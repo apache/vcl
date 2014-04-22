@@ -1894,6 +1894,9 @@ INSERT INTO `variable` (`name`, `serialization`, `value`) VALUES
 ('timesource|global', 'none','time.nist.gov,time-a.nist.gov,time-b.nist.gov,time.windows.com'),
 ('acknowledgetimeout', 'none', '900'),
 ('connecttimeout', 'none', '900'),
+('general_inuse_check', 'none', '300'),
+('server_inuse_check', 'none', '900'),
+('ignore_connections_gte', 'none', '1440'),
 ('xcat|timeout_error_limit', 'none', '5'),
 ('xcat|rpower_error_limit', 'none', '3');
 
