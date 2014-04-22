@@ -153,6 +153,7 @@ our @EXPORT = qw(
   get_resource_groups
   get_managable_resource_groups
   get_user_info
+  get_variable
   get_vmhost_assigned_vm_info
   get_vmhost_info
   getnewdbh
@@ -172,6 +173,7 @@ our @EXPORT = qw(
   is_request_imaging
   is_valid_dns_host_name
   is_valid_ip_address
+  is_variable_set
   kill_child_processes
   kill_reservation_process
   known_hosts
@@ -196,6 +198,7 @@ our @EXPORT = qw(
   set_hash_process_id
   set_logfile_path
   set_managementnode_state
+  set_variable
   setnextimage
   setup_confirm
   setup_get_array_choice
@@ -234,6 +237,8 @@ our @EXPORT = qw(
   write_currentimage_txt
   xmlrpc_call
   xml_string_to_hash
+  yaml_deserialize
+  yaml_serialize
   add_imageid_to_newimages
 
   $CONF_FILE_PATH
@@ -1082,8 +1087,9 @@ sub check_time {
 		else {
 			# End time is more than 10 minutes in the future
 			#notify($ERRORS{'DEBUG'}, 0, "reservation will end in more than 10 minutes ($end_diff_minutes)");
+			my $general_inuse_check_time = ($ENV{management_node_info}->{GENERAL_INUSE_CHECK} * -1);
 
-			if ($lastcheck_diff_minutes <= -5) {
+			if ($lastcheck_diff_minutes <= $general_inuse_check_time) {
 				#notify($ERRORS{'DEBUG'}, 0, "reservation was last checked more than 5 minutes ago ($lastcheck_diff_minutes)");
 				return "poll";
 			}
@@ -3155,7 +3161,7 @@ EOF
 		my $user_id = $request_info->{userid};
 		my $user_info = get_user_info($user_id, 0, 1);
 		$request_info->{user} = $user_info;
-		
+
 		my $imagemeta_root_access = $request_info->{reservation}{$reservation_id}{image}{imagemeta}{rootaccess};
 		
 		# Add the request user to the hash, set ROOTACCESS to the value configured in imagemeta
@@ -3182,7 +3188,7 @@ EOF
 		
 		# If server request or duration is greater >= 24 hrs disable user checks
 		if ($request_info->{reservation}{$reservation_id}{serverrequest}{id}) {
-			notify($ERRORS{'DEBUG'}, 0, "server sequest - disabling user checks");
+			notify($ERRORS{'DEBUG'}, 0, "server request - disabling user checks");
 			$request_info->{checkuser} = 0;
 			$request_info->{reservation}{$reservation_id}{serverrequest}{ALLOW_USERS} = $request_info->{user}{unityid};
 		}
@@ -4710,6 +4716,15 @@ AND managementnode.id != $management_node_id
 		$management_node_info->{IMAGELIBPARTNERS} = 0;
 		#notify($ERRORS{'DEBUG'}, 0, "image library sharing functions are disabled");
 	}
+
+	# Get the inuse timing checks for general and server based reservations
+	my $general_inuse_check = get_variable('general_inuse_check') || 300;
+	$management_node_info->{GENERAL_INUSE_CHECK} = round($general_inuse_check / 60);
+	$ENV{management_node_info}{GENERAL_INUSE_CHECK} = $management_node_info->{GENERAL_INUSE_CHECK};
+
+	my $server_inuse_check = get_variable('server_inuse_check') || 300;
+	$management_node_info->{SERVER_INUSE_CHECK} = round($server_inuse_check / 60);
+	$ENV{management_node_info}{SERVER_INUSE_CHECK} = $management_node_info->{SERVER_INUSE_CHECK};
 
 	# Get the OS name
 	my $os_name = lc($^O);
@@ -6550,6 +6565,7 @@ sub get_user_info {
 SELECT DISTINCT
 user.*,
 adminlevel.name AS adminlevel_name,
+affiliation.id AS affiliation_id,
 affiliation.name AS affiliation_name,
 affiliation.shibname AS affiliation_shibname,
 affiliation.dataUpdateText AS affiliation_dataUpdateText,
@@ -6688,7 +6704,7 @@ EOF
 	if ($user_login_id =~ /vcladmin/) {
 		$user_info->{STANDALONE} = 1;
 	}
-	
+
 	# Set the user's affiliation sitewwwaddress and help address if not defined or blank
 	if (!$user_info->{affiliation}{sitewwwaddress}) {
 		$user_info->{affiliation}{sitewwwaddress} = 'http://cwiki.apache.org/VCL';
@@ -10454,6 +10470,373 @@ sub get_code_ref_subroutine_name {
 	my $cv = svref_2object($code_ref) || return;
 	my $gv = $cv->GV || return;
 	return $gv->NAME;
+}
+
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 is_variable_set
+
+ Parameters  : variable name
+ Returns     : If variable is set: 1
+               If variable is not set: 0
+               If an error occurred: undefined
+ Description : Queries the variable table for the variable with the name
+               specified by the argument. Returns true if the variable is set,
+               false otherwise.
+
+=cut
+
+sub is_variable_set {
+	my $variable_name = shift;
+	
+	# Check if 1st argument is a reference meaning this was called as an object method
+	# If so, ignore 1st reference argument and call shift again
+	if (ref($variable_name)) {
+		$variable_name = shift;
+	}
+	
+	# Check the argument
+	if (!defined($variable_name)) {
+		notify($ERRORS{'WARNING'}, 0, "variable name argument was not supplied");
+		return;
+	}
+	
+	# Construct the select statement
+my $select_statement .= <<"EOF";
+SELECT
+variable.value
+FROM
+variable
+WHERE
+variable.name = '$variable_name'
+EOF
+	
+	# Call the database select subroutine
+	my @selected_rows = database_select($select_statement);
+
+	# Check to make 1 sure row was returned
+	if (!@selected_rows){
+		notify($ERRORS{'DEBUG'}, 0, "variable is NOT set: $variable_name");
+		return 0;
+	}
+	elsif (@selected_rows > 1){
+		notify($ERRORS{'WARNING'}, 0, "unable to get value of variable '$variable_name', multiple rows exist in the database for variable:\n" . format_data(\@selected_rows));
+		return;
+	}
+	
+	# Get the serialized value from the variable row
+	my $database_value = $selected_rows[0]{value};
+	
+	if (defined($database_value)) {
+		notify($ERRORS{'DEBUG'}, 0, "variable is set: $variable_name");
+		return 1;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "unable to get value of variable '$variable_name', row returned:\n" . format_data(\@selected_rows));
+		return;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_variable
+
+ Parameters  : $variable_name, $show_warnings (optional)
+ Returns     : If successful: data stored in the variable table for the variable name specified
+               If failed: false
+ Description : Queries the variable table for the variable with the name
+               specified by the argument. Returns the data stored for the
+               variable. Values are deserialized before being returned if the
+               value stored was a reference.
+               
+               Undefined is returned if the variable name does not exist in the
+               variable table. A log message is displayed by default. To
+               suppress the log message, supply the $show_warnings argument with
+               a value of 0.
+
+=cut
+
+sub get_variable {
+	# Check if 1st argument is a reference meaning this was called as an object method
+	# If so, ignore 1st reference argument
+	shift @_ if ($_[0] && ref($_[0]) && ref($_[0]) =~ /VCL/);
+	
+	# Check the argument
+	my $variable_name = shift;
+	if (!defined($variable_name)) {
+		notify($ERRORS{'WARNING'}, 0, "variable name argument was not supplied");
+		return;
+	}
+	
+	my $show_warnings = shift;
+	$show_warnings = 1 unless defined $show_warnings;
+	
+	# Construct the select statement
+my $select_statement .= <<"EOF";
+SELECT
+variable.value,
+variable.serialization
+FROM
+variable
+WHERE
+variable.name = '$variable_name'
+EOF
+	
+	# Call the database select subroutine
+	my @selected_rows = database_select($select_statement);
+
+	# Check to make 1 sure row was returned
+	if (!@selected_rows){
+		notify($ERRORS{'OK'}, 0, "variable '$variable_name' is not set in the database") if $show_warnings;
+		return 0;
+	}
+	elsif (@selected_rows > 1){
+		notify($ERRORS{'WARNING'}, 0, "unable to get value of variable '$variable_name', multiple rows exist in the database for variable:\n" . format_data(\@selected_rows));
+		return;
+	}
+	
+	# Get the serialized value from the variable row
+	my $serialization_type = $selected_rows[0]{serialization};
+	my $database_value = $selected_rows[0]{value};
+	my $deserialized_value;
+	
+	# Deserialize the variable value if necessary
+	if ($serialization_type eq 'none') {
+		$deserialized_value = $database_value;
+	}
+	elsif ($serialization_type eq 'yaml') {
+		# Attempt to deserialize the value
+		$deserialized_value = yaml_deserialize($database_value);
+		if (!defined($deserialized_value)) {
+			notify($ERRORS{'WARNING'}, 0, "unable to deserialize variable '$variable_name' using YAML");
+			return;
+		}
+		
+		# Display the data type of the value retrieved from the variable table
+		if (my $deserialized_data_type = ref($deserialized_value)) {
+			notify($ERRORS{'DEBUG'}, 0, "data type of variable '$variable_name': $deserialized_data_type reference");
+		}
+		else {
+			notify($ERRORS{'DEBUG'}, 0, "data type of variable '$variable_name': scalar");
+		}
+	}
+	elsif ($serialization_type eq 'phpserialize') {
+		# TODO: find Perl module to handle PHP serialized data
+		# Add module to list of dependencies
+		# Add code here to call PHP deserialize function
+		notify($ERRORS{'CRITICAL'}, 0, "unable to get value of variable '$variable_name', PHP serialized data is NOT supported yet by the VCL backend, returning null");
+		return;
+	}
+	else {
+		notify($ERRORS{'CRITICAL'}, 0, "unable to get value of variable '$variable_name', serialization type '$serialization_type' is NOT supported by the VCL backend, returning null");
+		return;
+	}
+	
+	notify($ERRORS{'DEBUG'}, 0, "retrieved variable '$variable_name', serialization: $serialization_type");
+	return $deserialized_value;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 yaml_deserialize
+
+ Parameters  : Data
+ Returns     : If successful: data structure
+               If failed: false
+ Description : 
+
+=cut
+
+sub yaml_deserialize {
+	# Check if 1st argument is a reference meaning this was called as an object method
+	# If so, ignore 1st reference argument and call shift again
+	my $yaml_data_argument = shift;
+	if (ref($yaml_data_argument)) {
+		$yaml_data_argument = shift;
+	}
+	
+	# Check to make sure argument was passed
+	if (!defined($yaml_data_argument)) {
+		notify($ERRORS{'WARNING'}, 0, "data argument was not passed");
+		return;
+	}
+	
+	my $deserialized_value;
+	eval '$deserialized_value = YAML::Load($yaml_data_argument)';
+	if ($EVAL_ERROR) {
+		notify($ERRORS{'WARNING'}, 0, "unable to deserialize data using YAML::Load(), data value: $yaml_data_argument");
+		return;
+	}
+	
+	return $deserialized_value;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 set_variable
+
+ Parameters  : variable name, variable value
+ Returns     : If successful: true
+               If failed: false
+ Description : Inserts or updates a row in the variable table. The variable name
+               and value arguments must be specified.
+               
+               The value can be a simple scalar such as a string or a reference
+               to a complex data structure such as an array of hashes.
+               
+               Simple scalar values are stored in the variable.value column
+               as-is and the variable.serialization column will be set to
+               'none'.
+               
+               References are serialized using YAML before being stored. The
+               variable.value column will contain the YAML representation of the
+               data and the variable.serialization column will be set to 'yaml'.
+               
+               This subroutine will also update the variable.timestamp column.
+               The variable.setby column is automatically set to the filename
+               and line number which called this subroutine.
+
+=cut
+
+sub set_variable {
+	# Check if 1st argument is a reference meaning this was called as an object method
+	# If so, ignore 1st reference argument
+	shift @_ if ($_[0] && ref($_[0]) && ref($_[0]) =~ /VCL/);
+	
+	my $variable_name = shift;
+	
+	# Get the 2nd argument containing the variable value
+	my $variable_value = shift;
+	
+	# Check the arguments
+	if (!defined($variable_name)) {
+		notify($ERRORS{'WARNING'}, 0, "variable name argument was not supplied");
+		return;
+	}
+	elsif (!defined($variable_value)) {
+		notify($ERRORS{'WARNING'}, 0, "variable value argument was not supplied");
+		return;
+	}
+	
+	notify($ERRORS{'DEBUG'}, 0, "attempting to set variable: $variable_name");
+	
+	# Set serialization type to yaml if the value being stored is a reference
+	# Otherwise, a simple scalar is being stored and serialization is not necessary
+	my $serialization_type;
+	if (ref($variable_value)) {
+		$serialization_type = 'yaml';
+	}
+	else {
+		$serialization_type = 'none';
+	}
+	
+	# Construct a string indicating where the variable was set from
+	my @caller = caller(0);
+	(my $calling_file) = $caller[1] =~ /([^\/]*)$/;
+	my $calling_line = $caller[2];
+	my $caller_string = "$calling_file:$calling_line";
+	
+	# Attempt to serialize the value if necessary
+	my $database_value;
+	if ($serialization_type eq 'none') {
+		$database_value = $variable_value;
+	}
+	else {
+		# Attempt to serialize the value using YAML
+		$database_value = yaml_serialize($variable_value);
+		if (!defined($database_value)) {
+			notify($ERRORS{'WARNING'}, 0, "unable to serialize variable '$variable_name' using YAML, value:\n" . format_data($variable_value));
+			return;
+		}
+	}
+	
+	# Escape all backslashes
+	$database_value =~ s/\\/\\\\/g;
+	
+	# Escape all single quote characters with a backslash
+	#   or else the SQL statement will fail becuase it is wrapped in single quotes
+	$database_value =~ s/'/\\'/g;
+	
+	# Assemble an insert statement, if the variable already exists, update the existing row
+	my $insert_statement .= <<"EOF";
+INSERT INTO variable
+(
+name,
+serialization,
+value,
+setby,
+timestamp
+)
+VALUES
+(
+'$variable_name',
+'$serialization_type',
+'$database_value',
+'$caller_string',
+NOW()
+)
+ON DUPLICATE KEY UPDATE
+name=VALUES(name),
+serialization=VALUES(serialization),
+value=VALUES(value),
+setby=VALUES(setby),
+timestamp=VALUES(timestamp)
+EOF
+	
+	# Execute the insert statement, the return value should be the id of the row
+	my $inserted_id = database_execute($insert_statement);
+	if ($inserted_id) {
+		notify($ERRORS{'OK'}, 0, "set variable '$variable_name', variable id: $inserted_id, serialization: $serialization_type");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to set variable '$variable_name', serialization: $serialization_type");
+		return;
+	}
+	
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 yaml_serialize
+
+ Parameters  : Data
+ Returns     : If successful: string containing serialized representation of data
+               If failed: false
+ Description : 
+
+=cut
+
+sub yaml_serialize {
+	# Check if 1st argument is a reference meaning this was called as an object method
+	# If so, ignore 1st reference argument
+	shift @_ if ($_[0] && ref($_[0]) && ref($_[0]) =~ /VCL/);
+	
+	# Check to make sure argument was passed
+	my $data_argument = shift;
+	if (!defined($data_argument)) {
+		notify($ERRORS{'WARNING'}, 0, "data argument was not passed");
+		return;
+	}
+	
+	# Attempt to serialize the value using YAML::Dump()
+	# Use eval because Dump() will call die() if it encounters an error
+	my $serialized_data;
+	eval '$serialized_data = YAML::Dump($data_argument)';
+	if ($EVAL_ERROR) {
+		notify($ERRORS{'WARNING'}, 0, "unable to serialize data using YAML::Dump(), data value: $data_argument");
+		return;
+	}
+	
+	# Escape all backslashes
+	$serialized_data =~ s/\\/\\\\/g;
+	
+	# Escape all single quote characters with a backslash
+	#   or else the SQL statement will fail becuase it is wrapped in single quotes
+	$serialized_data =~ s/'/\\'/g;
+	
+	return $serialized_data;
 }
 
 #/////////////////////////////////////////////////////////////////////////////

@@ -179,7 +179,7 @@ sub load {
 	$self->_edit_nodelist($computer_node_name, $image_name) || return;
 	
 	# Check to see if management node throttle is configured
-	my $throttle_limit = $self->data->get_variable("xcat|throttle|$management_node_hostname", 0) || $self->data->get_variable("$management_node_hostname|xcat|throttle", 0) || $self->data->get_variable("xcat|throttle", 0);
+	my $throttle_limit = get_variable("xcat|throttle|$management_node_hostname", 0) || get_variable("$management_node_hostname|xcat|throttle", 0) || get_variable("xcat|throttle", 0);
 	if (!$throttle_limit || $throttle_limit !~ /^\d+$/) {
 		$throttle_limit = 10;
 		notify($ERRORS{'DEBUG'}, 0, "xCAT load throttle limit variable is NOT set in database: 'xcat|throttle', using default value: $throttle_limit");
@@ -1860,13 +1860,13 @@ sub _rpower {
 	my $command = "$XCAT_ROOT/bin/rpower $computer_node_name $rpower_option";
 	
 	my $rpower_attempt = 0;
-	my $rpower_error_limit = $self->data->get_variable("xcat|rpower_error_limit|$management_node_hostname", 0) || $self->data->get_variable("xcat|rpower_error_limit", 0);
+	my $rpower_error_limit = get_variable("xcat|rpower_error_limit|$management_node_hostname", 0) || get_variable("xcat|rpower_error_limit", 0);
 	if (!$rpower_error_limit || $rpower_error_limit !~ /^\d+$/) {
 		$rpower_error_limit = 3;
 	}
 	
 	my $timeout_error_count = 0;
-	my $timeout_error_limit = $self->data->get_variable("xcat|timeout_error_limit|$management_node_hostname", 0) || $self->data->get_variable("xcat|timeout_error_limit", 0);
+	my $timeout_error_limit = get_variable("xcat|timeout_error_limit|$management_node_hostname", 0) || get_variable("xcat|timeout_error_limit", 0);
 	if (!$timeout_error_limit || $timeout_error_limit !~ /^\d+$/) {
 		$timeout_error_limit = 5;
 	}

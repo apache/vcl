@@ -3286,9 +3286,9 @@ sub update_fixedIP_info {
 	my $variable_name = "fixedIPsr" . $server_request_id; 	
    my $server_variable_data;
 
-	if($self->data->is_variable_set($variable_name)){
+	if(is_variable_set($variable_name)){
 		  #fetch variable
-		  $server_variable_data  = $self->data->get_variable($variable_name);
+		  $server_variable_data  = get_variable($variable_name);
 
 		  notify($ERRORS{'DEBUG'}, 0, "data is set for $variable_name" . format_data($server_variable_data));
 			
@@ -3306,6 +3306,54 @@ sub update_fixedIP_info {
         notify($ERRORS{'DEBUG'}, 0, "data is not set for $variable_name");
         return 0;
    }
+
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+=head2 get_timings
+
+   Parameters  : $self
+   Returns     : hash of timings
+   Description : Check for cached information or pulls from variable table
+   Acceptable variables are:
+      acknowledgetimeout
+      wait_for_connect
+      wait_for_reconnect
+      general_inuse_check
+      server_inuse_check
+      general_end_notice_first
+      general_end_notice_second
+      ignore_connections_gte
+
+=cut
+
+#/////////////////////////////////////////////////////////////////////////////
+
+sub get_timings {
+	my $self = shift;
+	my $variable = shift;
+	my $affiliation_name = $self->data->get_user_affiliation_name(0);
+
+   my %timing_defaults = (
+      acknowledgetimeout => '900',
+      connecttimeout => '900',
+      wait_for_connect => '900',
+      wait_for_reconnect => '900',
+      general_inuse_check => '300',
+      server_inuse_check => '900',
+      general_end_notice_first => '600',
+      general_end_notice_second => '300',
+      ignore_connections_gte => '1440'
+   );
+
+	#Check for affiliation, if nothing return default timings
+   if (!defined($variable) || !(exists($timing_defaults{$variable}))) {
+		notify($ERRORS{'WARNING'}, 0, " input variable is not acceptable, returning 900 as value"); 
+      return '900';
+   }
+
+	my $db_timing_variable_value = get_variable("$variable|$affiliation_name", 0) || get_variable("$variable", 0) || $timing_defaults{$variable} ;
+	return $db_timing_variable_value;
 
 }
 

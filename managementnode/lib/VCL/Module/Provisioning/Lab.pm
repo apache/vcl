@@ -296,6 +296,12 @@ sub node_status {
 	return \%status;
 } ## end sub node_status
 
+
+sub power_reset {
+
+	return 1;
+
+}
 #/////////////////////////////////////////////////////////////////////////////
 
 1;

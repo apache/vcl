@@ -1023,12 +1023,12 @@ sub synchronize_time {
 	my $variable_name_global = "timesource|global";
 	
 	my $time_source_variable;
-	if ($self->data->is_variable_set($variable_name)) {
-		$time_source_variable = $self->data->get_variable($variable_name);
+	if (is_variable_set($variable_name)) {
+		$time_source_variable = get_variable($variable_name);
 		notify($ERRORS{'DEBUG'}, 0, "retrieved time source variable '$variable_name': $time_source_variable");
 	}
-	elsif ($self->data->is_variable_set($variable_name_global)) {
-		$time_source_variable = $self->data->get_variable($variable_name_global);
+	elsif (is_variable_set($variable_name_global)) {
+		$time_source_variable = get_variable($variable_name_global);
 		notify($ERRORS{'DEBUG'}, 0, "retrieved global time source variable '$variable_name_global': $time_source_variable");
 	}
 	else {
@@ -3029,7 +3029,7 @@ sub check_connection_on_port {
 	
 	my $ret_val = "no";
 	my $command = "netstat -an";
-	my ($status, $output) = $self->execute($command, '', '', 0);
+	my ($status, $output) = $self->execute($command, 0);
 	notify($ERRORS{'DEBUG'}, 0, "checking connections on node $computer_node_name on port $port");
 	foreach my $line (@{$output}) {
 		if ($line =~ /Connection refused|Permission denied/) {

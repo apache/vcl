@@ -8587,14 +8587,14 @@ sub configure_time_synchronization {
 	my $time_source;
    my $variable_name = "timesource|" . $self->data->get_management_node_hostname();
    my $variable_name_global = "timesource|global";
-   if($self->data->is_variable_set($variable_name)){
+   if(is_variable_set($variable_name)){
        #fetch variable
-       $time_source = $self->data->get_variable($variable_name);
+       $time_source = get_variable($variable_name);
        notify($ERRORS{'DEBUG'}, 0, "time_source is $time_source  set for $variable_name");
     }
-    elsif($self->data->is_variable_set($variable_name_global) ) {
+    elsif(is_variable_set($variable_name_global) ) {
        #fetch variable
-       $time_source = $self->data->get_variable($variable_name_global);
+       $time_source = get_variable($variable_name_global);
        notify($ERRORS{'DEBUG'}, 0, "time_source is $time_source  set for $variable_name");
     }
 	 else {
@@ -11720,8 +11720,8 @@ sub check_image {
 		return;
 	}
 	
-	#$self->data->set_variable('ignore_users', 'Administrator,cyg_server,Guest,root,sshd,HelpAssistant,SUPPORT_388945a0,ASPNET');
-	#$self->data->set_variable('disable_users', 'test');
+	#set_variable('ignore_users', 'Administrator,cyg_server,Guest,root,sshd,HelpAssistant,SUPPORT_388945a0,ASPNET');
+	#set_variable('disable_users', 'test');
 	
 	my $imagerevision_id = $self->data->get_imagerevision_id();
 	my $image_name = $self->data->get_image_name();
@@ -11740,12 +11740,12 @@ sub check_image {
 	my $reservation_user_names_regex = join("|", @reservation_user_names);
 
 	# Get list of user names which should be ignored in images (safe, normal users: Administrator, guest...)
-	my $ignore_user_names_variable = $self->data->get_variable('ignore_users') || '';
+	my $ignore_user_names_variable = get_variable('ignore_users') || '';
 	my @ignore_user_names = sort {lc($a) cmp lc($b)} (split(/[,;]+/, $ignore_user_names_variable));
 	my $ignore_user_names_regex = join("|", @ignore_user_names);
 	
 	# Get list of user names which should be disabled in images - known bad, unsafe
-	my $disable_user_names_variable = $self->data->get_variable('disable_users') || '';
+	my $disable_user_names_variable = get_variable('disable_users') || '';
 	my @disable_user_names = sort {lc($a) cmp lc($b)} (split(/[,;]+/, $disable_user_names_variable));
 	my $disable_user_names_regex = join("|", @disable_user_names);
 	

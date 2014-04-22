@@ -116,7 +116,7 @@ sub process {
 	my $is_parent_reservation   = $self->data->is_parent_reservation();
 	my $computer_id             = $self->data->get_computer_id();
 	my $computer_short_name     = $self->data->get_computer_short_name();
-	my $connect_timeout_seconds = $self->data->get_variable('connecttimeout') || (15 * 60);
+	my $connect_timeout_seconds = $self->os->get_timings('connecttimeout');
 
 	# Make sure connect timeout is long enough
 	# It has to be a bit longer than the ~5 minute period between inuse checks due to cluster reservations
@@ -378,6 +378,8 @@ sub user_connected {
 	my $server_request_id       		= $self->data->get_server_request_id();
 	my $request_duration_epoch_secs	= $self->data->get_request_duration_epoch();
 	my $request_duration_hrs 			= floor($request_duration_epoch_secs / 60 / 60);
+	my $ignore_connections_gte_min	= $self->os->get_timings('ignore_connections_gte');
+	my $ignore_connections_gte			= floor($ignore_connections_gte_min / 60);
 	
 	# Check if user deleted the request
 	$self->state_exit() if is_request_deleted($request_id);
@@ -393,8 +395,8 @@ sub user_connected {
 	}
 	
 	# If duration is >= 24 hrs set as connected and return
-	if($request_duration_hrs >= 24 ) {
-		notify($ERRORS{'OK'}, 0, "duration is $request_duration_hrs hrs . Is >= to 24 hrs, skipping inuse checks");
+	if($request_duration_hrs >= $ignore_connections_gte ) {
+		notify($ERRORS{'OK'}, 0, "reservation duration is $request_duration_hrs hrs is >= to ignore_connections setting $ignore_connections_gte hrs, skipping inuse checks");
 		insertloadlog($reservation_id, $computer_id, "connected", "user connected to $computer_short_name");
 		return 1;
 	}	

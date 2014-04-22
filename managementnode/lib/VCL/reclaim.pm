@@ -102,7 +102,7 @@ sub process {
 	# Remove related fixedIPsr variable, if it exists
 	if ($server_request_id) {
  		my $variable_name = "fixedIPsr" . $server_request_id;
- 		if($self->data->is_variable_set($variable_name)){
+ 		if(is_variable_set($variable_name)){
                #Delete from variable table.
                my $delete_sql_statement = "DELETE variable FROM variable WHERE name = '$variable_name' ";
                if (database_execute($delete_sql_statement)) {

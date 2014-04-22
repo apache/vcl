@@ -101,7 +101,7 @@ sub process {
 	my $computer_short_name         = $self->data->get_computer_short_name();
 	my $is_parent_reservation       = $self->data->is_parent_reservation();
 	my $server_request_id           = $self->data->get_server_request_id();
-	my $acknowledge_timeout_seconds = $self->data->get_variable('acknowledgetimeout') || 900;
+	my $acknowledge_timeout_seconds = $self->os->get_timings('acknowledgetimeout');
 	
 	# Update the log loaded time to now for this request
 	update_log_loaded_time($request_logid);
