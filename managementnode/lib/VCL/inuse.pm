@@ -167,8 +167,8 @@ sub process {
 	my $request_duration_seconds = ($request_end_epoch_seconds - $request_start_epoch_seconds);
 	my $request_duration_hours = floor($request_duration_seconds / 60 / 60);
 	
-	my $end_time_notify_minutes = 10;
-	my $end_time_notify_seconds = ($end_time_notify_minutes * 60);
+	my $end_time_notify_seconds = $self->os->get_timings('general_end_notice_first');
+	my $end_time_notify_minutes = floor($end_time_notify_seconds / 60);
 	
 	my $now_string               = strftime('%H:%M:%S', localtime($now_epoch_seconds));
 	my $request_end_string       = strftime('%H:%M:%S', localtime($request_end_epoch_seconds));
