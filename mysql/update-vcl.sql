@@ -1404,6 +1404,8 @@ INSERT IGNORE INTO `variable` (`name`, `serialization`, `value`) VALUES ('acknow
 INSERT IGNORE INTO `variable` (`name`, `serialization`, `value`) VALUES ('connecttimeout', 'none', '900');
 INSERT IGNORE INTO `variable` (`name`, `serialization`, `value`) VALUES ('general_inuse_check', 'none', '300');
 INSERT IGNORE INTO `variable` (`name`, `serialization`, `value`) VALUES ('server_inuse_check', 'none', '900');
+INSERT IGNORE INTO `variable` (`name`, `serialization`, `value`) VALUES ('general_end_notice_first', 'none', '600');
+INSERT IGNORE INTO `variable` (`name`, `serialization`, `value`) VALUES ('general_end_notice_second', 'none', '300');
 INSERT IGNORE INTO `variable` (`name`, `serialization`, `value`) VALUES ('ignore_connections_gte', 'none', '1440');
 
 -- 
