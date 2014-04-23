@@ -4667,6 +4667,48 @@ sub command_exists {
 	}
 }
 
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 notify_user_console
+
+ Parameters  : message, username(optional)
+ Returns     : boolean
+ Description : Send a message to the user on the console
+
+=cut
+
+sub notify_user_console {
+	my $self = shift;
+	if (ref($self) !~ /Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+
+	my $message = shift;
+	if(!$message) {
+		notify($ERRORS{'WARNING'}, 0, "message argument was not supplied");
+		return;
+	}
+
+	my $username = shift;
+	if (!$username) {
+	   $username = $self->data->get_user_login_id();
+	}
+
+	my $computer_node_name = $self->data->get_computer_node_name();
+
+	my $cmd = "echo $message \| write $username";
+	my ($exit_status, $output) = $self->execute($cmd, 1);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to determine if the '$cmd' shell command exists on $computer_node_name");
+		return;
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "executed command to determine if the '$cmd' shell command exists on $computer_node_name");
+		return 1;
+	}
+}
+
 ##/////////////////////////////////////////////////////////////////////////////
 1;
 __END__

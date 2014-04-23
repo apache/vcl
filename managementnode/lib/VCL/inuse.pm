@@ -513,6 +513,13 @@ EOF
 	else {
 		notify($ERRORS{'DEBUG'}, 0, "user $user_login_id email notices disabled - not notifying user of endtime");
 	}
+
+	# notify via console
+	if ( $self->os->can('notify_user_console') ) {
+		if ( $self->os->notify_user_console($short_message) ) {
+			notify($ERRORS{'DEBUG'}, 0, "Successfully notified user $user_login_id via console method");
+		}
+	}
 	
 	# Send message to machine
 	if ($computer_type =~ /blade|virtualmachine/) {
@@ -665,6 +672,13 @@ EOF
 	# Send mail
 	if ($is_parent_reservation && $user_emailnotices) {
 		mail($user_email, $subject, $message, $user_affiliation_helpaddress);
+	}
+
+	# notify via console
+	if ( $self->os->can('notify_user_console') ) {
+		if ( $self->os->notify_user_console($short_message) ) {
+			notify($ERRORS{'DEBUG'}, 0, "Successfully notified user $user_login_id via console method");
+		}
 	}
 	
 	# Send IM
