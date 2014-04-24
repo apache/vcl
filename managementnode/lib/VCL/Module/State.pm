@@ -243,6 +243,12 @@ sub reservation_failed {
 		$message = 'reservation failed';
 	}
 
+	# Check if computer needs to be marked as failed
+	my $computer_input_state = shift;
+   if (!$computer_input_state) {
+      $computer_input_state = 0;
+   }
+
 	# Get the required data
 	my $request_id                  = $self->data->get_request_id();
 	my $request_logid               = $self->data->get_request_log_id();
@@ -287,6 +293,10 @@ sub reservation_failed {
 	if ($request_state_name eq 'image') {
 		$new_request_state_name = 'maintenance';
 		$new_computer_state_name = 'maintenance';
+	}
+	elsif ($computer_input_state) {
+	   $new_request_state_name = 'failed';
+	   $new_computer_state_name = $computer_input_state;
 	}
 	else {
 		$new_request_state_name = 'failed';

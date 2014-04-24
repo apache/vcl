@@ -623,13 +623,13 @@ sub reload_image {
 					else {
 						notify($ERRORS{'CRITICAL'}, 0, "$image_name does not exist on management node and could not be retrieved");
 						insertloadlog($reservation_id, $computer_id, "failed", "requested image does not exist on management node and could not be retrieved");
-						return;
+						$self->reservation_failed("$image_name does not exist unable to retrieve image from another management node", "available");
 					}
 				} ## end if ($self->provisioner->can("retrieve_image"...
 				else {
 					notify($ERRORS{'CRITICAL'}, 0, "unable to retrieve image from another management node, retrieve_image() is not implemented by " . ref($self->provisioner));
 					insertloadlog($reservation_id, $computer_id, "failed", "failed requested image does not exist on management node, retrieve_image() is not implemented");
-					return;
+					$self->reservation_failed("$image_name does not exist", "available");
 				}
 			} ## end else [ if ($self->provisioner->does_image_exist($image_name...
 		} ## end if ($self->provisioner->can("does_image_exist"...
@@ -965,7 +965,7 @@ sub reserve_computer {
 					notify($ERRORS{'DEBUG'}, 0, "updated password in the reservation table");
 				}
 				else {
-					$self->reservation_failed("failed to update password in the reservation table");
+					$self->reservation_failed("failed to update password in the reservation table", "available");
 				}
 				
 				# Set the password in the DataStructure object
