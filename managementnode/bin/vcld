@@ -155,7 +155,7 @@ sub main () {
 			if (defined $info{managementnode}{checkininterval}) {
 				$management_node_checkin_interval = $info{managementnode}{checkininterval};
 			}
-			notify($ERRORS{'DEBUG'}, $LOGFILE, "dump: " . format_data($ENV{management_node_info}{$management_node_id}));
+			#notify($ERRORS{'DEBUG'}, $LOGFILE, "dump: " . format_data($ENV{management_node_info}{$management_node_id}));
 		}
 		
 		# Set the vcld environment variable to 0 so other subroutines know if this is the vcld or child process
