@@ -983,7 +983,7 @@ sub check_blockrequest_time {
 =cut
 
 sub check_time {
-	my ($request_start, $request_end, $reservation_lastcheck, $request_state_name, $request_laststate_name) = @_;
+	my ($request_start, $request_end, $reservation_lastcheck, $request_state_name, $request_laststate_name, $serverrequest) = @_;
 	
 	# Check the arguments
 	if (!defined($request_state_name)) {
@@ -1086,16 +1086,27 @@ sub check_time {
 		}
 		else {
 			# End time is more than 10 minutes in the future
-			#notify($ERRORS{'DEBUG'}, 0, "reservation will end in more than 10 minutes ($end_diff_minutes)");
-			my $general_inuse_check_time = ($ENV{management_node_info}->{GENERAL_INUSE_CHECK} * -1);
-
-			if ($lastcheck_diff_minutes <= $general_inuse_check_time) {
-				#notify($ERRORS{'DEBUG'}, 0, "reservation was last checked more than 5 minutes ago ($lastcheck_diff_minutes)");
-				return "poll";
+			if($serverrequest) {	
+				my $server_inuse_check_time = ($ENV{management_node_info}->{SERVER_INUSE_CHECK} * -1);
+				if ($lastcheck_diff_minutes <= $server_inuse_check_time) {
+					return "poll";
+				}
+				else {
+					return 0;
+				}
 			}
 			else {
-				#notify($ERRORS{'DEBUG'}, 0, "reservation has been checked within the past 5 minutes ($lastcheck_diff_minutes)");
-				return 0;
+				#notify($ERRORS{'DEBUG'}, 0, "reservation will end in more than 10 minutes ($end_diff_minutes)");
+				my $general_inuse_check_time = ($ENV{management_node_info}->{GENERAL_INUSE_CHECK} * -1);
+
+				if ($lastcheck_diff_minutes <= $general_inuse_check_time) {
+					#notify($ERRORS{'DEBUG'}, 0, "reservation was last checked more than 5 minutes ago ($lastcheck_diff_minutes)");
+					return "poll";
+				}
+				else {
+					#notify($ERRORS{'DEBUG'}, 0, "reservation has been checked within the past 5 minutes ($lastcheck_diff_minutes)");
+					return 0;
+				}
 			}
 		} ## end else [ if ($end_diff_minutes <= 10)
 	} ## end elsif ($request_state_name =~ /inuse|imageinuse/) [ if ($request_state_name =~ /new|imageprep|reload|tomaintenance|tovmhostinuse/)
@@ -3321,10 +3332,13 @@ sub get_management_node_requests {
    reservation.id AS reservation_id,
    reservation.requestid AS reservation_requestid,
    reservation.managementnodeid AS reservation_managementnodeid,
-	reservation.lastcheck AS reservation_lastcheck
+	reservation.lastcheck AS reservation_lastcheck,
+	
+	serverrequest.id AS ServerRequest_serverrequestid
 
    FROM
-   request,
+   request
+	LEFT JOIN (serverrequest) ON (serverrequest.requestid = request.id),
    reservation,
 	state requeststate,
    state requestlaststate
@@ -3377,6 +3391,9 @@ sub get_management_node_requests {
 				$requests{$request_id}{laststate}{$original_key} = $value if (!$requests{$request_id}{laststate}{$original_key});
 			}
 			elsif ($key =~ /reservation_/) {
+				$requests{$request_id}{reservation}{$reservation_id}{$original_key} = $value;
+			}
+			elsif ($key =~ /ServerRequest_/) {
 				$requests{$request_id}{reservation}{$reservation_id}{$original_key} = $value;
 			}
 			else {
