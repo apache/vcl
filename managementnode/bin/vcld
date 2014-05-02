@@ -148,6 +148,16 @@ sub main () {
 		delete $ENV{state};
 		delete $ENV{data};
 		
+		my $data_age_seconds = (time - $ENV{management_node_info}{$management_node_id}{RETRIEVAL_TIME});
+		if ($data_age_seconds > 120 ) {
+			notify($ERRORS{'DEBUG'}, $LOGFILE, "retrieving management node info for '$management_node_id', cached data is stale: $data_age_seconds seconds old");
+			$info{managementnode} = get_management_node_info();
+			if (defined $info{managementnode}{checkininterval}) {
+				$management_node_checkin_interval = $info{managementnode}{checkininterval};
+			}
+			notify($ERRORS{'DEBUG'}, $LOGFILE, "dump: " . format_data($ENV{management_node_info}{$management_node_id}));
+		}
+		
 		# Set the vcld environment variable to 0 so other subroutines know if this is the vcld or child process
 		if (!defined($ENV{vcld})) {
 			$ENV{vcld} = 1;
@@ -225,6 +235,7 @@ sub main () {
 				my $reservation_info = $info{request}{$request_id}{reservation}{$reservation_id};
 				my $reservation_management_node_id = $reservation_info->{managementnodeid};
 				my $reservation_lastcheck = $reservation_info->{lastcheck};
+				#notify($ERRORS{'DEBUG'}, $LOGFILE, "dump: " . format_data($reservation_info));
 				
 				if ($management_node_id != $reservation_management_node_id) {
 					notify($ERRORS{'DEBUG'}, $LOGFILE, "ignoring reservation $reservation_id assigned to management node ID $reservation_management_node_id");
