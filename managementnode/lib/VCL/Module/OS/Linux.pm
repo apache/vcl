@@ -391,19 +391,24 @@ sub post_load {
 	}
 	
 	# Run the vcl_post_load script if it exists in the image
-	my $script_path = '/etc/init.d/vcl_post_load';
-	if ($self->file_exists($script_path)) {
-		my $result = $self->run_script($script_path, '1', '300', '1');
-		if (!defined($result)) {
-			notify($ERRORS{'WARNING'}, 0, "error occurred running $script_path");
-		}
-		elsif ($result == 0) {
-			notify($ERRORS{'DEBUG'}, 0, "$script_path does not exist in image: $image_name");
-		}
-		else {
-			notify($ERRORS{'DEBUG'}, 0, "ran $script_path");
+	my @post_load_script_paths = ('/usr/local/vcl/vcl_post_load', '/etc/init.d/vcl_post_load');	
+
+	foreach my $script_path (@post_load_script_paths) {
+		notify($ERRORS{'DEBUG'}, 0, "script_path $script_path");
+		if ($self->file_exists($script_path)) {
+			my $result = $self->run_script($script_path, '1', '300', '1');
+			if (!defined($result)) {
+				notify($ERRORS{'WARNING'}, 0, "error occurred running $script_path");
+			}
+			elsif ($result == 0) {
+				notify($ERRORS{'DEBUG'}, 0, "$script_path does not exist in image: $image_name");
+			}
+			else {
+				notify($ERRORS{'DEBUG'}, 0, "ran $script_path");
+			}
 		}
 	}
+
 	
 	# Add a line to currentimage.txt indicating post_load has run
 	$self->set_vcld_post_load_status();
@@ -431,28 +436,27 @@ sub post_reserve {
 	
 	my $image_name          = $self->data->get_image_name();
 	my $computer_short_name = $self->data->get_computer_short_name();
-	my $script_path         = '/etc/init.d/vcl_post_reserve';
+	my @post_reserve_script_paths = ('/usr/local/vcl/vcl_post_reserve', '/etc/init.d/vcl_post_reserve');
 	
 	notify($ERRORS{'OK'}, 0, "initiating Linux post_reserve: $image_name on $computer_short_name");
 	
 	# Check if script exists
-	if (!$self->file_exists($script_path)) {
-		notify($ERRORS{'DEBUG'}, 0, "script does NOT exist: $script_path");
-		return 1;
+	foreach my $script_path (@post_reserve_script_paths) {
+			notify($ERRORS{'DEBUG'}, 0, "script_path $script_path");
+		if ($self->file_exists($script_path)) {
+			# Run the vcl_post_reserve script if it exists in the image
+			my $result = $self->run_script($script_path, '1', '300', '1');
+			if (!defined($result)) {
+				notify($ERRORS{'WARNING'}, 0, "error occurred running $script_path");
+			}
+			elsif ($result == 0) {
+				notify($ERRORS{'DEBUG'}, 0, "$script_path does not exist in image: $image_name");
+			}
+			else {
+				notify($ERRORS{'DEBUG'}, 0, "ran $script_path");
+			}
+		}
 	}
-	
-	# Run the vcl_post_reserve script if it exists in the image
-	my $result = $self->run_script($script_path, '1', '300', '1');
-	if (!defined($result)) {
-		notify($ERRORS{'WARNING'}, 0, "error occurred running $script_path");
-	}
-	elsif ($result == 0) {
-		notify($ERRORS{'DEBUG'}, 0, "$script_path does not exist in image: $image_name");
-	}
-	else {
-		notify($ERRORS{'DEBUG'}, 0, "ran $script_path");
-	}
-	
 	return 1;
 }
 
@@ -475,7 +479,7 @@ sub post_reservation {
 	
 	my $image_name          = $self->data->get_image_name();
 	my $computer_short_name = $self->data->get_computer_short_name();
-	my $script_path         = '/etc/init.d/vcl_post_reservation';
+	my $script_path         = '/usr/local/vcl/vcl_post_reservation';
 	
 	notify($ERRORS{'OK'}, 0, "initiating Linux post_reservation: $image_name on $computer_short_name");
 	
