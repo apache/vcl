@@ -458,6 +458,50 @@ sub post_reserve {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 post_reservation
+
+ Parameters  : none
+ Returns     : boolean 1 or 0
+ Description : Checks for and runs vcl_post_reservation script at the end of a reservation
+
+=cut
+
+sub post_reservation {
+	my $self = shift;
+	if (ref($self) !~ /linux/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return 0;
+	}
+	
+	my $image_name          = $self->data->get_image_name();
+	my $computer_short_name = $self->data->get_computer_short_name();
+	my $script_path         = '/etc/init.d/vcl_post_reservation';
+	
+	notify($ERRORS{'OK'}, 0, "initiating Linux post_reservation: $image_name on $computer_short_name");
+	
+	# Check if script exists
+	if (!$self->file_exists($script_path)) {
+		notify($ERRORS{'DEBUG'}, 0, "script does NOT exist: $script_path");
+		return 1;
+	}
+	
+	# Run the vcl_post_reserve script if it exists in the image
+	my $result = $self->run_script($script_path, '1', '300', '1');
+	if (!defined($result)) {
+		notify($ERRORS{'WARNING'}, 0, "error occurred running $script_path");
+	}
+	elsif ($result == 0) {
+		notify($ERRORS{'DEBUG'}, 0, "$script_path does not exist in image: $image_name");
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "ran $script_path");
+	}
+
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 =head2 update_public_hostname
 
  Parameters  : none

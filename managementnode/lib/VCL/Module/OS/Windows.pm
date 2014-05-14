@@ -982,6 +982,49 @@ sub post_reserve {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 post_reservation
+
+ Parameters  : none
+ Returns     : boolean
+ Description : Runs $SYSTEMROOT/vcl_post_reservation.cmd if it exists in the image.
+               Does not check if the actual script succeeded or not.
+
+=cut
+
+sub post_reservation {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return 0;
+	}
+	
+	my $image_name = $self->data->get_image_name();
+	my $computer_short_name = $self->data->get_computer_short_name();
+	my $script_path = '$SYSTEMROOT/vcl_post_reservation.cmd';
+	
+	# Check if script exists
+	if (!$self->file_exists($script_path)) {
+		notify($ERRORS{'DEBUG'}, 0, "post_reservation script does NOT exist: $script_path");
+		return 1;
+	}
+	
+	# Run the vcl_post_reserve.cmd script if it exists in the image
+	my $result = $self->run_script($script_path);
+	if (!defined($result)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to run post_reservation script: $script_path");
+	}
+	elsif ($result == 0) {
+		notify($ERRORS{'DEBUG'}, 0, "$script_path does not exist in image: $image_name");
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "ran $script_path");
+	}
+	
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 =head2 sanitize
 
  Parameters  :

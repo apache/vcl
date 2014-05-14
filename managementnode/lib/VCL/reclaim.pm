@@ -207,6 +207,14 @@ sub insert_reload_and_exit {
 	my $self = shift;
 	my $request_data               = $self->data->get_request_data;
 	my $computer_id                = $self->data->get_computer_id();
+	my $computer_shortname			 = $self->data->get_computer_short_name();
+	
+	# Run any vcl_post_reservation scripts (if exists)
+	if ($self->os->can("post_reservation")) {
+		if ($self->os->post_reservation()) {
+			notify($ERRORS{'OK'}, 0, "post_reservation script has been executed on $computer_shortname prior to reloading");
+		}
+	}
 	
 	# Retrieve next image
 	my ($next_image_name, $next_image_id, $next_imagerevision_id) = $self->data->get_next_image_dataStructure();
