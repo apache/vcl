@@ -321,6 +321,10 @@ sub retrieve_image {
 	}
 	else {
 		$image_repository_path_local = $self->data->get_vmhost_profile_repository_path(0);
+		
+		# Add the image name as an intermediate directory
+		$image_repository_path_local =~ s/[\/\s]+$//;
+		$image_repository_path_local .= "/$image_name";
 	}
 	
 	if (!$image_repository_path_local) {
