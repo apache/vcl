@@ -1773,15 +1773,17 @@ sub create_user {
 		$password = $self->data->get_reservation_password();
 	}
 	
-	# adminoverride, if 0 use value from database for $imagemeta_rootaccess
-	# If 1 or 2 override database value:
+	# If imagemeta allows rootaccess, check the adminoverride variable
+	# Does not allow for override called from manage_server_access 
 	# 1 - allow admin access, set $imagemeta_rootaccess=1
 	# 2 - disallow admin access, set $imagemeta_rootaccess=0
-	if ($adminoverride eq '1') {
-		$imagemeta_rootaccess = 1;
-	}
-	elsif ($adminoverride eq '2') {
-		$imagemeta_rootaccess = 0;
+	if($imagemeta_rootaccess) {
+		if ($adminoverride eq '1') {
+			$imagemeta_rootaccess = 1;
+		}
+		elsif ($adminoverride eq '2') {
+			$imagemeta_rootaccess = 0;
+		}
 	}
 
 	# Check if user already exists

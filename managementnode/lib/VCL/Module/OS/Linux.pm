@@ -2417,6 +2417,7 @@ sub create_user {
 	}
 	
 	my $computer_node_name = $self->data->get_computer_node_name();
+	my $imagemeta_root_access = $self->data->get_imagemeta_rootaccess();
 	
 	# Check if username argument was supplied
 	my $user_login_id = shift;
@@ -2523,19 +2524,25 @@ sub create_user {
 	$self->restart_service('ext_sshd') || return;
 	
 	# Check image profile for allowed root access
-	if ($root_access == 1) {
-		my $sudoers_file_path = '/etc/sudoers';
-		my $sudoers_line = "$user_login_id ALL= NOPASSWD: ALL";
-		if ($self->append_text_file($sudoers_file_path, $sudoers_line)) {
-			notify($ERRORS{'DEBUG'}, 0, "added line to $sudoers_file_path: '$sudoers_line'");
+	# If the imagemeta root access is disable don't allow manage_server_access to override
+	if(defined($imagemeta_root_access) && $imagemeta_root_access) {
+		if ($root_access == 1) {
+			my $sudoers_file_path = '/etc/sudoers';
+			my $sudoers_line = "$user_login_id ALL= NOPASSWD: ALL";
+			if ($self->append_text_file($sudoers_file_path, $sudoers_line)) {
+				notify($ERRORS{'DEBUG'}, 0, "added line to $sudoers_file_path: '$sudoers_line'");
+			}
+			else {
+				notify($ERRORS{'WARNING'}, 0, "failed to add line to $sudoers_file_path: '$sudoers_line'");
+				return;
+			}
 		}
 		else {
-			notify($ERRORS{'WARNING'}, 0, "failed to add line to $sudoers_file_path: '$sudoers_line'");
-			return;
+			notify($ERRORS{'DEBUG'}, 0, "root access NOT granted to $user_login_id");
 		}
 	}
 	else {
-		notify($ERRORS{'DEBUG'}, 0, "root access NOT granted to $user_login_id");
+		notify($ERRORS{'DEBUG'}, 0, "root access NOT granted to $user_login_id, imagemeta_root_access set to $imagemeta_root_access");
 	}
 
 	# Add user's public ssh identity keys if exists
