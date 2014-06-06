@@ -2136,11 +2136,9 @@ sub get_computer_state_name {
 		return;
 	}
 	
-	notify($ERRORS{'DEBUG'}, 0, "attempting to retrieve current state of computer $computer_name from the database");
-
 	# Create the select statement
 	my $select_statement = "
-   SELECT DISTINCT
+	SELECT DISTINCT
 	state.name AS name
 	FROM
 	state,
@@ -2148,7 +2146,7 @@ sub get_computer_state_name {
 	WHERE
 	computer.stateid = state.id
 	AND (computer.hostname LIKE '$computer_name.%' OR computer.hostname = '$computer_name')
-   ";
+	";
 
 	# Call the database select subroutine
 	# This will return an array of one or more rows based on the select statement
@@ -2301,6 +2299,31 @@ sub get_reservation_info_string {
 	}
 	
 	return $string;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_reservation_user_login_ids
+
+ Parameters  : none
+ Returns     : array
+ Description : Returns an array containing the reservation user login IDs
+               (usernames).
+
+=cut
+
+
+sub get_reservation_user_login_ids {
+	my $self = shift;
+	
+	my $reservation_user_info = $self->get_reservation_users();
+	if (!$reservation_user_info) {
+		notify($ERRORS{'WARNING'}, 0, "unable to retrieve reservation user login IDs, reservation user info is not populated in the request data");
+		return;
+	}
+	
+	my @reservation_users = map { $reservation_user_info->{$_}{unityid} } keys %$reservation_user_info;
+	return @reservation_users;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
