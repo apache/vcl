@@ -105,6 +105,8 @@ our @EXPORT = qw(
   get_block_request_image_info
   get_caller_trace
   get_calling_subroutine
+  get_changelog_info
+  get_changelog_remote_ip_address_info
   get_code_ref_package_name
   get_code_ref_subroutine_name
   get_computer_current_state_name
@@ -113,6 +115,8 @@ our @EXPORT = qw(
   get_computer_info
   get_computers_controlled_by_mn
   get_connect_method_info
+  get_connectlog_info
+  get_connectlog_remote_ip_address_info
   get_copy_speed_info_string
   get_current_file_name
   get_current_package_name
@@ -189,6 +193,7 @@ our @EXPORT = qw(
   parent_directory_path
   preplogfile
   read_file_to_array
+  remove_array_duplicates
   rename_vcld_process
   reservation_being_processed
   round
@@ -214,22 +219,26 @@ our @EXPORT = qw(
   switch_state
   switch_vmhost_id
   update_blockrequest_processing
+  update_changelog_request_user_remote_ip
+  update_changelog_reservation_remote_ip
+  update_changelog_reservation_user_remote_ip
   update_cluster_info
   update_computer_address
-  update_computer_state
+  update_computer_imagename
   update_computer_lastcheck
   update_computer_procnumber
   update_computer_procspeed
   update_computer_ram
+  update_computer_state
+  update_connectlog
   update_currentimage
-  update_computer_imagename
   update_image_name
   update_image_type
   update_lastcheckin
   update_log_ending
   update_log_loaded_time
   update_preload_flag
-  update_request_password
+  update_reservation_password
   update_request_state
   update_reservation_accounts
   update_reservation_lastcheck
@@ -1096,17 +1105,17 @@ sub check_time {
 				}
 			}
 			else {
-				#notify($ERRORS{'DEBUG'}, 0, "reservation will end in more than 10 minutes ($end_diff_minutes)");
+			#notify($ERRORS{'DEBUG'}, 0, "reservation will end in more than 10 minutes ($end_diff_minutes)");
 				my $general_inuse_check_time = ($ENV{management_node_info}->{GENERAL_INUSE_CHECK} * -1);
 
 				if ($lastcheck_diff_minutes <= $general_inuse_check_time) {
-					#notify($ERRORS{'DEBUG'}, 0, "reservation was last checked more than 5 minutes ago ($lastcheck_diff_minutes)");
-					return "poll";
-				}
-				else {
-					#notify($ERRORS{'DEBUG'}, 0, "reservation has been checked within the past 5 minutes ($lastcheck_diff_minutes)");
-					return 0;
-				}
+				#notify($ERRORS{'DEBUG'}, 0, "reservation was last checked more than 5 minutes ago ($lastcheck_diff_minutes)");
+				return "poll";
+			}
+			else {
+				#notify($ERRORS{'DEBUG'}, 0, "reservation has been checked within the past 5 minutes ($lastcheck_diff_minutes)");
+				return 0;
+			}
 			}
 		} ## end else [ if ($end_diff_minutes <= 10)
 	} ## end elsif ($request_state_name =~ /inuse|imageinuse/) [ if ($request_state_name =~ /new|imageprep|reload|tomaintenance|tovmhostinuse/)
@@ -1338,7 +1347,7 @@ EOF
 				return 1;
 			}
 			else {
-				notify($ERRORS{'WARNING'}, $LOGFILE, "unable to update request $request_id state to: $state_name/$laststate_name, current state: $current_state_name/$current_laststate_name");
+				notify($ERRORS{'WARNING'}, $LOGFILE, "unable to update request $request_id state to $state_name/$laststate_name, current state: $current_state_name/$current_laststate_name, SQL statement:\n$update_statement");
 				return;
 			}
 		}
@@ -1556,7 +1565,7 @@ EOF
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 update_request_password
+=head2 update_reservation_password
 
  Parameters  : $reservation_id, $password
  Returns     : 1 success 0 failure
@@ -1564,34 +1573,31 @@ EOF
 
 =cut
 
-sub update_request_password {
+sub update_reservation_password {
 	my ($reservation_id, $password) = @_;
-
-	my ($package, $filename, $line, $sub) = caller(0);
-
-	notify($ERRORS{'WARNING'}, 0, "reservation id is not defined") unless (defined($reservation_id));
-	notify($ERRORS{'WARNING'}, 0, "password is not defined")       unless (defined($password));
-
-	my $update_statement = "
-	UPDATE
-   reservation
-	SET
-	pw = \'$password\'
-	WHERE
-   id = $reservation_id
-	";
+	
+	if (!$reservation_id) {
+		notify($ERRORS{'WARNING'}, 0, "reservation ID argument was not supplied");
+		return;
+	}
+	if (!$password) {
+		notify($ERRORS{'WARNING'}, 0, "password argument was not supplied");
+		return;
+	}
+	
+	my $update_statement = "UPDATE reservation SET pw = \'$password\'	WHERE id = $reservation_id";
 
 	# Call the database execute subroutine
 	if (database_execute($update_statement)) {
 		# Update successful
-		notify($ERRORS{'OK'}, $LOGFILE, "password updated for reservation_id $reservation_id ");
+		notify($ERRORS{'OK'}, $LOGFILE, "password updated for reservation $reservation_id: $password");
 		return 1;
 	}
 	else {
-		notify($ERRORS{'CRITICAL'}, 0, "unable to update password for reservation $reservation_id");
+		notify($ERRORS{'WARNING'}, 0, "failed to update password for reservation $reservation_id");
 		return 0;
 	}
-} ## end sub update_request_password
+} ## end sub update_reservation_password
 
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -1707,9 +1713,7 @@ sub is_request_imaging {
 	my $forimaging     = $selected_rows[0]{forimaging};
 	my $state_name     = $selected_rows[0]{currentstate_name};
 	my $laststate_name = $selected_rows[0]{laststate_name};
-
-	notify($ERRORS{'DEBUG'}, 0, "forimaging=$forimaging, currentstate=$state_name, laststate=$laststate_name");
-
+	
 	# If request state or laststate has been changed to image, return 1
 	# If forimaging is set, return 0
 	# If neither state is image and forimaging is not set, return undefined
@@ -2913,7 +2917,7 @@ sub kill_reservation_process {
 sub database_select {
 	my ($select_statement, $database) = @_;
 	
-	my $calling_sub = (caller(1))[3];
+	my $calling_sub = (caller(1))[3] || 'undefined';
 	
 	# Initialize the database_select_calls element if not already initialized
 	if (!ref($ENV{database_select_calls})) {
@@ -3006,7 +3010,7 @@ sub database_execute {
 	# Execute the statement handle
 	my $result = $statement_handle->execute();
 	if (!defined($result)) {
-		notify($ERRORS{'WARNING'}, 0, "could not execute SQL statement, $sql_statement, " . $dbh->errstr());
+		notify($ERRORS{'WARNING'}, 0, "could not execute SQL statement: $sql_statement\n" . $dbh->errstr());
 		$statement_handle->finish;
 		$dbh->disconnect if !defined $ENV{dbh};
 		return;
@@ -3172,7 +3176,7 @@ EOF
 		my $user_id = $request_info->{userid};
 		my $user_info = get_user_info($user_id, 0, 1);
 		$request_info->{user} = $user_info;
-
+		
 		my $imagemeta_root_access = $request_info->{reservation}{$reservation_id}{image}{imagemeta}{rootaccess};
 		
 		# Add the request user to the hash, set ROOTACCESS to the value configured in imagemeta
@@ -3333,7 +3337,7 @@ sub get_management_node_requests {
    reservation.requestid AS reservation_requestid,
    reservation.managementnodeid AS reservation_managementnodeid,
 	reservation.lastcheck AS reservation_lastcheck,
-	
+
 	serverrequest.id AS ServerRequest_serverrequestid
 
    FROM
@@ -5579,9 +5583,9 @@ EOF
 	}
 	elsif ($loadstatename) {
 		# Remove the first character of loadstatename, it is !
-		$loadstatename = substr($loadstatename, 1);
-		notify($ERRORS{'DEBUG'}, 0, "removing computerloadlog entries NOT matching loadstate = $loadstatename");
-		$sql_statement .= "AND computerloadstate.loadstatename != \'$loadstatename\'";
+		my $modified_loadstatename = substr($loadstatename, 1);
+		notify($ERRORS{'DEBUG'}, 0, "removing computerloadlog entries NOT matching loadstate = $modified_loadstatename");
+		$sql_statement .= "AND computerloadstate.loadstatename != \'$modified_loadstatename\'";
 	}
 	else {
 		notify($ERRORS{'DEBUG'}, 0, "removing all computerloadlog entries for reservation");
@@ -5589,7 +5593,13 @@ EOF
 	
 	# Call the database execute subroutine
 	if (database_execute($sql_statement)) {
-		notify($ERRORS{'OK'}, 0, "deleted rows from computerloadlog for reservation IDs: $reservation_id_string");
+		if ($loadstatename) {
+			notify($ERRORS{'OK'}, 0, "deleted rows from computerloadlog matching loadstate '$loadstatename' for reservation IDs: $reservation_id_string");
+		}
+		else {
+			notify($ERRORS{'OK'}, 0, "deleted all rows from computerloadlog for reservation IDs: $reservation_id_string");
+		}
+		
 		return 1;
 	}
 	else {
@@ -6721,7 +6731,7 @@ EOF
 	if ($user_login_id =~ /vcladmin/) {
 		$user_info->{STANDALONE} = 1;
 	}
-
+	
 	# Set the user's affiliation sitewwwaddress and help address if not defined or blank
 	if (!$user_info->{affiliation}{sitewwwaddress}) {
 		$user_info->{affiliation}{sitewwwaddress} = 'http://cwiki.apache.org/VCL';
@@ -7040,9 +7050,12 @@ SELECT
 FROM
 computer
 WHERE
-hostname REGEXP '^$computer_identifier(\\\\.|\$)'
-OR IPaddress = '$computer_identifier'
-OR privateIPaddress = '$computer_identifier'
+deleted = 0
+AND (
+   hostname REGEXP '^$computer_identifier(\\\\.|\$)'
+   OR IPaddress = '$computer_identifier'
+   OR privateIPaddress = '$computer_identifier'
+)
 EOF
 
 	my @selected_rows = database_select($select_statement);
@@ -7672,16 +7685,15 @@ sub switch_vmhost_id {
                belonging to the request. A hash is constructed with keys set to
                the reservation IDs. The data of each key is a reference to an
                array containing the computerloadstate names. Example:
-					{
-					  3115 => [
-						 "begin",
-					  ],
-					  3116 => [
-						 "begin",
-						 "nodeready"
-					  ]
-					}
-
+               {
+                 3115 => [
+                   "begin",
+                 ],
+                 3116 => [
+                   "begin",
+                   "nodeready"
+                 ]
+               }
 
 =cut
 
@@ -7898,14 +7910,35 @@ sub string_to_ascii {
 	);
 	
 	my $ascii_value_string;
+	my $previous_code = -1;
+	my $consecutive_count = 0;
 	foreach my $ascii_code (unpack("C*", $string)) {
-		if (defined($ascii_codes{$ascii_code})) {
-			$ascii_value_string .= "[$ascii_codes{$ascii_code}]";
+		if ($ascii_code != 10 && $ascii_code == $previous_code) {
+			$consecutive_count++;
+			next;
+		}
+		else {
+			if ($consecutive_count > 1) {
+				chop $ascii_value_string;
+				$ascii_value_string .= "x$consecutive_count]";
+			}
+			$consecutive_count = 1;
+		}
+		
+		if (my $code = $ascii_codes{$ascii_code}) {
+			$ascii_value_string .= "[$code]";
 			$ascii_value_string .= "\n" if $ascii_code == 10;
+			$previous_code = $ascii_code;
 		}
 		else {
 			$ascii_value_string .= pack("C*", $ascii_code);
+			$previous_code = -1;
 		}
+	}
+	
+	if ($consecutive_count > 1) {
+		chop $ascii_value_string;
+		$ascii_value_string .= "x$consecutive_count]";
 	}
 	
 	if (defined($ascii_value_string)) {
@@ -9487,11 +9520,11 @@ sub get_random_mac_address {
 
 =head2 xml_string_to_hash
 
- Parameters  : $xml_text
+ Parameters  : $xml_text, $force_array (optional)
  Returns     : hash reference
  Description : Converts XML text to a hash using XML::Simple:XMLin. The argument
-               may be a string of XML text, an array, or array reference of
-               lines of XML text.
+               may be a string of XML text or array reference of lines of XML
+               text.
 
 =cut
 
@@ -9502,27 +9535,19 @@ sub xml_string_to_hash {
 		return;
 	}
 	
-	my $xml_text;
-	
-	# Check if the argument is an array of lines, array reference, or string
-	if (scalar(@arguments) == 1) {
-		my $argument = $arguments[0];
-		if (my $type = ref($argument)) {
-			if ($type eq 'ARRAY') {
-				$xml_text = join("\n", @$argument);
-			}
-			else {
-				notify($ERRORS{'WARNING'}, 0, "XML text argument is a $type reference, it may only be a string or array reference");
-				return;
-			}
+	my ($xml_text, $force_array) = @_;
+	my $type = ref($xml_text);
+	if ($type) {
+		if ($type eq 'ARRAY') {
+			$xml_text = join("\n", @$xml_text);
 		}
 		else {
-			$xml_text = $argument;
+			notify($ERRORS{'WARNING'}, 0, "invalid argument type: $type");
+			return;
 		}
 	}
-	else {
-		$xml_text = join("\n", @arguments);
-	}
+	
+	$force_array = 1 if !defined $force_array;
 	
 	# Override the die handler 
 	local $SIG{__DIE__} = sub{};
@@ -9530,7 +9555,7 @@ sub xml_string_to_hash {
 	# Convert the XML to a hash using XML::Simple
 	my $xml_hashref;
 	eval {
-		$xml_hashref = XMLin($xml_text, 'ForceArray' => 1, 'KeyAttr' => []);
+		$xml_hashref = XMLin($xml_text, 'ForceArray' => $force_array, 'KeyAttr' => []);
 	};
 	
 	if ($xml_hashref) {
@@ -10854,6 +10879,590 @@ sub yaml_serialize {
 	$serialized_data =~ s/'/\\'/g;
 	
 	return $serialized_data;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 remove_array_duplicates
+
+ Parameters  : @array
+ Returns     : array
+ Description : Removes duplicates from the array and returns a sorted array.
+
+=cut
+
+sub remove_array_duplicates {
+	my @array = @_;
+	my %hash = map { $_ => 1 } @array;
+	return sort keys %hash;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_changelog_info
+
+ Parameters  : $request_id, $age_limit_timestamp (optional)
+ Returns     : hash reference
+ Description : Retrieves all of the changelog entries for a request which have a
+               changelog.remoteIP value. If the $age_limit_timestamp argument is
+               supplied, only entries with timestamp values greater than or
+               equal to the argument will be returned. A hash is constructed.
+               The hash values are the changelog.id values:
+               
+               194 => {
+                 "computerid" => 3574,
+                 "end" => undef,
+                 "id" => 194,
+                 "logid" => 5354,
+                 "other" => undef,
+                 "remoteIP" => "1.2.3.4",
+                 "reservation" => {
+                   "lastcheck" => "2014-06-06 11:43:29"
+                 },
+                 "reservationid" => 3115,
+                 "start" => undef,
+                 "timestamp" => "2014-06-06 11:41:05",
+                 "user" => {
+                   "unityid" => "admin"
+                 },
+                 "userid" => 1,
+                 "wasavailable" => undef
+               },
+
+=cut
+
+sub get_changelog_info {
+	my ($request_id, $age_limit_timestamp) = @_;
+	if (!defined($request_id)) {
+		notify($ERRORS{'WARNING'}, 0, "request ID argument was not supplied");
+		return;
+	}
+	
+	# Get a hash ref containing the database column names
+	my $database_table_columns = get_database_table_columns();
+	
+	my %tables = (
+		'changelog' => 'changelog',
+	);
+	
+	# Construct the select statement
+	my $select_statement = "SELECT DISTINCT\n";
+	
+	# Get the column names for each table and add them to the select statement
+	for my $table_alias (keys %tables) {
+		my $table_name = $tables{$table_alias};
+		my @columns = @{$database_table_columns->{$table_name}};
+		for my $column (@columns) {
+			$select_statement .= "$table_alias.$column AS '$table_alias-$column',\n";
+		}
+	}
+	
+	# Complete the select statement
+	$select_statement .= <<EOF;
+user.unityid AS 'user-unityid',
+reservation.lastcheck AS 'reservation-lastcheck'
+FROM
+log,
+request,
+changelog
+LEFT JOIN (user) ON (changelog.userid = user.id)
+LEFT JOIN (reservation) ON (changelog.reservationid = reservation.id)
+WHERE
+changelog.logid = log.id
+AND log.id = request.logid
+AND request.id = $request_id
+AND changelog.remoteIP IS NOT NULL
+EOF
+	
+	if ($age_limit_timestamp) {
+		$select_statement .= "AND changelog.timestamp >= '$age_limit_timestamp'";
+	}
+	
+	my @rows = database_select($select_statement);
+
+	my $changelog_info = {};
+	for my $row (@rows) {
+		my $changelog_id = $row->{'changelog-id'};
+		
+		# Loop through all the columns returned
+		for my $key (keys %$row) {
+			my $value = $row->{$key};
+			
+			# Split the table-column names
+			my ($table, $column) = $key =~ /^([^-]+)-(.+)/;
+			
+			if ($table eq 'changelog') {
+				$changelog_info->{$changelog_id}{$column} = $value;
+			}
+			else {
+				$changelog_info->{$changelog_id}{$table}{$column} = $value;
+			}
+		}
+	}
+	
+	my $age_string = '';
+	if ($age_limit_timestamp) {
+		$age_string = " updated on or after $age_limit_timestamp";
+	}
+	
+	if (scalar(%$changelog_info)) {
+		notify($ERRORS{'DEBUG'}, 0, "retrieved changelog info for request $request_id$age_string:\n" . format_data($changelog_info));
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "no changelog entries exist for request $request_id$age_string");
+	}
+	return $changelog_info;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_changelog_remote_ip_address_info
+
+ Parameters  : $request_id, $age_limit_timestamp (optional)
+ Returns     : hash reference
+ Description : Retrieves all of the changelog entries for a request which have a
+               changelog.remoteIP value and organizes the results by remote IP
+               address. If the $age_limit_timestamp argument is supplied, only
+               entries with timestamp values greater than or equal to the
+               argument will be returned. A hash is constructed. The hash values
+               are the changelog.remoteIP values:
+
+               "1.2.3.5" => [
+                 {
+                   "computerid" => 3574,
+                   "end" => undef,
+                   "id" => 199,
+                   "logid" => 5354,
+                   "other" => undef,
+                   "remoteIP" => "1.2.3.5",
+                   "reservation" => {
+                     "lastcheck" => "2014-06-06 11:56:00"
+                   },
+                   "reservationid" => 3115,
+                   "start" => undef,
+                   "timestamp" => "2014-06-06 11:53:36",
+                   "user" => {
+                     "unityid" => "admin"
+                   },
+                   "userid" => 1,
+                   "wasavailable" => undef
+                 }
+               ]
+
+=cut
+
+sub get_changelog_remote_ip_address_info {
+	my ($request_id, $age_limit_timestamp) = @_;
+	if (!defined($request_id)) {
+		notify($ERRORS{'WARNING'}, 0, "request ID argument was not supplied");
+		return;
+	}
+	
+	my $changelog_remote_ip_info = {};
+	
+	my $changelog_info = get_changelog_info($request_id, $age_limit_timestamp);
+	for my $changelog_id (keys %$changelog_info) {
+		my $remote_ip = $changelog_info->{$changelog_id}{remoteIP};
+		
+		push @{$changelog_remote_ip_info->{$remote_ip}}, $changelog_info->{$changelog_id};
+	}
+	
+	notify($ERRORS{'DEBUG'}, 0, "retrieved all changelog remote IP addresses for request $request_id: " . format_data($changelog_remote_ip_info));
+	return $changelog_remote_ip_info;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 update_changelog_reservation_remote_ip
+
+ Parameters  : $reservation_id, @remote_ip_addresses
+ Returns     : boolean
+ Description : Inserts a rows into the changelog table with the remoteIP value
+               specified by the argument. If a changelog row already exists with
+               the same reservationid and remoteIP values, the timestamp of that
+               row is updated to the current time. The changelog.userid column
+               is set to NULL.
+
+=cut
+
+sub update_changelog_reservation_remote_ip {
+	my ($reservation_id, @remote_ip_addresses) = @_;
+	if (!$reservation_id) {
+		notify($ERRORS{'WARNING'}, 0, "reservation ID argument was not supplied");
+		return;
+	}
+	if (!@remote_ip_addresses) {
+		notify($ERRORS{'WARNING'}, 0, "remote IP address argument was not supplied");
+		return;
+	}
+	
+	for my $remote_ip (@remote_ip_addresses) {
+		my $sql = <<EOF;
+INSERT INTO changelog
+(logid, reservationid, computerid, remoteIP, timestamp)
+(
+	SELECT
+	log.id, reservation.id, reservation.computerid, '$remote_ip', NOW()
+	FROM
+	request,
+	reservation,
+	log
+	WHERE
+	reservation.id = $reservation_id
+	AND request.id = reservation.requestid
+	AND request.logid = log.id
+)
+ON DUPLICATE KEY UPDATE
+changelog.timestamp=NOW(),
+changelog.id=LAST_INSERT_ID(changelog.id)
+EOF
+		
+		my $changelog_id = database_execute($sql);
+		if ($changelog_id) {
+			notify($ERRORS{'OK'}, 0, "updated changelog ID: $changelog_id, reservation: $reservation_id, remote IP: $remote_ip");
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "failed to update into changelog table, reservation: $reservation_id, remote IP: $remote_ip");
+			return;
+		}
+	}
+	
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 update_changelog_reservation_user_remote_ip
+
+ Parameters  : $reservation_id, $user_id, @remote_ip_addresses
+ Returns     : boolean
+ Description : Inserts a rows into the changelog table with the reservationid,
+               userid, and remoteIP values specified by the arguments. If a
+               changelog row already exists with the same reservationid and
+               remoteIP values, the timestamp of that row is updated to the
+               current time.
+
+=cut
+
+sub update_changelog_reservation_user_remote_ip {
+	my ($reservation_id, $user_id, @remote_ip_addresses) = @_;
+	if (!defined($reservation_id)) {
+		notify($ERRORS{'WARNING'}, 0, "reservation ID argument was not supplied");
+		return;
+	}
+	if (!defined($user_id)) {
+		notify($ERRORS{'WARNING'}, 0, "user ID argument was not supplied");
+		return;
+	}
+	elsif (!@remote_ip_addresses) {
+		notify($ERRORS{'WARNING'}, 0, "remote IP address argument was not supplied");
+		return;
+	}
+	
+	for my $remote_ip (@remote_ip_addresses) {
+		my $sql = <<EOF;
+INSERT INTO changelog
+(logid, userid, reservationid, computerid, remoteIP, timestamp)
+(
+	SELECT
+	log.id, user.id, reservation.id, reservation.computerid, '$remote_ip', NOW()
+	FROM
+	request,
+	reservation,
+	log,
+	user
+	WHERE
+	reservation.id = $reservation_id
+	AND request.id = reservation.requestid
+	AND request.logid = log.id
+	AND user.id = $user_id
+)
+ON DUPLICATE KEY UPDATE
+changelog.timestamp=NOW(),
+changelog.id=LAST_INSERT_ID(changelog.id)
+EOF
+		
+		my $changelog_id = database_execute($sql);
+		if ($changelog_id) {
+			notify($ERRORS{'OK'}, 0, "updated changelog ID: $changelog_id, reservation: $reservation_id, user ID: $user_id, remote IP: $remote_ip");
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "failed to update into changelog table, reservation: $reservation_id, user ID: $user_id, remote IP: $remote_ip");
+			return;
+		}
+	}
+	
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 update_changelog_request_user_remote_ip
+
+ Parameters  : $request_id, $user_id, @remote_ip_addresses
+ Returns     : boolean
+ Description : Inserts a rows into the changelog table with the userid and
+               remoteIP values specified by the arguments. The reservationid
+               value is set to NULL.
+
+=cut
+
+sub update_changelog_request_user_remote_ip {
+	my ($request_id, $user_id, @remote_ip_addresses) = @_;
+	if (!defined($request_id)) {
+		notify($ERRORS{'WARNING'}, 0, "request ID argument was not supplied");
+		return;
+	}
+	if (!defined($user_id)) {
+		notify($ERRORS{'WARNING'}, 0, "user ID argument was not supplied");
+		return;
+	}
+	elsif (!@remote_ip_addresses) {
+		notify($ERRORS{'WARNING'}, 0, "remote IP address argument was not supplied");
+		return;
+	}
+	
+	for my $remote_ip (@remote_ip_addresses) {
+		my $sql = <<EOF;
+INSERT INTO changelog
+(logid, userid, remoteIP, timestamp)
+(
+	SELECT
+	request.logid, $user_id, '$remote_ip', NOW()
+	FROM
+	request
+	WHERE
+	request.id = $request_id
+)
+ON DUPLICATE KEY UPDATE
+changelog.timestamp=NOW(),
+changelog.id=LAST_INSERT_ID(changelog.id)
+EOF
+		
+		my $changelog_id = database_execute($sql);
+		if ($changelog_id) {
+			notify($ERRORS{'OK'}, 0, "updated changelog ID: $changelog_id, request: $request_id, user ID: $user_id, remote IP: $remote_ip");
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "failed to update into changelog table, request: $request_id, user ID: $user_id, remote IP: $remote_ip");
+			return;
+		}
+	}
+	
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_connectlog_info
+
+ Parameters  : $request_id, $age_limit_timestamp (optional)
+ Returns     : hash
+ Description : Retrieves connectlog entries for a request and returns a hash
+               reference organized by connectlog.id values:
+               
+               {
+                 119 => {
+                   "id" => 119,
+                   "logid" => 5354,
+                   "remoteIP" => "192.168.53.54",
+                   "reservationid" => 3115,
+                   "timestamp" => "2014-05-16 12:47:05",
+                   "userid" => 1,
+                   "verified" => 1
+                 },
+                 122 => {
+                   "id" => 122,
+                   "logid" => 5354,
+                   "remoteIP" => "192.168.53.54",
+                   "reservationid" => 3115,
+                   "timestamp" => "2014-05-16 12:47:05",
+                   "userid" => undef,
+                   "verified" => 0
+                 },
+
+=cut
+
+sub get_connectlog_info {
+	my ($request_id, $age_limit_timestamp) = @_;
+	if (!$request_id) {
+		notify($ERRORS{'WARNING'}, 0, "request ID argument was not supplied");
+		return;
+	}
+	
+	my $select_statement = <<EOF;	
+SELECT
+connectlog.*
+FROM
+connectlog,
+request
+WHERE
+request.id = $request_id
+AND connectlog.logid = request.logid
+EOF
+	
+	if ($age_limit_timestamp) {
+		$select_statement .= "AND connectlog.timestamp >= '$age_limit_timestamp'";
+	}
+	
+	my $connectlog_info = {};
+	
+	my @rows = database_select($select_statement);
+	for my $row (@rows) {
+		my $connectlog_id = $row->{id};
+		$connectlog_info->{$connectlog_id} = $row;
+	}
+	
+	my $age_string = '';
+	if ($age_limit_timestamp) {
+		$age_string = " updated on or after $age_limit_timestamp";
+	}
+	
+	notify($ERRORS{'DEBUG'}, 0, "retrieved connectlog info for request $request_id$age_string:\n" . format_data($connectlog_info));
+	return $connectlog_info;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_connectlog_remote_ip_address_info
+
+ Parameters  : $request_id, $age_limit_timestamp (optional)
+ Returns     : hash
+ Description : Retrieves connectlog entries for a request and returns a hash
+               reference organized by connectlog.remoteIP values. Each hash key
+               contains an array reference of the connectlog entries which match
+               the remoteIP key:
+               {
+                  "192.168.53.54" => [
+                    {
+                      "id" => 119,
+                      "logid" => 5354,
+                      "remoteIP" => "192.168.53.54",
+                      "reservationid" => 3115,
+                      "timestamp" => "2014-05-16 12:47:05",
+                      "userid" => 1,
+                      "verified" => 1
+                    },
+                    {
+                      "id" => 122,
+                      "logid" => 5354,
+                      "remoteIP" => "192.168.53.54",
+                      "reservationid" => 3115,
+                      "timestamp" => "2014-05-16 12:47:05",
+                      "userid" => undef,
+                      "verified" => 0
+                    }
+                  ],
+               }
+
+=cut
+
+sub get_connectlog_remote_ip_address_info {
+	my ($request_id, $age_limit_timestamp) = @_;
+	if (!$request_id) {
+		notify($ERRORS{'WARNING'}, 0, "request ID argument was not supplied");
+		return;
+	}
+	
+	my $connectlog_remote_ip_info = {};
+	my $connectlog_info = get_connectlog_info($request_id, $age_limit_timestamp);
+	for my $connectlog_id (keys %$connectlog_info) {
+		my $remote_ip = $connectlog_info->{$connectlog_id}{remoteIP};
+		push @{$connectlog_remote_ip_info->{$remote_ip}}, $connectlog_info->{$connectlog_id};
+	}
+	
+	my $age_string = '';
+	if ($age_limit_timestamp) {
+		$age_string = " updated on or after $age_limit_timestamp";
+	}
+	
+	notify($ERRORS{'DEBUG'}, 0, "retrieved connectlog remote IP address info for request $request_id$age_string:\n" . format_data($connectlog_remote_ip_info));
+	return $connectlog_remote_ip_info;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 update_connectlog
+
+ Parameters  : $reservation_id, $remote_ip, $verified (optional), $user_id (optional)
+ Returns     : boolean
+ Description : Inserts into or updates the connectlog table. If an existing
+               entry with the same reservation ID, user ID, and remote IP values
+               exists, the timestamp is updated. The verified value is updated
+               if the existing value is false and the verified argument is true.
+               Otherwise, the verified value remains false.
+
+=cut
+
+sub update_connectlog {
+	my ($reservation_id, $remote_ip, $verified, $user_id) = @_;
+	
+	if (!$reservation_id) {
+		notify($ERRORS{'WARNING'}, 0, "reservation ID argument was not supplied");
+		return;
+	}
+	if (!$remote_ip) {
+		notify($ERRORS{'WARNING'}, 0, "remote IP address argument was not supplied");
+		return;
+	}
+	
+	$verified = 0 unless defined($verified);
+	$user_id = 'NULL' unless defined($user_id) && $verified;
+	
+	my $sql = <<EOF;
+INSERT INTO connectlog
+(logid, reservationid, userid, remoteIP, verified, timestamp)
+SELECT
+request.logid,
+$reservation_id,
+$user_id,
+'$remote_ip',
+$verified,
+NOW()
+FROM
+request,
+reservation
+WHERE
+reservation.id = $reservation_id
+AND reservation.requestid = request.id
+EOF
+	
+	# Try to prevent duplicate rows if userid is NULL
+	if ($user_id eq 'NULL') {
+		$sql .= <<EOF;
+AND NOT EXISTS (
+   SELECT
+	id
+	FROM
+	connectlog
+	WHERE
+	reservationid = $reservation_id
+	AND remoteIP = '$remote_ip'
+	AND userid IS NULL
+)
+EOF
+	}
+
+	$sql .= <<EOF;
+ON DUPLICATE KEY UPDATE
+connectlog.logid = LAST_INSERT_ID(connectlog.logid),
+connectlog.timestamp = NOW(),
+connectlog.verified = IF(VALUES(verified) = 1, 1, connectlog.verified)
+EOF
+	
+	# If user ID argument wasn't provided, set it to 'NULL' for the log message
+	$user_id = 'NULL' unless defined($user_id);
+	
+	my $connectlog_id = database_execute($sql);
+	if ($connectlog_id) {
+		notify($ERRORS{'OK'}, 0, "updated connectlog ID: $connectlog_id, reservation: $reservation_id, remote IP: $remote_ip, verified: $verified, user ID: $user_id");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to update into connectlog table, reservation: $reservation_id, remote IP: $remote_ip, verified: $verified, user ID: $user_id");
+		return;
+	}
+	
+	return 1;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
