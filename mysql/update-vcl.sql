@@ -765,6 +765,27 @@ CREATE TABLE IF NOT EXISTS `connectmethodmap` (
 
 -- --------------------------------------------------------
 
+--
+-- Table structure for table 'connectlog'
+--
+
+CREATE TABLE IF NOT EXISTS connectlog (
+  id int(10) unsigned NOT NULL AUTO_INCREMENT,
+  logid int(10) unsigned NOT NULL,
+  reservationid mediumint(8) unsigned NOT NULL,
+  userid mediumint(8) unsigned DEFAULT NULL,
+  remoteIP varchar(39) NOT NULL,
+  verified tinyint(1) NOT NULL,
+  `timestamp` datetime NOT NULL DEFAULT '0000-00-00 00:00:00',
+  PRIMARY KEY (id),
+  UNIQUE KEY reservationid_2 (reservationid,userid,remoteIP),
+  KEY reservationid (reservationid),
+  KEY userid (userid),
+  KEY logid (logid)
+) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
+
+-- --------------------------------------------------------
+
 -- 
 --  Table structure for table `image`
 --
@@ -1407,6 +1428,7 @@ INSERT IGNORE INTO `variable` (`name`, `serialization`, `value`) VALUES ('server
 INSERT IGNORE INTO `variable` (`name`, `serialization`, `value`) VALUES ('general_end_notice_first', 'none', '600');
 INSERT IGNORE INTO `variable` (`name`, `serialization`, `value`) VALUES ('general_end_notice_second', 'none', '300');
 INSERT IGNORE INTO `variable` (`name`, `serialization`, `value`) VALUES ('ignore_connections_gte', 'none', '1440');
+INSERT IGNORE INTO `variable` (`name`, `serialization`, `value`) VALUES ('ignored_remote_ip_addresses', 'none', '');
 
 -- 
 
@@ -1424,6 +1446,9 @@ UPDATE vmprofile SET vmprofile.datastoreimagetypeid = (SELECT `id` FROM `imagety
 --
 
 CALL AddConstraintIfNotExists('computer', 'currentimageid', 'image', 'id', 'update', 'CASCADE');
+CALL AddConstraintIfNotExists('computer', 'vmhostid', 'vmhost', 'id', 'update', 'CASCADE');
+CALL AddConstraintIfNotExists('computer', 'imagerevisionid', 'imagerevision', 'id', 'update', 'CASCADE');
+CALL AddConstraintIfNotExists('computer', 'nextimageid', 'image', 'id', 'update', 'CASCADE');
 
 -- --------------------------------------------------------
 
@@ -1435,6 +1460,15 @@ CALL AddConstraintIfNotExists('connectmethodmap', 'connectmethodid', 'connectmet
 CALL AddConstraintIfNotExists('connectmethodmap', 'OStypeid', 'OStype', 'id', 'both', 'CASCADE');
 CALL AddConstraintIfNotExists('connectmethodmap', 'OSid', 'OS', 'id', 'both', 'CASCADE');
 CALL AddConstraintIfNotExists('connectmethodmap', 'imagerevisionid', 'imagerevision', 'id', 'both', 'CASCADE');
+
+-- --------------------------------------------------------
+
+--
+-- Constraints for table `connectlog`
+--
+
+CALL AddConstraintIfNotExists('connectlog', 'logid', 'log', 'id', 'both', 'CASCADE');
+CALL AddConstraintIfNotExists('connectlog', 'userid', 'user', 'id', 'both', 'CASCADE');
 
 -- --------------------------------------------------------
 

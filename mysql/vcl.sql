@@ -298,6 +298,27 @@ CREATE TABLE IF NOT EXISTS `computerloadstate` (
 -- --------------------------------------------------------
 
 --
+-- Table structure for table 'connectlog'
+--
+
+CREATE TABLE IF NOT EXISTS connectlog (
+  id int(10) unsigned NOT NULL AUTO_INCREMENT,
+  logid int(10) unsigned NOT NULL,
+  reservationid mediumint(8) unsigned NOT NULL,
+  userid mediumint(8) unsigned DEFAULT NULL,
+  remoteIP varchar(39) NOT NULL,
+  verified tinyint(1) NOT NULL,
+  `timestamp` datetime NOT NULL DEFAULT '0000-00-00 00:00:00',
+  PRIMARY KEY (id),
+  UNIQUE KEY reservationid_1 (reservationid,userid,remoteIP),
+  KEY reservationid (reservationid),
+  KEY userid (userid),
+  KEY logid (logid)
+) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
+
+-- --------------------------------------------------------
+
+--
 -- Table structure for table `connectmethod`
 --
 
@@ -425,7 +446,7 @@ CREATE TABLE IF NOT EXISTS `imagemeta` (
   `postoption` varchar(32) default NULL,
   `architecture` varchar(10) default NULL,
   `rootaccess` tinyint(1) unsigned NOT NULL default '1',
-  PRIMARY KEY  (`id`),
+  PRIMARY KEY  (`id`)
 ) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
@@ -1898,8 +1919,8 @@ INSERT INTO `variable` (`name`, `serialization`, `value`) VALUES
 ('general_end_notice_second', 'none', '300'),
 ('ignore_connections_gte', 'none', '1440'),
 ('xcat|timeout_error_limit', 'none', '5'),
-('xcat|rpower_error_limit', 'none', '3');
-
+('xcat|rpower_error_limit', 'none', '3'),
+('ignored_remote_ip_addresses', 'none', '');
 
 -- 
 -- Dumping data for table `vmprofile`
@@ -1967,12 +1988,15 @@ ALTER TABLE `blockWebTime`
 -- Constraints for table `computer`
 -- 
 ALTER TABLE `computer`
-  ADD CONSTRAINT `computer_ibfk_12` FOREIGN KEY (`ownerid`) REFERENCES `user` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
+  ADD CONSTRAINT `computer_ibfk_40` FOREIGN KEY (vmhostid) REFERENCES vmhost (`id`) ON UPDATE CASCADE,
+	ADD CONSTRAINT `computer_ibfk_12` FOREIGN KEY (`ownerid`) REFERENCES `user` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
   ADD CONSTRAINT `computer_ibfk_30` FOREIGN KEY (`scheduleid`) REFERENCES `schedule` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
   ADD CONSTRAINT `computer_ibfk_33` FOREIGN KEY (`stateid`) REFERENCES `state` (`id`) ON UPDATE CASCADE,
   ADD CONSTRAINT `computer_ibfk_35` FOREIGN KEY (`platformid`) REFERENCES `platform` (`id`) ON UPDATE CASCADE,
   ADD CONSTRAINT `computer_ibfk_36` FOREIGN KEY (`currentimageid`) REFERENCES `image` (`id`) ON UPDATE CASCADE,
-  ADD CONSTRAINT `computer_ibfk_37` FOREIGN KEY (`provisioningid`) REFERENCES `provisioning` (`id`) ON UPDATE CASCADE;
+  ADD CONSTRAINT `computer_ibfk_37` FOREIGN KEY (`provisioningid`) REFERENCES `provisioning` (`id`) ON UPDATE CASCADE,
+  ADD CONSTRAINT `computer_ibfk_38` FOREIGN KEY (`imagerevisionid`) REFERENCES imagerevision (`id`) ON UPDATE CASCADE,
+  ADD CONSTRAINT `computer_ibfk_39` FOREIGN KEY (`nextimageid`) REFERENCES image (`id`) ON UPDATE CASCADE;
 
 -- 
 -- Constraints for table `computerloadlog`
@@ -1988,6 +2012,14 @@ ALTER TABLE `connectmethodmap`
   ADD CONSTRAINT `connectmethodmap_ibfk_2` FOREIGN KEY (`OStypeid`) REFERENCES `OStype` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
   ADD CONSTRAINT `connectmethodmap_ibfk_3` FOREIGN KEY (`OSid`) REFERENCES `OS` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
   ADD CONSTRAINT `connectmethodmap_ibfk_4` FOREIGN KEY (`imagerevisionid`) REFERENCES `imagerevision` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+
+--
+-- Constraints for table `connectlog`
+--
+ALTER TABLE `connectlog`
+  ADD CONSTRAINT `connectlog_ibfk_3` FOREIGN KEY (`logid`) REFERENCES `log` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  ADD CONSTRAINT `connectlog_ibfk_1` FOREIGN KEY (`userid`) REFERENCES `user` (`id`) ON UPDATE CASCADE;
 
 -- 
 -- Constraints for table `continuations`
