@@ -278,7 +278,19 @@ END
 	}
 
 } ## end sub process
+
 #/////////////////////////////////////////////////////////////////////////////
+
+=head2 reservation_successful
+
+ Parameters  : none
+ Returns     : exits
+ Description : Handles final steps when an image capture is successful. Sends
+               message to image creator. Inserts reload request into the
+               database for the newly captured image revision on the computer
+               which was used to capture it.
+
+=cut
 
 sub reservation_successful {
 	my $self           = shift;
@@ -357,6 +369,16 @@ END
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 reservation_failed
+
+ Parameters  : $message (optional)
+ Returns     : exits
+ Description : Handles final steps when a request in the image state fails. Sets
+               the request and computer states to maintenance. Sends "processing
+               delayed" message to image creator.
+
+=cut
+
 sub reservation_failed {
 	my $self = shift;
 
@@ -375,9 +397,16 @@ sub reservation_failed {
 	my $computer_shortname         = $self->data->get_computer_short_name();
 	my $managementnode_shortname   = $self->data->get_management_node_short_name();
 	my $sysadmin_mail_address      = $self->data->get_management_node_sysadmin_email(0);
-
+	
+	my $message = shift;
+	
 	# Image process failed
-	notify($ERRORS{'CRITICAL'}, 0, "$image_name image creation failed");
+	if ($message) {
+		notify($ERRORS{'CRITICAL'}, 0, "$image_name image creation failed - $message");
+	}
+	else {
+		notify($ERRORS{'CRITICAL'}, 0, "$image_name image creation failed");
+	}
 
 	# Send mail to user
 	my $body_user = <<"END";
@@ -455,8 +484,8 @@ END
 =head2 setup_get_menu
 
  Parameters  : none
- Returns     : 
- Description : 
+ Returns     : hash reference
+ Description : Assembles the image-related 'vcld -setup' menu items.
 
 =cut
 
@@ -473,7 +502,7 @@ sub setup_get_menu {
 =head2 setup_capture_base_image
 
  Parameters  : none
- Returns     : 
+ Returns     : true
  Description : This subroutine is used when vcld is run in setup mode. It
                inserts the database entries necessary to capture a base image.
                Several questions are presented to the user via the command line.
