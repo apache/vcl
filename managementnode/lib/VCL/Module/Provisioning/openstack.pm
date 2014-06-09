@@ -281,38 +281,6 @@ sub _image_create{
         }
 }
 
-sub _get_instance_id {
-	my $self = shift;
-	
-        my $describe_instance;
-        my $describe_instance_output;
-        my $instance_id;
-
-	my $instance_private_ip = $self->data->get_computer_private_ip_address();
-	my $computer_shortname = $self->data->get_computer_short_name;
-
-	if(!$instance_private_ip) {
-		notify($ERRORS{'DEBUG'}, 0, "The $computer_shortname is NOT currently exist");
-		return 0;
-	}
-	else {
-
-		$describe_instance = "nova list |grep $instance_private_ip";
-		$describe_instance_output = `$describe_instance`;
-
-		if($describe_instance_output  =~ m/(\w{8}-\w{4}-\w{4}-\w{4}-\w{12})/g )
-		{
-			$instance_id = $&;
-			notify($ERRORS{'OK'}, 0, "The $computer_shortname has private IP : $instance_private_ip");
-			notify($ERRORS{'OK'}, 0, "The Instance ID: $instance_id");
-			return $instance_id;
-		} else {
-			notify($ERRORS{'DEBUG'}, 0, "The $computer_shortname is NOT currently exist");
-			return 0;
-		}
-	}
-}
-
 sub _prepare_capture {
 	my $self = shift;
 	
@@ -502,74 +470,99 @@ sub node_status {
 	my ($hostnode);
 
 	# Create a hash to store status components
-	my %status;
+#	my %status;
 
 	# Initialize all hash keys here to make sure they're defined
-	$status{status}       = 0;
-	$status{currentimage} = 0;
-	$status{ping}         = 0;
-	$status{ssh}          = 0;
-	$status{vmstate}      = 0;    #on or off
-	$status{image_match}  = 0;
+#	$status{status}       = 0;
+#	$status{currentimage} = 0;
+#	$status{ping}         = 0;
+#	$status{ssh}          = 0;
+#	$status{vmstate}      = 0;    #on or off
+#	$status{image_match}  = 0;
 
 	# Check if node is pingable
-	notify($ERRORS{'OK'}, 0, "checking if $vmclient_shortname is pingable");
-	if (_pingnode($vmclient_shortname)) {
-		$status{ping} = 1;
-		notify($ERRORS{'OK'}, 0, "$vmclient_shortname is pingable ($status{ping})");
-	}
-	else {
-		notify($ERRORS{'OK'}, 0, "$vmclient_shortname is not pingable ($status{ping})");
-		return $status{status};
-	}
+#	notify($ERRORS{'OK'}, 0, "checking if $vmclient_shortname is pingable");
+#	if (_pingnode($vmclient_shortname)) {
+#		$status{ping} = 1;
+#		notify($ERRORS{'OK'}, 0, "$vmclient_shortname is pingable ($status{ping})");
+#	}
+#	else {
+#		notify($ERRORS{'OK'}, 0, "$vmclient_shortname is not pingable ($status{ping})");
+#		return $status{status};
+#	}
+
+        my $status;
+        $status->{currentimage} = '';
+        $status->{ssh} = 0;
+        $status->{image_match} = 0;
+        $status->{status} = 'RELOAD';
+
+        notify($ERRORS{'OK'}, 0, "checking if $vmclient_shortname is pingable");
+        if (_pingnode($vmclient_shortname)) {
+                $status->{ping} = 1;
+                notify($ERRORS{'OK'}, 0, "$vmclient_shortname is pingable ($status->{ping})");
+        }
+        else {
+                notify($ERRORS{'OK'}, 0, "$vmclient_shortname is not pingable ($status->{ping})");
+                return $status->{ping}=0;
+        }
+
+
 
 	notify($ERRORS{'DEBUG'}, 0, "Trying to ssh...");
 
+        if ($self->os->is_ssh_responding()) {
+                notify($ERRORS{'DEBUG'}, 0, "VM $computer_node_name is responding to SSH");
+                $status->{ssh} = 1;
+        }
+        else {
+                notify($ERRORS{'OK'}, 0, "VM $computer_node_name is not responding to SSH, returning 'RELOAD'");
+                $status->{status} = 'RELOAD';
+                $status->{ssh} = 0;
+	
+		return $status;
+	}
 
-	#can I ssh into it
-	my $sshd = _sshd_status($vmclient_shortname, $vcl_requestedimagename, $image_os_type);
+        my $current_image_revision_id = $self->os->get_current_image_info();
+	$status->{currentimagerevision_id} = $current_image_revision_id;
 
-	#is it running the requested image
-	if ($sshd eq "on") {
+	$status->{currentimage} = $self->data->get_computer_currentimage_name();
+        my $current_image_name = $status->{currentimage};
+        my $vcld_post_load_status = $self->data->get_computer_currentimage_vcld_post_load();
 
-		notify($ERRORS{'DEBUG'}, 0, "SSH good, trying to query image name");
+        if (!$current_image_revision_id) {
+                notify($ERRORS{'OK'}, 0, "unable to retrieve image name from currentimage.txt on VM $computer_node_name, returning 'RELOAD'");
+                return $status;
+        }
+        elsif ($current_image_revision_id eq $vcl_requestedimagename) {
+                notify($ERRORS{'OK'}, 0, "currentimage.txt image $current_image_revision_id ($current_image_name) matches requested imagerevision_id $vcl_requestedimagename  on VM $computer_node_name");
+                $status->{image_match} = 1;
+        }
+        else {
+                notify($ERRORS{'OK'}, 0, "currentimage.txt imagerevision_id $current_image_revision_id ($current_image_name) does not match requested imagerevision_id $vcl_requestedimagename on VM $computer_node_name, returning 'RELOAD'");
+                return $status;
+        }
 
-		$status{ssh} = 1;
-		my @sshcmd = run_ssh_command($vmclient_shortname, $identity_keys, "cat currentimage.txt");
-		$status{currentimage} = $sshcmd[1][0];
-
-		notify($ERRORS{'DEBUG'}, 0, "Image name: $status{currentimage}");
-
-		if ($status{currentimage}) {
-			chomp($status{currentimage});
-			if ($status{currentimage} =~ /$vcl_requestedimagename/) {
-				$status{image_match} = 1;
-				notify($ERRORS{'OK'}, 0, "$vmclient_shortname is loaded with requestedimagename $vcl_requestedimagename");
-			}
-			else {
-				notify($ERRORS{'OK'}, 0, "$vmclient_shortname reports current image is currentimage= $status{currentimage} requestedimagename= $vcl_requestedimagename");
-			}
-		} ## end if ($status{currentimage})
-	} ## end if ($sshd eq "on")
 
 	# Determine the overall machine status based on the individual status results
-	if ($status{ssh} && $status{image_match}) {
-		$status{status} = 'READY';
+	if ($status->{ssh} && $status->{image_match}) {
+		$status->{status} = 'READY';
 	}
 	else {
-		$status{status} = 'RELOAD';
+		$status->{status} = 'RELOAD';
 	}
 
-	notify($ERRORS{'DEBUG'}, 0, "status set to $status{status}");
+	notify($ERRORS{'DEBUG'}, 0, "status set to $status->{status}");
 
 
 	if ($request_forimaging) {
-		$status{status} = 'RELOAD';
+		$status->{status} = 'RELOAD';
 		notify($ERRORS{'OK'}, 0, "request_forimaging set, setting status to RELOAD");
 	}
 
-	notify($ERRORS{'DEBUG'}, 0, "returning node status hash reference (\$node_status->{status}=$status{status})");
-	return \%status;
+	notify($ERRORS{'DEBUG'}, 0, "returning node status hash reference (\$node_status->{status}=$status->{status})");
+	#return \%status;
+	return $status;
 
 } ## end sub node_status
 
@@ -729,50 +722,42 @@ sub _match_image_name {
 
 }# _match_image_name close
 
-
 sub _terminate_instances {
-	
 	my $self = shift;
-	
-	my $computer_shortname  = $self->data->get_computer_short_name;
-	my $instance_private_ip = $self->data->get_computer_private_ip_address();
 
-	my $instance_id;
-	my $describe_instances;
-	my $run_describe_instances;
+	my $computer_shortname = $self->data->get_computer_short_name;
+	my $instance_private_ip = $self->data->get_computer_private_ip_address();
+	my $instance_id = $self->_get_instance_id;
+	$self->_delete_computer_mapping;
 	my $terminate_instances;
 	my $run_terminate_instances;
-	if(!$instance_private_ip) {
-		notify($ERRORS{'OK'}, 0, "The $computer_shortname is NOT currently running");
-		return 1;
+	my $nova_db_sync;
+	my $run_nova_db_sync;
+
+	if ($instance_id) {
+		notify($ERRORS{'OK'}, 0, "Terminate the existing instance");
+		$terminate_instances = "nova delete $instance_id";
+		$run_terminate_instances = `$terminate_instances`;
+		notify($ERRORS{'OK'}, 0, "The nova delete : $run_terminate_instances is terminated");
+		# nova.conf, set force_dhcp_release=true
+		sleep 30; # wait for completely removing from nova list
+		#$nova_db_sync = "nova-manage db sync";
+		#$run_nova_db_sync = `$nova_db_sync`;
+		# Check if terminate instance is okay
 	}
 	else {
-		$describe_instances = "nova list |grep $instance_private_ip";
-		$run_describe_instances = `$describe_instances`;
-
-		if($run_describe_instances =~ m/(\w{8}-\w{4}-\w{4}-\w{4}-\w{12})/g )
-		{
-			$instance_id = $&;
-			notify($ERRORS{'OK'}, 0, "Terminate the existing instance");
-			$terminate_instances = "nova delete $instance_id";
-			$run_terminate_instances = `$terminate_instances`;
-			notify($ERRORS{'OK'}, 0, "The nova delete : $run_terminate_instances is terminated");
-
-		}
-		else {
-			notify($ERRORS{'DEBUG'}, 0, "No running instance with the privagte ip: $instance_private_ip");
-			return 0;
-		}
+		notify($ERRORS{'OK'}, 0, "No instance found for $computer_shortname");
 	}
-	
+
 	return 1;
 }
 
 sub _run_instances {
 	my $self = shift;
 	
-	my $flavor_type = '1';
-	my $key_name = 'OpenStack_Root';
+	my $flavor_type = '3';
+	my $key_name = 'newkey';
+	#my $key_name = 'OpenStack_Root';
 	#my $key_name = 'vclkey';
 	my $image_full_name = $self->data->get_image_name;
 	my $computer_shortname  = $self->data->get_computer_short_name;
@@ -792,20 +777,107 @@ sub _run_instances {
 	
 	my $run_instance_output = `$run_instance`;
 	my $instance_id;
+	my $insert_success;
 	
 	notify($ERRORS{'OK'}, 0, "The run_instance Output: $run_instance_output\n");
 	if($run_instance_output  =~ m/(\w{8}-\w{4}-\w{4}-\w{4}-\w{12})/g )
 	{
 		$instance_id = $&;
 		notify($ERRORS{'OK'}, 0, "The indstance_id: $instance_id\n");
-		return $instance_id;
 	}
-	else
-	{
+	else {
 		notify($ERRORS{'OK'}, 0, "Fail to run the instance");
 		return 0;
 	}
+
+	$insert_success = $self->_insert_instance_id($instance_id);
+
+	if (!$insert_success) {
+		return 0;
+	}
+
+	return $instance_id;
 }
+
+sub _insert_instance_id {
+	my $self = shift;
+	my $instance_id = shift;
+	my $computer_id = $self->data->get_computer_id;
+
+	my $insert_statement = "
+	INSERT INTO
+	openstackComputerMap (
+	instanceid,
+	computerid
+	) VALUES (
+		'$instance_id',
+		'$computer_id'
+	)";
+
+	notify($ERRORS{'OK'}, 0, "$insert_statement");
+	my $success = database_execute($insert_statement);
+
+	if ($success) {
+		notify($ERRORS{'OK'}, 0, "Successfully inserted instance id");
+		return 1;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "Unable to insert instance id");
+		return 0;
+	}
+}
+
+sub _get_instance_id {
+	my $self = shift;
+	my $computer_id = $self->data->get_computer_id;
+
+	my $select_statement = "
+	SELECT
+	instanceid
+	FROM
+	openstackComputerMap
+	WHERE
+	computerid = '$computer_id'
+	";
+
+	notify($ERRORS{'OK'}, 0, "$select_statement");
+	my @selected_rows = database_select($select_statement);
+
+	if (scalar @selected_rows == 0) {
+		return 0;
+	}
+
+	my $instance_id = $selected_rows[0]{instanceid};
+	notify($ERRORS{'OK'}, 0, "Openstack id for $computer_id is $instance_id");
+
+	return $instance_id;
+}
+
+sub _delete_computer_mapping {
+	my $self = shift;
+	my $computer_id = $self->data->get_computer_id;
+
+	my $delete_statement = "
+	DELETE FROM
+	openstackComputerMap
+	WHERE
+	computerid='$computer_id'
+	";
+
+	notify($ERRORS{'OK'}, 0, "$delete_statement");
+	my $success = database_execute($delete_statement);
+
+	if ($success) {
+		notify($ERRORS{'OK'}, 0, "Successfully deleted computer mapping");
+		return 1;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "Unable to delete computer mapping");
+		return 0;
+	}
+}
+
+
 
 sub _update_private_ip {
 	my $self = shift;
