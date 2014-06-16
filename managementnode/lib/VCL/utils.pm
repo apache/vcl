@@ -1093,6 +1093,9 @@ sub check_time {
 			notify($ERRORS{'DEBUG'}, 0, "reservation will end in 10 minutes or less ($end_diff_minutes)");
 			return "end";
 		}
+		elsif ($request_laststate_name =~ /reserved/) {
+			return "poll";
+		}
 		else {
 			# End time is more than 10 minutes in the future
 			if($serverrequest) {	
@@ -5666,6 +5669,7 @@ sub delete_request {
 
 	# Try to delete any associated entries in the request and reservation tables
 	if (database_execute($sql_request_delete)) {
+		notify($ERRORS{'DEBUG'}, 0, "request deleted: $request_id");
 		return 1;
 	}
 	else {

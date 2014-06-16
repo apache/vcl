@@ -128,6 +128,32 @@ sub pre_capture {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 reserve
+
+ Parameters  : none
+ Returns     : boolean
+ Description : Performs common OS steps to reserve the computer for a user.
+
+=cut
+
+sub reserve {
+ 	my $self = shift;
+	if (ref($self) !~ /VCL::Module/) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Make sure the public IP address assigned to the computer matches the database
+	if (!$self->update_public_ip_address()) {
+		notify($ERRORS{'WARNING'}, 0, "unable to reserve computer, failed to update IP address");
+		return;
+	}
+	
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 =head2 get_source_configuration_directories
 
  Parameters  : None
@@ -945,7 +971,6 @@ sub server_request_set_fixedIP {
 					-- future; good to check with upstream network switch or control
 
 =cut
-#/////////////////////////////////////////////////////////////////////////////
 
 sub confirm_fixedIP_is_available {
 	my $self = shift;
@@ -1007,7 +1032,7 @@ sub update_public_ip_address {
 	my $image_os_type = $self->data->get_image_os_type() || return;
 	my $computer_ip_address = $self->data->get_computer_ip_address();
 	my $public_ip_configuration = $self->data->get_management_node_public_ip_configuration() || return;
-
+	
 	if ($public_ip_configuration =~ /dhcp/i) {
 		notify($ERRORS{'DEBUG'}, 0, "IP configuration is set to $public_ip_configuration, attempting to retrieve dynamic public IP address from $computer_node_name");
 		
@@ -1046,7 +1071,6 @@ sub update_public_ip_address {
 		}
 		
 	}
-	
 	elsif ($public_ip_configuration =~ /static/i) {
 		notify($ERRORS{'DEBUG'}, 0, "IP configuration is set to $public_ip_configuration, attempting to set public IP address");
 		
@@ -1066,7 +1090,6 @@ sub update_public_ip_address {
 			notify($ERRORS{'WARNING'}, 0, "unable to set static public IP address on $computer_node_name, " . ref($self) . " module does not implement a set_static_public_address subroutine");
 		}
 	}
-	
 	else {
 		notify($ERRORS{'DEBUG'}, 0, "IP configuration is set to $public_ip_configuration, no public IP address updates necessary");
 	}
@@ -1218,7 +1241,7 @@ sub get_public_interface_name {
 	my $no_cache = shift;
 	
 	if (defined $self->{public_interface_name} && !$no_cache) {
-		notify($ERRORS{'DEBUG'}, 0, "returning public interface name previously retrieved: $self->{public_interface_name}");
+		#notify($ERRORS{'DEBUG'}, 0, "returning public interface name previously retrieved: $self->{public_interface_name}");
 		return $self->{public_interface_name};
 	}
 	
@@ -1306,7 +1329,7 @@ sub get_public_interface_name {
 	
 	if ($public_interface_name) {
 		$self->{public_interface_name} = $public_interface_name;
-		notify($ERRORS{'OK'}, 0, "determined the public interface name: '$self->{public_interface_name}'\n" . format_data($network_configuration->{$self->{public_interface_name}}));
+		notify($ERRORS{'OK'}, 0, "determined the public interface name: '$self->{public_interface_name}'");
 		return $self->{public_interface_name};
 	}
 	else {
@@ -1560,9 +1583,11 @@ sub get_public_mac_address {
 
 =head2 get_ip_address
 
- Parameters  : 
- Returns     : 
- Description : 
+ Parameters  : $network_type (optional), $ignore_error (optional)
+ Returns     : string
+ Description : Returns the IP address of the computer. The $network_type
+               argument may either be 'public' or 'private'. If not supplied,
+               the default is to return the public IP address.
 
 =cut
 
@@ -1580,7 +1605,9 @@ sub get_ip_address {
 		notify($ERRORS{'WARNING'}, 0, "network type argument can only be 'public' or 'private'");
 		return;
 	}
-
+	
+	my $ignore_error = shift;
+	
 	# Get the public or private network configuration
 	# Use 'eval' to construct the appropriate subroutine name
 	my $network_configuration = eval "\$self->get_$network_type\_network_configuration()";
@@ -1599,14 +1626,16 @@ sub get_ip_address {
 	my $ip_address;
 	my @ip_addresses = keys %$ip_address_info;
 	if (!@ip_addresses) {
-		notify($ERRORS{'WARNING'}, 0, "unable to determine $network_type IP address, 'ip_address' value is not set in the network configuration info: \n" . format_data($network_configuration));
+		if (!$ignore_error) {
+			notify($ERRORS{'WARNING'}, 0, "unable to determine $network_type IP address, 'ip_address' value is not set in the network configuration info: \n" . format_data($network_configuration));
+		}
 		return;
 	}
 	
 	# Interface has multiple IP addresses, try to find a valid one
 	for $ip_address (@ip_addresses) {
 		if ($ip_address !~ /(0\.0\.0\.0|169\.254\.)/) {
-			notify($ERRORS{'DEBUG'}, 0, "returning $network_type IP address: $ip_address");
+			#notify($ERRORS{'DEBUG'}, 0, "returning $network_type IP address: $ip_address");
 			return $ip_address;
 		}
 		else {
@@ -1622,9 +1651,9 @@ sub get_ip_address {
 
 =head2 get_private_ip_address
 
- Parameters  : 
- Returns     : 
- Description : 
+ Parameters  : $ignore_error (optional)
+ Returns     : string
+ Description : Returns the computer's private IP address.
 
 =cut
 
@@ -1635,16 +1664,17 @@ sub get_private_ip_address {
 		return;
 	}
 	
-	return $self->get_ip_address('private');
+	my $ignore_error = shift;
+	return $self->get_ip_address('private', $ignore_error);
 }
 
 #/////////////////////////////////////////////////////////////////////////////
 
 =head2 get_public_ip_address
 
- Parameters  : 
- Returns     : 
- Description : 
+ Parameters  : $ignore_error (optional)
+ Returns     : string
+ Description : Returns the computer's public IP address.
 
 =cut
 
@@ -1654,8 +1684,8 @@ sub get_public_ip_address {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return;
 	}
-	
-	return $self->get_ip_address('public');
+	my $ignore_error = shift;
+	return $self->get_ip_address('public', $ignore_error);
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -2148,7 +2178,7 @@ sub execute {
 	my ($exit_status, $output) = run_ssh_command($arguments);
 	if (defined($exit_status) && defined($output)) {
 		if ($display_output) {
-			notify($ERRORS{'OK'}, 0, "executed command: '$command', exit status: $exit_status, output:\n" . join("\n", @$output));
+			notify($ERRORS{'DEBUG'}, 0, "executed command: '$command', exit status: $exit_status, output:\n" . join("\n", @$output));
 		}
 		return ($exit_status, $output);
 	}
@@ -2626,11 +2656,12 @@ sub manage_server_access {
 	
 	return 1;
 }
+
 #/////////////////////////////////////////////////////////////////////////////
 
 =head2 process_connect_methods
 
- Parameters  : none
+ Parameters  : $remote_ip (optional), $overwrite
  Returns     : boolean
  Description : Processes the connect methods configured for the image revision.
 
@@ -2644,12 +2675,12 @@ sub process_connect_methods {
 	}
 	
 	my $computer_node_name = $self->data->get_computer_node_name();
-	my $imagerevision_id   = $self->data->get_imagerevision_id();
+	my $imagerevision_id = $self->data->get_imagerevision_id();
 	
 	# Retrieve the connect method info hash
 	my $connect_method_info = get_connect_method_info($imagerevision_id);
 	if (!$connect_method_info) {
-		notify($ERRORS{'WARNING'}, 0, "no connect methods are configured for image revision $imagerevision_id");
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve connect method info for image revision $imagerevision_id");
 		return;
 	}
 
@@ -3355,6 +3386,253 @@ sub get_timings {
 	my $db_timing_variable_value = get_variable("$variable|$affiliation_name", 0) || get_variable("$variable", 0) || $timing_defaults{$variable} ;
 	return $db_timing_variable_value;
 
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 run_scripts
+
+ Parameters  : $stage
+ Returns     : boolean
+ Description : Runs scripts on the computer intended for the state specified by
+               the argument. The stage argument may be any of the following:
+               -pre_capture
+               -post_load
+               -post_reserve
+               
+               Scripts are stored in various directories under tools matching
+               the OS of the image being loaded. For example, scripts residing
+               in any of the following directories would be executed if the
+               stage argument is 'post_load' and the OS of the image being
+               loaded is Windows XP 32-bit:
+               -tools/Windows/Scripts/post_load
+               -tools/Windows/Scripts/post_load/x86
+               -tools/Windows_Version_5/Scripts/post_load
+               -tools/Windows_Version_5/Scripts/post_load/x86
+               -tools/Windows_XP/Scripts/post_load
+               -tools/Windows_XP/Scripts/post_load/x86
+               
+               The order the scripts are executed is determined by the script
+               file names. The directory where the script resides has no affect
+               on the order. Script files can be named beginning with a number.
+               The scripts sorted numerically and processed from the lowest
+               number to the highest:
+               -1.cmd
+               -50.cmd
+               -100.cmd
+               
+               Scripts which do not begin with a number are sorted
+               alphabetically and processed after any scripts which begin with a
+               number:
+               -1.cmd
+               -50.cmd
+               -100.cmd
+               -Blah.cmd
+               -foo.cmd
+
+=cut
+
+sub run_scripts {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Get the stage argument
+	my $stage = shift;
+	if (!$stage) {
+		notify($ERRORS{'WARNING'}, 0, "unable to run scripts, stage argument was not supplied");
+		return;
+	}
+	elsif ($stage !~ /(pre_capture|post_load|post_reserve)/) {
+		notify($ERRORS{'WARNING'}, 0, "invalid stage argument was supplied: $stage");
+		return;
+	}
+	
+	my $computer_node_name = $self->data->get_computer_node_name();
+	
+	my @computer_tools_files = $self->get_tools_file_paths("/Scripts/$stage/");
+	
+	my @failed_file_paths;
+	
+	# Loop through all tools files on the computer
+	for my $computer_tools_file_path (@computer_tools_files) {
+		notify($ERRORS{'DEBUG'}, 0, "executing script on $computer_node_name: $computer_tools_file_path");
+		if (!$self->run_script($computer_tools_file_path)) {
+			push @failed_file_paths, $computer_tools_file_path;
+		}
+	}
+	
+	# Check if any scripts failed
+	if (@failed_file_paths) {
+		notify($ERRORS{'CRITICAL'}, 0, "failed to run the following scripts on $computer_node_name, stage: $stage\n" . join("\n", @failed_file_paths));
+		return;
+	}
+	
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 check_reservation_password
+
+ Parameters  : none
+ Returns     : boolean
+ Description : Checks if a reservation password has already been generated. If
+               not, a password is generated, the reservation table is updated,
+               and the DataStructure is updated.
+
+=cut
+
+sub check_reservation_password {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	if ($self->data->get_reservation_password(0)) {
+		notify($ERRORS{'DEBUG'}, 0, "reservation password has already been generated");
+		return 1;
+	}
+	
+	my $reservation_id = $self->data->get_reservation_id();
+	
+	# Create a random password for the reservation
+	my $reservation_password = getpw();
+	
+	# Update the password in the reservation table
+	if (!update_reservation_password($reservation_id, $reservation_password)) {
+		$self->reservation_failed("failed to update password in the reservation table");
+		return;
+	}
+	
+	# Set the password in the DataStructure object
+	$self->data->set_reservation_password($reservation_password);
+	
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_connect_method_remote_ip_addresses
+
+ Parameters  : none
+ Returns     : array
+ Description : Retrieves the current connection information from the computer
+               and compares it to the connect methods configured for the
+               reservation image revision. An array is returned containing the
+               remote IP addresses for connections which match any of the
+               protocols and ports configured for any connect method.
+               
+               Remote connections which match the management node's private or
+               public IP address are ignored.
+               
+               The ignored_remote_ip_addresses variable may be configured in the
+               database. This list should contain IP addresses or regular
+               expressions and may be deliminated by commas, semicolons, or
+               spaces. Any remote connections from an IP address in this list
+               will also be ignored. This may be used to exclude hosts other
+               than those a user may connect from which may have periodic
+               or a persistent connection -- such as a monitoring host.
+
+=cut
+
+sub get_connect_method_remote_ip_addresses {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Make sure a get_connection_info subroutine is implemented
+	if (!$self->can('get_port_connection_info')) {
+		notify($ERRORS{'WARNING'}, 0, "OS module does not implement a get_port_connection_info subroutine");
+		return;
+	}
+	
+	my $computer_node_name = $self->data->get_computer_node_name();
+	my $imagerevision_id = $self->data->get_imagerevision_id();
+	
+	# Get the management node's IP addresses - these will be ignored
+	my $mn_private_ip_address = $self->mn_os->get_private_ip_address();
+	my $mn_public_ip_address = $self->mn_os->get_public_ip_address();
+	
+	# Get the ignored remote IP address variable from the database if it is configured
+	my $ignored_remote_ip_address_string = $self->data->get_variable('ignored_remote_ip_addresses') || '';
+	my @ignored_remote_ip_addresses = split(/[,; ]+/, $ignored_remote_ip_address_string);
+	notify($ERRORS{'DEBUG'}, 0, "connections to $computer_node_name from any of the following IP addresses will be ignored: " . join(', ', @ignored_remote_ip_addresses)) if (@ignored_remote_ip_addresses);
+	
+	my $connection_info = $self->get_port_connection_info();
+	if (!defined($connection_info)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve connection info from $computer_node_name");
+		return;
+	}
+	
+	my @remote_ip_addresses = ();
+	
+	my $connect_method_info = get_connect_method_info($imagerevision_id);
+	foreach my $connect_method_id (keys %$connect_method_info) {
+		my $connect_method_name = $connect_method_info->{$connect_method_id}{name};
+		my $connect_method_protocol = $connect_method_info->{$connect_method_id}{protocol} || 'any';
+		my $connect_method_port = $connect_method_info->{$connect_method_id}{port};
+		
+		notify($ERRORS{'DEBUG'}, 0, "checking connect method: '$connect_method_name', protocol: $connect_method_protocol, port: $connect_method_port");
+		
+		CONNECTION_PROTOCOL: for my $connection_protocol (keys %$connection_info) {
+			# Check if the protocol defined for the connect method matches the established connection
+			if (!$connect_method_protocol || $connect_method_protocol =~ /(\*|any|all)/i) {
+				#notify($ERRORS{'DEBUG'}, 0, "skipping validation of connect method protocol: $connect_method_protocol");
+			}
+			else {
+				if ($connect_method_protocol =~ /$connection_protocol/i || $connection_protocol =~ /$connect_method_protocol/i) {
+					notify($ERRORS{'DEBUG'}, 0, "connect method protocol matches established connection protocol: $connection_protocol");
+				}
+				else {
+					notify($ERRORS{'DEBUG'}, 0, "connect method protocol $connect_method_protocol does NOT match established connection protocol $connection_protocol");
+					next CONNECTION_PROTOCOL;
+				}
+			}
+			
+			CONNECTION_PORT: for my $connection_port (keys %{$connection_info->{$connection_protocol}}) {
+				# Check if the port defined for the connect method matches the established connection
+				if ($connect_method_port eq $connection_port) {
+					notify($ERRORS{'DEBUG'}, 0, "connect method port matches established connection port: $connection_port");
+					
+					for my $connection (@{$connection_info->{$connection_protocol}{$connection_port}}) {
+						my $remote_ip_address = $connection->{remote_ip};
+						if (!$remote_ip_address) {
+							notify($ERRORS{'WARNING'}, 0, "connection does NOT contain remote IP address (remote_ip) key:\n" . format_data($connection));
+						}
+						elsif ($remote_ip_address eq $mn_private_ip_address || $remote_ip_address eq $mn_public_ip_address) {
+							notify($ERRORS{'DEBUG'}, 0, "ignoring connection to port $connection_port from management node: $remote_ip_address");
+						}
+						elsif (my ($ignored_remote_ip_address) = grep { $remote_ip_address =~ /($_)/ } @ignored_remote_ip_addresses) {
+							notify($ERRORS{'DEBUG'}, 0, "ignoring connection to port $connection_port from ignored remote IP address ($ignored_remote_ip_address): $remote_ip_address");
+						}
+						else {
+							push @remote_ip_addresses, $remote_ip_address;
+						}
+					}
+				}
+				else {
+					notify($ERRORS{'DEBUG'}, 0, "connect method port $connect_method_port does NOT match established connection port $connection_port");
+					next CONNECTION_PORT;
+				}
+			}
+		}
+	}
+	
+	if (@remote_ip_addresses) {
+		@remote_ip_addresses = remove_array_duplicates(@remote_ip_addresses);
+		notify($ERRORS{'OK'}, 0, "detected connection to $computer_node_name using the ports and protocols configured for the connect methods, remote IP address(es): " . join(', ', @remote_ip_addresses));
+		return @remote_ip_addresses;
+	}
+	else {
+		notify($ERRORS{'OK'}, 0, "connection NOT established to $computer_node_name using the ports and protocols configured for the connect methods");
+		return ();
+	}
 }
 
 #///////////////////////////////////////////////////////////////////////////

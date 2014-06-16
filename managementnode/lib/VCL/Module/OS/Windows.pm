@@ -790,6 +790,16 @@ sub post_load {
 		notify($ERRORS{'WARNING'}, 0, "failed to rename My Computer");
 	}
 
+=item *
+
+ Check if the RDP port configured on the computer matches the RDP connect method
+
+=cut
+
+	if (!$self->check_rdp_port_configuration()) {
+		return 0;
+	}
+
 #=item *
 #
 #Disable NetBIOS
@@ -899,9 +909,9 @@ sub post_load {
 
 =head2 reserve
 
- Parameters  :
- Returns     :
- Description :
+ Parameters  : none
+ Returns     : boolean
+ Description : Performs the steps necessary to reserve a computer for a user.
 
 =cut
 
@@ -911,12 +921,21 @@ sub reserve {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return;
 	}
-
-	my $request_forimaging   = $self->data->get_request_forimaging();
-	my $reservation_password = $self->data->get_reservation_password();
-
+	
+	# Call OS.pm's reserve subroutine
+	$self->SUPER::reserve() || return;
+	
 	notify($ERRORS{'OK'}, 0, "beginning Windows reserve tasks");
-
+	
+	# Generate a reservation password
+	if (!$self->check_reservation_password()) {
+		notify($ERRORS{'WARNING'}, 0, "failed to generate a reservation password");
+		return;
+	}
+	
+	my $request_forimaging = $self->data->get_request_forimaging();
+	my $reservation_password = $self->data->get_reservation_password();
+	
 	# Check if this is an imaging request or not
 	if ($request_forimaging) {
 		# Imaging request, don't create account, set the Administrator password
@@ -932,8 +951,7 @@ sub reserve {
 			return 0;
 		}
 	}
-
-	notify($ERRORS{'OK'}, 0, "returning 1");
+	
 	return 1;
 } ## end sub reserve
 
@@ -1078,7 +1096,6 @@ sub grant_access {
 		return;
 	}
 
-	my $management_node_keys = $self->data->get_management_node_keys();
 	my $computer_node_name   = $self->data->get_computer_node_name();
 	my $system32_path        = $self->get_system32_path();
 	my $request_forimaging   = $self->data->get_request_forimaging();
@@ -1770,7 +1787,7 @@ sub create_user {
 		$username = $self->data->get_user_login_id();
 	}
 	if (!$password) {
-		$password = $self->data->get_reservation_password();
+		$password = $self->data->get_reservation_password() || return;
 	}
 	
 	# If imagemeta allows rootaccess, check the adminoverride variable
@@ -7748,12 +7765,13 @@ sub apply_security_templates {
 		# Note: secedit.exe returns exit status 3 if a warning occurs, this will appear in the log file:
 		# Task is completed. Warnings occurred for some attributes during this operation. It's ok to ignore.
 		my $secedit_command = "$secedit_exe /configure /cfg \"$inf_target_path\" /db $secedit_db /log $secedit_log /overwrite /quiet";
+		
 		my ($secedit_exit_status, $secedit_output) = run_ssh_command($computer_node_name, $management_node_keys, $secedit_command, '', '', 0);
 		if (defined($secedit_exit_status) && ($secedit_exit_status == 0 || $secedit_exit_status == 3)) {
 			notify($ERRORS{'OK'}, 0, "ran secedit.exe to apply $inf_file_name");
 		}
 		elsif (defined($secedit_exit_status)) {
-			notify($ERRORS{'WARNING'}, 0, "failed to run secedit.exe to apply $inf_target_path, exit status: $secedit_exit_status, output:\n" . join("\n", @$secedit_output));
+			notify($ERRORS{'WARNING'}, 0, "failed to run secedit.exe to apply $inf_target_path, exit status: $secedit_exit_status, command: $secedit_command, output:\n" . join("\n", @$secedit_output));
 			$error_occurred++;
 		}
 		else {
@@ -8990,18 +9008,12 @@ sub user_logged_in {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return;
 	}
-
-	my $management_node_keys = $self->data->get_management_node_keys();
+	
 	my $computer_node_name   = $self->data->get_computer_node_name();
-	my $system32_path        = $self->get_system32_path() || return;
-
+	
 	# Attempt to get the username from the arguments
 	# If no argument was supplied, use the user specified in the DataStructure
 	my $username = shift;
-	
-	# Remove spaces from beginning and end of username argument
-	# Fixes problem if string containing only spaces is passed
-	$username =~ s/(^\s+|\s+$)//g if $username;
 	
 	# Check if username argument was passed
 	if (!$username) {
@@ -9012,32 +9024,71 @@ sub user_logged_in {
 			$username = $self->data->get_user_login_id();
 		}
 	}
-	notify($ERRORS{'DEBUG'}, 0, "checking if $username is logged in to $computer_node_name");
-
-	# Run qwinsta.exe to display terminal session information
-	# Set command timeout argument because this command occasionally hangs
-	my ($exit_status, $output) = run_ssh_command($computer_node_name, $management_node_keys, "$system32_path/qwinsta.exe", '', '', 1, 60);
-	if ($exit_status > 0) {
-		notify($ERRORS{'WARNING'}, 0, "failed to run qwinsta.exe on $computer_node_name, exit status: $exit_status, output:\n@{$output}");
-		return;
-	}
-	elsif (!defined($exit_status)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to run qwinsta.exe SSH command on $computer_node_name");
-		return;
-	}
 	
-	# Find lines in qwinsta.exe output indicating a logged in user, lines may look like this:
-	# ' rdp-tcp#2         root                      2  Active  rdpwd'
-	# '>console           root                      0  Active  wdcon'
-	my @user_connection_lines = grep(/[\s>]+(\S+)\s+($username)\s+(\d+)\s+(Active)/, @{$output});
-	if (@user_connection_lines) {
-		notify($ERRORS{'OK'}, 0, "$username appears to be logged in on $computer_node_name:\n" . join("\n", @user_connection_lines));
+	my @logged_in_users = $self->get_logged_in_users();
+	if (grep { $username eq $_ } @logged_in_users) {
+		notify($ERRORS{'DEBUG'}, 0, "$username is logged in to $computer_node_name");
 		return 1;
 	}
 	else {
-		notify($ERRORS{'OK'}, 0, "$username does NOT appear to be logged in on $computer_node_name");
+		notify($ERRORS{'DEBUG'}, 0, "$username is NOT logged in to $computer_node_name");
 		return 0;
 	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_logged_in_users
+
+ Parameters  : none
+ Returns     : array
+ Description : Retrieves the names of users logged in to the computer.
+
+=cut
+
+sub get_logged_in_users {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $computer_node_name   = $self->data->get_computer_node_name();
+	my $system32_path        = $self->get_system32_path() || return;
+
+	# Run qwinsta.exe to display terminal session information
+	# Set command timeout argument because this command occasionally hangs
+	my $command = "$system32_path/qwinsta.exe";
+	my ($exit_status, $output) = $self->execute({
+		command => $command,
+		timeout => 60,
+	});
+	
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to run qwinsta.exe command on $computer_node_name");
+		return;
+	}
+	elsif (!grep(/USERNAME/, @$output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve logged in users on $computer_node_name, command: $command, output:\n" . join("\n", @$output));
+		return;
+	}
+
+	# SESSIONNAME       USERNAME                 ID  STATE   TYPE        DEVICE
+	# services                                    0  Disc
+	#                   root                      1  Disc
+	# console                                     2  Conn
+	#>rdp-tcp#1         Administrator             3  Active  rdpwd
+	# rdp-tcp#2         test user                 4  Active  rdpwd
+	# rdp-tcp                                 65536  Listen
+	my @usernames;
+	for my $line (@$output) {
+		my ($session_name, $username, $session_id, $state) = $line =~ /^[\s>]([^\s]+)?\s+(.+[^\s])?\s+(\d+)\s+(Active)/i;
+		push @usernames, $username if defined($username);
+	}
+	
+	my $username_count = scalar(@usernames);
+	notify($ERRORS{'DEBUG'}, 0, "$username_count user" . ($username_count == 1 ? '' : 's') . " logged in to $computer_node_name: " . join(', ', @usernames));
+	return @usernames;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -11068,71 +11119,37 @@ sub firewall_compare_update {
       notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
       return;
    }
-  
+	
    my $computer_node_name = $self->data->get_computer_node_name();
    my $imagerevision_id   = $self->data->get_imagerevision_id();
    my $remote_ip          = $self->data->get_reservation_remote_ip();
-  
-   #collect connection_methods
-   #collect firewall_config
-   #For each port defined in connection_methods
-   #compare rule source address with remote_IP address
-	notify($ERRORS{'OK'}, 0, "pulling connect methods");
-  
-   # Retrieve the connect method info hash
+	
+	if (!$remote_ip) {
+		notify($ERRORS{'WARNING'}, 0, "unable to update firewall on $computer_node_name, remote IP could not be retrieved for reservation");
+      return;
+	}
+	
+   # Retrieve the connect method info
    my $connect_method_info = get_connect_method_info($imagerevision_id);
    if (!$connect_method_info) {
-      notify($ERRORS{'WARNING'}, 0, "no connect methods are configured for image revision $imagerevision_id");
+      notify($ERRORS{'WARNING'}, 0, "failed to retrieve connect method info for image revision $imagerevision_id");
       return;
    }
-
-   # Retrieve the firewall configuration
-   my $firewall_configuration = $self->get_firewall_configuration() || return;
-
-   for my $connect_method_id (sort keys %{$connect_method_info} ) {
-		
-      my $name            = $connect_method_info->{$connect_method_id}{name};
-      my $description     = $connect_method_info->{$connect_method_id}{description};
-      my $protocol        = $connect_method_info->{$connect_method_id}{protocol} || 'TCP';
-      my $port            = $connect_method_info->{$connect_method_id}{port};
-      my $scope;
-		
-		next if ( !$port );
-
-     # $protocol = lc($protocol);
-
-		my $existing_scope = $firewall_configuration->{$protocol}{$port}{scope} || '';
-		if(!$existing_scope ) {
-			notify($ERRORS{'WARNING'}, 0, "No existing scope defined for protocol= $protocol port= $port ");
-			return 1;
-      }
-		else {
-            my $parsed_existing_scope = $self->parse_firewall_scope($existing_scope);
-            if (!$parsed_existing_scope) {
-                notify($ERRORS{'WARNING'}, 0, "failed to parse existing firewall scope: '$existing_scope'");
-                return;
-            }
-            $scope = $self->parse_firewall_scope("$remote_ip,$existing_scope");
-            if (!$scope) {
-                notify($ERRORS{'WARNING'}, 0, "failed to parse firewall scope argument appended with existing scope: '$remote_ip,$existing_scope'");
-                return;
-            }
-
-            if ($scope eq $parsed_existing_scope) {
-                notify($ERRORS{'DEBUG'}, 0, "firewall is already open on $computer_node_name, existing scope matches scope argument:\n" .
-               "name: '$name'\n" .
-               "protocol: $protocol\n" .
-               "port/type: $port\n" .
-               "scope: $scope\n");
-                return 1;
-            }
-				else {
-               if ($self->enable_firewall_port($protocol, $port, "$remote_ip/24", 0)) {
-                   notify($ERRORS{'OK'}, 0, "opened firewall port $port on $computer_node_name for $remote_ip $name connect method");
-               }
-            }
-			}
 	
+   # Retrieve the firewall configuration from the computer
+   my $firewall_configuration = $self->get_firewall_configuration() || return;
+	
+	# Loop through the connect methods, check to make sure firewall is open for remote IP
+   for my $connect_method_id (sort keys %{$connect_method_info} ) {
+      my $connect_method_name = $connect_method_info->{$connect_method_id}{name};
+      my $protocol            = $connect_method_info->{$connect_method_id}{protocol} || 'TCP';
+      my $port                = $connect_method_info->{$connect_method_id}{port};
+		
+		next if (!$port);
+		
+		if ($self->enable_firewall_port($protocol, $port, $remote_ip, 0)) {
+			notify($ERRORS{'DEBUG'}, 0, "opened/verified firewall port $port on $computer_node_name for $remote_ip $connect_method_name connect method");
+		}
 	}
 	return 1;
 
@@ -11240,87 +11257,6 @@ sub run_script {
 		notify($ERRORS{'WARNING'}, 0, "script '$script_path' returned a non-zero exit status: $exit_status\nlogfile path: '$log_file_path'\ncommand: '$command'\noutput:\n" . join("\n", @$output));
 		return 0;
 	}
-}
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 run_scripts
-
- Parameters  : $stage
- Returns     : boolean
- Description : Runs scripts on the computer intended for the state specified by
-               the argument. The stage argument may be any of the following:
-               -pre_capture
-               -post_load
-               -post_reserve
-               
-               Scripts are stored in various directories under tools matching
-               the OS of the image being loaded. For example, scripts residing
-               in any of the following directories would be executed if the
-               stage argument is 'post_load' and the OS of the image being
-               loaded is Windows XP 32-bit:
-               -tools/Windows/Scripts/post_load
-               -tools/Windows/Scripts/post_load/x86
-               -tools/Windows_Version_5/Scripts/post_load
-               -tools/Windows_Version_5/Scripts/post_load/x86
-               -tools/Windows_XP/Scripts/post_load
-               -tools/Windows_XP/Scripts/post_load/x86
-               
-               The order the scripts are executed is determined by the script
-               file names. The directory where the script resides has no affect
-               on the order. Script files can be named beginning with a number.
-               The scripts sorted numerically and processed from the lowest
-               number to the highest:
-               -1.cmd
-               -50.cmd
-               -100.cmd
-               
-               Scripts which do not begin with a number are sorted
-               alphabetically and processed after any scripts which begin with a
-               number:
-               -1.cmd
-               -50.cmd
-               -100.cmd
-               -Blah.cmd
-               -foo.cmd
-
-=cut
-
-sub run_scripts {
-	my $self = shift;
-	if (ref($self) !~ /VCL::Module/) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return;
-	}
-	
-	# Get the stage argument
-	my $stage = shift;
-	if (!$stage) {
-		notify($ERRORS{'WARNING'}, 0, "unable to run scripts, stage argument was not supplied");
-		return;
-	}
-	elsif ($stage !~ /(pre_capture|post_load|post_reserve)/) {
-		notify($ERRORS{'WARNING'}, 0, "invalid stage argument was supplied: $stage");
-		return;
-	}
-	
-	my $computer_node_name = $self->data->get_computer_node_name();
-	
-	my @computer_tools_files = $self->get_tools_file_paths("/Scripts/$stage/");
-	
-	# Loop through all tools files on the computer
-	for my $computer_tools_file_path (@computer_tools_files) {
-		if ($computer_tools_file_path !~ /\.(cmd|bat)$/i) {
-			notify($ERRORS{'DEBUG'}, 0, "file on $computer_node_name not executed because extension is not .cmd or .bat: $computer_tools_file_path");
-			next;
-		}
-		
-		notify($ERRORS{'DEBUG'}, 0, "executing script on $computer_node_name: $computer_tools_file_path");
-		
-		$self->run_script($computer_tools_file_path);
-	}
-	
-	return 1;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -11971,6 +11907,211 @@ sub get_firewall_state {
 	# No lines were found containing "ON", return "OFF"
 	notify($ERRORS{'WARNING'}, 0, "unable to determine firewall state, output:\n" . join("\n", @$output));
 	return;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 check_rdp_port_configuration
+
+ Parameters  : none
+ Returns     : boolean
+ Description : Checks if the RDP port number configured in the registry matches
+               the port number configured for the RDP connect method. If they
+               don't match, the registry is modified and the TermService service
+               is restarted.
+
+=cut
+
+sub check_rdp_port_configuration {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $imagerevision_id = $self->data->get_imagerevision_id();
+	my $computer_name = $self->data->get_computer_short_name();
+	
+	my $connect_method_info = get_connect_method_info($imagerevision_id);
+	if (!$connect_method_info) {
+		notify($ERRORS{'WARNING'}, 0, "unable to check RDP port, connect method info could not be retrieved for image ID $imagerevision_id");
+		return;
+	}
+	
+	# Find the RDP method, retrieve the port
+	my $connect_method_rdp_port;
+	for my $connect_method_id (keys %$connect_method_info) {
+		my $connect_method_name = $connect_method_info->{$connect_method_id}{name};
+		if ($connect_method_name =~ /^rdp$/i) {
+			$connect_method_rdp_port = $connect_method_info->{$connect_method_id}{port};
+			last;
+		}
+	}
+	if (!defined($connect_method_rdp_port)) {
+		notify($ERRORS{'DEBUG'}, 0, "no connect method exists named 'rdp':\n" . format_data($connect_method_info));
+		return 1;
+	}
+	
+	my $rdp_port_key = 'HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp';
+	my $rdp_port_value = 'PortNumber';
+	
+	my $existing_rdp_port = $self->reg_query($rdp_port_key, $rdp_port_value);
+	if (!defined($existing_rdp_port)) {
+		notify($ERRORS{'WARNING'}, 0, "unable to check RDP port on $computer_name, failed to retrieve existing value from registry");
+		return;
+	}
+	elsif ($existing_rdp_port eq $connect_method_rdp_port) {
+		notify($ERRORS{'DEBUG'}, 0, "existing RDP port value in registry matches connect method port: $connect_method_rdp_port");
+		return 1;
+	}
+	notify($ERRORS{'DEBUG'}, 0, "existing RDP port value in registry $existing_rdp_port does NOT match connect method port $connect_method_rdp_port");
+	
+	# Set the registry key
+	if (!$self->reg_add($rdp_port_key, $rdp_port_value, 'REG_DWORD', $connect_method_rdp_port)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to set RDP port value in registry");
+		return;
+	}
+	
+	# The services that depend on TermService must be stopped first or else the restart will fail
+	$self->stop_service('UmRdpService');
+	$self->stop_service('Mcx2Svc');
+	
+	if ($self->restart_service('TermService')) {
+		notify($ERRORS{'OK'}, 0, "configured $computer_name to use RDP port $connect_method_rdp_port");
+		return 1;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to configure $computer_name to use RDP port $connect_method_rdp_port, failed to restart Remote Desktop Service (TermService)");
+		return;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_port_connection_info
+
+ Parameters  : none
+ Returns     : hash reference
+ Description : Retrieves information about established connections from the
+               computer. A hash is constructed:
+                  {
+                    "TCP" => {
+                      22 => [
+                        {
+                          "local_ip" => "10.25.10.197",
+                          "pid" => 3648,
+                          "remote_ip" => "10.25.0.241",
+                          "remote_port" => 54692
+                        }
+                      ],
+                      3389 => [
+                        {
+                          "local_ip" => "192.168.16.238",
+                          "pid" => 332,
+                          "remote_ip" => "192.168.53.54",
+                          "remote_port" => 55892
+                        }
+                      ]
+                    }
+                  }
+
+=cut
+
+sub get_port_connection_info {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $computer_node_name = $self->data->get_computer_node_name();
+	
+	
+	my $command = "netstat -ano";
+	my ($exit_status, $output) = $self->execute($command, 0);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command: $command");
+		return;
+	}
+	elsif (grep(/^netstat: /, @$output)) {
+		notify($ERRORS{'WARNING'}, 0, "error occurred executing command: '$command', exit status: $exit_status, output:\n" . join("\n", @$output));
+		return;
+	}
+	
+	my $connection_info = {};
+	for my $line (@$output) {
+		# Proto  Local Address          Foreign Address         State           PID
+		# TCP    192.168.1.53:3389      192.168.53.54:55892     ESTABLISHED     332
+		my ($protocol, $local_ip_address, $local_port, $remote_ip_address, $remote_port, $state, $pid) = $line =~ /^\s*(\w+)\s+([\d\.]+):(\d+)\s+([\d\.]+):(\d+)\s+(\w+)\s+(\d+)/i;
+		
+		if (!$state) {
+			#notify($ERRORS{'DEBUG'}, 0, "connection state could not be determined from line:\n$line");
+			next;
+		}
+		elsif ($state !~ /ESTABLISHED/i) {
+			next;
+		}
+		
+		my $connection = {
+			local_ip => $local_ip_address,
+			remote_ip => $remote_ip_address,
+			remote_port => $remote_port,
+		};
+		$connection->{pid} = $pid if $pid;
+		
+		push @{$connection_info->{$protocol}{$local_port}}, $connection;
+	}
+	
+	if ($connection_info) {
+		notify($ERRORS{'DEBUG'}, 0, "retrieved connection info from $computer_node_name:\n" . format_data($connection_info));
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "did not detect any connections on $computer_node_name");
+	}
+	return $connection_info;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_timezone_offset_minutes
+
+ Parameters  : none
+ Returns     : integer
+ Description : Retrieves the number of minutes the system time of the computer
+               is offset from UTC. It may be positive or negative. This is used
+               to adjust times returned by the computer which are not adjusted
+               to the computer's time zone such as from event log entries.
+
+=cut
+
+sub get_timezone_offset_minutes {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	return $self->{timezone_offset_minutes} if defined($self->{timezone_offset_minutes});
+	
+	my $system32_path = $self->get_system32_path();
+	
+	my $command = "$system32_path/Wbem/wmic.exe OS Get CurrentTimeZone";
+	my ($exit_status, $output) = $self->execute($command);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to retrieve timezone offset");
+		return;
+	}
+	
+	my ($offset_minutes) = grep(/^-?\d+$/, @$output);
+	if (defined($offset_minutes)) {
+		notify($ERRORS{'DEBUG'}, 0, "retrieved OS timezone offset minutes: $offset_minutes");
+		$self->{timezone_offset_minutes} = $offset_minutes;
+		return $self->{timezone_offset_minutes};
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve OS timezone offset minutes, command: $command, output:\n" . join("\n", @$output));
+		return;
+	}
 }
 
 #/////////////////////////////////////////////////////////////////////////////

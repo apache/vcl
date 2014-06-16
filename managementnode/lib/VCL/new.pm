@@ -105,7 +105,7 @@ sub process {
 	my $imagerevision_id                = $self->data->get_imagerevision_id();
 	my $user_standalone                 = $self->data->get_user_standalone();
 	
-	#If reload state is reload and computer is part of block allocation confirm imagerevisionid is the production image.
+	# If reload state is reload and computer is part of block allocation confirm imagerevisionid is the production image.
 	if ($request_state_name eq 'reload' && is_inblockrequest($computer_id)) {
 		notify($ERRORS{'OK'}, 0, "request state is '$request_state_name', computer $computer_id is in blockrequest, making sure reservation is assigned production image revision");
 		my $imagerev_info = get_production_imagerevision_info($image_id);
@@ -898,8 +898,8 @@ sub computer_not_being_used {
 
 =head2 reserve_computer
 
- Parameters  :
- Returns     :
+ Parameters  : none
+ Returns     : boolean
  Description :
 
 =cut
@@ -907,164 +907,79 @@ sub computer_not_being_used {
 sub reserve_computer {
 	my $self = shift;
 
-	my $request_data                    = $self->data->get_request_data();
-	my $request_state_name              = $self->data->get_request_state_name();
 	my $request_id                      = $self->data->get_request_id();
+	my $request_state_name              = $self->data->get_request_state_name();
 	my $request_logid                   = $self->data->get_request_log_id();
-	my $request_forimaging              = $self->data->get_request_forimaging();
-	my $reservation_count               = $self->data->get_reservation_count();
-	my $reservation_id                  = $self->data->get_reservation_id();
 	my $reservation_is_parent           = $self->data->is_parent_reservation;
-	my $computer_id                     = $self->data->get_computer_id();
 	my $computer_short_name             = $self->data->get_computer_short_name();
-	my $computer_type                   = $self->data->get_computer_type();
-	my $computer_ip_address             = $self->data->get_computer_ip_address();
-	my $image_os_name                   = $self->data->get_image_os_name();
 	my $image_prettyname                = $self->data->get_image_prettyname();
-	my $image_os_type                   = $self->data->get_image_os_type();
 	my $user_affiliation_sitewwwaddress = $self->data->get_user_affiliation_sitewwwaddress();
 	my $user_affiliation_helpaddress    = $self->data->get_user_affiliation_helpaddress();
-	my $user_standalone                 = $self->data->get_user_standalone();
 	my $user_email                      = $self->data->get_user_email();
 	my $user_emailnotices               = $self->data->get_user_emailnotices();
 	my $user_imtype_name                = $self->data->get_user_imtype_name();
 	my $user_im_id                      = $self->data->get_user_im_id();
-	
-	notify($ERRORS{'OK'}, 0, "user_standalone=$user_standalone, image OS type=$image_os_type");
-	
-	my ($mailstring, $subject, $r);
-	
-	# check for deletion
-	if (is_request_deleted($request_id)) {
-		notify($ERRORS{'OK'}, 0, "user has deleted, quietly exiting");
-		#return 0 and let process routine handle reset computer state
-		return 0;
+
+	# Call OS module's reserve subroutine
+	if (!$self->os->reserve()) {
+		$self->reservation_failed("OS module failed to reserve resources for this reservation");
+		return;
 	}
 	
-	if ($computer_type =~ /blade|virtualmachine/) {
-		#Confirm public IP address
-		if ($self->confirm_public_ip_address()) {
-		}
-		
-		# Update the $computer_ip_address varible in case the IP address was different than what was originally in the database
-		#$computer_ip_address = $self->data->get_computer_ip_address();
-		
-		insertloadlog($reservation_id, $computer_id, "info", "node ready adding user account");
-		
-		# Only generate new password if:
-		# ! reinstall
-		# linux and user standalone	
-		if ($request_state_name !~ /^(reinstall)/) {
-			# Create a random password and update the reservation table unless the reservation if for a Linux non-standalone image
-			unless ($image_os_type =~ /linux/ && !$user_standalone) {
-				# Create a random password for the reservation
-				my $reservation_password = getpw();
-				
-				# Update the password in the reservation table
-				if (update_reservation_password($reservation_id, $reservation_password)) {
-					notify($ERRORS{'DEBUG'}, 0, "updated password in the reservation table");
-				}
-				else {
-					$self->reservation_failed("failed to update password in the reservation table", "available");
-				}
-				
-				# Set the password in the DataStructure object
-				$self->data->set_reservation_password($reservation_password);
-			}
-		}
-		
-		# Check if OS module implements a reserve() subroutine
-		if ($self->os->can('reserve')) {
-			# Call the OS module's reserve() subroutine
-			notify($ERRORS{'DEBUG'}, 0, "calling OS module's reserve() subroutine");
-			if ($self->os->reserve()) {
-				notify($ERRORS{'DEBUG'}, 0, "OS module successfully reserved resources for this reservation");
-			}
-			else {
-				$self->reservation_failed("OS module failed to reserve resources for this reservation");
-			}
-		}
-		
-		# Check if this is a parent reservation, only the parent reservation handles notifications
-		if (!$reservation_is_parent) {
-			return 1;
-		}
-		
-		# Assemble the message subject based on whether this is a cluster based or normal request
-		if ($request_forimaging) {
-			$subject = "VCL -- $image_prettyname imaging reservation";
-		}
-		elsif ($reservation_count > 1) {
-			$subject = "VCL -- Cluster-based reservation";
-		}
-		else {
-			$subject = "VCL -- $image_prettyname reservation";
-		}
-		
-		# Assemble the message body reservations
-		if ($request_forimaging) {
-			$mailstring = <<"EOF";
+	# Check if this is a parent reservation, only the parent reservation handles notifications
+	if (!$reservation_is_parent) {
+		return 1;
+	}
+	
+	# Retrieve the computer IP address after reserve() is called because it may change
+	# Reserve may retrieve a dynamically assigned IP address and should update the DataStructure object
+	my $computer_ip_address = $self->data->get_computer_ip_address();
+	
+	# Update sublog table with the IP address of the machine
+	if (update_sublog_ipaddress($request_logid, $computer_ip_address)) {
+		notify($ERRORS{'DEBUG'}, 0, "updated computer IP address in sublog table, log ID: $request_logid, IP address: $computer_ip_address");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "could not update sublog $request_logid for node $computer_short_name IP address $computer_ip_address");
+	}
 
-The resources for your VCL image creation request have been successfully reserved.
-
-EOF
-		}
-		elsif ($request_state_name =~ /^(reinstall)$/) {
-			$mailstring = <<"EOF";
-
+	# Check if request has been deleted
+	if (is_request_deleted($request_id)) {
+		notify($ERRORS{'OK'}, 0, "request has been deleted, setting computer state to 'available' and exiting");
+		$self->state_exit('', 'available');
+	}
+	
+	my $mailstring;
+	my $subject;
+	
+	# Assemble the message body reservations
+	if ($request_state_name =~ /^(reinstall)$/) {
+		$subject = "VCL -- $image_prettyname reservation reinstalled";
+		
+		$mailstring = <<"EOF";
 Your reservation was successfully reinstalled and you can proceed to reconnect. 
-Please revisit the Current reservations page for any additional information.
-
+Please revisit the 'Current Reservations' page for any additional information.
 EOF
-		}
-		else {
-			$mailstring = <<"EOF";
-
-The resources for your VCL request have been successfully reserved.
-
-EOF
-		}
+	}
+	else {
+		$subject = "VCL -- $image_prettyname reservation";
 		
-		# Add the image name and IP address information
-		$mailstring .= "Reservation Information:\n";
-		foreach $r (keys %{$request_data->{reservation}}) {
-			my $reservation_image_name = $request_data->{reservation}{$r}{image}{prettyname};
-			$mailstring .= "Image Name: $reservation_image_name\n";
-		}
-		
-		if ($request_state_name !~ /^(reinstall)$/) {
-			$mailstring = <<"EOF";
-
-Connection will not be allowed until you acknowledge using the VCL web interface.  You must acknowledge the reservation within the next 15 minutes or the resources will be reclaimed for other VCL users.
-
-EOF
-		}
-		
-		$mailstring .= <<"EOF";
+		$mailstring = <<"EOF";
+The resources for your VCL reservation have been successfully reserved.
+Connection will not be allowed until you click the 'Connect' button on the 'Current Reservations' page.
+You must acknowledge the reservation within the next 15 minutes or the resources will be reclaimed for other VCL users.
 
 -Visit $user_affiliation_sitewwwaddress
 -Select "Current Reservations"
 -Click the "Connect" button
-
 Upon acknowledgement, all of the remaining connection details will be displayed.
-
 EOF
-		
-		if ($request_forimaging) {
-			$mailstring .= <<"EOF";
-You have up to 8 hours to complete the new image.  Once you have completed preparing the new image:
+	}
+	
+	$mailstring .= <<"EOF";
 
--Visit $user_affiliation_sitewwwaddress
--Select "Current Reservations"
--Click the "Create Image" button and follow the instuctions
-
-EOF
-		} ## end if ($request_forimaging)
-		
-		$mailstring .= <<"EOF";
 Thank You,
 VCL Team
-
 
 ******************************************************************
 This is an automated notice. If you need assistance please respond 
@@ -1078,86 +993,17 @@ To disable email notices
 
 ******************************************************************
 EOF
-		if ($user_emailnotices) {
-			mail($user_email, $subject, $mailstring, $user_affiliation_helpaddress);
-		}
-		else {
-			#just for our email record keeping, might be overkill
-			notify($ERRORS{'MAILMASTERS'}, 0, " $user_email\n$mailstring");
-		}
-		
-		notify($ERRORS{'DEBUG'}, 0, "IMTYPE_name= $user_imtype_name calling notify_via");
-		if ($user_imtype_name ne "none") {
-			notify_via_IM($user_imtype_name, $user_im_id, $mailstring, $user_affiliation_helpaddress);
-		}
-	} ## end if ($computer_type =~ /blade|virtualmachine/)
 	
-	elsif ($computer_type eq "lab") {
-		if ($image_os_name =~ /sun4x_|rhel/) {
-			# i can't really do anything here
-			# because I need the remoteIP the user
-			# will be accessing the machine from
-			$subject = "VCL -- $image_prettyname reservation";
-			
-			$mailstring = <<"EOF";
-
-A machine with $image_prettyname has been reserved. Use ssh to connect to $computer_ip_address.
-
-Username: your Unity ID
-Password: your Unity password
-
-Connection will not be allowed until you acknowledge using the VCL web interface.
--Visit $user_affiliation_sitewwwaddress
--Select Current Reservations
--Click the Connect button to acknowledge
-
-
-Thank You,
-VCL Team
-
-
-
-******************************************************************
-This is an automated notice. If you need assistance please respond 
-with detailed information on the issue and a help ticket will be 
-generated.
-
-To disable email notices
--Visit $user_affiliation_sitewwwaddress
--Select User Preferences
--Select General Preferences
-
-******************************************************************
-EOF
-
-			if ($user_emailnotices) {
-				#if  "0" user does not care to get additional notices
-				mail($user_email, $subject, $mailstring, $user_affiliation_helpaddress);
-			}
-			else {
-				#just for our record keeping
-				notify($ERRORS{'MAILMASTERS'}, 0, "$user_email\n$mailstring");
-			}
-			if ($user_imtype_name ne "none") {
-				notify_via_IM($user_imtype_name, $user_im_id, $mailstring, $user_affiliation_helpaddress);
-			}
-		} ## end if ($image_os_name =~ /sun4x_|rhel/)
-		elsif ($image_os_name =~ /realm/) {
-			#same as above
-			return 1;
-		}
-		else {
-			notify($ERRORS{'WARNING'}, 0, "hrmm found an OS I am not set to handle $image_os_name");
-			return 0;
-		}
-	} ## end elsif ($computer_type eq "lab")  [ if ($computer_type =~ /blade|virtualmachine/)
-	
-	#update log table with the IPaddress of the machine
-	if (update_sublog_ipaddress($request_logid, $computer_ip_address)) {
-		notify($ERRORS{'OK'}, 0, "updated sublog $request_logid for node $computer_short_name IPaddress $computer_ip_address");
+	if ($user_emailnotices) {
+		mail($user_email, $subject, $mailstring, $user_affiliation_helpaddress);
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "could not update sublog $request_logid for node $computer_short_name IPaddress $computer_ip_address");
+		# For email record keeping
+		notify($ERRORS{'MAILMASTERS'}, 0, " $user_email\n$mailstring");
+	}
+	
+	if ($user_imtype_name ne "none") {
+		notify_via_IM($user_imtype_name, $user_im_id, $mailstring, $user_affiliation_helpaddress);
 	}
 	
 	return 1;
@@ -1307,55 +1153,6 @@ sub wait_for_child_reservations {
 	notify($ERRORS{'WARNING'}, 0, "waited maximum amount of time for all reservations to become ready");
 	return;
 } ## end sub wait_for_child_reservations
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 confirm_public_ip_address
-
- Parameters  :
- Returns     :
- Description :
-
-=cut
-
-sub confirm_public_ip_address {
-	my $self = shift;
-	
-	my $computer_short_name             = $self->data->get_computer_short_name();
-	my $public_ip_address;
-	my $computer_ip_address             = $self->data->get_computer_ip_address();
-	my $computer_id                     = $self->data->get_computer_id();
-	
-	#Try to get public IP address from OS module
-	if (!$self->os->can("get_public_ip_address")) {
-		notify($ERRORS{'WARNING'}, 0, "unable to retrieve public IP address from $computer_short_name, OS module " . ref($self) . " does not implement a 'get_public_ip_address' subroutine");
-		return;
-	}
-	elsif ($public_ip_address = $self->os->get_public_ip_address()) {
-		notify($ERRORS{'DEBUG'}, 0, "retrieved public IP address from $computer_short_name using the OS module: $public_ip_address");
-		
-		# Update the Datastructure and computer table if the retrieved IP address does not match what is in the database
-		if ($computer_ip_address ne $public_ip_address) {
-			$self->data->set_computer_ip_address($public_ip_address);
-			
-			if (update_computer_address($computer_id, $public_ip_address)) {
-			notify($ERRORS{'OK'}, 0, "updated dynamic public IP address in computer table for $computer_short_name, $public_ip_address");
-			}    
-			else {
-				notify($ERRORS{'WARNING'}, 0, "failed to update dynamic public IP address in computer table for $computer_short_name, $public_ip_address");
-				return 0;
-			}    
-		}
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to retrieve dynamic public IP address from $computer_short_name");
-		#It might not exist or got droppred
-		if (!$self->os->update_public_ip_address()) {
-			$self->reservation_failed("failed to update public IP address");
-		}
-	}
-	return 1;
-}
 
 #/////////////////////////////////////////////////////////////////////////////
 
