@@ -2190,6 +2190,358 @@ sub disable_sleep {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 query_event_log
+
+ Parameters  : $event_log_name, $xpath_query, $event_count_limit (optional)
+ Returns     : array
+ Description : Queries the event log on the computer. The $event_log_name
+               argument refers to the 'Channel' property of the events to be
+               queried. Examples:
+                  Security
+                  Microsoft-Windows-GroupPolicy/Operational
+               
+               The $xpath_query argument is an XPath query filter. Examples:
+               *
+               *[System[Provider[@Name="Microsoft-Windows-Security-Auditing"] and Task=12544 and EventID=4624] and EventData[Data[@Name="LogonType"]="10"]]
+               *[System[TimeCreated[timediff(@SystemTime) <= $milliseconds]]]
+               
+               Constructs an array of hashes based on the XML output from
+               wevtutil.exe.
+
+=cut
+
+sub query_event_log {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my ($event_log_name, $xpath_query, $event_count_limit) = @_;
+	if (!$event_log_name) {
+		notify($ERRORS{'WARNING'}, 0, "event log name argument was not specified");
+		return;
+	}
+	
+	$xpath_query = '*' if !$xpath_query;
+	
+	my $computer_node_name = $self->data->get_computer_node_name();
+	my $system32_path = $self->get_system32_path();
+	
+	# Fix problems with the query - replace all single quotes with double quotes
+	# Escape all double quote characters
+	$xpath_query =~ s/\\?("|')/\\"/g;
+	
+	# Remove newlines
+	$xpath_query =~ s/\s*\n+\s*/ /g;
+	
+	# Remove spaces after opening brackets and before closing brackets
+	$xpath_query =~ s/(\[)\s+/$1/g;
+	$xpath_query =~ s/\s+(\])/$1/g;
+	
+	# Remove spaces from end
+	$xpath_query =~ s/\s+$//g;
+	
+	# Write the output to a file on 
+	my $command = "$system32_path/wevtutil.exe query-events $event_log_name /format:XML /element:Events /query:\"$xpath_query\"";
+	if ($event_count_limit) {
+		$command .= " /count:$event_count_limit";
+	}
+	
+	my ($exit_status, $output) = $self->execute($command, 0);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to query event log on $computer_node_name: $command");
+		return;
+	}
+	elsif (!grep(/<Events>/, @$output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute query event log on $computer_node_name, output does not contain expected '<Events>' text\ncommand: $command\noutput:\n" . join("\n", @$output));
+		return;
+	}
+	
+	# Convert the XML output to a hash
+	my $xml_hash = xml_string_to_hash($output, ['Event', 'Data']);
+	if (!$xml_hash) {
+		notify($ERRORS{'WARNING'}, 0, "failed to query event log on $computer_node_name, XML output could not be converted to a hash:\n" . join("\n", @$output));
+		return;
+	}
+	
+	# If no events were returned 'Event' key will not be defined
+	if (!defined($xml_hash->{Event})) {
+		notify($ERRORS{'DEBUG'}, 0, "no events exist in '$event_log_name' event log on $computer_node_name, command:\n$command");
+		return {};
+	}
+	
+	$xml_hash = $self->query_event_log_helper($xml_hash);
+	
+	# Get the array of events
+	my @events = @{$xml_hash->{Event}};
+	my $event_count = scalar(@events);
+	
+	notify($ERRORS{'DEBUG'}, 0, "retrieved $event_count $event_log_name event" . ($event_count == 1 ? '' : 's') . " from $computer_node_name, command:\n$command\n" . format_data(\@events));
+	return @events;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 query_event_log_helper
+
+ Parameters  : $data
+ Returns     : varies
+ Description : Cleans up the data structure containing the event log
+               information. If the data contains an array of hashes and each
+               hash only has a 'Name' and 'content' key, the array is replaced
+               with a hash whose keys are the 'Name' values and values are the
+               'content' values.
+
+=cut
+
+sub query_event_log_helper {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $data = shift;
+	if (!defined($data)) {
+		return;
+	}
+	
+	my $type = ref($data);
+	if (!$type) {
+		return $data;
+	}
+	elsif ($type eq 'HASH') {
+		for my $key (keys %$data) {
+			$data->{$key} = $self->query_event_log_helper($data->{$key});
+		}
+		return $data;
+	}
+	elsif ($type eq 'ARRAY') {
+		my $test_element = @{$data}[0];
+		my $test_element_type = ref($test_element);
+		if ($test_element_type && $test_element_type eq 'HASH' && defined($test_element->{Name}) && defined($test_element->{content})) {
+			my %hash;
+			for my $element (@$data) {
+				if (defined($element->{Name}) && defined($element->{content})) {
+					$hash{$element->{Name}} = $element->{content};
+				}
+			}
+			return \%hash;
+		}
+		
+		my @array;
+		for my $element (@$data) {
+			push @array, $self->query_event_log_helper($element);
+		}
+		return \@array;
+	}
+	else {
+		return;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_logon_events
+
+ Parameters  : $past_minutes (optional)
+ Returns     : array
+ Description : Queries the event log for logon events in either the Security log
+					or Microsoft-Windows-TerminalServices-LocalSessionManager.
+					Anonymous logon and service logons are ignored. An array is
+					returned sorted by time from oldest to newest. Example:
+					[	
+						{
+						  "datetime" => "2014-03-18 19:15:25",
+						  "description" => "An account was successfully logged on",
+						  "epoch" => "1395184525",
+						  "event_id" => 4624,
+						  "event_record_id" => 2370,
+						  "logon_type" => "Interactive",
+						  "logon_type_id" => 2,
+						  "pid" => 4624,
+						  "provider" => "Microsoft-Windows-Security-Auditing",
+						  "remote_ip" => "127.0.0.1",
+						  "user" => "root"
+						},
+						{
+						  "datetime" => "2014-03-19 17:06:37",
+						  "description" => "An account was successfully logged on",
+						  "epoch" => "1395263197",
+						  "event_id" => 4624,
+						  "event_record_id" => 2665,
+						  "logon_type" => "Network",
+						  "logon_type_id" => 3,
+						  "pid" => 4624,
+						  "provider" => "Microsoft-Windows-Security-Auditing",
+						  "user" => "Administrator"
+						},
+					]	
+
+=cut
+
+sub get_logon_events {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my ($past_minutes) = @_;
+	my $offset_minutes = $self->get_timezone_offset_minutes() || 0;
+	
+	my $logon_type_names = {
+		0 => 'System',
+		2 => 'Interactive',
+		3 => 'Network',
+		4 => 'Batch',
+		5 => 'Service',
+		6 => 'Proxy',
+		7 => 'Unlock',
+		8 => 'NetworkCleartext',
+		9 => 'NewCredentials',
+		10 => 'RemoteInteractive',
+		11 => 'CachedInteractive',
+		12 => 'CachedRemoteInteractive',
+		13 => 'CachedUnlock',
+	};
+	
+	my $security_event_log = 'Security';
+	my $lsm_event_log = 'Microsoft-Windows-TerminalServices-LocalSessionManager/Operational';
+	
+	my $event_ids = {
+		'Microsoft-Windows-Security-Auditing' => {
+			4624 => 'An account was successfully logged on',
+		},
+		'Microsoft-Windows-TerminalServices-LocalSessionManager' => {
+			21 => 'Remote Desktop Services: Session logon succeeded',
+			25 => 'Remote Desktop Services: Session reconnection succeeded',
+			1101 => 'Remote Desktop Services: Session logon succeeded',
+			1105 => 'Remote Desktop Services: Session reconnection succeeded',
+		},
+	};
+	
+	my $security_event_id_string = "EventID=" . join(' or EventID=', keys(%{$event_ids->{'Microsoft-Windows-Security-Auditing'}}));
+	my $lsm_event_id_string = "EventID=" . join(' or EventID=', keys(%{$event_ids->{'Microsoft-Windows-TerminalServices-LocalSessionManager'}}));
+	
+	my $time_created_string = '';
+	if ($past_minutes) {
+		my $milliseconds = ($past_minutes * 60 * 1000);
+		$time_created_string = "and TimeCreated[timediff(\@SystemTime) <= $milliseconds]";
+	}
+	
+	my $security_query = <<EOF;
+*[
+	System[
+		Provider[\@Name="Microsoft-Windows-Security-Auditing"]
+		and Task=12544
+		and ($security_event_id_string)
+		$time_created_string
+	]
+	and
+	EventData[
+		Data[\@Name="TargetUserName"]!="ANONYMOUS LOGON"
+		and Data[\@Name="TargetUserName"]!="SYSTEM"
+		and Data[\@Name="IpAddress"]!="127.0.0.1"
+		and Data[\@Name="LogonType"]!="5"
+	]
+]
+EOF
+	
+	my $lsm_query = <<EOF;
+*[
+	System[
+		Provider[\@Name="Microsoft-Windows-TerminalServices-LocalSessionManager"]
+		and ($lsm_event_id_string)
+		$time_created_string
+	]
+]
+EOF
+	
+	my (@security_events, @lsm_events);
+	@security_events = $self->query_event_log($security_event_log, $security_query);
+	@lsm_events = $self->query_event_log($lsm_event_log, $lsm_query);
+	
+	my $logon_event_hash = {};
+	for my $event (@security_events, @lsm_events) {
+		my $system = $event->{System} || next;
+		
+		my $provider_name   = $system->{Provider}{Name};
+		my $system_time     = $system->{TimeCreated}{SystemTime};
+		my $event_record_id = $system->{EventRecordID};
+		my $event_id        = $system->{EventID};
+		my $process_pid     = $system->{Execution}{ProcessID};
+		
+		my $logon_event = {
+			event_record_id => $event_record_id,
+			event_id        => $event_id,
+			provider        => $provider_name,
+			pid             => $event_id,
+		};
+		$logon_event->{description} = $event_ids->{$provider_name}{$event_id} if $event_ids->{$provider_name}{$event_id};
+		
+		# Convert system time format to datetime: 2014-03-18T19:18:41.421250000Z
+		my ($date, $time) = $system_time =~ /^([\d-]+)T([\d:]+)\./;
+		next if (!$date || !$time);
+		my $datetime = "$date $time";
+		
+		# The time returned is UTC and not adjusted for the computer's time zone
+		my $epoch_seconds = convert_to_epoch_seconds($datetime);
+		$epoch_seconds += ($offset_minutes * 60);
+		$datetime = convert_to_datetime($epoch_seconds);
+		$logon_event->{datetime} = $datetime;
+		$logon_event->{epoch} = $epoch_seconds;
+		
+		if ($provider_name eq 'Microsoft-Windows-Security-Auditing') {
+			my $event_data = $event->{EventData}{Data} || next;
+			
+			$logon_event->{user}          = $event_data->{TargetUserName};
+			$logon_event->{remote_ip}     = $event_data->{IpAddress} if $event_data->{IpAddress};
+			$logon_event->{remote_port}   = $event_data->{IpPort} if $event_data->{IpPort};
+			$logon_event->{logon_type_id} = $event_data->{LogonType} if $event_data->{LogonType};
+			
+			my $logon_type_id = $event_data->{LogonType};
+			if (defined($logon_type_id)) {
+				$logon_event->{logon_type_id} = $logon_type_id;
+				$logon_event->{logon_type} = $logon_type_names->{$logon_type_id} if $logon_type_names->{$logon_type_id};
+			}
+		}
+		elsif ($provider_name eq 'Microsoft-Windows-TerminalServices-LocalSessionManager') {
+			my $user_data = $event->{UserData}{EventXML} || next;;
+			
+			$logon_event->{user}       = $user_data->{User};
+			$logon_event->{remote_ip}  = $user_data->{Address} if $user_data->{Address};
+			$logon_event->{session_id} = $user_data->{SessionID} if $user_data->{SessionID};
+		}
+		
+		if (!$logon_event->{user} || ref($logon_event->{user})) {
+			next;
+		}
+		$logon_event->{user} =~ s/.*\\+//g;
+		
+		if ($logon_event->{remote_ip} && ($logon_event->{remote_ip} eq '0.0.0.0' || $logon_event->{remote_ip} =~ /-/)) {
+			delete $logon_event->{remote_ip};
+		}
+		
+		if ($logon_event->{remote_port} && $logon_event->{remote_port} =~ /-/) {
+			delete $logon_event->{remote_port};
+		}
+		
+		# Add to the hash - use key containing the provider name and record ID in case events have the same epoch time
+		$logon_event_hash->{"$epoch_seconds-$provider_name-$event_record_id"} = $logon_event;
+	}
+	
+	# Convert the hash to an array sorted by the epoch time keys
+	my @logon_events = map { $logon_event_hash->{$_} } sort keys %$logon_event_hash;
+	
+	my $logon_event_count = scalar(@logon_events);
+	notify($ERRORS{'DEBUG'}, 0, "retrieved $logon_event_count logon event" . ($logon_event_count == 1 ? '' : 's') . ":\n" . format_data(\@logon_events));
+	return @logon_events;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 1;
 __END__
 
