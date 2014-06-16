@@ -688,7 +688,7 @@ sub state_exit {
 	
 	# Update the computer state if argument was supplied
 	if ($computer_state_name_new) {
-		my $computer_state_name_old    = $self->data->get_computer_state_name();
+		my $computer_state_name_old = $self->data->get_computer_state_name();
 		
 		if ($computer_state_name_new eq $computer_state_name_old) {
 			notify($ERRORS{'DEBUG'}, 0, "state of computer $computer_shortname not updated, already set to $computer_state_name_old");
