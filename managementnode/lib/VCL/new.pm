@@ -961,7 +961,7 @@ sub reserve_computer {
 				my $reservation_password = getpw();
 				
 				# Update the password in the reservation table
-				if (update_request_password($reservation_id, $reservation_password)) {
+				if (update_reservation_password($reservation_id, $reservation_password)) {
 					notify($ERRORS{'DEBUG'}, 0, "updated password in the reservation table");
 				}
 				else {
