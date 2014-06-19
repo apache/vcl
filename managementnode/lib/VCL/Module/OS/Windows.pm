@@ -8386,13 +8386,13 @@ sub set_static_public_address {
 
 	# Get the IP configuration
 	my $interface_name = $self->get_public_interface_name() || '<undefined>';
-	my $ip_address = $self->data->get_computer_ip_address() || '<undefined>';
+	my $computer_public_ip_address = $self->data->get_computer_public_ip_address() || '<undefined>';
 	my $subnet_mask = $self->data->get_management_node_public_subnet_mask() || '<undefined>';
 	my $default_gateway = $self->data->get_management_node_public_default_gateway() || '<undefined>';
 	my @dns_servers = $self->data->get_management_node_public_dns_servers();
 
    if ($server_request_fixedIP) {
-      $ip_address = $server_request_fixedIP;
+      $computer_public_ip_address = $server_request_fixedIP;
       $subnet_mask = $self->data->get_server_request_netmask();
       $default_gateway = $self->data->get_server_request_router();
       @dns_servers = $self->data->get_server_request_DNSservers();
@@ -8401,14 +8401,14 @@ sub set_static_public_address {
 	# Assemble a string containing the static IP configuration
 	my $configuration_info_string = <<EOF;
 public interface name: $interface_name
-public IP address: $ip_address
+public IP address: $computer_public_ip_address
 public subnet mask: $subnet_mask
 public default gateway: $default_gateway
 public DNS server(s): @dns_servers
 EOF
 	
 	# Make sure required info was retrieved
-	if ("$interface_name $ip_address $subnet_mask $default_gateway" =~ /undefined/) {
+	if ("$interface_name $computer_public_ip_address $subnet_mask $default_gateway" =~ /undefined/) {
 		notify($ERRORS{'WARNING'}, 0, "failed to retrieve required network configuration for $computer_name:\n$configuration_info_string");
 		return;
 	}
@@ -8418,8 +8418,8 @@ EOF
 
    #Try to ping address to make sure it's available
    #FIXME  -- need to add other tests for checking ip_address is or is not available.
-   if(_pingnode($ip_address)) {
-      notify($ERRORS{'WARNING'}, 0, "ip_address $ip_address is pingable, can not assign to $computer_name ");
+   if(_pingnode($computer_public_ip_address)) {
+      notify($ERRORS{'WARNING'}, 0, "ip_address $computer_public_ip_address is pingable, can not assign to $computer_name ");
       return;
    }
 	
@@ -8433,7 +8433,7 @@ EOF
 	delete $self->{network_configuration};
 	
 	# Set the static public IP address
-	my $command = "$system32_path/netsh.exe interface ip set address name=\"$interface_name\" source=static addr=$ip_address mask=$subnet_mask gateway=$default_gateway gwmetric=0";
+	my $command = "$system32_path/netsh.exe interface ip set address name=\"$interface_name\" source=static addr=$computer_public_ip_address mask=$subnet_mask gateway=$default_gateway gwmetric=0";
 	
 	# Set the static DNS server address
 	$command .= " && $system32_path/netsh.exe interface ip set dns name=\"$interface_name\" source=static addr=$primary_dns_server_address register=none";
@@ -11043,10 +11043,10 @@ sub check_connection_on_port {
 		return;
 	}
 	
-	my $management_node_keys 	= $self->data->get_management_node_keys();
-	my $computer_node_name   	= $self->data->get_computer_node_name();
-	my $remote_ip 			      = $self->data->get_reservation_remote_ip();
-	my $computer_ip_address   	= $self->data->get_computer_ip_address();
+	my $management_node_keys 	     = $self->data->get_management_node_keys();
+	my $computer_node_name   	     = $self->data->get_computer_node_name();
+	my $remote_ip 			           = $self->data->get_reservation_remote_ip();
+	my $computer_public_ip_address  = $self->data->get_computer_public_ip_address();
 	my $request_state_name          = $self->data->get_request_state_name();
 	
 	my $port = shift;
@@ -11074,7 +11074,7 @@ sub check_connection_on_port {
 			return $ret_val;
 		} ## end if ($line =~ /Connection refused|Permission denied/)
 		
-		if ($line =~ /\s+($computer_ip_address:$port)\s+([.0-9]*):([0-9]*)\s+(ESTABLISHED)/) {
+		if ($line =~ /\s+($computer_public_ip_address:$port)\s+([.0-9]*):([0-9]*)\s+(ESTABLISHED)/) {
 			if ($2 eq $remote_ip) {
 				$ret_val = "connected";
 				return $ret_val;

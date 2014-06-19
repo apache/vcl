@@ -204,7 +204,6 @@ $SUBROUTINE_MAPPINGS{computer_host_name} = '$self->request_data->{reservation}{R
 #$SUBROUTINE_MAPPINGS{computer_hostpub} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{hostpub}';
 $SUBROUTINE_MAPPINGS{computer_id} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{id}';
 $SUBROUTINE_MAPPINGS{computer_imagerevision_id} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{imagerevisionid}';
-$SUBROUTINE_MAPPINGS{computer_ip_address} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{IPaddress}';
 $SUBROUTINE_MAPPINGS{computer_lastcheck_time} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{lastcheck}';
 $SUBROUTINE_MAPPINGS{computer_location} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{location}';
 $SUBROUTINE_MAPPINGS{computer_networking_speed} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{network}';
@@ -214,6 +213,7 @@ $SUBROUTINE_MAPPINGS{computer_owner_id} = '$self->request_data->{reservation}{RE
 $SUBROUTINE_MAPPINGS{computer_platform_id} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{platformid}';
 $SUBROUTINE_MAPPINGS{computer_nextimage_id} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{nextimageid}';
 $SUBROUTINE_MAPPINGS{computer_private_ip_address} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{privateIPaddress}';
+$SUBROUTINE_MAPPINGS{computer_public_ip_address} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{IPaddress}';
 $SUBROUTINE_MAPPINGS{computer_processor_count} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{procnumber}';
 $SUBROUTINE_MAPPINGS{computer_processor_speed} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{procspeed}';
 $SUBROUTINE_MAPPINGS{computer_ram} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{RAM}';
@@ -1620,139 +1620,54 @@ sub get_log_data {
 
 =head2 get_computer_private_ip_address
 
- Parameters  : computer name (optional)
- Returns     : If successful: string containing IP address
-               If failed: false
- Description : Retrieves the IP address for a computer from the
-               management node's local /etc/hosts file.
-               
-               An optional argument can
-               be supplied containing the name of the computer for which the IP
-               address will be retrieved.
-               
-               This subroutine may or may not be called as a DataStructure
-               object method. If this subroutine is called as an object method,
-               the computer name argument is optional. If it is not called as an
-               object method, the computer name argument must be supplied.
-               
-               The first time this subroutine is called as an object method
-               without an argument, the reservation computer's IP address is
-               retrieved from the /etc/hosts file and saved in the DataStructure
-               object's data. Subsequent calls as an object method without an
-               argument will return the IP address retrieved the first time for
-               efficiency.
+ Parameters  : $suppress_warning (optional)
+ Returns     : string
+ Description : Retrieves the private IP address for a computer. If an address is
+               already stored in the DataStructure object, then that address is
+               returned. If no address is stored, null is returned and a warning
+               message is displayed in the log file. This can be suppressed via
+               the argument.
 
 =cut
 
 sub get_computer_private_ip_address {
-	my $self;
-	my $argument = shift;
-	my $computer_name;
+	my $self = shift;
+	unless (ref($self) && $self->isa('VCL::DataStructure')) {
+		notify($ERRORS{'WARNING'}, 0, "subroutine can only be called as a VCL::DataStructure module object method");
+		return;
+	}
 	
-	# Check if subroutine was called as an object method
-	if (ref($argument) && $argument->isa('VCL::DataStructure')) {
-		# Subroutine was called as an object method, check if an argument was specified
-		$self = $argument;
-		$argument = shift;
-		if ($argument) {
-			# Argument was specified, use this as the computer name
-			$computer_name = $argument;
+	my $suppress_warning = shift;
+	
+	my $computer_hostname = $self->get_computer_hostname();
+	if (!$computer_hostname) {
+		notify($ERRORS{'WARNING'}, 0, "computer hostname is not stored in this DataStructure object");
+		return;
+	}
+	
+	# Check if this is being called by set_computer_private_ip_address
+	# Don't display log messages if this is the case to avoid confusion
+	my $display_output = 1;
+	if (get_calling_subroutine() =~ /set_computer_private_ip_address/) {
+		$display_output = 0;
+	}
+	
+	# Check if the IP address is already stored
+	my $private_ip_address = $self->request_data->{reservation}{$self->reservation_id}{computer}{privateIPaddress};
+	if ($private_ip_address) {
+		notify($ERRORS{'DEBUG'}, 0, "returning private IP address of $computer_hostname already stored in this DataStructure object: $private_ip_address") if $display_output;
+		return $private_ip_address;
+	}
+	
+	if ($display_output) {
+		if ($suppress_warning) {
+			notify($ERRORS{'DEBUG'}, 0, "private IP address of $computer_hostname is not set in DataStructure object")
 		}
 		else {
-			# Argument was not specified, check if private IP address for this reservation's computer was already retrieved
-			if (defined $self->request_data->{reservation}{$self->reservation_id}{computer}{PRIVATE_IP_ADDRESS}) {
-				my $existing_private_ip_address = $self->request_data->{reservation}{$self->reservation_id}{computer}{PRIVATE_IP_ADDRESS};
-				
-				# This subroutine has already been run for the reservation computer, return IP address retrieved earlier
-				notify($ERRORS{'DEBUG'}, 0, "returning private IP address previously retrieved: $existing_private_ip_address");
-				return $existing_private_ip_address;
-			}
-			
-			# Argument was not specified and private IP address has not yet been saved in the request data
-			# Get the computer short name for this reservation
-			$computer_name = $self->get_computer_short_name();
+			notify($ERRORS{'WARNING'}, 0, "private IP address of $computer_hostname is not set in DataStructure object")
 		}
 	}
-	elsif (ref($argument)) {
-		notify($ERRORS{'WARNING'}, 0, "subroutine was called with an illegal argument type: " . ref($argument));
-		return;
-	}
-	else {
-		# Subroutine was not called as an object method
-		$computer_name = $argument;
-	}
-	
-	# Make sure the computer name was determined either from an argument or the request data
-	if (!$computer_name) {
-		notify($ERRORS{'WARNING'}, 0, "unable to determine computer name from argument or request data");
-		return;
-	}
-	
-	notify($ERRORS{'DEBUG'}, 0, "attempting to retrieve private IP address for computer: $computer_name");
-	
-	# Make sure mn_os is defined
-	my $mn_os = $self->mn_os;
-	if (!$mn_os) {
-		notify($ERRORS{'WARNING'}, 0, "unable to retrieve private IP address for computer: $computer_name, management node OS object is not available");
-		return;
-	}
-	
-	my @hosts_lines = $mn_os->get_file_contents('/etc/hosts');
-	if (!@hosts_lines) {
-		notify($ERRORS{'WARNING'}, 0, "failed to retrieve contents of /etc/hosts on this management node");
-		return;
-	}
-	
-	# Find lines containing the computer name followed by a space or period
-	my %matching_computer_ip_addresses;
-	
-	for my $line (@hosts_lines) {
-		# Ignore commented lines
-		next if ($line =~ /^\s*#/);
-		
-		# Ignore lines which don't contain the computer name
-		next if ($line !~ /((?:[0-9]{1,3}\.?){4})\s+$computer_name($|\.|\s)/i);
-		
-		# Extract the IP address from the matching line
-		my ($ip_address) = $line =~ /\s*((?:[0-9]{1,3}\.?){4})\s/i;
-	
-		if (!$ip_address) {
-			notify($ERRORS{'WARNING'}, 0, "unable to extract IP address from line: $line");
-			next;
-		}
-		
-		# Add the IP address and line to the hash
-		$matching_computer_ip_addresses{$ip_address} = $line;
-	}
-
-	# Check the hash, it should contain 1 key
-	# Make sure 1 uncommented line was found
-	my $found_count = scalar keys %matching_computer_ip_addresses;
-	if ($found_count == 0) {
-		if (my $database_ip_address = $self->request_data->{reservation}{$self->reservation_id}{computer}{privateIPaddress}) {
-			notify($ERRORS{'OK'}, 0, "did not find any lines in /etc/hosts containing '$computer_name', returning private IP address defined in the database: $database_ip_address");
-			$self->request_data->{reservation}{$self->reservation_id}{computer}{PRIVATE_IP_ADDRESS} = $database_ip_address;
-			return $database_ip_address;
-		}
-		else {
-			notify($ERRORS{'WARNING'}, 0, "did not find any lines in /etc/hosts containing '$computer_name' and the private IP address is not defined in the database");
-			return;
-		}
-	}
-	elsif ($found_count > 1) {
-		notify($ERRORS{'WARNING'}, 0, "found multiple lines in /etc/hosts containing '$computer_name' with different IP addresses:\n" . join("\n", values(%matching_computer_ip_addresses)));
-		return;
-	}
-	
-	my $ip_address = (keys %matching_computer_ip_addresses)[0];
-	
-	# Update the request data if subroutine was called as an object method without an argument
-	if ($self && !$argument) {
-		$self->request_data->{reservation}{$self->reservation_id}{computer}{PRIVATE_IP_ADDRESS} = $ip_address;
-	}
-	
-	notify($ERRORS{'DEBUG'}, 0, "returning IP address from /etc/hosts file: $ip_address");
-	return $ip_address;
+	return;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -1761,7 +1676,9 @@ sub get_computer_private_ip_address {
 
  Parameters  : $private_ip_address
  Returns     : boolean
- Description : Sets the computer private IP address in the DataStructure.
+ Description : Sets the computer private IP address in the DataStructure. If the
+               IP address argument is different than the value currently stored
+               in the DataStructure object, the database is updated.
 
 =cut
 
@@ -1774,27 +1691,52 @@ sub set_computer_private_ip_address {
 		return;
 	}
 	
-	my $private_ip_address = shift;
-	if (!$private_ip_address) {
+	my $private_ip_address_argument = shift;
+	if (!$private_ip_address_argument) {
 		notify($ERRORS{'WARNING'}, 0, "computer private IP address argument was not supplied");
 		return;
 	}
-	elsif (!is_valid_ip_address($private_ip_address)) {
-		notify($ERRORS{'WARNING'}, 0, "computer private IP address argument is not valid: '$private_ip_address'");
+	elsif ($private_ip_address_argument !~ /null/i && !is_valid_ip_address($private_ip_address_argument)) {
+		notify($ERRORS{'WARNING'}, 0, "computer private IP address argument is not valid: '$private_ip_address_argument'");
 		return;
 	}
 	
-	notify($ERRORS{'DEBUG'}, 0, "updated computer private IP address: '$private_ip_address'");
-	$self->request_data->{reservation}{$self->reservation_id}{computer}{PRIVATE_IP_ADDRESS} = $private_ip_address;
+	my $computer_id = $self->get_computer_id();
+	my $computer_hostname = $self->get_computer_hostname();
+	if (!$computer_id || !$computer_hostname) {
+		notify($ERRORS{'WARNING'}, 0, "computer hostname and ID are not stored in this DataStructure object");
+		return;
+	}
+	
+	my $existing_private_ip_address = $self->get_computer_private_ip_address();
+	
+	if (!$existing_private_ip_address && $private_ip_address_argument =~ /null/i) {
+		notify($ERRORS{'DEBUG'}, 0, "setting private IP address of $computer_hostname to '$private_ip_address_argument' not necessary, it is not set in this DataStructure object");
+		return 1;
+	}
+	elsif ($existing_private_ip_address && $existing_private_ip_address eq $private_ip_address_argument) {
+		notify($ERRORS{'DEBUG'}, 0, "private IP address of $computer_hostname is already set to $private_ip_address_argument");
+		return 1;
+	}
+	else {
+		# Update this DataStructure object
+		if ($private_ip_address_argument =~ /null/i) {
+			delete $self->request_data->{reservation}{$self->reservation_id}{computer}{privateIPaddress};
+		}
+		else {
+			$self->request_data->{reservation}{$self->reservation_id}{computer}{privateIPaddress} = $private_ip_address_argument;
+		}
+		
+		# Update the database
+		if (!update_computer_private_ip_address($computer_id, $private_ip_address_argument)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to update private IP address of $computer_hostname to $private_ip_address_argument, unable to update the database");
+			return;
+		}
+	}
+	
+	notify($ERRORS{'DEBUG'}, 0, "private IP address of $computer_hostname set to $private_ip_address_argument");
 	return 1;
 }
-
-
-#/////////////////////////////////////////////////////////////////////////////
-
-#/////////////////////////////////////////////////////////////////////////////
-
-#/////////////////////////////////////////////////////////////////////////////
 
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -2249,7 +2191,7 @@ sub get_reservation_info_string {
 		$string .= "computer eth0 MAC address: " . (defined($_ = $self->get_computer_eth0_mac_address(0)) ? $_ : '<undefined>') . "\n";
 		$string .= "computer eth1 MAC address: " . (defined($_ = $self->get_computer_eth1_mac_address(0)) ? $_ : '<undefined>') . "\n";
 		$string .= "computer private IP address: " . (defined($_ = $self->get_computer_private_ip_address(0)) ? $_ : '<undefined>') . "\n";
-		$string .= "computer public IP address: " . (defined($_ = $self->get_computer_ip_address(0)) ? $_ : '<undefined>') . "\n";
+		$string .= "computer public IP address: " . (defined($_ = $self->get_computer_public_ip_address(0)) ? $_ : '<undefined>') . "\n";
 		$string .= "computer in block allocation: " . (defined($_ = is_inblockrequest($self->get_computer_id(0))) ? ($_ ? 'yes' : 'no') : '<undefined>') . "\n";
 		$string .= "provisioning module: " . (defined($_ = $self->get_computer_provisioning_module_perl_package(0)) ? $_ : '<undefined>') . "\n";
 	

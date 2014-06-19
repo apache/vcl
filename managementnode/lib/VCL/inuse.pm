@@ -458,7 +458,7 @@ sub _notify_user_endtime {
 	
 	my $computer_short_name             = $self->data->get_computer_short_name();
 	my $computer_type                   = $self->data->get_computer_type();
-	my $computer_ip_address             = $self->data->get_computer_ip_address();
+	my $computer_public_ip_address      = $self->data->get_computer_public_ip_address();
 	my $image_os_name                   = $self->data->get_image_os_name();
 	my $image_prettyname                = $self->data->get_image_prettyname();
 	my $image_os_type                   = $self->data->get_image_os_type();
@@ -539,7 +539,7 @@ EOF
 	} ## end if ($computer_type =~ /blade|virtualmachine/)
 	elsif ($computer_type eq "lab") {
 		# Notify via wall
-		notify_via_wall($computer_ip_address, $user_login_id, $short_message, $image_os_name, $computer_type);
+		notify_via_wall($computer_public_ip_address, $user_login_id, $short_message, $image_os_name, $computer_type);
 	}
 	
 	# Send IM
@@ -579,7 +579,7 @@ sub _notify_user_disconnect {
 	
 	my $computer_short_name             = $self->data->get_computer_short_name();
 	my $computer_type                   = $self->data->get_computer_type();
-	my $computer_ip_address             = $self->data->get_computer_ip_address();
+	my $computer_public_ip_address      = $self->data->get_computer_public_ip_address();
 	my $image_os_name                   = $self->data->get_image_os_name();
 	my $image_prettyname                = $self->data->get_image_prettyname();
 	my $image_os_type                   = $self->data->get_image_os_type();
@@ -700,7 +700,7 @@ EOF
 	} ## end if ($computer_type =~ /blade|virtualmachine/)
 	elsif ($computer_type eq "lab") {
 		# Notify via wall
-		notify_via_wall($computer_ip_address, $user_login_id, $short_message, $image_os_name, $computer_type);
+		notify_via_wall($computer_public_ip_address, $user_login_id, $short_message, $image_os_name, $computer_type);
 	}
 	
 	return 1;
@@ -722,7 +722,7 @@ sub _notify_user_timeout {
 	
 	my $computer_short_name             = $self->data->get_computer_short_name();
 	my $computer_type                   = $self->data->get_computer_type();
-	my $computer_ip_address             = $self->data->get_computer_ip_address();
+	my $computer_public_ip_address      = $self->data->get_computer_public_ip_address();
 	my $image_os_name                   = $self->data->get_image_os_name();
 	my $image_prettyname                = $self->data->get_image_prettyname();
 	my $image_os_type                   = $self->data->get_image_os_type();
@@ -737,7 +737,7 @@ sub _notify_user_timeout {
 	
 	my $message = <<"EOF";
 
-Your reservation has timed out due to inactivity for image $image_prettyname at address $computer_ip_address.
+Your reservation has timed out due to inactivity for image $image_prettyname at address $computer_public_ip_address.
 
 To make another reservation, please revisit:
 $user_affiliation_sitewwwaddress
@@ -797,7 +797,7 @@ sub _notify_user_request_ended {
 	my $computer_id                     = $self->data->get_computer_id();
 	my $computer_short_name             = $self->data->get_computer_short_name();
 	my $computer_type                   = $self->data->get_computer_type();
-	my $computer_ip_address             = $self->data->get_computer_ip_address();
+	my $computer_public_ip_address      = $self->data->get_computer_public_ip_address();
 	my $image_os_name                   = $self->data->get_image_os_name();
 	my $image_prettyname                = $self->data->get_image_prettyname();
 	my $image_os_type                   = $self->data->get_image_os_type();
@@ -902,12 +902,12 @@ sub _notify_user_no_login {
 	my $affiliation_sitewwwaddress = $self->data->get_user_affiliation_sitewwwaddress();
 	my $affiliation_helpaddress    = $self->data->get_user_affiliation_helpaddress();
 	my $image_prettyname           = $self->data->get_image_prettyname();
-	my $computer_ip_address        = $self->data->get_computer_ip_address();
+	my $computer_public_ip_address = $self->data->get_computer_public_ip_address();
 	my $is_parent_reservation      = $self->data->is_parent_reservation();
 
 	my $message = <<"EOF";
 
-Your reservation has timed out for image $image_prettyname at address $computer_ip_address because no initial connection was made.
+Your reservation has timed out for image $image_prettyname at address $computer_public_ip_address because no initial connection was made.
 
 To make another reservation, please revisit $affiliation_sitewwwaddress.
 

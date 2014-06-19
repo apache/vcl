@@ -132,7 +132,7 @@ sub load {
 	my $vmclient_imageminram      = $self->data->get_image_minram;
 	my $vmhost_RAM                = $self->data->get_vmhost_ram;
 	my $vmclient_drivetype        = $self->data->get_computer_drive_type;
-	my $vmclient_privateIPaddress = $self->data->get_computer_ip_address;
+	my $vmclient_privateIPaddress = $self->data->get_computer_public_ip_address;
 	my $vmclient_publicIPaddress  = $self->data->get_computer_private_ip_address;
 	my $vmclient_OSname           = $self->data->get_image_os_name;
 	

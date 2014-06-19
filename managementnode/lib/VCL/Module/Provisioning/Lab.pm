@@ -141,7 +141,7 @@ sub node_status {
 	my $self = shift;
 	my ($computer_node_name, $log);
 
-	my ($management_node_os_name, $management_node_keys, $computer_host_name, $computer_short_name, $computer_ip_address, $image_os_name);
+	my ($management_node_os_name, $management_node_keys, $computer_host_name, $computer_short_name, $computer_public_ip_address, $image_os_name);
 
 	# Check if subroutine was called as a class method
 	if (ref($self) !~ /lab/i) {
@@ -154,12 +154,12 @@ sub node_status {
 			notify($ERRORS{'DEBUG'}, 0, "self is a array reference");
 		}
 
-		$computer_node_name      = $self->{hostname};
-		$management_node_os_name = $self->{managementnode}->{OSNAME};
-		$management_node_keys    = $self->{managementnode}->{keys};
-		$computer_host_name      = $self->{hostname};
-		$computer_ip_address     = $self->{IPaddress};
-		$image_os_name           = $self->{currentimage}->{OS}->{name};
+		$computer_node_name         = $self->{hostname};
+		$management_node_os_name    = $self->{managementnode}->{OSNAME};
+		$management_node_keys       = $self->{managementnode}->{keys};
+		$computer_host_name         = $self->{hostname};
+		$computer_public_ip_address = $self->{IPaddress};
+		$image_os_name              = $self->{currentimage}->{OS}->{name};
 
 		$log = 0 if !$log;
 		$computer_short_name = $1 if ($computer_node_name =~ /([-_a-zA-Z0-9]*)(\.?)/);
@@ -171,21 +171,23 @@ sub node_status {
 
 		# Check if this was called as a class method, but a node name was also specified as an argument
 		my $node_name_argument = shift;
-		$computer_node_name      = $node_name_argument if $node_name_argument;
-		$management_node_os_name = $self->data->get_management_node_os_name();
-		$management_node_keys    = $self->data->get_management_node_keys();
-		$computer_host_name      = $self->data->get_computer_host_name();
-		$computer_short_name     = $self->data->get_computer_short_name();
-		$computer_ip_address     = $self->data->get_computer_ip_address();
-		$image_os_name           = $self->data->get_image_os_name();
-		$log                     = 0;
+		$computer_node_name = $node_name_argument if $node_name_argument;
+		
+		$management_node_os_name    = $self->data->get_management_node_os_name();
+		$management_node_keys       = $self->data->get_management_node_keys();
+		$computer_host_name         = $self->data->get_computer_host_name();
+		$computer_short_name        = $self->data->get_computer_short_name();
+		$computer_public_ip_address = $self->data->get_computer_public_ip_address();
+		$image_os_name              = $self->data->get_image_os_name();
+		
+		$log = 0;
 	} ## end else [ if (ref($self) !~ /lab/i)
 
 	notify($ERRORS{'DEBUG'}, $log, "computer_short_name= $computer_short_name ");
 	notify($ERRORS{'DEBUG'}, $log, "computer_node_name= $computer_node_name ");
 	notify($ERRORS{'DEBUG'}, $log, "image_os_name= $image_os_name");
 	notify($ERRORS{'DEBUG'}, $log, "management_node_os_name= $management_node_os_name");
-	notify($ERRORS{'DEBUG'}, $log, "computer_ip_address= $computer_ip_address");
+	notify($ERRORS{'DEBUG'}, $log, "computer_public_ip_address= $computer_public_ip_address");
 	notify($ERRORS{'DEBUG'}, $log, "management_node_keys= $management_node_keys");
 
 
@@ -209,7 +211,7 @@ sub node_status {
 
 	# Check if host is listed in management node's known_hosts file
 	notify($ERRORS{'DEBUG'}, $log, "checking if $computer_host_name in management node known_hosts file");
-	if (known_hosts($computer_host_name, $management_node_os_name, $computer_ip_address)) {
+	if (known_hosts($computer_host_name, $management_node_os_name, $computer_public_ip_address)) {
 		notify($ERRORS{'OK'}, $log, "$computer_host_name public key added to management node known_hosts file");
 	}
 	else {
@@ -218,31 +220,31 @@ sub node_status {
 
 
 	# Check if node is pingable
-	notify($ERRORS{'DEBUG'}, $log, "checking if $computer_ip_address is pingable");
-	if (_pingnode($computer_ip_address)) {
-		notify($ERRORS{'OK'}, $log, "$computer_ip_address is pingable");
+	notify($ERRORS{'DEBUG'}, $log, "checking if $computer_public_ip_address is pingable");
+	if (_pingnode($computer_public_ip_address)) {
+		notify($ERRORS{'OK'}, $log, "$computer_public_ip_address is pingable");
 		$status{ping} = 1;
 	}
 	else {
-		notify($ERRORS{'OK'}, $log, "$computer_ip_address is not pingable");
+		notify($ERRORS{'OK'}, $log, "$computer_public_ip_address is not pingable");
 		$status{ping} = 0;
 	}
 
 
 	# Check if sshd is open on the admin port (24)
-	notify($ERRORS{'DEBUG'}, $log, "checking if $computer_ip_address sshd admin port 24 is accessible");
-	if (check_ssh($computer_ip_address, 24, $log)) {
-		notify($ERRORS{'OK'}, $log, "$computer_ip_address admin sshd port 24 is accessible");
+	notify($ERRORS{'DEBUG'}, $log, "checking if $computer_public_ip_address sshd admin port 24 is accessible");
+	if (check_ssh($computer_public_ip_address, 24, $log)) {
+		notify($ERRORS{'OK'}, $log, "$computer_public_ip_address admin sshd port 24 is accessible");
 
 		# Run uname -n to make sure ssh is usable
-		notify($ERRORS{'OK'}, $log, "checking if ssh command can be run on $computer_ip_address");
-		my ($uname_exit_status, $uname_output) = run_ssh_command($computer_ip_address, $management_node_keys, "uname -n", "vclstaff", 24);
+		notify($ERRORS{'OK'}, $log, "checking if ssh command can be run on $computer_public_ip_address");
+		my ($uname_exit_status, $uname_output) = run_ssh_command($computer_public_ip_address, $management_node_keys, "uname -n", "vclstaff", 24);
 		if (!defined($uname_output) || !$uname_output) {
-			notify($ERRORS{'WARNING'}, $log, "unable to run 'uname -n' ssh command on $computer_ip_address");
+			notify($ERRORS{'WARNING'}, $log, "unable to run 'uname -n' ssh command on $computer_public_ip_address");
 			$status{ssh} = 0;
 		}
 		else {
-			notify($ERRORS{'OK'}, $log, "successfully ran 'uname -n' ssh command on $computer_ip_address");
+			notify($ERRORS{'OK'}, $log, "successfully ran 'uname -n' ssh command on $computer_public_ip_address");
 			$status{ssh} = 1;
 		}
 
@@ -258,10 +260,10 @@ sub node_status {
 		#}
 
 		# Check if is VCL client daemon is running
-		notify($ERRORS{'OK'}, $log, "checking if VCL client daemon is running on $computer_ip_address");
-		my ($pgrep_exit_status, $pgrep_output) = run_ssh_command($computer_ip_address, $management_node_keys, "pgrep vclclient", "vclstaff", 24);
+		notify($ERRORS{'OK'}, $log, "checking if VCL client daemon is running on $computer_public_ip_address");
+		my ($pgrep_exit_status, $pgrep_output) = run_ssh_command($computer_public_ip_address, $management_node_keys, "pgrep vclclient", "vclstaff", 24);
 		if (!defined($pgrep_output) || !$pgrep_output) {
-			notify($ERRORS{'WARNING'}, $log, "unable to run 'pgrep vclclient' command on $computer_ip_address");
+			notify($ERRORS{'WARNING'}, $log, "unable to run 'pgrep vclclient' command on $computer_public_ip_address");
 			$status{vcl_client} = 0;
 		}
 
@@ -275,9 +277,9 @@ sub node_status {
 			notify($ERRORS{'WARNING'}, $log, "VCL client daemon is not running, unable to find running process in 'pgrep vclclient' output:\n$pgrep_output_string");
 			$status{vcl_client} = 0;
 		}
-	} ## end if (check_ssh($computer_ip_address, 24, $log...
+	} ## end if (check_ssh($computer_public_ip_address, 24, $log...
 	else {
-		notify($ERRORS{'WARNING'}, $log, "$computer_ip_address sshd admin port 24 is not accessible");
+		notify($ERRORS{'WARNING'}, $log, "$computer_public_ip_address sshd admin port 24 is not accessible");
 		$status{ssh}        = 0;
 		$status{vcl_client} = 0;
 	}
@@ -288,7 +290,7 @@ sub node_status {
 	}
 	else {
 		# Lab machine is not available, return undefined to indicate error occurred
-		notify($ERRORS{'WARNING'}, 0, "lab machine $computer_host_name ($computer_ip_address) is not available");
+		notify($ERRORS{'WARNING'}, 0, "lab machine $computer_host_name ($computer_public_ip_address) is not available");
 		$status{status} = 'RELOAD';
 	}
 

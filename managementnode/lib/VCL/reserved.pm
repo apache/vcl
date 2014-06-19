@@ -284,12 +284,12 @@ sub _notify_user_timeout {
 	my $affiliation_sitewwwaddress = $self->data->get_user_affiliation_sitewwwaddress();
 	my $affiliation_helpaddress    = $self->data->get_user_affiliation_helpaddress();
 	my $image_prettyname           = $self->data->get_image_prettyname();
-	my $computer_ip_address        = $self->data->get_computer_ip_address();
+	my $computer_public_ip_address = $self->data->get_computer_public_ip_address();
 	my $is_parent_reservation      = $self->data->is_parent_reservation();
 
 	my $message = <<"EOF";
 
-Your reservation has timed out for image $image_prettyname at address $computer_ip_address because no initial connection was made.
+Your reservation has timed out for image $image_prettyname at address $computer_public_ip_address because no initial connection was made.
 
 To make another reservation, please revisit $affiliation_sitewwwaddress.
 

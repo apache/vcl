@@ -898,15 +898,15 @@ sub server_request_set_fixedIP {
       return;
    }
    
-	my $reservation_id = $self->data->get_reservation_id() || return;
-	my $computer_id = $self->data->get_computer_id() || return;
-	my $computer_node_name = $self->data->get_computer_node_name() || return;   
-	my $image_os_name = $self->data->get_image_os_name() || return;
-	my $image_os_type = $self->data->get_image_os_type() || return;   
-	my $computer_ip_address = $self->data->get_computer_ip_address();   
-	my $public_ip_configuration = $self->data->get_management_node_public_ip_configuration() || return;
-	my $server_request_id            = $self->data->get_server_request_id();
-	my $server_request_fixedIP       = $self->data->get_server_request_fixedIP(); 
+	my $reservation_id             = $self->data->get_reservation_id() || return;
+	my $computer_id                = $self->data->get_computer_id() || return;
+	my $computer_node_name         = $self->data->get_computer_node_name() || return;   
+	my $image_os_name              = $self->data->get_image_os_name() || return;
+	my $image_os_type              = $self->data->get_image_os_type() || return;   
+	my $computer_public_ip_address = $self->data->get_computer_public_ip_address();   
+	my $public_ip_configuration    = $self->data->get_management_node_public_ip_configuration() || return;
+	my $server_request_id          = $self->data->get_server_request_id();
+	my $server_request_fixedIP     = $self->data->get_server_request_fixedIP(); 
 
    if($server_request_id) {
       if($server_request_fixedIP) {
@@ -925,7 +925,7 @@ sub server_request_set_fixedIP {
            if ($self->can("set_static_public_address")) {
               if ($self->set_static_public_address()) {
                  notify($ERRORS{'DEBUG'}, 0, "set static public IP address on $computer_node_name using OS module's set_static_public_address() method");                
-						$self->data->set_computer_ip_address($server_request_fixedIP);
+						$self->data->set_computer_public_ip_address($server_request_fixedIP);
 
                 # Delete cached network configuration information so it is retrieved next time it is needed
                 delete $self->{network_configuration};
@@ -1030,21 +1030,21 @@ sub update_public_ip_address {
 	my $computer_node_name = $self->data->get_computer_node_name() || return;
 	my $image_os_name = $self->data->get_image_os_name() || return;
 	my $image_os_type = $self->data->get_image_os_type() || return;
-	my $computer_ip_address = $self->data->get_computer_ip_address();
+	my $computer_public_ip_address = $self->data->get_computer_public_ip_address();
 	my $public_ip_configuration = $self->data->get_management_node_public_ip_configuration() || return;
 	
 	if ($public_ip_configuration =~ /dhcp/i) {
 		notify($ERRORS{'DEBUG'}, 0, "IP configuration is set to $public_ip_configuration, attempting to retrieve dynamic public IP address from $computer_node_name");
 		
-		my $public_ip_address;
+		my $retrieved_public_ip_address;
 		
 		# Try to retrieve the public IP address from the OS module
 		if (!$self->can("get_public_ip_address")) {
 			notify($ERRORS{'WARNING'}, 0, "unable to retrieve public IP address from $computer_node_name, OS module " . ref($self) . " does not implement a 'get_public_ip_address' subroutine");
 			return;
 		}
-		elsif ($public_ip_address = $self->get_public_ip_address()) {
-			notify($ERRORS{'DEBUG'}, 0, "retrieved public IP address from $computer_node_name using the OS module: $public_ip_address");
+		elsif ($retrieved_public_ip_address = $self->get_public_ip_address()) {
+			notify($ERRORS{'DEBUG'}, 0, "retrieved public IP address from $computer_node_name using the OS module: $retrieved_public_ip_address");
 		}
 		else {
 			notify($ERRORS{'WARNING'}, 0, "failed to retrieve dynamic public IP address from $computer_node_name");
@@ -1053,21 +1053,21 @@ sub update_public_ip_address {
 		}
 		
 		# Update the Datastructure and computer table if the retrieved IP address does not match what is in the database
-		if ($computer_ip_address ne $public_ip_address) {
-			$self->data->set_computer_ip_address($public_ip_address);
+		if ($computer_public_ip_address ne $retrieved_public_ip_address) {
+			$self->data->set_computer_public_ip_address($retrieved_public_ip_address);
 			
-			if (update_computer_public_ip_address($computer_id, $public_ip_address)) {
-				notify($ERRORS{'OK'}, 0, "updated dynamic public IP address in computer table for $computer_node_name, $public_ip_address");
-				insertloadlog($reservation_id, $computer_id, "dynamicDHCPaddress", "updated dynamic public IP address in computer table for $computer_node_name, $public_ip_address");
+			if (update_computer_public_ip_address($computer_id, $retrieved_public_ip_address)) {
+				notify($ERRORS{'OK'}, 0, "updated dynamic public IP address in computer table for $computer_node_name, $retrieved_public_ip_address");
+				insertloadlog($reservation_id, $computer_id, "dynamicDHCPaddress", "updated dynamic public IP address in computer table for $computer_node_name, $retrieved_public_ip_address");
 			}
 			else {
-				notify($ERRORS{'WARNING'}, 0, "failed to update dynamic public IP address in computer table for $computer_node_name, $public_ip_address");
-				insertloadlog($reservation_id, $computer_id, "dynamicDHCPaddress", "failed to update dynamic public IP address in computer table for $computer_node_name, $public_ip_address");
+				notify($ERRORS{'WARNING'}, 0, "failed to update dynamic public IP address in computer table for $computer_node_name, $retrieved_public_ip_address");
+				insertloadlog($reservation_id, $computer_id, "dynamicDHCPaddress", "failed to update dynamic public IP address in computer table for $computer_node_name, $retrieved_public_ip_address");
 				return;
 			}
 		}
 		else {
-			notify($ERRORS{'DEBUG'}, 0, "public IP address in computer table is already correct for $computer_node_name: $computer_ip_address");
+			notify($ERRORS{'DEBUG'}, 0, "public IP address in computer table is already correct for $computer_node_name: $computer_public_ip_address");
 		}
 		
 	}

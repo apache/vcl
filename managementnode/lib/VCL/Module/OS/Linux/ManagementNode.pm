@@ -85,7 +85,7 @@ sub initialize {
 	$self->data->set_computer_hostname($management_node_hostname);
 	$self->data->set_computer_node_name($management_node_short_name);
 	$self->data->set_computer_short_name($management_node_short_name);
-	$self->data->set_computer_ip_address($management_node_ip_address);
+	$self->data->set_computer_public_ip_address($management_node_ip_address);
 	
 	#print "\n\n" . format_data($self->data->get_request_data()) . "\n\n";
 	return 1;

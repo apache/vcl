@@ -728,21 +728,21 @@ sub set_static_public_address {
 		return;
 	}
 	
-	my $ip_address      = $self->data->get_computer_ip_address()                    || '<undefined>';
-	my $subnet_mask     = $self->data->get_management_node_public_subnet_mask()     || '<undefined>';
-	my $default_gateway = $self->data->get_management_node_public_default_gateway() || '<undefined>';
-	my @dns_servers     = $self->data->get_management_node_public_dns_servers();
+	my $computer_public_ip_address  = $self->data->get_computer_public_ip_address()             || '<undefined>';
+	my $subnet_mask                 = $self->data->get_management_node_public_subnet_mask()     || '<undefined>';
+	my $default_gateway             = $self->data->get_management_node_public_default_gateway() || '<undefined>';
+	my @dns_servers                 = $self->data->get_management_node_public_dns_servers();
 	
 	if ($server_request_fixedIP) {
-		$ip_address      = $server_request_fixedIP;
-		$subnet_mask     = $self->data->get_server_request_netmask();
-		$default_gateway = $self->data->get_server_request_router();
-		@dns_servers     = $self->data->get_server_request_DNSservers();
+		$computer_public_ip_address  = $server_request_fixedIP;
+		$subnet_mask                 = $self->data->get_server_request_netmask();
+		$default_gateway             = $self->data->get_server_request_router();
+		@dns_servers                 = $self->data->get_server_request_DNSservers();
 	}
 	
 	# Assemble a string containing the static IP configuration
 	my $configuration_info_string = <<EOF;
-public IP address: $ip_address
+public IP address: $computer_public_ip_address
 public subnet mask: $subnet_mask
 public default gateway: $default_gateway
 public DNS server(s): @dns_servers
@@ -752,12 +752,12 @@ EOF
 	# Pass the $ignore_error flag to prevent warnings if not defined
 	my $current_public_ip_address = $self->get_public_ip_address(1);
 	if ($current_public_ip_address) {
-		if ($current_public_ip_address eq $ip_address) {
+		if ($current_public_ip_address eq $computer_public_ip_address) {
 			notify($ERRORS{'DEBUG'}, 0, "static public IP address does not need to be set, $computer_name is already configured to use $current_public_ip_address");
 			return 1;
 		}
 		else {
-			notify($ERRORS{'DEBUG'}, 0, "static public IP address needs to be set, public IP address currently being used by $computer_name $current_public_ip_address does NOT match correct public IP address: $ip_address");
+			notify($ERRORS{'DEBUG'}, 0, "static public IP address needs to be set, public IP address currently being used by $computer_name $current_public_ip_address does NOT match correct public IP address: $computer_public_ip_address");
 		}
 	}
 	else {
@@ -766,7 +766,7 @@ EOF
 	
 	
 	# Make sure required info was retrieved
-	if ("$ip_address $subnet_mask $default_gateway" =~ /undefined/) {
+	if ("$computer_public_ip_address $subnet_mask $default_gateway" =~ /undefined/) {
 		notify($ERRORS{'WARNING'}, 0, "failed to retrieve required network configuration for $computer_name:\n$configuration_info_string");
 		return;
 	}
@@ -776,8 +776,8 @@ EOF
 	
 	# Try to ping address to make sure it's available
 	# FIXME  -- need to add other tests for checking ip_address is or is not available.
-	if ((_pingnode($ip_address))) {
-		notify($ERRORS{'WARNING'}, 0, "ip_address $ip_address is pingable, can not assign to $computer_name ");
+	if ((_pingnode($computer_public_ip_address))) {
+		notify($ERRORS{'WARNING'}, 0, "ip_address $computer_public_ip_address is pingable, can not assign to $computer_name ");
 		return;
 	}
 	
@@ -790,7 +790,7 @@ EOF
 	my $ifcfg_contents = <<EOF;
 DEVICE=$interface_name
 BOOTPROTO=static
-IPADDR=$ip_address
+IPADDR=$computer_public_ip_address
 NETMASK=$subnet_mask
 GATEWAY=$default_gateway
 STARTMODE=onboot
@@ -857,7 +857,7 @@ EOF
 	$self->remove_lines_from_file($ext_sshd_config_file_path, 'ListenAddress') || return;
 	
 	# Add ListenAddress line to the end of the file
-	$self->append_text_file($ext_sshd_config_file_path, "ListenAddress $ip_address\n") || return;
+	$self->append_text_file($ext_sshd_config_file_path, "ListenAddress $computer_public_ip_address\n") || return;
 	
 	# Update resolv.conf if DNS server address is configured for the management node
 	my $resolv_conf_path = "/etc/resolv.conf";
@@ -1311,10 +1311,10 @@ sub is_connected {
 		return;
 	}
 	
-	my $computer_node_name = $self->data->get_computer_node_name();
-	my $identity           = $self->data->get_image_identity;
-	my $remote_ip          = $self->data->get_reservation_remote_ip();
-	my $computer_ipaddress = $self->data->get_computer_ip_address();
+	my $computer_node_name         = $self->data->get_computer_node_name();
+	my $identity                   = $self->data->get_image_identity;
+	my $remote_ip                  = $self->data->get_reservation_remote_ip();
+	my $computer_public_ip_address = $self->data->get_computer_public_ip_address();
 	
 	my @SSHCMD = run_ssh_command($computer_node_name, $identity, "netstat -an", "root", 22, 0);
 	foreach my $line (@{$SSHCMD[1]}) {
@@ -1325,7 +1325,7 @@ sub is_connected {
 			notify($ERRORS{'WARNING'}, 0, "$line");
 			return 1;
 		}
-		if ($line =~ /tcp\s+([0-9]*)\s+([0-9]*)\s($computer_ipaddress:22)\s+([.0-9]*):([0-9]*)(.*)(ESTABLISHED)/) {
+		if ($line =~ /tcp\s+([0-9]*)\s+([0-9]*)\s($computer_public_ip_address:22)\s+([.0-9]*):([0-9]*)(.*)(ESTABLISHED)/) {
 			return 1;
 		}
 	} ## end foreach my $line (@{$SSHCMD[1]})
@@ -3153,12 +3153,12 @@ sub check_connection_on_port {
 		return;
 	}
 	
-	my $management_node_keys = $self->data->get_management_node_keys();
-	my $computer_node_name   = $self->data->get_computer_node_name();
-	my $remote_ip            = $self->data->get_reservation_remote_ip();
-	my $computer_ip_address  = $self->data->get_computer_ip_address();
-	my $request_state_name   = $self->data->get_request_state_name();
-	my $username             = $self->data->get_user_login_id();
+	my $management_node_keys        = $self->data->get_management_node_keys();
+	my $computer_node_name          = $self->data->get_computer_node_name();
+	my $remote_ip                   = $self->data->get_reservation_remote_ip();
+	my $computer_public_ip_address  = $self->data->get_computer_public_ip_address();
+	my $request_state_name          = $self->data->get_request_state_name();
+	my $username                    = $self->data->get_user_login_id();
 	
 	my $port = shift;
 	if (!$port) {
@@ -3182,7 +3182,7 @@ sub check_connection_on_port {
 			}
 			return $ret_val;
 		} ## end if ($line =~ /Connection refused|Permission denied/)
-		if ($line =~ /tcp\s+([0-9]*)\s+([0-9]*)\s($computer_ip_address:$port)\s+([.0-9]*):([0-9]*)(.*)(ESTABLISHED)/) {
+		if ($line =~ /tcp\s+([0-9]*)\s+([0-9]*)\s($computer_public_ip_address:$port)\s+([.0-9]*):([0-9]*)(.*)(ESTABLISHED)/) {
 			if ($4 eq $remote_ip) {
 				$ret_val = "connected";
 				return $ret_val;

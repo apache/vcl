@@ -4997,7 +4997,8 @@ sub update_lastcheckin {
  Parameters  : $computer_id, $private_ip_address
  Returns     : boolean
  Description : Updates the computer.privateIPaddress value of the computer
-               specified by the argument.
+               specified by the argument. The value can be set to null by
+               passing 'null' as the argument.
 
 =cut
 
@@ -5006,19 +5007,27 @@ sub update_computer_private_ip_address {
 	
 	if (!defined($computer_id)) {
 		notify($ERRORS{'WARNING'}, 0, "computer ID argument was not specified");
-		return
+		return;
 	}
 	if (!defined($private_ip_address)) {
 		notify($ERRORS{'WARNING'}, 0, "private IP address argument was not specified");
-		return ();
+		return;
 	}
-
+	
+	my $private_ip_address_text;
+	if ($private_ip_address =~ /null/i) {
+		$private_ip_address_text = 'NULL';
+	}
+	else {
+		$private_ip_address_text = "'$private_ip_address'";
+	}
+	
 	# Construct the update statement
 	my $update_statement = <<EOF;
 UPDATE
 computer
 SET
-privateIPaddress = '$private_ip_address'
+privateIPaddress = $private_ip_address_text
 WHERE
 id = $computer_id
 EOF
@@ -5050,11 +5059,11 @@ sub update_computer_public_ip_address {
 	
 	if (!defined($computer_id)) {
 		notify($ERRORS{'WARNING'}, 0, "computer ID argument was not specified");
-		return
+		return;
 	}
 	if (!defined($public_ip_address)) {
 		notify($ERRORS{'WARNING'}, 0, "public IP address argument was not specified");
-		return ();
+		return;
 	}
 
 	# Construct the update statement
@@ -5846,7 +5855,7 @@ sub clearfromblockrequest {
 
 =head2 update_sublog_ipaddress
 
- Parameters  : $computer_id
+ Parameters  : $computer_id, $computer_public_ip_address
  Returns     : 0 or 1
  Description : updates log table with IPaddress of node when dynamic dhcp is
                enabled there is no way to track which IP was used
@@ -5854,11 +5863,11 @@ sub clearfromblockrequest {
 =cut
 
 sub update_sublog_ipaddress {
-	my ($logid, $computer_ip_address) = @_;
+	my ($logid, $computer_public_ip_address) = @_;
 	my ($package, $filename, $line, $sub) = caller(0);
 	# Check the passed parameter
-	if (!(defined($computer_ip_address))) {
-		notify($ERRORS{'WARNING'}, 0, "computer_ip_address was not specified");
+	if (!(defined($computer_public_ip_address))) {
+		notify($ERRORS{'WARNING'}, 0, "computer public IP address argument was not specified");
 		return 0;
 	}
 	if (!(defined($logid))) {
@@ -5867,14 +5876,14 @@ sub update_sublog_ipaddress {
 	}
 
 	# Construct the SQL statement
-	my $sql_statement = "UPDATE sublog SET IPaddress = \'$computer_ip_address\' WHERE logid=$logid";
+	my $sql_statement = "UPDATE sublog SET IPaddress = \'$computer_public_ip_address\' WHERE logid=$logid";
 
 	# Call the database execute subroutine
 	if (database_execute($sql_statement)) {
 		return 1;
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "unable to update sublog table logid = $logid with ipaddress $computer_ip_address");
+		notify($ERRORS{'WARNING'}, 0, "unable to update sublog table logid = $logid with ipaddress $computer_public_ip_address");
 		return 0;
 	}
 } ## end sub update_sublog_ipaddress
@@ -8286,7 +8295,7 @@ sub is_valid_ip_address {
 		return 0;
 	}
 	
-	notify($ERRORS{'DEBUG'}, 0, "IP address is valid: $ip_address");
+	#notify($ERRORS{'DEBUG'}, 0, "IP address is valid: $ip_address");
 	return 1;
 }
 

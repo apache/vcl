@@ -77,10 +77,10 @@ sub revoke_access {
 		return 0;
 	}
 
-	my $computer_ip_address = $self->data->get_computer_ip_address;
-	my $computer_node_name  = $self->data->get_computer_node_name();
-	my $user_login_id       = $self->data->get_user_login_id();
-	my $identity            = $self->data->get_image_identity();
+	my $computer_public_ip_address = $self->data->get_computer_public_ip_address;
+	my $computer_node_name         = $self->data->get_computer_node_name();
+	my $user_login_id              = $self->data->get_user_login_id();
+	my $identity                   = $self->data->get_image_identity();
 
 	if (!$user_login_id) {
 		notify($ERRORS{'WARNING'}, 0, "user could not be determined");
@@ -104,7 +104,7 @@ sub revoke_access {
 	my @lines;
 	my $l;
 	# create clientdata file
-	my $clientdata = "/tmp/clientdata.$computer_ip_address";
+	my $clientdata = "/tmp/clientdata.$computer_public_ip_address";
 	if (open(CLIENTDATA, ">$clientdata")) {
 		print CLIENTDATA "$state\n";
 		print CLIENTDATA "$user_login_id\n";
@@ -112,20 +112,20 @@ sub revoke_access {
 		close CLIENTDATA;
 
 		# scp to hostname
-		my $target = "vclstaff\@$computer_ip_address:/home/vclstaff/clientdata";
+		my $target = "vclstaff\@$computer_public_ip_address:/home/vclstaff/clientdata";
 		if (run_scp_command($clientdata, $target, $identity, "24")) {
 			notify($ERRORS{'OK'}, 0, "Success copied $clientdata to $target");
 			unlink($clientdata);
 
 			# send flag to activate changes
-			my @sshcmd = run_ssh_command($computer_ip_address, $identity, "echo 1 > /home/vclstaff/flag", "vclstaff", "24");
-			notify($ERRORS{'OK'}, 0, "setting flag to 1 on $computer_ip_address");
+			my @sshcmd = run_ssh_command($computer_public_ip_address, $identity, "echo 1 > /home/vclstaff/flag", "vclstaff", "24");
+			notify($ERRORS{'OK'}, 0, "setting flag to 1 on $computer_public_ip_address");
 
 			my $nmapchecks = 0;
 			# return nmap check
 
 			NMAPPORT:
-			if (!(nmap_port($computer_ip_address, 22))) {
+			if (!(nmap_port($computer_public_ip_address, 22))) {
 				return 1;
 			}
 			else {
@@ -136,10 +136,10 @@ sub revoke_access {
 					goto NMAPPORT;
 				}
 				else {
-					notify($ERRORS{'WARNING'}, 0, "port 22 never closed on client $computer_ip_address");
+					notify($ERRORS{'WARNING'}, 0, "port 22 never closed on client $computer_public_ip_address");
 					return 0;
 				}
-			} ## end else [ if (!(nmap_port($computer_ip_address, 22)))
+			} ## end else [ if (!(nmap_port($computer_public_ip_address, 22)))
 		} ## end if (run_scp_command($clientdata, $target, ...
 		else {
 			notify($ERRORS{'OK'}, 0, "could not copy src=$clientdata to target=$target");
@@ -147,7 +147,7 @@ sub revoke_access {
 		}
 	} ## end if (open(CLIENTDATA, ">$clientdata"))
 	else {
-		notify($ERRORS{'WARNING'}, 0, "could not open /tmp/clientdata.$computer_ip_address $! ");
+		notify($ERRORS{'WARNING'}, 0, "could not open /tmp/clientdata.$computer_public_ip_address $! ");
 		return 0;
 	}
 
@@ -192,12 +192,12 @@ sub grant_access {
 		return 0;
 	}
 
-	my $user                = $self->data->get_user_login_id();
-	my $computer_node_name  = $self->data->get_computer_node_name();
-	my $computer_ip_address = $self->data->get_computer_ip_address;
-	my $identity            = $self->data->get_image_identity;
-	my $remoteIP            = $self->data->get_reservation_remote_ip();
-	my $state               = "new";
+	my $user                       = $self->data->get_user_login_id();
+	my $computer_node_name         = $self->data->get_computer_node_name();
+	my $computer_public_ip_address = $self->data->get_computer_public_ip_address;
+	my $identity                   = $self->data->get_image_identity;
+	my $remoteIP                   = $self->data->get_reservation_remote_ip();
+	my $state                      = "new";
 
 
 	notify($ERRORS{'OK'}, 0, "In grant_access routine $user,$computer_node_name");
@@ -205,7 +205,7 @@ sub grant_access {
 	my ($package, $filename, $line, $sub) = caller(0);
 
 	# create clientdata file
-	my $clientdata = "/tmp/clientdata.$computer_ip_address";
+	my $clientdata = "/tmp/clientdata.$computer_public_ip_address";
 	if (open(CLIENTDATA, ">$clientdata")) {
 		print CLIENTDATA "$state\n";
 		print CLIENTDATA "$user\n";
@@ -213,19 +213,19 @@ sub grant_access {
 		close CLIENTDATA;
 
 		# scp to hostname
-		my $target = "vclstaff\@$computer_ip_address:/home/vclstaff/clientdata";
+		my $target = "vclstaff\@$computer_public_ip_address:/home/vclstaff/clientdata";
 		if (run_scp_command($clientdata, $target, $identity, "24")) {
 			notify($ERRORS{'OK'}, 0, "Success copied $clientdata to $target");
 			unlink($clientdata);
 
 			# send flag to activate changes
-			my @sshcmd = run_ssh_command($computer_ip_address, $identity, "echo 1 > /home/vclstaff/flag", "vclstaff", "24");
-			notify($ERRORS{'OK'}, 0, "setting flag to 1 on $computer_ip_address");
+			my @sshcmd = run_ssh_command($computer_public_ip_address, $identity, "echo 1 > /home/vclstaff/flag", "vclstaff", "24");
+			notify($ERRORS{'OK'}, 0, "setting flag to 1 on $computer_public_ip_address");
 
 			my $nmapchecks = 0;
 
 			NMAPPORT:
-			if (nmap_port($computer_ip_address, 22)) {
+			if (nmap_port($computer_public_ip_address, 22)) {
 				notify($ERRORS{'OK'}, 0, "sshd opened");
 				return 1;
 			}
@@ -237,10 +237,10 @@ sub grant_access {
 					goto NMAPPORT;
 				}
 				else {
-					notify($ERRORS{'WARNING'}, 0, "port 22 never opened on client $computer_ip_address");
+					notify($ERRORS{'WARNING'}, 0, "port 22 never opened on client $computer_public_ip_address");
 					return 0;
 				}
-			} ## end else [ if (nmap_port($computer_ip_address, 22))
+			} ## end else [ if (nmap_port($computer_public_ip_address, 22))
 		} ## end if (run_scp_command($clientdata, $target, ...
 		else {
 			notify($ERRORS{'WARNING'}, 0, "could not copy src=$clientdata to target= $target");
@@ -248,7 +248,7 @@ sub grant_access {
 		}
 	} ## end if (open(CLIENTDATA, ">$clientdata"))
 	else {
-		notify($ERRORS{'WARNING'}, 0, "could not open /tmp/clientdata.$computer_ip_address $! ");
+		notify($ERRORS{'WARNING'}, 0, "could not open /tmp/clientdata.$computer_public_ip_address $! ");
 		return 0;
 	}
 
@@ -354,7 +354,7 @@ sub check_connection_on_port {
         my $management_node_keys        = $self->data->get_management_node_keys();
         my $computer_node_name          = $self->data->get_computer_node_name();
         my $remote_ip                   = $self->data->get_reservation_remote_ip();
-        my $computer_ip_address         = $self->data->get_computer_ip_address();
+        my $computer_public_ip_address  = $self->data->get_computer_public_ip_address();
         my $request_state_name          = $self->data->get_request_state_name();
 
         my $port = shift;
@@ -379,7 +379,7 @@ sub check_connection_on_port {
                     }
                     return $ret_val;
                  } ## end if ($line =~ /Connection refused|Permission denied/)
-                 if ($line =~ /tcp\s+([0-9]*)\s+([0-9]*)\s($computer_ip_address:$port)\s+([.0-9]*):([0-9]*)(.*)(ESTABLISHED)/) {
+                 if ($line =~ /tcp\s+([0-9]*)\s+([0-9]*)\s($computer_public_ip_address:$port)\s+([.0-9]*):([0-9]*)(.*)(ESTABLISHED)/) {
                      if ($4 eq $remote_ip) {
                          $ret_val = "connected";
                          return $ret_val;
@@ -390,7 +390,7 @@ sub check_connection_on_port {
                           return $ret_val;
                      }
                  }    # Linux
-		 if ($line =~ /tcp\s+([0-9]*)\s+([0-9]*)\s::ffff:($computer_ip_address:$port)\s+::ffff:([.0-9]*):([0-9]*)(.*)(ESTABLISHED) /) {
+		 if ($line =~ /tcp\s+([0-9]*)\s+([0-9]*)\s::ffff:($computer_public_ip_address:$port)\s+::ffff:([.0-9]*):([0-9]*)(.*)(ESTABLISHED) /) {
                      if ($4 eq $remote_ip) {
                          $ret_val = "connected";
                          return $ret_val;
@@ -401,7 +401,7 @@ sub check_connection_on_port {
                           return $ret_val;
                      }
                 } ##
-		if ($line =~ /\s*($computer_ip_address\.$port)\s+([.0-9]*)\.([0-9]*)(.*)(ESTABLISHED)/) {
+		if ($line =~ /\s*($computer_public_ip_address\.$port)\s+([.0-9]*)\.([0-9]*)(.*)(ESTABLISHED)/) {
                      if ($4 eq $remote_ip) {
                          $ret_val = "connected";
                          return $ret_val;                       

@@ -350,7 +350,7 @@ sub check_connection_on_port {
    my $computer_node_name = $self->data->get_computer_node_name();
 
    my $remote_ip                   = $self->data->get_reservation_remote_ip();
-   my $computer_ip_address         = $self->data->get_computer_ip_address();
+   my $computer_public_ip_address  = $self->data->get_computer_public_ip_address();
 
    my $port = shift;
    if (!$port) {

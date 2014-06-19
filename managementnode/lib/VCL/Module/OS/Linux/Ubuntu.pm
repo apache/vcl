@@ -643,20 +643,20 @@ sub set_static_public_address {
 
    # Get the IP configuration
    my $interface_name = $self->get_public_interface_name() || '<undefined>';
-   my $ip_address = $self->data->get_computer_ip_address() || '<undefined>';
+   my $computer_public_ip_address = $self->data->get_computer_public_ip_address() || '<undefined>';
    my $subnet_mask = $self->data->get_management_node_public_subnet_mask() || '<undefined>';
    my $default_gateway = $self->data->get_management_node_public_default_gateway() || '<undefined>';
    my @dns_servers = $self->data->get_management_node_public_dns_servers();
 
    if ($server_request_fixedIP) {
-      $ip_address = $server_request_fixedIP;
+      $computer_public_ip_address = $server_request_fixedIP;
       $subnet_mask = $self->data->get_server_request_netmask();
       $default_gateway = $self->data->get_server_request_router();
       @dns_servers = $self->data->get_server_request_DNSservers();
    }
 
    # Make sure required info was retrieved
-   if ("$interface_name $ip_address $subnet_mask $default_gateway" =~ /undefined/) {
+   if ("$interface_name $computer_public_ip_address $subnet_mask $default_gateway" =~ /undefined/) {
       notify($ERRORS{'WARNING'}, 0, "failed to retrieve required network configuration for $computer_name");
       return;
    }
@@ -666,8 +666,8 @@ sub set_static_public_address {
 	
 	#Try to ping address to make sure it's available
    #FIXME  -- need to add other tests for checking ip_address is or is not available.
-   if(_pingnode($ip_address)) {
-      notify($ERRORS{'WARNING'}, 0, "ip_address $ip_address is pingable, can not assign to $computer_name ");
+   if(_pingnode($computer_public_ip_address)) {
+      notify($ERRORS{'WARNING'}, 0, "ip_address $computer_public_ip_address is pingable, can not assign to $computer_name ");
       return;
    }
 
@@ -705,7 +705,7 @@ sub set_static_public_address {
 	
 		if($l =~ /^iface $interface_name/) {
 			push(@new_interfaces_file, "iface $interface_name inet static\n");
-			push(@new_interfaces_file, "address $ip_address\n");
+			push(@new_interfaces_file, "address $computer_public_ip_address\n");
 			push(@new_interfaces_file, "netmask $subnet_mask\n");
 			push(@new_interfaces_file, "gateway $default_gateway\n");
 		}
@@ -777,7 +777,7 @@ sub set_static_public_address {
 	$self->remove_lines_from_file($ext_sshd_config_file_path, 'ListenAddress') || return;
 	
 	# Add ListenAddress line to the end of the file
-	$self->append_text_file($ext_sshd_config_file_path, "ListenAddress $ip_address\n") || return;
+	$self->append_text_file($ext_sshd_config_file_path, "ListenAddress $computer_public_ip_address\n") || return;
 
    # Update resolv.conf if DNS server address is configured for the management node
    my $resolv_conf_path = "/etc/resolv.conf";

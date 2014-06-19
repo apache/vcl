@@ -940,14 +940,14 @@ sub reserve_computer {
 	
 	# Retrieve the computer IP address after reserve() is called because it may change
 	# Reserve may retrieve a dynamically assigned IP address and should update the DataStructure object
-	my $computer_ip_address = $self->data->get_computer_ip_address();
+	my $computer_public_ip_address = $self->data->get_computer_public_ip_address();
 	
 	# Update sublog table with the IP address of the machine
-	if (update_sublog_ipaddress($request_logid, $computer_ip_address)) {
-		notify($ERRORS{'DEBUG'}, 0, "updated computer IP address in sublog table, log ID: $request_logid, IP address: $computer_ip_address");
+	if (update_sublog_ipaddress($request_logid, $computer_public_ip_address)) {
+		notify($ERRORS{'DEBUG'}, 0, "updated computer IP address in sublog table, log ID: $request_logid, IP address: $computer_public_ip_address");
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "could not update sublog $request_logid for node $computer_short_name IP address $computer_ip_address");
+		notify($ERRORS{'WARNING'}, 0, "could not update sublog $request_logid for node $computer_short_name IP address $computer_public_ip_address");
 	}
 
 	# Check if request has been deleted
