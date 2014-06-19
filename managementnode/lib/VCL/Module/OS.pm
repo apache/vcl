@@ -2522,6 +2522,7 @@ sub manage_server_access {
 	my $user_id_owner		           = $self->data->get_user_id();
 	my $image_os_type 				  = $self->data->get_image_os_type();
 	my $request_laststate_name      = $self->data->get_request_laststate_name();
+	my $reservation_users			  = $self->data->get_reservation_users();
 
 	# Build list of users.
 	# If in admin group set admin flag
@@ -2529,52 +2530,7 @@ sub manage_server_access {
 	# Check if user is in reserverationaccounts table, add user if needed
 	# Check if user exists on server, add if needed
 	
-	my @userlist_admin;
-	my @userlist_login;
-	my %user_hash;
-
-	if ($server_request_admingroupid) {
-		@userlist_admin = getusergroupmembers($server_request_admingroupid);
-	}
-	if ($server_request_logingroupid) {
-		@userlist_login = getusergroupmembers($server_request_logingroupid);
-	}	
-	
-	notify($ERRORS{'OK'}, 0, "request_laststate_name=$request_laststate_name");	
-	notify($ERRORS{'OK'}, 0, " admin login list= @userlist_admin");
-	notify($ERRORS{'OK'}, 0, " nonadmin login list= @userlist_login");
-	
-	if (scalar @userlist_admin > 0) {
-		foreach my $str (@userlist_admin) {
-			my ($username,$uid,$vcl_user_id) = 0;
-			($username,$uid,$vcl_user_id) = split(/:/, $str);
-			my ($correct_username, $user_domain) = split /@/, $username;
-         $user_hash{$vcl_user_id}{"user_info"} = get_user_info($vcl_user_id);
-         $user_hash{$vcl_user_id}{"username"} = $correct_username;
-			$user_hash{$vcl_user_id}{"uid"} = $uid;
-			$user_hash{$vcl_user_id}{"vcl_user_id"} = $vcl_user_id;
-			$user_hash{$vcl_user_id}{"rootaccess"} = 1;
-			notify($ERRORS{'DEBUG'}, 0, "adding admin vcl_user_id= $vcl_user_id uid= $uid for $username ");
-		}
-	}		
-	if (scalar @userlist_login > 0) {
-		foreach my $str (@userlist_login) {
-			my ($username, $uid,$vcl_user_id) = 0;
-			($username, $uid,$vcl_user_id) = split(/:/, $str);
-			my ($correct_username, $user_domain) = split /@/, $username;
-			if (!exists($user_hash{$vcl_user_id})) {
-				$user_hash{$vcl_user_id}{"user_info"} = get_user_info($vcl_user_id);
-				$user_hash{$vcl_user_id}{"username"} = $correct_username;
-				$user_hash{$vcl_user_id}{"uid"}	= $uid;
-				$user_hash{$vcl_user_id}{"vcl_user_id"}	= $vcl_user_id;
-				$user_hash{$vcl_user_id}{"rootaccess"} = 2;
-				notify($ERRORS{'DEBUG'}, 0, "adding $vcl_user_id for $username ");
-			}
-			else {
-				notify($ERRORS{'OK'}, 0, "$vcl_user_id for $username exists in user_hash, skipping");
-			}
-		}
-	}	
+	my %user_hash = %{$reservation_users};
 
 	# Collect users in reservationaccounts table
 	my %res_accounts = get_reservation_accounts($reservation_id);
@@ -2589,7 +2545,9 @@ sub manage_server_access {
 		}
 		my $standalone = $user_hash{$userid}{user_info}{STANDALONE};
 
-		if(!$self->user_exists($user_hash{$userid}{username})){
+		notify($ERRORS{'OK'}, 0, " userid= $userid unityid= $user_hash{$userid}{unityid}");
+
+		if(!$self->user_exists($user_hash{$userid}{unityid})){
 			delete($res_accounts{$userid});
 		}
 		
@@ -2620,8 +2578,8 @@ sub manage_server_access {
 			}
 	
 			# Create user on the OS
-			if($self->create_user($user_hash{$userid}{username},$user_hash{$userid}{passwd},$user_hash{$userid}{uid},$user_hash{$userid}{rootaccess},$standalone,$user_hash{$userid}{user_info}{user_sshPublicKeys})) {
-				notify($ERRORS{'OK'}, 0, "Successfully created user $user_hash{$userid}{username} on $computer_node_name");
+			if($self->create_user($user_hash{$userid}{unityid},$user_hash{$userid}{passwd},$user_hash{$userid}{uid},$user_hash{$userid}{rootaccess},$standalone,$user_hash{$userid}{user_info}{user_sshPublicKeys})) {
+				notify($ERRORS{'OK'}, 0, "Successfully created user $user_hash{$userid}{unityid} on $computer_node_name");
 			}
 			else {
 				notify($ERRORS{'WARNING'}, 0, "Failed to create user on $computer_node_name ");
