@@ -713,12 +713,19 @@ sub computer_not_being_used {
 		notify($ERRORS{'OK'}, 0, "attempt $attempt/$attempt_limit: checking for competing reservations assigned to $computer_short_name");
 		my $computer_state_name = $self->data->get_computer_state_name();
 		
-		# Return 0 if computer state is maintenance, deleted, vmhostinuse
-		if ($computer_state_name =~ /^(deleted|maintenance|vmhostinuse)$/) {
+		# Return 0 if computer state is deleted, vmhostinuse
+		if ($computer_state_name =~ /^(deleted|vmhostinuse)$/) {
 			notify($ERRORS{'WARNING'}, 0, "$computer_short_name is NOT available, its state is $computer_state_name");
 			return 0;
 		}
-		
+
+		# Return 0 if computer state is maintenance and request state name is not vmhostinuse
+		# Allow computers to go from maintenance directly to a vmhost
+		if ($computer_state_name =~ /^(maintenance)$/ && $request_state_name !~ /tovmhostinuse/) {
+			notify($ERRORS{'WARNING'}, 0, "$computer_short_name is NOT available, its state is $computer_state_name");
+			return 0;
+		}
+
 		# Warn if computer state isn't available or reload - except for reinstall requests
 		if ($request_state_name !~ /^(reinstall)$/ && $computer_state_name !~ /^(available|reload)$/) {
 			notify($ERRORS{'WARNING'}, 0, "$computer_short_name state is $computer_state_name, checking if any conflicting reservations are active");
