@@ -3383,9 +3383,25 @@ sub sanitize_firewall {
 
 =head2 enable_firewall_port
  
- Parameters  : $protocol, $port, $scope (optional), $overwrite_existing (optional), $name (optional), $description (optional)
+ Parameters  : $protocol, $port, $scope (optional), $overwrite_existing (optional)
  Returns     : boolean
- Description : Updates iptables for given port for collect IPaddress range and mode
+ Description : Enables an iptables firewall port. The protocol and port
+               arguments must be supplied. Port may be an integer, '*', or
+               'any'.
+               
+               If protocol is '*' or 'any' and the protocol is anything other
+               than ICMP, the scope argument must be specified otherwise the
+               firewall would be opened to any port from any address.
+               
+               If supplied, the scope argument must be in one of the following
+               forms:
+               x.x.x.x (10.1.1.1)
+               x.x.x.x/y (10.1.1.1/24)
+               x.x.x.x/y.y.y.y (10.1.1.1/255.255.255.0)
+               
+               If the $overwrite_existing argument is supplied, all existing
+               rules matching the protocol and port will be removed and
+               replaced.
  
 =cut
 
@@ -3396,155 +3412,201 @@ sub enable_firewall_port {
 		return;
 	}
 	
-	# Check to see if this distro has iptables
-	# If not return 1 so it does not fail
-	if (!($self->service_exists("iptables"))) {
-		notify($ERRORS{'DEBUG'}, 0, "iptables does not exist on this OS");
+	my ($protocol, $port, $scope_argument, $overwrite_existing) = @_;
+	
+	my $computer_node_name = $self->data->get_computer_node_name();
+	
+	# Make sure iptables service exists
+	if (!$self->service_exists("iptables")) {
+		notify($ERRORS{'DEBUG'}, 0, "iptables service does NOT exist on $computer_node_name");
 		return 1;
 	}
 	
-	my ($protocol, $port, $scope_argument, $overwrite_existing, $name, $description) = @_;
-	if (!defined($protocol) || !defined($port)) {
-		notify($ERRORS{'WARNING'}, 0, "protocol and port arguments were not supplied");
+	# Check the protocol argument
+	if (!defined($protocol)) {
+		notify($ERRORS{'WARNING'}, 0, "protocol argument was not supplied");
+		return;
+	}
+	elsif ($protocol !~ /^\w+$/i) {
+		notify($ERRORS{'WARNING'}, 0, "protocol argument is not valid: '$protocol'");
+		return;
+	}
+	$protocol = lc($protocol);
+	
+	# Check the port argument
+	if (!defined($port)) {
+		notify($ERRORS{'WARNING'}, 0, "port argument was not supplied");
+		return;
+	}
+	elsif ($port =~ /^(any|\*)$/i) {
+		# If the port argument is unrestricted, the scope argument must be specified
+		if ($protocol !~ /icmp/i && !$scope_argument) {
+			notify($ERRORS{'WARNING'}, 0, "firewall not modified, port argument is not restricted to a certain port: '$port', scope argument was not supplied, it must be restricted to certain IP addresses if the port argument is unrestricted");
+			return;
+		}
+		
+		# Check if icmp/* was specified, change the port to 255 (all ICMP types)
+		if ($protocol =~ /icmp/i) {
+			$port = 255;
+		}
+		else {
+			$port = 'any';
+		}
+	}
+	elsif ($port !~ /^\d+$/i) {
+		notify($ERRORS{'WARNING'}, 0, "port argument is not valid: '$port', it must be an integer, '*', or 'any'");
 		return;
 	}
 	
-	my $computer_node_name = $self->data->get_computer_node_name();
-	my $mn_private_ip      = $self->mn_os->get_private_ip_address();
-	
-	$protocol = lc($protocol);
-	
-	$scope_argument = '' if (!defined($scope_argument));
-	
-	$name        = '' if !$name;
-	$description = '' if !$description;
-	
-	my $scope;
-	
-	my $INPUT_CHAIN = "INPUT";
-	
-	
-	my $firewall_configuration = $self->get_firewall_configuration() || return;
-	my $chain;
-	my $iptables_del_cmd;
-	
-	for my $num (sort keys %{$firewall_configuration->{$INPUT_CHAIN}}) {
-		my $existing_scope       = $firewall_configuration->{$INPUT_CHAIN}{$num}{$protocol}{$port}{scope} || '';
-		my $existing_name        = $firewall_configuration->{$INPUT_CHAIN}{$num}{$protocol}{$port}{name}  || '';
-		my $existing_description = $firewall_configuration->{$INPUT_CHAIN}{$num}{$protocol}{$port}{name}  || '';
-		
-		if ($existing_scope) {
-			notify($ERRORS{'DEBUG'}, 0, " num= $num protocol= $protocol port= $port existing_scope= $existing_scope existing_name= $existing_name existing_description= $existing_description ");
-			
-			if ($overwrite_existing) {
-				$scope            = $self->parse_firewall_scope($scope_argument);
-				$iptables_del_cmd = "iptables -D $INPUT_CHAIN $num";
-				if (!$scope) {
-					notify($ERRORS{'WARNING'}, 0, "failed to parse firewall scope argument: '$scope_argument'");
-					return;
-				}
-				
-				notify($ERRORS{'DEBUG'}, 0, "existing firewall opening on $computer_node_name will be replaced:\n" .
-				"name: '$existing_name'\n" .
-				"num: '$num'\n" .
-				"protocol: $protocol\n" .
-				"port/type: $port\n" .
-				"existing scope: '$existing_scope'\n" .
-				"new scope: $scope\n" .
-				"overwrite existing rule: " . ($overwrite_existing ? 'yes' : 'no')
-				);
-			}
-			else {
-				my $parsed_existing_scope = $self->parse_firewall_scope($existing_scope);
-				if (!$parsed_existing_scope) {
-					notify($ERRORS{'WARNING'}, 0, "failed to parse existing firewall scope: '$existing_scope'");
-					return;
-				}
-				
-				$scope = $self->parse_firewall_scope("$scope_argument,$existing_scope");
-				if (!$scope) {
-					notify($ERRORS{'WARNING'}, 0, "failed to parse firewall scope argument appended with existing scope: '$scope_argument,$existing_scope'");
-					return;
-				}
-				
-				if ($scope eq $parsed_existing_scope) {
-					notify($ERRORS{'DEBUG'}, 0, "firewall is already open on $computer_node_name, existing scope matches scope argument:\n" .
-					"name: '$existing_name'\n" .
-					"protocol: $protocol\n" .
-					"port/type: $port\n" .
-					"scope: $scope\n" .
-					"overwrite existing rule: " . ($overwrite_existing ? 'yes' : 'no')
-					);
-					return 1;
-				}
-			}
-		}
-		else {
-			next;
-		}
+	# Check the scope argument
+	if (!$scope_argument) {
+		$scope_argument = 'any';
+	}
+	my $parsed_scope_argument = $self->parse_firewall_scope($scope_argument);
+	if (!$parsed_scope_argument) {
+		notify($ERRORS{'WARNING'}, 0, "failed to parse firewall scope argument: '$scope_argument'");
+		return;
 	}
 	
-	if (!$scope) {
-		$scope = $self->parse_firewall_scope($scope_argument);
-		if (!$scope) {
-			notify($ERRORS{'WARNING'}, 0, "failed to parse firewall scope argument: '$scope_argument'");
+	my $chain = "INPUT";
+	my @commands;
+	my $new_scope = '';
+	my $existing_scope_string = '';
+	
+	# Loop through the rules
+	# Important: reverse sort the rules because some rules may be deleted
+	# They must be deleted in order from highest rule number to lowest
+	# Otherwise, unintended rules will be deleted unless the rule numbers are adjusted
+	my $firewall_configuration = $self->get_firewall_configuration() || return;
+	RULE: for my $rule_number (reverse sort keys %{$firewall_configuration->{$chain}}) {
+		my $rule = $firewall_configuration->{$chain}{$rule_number};
+		
+		# Check if the rule matches the protocol and port arguments
+		if (!defined($rule->{$protocol}{$port})) {
+			next RULE;
+		}
+		
+		# Ignore rule is existing scope isn't defined
+		my $existing_scope = $rule->{$protocol}{$port}{scope};
+		if (!defined($existing_scope)) {
+			notify($ERRORS{'DEBUG'}, 0, "ignoring rule $rule_number, existing scope is NOT specified:\n" . format_data($rule->{$protocol}{$port}));
+			next RULE;
+		}
+		$existing_scope_string .= "$existing_scope,";
+		
+		# Existing rules will be replaced with new rules which consolidate overlapping scopes
+		# This helps reduce duplicate rules and the number of individual rules
+		push @commands, "iptables -D $chain $rule_number";
+	}
+	
+	# Combine all of the existing scopes matching the protocol/port
+	my $parsed_existing_scope;
+	if ($existing_scope_string) {
+		$parsed_existing_scope = $self->parse_firewall_scope($existing_scope_string);
+		if (!$parsed_existing_scope) {
+			notify($ERRORS{'WARNING'}, 0, "failed to parse existing firewall scope: '$existing_scope_string'");
 			return;
 		}
 	}
 	
-	$name = "VCL: allow $protocol/$port from $scope" if !$name;
-	
-	$name = substr($name, 0, 60) . "..." if length($name) > 60;
-	
-	my $command;
-	
-	if ($iptables_del_cmd) {
-		$command = "$iptables_del_cmd ; ";
-	
+	if (!$parsed_existing_scope) {
+		$new_scope = $parsed_scope_argument;
+		notify($ERRORS{'DEBUG'}, 0, "existing $protocol/$port firewall rule does not exist, new rule will be added, scope: $new_scope");
 	}
-	
-	$command .= "/sbin/iptables -I INPUT 1 -m state --state NEW,RELATED,ESTABLISHED -m $protocol -p $protocol -j ACCEPT";
-	
-	if ($port =~ /\d+/) {
-		$command .= " --dport $port";
-	}
-	
-	if ($scope_argument) {
-		#	if ($scope_argument eq '0.0.0.0') {
-		#		$scope_argument .= "/0";
-		#	}
-		#	else {
-		#		$scope_argument .= "/24";
-		#	}
-	
-		$command .= " -s $scope_argument";
-	}
-	
-	# Make backup copy of original iptables configuration
-	my $iptables_backup_file_path = "/etc/sysconfig/iptables_pre_$port";
-	if ($self->copy_file("/etc/sysconfig/iptables", $iptables_backup_file_path)) {
-		notify($ERRORS{'DEBUG'}, 0, "backed up original iptables file to: '$iptables_backup_file_path'");
+	elsif ($overwrite_existing) {
+		if ($parsed_existing_scope eq $parsed_scope_argument) {
+			notify($ERRORS{'DEBUG'}, 0, "firewall modification for $protocol/$port not necessary, existing scope matches scope argument: $parsed_scope_argument");
+			return 1;
+		}
+		else {
+			$new_scope = $parsed_scope_argument;
+			notify($ERRORS{'DEBUG'}, 0, "overwrite existing argument specified, existing $protocol/$port firewall rule(s) will be replaced:\n" .
+				"existing scope: $parsed_existing_scope\n" .
+				"new scope: $new_scope"
+			);
+		}
 	}
 	else {
+		# Combine the existing matching scopes and the scope argument, then check if anything needs to be done
+		my $appended_scope = $self->parse_firewall_scope("$parsed_scope_argument,$parsed_existing_scope");
+		if (!$appended_scope) {
+			notify($ERRORS{'WARNING'}, 0, "failed to parse firewall scope argument appended with existing scope: '$parsed_scope_argument,$parsed_existing_scope'");
+			return;
+		}
+		
+		if ($parsed_existing_scope eq $appended_scope) {
+			notify($ERRORS{'DEBUG'}, 0, "firewall modification for $protocol/$port not necessary, existing scope includes entire scope argument:\n" .
+				"scope argument: $parsed_scope_argument\n" .
+				"existing scope: $parsed_existing_scope"
+			);
+			return 1;
+		}
+		else {
+			$new_scope = $appended_scope;
+			if ($parsed_scope_argument eq $appended_scope) {
+				notify($ERRORS{'DEBUG'}, 0, "existing $protocol/$port rule(s) will be replaced, scope argument includes entire existing scope:\n" .
+					"scope argument: $parsed_scope_argument\n" .
+					"existing scope: $parsed_existing_scope\n" .
+					"new scope: $new_scope"
+				);
+			}
+			else {
+				notify($ERRORS{'DEBUG'}, 0, "new $protocol/$port rule will be added, existing scope does NOT intersect scope argument:\n" .
+					"scope argument: $parsed_scope_argument\n" .
+					"existing scope: $parsed_existing_scope\n" .
+					"new scope: $new_scope"
+				);
+			}
+		}
+	}
+	
+	# Add the new rule to the array of iptables commands
+	my $new_rule_command;
+	$new_rule_command .= "/sbin/iptables -v -I INPUT 1";
+	$new_rule_command .= " -p $protocol";
+	$new_rule_command .= " -j ACCEPT";
+	$new_rule_command .= " -s $new_scope";
+	
+	if ($protocol =~ /icmp/i) {
+		if ($port ne '255') {
+			$new_rule_command .= "  --icmp-type $port";
+		}
+	}
+	else {
+		$new_rule_command .= " -m state --state NEW,RELATED,ESTABLISHED";
+		
+		if ($port =~ /^\d+$/) {
+			$new_rule_command .= " -m $protocol --dport $port";
+		}
+	}
+	
+	push @commands, $new_rule_command;
+	
+	# Join the iptables commands together with ' && '
+	my $command = join(' && ', @commands);
+	
+	# Make backup copy of original iptables configuration
+	my $iptables_backup_file_path = "/etc/sysconfig/iptables_pre_$protocol-$port";
+	if (!$self->copy_file("/etc/sysconfig/iptables", $iptables_backup_file_path)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to back up original iptables file to: '$iptables_backup_file_path'");
 	}
 	
-	# Add rule
-	notify($ERRORS{'DEBUG'}, 0, "attempting to execute command on $computer_node_name: '$command'");
-	my ($status, $output) = $self->execute($command);
-	if (defined $status && $status == 0) {
-		notify($ERRORS{'DEBUG'}, 0, "executed command on $computer_node_name: '$command'");
+	#notify($ERRORS{'DEBUG'}, 0, "attempting to execute iptables commands on $computer_node_name:\n" . join("\n", @commands));
+	my ($exit_status, $output) = $self->execute($command, 0);
+	if (!defined $exit_status) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute iptables commands to enable firewall port on $computer_node_name, protocol: $protocol, port: $port, scope: $new_scope");
+		return;
+	}
+	elsif ($exit_status == 0) {
+		notify($ERRORS{'DEBUG'}, 0, "enabled firewall port on $computer_node_name, protocol: $protocol, port: $port, scope: $new_scope");
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "output from iptables:\n" . join("\n", @$output));
+		notify($ERRORS{'WARNING'}, 0, "failed to enable firewall port on $computer_node_name, protocol: $protocol, port: $port, scope: $new_scope, exit status: $exit_status, command:\n$command\noutput:\n" . join("\n", @$output));
+		return;
 	}
 	
-	# Save rules to sysconfig/iptables -- incase of reboot
-	my $iptables_save_cmd = "/sbin/iptables-save > /etc/sysconfig/iptables";
-	my ($status_save, $output_save) = $self->execute($iptables_save_cmd);
-	if (defined $status_save && $status_save == 0) {
-		notify($ERRORS{'DEBUG'}, 0, "executed command $iptables_save_cmd on $computer_node_name");
-	}
+	# Save rules to /etc/sysconfig/iptables so changes persist across reboots
+	$self->save_firewall_configuration();
 	
 	return 1;
 }
@@ -3553,9 +3615,9 @@ sub enable_firewall_port {
 
 =head2 disable_firewall_port
  
- Parameters  : none
- Returns     : 1 successful, 0 failed
- Description : updates iptables for given port for collect IPaddress range and mode
+ Parameters  : $protocol, $port
+ Returns     : boolean
+ Description : 
  
 =cut
 
@@ -3566,6 +3628,8 @@ sub disable_firewall_port {
 		return;
 	}
 	
+	my ($protocol, $port) = @_;
+
 	# Check to see if this distro has iptables
 	# If not return 1 so it does not fail
 	if (!($self->service_exists("iptables"))) {
@@ -3573,53 +3637,145 @@ sub disable_firewall_port {
 		return 1;
 	}
 	
-	my ($protocol, $port, $scope_argument, $overwrite_existing, $name, $description) = @_;
-	if (!defined($protocol) || !defined($port)) {
-		notify($ERRORS{'WARNING'}, 0, "protocol and port arguments were not supplied");
+	my $computer_node_name = $self->data->get_computer_node_name();
+	
+	# Check the protocol argument
+	if (!defined($protocol)) {
+		notify($ERRORS{'WARNING'}, 0, "protocol argument was not supplied");
+		return;
+	}
+	elsif ($protocol !~ /^\w+$/i) {
+		notify($ERRORS{'WARNING'}, 0, "protocol argument is not valid: '$protocol'");
+		return;
+	}
+	$protocol = lc($protocol);
+	
+	# Check the port argument
+	if (!defined($port)) {
+		notify($ERRORS{'WARNING'}, 0, "port argument was not supplied");
+		return;
+	}
+	elsif (!$port) {
+		notify($ERRORS{'WARNING'}, 0, "port argument is not valid: '$port'");
+		return;
+	}
+	elsif ($port =~ /^(any|\*)$/) {
+		if ($protocol =~ /icmp/i) {
+			$port = 255;
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "port argument invalid: '$port', protocol argument: '$protocol', port must be an integer");
+			return;
+		}
+	}
+	elsif ($port !~ /^\d+$/i) {
+		notify($ERRORS{'WARNING'}, 0, "port argument is not valid: '$port'");
+		return;
+	}
+	elsif ($port eq '22') {
+		notify($ERRORS{'CRITICAL'}, 0, "disabling firewall port 22 is not allowed because it will cut off access from the management node");
+		return;
+	}
+	
+	my $chain = "INPUT";
+	my @commands;
+	my $new_scope;
+	my $existing_scope_string;
+	
+	my $firewall_configuration = $self->get_firewall_configuration() || return;
+	RULE: for my $rule_number (reverse sort keys %{$firewall_configuration->{$chain}}) {
+		my $rule = $firewall_configuration->{$chain}{$rule_number};
+		
+		# Check if the rule matches the protocol and port arguments
+		if ($protocol =~ /icmp/i && $port eq 255) {
+			if (!defined($rule->{$protocol})) {
+				#notify($ERRORS{'DEBUG'}, 0, "ignoring rule $rule_number, protocol is not $protocol:\n" . format_data($rule));
+				next;
+			}
+		}
+		elsif (!defined($rule->{$protocol}{$port})) {
+			#notify($ERRORS{'DEBUG'}, 0, "ignoring rule $rule_number, does not match protocol/port $protocol/$port:\n" . format_data($rule));
+			next RULE;
+		}
+		else {
+			# Only remove if target is 'ACCEPT'
+			my $target = $rule->{$protocol}{$port}{target};
+			if (!defined($target)) {
+				#notify($ERRORS{'WARNING'}, 0, "ignoring rule $rule_number, 'target' is not defined:\n" . format_data($rule));
+				next RULE;
+			}
+			elsif ($target !~ /ACCEPT/i) {
+				#notify($ERRORS{'DEBUG'}, 0, "ignoring rule $rule_number, 'target' is not 'ACCEPT':\n" . format_data($rule));
+				next RULE;
+			}
+		}
+		
+		push @commands, "iptables -D $chain $rule_number";
+	}
+	
+	# If no existing rules were found, nothing needs to be done
+	if (!@commands) {
+		notify($ERRORS{'DEBUG'}, 0, "firewall port $protocol/$port is not open on $computer_node_name");
+		return 1;
+	}
+	
+	# Join the iptables commands together with ' && '
+	my $command = join(' && ', @commands);
+	#notify($ERRORS{'DEBUG'}, 0, "attempting to execute iptables commands on $computer_node_name:\n" . join("\n", @commands));
+	my ($exit_status, $output) = $self->execute($command);
+	if (!defined $exit_status) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute iptables commands to disable firewall port $protocol/$port on $computer_node_name");
+		return;
+	}
+	elsif ($exit_status == 0) {
+		notify($ERRORS{'DEBUG'}, 0, "disabled firewall port $protocol/$port on $computer_node_name");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to disable firewall port $protocol/$port on $computer_node_name, exit status: $exit_status, output:\n" . join("\n", @$output));
+		return;
+	}
+	
+	# Save rules to /etc/sysconfig/iptables so changes persist across reboots
+	$self->save_firewall_configuration();
+	
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 save_firewall_configuration
+ 
+ Parameters  : none
+ Returns     : boolean
+ Description : Calls iptables-save to save the current iptables firewall
+               configuration to /etc/sysconfig/iptables.
+ 
+=cut
+
+sub save_firewall_configuration {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return;
 	}
 	
 	my $computer_node_name = $self->data->get_computer_node_name();
-	my $mn_private_ip      = $self->mn_os->get_private_ip_address();
 	
-	$protocol = lc($protocol);
-	
-	$scope_argument = '' if (!defined($scope_argument));
-	
-	$name        = '' if !$name;
-	$description = '' if !$description;
-	
-	my $scope;
-	
-	my $INPUT_CHAIN = "INPUT";
-	
-	my $firewall_configuration = $self->get_firewall_configuration() || return;
-	my $chain;
-	my $command;
-	
-	for my $num (sort keys %{$firewall_configuration->{$INPUT_CHAIN}}) {
-		my $existing_scope = $firewall_configuration->{$INPUT_CHAIN}{$num}{$protocol}{$port}{scope} || '';
-		my $existing_name  = $firewall_configuration->{$INPUT_CHAIN}{$num}{$protocol}{$port}{name}  || '';
-		if ($existing_scope) {
-			$command = "iptables -D $INPUT_CHAIN $num";
-			
-			notify($ERRORS{'DEBUG'}, 0, "attempting to execute command on $computer_node_name: '$command'");
-			my ($status, $output) = $self->execute($command);
-			if (defined $status && $status == 0) {
-				notify($ERRORS{'DEBUG'}, 0, "executed command on $computer_node_name: '$command'");
-			}
-			else {
-				notify($ERRORS{'WARNING'}, 0, "output from iptables:\n" . join("\n", @$output));
-			}
-			
-			# Save rules to sysconfig/iptables -- incase of reboot
-			my $iptables_save_cmd = "/sbin/iptables-save > /etc/sysconfig/iptables";
-			my ($status_save, $output_save) = $self->execute($iptables_save_cmd);
-			if (defined $status_save && $status_save == 0) {
-				notify($ERRORS{'DEBUG'}, 0, "executed command $iptables_save_cmd on $computer_node_name");
-			}
-		}
+	my $iptables_file_path = '/etc/sysconfig/iptables';
+	my $command = "/sbin/iptables-save > $iptables_file_path";
+	my ($exit_status, $output) = $self->execute($command);
+	if (!defined $output) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to save iptables configuration on $computer_node_name:\n$command");
+		return;
 	}
+	elsif ($exit_status == 0) {
+		notify($ERRORS{'DEBUG'}, 0, "saved iptables configuration on $computer_node_name: $iptables_file_path");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to save iptables configuration on $computer_node_name, exit status: $exit_status, command: $command, output:\n" . join("\n", @$output));
+		return;
+	}
+	
 	return 1;
 }
 
@@ -5055,406 +5211,6 @@ sub get_port_connection_info {
 		notify($ERRORS{'DEBUG'}, 0, "did not detect any connections on $computer_node_name");
 	}
 	return $connection_info;
-}
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 enable_firewall_port_new
- 
- Parameters  : $protocol, $port, $scope (optional), $overwrite_existing (optional)
- Returns     : boolean
- Description : Enables an iptables firewall port. The protocol and port
-               arguments must be supplied. Port may be an integer, '*', or
-               'any'.
-               
-               If protocol is '*' or 'any' and the protocol is anything other
-               than ICMP, the scope argument must be specified otherwise the
-               firewall would be opened to any port from any address.
-               
-               If supplied, the scope argument must be in one of the following
-               forms:
-               x.x.x.x (10.1.1.1)
-               x.x.x.x/y (10.1.1.1/24)
-               x.x.x.x/y.y.y.y (10.1.1.1/255.255.255.0)
-               
-               If the $overwrite_existing argument is supplied, all existing
-               rules matching the protocol and port will be removed and
-               replaced.
- 
-=cut
-
-sub enable_firewall_port_new {
-	my $self = shift;
-	if (ref($self) !~ /VCL::Module/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return;
-	}
-	
-	my ($protocol, $port, $scope_argument, $overwrite_existing) = @_;
-	
-	my $computer_node_name = $self->data->get_computer_node_name();
-	
-	# Make sure iptables service exists
-	if (!$self->service_exists("iptables")) {
-		notify($ERRORS{'DEBUG'}, 0, "iptables service does NOT exist on $computer_node_name");
-		return 1;
-	}
-	
-	# Check the protocol argument
-	if (!defined($protocol)) {
-		notify($ERRORS{'WARNING'}, 0, "protocol argument was not supplied");
-		return;
-	}
-	elsif ($protocol !~ /^\w+$/i) {
-		notify($ERRORS{'WARNING'}, 0, "protocol argument is not valid: '$protocol'");
-		return;
-	}
-	$protocol = lc($protocol);
-	
-	# Check the port argument
-	if (!defined($port)) {
-		notify($ERRORS{'WARNING'}, 0, "port argument was not supplied");
-		return;
-	}
-	elsif ($port =~ /^(any|\*)$/i) {
-		# If the port argument is unrestricted, the scope argument must be specified
-		if ($protocol !~ /icmp/i && !$scope_argument) {
-			notify($ERRORS{'WARNING'}, 0, "firewall not modified, port argument is not restricted to a certain port: '$port', scope argument was not supplied, it must be restricted to certain IP addresses if the port argument is unrestricted");
-			return;
-		}
-		
-		# Check if icmp/* was specified, change the port to 255 (all ICMP types)
-		if ($protocol =~ /icmp/i) {
-			$port = 255;
-		}
-		else {
-			$port = 'any';
-		}
-	}
-	elsif ($port !~ /^\d+$/i) {
-		notify($ERRORS{'WARNING'}, 0, "port argument is not valid: '$port', it must be an integer, '*', or 'any'");
-		return;
-	}
-	
-	# Check the scope argument
-	if (!$scope_argument) {
-		$scope_argument = 'any';
-	}
-	my $parsed_scope_argument = $self->parse_firewall_scope($scope_argument);
-	if (!$parsed_scope_argument) {
-		notify($ERRORS{'WARNING'}, 0, "failed to parse firewall scope argument: '$scope_argument'");
-		return;
-	}
-	
-	my $chain = "INPUT";
-	my @commands;
-	my $new_scope = '';
-	my $existing_scope_string = '';
-	
-	# Loop through the rules
-	# Important: reverse sort the rules because some rules may be deleted
-	# They must be deleted in order from highest rule number to lowest
-	# Otherwise, unintended rules will be deleted unless the rule numbers are adjusted
-	my $firewall_configuration = $self->get_firewall_configuration() || return;
-	RULE: for my $rule_number (reverse sort keys %{$firewall_configuration->{$chain}}) {
-		my $rule = $firewall_configuration->{$chain}{$rule_number};
-		
-		# Check if the rule matches the protocol and port arguments
-		if (!defined($rule->{$protocol}{$port})) {
-			next RULE;
-		}
-		
-		# Ignore rule is existing scope isn't defined
-		my $existing_scope = $rule->{$protocol}{$port}{scope};
-		if (!defined($existing_scope)) {
-			notify($ERRORS{'DEBUG'}, 0, "ignoring rule $rule_number, existing scope is NOT specified:\n" . format_data($rule->{$protocol}{$port}));
-			next RULE;
-		}
-		$existing_scope_string .= "$existing_scope,";
-		
-		# Existing rules will be replaced with new rules which consolidate overlapping scopes
-		# This helps reduce duplicate rules and the number of individual rules
-		push @commands, "iptables -D $chain $rule_number";
-	}
-	
-	# Combine all of the existing scopes matching the protocol/port
-	my $parsed_existing_scope;
-	if ($existing_scope_string) {
-		$parsed_existing_scope = $self->parse_firewall_scope($existing_scope_string);
-		if (!$parsed_existing_scope) {
-			notify($ERRORS{'WARNING'}, 0, "failed to parse existing firewall scope: '$existing_scope_string'");
-			return;
-		}
-	}
-	
-	if (!$parsed_existing_scope) {
-		$new_scope = $parsed_scope_argument;
-		notify($ERRORS{'DEBUG'}, 0, "existing $protocol/$port firewall rule does not exist, new rule will be added, scope: $new_scope");
-	}
-	elsif ($overwrite_existing) {
-		if ($parsed_existing_scope eq $parsed_scope_argument) {
-			notify($ERRORS{'DEBUG'}, 0, "firewall modification for $protocol/$port not necessary, existing scope matches scope argument: $parsed_scope_argument");
-			return 1;
-		}
-		else {
-			$new_scope = $parsed_scope_argument;
-			notify($ERRORS{'DEBUG'}, 0, "overwrite existing argument specified, existing $protocol/$port firewall rule(s) will be replaced:\n" .
-				"existing scope: $parsed_existing_scope\n" .
-				"new scope: $new_scope"
-			);
-		}
-	}
-	else {
-		# Combine the existing matching scopes and the scope argument, then check if anything needs to be done
-		my $appended_scope = $self->parse_firewall_scope("$parsed_scope_argument,$parsed_existing_scope");
-		if (!$appended_scope) {
-			notify($ERRORS{'WARNING'}, 0, "failed to parse firewall scope argument appended with existing scope: '$parsed_scope_argument,$parsed_existing_scope'");
-			return;
-		}
-		
-		if ($parsed_existing_scope eq $appended_scope) {
-			notify($ERRORS{'DEBUG'}, 0, "firewall modification for $protocol/$port not necessary, existing scope includes entire scope argument:\n" .
-				"scope argument: $parsed_scope_argument\n" .
-				"existing scope: $parsed_existing_scope"
-			);
-			return 1;
-		}
-		else {
-			$new_scope = $appended_scope;
-			if ($parsed_scope_argument eq $appended_scope) {
-				notify($ERRORS{'DEBUG'}, 0, "existing $protocol/$port rule(s) will be replaced, scope argument includes entire existing scope:\n" .
-					"scope argument: $parsed_scope_argument\n" .
-					"existing scope: $parsed_existing_scope\n" .
-					"new scope: $new_scope"
-				);
-			}
-			else {
-				notify($ERRORS{'DEBUG'}, 0, "new $protocol/$port rule will be added, existing scope does NOT intersect scope argument:\n" .
-					"scope argument: $parsed_scope_argument\n" .
-					"existing scope: $parsed_existing_scope\n" .
-					"new scope: $new_scope"
-				);
-			}
-		}
-	}
-	
-	# Add the new rule to the array of iptables commands
-	my $new_rule_command;
-	$new_rule_command .= "/sbin/iptables -v -I INPUT 1";
-	$new_rule_command .= " -p $protocol";
-	$new_rule_command .= " -j ACCEPT";
-	$new_rule_command .= " -s $new_scope";
-	
-	if ($protocol =~ /icmp/i) {
-		if ($port ne '255') {
-			$new_rule_command .= "  --icmp-type $port";
-		}
-	}
-	else {
-		$new_rule_command .= " -m state --state NEW,RELATED,ESTABLISHED";
-		
-		if ($port =~ /^\d+$/) {
-			$new_rule_command .= " -m $protocol --dport $port";
-		}
-	}
-	
-	push @commands, $new_rule_command;
-	
-	# Join the iptables commands together with ' && '
-	my $command = join(' && ', @commands);
-	
-	# Make backup copy of original iptables configuration
-	my $iptables_backup_file_path = "/etc/sysconfig/iptables_pre_$protocol-$port";
-	if (!$self->copy_file("/etc/sysconfig/iptables", $iptables_backup_file_path)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to back up original iptables file to: '$iptables_backup_file_path'");
-	}
-	
-	#notify($ERRORS{'DEBUG'}, 0, "attempting to execute iptables commands on $computer_node_name:\n" . join("\n", @commands));
-	my ($exit_status, $output) = $self->execute($command, 0);
-	if (!defined $exit_status) {
-		notify($ERRORS{'WARNING'}, 0, "failed to execute iptables commands to enable firewall port on $computer_node_name, protocol: $protocol, port: $port, scope: $new_scope");
-		return;
-	}
-	elsif ($exit_status == 0) {
-		notify($ERRORS{'DEBUG'}, 0, "enabled firewall port on $computer_node_name, protocol: $protocol, port: $port, scope: $new_scope");
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to enable firewall port on $computer_node_name, protocol: $protocol, port: $port, scope: $new_scope, exit status: $exit_status, command:\n$command\noutput:\n" . join("\n", @$output));
-		return;
-	}
-	
-	# Save rules to /etc/sysconfig/iptables so changes persist across reboots
-	$self->save_firewall_configuration();
-	
-	return 1;
-}
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 disable_firewall_port_new
- 
- Parameters  : $protocol, $port
- Returns     : boolean
- Description : 
- 
-=cut
-
-sub disable_firewall_port_new {
-	my $self = shift;
-	if (ref($self) !~ /VCL::Module/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return;
-	}
-	
-	my ($protocol, $port) = @_;
-
-	# Check to see if this distro has iptables
-	# If not return 1 so it does not fail
-	if (!($self->service_exists("iptables"))) {
-		notify($ERRORS{'WARNING'}, 0, "iptables does not exist on this OS");
-		return 1;
-	}
-	
-	my $computer_node_name = $self->data->get_computer_node_name();
-	
-	# Check the protocol argument
-	if (!defined($protocol)) {
-		notify($ERRORS{'WARNING'}, 0, "protocol argument was not supplied");
-		return;
-	}
-	elsif ($protocol !~ /^\w+$/i) {
-		notify($ERRORS{'WARNING'}, 0, "protocol argument is not valid: '$protocol'");
-		return;
-	}
-	$protocol = lc($protocol);
-	
-	# Check the port argument
-	if (!defined($port)) {
-		notify($ERRORS{'WARNING'}, 0, "port argument was not supplied");
-		return;
-	}
-	elsif (!$port) {
-		notify($ERRORS{'WARNING'}, 0, "port argument is not valid: '$port'");
-		return;
-	}
-	elsif ($port =~ /^(any|\*)$/) {
-		if ($protocol =~ /icmp/i) {
-			$port = 255;
-		}
-		else {
-			notify($ERRORS{'WARNING'}, 0, "port argument invalid: '$port', protocol argument: '$protocol', port must be an integer");
-			return;
-		}
-	}
-	elsif ($port !~ /^\d+$/i) {
-		notify($ERRORS{'WARNING'}, 0, "port argument is not valid: '$port'");
-		return;
-	}
-	elsif ($port eq '22') {
-		notify($ERRORS{'CRITICAL'}, 0, "disabling firewall port 22 is not allowed because it will cut off access from the management node");
-		return;
-	}
-	
-	my $chain = "INPUT";
-	my @commands;
-	my $new_scope;
-	my $existing_scope_string;
-	
-	my $firewall_configuration = $self->get_firewall_configuration() || return;
-	RULE: for my $rule_number (reverse sort keys %{$firewall_configuration->{$chain}}) {
-		my $rule = $firewall_configuration->{$chain}{$rule_number};
-		
-		# Check if the rule matches the protocol and port arguments
-		if ($protocol =~ /icmp/i && $port eq 255) {
-			if (!defined($rule->{$protocol})) {
-				#notify($ERRORS{'DEBUG'}, 0, "ignoring rule $rule_number, protocol is not $protocol:\n" . format_data($rule));
-				next;
-			}
-		}
-		elsif (!defined($rule->{$protocol}{$port})) {
-			#notify($ERRORS{'DEBUG'}, 0, "ignoring rule $rule_number, does not match protocol/port $protocol/$port:\n" . format_data($rule));
-			next RULE;
-		}
-		else {
-			# Only remove if target is 'ACCEPT'
-			my $target = $rule->{$protocol}{$port}{target};
-			if (!defined($target)) {
-				#notify($ERRORS{'WARNING'}, 0, "ignoring rule $rule_number, 'target' is not defined:\n" . format_data($rule));
-				next RULE;
-			}
-			elsif ($target !~ /ACCEPT/i) {
-				#notify($ERRORS{'DEBUG'}, 0, "ignoring rule $rule_number, 'target' is not 'ACCEPT':\n" . format_data($rule));
-				next RULE;
-			}
-		}
-		
-		push @commands, "iptables -D $chain $rule_number";
-	}
-	
-	# If no existing rules were found, nothing needs to be done
-	if (!@commands) {
-		notify($ERRORS{'DEBUG'}, 0, "firewall port $protocol/$port is not open on $computer_node_name");
-		return 1;
-	}
-	
-	# Join the iptables commands together with ' && '
-	my $command = join(' && ', @commands);
-	#notify($ERRORS{'DEBUG'}, 0, "attempting to execute iptables commands on $computer_node_name:\n" . join("\n", @commands));
-	my ($exit_status, $output) = $self->execute($command);
-	if (!defined $exit_status) {
-		notify($ERRORS{'WARNING'}, 0, "failed to execute iptables commands to disable firewall port $protocol/$port on $computer_node_name");
-		return;
-	}
-	elsif ($exit_status == 0) {
-		notify($ERRORS{'DEBUG'}, 0, "disabled firewall port $protocol/$port on $computer_node_name");
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to disable firewall port $protocol/$port on $computer_node_name, exit status: $exit_status, output:\n" . join("\n", @$output));
-		return;
-	}
-	
-	# Save rules to /etc/sysconfig/iptables so changes persist across reboots
-	$self->save_firewall_configuration();
-	
-	return 1;
-}
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 save_firewall_configuration
- 
- Parameters  : none
- Returns     : boolean
- Description : Calls iptables-save to save the current iptables firewall
-               configuration to /etc/sysconfig/iptables.
- 
-=cut
-
-sub save_firewall_configuration {
-	my $self = shift;
-	if (ref($self) !~ /VCL::Module/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return;
-	}
-	
-	my $computer_node_name = $self->data->get_computer_node_name();
-	
-	my $iptables_file_path = '/etc/sysconfig/iptables';
-	my $command = "/sbin/iptables-save > $iptables_file_path";
-	my ($exit_status, $output) = $self->execute($command);
-	if (!defined $output) {
-		notify($ERRORS{'WARNING'}, 0, "failed to execute command to save iptables configuration on $computer_node_name:\n$command");
-		return;
-	}
-	elsif ($exit_status == 0) {
-		notify($ERRORS{'DEBUG'}, 0, "saved iptables configuration on $computer_node_name: $iptables_file_path");
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to save iptables configuration on $computer_node_name, exit status: $exit_status, command: $command, output:\n" . join("\n", @$output));
-		return;
-	}
-	
-	return 1;
 }
 
 ##/////////////////////////////////////////////////////////////////////////////

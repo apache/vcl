@@ -930,7 +930,7 @@ sub server_request_set_fixedIP {
                 # Delete cached network configuration information so it is retrieved next time it is needed
                 delete $self->{network_configuration};
 
-                if (update_computer_address($computer_id, $server_request_fixedIP)) {
+                if (update_computer_public_ip_address($computer_id, $server_request_fixedIP)) {
                  notify($ERRORS{'OK'}, 0, "updated public IP address in computer table for $computer_node_name, $server_request_fixedIP");
                 }
 
@@ -1056,7 +1056,7 @@ sub update_public_ip_address {
 		if ($computer_ip_address ne $public_ip_address) {
 			$self->data->set_computer_ip_address($public_ip_address);
 			
-			if (update_computer_address($computer_id, $public_ip_address)) {
+			if (update_computer_public_ip_address($computer_id, $public_ip_address)) {
 				notify($ERRORS{'OK'}, 0, "updated dynamic public IP address in computer table for $computer_node_name, $public_ip_address");
 				insertloadlog($reservation_id, $computer_id, "dynamicDHCPaddress", "updated dynamic public IP address in computer table for $computer_node_name, $public_ip_address");
 			}

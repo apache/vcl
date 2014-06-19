@@ -82,197 +82,197 @@ require Exporter;
 our @ISA = qw(Exporter);
 
 our @EXPORT = qw(
-  _pingnode
-  check_blockrequest_time
-  check_endtimenotice_interval
-  check_ssh
-  check_time
-  clearfromblockrequest
-  clear_next_image_id
-  convert_to_datetime
-  convert_to_epoch_seconds
-  create_management_node_directory
-  database_execute
-  database_select
-  delete_computerloadlog_reservation
-  delete_request
-  escape_file_path
-  format_data
-  format_hash_keys
-  format_number
-  get_affiliation_info
-  get_array_intersection
-  get_block_request_image_info
-  get_caller_trace
-  get_calling_subroutine
-  get_changelog_info
-  get_changelog_remote_ip_address_info
-  get_code_ref_package_name
-  get_code_ref_subroutine_name
-  get_computer_current_state_name
-  get_computer_grp_members
-  get_computer_ids
-  get_computer_info
-  get_computers_controlled_by_mn
-  get_connect_method_info
-  get_connectlog_info
-  get_connectlog_remote_ip_address_info
-  get_copy_speed_info_string
-  get_current_file_name
-  get_current_package_name
-  get_current_subroutine_name
-  get_database_table_columns
-  get_file_size_info_string
-  get_group_name
-  get_image_info
-  get_imagemeta_info
-  get_imagerevision_cleanup_info
-  get_imagerevision_info
-  get_imagerevision_loaded_info
-  get_imagerevision_names
-  get_imagerevision_names_recently_reserved
-  get_imagerevision_reservation_info
-  get_current_image_contents_noDS
-  get_current_reservation_lastcheck
-  get_local_user_info
-  get_management_node_blockrequests
-  get_management_node_computer_ids
-  get_management_node_vmhost_ids
-  get_management_node_vmhost_info
-  get_management_node_id
-  get_management_node_info
-  get_management_node_requests
-  get_management_predictive_info
-  get_module_info
-  get_next_image_default
-  get_os_info
-  get_production_imagerevision_info
-  get_random_mac_address
-  get_request_by_computerid
-  get_request_current_state_name
-  get_request_end
-  get_request_info
-  get_request_loadstate_names
-  get_reservation_accounts
-  get_resource_groups
-  get_managable_resource_groups
-  get_user_info
-  get_variable
-  get_vmhost_assigned_vm_info
-  get_vmhost_info
-  getnewdbh
-  getpw
-  getusergroupmembers
-  get_user_group_member_info
-  hash_to_xml_string
-  help
-  insert_reload_request
-  insert_request
-  insertloadlog
-  is_ip_assigned_query
-  is_management_node_process_running
-  is_inblockrequest
-  is_public_ip_address
-  is_request_deleted
-  is_request_imaging
-  is_valid_dns_host_name
-  is_valid_ip_address
-  is_variable_set
-  kill_child_processes
-  kill_reservation_process
-  known_hosts
-  mail
-  makedatestring
-  nmap_port
-  normalize_file_path
-  notify
-  notify_via_IM
-  notify_via_msg
-  notify_via_wall
-  notify_via_oascript
-  parent_directory_path
-  preplogfile
-  read_file_to_array
-  remove_array_duplicates
-  rename_vcld_process
-  reservation_being_processed
-  round
-  run_command
-  run_scp_command
-  run_ssh_command
-  set_hash_process_id
-  set_logfile_path
-  set_managementnode_state
-  set_variable
-  setnextimage
-  setup_confirm
-  setup_get_array_choice
-  setup_get_hash_choice
-  setup_get_input_string
-  setup_get_menu_choice
-  setup_print_break
-  setup_print_wrap
-  sleep_uninterrupted
-  sort_by_file_name
-  stopwatch
-  string_to_ascii
-  switch_state
-  switch_vmhost_id
-  update_blockrequest_processing
-  update_changelog_request_user_remote_ip
-  update_changelog_reservation_remote_ip
-  update_changelog_reservation_user_remote_ip
-  update_cluster_info
-  update_computer_address
-  update_computer_imagename
-  update_computer_lastcheck
-  update_computer_procnumber
-  update_computer_procspeed
-  update_computer_ram
-  update_computer_state
-  update_connectlog
-  update_currentimage
-  update_image_name
-  update_image_type
-  update_lastcheckin
-  update_log_ending
-  update_log_loaded_time
-  update_preload_flag
-  update_reservation_password
-  update_request_state
-  update_reservation_accounts
-  update_reservation_lastcheck
-  update_sublog_ipaddress
-  write_currentimage_txt
-  xmlrpc_call
-  xml_string_to_hash
-  yaml_deserialize
-  yaml_serialize
-  add_imageid_to_newimages
+	_pingnode
+	add_imageid_to_newimages
+	check_blockrequest_time
+	check_endtimenotice_interval
+	check_ssh
+	check_time
+	clear_next_image_id
+	clearfromblockrequest
+	convert_to_datetime
+	convert_to_epoch_seconds
+	create_management_node_directory
+	database_execute
+	database_select
+	delete_computerloadlog_reservation
+	delete_request
+	escape_file_path
+	format_data
+	format_hash_keys
+	format_number
+	get_affiliation_info
+	get_array_intersection
+	get_block_request_image_info
+	get_caller_trace
+	get_calling_subroutine
+	get_changelog_info
+	get_changelog_remote_ip_address_info
+	get_code_ref_package_name
+	get_code_ref_subroutine_name
+	get_computer_current_state_name
+	get_computer_grp_members
+	get_computer_ids
+	get_computer_info
+	get_computers_controlled_by_mn
+	get_connect_method_info
+	get_connectlog_info
+	get_connectlog_remote_ip_address_info
+	get_copy_speed_info_string
+	get_current_file_name
+	get_current_image_contents_noDS
+	get_current_package_name
+	get_current_reservation_lastcheck
+	get_current_subroutine_name
+	get_database_table_columns
+	get_file_size_info_string
+	get_group_name
+	get_image_info
+	get_imagemeta_info
+	get_imagerevision_cleanup_info
+	get_imagerevision_info
+	get_imagerevision_loaded_info
+	get_imagerevision_names
+	get_imagerevision_names_recently_reserved
+	get_imagerevision_reservation_info
+	get_local_user_info
+	get_managable_resource_groups
+	get_management_node_blockrequests
+	get_management_node_computer_ids
+	get_management_node_id
+	get_management_node_info
+	get_management_node_requests
+	get_management_node_vmhost_ids
+	get_management_node_vmhost_info
+	get_management_predictive_info
+	get_module_info
+	get_next_image_default
+	get_os_info
+	get_production_imagerevision_info
+	get_random_mac_address
+	get_request_by_computerid
+	get_request_current_state_name
+	get_request_end
+	get_request_info
+	get_request_loadstate_names
+	get_reservation_accounts
+	get_resource_groups
+	get_user_group_member_info
+	get_user_info
+	get_variable
+	get_vmhost_assigned_vm_info
+	get_vmhost_info
+	getnewdbh
+	getpw
+	getusergroupmembers
+	hash_to_xml_string
+	help
+	insert_reload_request
+	insert_request
+	insertloadlog
+	is_inblockrequest
+	is_ip_assigned_query
+	is_management_node_process_running
+	is_public_ip_address
+	is_request_deleted
+	is_request_imaging
+	is_valid_dns_host_name
+	is_valid_ip_address
+	is_variable_set
+	kill_child_processes
+	kill_reservation_process
+	known_hosts
+	mail
+	makedatestring
+	nmap_port
+	normalize_file_path
+	notify
+	notify_via_IM
+	notify_via_msg
+	notify_via_oascript
+	notify_via_wall
+	parent_directory_path
+	preplogfile
+	read_file_to_array
+	remove_array_duplicates
+	rename_vcld_process
+	reservation_being_processed
+	round
+	run_command
+	run_scp_command
+	run_ssh_command
+	set_hash_process_id
+	set_logfile_path
+	set_managementnode_state
+	set_variable
+	setnextimage
+	setup_confirm
+	setup_get_array_choice
+	setup_get_hash_choice
+	setup_get_input_string
+	setup_get_menu_choice
+	setup_print_break
+	setup_print_wrap
+	sleep_uninterrupted
+	sort_by_file_name
+	stopwatch
+	string_to_ascii
+	switch_state
+	switch_vmhost_id
+	update_blockrequest_processing
+	update_changelog_request_user_remote_ip
+	update_changelog_reservation_remote_ip
+	update_changelog_reservation_user_remote_ip
+	update_cluster_info
+	update_computer_imagename
+	update_computer_lastcheck
+	update_computer_private_ip_address
+	update_computer_procnumber
+	update_computer_procspeed
+	update_computer_public_ip_address
+	update_computer_ram
+	update_computer_state
+	update_connectlog
+	update_currentimage
+	update_image_name
+	update_image_type
+	update_lastcheckin
+	update_log_ending
+	update_log_loaded_time
+	update_preload_flag
+	update_request_state
+	update_reservation_accounts
+	update_reservation_lastcheck
+	update_reservation_password
+	update_sublog_ipaddress
+	write_currentimage_txt
+	xml_string_to_hash
+	xmlrpc_call
+	yaml_deserialize
+	yaml_serialize
 
-  $CONF_FILE_PATH
-  $DAEMON_MODE
-  $DATABASE
-  $DEFAULTHELPEMAIL
-  $FQDN
-  $LOGFILE
-  $MYSQL_SSL
-  $MYSQL_SSL_CERT
-  $PIDFILE
-  $PROCESSNAME
-  $WINDOWS_ROOT_PASSWORD
-  $SERVER
-  $SETUP_MODE
-  $TOOLS
-  $VERBOSE
-  $WRTPASS
-  $WRTUSER
-  $XMLRPC_USER
-  $XMLRPC_PASS
-  $XMLRPC_URL
-  %ERRORS
-  %OPTIONS
-
+	$CONF_FILE_PATH
+	$DAEMON_MODE
+	$DATABASE
+	$DEFAULTHELPEMAIL
+	$FQDN
+	$LOGFILE
+	$MYSQL_SSL
+	$MYSQL_SSL_CERT
+	$PIDFILE
+	$PROCESSNAME
+	$WINDOWS_ROOT_PASSWORD
+	$SERVER
+	$SETUP_MODE
+	$TOOLS
+	$VERBOSE
+	$WRTPASS
+	$WRTUSER
+	$XMLRPC_USER
+	$XMLRPC_PASS
+	$XMLRPC_URL
+	%ERRORS
+	%OPTIONS
 );
 
 our %ERRORS = (
@@ -4992,52 +4992,91 @@ sub update_lastcheckin {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 update_computer_ipaddress
+=head2 update_computer_private_ip_address
 
- Parameters  : $computer_id, $IPaddress
- Returns     : 0 failed or 1 success
- Description : Updates computer's ipaddress - used in dynamic dhcp setup
+ Parameters  : $computer_id, $private_ip_address
+ Returns     : boolean
+ Description : Updates the computer.privateIPaddress value of the computer
+               specified by the argument.
 
 =cut
 
-
-sub update_computer_address {
-	my ($computer_id, $IPaddress) = @_;
-
-	my ($package, $filename, $line, $sub) = caller(0);
-
-	# Check the passed parameter
-	if (!(defined($computer_id))) {
-		notify($ERRORS{'WARNING'}, 0, "computer ID was not specified");
-		return ();
+sub update_computer_private_ip_address {
+	my ($computer_id, $private_ip_address) = @_;
+	
+	if (!defined($computer_id)) {
+		notify($ERRORS{'WARNING'}, 0, "computer ID argument was not specified");
+		return
 	}
-	# Check the passed parameter
-	if (!(defined($IPaddress))) {
-		notify($ERRORS{'WARNING'}, 0, "IPaddress was not specified");
+	if (!defined($private_ip_address)) {
+		notify($ERRORS{'WARNING'}, 0, "private IP address argument was not specified");
 		return ();
 	}
 
 	# Construct the update statement
-	my $update_statement = "
-	    UPDATE
-		computer
-		SET
-		IPaddress = \'$IPaddress\'
-		WHERE
-		id = $computer_id
-	 ";
+	my $update_statement = <<EOF;
+UPDATE
+computer
+SET
+privateIPaddress = '$private_ip_address'
+WHERE
+id = $computer_id
+EOF
 
 	# Call the database execute subroutine
 	if (database_execute($update_statement)) {
-		# Update successful, return timestamp
-		notify($ERRORS{'OK'}, $LOGFILE, "computer $computer_id IP address $IPaddress updated in database");
+		notify($ERRORS{'OK'}, 0, "updated private IP address of computer $computer_id in database: $private_ip_address");
 		return 1;
 	}
 	else {
-		notify($ERRORS{'CRITICAL'}, 0, "unable to update database, computer IPaddress $computer_id,$IPaddress");
-		return 0;
+		notify($ERRORS{'WARNING'}, 0, "failed to update private IP address of computer $computer_id in database: $private_ip_address");
+		return;
 	}
-} ## end sub update_computer_address
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 update_computer_public_ip_address
+
+ Parameters  : $computer_id, $public_ip_address
+ Returns     : boolean
+ Description : Updates the computer.IPaddress value of the computer specified by
+               the argument.
+
+=cut
+
+sub update_computer_public_ip_address {
+	my ($computer_id, $public_ip_address) = @_;
+	
+	if (!defined($computer_id)) {
+		notify($ERRORS{'WARNING'}, 0, "computer ID argument was not specified");
+		return
+	}
+	if (!defined($public_ip_address)) {
+		notify($ERRORS{'WARNING'}, 0, "public IP address argument was not specified");
+		return ();
+	}
+
+	# Construct the update statement
+	my $update_statement = <<EOF;
+UPDATE
+computer
+SET
+IPaddress = '$public_ip_address'
+WHERE
+id = $computer_id
+EOF
+
+	# Call the database execute subroutine
+	if (database_execute($update_statement)) {
+		notify($ERRORS{'OK'}, 0, "updated public IP address of computer $computer_id in database: $public_ip_address");
+		return 1;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to update public IP address of computer $computer_id in database: $public_ip_address");
+		return;
+	}
+}
 
 #/////////////////////////////////////////////////////////////////////////////
 
