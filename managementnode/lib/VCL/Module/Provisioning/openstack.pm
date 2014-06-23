@@ -1,6 +1,6 @@
 #!/usr/bin/perl -w
 ###############################################################################
-# $Id: openstack.pm 2012-4-14 
+# $Id: openstack.pm 2014-6-22 
 ###############################################################################
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
@@ -59,9 +59,8 @@ use IO::File;
 use Fcntl qw(:DEFAULT :flock);
 use File::Temp qw( tempfile );
 use List::Util qw( max );
-
 use VCL::utils;
-
+use List::BinarySearch qw(binsearch_pos);
 
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -233,167 +232,6 @@ sub capture {
 
         return 1;
 } ## end sub capture
-
-sub _image_create{
-	my $self = shift;
-	my $instance_id = shift;
-	my $imagerevision_comments = $self->data->get_imagerevision_comments(0);
-        my $image_name     = $self->data->get_image_name();
-	
-	my $image_version;
-        if($image_name =~ m/(-+)(.+)(-v\d+)/g)
-        {
-                $image_version = $3;
-                notify($ERRORS{'OK'}, 0, "Acquire the Image Version: $image_version");
-        }
-
-        my $image_description = $image_name . $imagerevision_comments;
-        #my $image_description = $image_name . '-' . $imagerevision_comments;
-        my $capture_image = "nova image-create $instance_id $image_description";
-        notify($ERRORS{'OK'}, 0, "New Image Capture Command: $capture_image");
-        my $capture_image_output = `$capture_image`;
-
-        my $openstack_image_id;
-        my $new_image_name;
-        my $describe_image = "nova image-list |grep $instance_id";
-        my $run_describe_image_output = `$describe_image`;
-        notify($ERRORS{'OK'}, 0, "The images: $run_describe_image_output");
-
-	sleep 10;
-
-        if($run_describe_image_output  =~ m/^\|\s(\w{8}-\w{4}-\w{4}-\w{4}-\w{12})/g )
-        {
-                $openstack_image_id = $1;
-                $new_image_name = $openstack_image_id . $image_version;
-                #$new_image_name = $openstack_image_id .'-v'. $image_version;
-                notify($ERRORS{'OK'}, 0, "The Openstack Image ID:$openstack_image_id");
-                notify($ERRORS{'OK'}, 0, "The New Image Name:$new_image_name");
-                return $new_image_name;
-        }
-        else
-        {
-                notify($ERRORS{'DEBUG'}, 0, "Fail to capture new Image");
-                return 0;
-        }
-}
-
-sub _prepare_capture {
-	my $self = shift;
-	
-        my ($package, $filename, $line, $sub) = caller(0);
-        my $request_data = $self->data->get_request_data;
-
-        if (!$request_data) {
-                notify($ERRORS{'WARNING'}, 0, "unable to retrieve request data hash");
-                return 0;
-        }
-
-        my $request_id     = $self->data->get_request_id;
-        my $reservation_id = $self->data->get_reservation_id;
-        my $management_node_keys     = $self->data->get_management_node_keys();
-
-        my $image_id       = $self->data->get_image_id;
-        my $image_os_name  = $self->data->get_image_os_name;
-        my $image_identity = $self->data->get_image_identity;
-        my $image_os_type  = $self->data->get_image_os_type;
-        my $image_name     = $self->data->get_image_name();
-
-        my $computer_id        = $self->data->get_computer_id;
-        my $computer_name = $self->data->get_computer_short_name;
-        my $computer_nodename  = $computer_name;
-        my $computer_hostname  = $self->data->get_computer_hostname;
-        my $computer_type      = $self->data->get_computer_type;
-
-        if (write_currentimage_txt($self->data)) {
-                notify($ERRORS{'OK'}, 0, "currentimage.txt updated on $computer_name");
-        }
-        else {
-                notify($ERRORS{'DEBUG'}, 0, "unable to update currentimage.txt on $computer_name");
-                return 0;
-        }
-
-        $self->data->set_imagemeta_sysprep(0);
-        notify($ERRORS{'OK'}, 0, "Set the imagemeta Sysprep value to 0");
-
-        if ($self->os->can("pre_capture")) {
-                notify($ERRORS{'OK'}, 0, "calling OS module's pre_capture() subroutine");
-
-                if (!$self->os->pre_capture({end_state => 'on'})) {
-                        notify($ERRORS{'DEBUG'}, 0, "OS module pre_capture() failed");
-                        return 0;
-                }
-        }
-	return 1;
-}
-
-sub _insert_openstack_image_name {
-
-	my $self = shift;
-	my $openstack_image_name = shift;
-        my $image_name     = $self->data->get_image_name();       
-
-        my $insert_statement = "
-        INSERT INTO
-        openstackImageNameMap (
-          openstackImageNameMap.openstackimagename,
-          openstackImageNameMap.vclimagename
-        ) VALUES (
-          '$openstack_image_name',
-          '$image_name')";
-
-        notify($ERRORS{'OK'}, 0, "$insert_statement");
-
-        my $requested_id = database_execute($insert_statement);
-        notify($ERRORS{'OK'}, 0, "SQL Insert is first time or requested_id : $requested_id");
-
-        if (!$requested_id) {
-                notify($ERRORS{'DEBUG'}, 0, "unable to insert image name");
-                return 0;
-        }
-        notify($ERRORS{'OK'}, 0, "Successfully insert image name");
-	return 1;
-}
-
-sub _wait_for_copying_image {
-	my $self = shift;
-	
-	my $instance_id = shift;
-	
-        my $query_image = "nova image-list | grep $instance_id";
-        my $query_image_output = `$query_image`;
-        my $loop = 50;
-
-        notify($ERRORS{'OK'}, 0, "The describe image output for $instance_id : $query_image_output");
-        while ($loop > 0)
-        {
-		if($query_image_output  =~ m/\|\s(\w{6})\s\|/g )
-		{
-                        my $temp = $1;
-
-                        if( $temp eq 'ACTIVE') {
-                               notify($ERRORS{'OK'}, 0, "$instance_id is available now");
-                               goto RELOAD;
-                        }
-                        elsif ($temp eq 'SAVING') {
-                                notify($ERRORS{'OK'}, 0, "Sleep to capture New Image for 25 secs");
-                                sleep 25;
-                        }
-                        else {
-                                notify($ERRORS{'DEBUG'}, 0, "Failure for $instance_id");
-				return 0;
-                        }
-                }
-                $query_image_output = `$query_image`;
-                notify($ERRORS{'OK'}, 0, "The describe image output of loop #$loop: $query_image_output");
-                $loop--;
-        }
-        RELOAD:
-        #notify($ERRORS{'OK'}, 0, "Sleep until image is available");
-        sleep 30;
-	
-	return 1;
-}
-
 #/////////////////////////////////////////////////////////////////////////
 
 =head2 node_status
@@ -577,6 +415,17 @@ sub node_status {
 } ## end sub node_status
 
 
+
+#/////////////////////////////////////////////////////////////////////////
+
+=head2 does_image_exist
+
+ Parameters  : 
+ Returns     : 1 or 0
+ Description : Checks the existence of an image.
+
+=cut
+
 sub does_image_exist {
 	my $self = shift;
 	if (ref($self) !~ /openstack/i) {
@@ -637,57 +486,226 @@ sub get_image_size {
 	return 0;
 } ## end sub get_image_size
 
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 _set_openstack_user_conf 
-
- Parameters  : None 
- Returns     : 1(success) or 0(failure)
- Description : load environment profile and set global environemnt variables 
-
-example: openstack.conf
-"os_tenant_name" => "admin",
-"os_username" => "admin",
-"os_password" => "adminpassword",
-"os_auth_url" => "http://openstack_nova_url:5000/v2.0/",
-"vcl_windows_key" => "vcl_windows_key",
-"vcl_linux_key" => "vcl_linux_key",
-
-
-=cut
-
-sub _set_openstack_user_conf {
-
+sub _delete_computer_mapping {
 	my $self = shift;
-        notify($ERRORS{'OK'}, 0, "********* Set OpenStack User Configuration******************");
-	my $computer_name   = $self->data->get_computer_short_name;
-        notify($ERRORS{'OK'}, 0,  "computer_name: $computer_name");
-	# User's environment file
-	my $user_config_file = '/etc/vcl/openstack/openstack.conf';
-        notify($ERRORS{'OK'}, 0,  "loading $user_config_file");
-        my %config = do($user_config_file);
-        if (!%config) {
-                notify($ERRORS{'CRITICAL'},0, "failure to process $user_config_file");
+	my $computer_id = $self->data->get_computer_id;
+
+	my $delete_statement = "
+	DELETE FROM
+	openstackComputerMap
+	WHERE
+	computerid = '$computer_id'
+	";
+
+	notify($ERRORS{'OK'}, 0, "$delete_statement");
+	my $success = database_execute($delete_statement);
+
+	if ($success) {
+		notify($ERRORS{'OK'}, 0, "Successfully deleted computer mapping");
+		return 1;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "Unable to delete computer mapping");
+		return 0;
+	}
+}
+
+sub _get_flavor_type {
+	my $openstack_image_name = shift;
+	my $image_disk_size;
+	my $openstack_image_info = "qemu-img info /var/lib/glance/images/$openstack_image_name";
+	my $openstack_image_info_output = `$openstack_image_info`;
+        if($openstack_image_info_output =~ m/virtual size:(\s\d{1,4})G/g)
+        {
+                $image_disk_size = $1;
+                notify($ERRORS{'OK'}, 0, "The disk size for $openstack_image_name  is $image_disk_size G");
+        } else {
+                notify($ERRORS{'WARNING'}, 0, "Unable to find $openstack_image_name in /var/lib/glance/images");
                 return 0;
         }
-        $self->{config} = \%config;
-        my $os_auth_url = $self->{config}->{os_auth_url};
-        my $os_tenant_name = $self->{config}->{os_tenant_name};
-        my $os_username = $self->{config}->{os_username};
-        my $os_password = $self->{config}->{os_password};
-        my $vcl_windows_key = $self->{config}->{vcl_windows_key};
-        my $vcl_linux_key = $self->{config}->{vcl_linux_key};
+	my @flavor_ids;
+	my @flavor_disk_sizes;
+	my $openstack_flavor_info = "nova flavor-list";
+	my $openstack_flavor_info_output = `$openstack_flavor_info`;
+	my @lines = split /\n/, $openstack_flavor_info_output;
+	foreach my $line (@lines) {
+        	if($line =~ m/^\|\s(\d+)\s+\|/g) {
+                	push(@flavor_ids, $1);
+        	}
+        	if($line =~ m/\|\s\d+\s+\|\s(\d{1,4})\s+\|/g) {
+                	push(@flavor_disk_sizes, $1);
+        	}
+	}
+	notify($ERRORS{'OK'}, 0, "OpenStack flavor IDs: @flavor_ids, disk sizes: @flavor_disk_sizes");
+	my $num_of_ids = @flavor_ids;
+	if(!$num_of_ids || $image_disk_size > $flavor_disk_sizes[$num_of_ids-1]) {
+		notify($ERRORS{'WARNING'}, 0, "No flavor information or disk size is greater than the maximum flavor");
+		return 0;
+	}
+	
+	# Use List::BinarySearch package to find the proper flavor type for the image based on its size.
+	my $index = binsearch_pos { $a <=> $b} $image_disk_size, @flavor_disk_sizes;
+	my $flavor_type = $flavor_ids[$index];
+	notify($ERRORS{'OK'}, 0, "OpenStack flavor type = $flavor_type");
 
-	# Set Environment File
-	$ENV{'OS_AUTH_URL'} = $os_auth_url;
-	$ENV{'OS_TENANT_NAME'} = $os_tenant_name;
-	$ENV{'OS_USERNAME'} = $os_username;
-	$ENV{'OS_PASSWORD'} = $os_password;
-	$ENV{'VCL_WINDOWS_KEY'} = $vcl_windows_key;
-	$ENV{'VCL_LINUX_KEY'} = $vcl_linux_key;
+=for comment
+# if you do not want to use List::BinarySearch package 
+# then use if, elsif, else based on your OpenStack flavor info
+# OR, use database to get the flavor information
+# for example,
+        my @flavor_disk_sizes = (1, 20, 40, 80, 160);
+        my $flavor_type;
 
-        return 1;
-}# _set_openstack_user_conf close
+        if($image_size < $flavor_disk_sizes[0]){
+                $flavor_type = 1;
+        }
+        elsif($flavor_disk_sizes[0] <= $image_size && $image_size < $flavor_disk_sizes[1]) {
+                $flavor_type = 2;
+        }
+        elsif($flavor_disk_sizes[1] <= $image_size && $image_size < $flavor_disk_sizes[2]) {
+                $flavor_type = 3;
+        }
+        elsif($flavor_disk_sizes[2] <= $image_size && $image_size < $flavor_disk_sizes[3]) {
+                $flavor_type = 4;
+        }
+        elsif($flavor_disk_sizes[3] <= $image_size && $image_size < $flavor_disk_sizes[4]) {
+                $flavor_type = 5;
+        }
+        else {
+                notify($ERRORS{'OK'}, 0, "No available OpenStack flavor for  $openstack_image_name");
+                return 0;
+        }
+
+=cut
+	return $flavor_type;
+}
+
+sub _get_instance_id {
+	my $self = shift;
+	my $computer_id = $self->data->get_computer_id;
+
+	my $select_statement = "
+	SELECT
+	instanceid
+	FROM
+	openstackComputerMap
+	WHERE
+	computerid = '$computer_id'
+	";
+
+	notify($ERRORS{'OK'}, 0, "$select_statement");
+	my @selected_rows = database_select($select_statement);
+
+	if (scalar @selected_rows == 0) {
+		notify($ERRORS{'WARNING'}, 0, "Unable to find the instance id");
+		return 0;
+	}
+
+	my $instance_id = $selected_rows[0]{instanceid};
+	notify($ERRORS{'OK'}, 0, "Openstack id for $computer_id is $instance_id");
+
+	return $instance_id;
+}
+
+sub _image_create{
+	my $self = shift;
+	my $instance_id = shift;
+	my $imagerevision_comments = $self->data->get_imagerevision_comments(0);
+        my $image_name     = $self->data->get_image_name();
+	
+	my $image_version;
+        if($image_name =~ m/(-+)(.+)(-v\d+)/g)
+        {
+                $image_version = $3;
+                notify($ERRORS{'OK'}, 0, "Acquire the Image Version: $image_version");
+        }
+
+        my $image_description = $image_name . $imagerevision_comments;
+        #my $image_description = $image_name . '-' . $imagerevision_comments;
+        my $capture_image = "nova image-create $instance_id $image_description";
+        notify($ERRORS{'OK'}, 0, "New Image Capture Command: $capture_image");
+        my $capture_image_output = `$capture_image`;
+
+        my $openstack_image_id;
+        my $new_image_name;
+        my $describe_image = "nova image-list |grep $instance_id";
+        my $run_describe_image_output = `$describe_image`;
+        notify($ERRORS{'OK'}, 0, "The images: $run_describe_image_output");
+
+	sleep 10;
+
+        if($run_describe_image_output  =~ m/^\|\s(\w{8}-\w{4}-\w{4}-\w{4}-\w{12})/g )
+        {
+                $openstack_image_id = $1;
+                $new_image_name = $openstack_image_id . $image_version;
+                #$new_image_name = $openstack_image_id .'-v'. $image_version;
+                notify($ERRORS{'OK'}, 0, "The Openstack Image ID:$openstack_image_id");
+                notify($ERRORS{'OK'}, 0, "The New Image Name:$new_image_name");
+                return $new_image_name;
+        }
+        else
+        {
+                notify($ERRORS{'DEBUG'}, 0, "Fail to capture new Image");
+                return 0;
+        }
+}
+
+sub _insert_instance_id {
+	my $self = shift;
+	my $instance_id = shift;
+	my $computer_id = $self->data->get_computer_id;
+
+	my $insert_statement = "
+	INSERT INTO
+	openstackComputerMap (
+	instanceid,
+	computerid
+	) VALUES (
+		'$instance_id',
+		'$computer_id'
+	)";
+
+	notify($ERRORS{'OK'}, 0, "$insert_statement");
+	my $success = database_execute($insert_statement);
+
+	if ($success) {
+		notify($ERRORS{'OK'}, 0, "Successfully inserted instance id");
+		return 1;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "Unable to insert instance id");
+		return 0;
+	}
+}
+
+
+sub _insert_openstack_image_name {
+
+	my $self = shift;
+	my $openstack_image_name = shift;
+        my $image_name     = $self->data->get_image_name();       
+
+        my $insert_statement = "
+        INSERT INTO
+        openstackImageNameMap (
+          openstackImageNameMap.openstackimagename,
+          openstackImageNameMap.vclimagename
+        ) VALUES (
+          '$openstack_image_name',
+          '$image_name')";
+
+        notify($ERRORS{'OK'}, 0, "$insert_statement");
+
+        my $requested_id = database_execute($insert_statement);
+        notify($ERRORS{'OK'}, 0, "SQL Insert is first time or requested_id : $requested_id");
+
+        if (!$requested_id) {
+                notify($ERRORS{'DEBUG'}, 0, "unable to insert image name");
+                return 0;
+        }
+        notify($ERRORS{'OK'}, 0, "Successfully insert image name");
+	return 1;
+}
 
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -734,68 +752,52 @@ sub _match_image_name {
 	return $openstack_image_name;
 }
 
-sub _get_flavor_type {
-	my $openstack_image_name = shift;
-	my $image_size;
-	my $openstack_image_info = "qemu-img info /var/lib/glance/images/$openstack_image_name";
-	my $openstack_image_info_output = `$openstack_image_info`;
-        if($openstack_image_info_output =~ m/virtual size:(\s\d{1,4})G/g)
-        {
-                $image_size = $1;
-                notify($ERRORS{'OK'}, 0, "The disk size for $openstack_image_name  is $image_size G");
-        } else {
-                notify($ERRORS{'WARNING'}, 0, "Unable to find $openstack_image_name in /var/lib/glance/images");
+sub _prepare_capture {
+	my $self = shift;
+	
+        my ($package, $filename, $line, $sub) = caller(0);
+        my $request_data = $self->data->get_request_data;
+
+        if (!$request_data) {
+                notify($ERRORS{'WARNING'}, 0, "unable to retrieve request data hash");
                 return 0;
         }
 
-	# Change the disk size based on the OpenStack flavor info
-	my @flavor_disk_sizes = (1, 20, 40, 80, 160);
-	my $flavor_type;
+        my $request_id     = $self->data->get_request_id;
+        my $reservation_id = $self->data->get_reservation_id;
+        my $management_node_keys     = $self->data->get_management_node_keys();
 
-	if($image_size < $flavor_disk_sizes[0]){
-       		$flavor_type = 1;
-	} 
-	elsif($flavor_disk_sizes[0] <= $image_size && $image_size < $flavor_disk_sizes[1]) {
-       		$flavor_type = 2;
-	} 
-	elsif($flavor_disk_sizes[1] <= $image_size && $image_size < $flavor_disk_sizes[2]) {
-        	$flavor_type = 3;
-	} 
-	elsif($flavor_disk_sizes[2] <= $image_size && $image_size < $flavor_disk_sizes[3]) {
-        	$flavor_type = 4;
-	} 
-	elsif($flavor_disk_sizes[3] <= $image_size && $image_size < $flavor_disk_sizes[4]) {
-        	$flavor_type = 5;
-	} 
-	else {
-		notify($ERRORS{'OK'}, 0, "No available OpenStack flavor for  $openstack_image_name");
-		return 0;
-	}
+        my $image_id       = $self->data->get_image_id;
+        my $image_os_name  = $self->data->get_image_os_name;
+        my $image_identity = $self->data->get_image_identity;
+        my $image_os_type  = $self->data->get_image_os_type;
+        my $image_name     = $self->data->get_image_name();
 
-	notify($ERRORS{'OK'}, 0, "The flavor type for  $openstack_image_name is $flavor_type");
-	return $flavor_type;
+        my $computer_id        = $self->data->get_computer_id;
+        my $computer_name = $self->data->get_computer_short_name;
+        my $computer_nodename  = $computer_name;
+        my $computer_hostname  = $self->data->get_computer_hostname;
+        my $computer_type      = $self->data->get_computer_type;
 
-}
+        if (write_currentimage_txt($self->data)) {
+                notify($ERRORS{'OK'}, 0, "currentimage.txt updated on $computer_name");
+        }
+        else {
+                notify($ERRORS{'DEBUG'}, 0, "unable to update currentimage.txt on $computer_name");
+                return 0;
+        }
 
-sub _terminate_instances {
-	my $self = shift;
+        $self->data->set_imagemeta_sysprep(0);
+        notify($ERRORS{'OK'}, 0, "Set the imagemeta Sysprep value to 0");
 
-	my $computer_name = $self->data->get_computer_short_name;
-	my $instance_id = $self->_get_instance_id;
-	$self->_delete_computer_mapping;
+        if ($self->os->can("pre_capture")) {
+                notify($ERRORS{'OK'}, 0, "calling OS module's pre_capture() subroutine");
 
-	if ($instance_id) {
-		notify($ERRORS{'OK'}, 0, "Terminate the existing instance");
-		my $terminate_instances = "nova delete $instance_id";
-		my $run_terminate_instances = `$terminate_instances`;
-		notify($ERRORS{'OK'}, 0, "The nova delete : $instance_id is terminated");
-		# nova.conf, set force_dhcp_release=true 
-		sleep 30; # wait for completely removing from nova list
-	}
-	else {
-		notify($ERRORS{'OK'}, 0, "No instance found for $computer_name");
-	}
-
+                if (!$self->os->pre_capture({end_state => 'on'})) {
+                        notify($ERRORS{'DEBUG'}, 0, "OS module pre_capture() failed");
+                        return 0;
+                }
+        }
 	return 1;
 }
 
@@ -864,86 +866,78 @@ sub _run_instances {
 	return 1;
 }
 
-sub _insert_instance_id {
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 _set_openstack_user_conf 
+
+ Parameters  : None 
+ Returns     : 1(success) or 0(failure)
+ Description : load environment profile and set global environemnt variables 
+
+example: openstack.conf
+"os_tenant_name" => "admin",
+"os_username" => "admin",
+"os_password" => "adminpassword",
+"os_auth_url" => "http://openstack_nova_url:5000/v2.0/",
+"vcl_windows_key" => "vcl_windows_key",
+"vcl_linux_key" => "vcl_linux_key",
+
+
+=cut
+
+sub _set_openstack_user_conf {
 	my $self = shift;
-	my $instance_id = shift;
-	my $computer_id = $self->data->get_computer_id;
+	my $computer_name   = $self->data->get_computer_short_name;
+	# User's environment file
+	my $user_config_file = '/etc/vcl/openstack/openstack.conf';
+        notify($ERRORS{'OK'}, 0, "********* Set OpenStack User Configuration******************");
+        notify($ERRORS{'OK'}, 0,  "computer_name: $computer_name");
+        notify($ERRORS{'OK'}, 0,  "loading $user_config_file");
+        my %config = do($user_config_file);
+        if (!%config) {
+                notify($ERRORS{'CRITICAL'},0, "failure to process $user_config_file");
+                return 0;
+        }
+        $self->{config} = \%config;
+        my $os_auth_url = $self->{config}->{os_auth_url};
+        my $os_tenant_name = $self->{config}->{os_tenant_name};
+        my $os_username = $self->{config}->{os_username};
+        my $os_password = $self->{config}->{os_password};
+        my $vcl_windows_key = $self->{config}->{vcl_windows_key};
+        my $vcl_linux_key = $self->{config}->{vcl_linux_key};
 
-	my $insert_statement = "
-	INSERT INTO
-	openstackComputerMap (
-	instanceid,
-	computerid
-	) VALUES (
-		'$instance_id',
-		'$computer_id'
-	)";
+	# Set Environment File
+	$ENV{'OS_AUTH_URL'} = $os_auth_url;
+	$ENV{'OS_TENANT_NAME'} = $os_tenant_name;
+	$ENV{'OS_USERNAME'} = $os_username;
+	$ENV{'OS_PASSWORD'} = $os_password;
+	$ENV{'VCL_WINDOWS_KEY'} = $vcl_windows_key;
+	$ENV{'VCL_LINUX_KEY'} = $vcl_linux_key;
 
-	notify($ERRORS{'OK'}, 0, "$insert_statement");
-	my $success = database_execute($insert_statement);
+        return 1;
+}# _set_openstack_user_conf close
 
-	if ($success) {
-		notify($ERRORS{'OK'}, 0, "Successfully inserted instance id");
-		return 1;
+sub _terminate_instances {
+	my $self = shift;
+
+	my $computer_name = $self->data->get_computer_short_name;
+	my $instance_id = $self->_get_instance_id;
+	$self->_delete_computer_mapping;
+
+	if ($instance_id) {
+		notify($ERRORS{'OK'}, 0, "Terminate the existing instance");
+		my $terminate_instances = "nova delete $instance_id";
+		my $run_terminate_instances = `$terminate_instances`;
+		notify($ERRORS{'OK'}, 0, "The nova delete : $instance_id is terminated");
+		# nova.conf, set force_dhcp_release=true 
+		sleep 30; # wait for completely removing from nova list
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "Unable to insert instance id");
-		return 0;
+		notify($ERRORS{'OK'}, 0, "No instance found for $computer_name");
 	}
+
+	return 1;
 }
-
-sub _get_instance_id {
-	my $self = shift;
-	my $computer_id = $self->data->get_computer_id;
-
-	my $select_statement = "
-	SELECT
-	instanceid
-	FROM
-	openstackComputerMap
-	WHERE
-	computerid = '$computer_id'
-	";
-
-	notify($ERRORS{'OK'}, 0, "$select_statement");
-	my @selected_rows = database_select($select_statement);
-
-	if (scalar @selected_rows == 0) {
-		notify($ERRORS{'WARNING'}, 0, "Unable to find the instance id");
-		return 0;
-	}
-
-	my $instance_id = $selected_rows[0]{instanceid};
-	notify($ERRORS{'OK'}, 0, "Openstack id for $computer_id is $instance_id");
-
-	return $instance_id;
-}
-
-sub _delete_computer_mapping {
-	my $self = shift;
-	my $computer_id = $self->data->get_computer_id;
-
-	my $delete_statement = "
-	DELETE FROM
-	openstackComputerMap
-	WHERE
-	computerid = '$computer_id'
-	";
-
-	notify($ERRORS{'OK'}, 0, "$delete_statement");
-	my $success = database_execute($delete_statement);
-
-	if ($success) {
-		notify($ERRORS{'OK'}, 0, "Successfully deleted computer mapping");
-		return 1;
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "Unable to delete computer mapping");
-		return 0;
-	}
-}
-
-
 
 sub _update_private_ip {
 	my $self = shift;
@@ -989,6 +983,47 @@ sub _update_private_ip {
 	
 	return 1;
 }
+
+sub _wait_for_copying_image {
+	my $self = shift;
+	
+	my $instance_id = shift;
+        my $query_image = "nova image-list | grep $instance_id";
+        my $query_image_output = `$query_image`;
+
+        my $loop = 50;
+        notify($ERRORS{'OK'}, 0, "The describe image output for $instance_id : $query_image_output");
+        while ($loop > 0)
+        {
+		if($query_image_output  =~ m/\|\s(\w{6})\s\|/g )
+		{
+                        my $temp = $1;
+
+                        if( $temp eq 'ACTIVE') {
+                               notify($ERRORS{'OK'}, 0, "$instance_id is available now");
+                               goto RELOAD;
+                        }
+                        elsif ($temp eq 'SAVING') {
+                                notify($ERRORS{'OK'}, 0, "Sleep to capture New Image for 25 secs");
+                                sleep 25;
+                        }
+                        else {
+                                notify($ERRORS{'DEBUG'}, 0, "Failure for $instance_id");
+				return 0;
+                        }
+                }
+                $query_image_output = `$query_image`;
+                notify($ERRORS{'OK'}, 0, "The describe image output of loop #$loop: $query_image_output");
+                $loop--;
+        }
+        RELOAD:
+        #notify($ERRORS{'OK'}, 0, "Sleep until image is available");
+        sleep 30;
+	
+	return 1;
+}
+
+
 #/////////////////////////////////////////////////////////////////////////////
 
 1;
