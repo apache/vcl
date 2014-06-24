@@ -513,6 +513,7 @@ sub _delete_computer_mapping {
 sub _get_flavor_type {
 	my $openstack_image_name = shift;
 	my $image_disk_size;
+	# Change the glance image path based on your confirguration
 	my $openstack_image_info = "qemu-img info /var/lib/glance/images/$openstack_image_name";
 	my $openstack_image_info_output = `$openstack_image_info`;
         if($openstack_image_info_output =~ m/virtual size:(\s\d{1,4})G/g)
@@ -542,41 +543,25 @@ sub _get_flavor_type {
 		notify($ERRORS{'WARNING'}, 0, "No flavor information or disk size is greater than the maximum flavor");
 		return 0;
 	}
+	my $flavor_type;
+	my $index=0;
+	foreach my $x (@flavor_disk_sizes) {
+		if($x >= $image_disk_size) {
+			$flavor_type = $flavor_ids[$index];
+			last;
+		}
+		$index = $index + 1;
+	}
+	notify($ERRORS{'OK'}, 0, "OpenStack flavor type = $flavor_type");
 	
+=for comment
+# if you want to use List::BinarySearch package 
 	# Use List::BinarySearch package to find the proper flavor type for the image based on its size.
 	my $index = binsearch_pos { $a <=> $b} $image_disk_size, @flavor_disk_sizes;
 	my $flavor_type = $flavor_ids[$index];
 	notify($ERRORS{'OK'}, 0, "OpenStack flavor type = $flavor_type");
-
-=for comment
-# if you do not want to use List::BinarySearch package 
-# then use if, elsif, else based on your OpenStack flavor info
-# OR, use database to get the flavor information
-# for example,
-        my @flavor_disk_sizes = (1, 20, 40, 80, 160);
-        my $flavor_type;
-
-        if($image_size < $flavor_disk_sizes[0]){
-                $flavor_type = 1;
-        }
-        elsif($flavor_disk_sizes[0] <= $image_size && $image_size < $flavor_disk_sizes[1]) {
-                $flavor_type = 2;
-        }
-        elsif($flavor_disk_sizes[1] <= $image_size && $image_size < $flavor_disk_sizes[2]) {
-                $flavor_type = 3;
-        }
-        elsif($flavor_disk_sizes[2] <= $image_size && $image_size < $flavor_disk_sizes[3]) {
-                $flavor_type = 4;
-        }
-        elsif($flavor_disk_sizes[3] <= $image_size && $image_size < $flavor_disk_sizes[4]) {
-                $flavor_type = 5;
-        }
-        else {
-                notify($ERRORS{'OK'}, 0, "No available OpenStack flavor for  $openstack_image_name");
-                return 0;
-        }
-
 =cut
+
 	return $flavor_type;
 }
 
