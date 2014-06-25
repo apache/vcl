@@ -2545,8 +2545,6 @@ sub manage_server_access {
 		}
 		my $standalone = $user_hash{$userid}{user_info}{STANDALONE};
 
-		notify($ERRORS{'OK'}, 0, " userid= $userid unityid= $user_hash{$userid}{unityid}");
-
 		if(!$self->user_exists($user_hash{$userid}{unityid})){
 			delete($res_accounts{$userid});
 		}
@@ -2578,7 +2576,7 @@ sub manage_server_access {
 			}
 	
 			# Create user on the OS
-			if($self->create_user($user_hash{$userid}{unityid},$user_hash{$userid}{passwd},$user_hash{$userid}{uid},$user_hash{$userid}{rootaccess},$standalone,$user_hash{$userid}{user_info}{user_sshPublicKeys})) {
+			if($self->create_user($user_hash{$userid}{unityid},$user_hash{$userid}{passwd},$user_hash{$userid}{uid},$user_hash{$userid}{ROOTACCESS},$standalone,$user_hash{$userid}{user_info}{user_sshPublicKeys})) {
 				notify($ERRORS{'OK'}, 0, "Successfully created user $user_hash{$userid}{unityid} on $computer_node_name");
 			}
 			else {
