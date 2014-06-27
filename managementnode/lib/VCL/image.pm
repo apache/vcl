@@ -387,16 +387,28 @@ sub reservation_failed {
 	my $user_id                    = $self->data->get_user_id();
 	my $user_unityid               = $self->data->get_user_login_id();
 	my $user_email                 = $self->data->get_user_email();
+	my $user_firstname             = $self->data->get_user_firstname() || '';
+	my $user_lastname              = $self->data->get_user_lastname() || '';
+	my $user_affiliation_name      = $self->data->get_user_affiliation_name();
 	my $affiliation_helpaddress    = $self->data->get_user_affiliation_helpaddress();
 	my $image_id                   = $self->data->get_image_id();
 	my $image_name                 = $self->data->get_image_name();
 	my $image_prettyname           = $self->data->get_image_prettyname();
 	my $imagerevision_id           = $self->data->get_imagerevision_id();
+	my $os_module_perl_package     = $self->data->get_image_os_module_perl_package();
 	my $imagemeta_sysprep          = $self->data->get_imagemeta_sysprep();
 	my $computer_id                = $self->data->get_computer_id();
 	my $computer_shortname         = $self->data->get_computer_short_name();
+	my $provisioning_pretty_name   = $self->data->get_computer_provisioning_pretty_name();
+	my $provisioning_name          = $self->data->get_computer_provisioning_name();
+	my $provisioning_perl_package  = $self->data->get_computer_provisioning_module_perl_package();
 	my $managementnode_shortname   = $self->data->get_management_node_short_name();
 	my $sysadmin_mail_address      = $self->data->get_management_node_sysadmin_email(0);
+	my $vmhost_id                  = $self->data->get_vmhost_id() || '';
+	my $vmhost_computer_id         = $self->data->get_vmhost_computer_id() || '';
+	my $vmhost_short_name          = $self->data->get_vmhost_short_name() || '';
+	my $vmhost_profile_id          = $self->data->get_vmhost_profile_id() || '';
+	my $vmhost_profile_name        = $self->data->get_vmhost_profile_name() || '';
 	
 	my $message = shift;
 	
@@ -436,26 +448,41 @@ END
 		my $body_admin = <<"END";
 VCL Image Creation Failed
 
-Request ID: $request_id
-Reservation ID: $reservation_id
-PID: $$
+Management node       : $managementnode_shortname
 
-Image ID: $image_id
-Image name: $image_name
+Request ID            : $request_id
+Reservation ID        : $reservation_id
+PID                   : $$
 
-Revision ID: $imagerevision_id
+Image ID              : $image_id
+Image revision ID     : $imagerevision_id
+Image name            : $image_name
+Image display name    : $image_prettyname
+Image OS package      : $os_module_perl_package
 
-Management node: $managementnode_shortname
+User ID               : $user_id
+User login name       : $user_unityid
+User name             : $user_firstname $user_lastname
+User affiliation      : $user_affiliation_name
 
-Username: $user_unityid
-User ID: $user_id
+Provisioning module   : $provisioning_pretty_name ($provisioning_name)
+Provisioning package  : $provisioning_perl_package
 
-Computer ID: $computer_id
-Computer name: $computer_shortname
-
-Use Sysprep: $imagemeta_sysprep
+Computer ID           : $computer_id
+Computer name         : $computer_shortname
 END
+		if ($vmhost_id) {
+			$body_admin .= <<"END";
 
+VM host ID            : $vmhost_id
+VM host computer ID   : $vmhost_computer_id
+VM host computer name : $vmhost_short_name
+
+VM host profile ID    : $vmhost_profile_id
+VM host profile name  : $vmhost_profile_name
+END
+		}
+		notify($ERRORS{'OK'}, 0, "imaging reservation info:\n$body_admin");
 		mail($sysadmin_mail_address, "VCL -- NOTICE FAILED Image Creation $image_prettyname", $body_admin, $affiliation_helpaddress);
 	}
 	
