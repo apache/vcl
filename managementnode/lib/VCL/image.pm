@@ -448,38 +448,38 @@ END
 		my $body_admin = <<"END";
 VCL Image Creation Failed
 
-Management node       : $managementnode_shortname
+Management node: $managementnode_shortname
 
-Request ID            : $request_id
-Reservation ID        : $reservation_id
-PID                   : $$
+Request ID: $request_id
+Reservation ID: $reservation_id
+PID: $$
 
-Image ID              : $image_id
-Image revision ID     : $imagerevision_id
-Image name            : $image_name
-Image display name    : $image_prettyname
-Image OS package      : $os_module_perl_package
+Image ID: $image_id
+Image revision ID: $imagerevision_id
+Image name: $image_name
+Image display name: $image_prettyname
+Image OS package: $os_module_perl_package
 
-User ID               : $user_id
-User login name       : $user_unityid
-User name             : $user_firstname $user_lastname
-User affiliation      : $user_affiliation_name
+User ID: $user_id
+User login name: $user_unityid
+User name: $user_firstname $user_lastname
+User affiliation: $user_affiliation_name
 
-Provisioning module   : $provisioning_pretty_name ($provisioning_name)
-Provisioning package  : $provisioning_perl_package
+Provisioning module: $provisioning_pretty_name ($provisioning_name)
+Provisioning package: $provisioning_perl_package
 
-Computer ID           : $computer_id
-Computer name         : $computer_shortname
+Computer ID: $computer_id
+Computer name: $computer_shortname
 END
 		if ($vmhost_id) {
 			$body_admin .= <<"END";
 
-VM host ID            : $vmhost_id
-VM host computer ID   : $vmhost_computer_id
-VM host computer name : $vmhost_short_name
+VM host ID: $vmhost_id
+VM host computer ID: $vmhost_computer_id
+VM host computer name: $vmhost_short_name
 
-VM host profile ID    : $vmhost_profile_id
-VM host profile name  : $vmhost_profile_name
+VM host profile ID: $vmhost_profile_id
+VM host profile name: $vmhost_profile_name
 END
 		}
 		notify($ERRORS{'OK'}, 0, "imaging reservation info:\n$body_admin");
