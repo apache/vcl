@@ -77,6 +77,7 @@ use XML::Simple;
 use Time::HiRes qw(gettimeofday tv_interval);
 use Crypt::OpenSSL::RSA;
 use B qw(svref_2object);
+use Socket qw(inet_ntoa);
 
 require Exporter;
 our @ISA = qw(Exporter);
@@ -114,6 +115,7 @@ our @EXPORT = qw(
 	get_computer_grp_members
 	get_computer_ids
 	get_computer_info
+	get_computer_private_ip_address_info
 	get_computers_controlled_by_mn
 	get_connect_method_info
 	get_connectlog_info
@@ -167,6 +169,7 @@ our @EXPORT = qw(
 	getusergroupmembers
 	hash_to_xml_string
 	help
+	hostname_to_ip_address
 	insert_reload_request
 	insert_request
 	insertloadlog
@@ -240,6 +243,7 @@ our @EXPORT = qw(
 	update_log_ending
 	update_log_loaded_time
 	update_preload_flag
+	update_request_checkuser
 	update_request_state
 	update_reservation_accounts
 	update_reservation_lastcheck
@@ -4994,19 +4998,21 @@ sub update_lastcheckin {
 
 =head2 update_computer_private_ip_address
 
- Parameters  : $computer_id, $private_ip_address
+ Parameters  : $computer_identifier, $private_ip_address
  Returns     : boolean
  Description : Updates the computer.privateIPaddress value of the computer
                specified by the argument. The value can be set to null by
-               passing 'null' as the argument.
+               passing 'null' as the argument. The $computer_identifier argument
+               may either be the numeric computer.id value or the
+               computer.hostname value.
 
 =cut
 
 sub update_computer_private_ip_address {
-	my ($computer_id, $private_ip_address) = @_;
+	my ($computer_identifier, $private_ip_address) = @_;
 	
-	if (!defined($computer_id)) {
-		notify($ERRORS{'WARNING'}, 0, "computer ID argument was not specified");
+	if (!defined($computer_identifier)) {
+		notify($ERRORS{'WARNING'}, 0, "computer identifier argument was not specified");
 		return;
 	}
 	if (!defined($private_ip_address)) {
@@ -5029,16 +5035,26 @@ computer
 SET
 privateIPaddress = $private_ip_address_text
 WHERE
-id = $computer_id
+computer.deleted != '1'
+AND 
 EOF
+
+	# If the computer identifier is all digits match it to computer.id
+	# Otherwise, match computer.hostname
+	if ($computer_identifier =~ /^\d+$/) {
+		$update_statement .= "computer.id = \'$computer_identifier\'";
+	}
+	else {
+		$update_statement .= "computer.hostname REGEXP '$computer_identifier(\\\\.|\$)'";
+	}
 
 	# Call the database execute subroutine
 	if (database_execute($update_statement)) {
-		notify($ERRORS{'OK'}, 0, "updated private IP address of computer $computer_id in database: $private_ip_address");
+		notify($ERRORS{'OK'}, 0, "updated private IP address of computer $computer_identifier in database: $private_ip_address");
 		return 1;
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to update private IP address of computer $computer_id in database: $private_ip_address");
+		notify($ERRORS{'WARNING'}, 0, "failed to update private IP address of computer $computer_identifier in database: $private_ip_address");
 		return;
 	}
 }
@@ -9890,7 +9906,7 @@ sub stopwatch {
 =cut
 
 sub get_management_node_computer_ids {
-	my $management_node_identifier = shift;
+	my $management_node_identifier = shift || get_management_node_id{};
 	if (!$management_node_identifier) {
 		notify($ERRORS{'WARNING'}, 0, "management node identifier argument was not supplied");
 		return;
@@ -11515,6 +11531,134 @@ EOF
 	}
 	
 	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_computer_private_ip_address_info
+
+ Parameters  : @computer_ids (optional)
+ Returns     : hash reference
+ Description : Retrieves the privateIPaddress value from the computer table for
+               all computers in the database. Deleted computers are not
+               included. A hash is constructed:
+               {
+                  "vcl-46.vcl.edu" => "10.10.7.46",
+                  "vcl-47.vcl.edu" => "10.10.7.47",
+                  "vcl-48.vcl.edu" => "10.10.7.48",
+                  "vcl-49.vcl.edu" => "10.10.7.49",
+                  "vcl-50.vcl.edu" => "10.10.7.50",
+               }
+
+=cut
+
+sub get_computer_private_ip_address_info {
+	my @computer_ids = @_;
+	if (@computer_ids) {
+		my @invalid_computer_ids = grep { $_ !~ /^\d+$/ } @computer_ids;
+		if (@invalid_computer_ids) {
+			notify($ERRORS{'WARNING'}, 0, "argument may only contain numberic computer IDs, the following values are not valid:\n" . join("\n", @invalid_computer_ids));
+			return;
+		}
+	}
+	
+	
+	my $select_statement = <<EOF;
+SELECT
+computer.hostname,
+computer.privateIPaddress
+FROM
+computer
+WHERE
+computer.deleted = 0
+EOF
+	
+	if (@computer_ids) {
+		my $computer_id_string = join(', ', @computer_ids);
+		$select_statement .= "AND computer.id IN ($computer_id_string)"
+	}
+
+	my $private_ip_address_info = {};
+	my @rows = database_select($select_statement);
+	for my $row (@rows) {
+		my $hostname = $row->{hostname};
+		my $private_ip_address = $row->{privateIPaddress};
+		$private_ip_address_info->{$hostname} = $private_ip_address;
+	}
+	
+	my $count = scalar(keys %$private_ip_address_info);
+	notify($ERRORS{'DEBUG'}, 0, "retrieved private IP addresses for $count computers from the database");
+	return $private_ip_address_info;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 hostname_to_ip_address
+
+ Parameters  : $hostname
+ Returns     : string
+ Description : Calls gethostbyname on the management node to determine the IP
+               address the hostname resolves to. The IP address is returned. If
+               the hostname cannot be resolved or if an error occurs, null is
+               returned.
+
+=cut
+
+sub hostname_to_ip_address {
+	my ($hostname) = @_;
+	
+	my $packed_ip_address = gethostbyname($hostname);
+	if (defined $packed_ip_address) {
+		my $ip_address = inet_ntoa($packed_ip_address);
+		#notify($ERRORS{'DEBUG'}, 0, "determined IP address hostname $hostname resolves to: $ip_address");
+		return $ip_address;
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "unable to determined IP address hostname $hostname resolves to");
+		return;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 update_request_checkuser
+
+ Parameters  : $request_id, $checkuser
+ Returns     : boolean
+ Description : Updates the request.checkuser value. This allows modules to
+               disable user connection checking.
+
+=cut
+
+sub update_request_checkuser {
+	my ($request_id, $checkuser) = @_;
+	if (!defined($request_id)) {
+		notify($ERRORS{'WARNING'}, 0, "request ID argument was not supplied");
+		return;
+	}
+	if (!defined($checkuser)) {
+		$checkuser = 0;
+	}
+
+	# Construct the SQL statement
+	my $sql_statement = <<EOF;
+UPDATE
+request
+SET
+checkuser = $checkuser
+WHERE
+request.id = $request_id
+EOF
+
+	# Call the database execute subroutine
+	if (database_execute($sql_statement)) {
+		notify($ERRORS{'OK'}, 0, "updated request.checkuser to $checkuser for request $request_id");
+		return 1;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to update request.checkuser to $checkuser for request $request_id");
+		return;
+	}
 }
 
 #/////////////////////////////////////////////////////////////////////////////

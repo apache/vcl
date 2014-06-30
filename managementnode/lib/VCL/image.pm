@@ -98,6 +98,7 @@ sub process {
 	}
 	
 	my $request_id                 = $self->data->get_request_id();
+	my $request_state_name         = $self->data->get_request_state_name();
 	my $reservation_id             = $self->data->get_reservation_id();
 	my $user_id                    = $self->data->get_user_id();
 	my $user_unityid               = $self->data->get_user_login_id();
@@ -160,123 +161,87 @@ END
 	$self->data->set_image_lastupdate($timestamp);
 	$self->data->set_imagerevision_date_created($timestamp);
 	
-	my $create_image_result;
-	
-	# --- BEGIN NEW MODULARIZED METHOD ---
 	# Check if capture() subroutine has been implemented by the provisioning module
-	if ($self->provisioner->can("capture")) {
-		# Call the provisioning modules's capture() subroutine
-		# The provisioning module should do everything necessary to capture the image
-		notify($ERRORS{'OK'}, 0, "calling provisioning module's capture() subroutine");
-		if ($create_image_result = $self->provisioner->capture()) {
-			notify($ERRORS{'OK'}, 0, "$image_name image was successfully captured by the provisioning module");
-		}
-		else {
-			notify($ERRORS{'WARNING'}, 0, "$image_name image failed to be captured by provisioning module");
-			$self->reservation_failed();
-		}
+	if (!$self->provisioner->can("capture")) {
+		notify($ERRORS{'CRITICAL'}, 0, "failed to capture image, " . ref($self->provisioner) . " provisioning module does not implement a 'capture' subroutine");
+		$self->reservation_failed();
 	}
-	# --- END NEW MODULARIZED METHOD ---
-
-	elsif ($computer_type eq "blade" && $self->os) {
-		$create_image_result = 1;
-
-		notify($ERRORS{'OK'}, 0, "OS modularization supported, beginning OS module capture prepare");
-		if (!$self->os->capture_prepare()) {
-			notify($ERRORS{'WARNING'}, 0, "OS module capture prepare failed");
-			$self->reservation_failed();
-		}
-
-		notify($ERRORS{'OK'}, 0, "beginning provisioning module capture prepare");
-		if (!$self->provisioner->capture_prepare()) {
-			notify($ERRORS{'WARNING'}, 0, "provisioning module capture prepare failed");
-			$self->reservation_failed();
-		}
-		
-		notify($ERRORS{'OK'}, 0, "beginning OS module capture start");
-		if (!$self->os->capture_start()) {
-			notify($ERRORS{'WARNING'}, 0, "OS module capture start failed");
-			$self->reservation_failed();
-		}
-
-		notify($ERRORS{'OK'}, 0, "beginning provisioning module capture monitor");
-		if (!$self->provisioner->capture_monitor()) {
-			notify($ERRORS{'WARNING'}, 0, "provisioning module capture monitor failed");
-			$self->reservation_failed();
-		}
-
-	} ## end if ($computer_type eq "blade" && $self->os)
 	
-	elsif ($computer_type eq "blade") {
-		$create_image_result = $self->provisioner->capture_prepare();
-
-		if ($create_image_result) {
-			$create_image_result = $self->provisioner->capture_monitor();
-		}
-	}
-	elsif ($computer_type eq "virtualmachine") {
-		$create_image_result = $self->provisioner->capture();
-	}
-	else {
-		notify($ERRORS{'CRITICAL'}, 0, "unsupported computer type: $computer_type");
+	# If this was a checkpoint, make sure the provisioning module implements a power_on subroutine
+	if ($request_state_name eq 'checkpoint' && !$self->provisioner->can('power_on')) {
+		notify($ERRORS{'CRITICAL'}, 0, "failed to create checkpoint of image, " . ref($self->provisioner) . " provisioning module does not implement a 'power_on' subroutine, won't be able to power the computer back on after image is captured in order to return it to a usable state for the user");
 		$self->reservation_failed();
 	}
-
-	# Image creation was successful, proceed to update database tables
-	if ($create_image_result) {
-		# Success
-		notify($ERRORS{'OK'}, 0, "$image_name image files successfully saved");
+	
+	# Call the provisioning modules's capture() subroutine
+	# The provisioning module should do everything necessary to capture the image
+	notify($ERRORS{'OK'}, 0, "calling provisioning module's capture() subroutine");
+	if ($self->provisioner->capture()) {
+		notify($ERRORS{'OK'}, 0, "$image_name image was successfully captured by the provisioning module");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "$image_name image failed to be captured by provisioning module");
+		$self->reservation_failed();
+	}
+	
+	# If this was a checkpoint, power the computer back on and wait for it to respond
+	if ($request_state_name eq 'checkpoint') {
+		if (!$self->provisioner->power_on()) {
+			notify($ERRORS{'CRITICAL'}, 0, "failed to create checkpoint of image, failed to power $computer_shortname back on after image was captured");
+			$self->reservation_failed();
+		}
 		
-		# Get the new image size
-		my $image_size_new;
-		if ($image_size_new = $self->provisioner->get_image_size($image_name)) {
-			notify($ERRORS{'OK'}, 0, "size of $image_name: $image_size_new");
+		if (!$self->os->post_load()) {
+			notify($ERRORS{'CRITICAL'}, 0, "failed to create checkpoint of image, unable to complete OS post-load tasks on $computer_shortname after image was captured and computer was powered on");
+			$self->reservation_failed();
 		}
-		else {
-			notify($ERRORS{'WARNING'}, 0, "unable to retrieve size of new revision: $image_name, old size will be used");
-			$image_size_new = $image_size;
+		
+		if (!$self->os->reserve()) {
+			notify($ERRORS{'CRITICAL'}, 0, "failed to create checkpoint of image, unable to complete OS reserve tasks on $computer_shortname");
+			$self->reservation_failed();
 		}
-		$self->data->set_image_size($image_size_new);
-
-		# Update image timestamp, clear deleted flag
-		# Set test flag if according to whether this image is new or updated
-		# Update the image size
-		my $update_image_statement = "
-		UPDATE
-		image,
-		imagerevision
-		SET
-		image.lastupdate = \'$timestamp\',
-		image.deleted = \'0\',
-		image.size = \'$image_size_new\',
-		image.name = \'$image_name\',
-		imagerevision.deleted = \'0\',
-		imagerevision.datecreated = \'$timestamp\'
-		WHERE
-		image.id = $image_id
-		AND imagerevision.id = $imagerevision_id
-		";
-
-		# Execute the image update statement
-		if (database_execute($update_image_statement)) {
-			notify($ERRORS{'OK'}, 0, "image and imagerevision tables updated for image=$image_id, imagerevision=$imagerevision_id, name=$image_name, lastupdate=$timestamp, deleted=0, size=$image_size_new");
-		}
-		else {
-			notify($ERRORS{'WARNING'}, 0, "image table could not be updated for image=$image_id");
-		}
-	} ## end if ($create_image_result)
-
-	# Check if image creation was successful and database tables were successfully updated
-	# Notify user and admins of the results
-	if ($create_image_result) {
-		$self->reservation_successful($image_size);
+		
+		# Disable user connection checking for this request to prevent timeouts
+		update_request_checkuser($request_id, 0);
 	}
-
+	
+	# Get the new image size
+	my $image_size_new;
+	if ($image_size_new = $self->provisioner->get_image_size($image_name)) {
+		notify($ERRORS{'OK'}, 0, "size of $image_name: $image_size_new");
+	}
 	else {
-		notify($ERRORS{'CRITICAL'}, 0, "image creation failed, see previous log messages");
-		$self->reservation_failed();
+		notify($ERRORS{'WARNING'}, 0, "unable to retrieve size of new revision: $image_name, old size will be used");
+		$image_size_new = $image_size;
 	}
-
+	$self->data->set_image_size($image_size_new);
+	
+	# Update image timestamp, image size, clear deleted flag
+	my $update_image_statement = <<EOF;
+UPDATE
+image,
+imagerevision
+SET
+image.lastupdate = '$timestamp',
+image.deleted = '0',
+image.size = '$image_size_new',
+image.name = '$image_name',
+imagerevision.deleted = '0',
+imagerevision.datecreated = '$timestamp'
+WHERE
+image.id = $image_id
+AND imagerevision.id = $imagerevision_id
+EOF
+	
+	# Execute the image update statement
+	if (database_execute($update_image_statement)) {
+		notify($ERRORS{'OK'}, 0, "image and imagerevision tables updated for image=$image_id, imagerevision=$imagerevision_id, name=$image_name, lastupdate=$timestamp, deleted=0, size=$image_size_new");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "image table could not be updated for image=$image_id");
+	}
+	
+	$self->reservation_successful($image_size);
 } ## end sub process
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -298,6 +263,7 @@ sub reservation_successful {
 
 	my $request_data               = $self->data->get_request_data();
 	my $request_id                 = $self->data->get_request_id();
+	my $request_state_name         = $self->data->get_request_state_name();
 	my $reservation_id             = $self->data->get_reservation_id();
 	my $user_id                    = $self->data->get_user_id();
 	my $user_unityid               = $self->data->get_user_login_id();
@@ -316,20 +282,49 @@ sub reservation_successful {
 	my $sysadmin_mail_address      = $self->data->get_management_node_sysadmin_email(0);
 
 	# Send image creation successful email to user
-	my $body_user = <<"END";
+	my $subject_user;
+	my $body_user;
+	
+	if ($request_state_name eq 'checkpoint') {
+		$subject_user = "VCL -- $image_prettyname Image Checkpoint Succeeded";
+		$body_user = <<"END";
 
-Your VCL image creation request for $image_prettyname has
-succeeded.  Please visit $affiliation_sitewwwaddress and
-you should see an image called $image_prettyname.
+Your VCL image checkpoint creation request for $image_prettyname has succeeded.
+
+You will need to visit the "Current Reservations" page and click "Connect" in order to be able to reconnect to the computer.
+
+Thank You,
+VCL Team
+END
+	}
+	else {
+		$subject_user = "VCL -- $image_prettyname Image Creation Succeeded";
+		$body_user = <<"END";
+
+Your VCL image creation request for $image_prettyname has succeeded.
+
+Please visit $affiliation_sitewwwaddress and you should see an image called $image_prettyname.
+
 Please test this image to confirm it works correctly.
 
 Thank You,
 VCL Team
 END
-	mail($user_email, "VCL -- $image_prettyname Image Creation Succeeded", $body_user, $affiliation_helpaddress);
-
+	}
+	
+	mail($user_email, $subject_user, $body_user, $affiliation_helpaddress);
+	
+	
 	# Send mail to $sysadmin_mail_address
 	if ($sysadmin_mail_address) {
+		my $subject_admin;
+		if ($request_state_name eq 'checkpoint') {
+			$subject_admin = "VCL IMAGE Checkpoint Completed: $image_name"
+		}
+		else {
+			$subject_admin = "VCL IMAGE Creation Completed: $image_name"
+		}
+		
 		my $body_admin = <<"END";
 VCL Image Creation Completed
 
@@ -354,16 +349,22 @@ Computer name: $computer_shortname
 Use Sysprep: $imagemeta_sysprep
 END
 
-		mail($sysadmin_mail_address, "VCL IMAGE Creation Completed: $image_name", $body_admin, $affiliation_helpaddress);
+		mail($sysadmin_mail_address, $subject_admin, $body_admin, $affiliation_helpaddress);
 	}
 	
-	# Insert reload request data into the datbase
-	if (!insert_reload_request($request_data)) {
-		notify($ERRORS{'CRITICAL'}, 0, "failed to insert reload request into database for computer id=$computer_id");
+	if ($request_state_name eq 'checkpoint') {
+		switch_state($request_data, 'reserved', 'checkpoint');
+	}
+	else {
+		# Insert reload request data into the datbase
+		if (!insert_reload_request($request_data)) {
+			notify($ERRORS{'CRITICAL'}, 0, "failed to insert reload request into database for computer id=$computer_id");
+		}
+		
+		# Switch the request state to complete, leave the computer state as is, update log ending to EOR, exit
+		switch_state($request_data, 'complete', '', 'EOR', '1');
 	}
 	
-	# Switch the request state to complete, leave the computer state as is, update log ending to EOR, exit
-	switch_state($request_data, 'complete', '', 'EOR', '1');
 	exit;
 } ## end sub reservation_successful
 

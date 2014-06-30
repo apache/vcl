@@ -2518,7 +2518,7 @@ sub manage_server_access {
 	my $server_request_admingroupid = $self->data->get_server_request_admingroupid();
 	my $server_request_logingroupid = $self->data->get_server_request_logingroupid();
 	my $user_login_id_owner         = $self->data->get_user_login_id();
-	my $user_sshPublicKeys 			  = $self->data->get_user_sshPublicKeys();
+	my $user_sshPublicKeys 			  = $self->data->get_user_sshPublicKeys(0);
 	my $user_id_owner		           = $self->data->get_user_id();
 	my $image_os_type 				  = $self->data->get_image_os_type();
 	my $request_laststate_name      = $self->data->get_request_laststate_name();

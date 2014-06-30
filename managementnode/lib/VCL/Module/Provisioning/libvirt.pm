@@ -307,6 +307,7 @@ sub capture {
 	my $new_image_name = $self->get_new_image_name();
 	$self->data->set_image_name($new_image_name);
 	
+	my $request_state_name = $self->data->get_request_state_name();
 	my $image_id = $self->data->get_image_id();
 	my $imagerevision_id = $self->data->get_imagerevision_id();
 	my $image_type = $self->data->get_imagetype_name();
@@ -490,8 +491,13 @@ EOF
 		}
 	}
 	
-	# Image has been captured, delete the domain
-	$self->delete_domain($domain_name);
+	if ($request_state_name !~ /^(image)$/) {
+		notify($ERRORS{'OK'}, 0, "domain will NOT be deleted because the request state is '$request_state_name'");
+	}
+	else {
+		# Image has been captured, delete the domain
+		$self->delete_domain($domain_name);
+	}
 	
 	return 1;
 } ## end sub capture

@@ -458,8 +458,9 @@ sub capture { ## This is going to need to be implemented before the module is co
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return 0;
 	}
-	my $request_id     = $self->data->get_request_id;
-	my $reservation_id = $self->data->get_reservation_id;
+	my $request_id         = $self->data->get_request_id;
+	my $request_state_name = $self->data->get_request_state_name();
+	my $reservation_id     = $self->data->get_reservation_id;
 	my $management_node_keys     = $self->data->get_management_node_keys();
 
 	my $requestedimagename = $self->data->get_image_name;
@@ -575,10 +576,13 @@ sub capture { ## This is going to need to be implemented before the module is co
 			notify($ERRORS{'CRITICAL'}, 0, "failed to copy .vdi file to image repository");
 			return 0;
 		}
-
-		notify($ERRORS{'OK'}, 0, "Removing VM");
-		if ($self->control_VM("remove")) {
-			notify($ERRORS{'OK'}, 0, "removed node $computer_shortname from vmhost $hostnodename");
+		
+		if ($request_state_name !~ /^(image)$/) {
+			notify($ERRORS{'OK'}, 0, "VM will NOT be deleted because the request state is '$request_state_name'");
+		}
+		else {
+			# Image has been captured, remove the VM
+			$self->control_VM("remove");
 		}
 	} elsif ($vmprofile_vmdisk =~ /shared/) { ## end if ($vmprofile_vmdisk =~ /(local|dedicated)/)
 		

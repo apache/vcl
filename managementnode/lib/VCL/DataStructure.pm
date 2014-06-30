@@ -1702,9 +1702,14 @@ sub set_computer_private_ip_address {
 	}
 	
 	my $computer_id = $self->get_computer_id();
+	if (!defined($computer_id)) {
+		notify($ERRORS{'WARNING'}, 0, "computer ID is not stored in this DataStructure object");
+		return;
+	}
+	
 	my $computer_hostname = $self->get_computer_hostname();
-	if (!$computer_id || !$computer_hostname) {
-		notify($ERRORS{'WARNING'}, 0, "computer hostname and ID are not stored in this DataStructure object");
+	if (!$computer_hostname) {
+		notify($ERRORS{'WARNING'}, 0, "computer hostname is not stored in this DataStructure object");
 		return;
 	}
 	

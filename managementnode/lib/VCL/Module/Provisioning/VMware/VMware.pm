@@ -614,6 +614,7 @@ sub capture {
 		return;
 	}
 	
+	my $request_state_name = $self->data->get_request_state_name();
 	my $computer_name = $self->data->get_computer_short_name();
 	my $image_name = $self->data->get_image_name();
 	my $vmhost_name = $self->data->get_vmhost_short_name();
@@ -915,6 +916,9 @@ sub capture {
 	}
 	elsif ($vmdk_directory_path_original eq $vmdk_directory_path_renamed) {
 		notify($ERRORS{'WARNING'}, 0, "VM will NOT be deleted because the VM's vmdk directory path configured in the vmx file matches the captured vmdk directory path: '$vmdk_directory_path_renamed'");
+	}
+	elsif ($request_state_name !~ /^(image)$/) {
+		notify($ERRORS{'OK'}, 0, "VM will NOT be deleted because the request state is '$request_state_name'");
 	}
 	else {
 		# Delete the VM
@@ -6806,7 +6810,7 @@ sub _get_datastore_path {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return;
 	}
-	
+
 	# Get the path argument
 	my $path_argument = shift;
 	if (!$path_argument) {
@@ -7151,7 +7155,7 @@ sub _get_parent_directory_name {
 		notify($ERRORS{'WARNING'}, 0, "unable to determine parent directory name, path argument could not be converted to a datastore path: '$path_argument'");
 		return;
 	}
-	
+
 	if ($datastore_path =~ /^\[.+\]$/) {
 		notify($ERRORS{'WARNING'}, 0, "unable to determine parent directory name, path argument is the root path of a datastore: '$path_argument'");
 		return;
@@ -8387,7 +8391,7 @@ sub get_datastore_imagerevision_names {
 		print "$ignored_count files and/or directories ignored, image revision not found in database:\n" . join("\n", @ignored) . "\n\n";
 	}
 	print "$datastore_imagerevision_name_count images found in datastore '$datastore_base_path'\n";
-	
+
 	return @datastore_imagerevision_names;
 }
 

@@ -82,10 +82,18 @@ sub initialize {
 	my $management_node_short_name = $self->data->get_management_node_short_name() || return;
 	my $management_node_ip_address = $self->data->get_management_node_ipaddress() || return;
 	
+	my $management_node_private_ip_address = hostname_to_ip_address($management_node_hostname);
+	if (!$management_node_private_ip_address) {
+		notify($ERRORS{'WARNING'}, 0, "failed to initialize management node OS object, unable to resolve hostname '$management_node_hostname'");
+		return;
+	}
+	
+	$self->data->set_computer_id(0);
 	$self->data->set_computer_hostname($management_node_hostname);
 	$self->data->set_computer_node_name($management_node_short_name);
 	$self->data->set_computer_short_name($management_node_short_name);
 	$self->data->set_computer_public_ip_address($management_node_ip_address);
+	$self->data->set_computer_private_ip_address($management_node_private_ip_address);
 	
 	#print "\n\n" . format_data($self->data->get_request_data()) . "\n\n";
 	return 1;
@@ -160,6 +168,7 @@ sub copy_file_to {
 	return $self->copy_file($source, $destination);
 }
 
+#/////////////////////////////////////////////////////////////////////////////
 
 #/////////////////////////////////////////////////////////////////////////////
 
