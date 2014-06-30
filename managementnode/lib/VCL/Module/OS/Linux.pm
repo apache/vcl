@@ -1003,7 +1003,8 @@ sub logoff_user {
 		notify($ERRORS{'DEBUG'}, 0, "user $user_login_id does not exist on $computer_node_name");
 		return 1;
 	}
-	elsif ($exit_status ne '0') {
+	elsif ($exit_status ne '0' && $exit_status ne '1') {
+		# pkill will exit with status = 1 if one or more processes were killed, and 1 if no processes matched
 		notify($ERRORS{'WARNING'}, 0, "error occurred attempting to log off $user_login_id from $computer_node_name, exit status: $exit_status, output:\n" . join("\n", @$output));
 		return;
 	}
