@@ -58,27 +58,9 @@ use Fcntl qw(:DEFAULT :flock);
 
 ##############################################################################
 
-
-##############################################################################
-
 =head1 OBJECT METHODS
 
 =cut
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 initialize
-
- Parameters  :
- Returns     :
- Description :
-
-=cut
-
-sub initialize {
-	notify($ERRORS{'DEBUG'}, 0, "module initialized");
-	return 1;
-}
 
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -124,7 +106,7 @@ sub load {
 
 	my $vmhost_imagename          = $self->data->get_vmhost_image_name;
 
-        my $vmhost_vmpath           = $self->data->get_vmhost_profile_vmpath;
+	my $vmhost_vmpath           = $self->data->get_vmhost_profile_vmpath;
 
 	my $vmhost_hostname           = $self->data->get_vmhost_hostname;
 	my $vmclient_eth0MAC          = $self->data->get_computer_eth0_mac_address;
@@ -153,7 +135,7 @@ sub load {
 
 	notify($ERRORS{'OK'}, 0, "identity file set $management_node_keys  vmhost imagename $vmhost_imagename bladekey ");
 	#setup flags
-        my $baseisregistered = 0;
+	my $baseisregistered = 0;
 	my $baseexists   = 0;
 	my $dirstructure = 0;
 
@@ -162,19 +144,19 @@ sub load {
 
 	# preform cleanup
 	if ($self->control_VM("remove")) {
-                notify($ERRORS{'OK'}, 0, "removed node $shortname from vmhost $vmhost_hostname");
-        }
+		notify($ERRORS{'OK'}, 0, "removed node $shortname from vmhost $vmhost_hostname");
+	}
 
-        ### FIX-ME: I have no freakin clue how to approach this (imaging mode) at the moment
-        ###         For VBox, this would require changing the disk mode from immuatable to normal
-        ###         which itself would be easy, the challenge for me is handeling the hypervisors that have this image registered
-        ###         where any VMs that are using it will have associated snapshots that will have to be delt with before the image
-        ###         could be un-registered and re-registered. so for now, @#$% it... (david.hutchins)
+	### FIX-ME: I have no freakin clue how to approach this (imaging mode) at the moment
+	###         For VBox, this would require changing the disk mode from immuatable to normal
+	###         which itself would be easy, the challenge for me is handeling the hypervisors that have this image registered
+	###         where any VMs that are using it will have associated snapshots that will have to be delt with before the image
+	###         could be un-registered and re-registered. so for now, @#$% it... (david.hutchins)
 	if ($persistent) {
-         $vm_name = "$requestedimagename\_IMAGING\_$shortname"; 
+		$vm_name = "$requestedimagename\_IMAGING\_$shortname"; 
 	} ## end if ($persistent)
 	else {
-         $vm_name = "$requestedimagename\_$shortname";
+		$vm_name = "$requestedimagename\_$shortname";
 	}
 	
 	$myimagename   = $requestedimagename;
@@ -202,24 +184,24 @@ sub load {
 			notify($ERRORS{'OK'}, 0, "Hdds in VirtualBox database on vm host:\n@{ $sshcmd[1] }");
 			foreach my $l (@{$sshcmd[1]}) {
 				if ($l =~ /(\s*?)$datastorepath\/$myimagename/) {
-                                        # The base is registered, so we will assume it is also present (This may not be the best approach, but for now it will do).
+					# The base is registered, so we will assume it is also present (This may not be the best approach, but for now it will do).
 					notify($ERRORS{'OK'}, 0, "base image exists");
 					$baseisregistered = 1;
-                                        $baseexists = 1;
+					$baseexists = 1;
 				}
 			} ## end foreach my $l (@{$sshcmd[1]})
 
-                        # If the base is not registered, we will check to see if it exists
-                        if (!($baseisregistered)) {
+			# If the base is not registered, we will check to see if it exists
+			if (!($baseisregistered)) {
 				undef @sshcmd;
 				@sshcmd = run_ssh_command($hostnode, $management_node_keys, "ls -1 $datastorepath", "root");
 				foreach my $l (@{$sshcmd[1]}) {
-                                	if ($l =~ /(\s*?)$myimagename/) {
-                                        	# The base exists so we just need to register it with VirtualBox.
-                                        	notify($ERRORS{'OK'}, 0, "base image exists, registering it with VirtualBox");
-                                        	$baseexists = 1;
-                                	}
-                        	}
+					if ($l =~ /(\s*?)$myimagename/) {
+						# The base exists so we just need to register it with VirtualBox.
+						notify($ERRORS{'OK'}, 0, "base image exists, registering it with VirtualBox");
+						$baseexists = 1;
+					}
+				}
 			}
 
 
@@ -283,28 +265,28 @@ sub load {
 				unlink($tmplockfile);
 
 			}    # start if base not exists
-                        # If the base exists but was not registered we just need to register it
+			# If the base exists but was not registered we just need to register it
 			if((!($baseisregistered)) && ($baseexists)) {
 				undef @sshcmd;
 
 				# So Oracle removed the method for registering an image with the server. Registration is now automated when media is attached to a VM. But a "read lock" error is given if you attempt to specify "-mtype multiattach" after the first attachment to a vm if the first vm is running. In order to avoid extra logic to determine if it is the first attachment during VM creation, a non-running VM is registered named "STORAGE_HOLDER" with a scsi controller named "STORAGE_HOLDER_SCSI". An image can be attached to port 0 in multiattach mode and any further attachments will default to multiattach when no mtype is specified, without the mtype arg no error is thrown. This feels more like a VBox bug to me, and I opened a bug report with Oracle.
 
-                                @sshcmd = run_ssh_command($hostnode, $management_node_keys, "VBoxManage storageattach STORAGE_HOLDER --storagectl STORAGE_HOLDER_SCSI --medium $datastorepath\/$myimagename --mtype multiattach --type hdd --port 0", "root");
-	                             foreach my $l (@{$sshcmd[1]}) {
+				@sshcmd = run_ssh_command($hostnode, $management_node_keys, "VBoxManage storageattach STORAGE_HOLDER --storagectl STORAGE_HOLDER_SCSI --medium $datastorepath\/$myimagename --mtype multiattach --type hdd --port 0", "root");
+				foreach my $l (@{$sshcmd[1]}) {
 					if ($l =~ /(\s*?)ERROR:/) {
-                                                # Registeration failed, manual intervention is probably required, send warning and die.
-                                                notify($ERRORS{'CRITICAL'}, 0, "Registeration of image failed, output is: \n@{ $sshcmd[1] }");
-                                                close(TMPLOCK);
-                                                unlink($tmplockfile);
-                                                return 0;
-                                        } 
+						# Registeration failed, manual intervention is probably required, send warning and die.
+						notify($ERRORS{'CRITICAL'}, 0, "Registeration of image failed, output is: \n@{ $sshcmd[1] }");
+						close(TMPLOCK);
+						unlink($tmplockfile);
+						return 0;
+					} 
 					else {
-                                                # Registeration success.
-                                                notify($ERRORS{'OK'}, 0, "IMG REGISTRATION-> $l");
-                                                $baseisregistered = 1;
+						# Registeration success.
+						notify($ERRORS{'OK'}, 0, "IMG REGISTRATION-> $l");
+						$baseisregistered = 1;
 					}
-                                        
-                                }
+					
+				}
 			} else {
 				#base exists
 				notify($ERRORS{'OK'}, 0, "confirm image exist process complete removing lock on $tmplockfile");
@@ -313,8 +295,8 @@ sub load {
 			}
 		}    #flock
 	}    #sysopen
-	     #ok good base vm files exist on hostnode
-	     #if guest dirstructure exists check state of vm, else create sturcture and new vmx file
+	#ok good base vm files exist on hostnode
+	#if guest dirstructure exists check state of vm, else create sturcture and new vmx file
 	#check for dependent settings ethX
 	if (!(defined($vmclient_eth0MAC))) {
 		#complain
@@ -337,36 +319,36 @@ sub load {
 		}
 	} ## end if (defined($vmclient_imageminram))
 	
-        VBOXCREATE:
-        undef @sshcmd;
-        @sshcmd = run_ssh_command($hostnode, $management_node_keys, "VBoxManage -q setproperty machinefolder $vmhost_vmpath", "root");
-        undef @sshcmd;
-        @sshcmd = run_ssh_command($hostnode, $management_node_keys, "VBoxManage -q createvm --name $vm_name --register", "root");
-        $vmclient_eth0MAC =~ tr/://d;
-        $vmclient_eth1MAC =~ tr/://d;
-        undef @sshcmd;
-        @sshcmd = run_ssh_command($hostnode, $management_node_keys, "VBoxManage -q modifyvm $vm_name --memory $dynamicmemvalue", "root");
-        undef @sshcmd;
-        @sshcmd = run_ssh_command($hostnode, $management_node_keys, "VBoxManage -q modifyvm $vm_name --ioapic on", "root");
-        undef @sshcmd;
-        @sshcmd = run_ssh_command($hostnode, $management_node_keys, "VBoxManage -q modifyvm $vm_name --nic1 bridged --bridgeadapter1 $virtualswitch0 --macaddress1 $vmclient_eth0MAC --nictype1 82540EM", "root");
-        undef @sshcmd;
-        @sshcmd = run_ssh_command($hostnode, $management_node_keys, "VBoxManage -q modifyvm $vm_name --nic2 bridged --bridgeadapter2 $virtualswitch1 --macaddress2 $vmclient_eth1MAC --nictype2 82540EM", "root");
-        undef @sshcmd;
-        @sshcmd = run_ssh_command($hostnode, $management_node_keys, "VBoxManage -q storagectl $vm_name --name $shortname\_stor --add ide", "root");
-        if ($persistent) {
+	VBOXCREATE:
+	undef @sshcmd;
+	@sshcmd = run_ssh_command($hostnode, $management_node_keys, "VBoxManage -q setproperty machinefolder $vmhost_vmpath", "root");
+	undef @sshcmd;
+	@sshcmd = run_ssh_command($hostnode, $management_node_keys, "VBoxManage -q createvm --name $vm_name --register", "root");
+	$vmclient_eth0MAC =~ tr/://d;
+	$vmclient_eth1MAC =~ tr/://d;
+	undef @sshcmd;
+	@sshcmd = run_ssh_command($hostnode, $management_node_keys, "VBoxManage -q modifyvm $vm_name --memory $dynamicmemvalue", "root");
+	undef @sshcmd;
+	@sshcmd = run_ssh_command($hostnode, $management_node_keys, "VBoxManage -q modifyvm $vm_name --ioapic on", "root");
+	undef @sshcmd;
+	@sshcmd = run_ssh_command($hostnode, $management_node_keys, "VBoxManage -q modifyvm $vm_name --nic1 bridged --bridgeadapter1 $virtualswitch0 --macaddress1 $vmclient_eth0MAC --nictype1 82540EM", "root");
+	undef @sshcmd;
+	@sshcmd = run_ssh_command($hostnode, $management_node_keys, "VBoxManage -q modifyvm $vm_name --nic2 bridged --bridgeadapter2 $virtualswitch1 --macaddress2 $vmclient_eth1MAC --nictype2 82540EM", "root");
+	undef @sshcmd;
+	@sshcmd = run_ssh_command($hostnode, $management_node_keys, "VBoxManage -q storagectl $vm_name --name $shortname\_stor --add ide", "root");
+	if ($persistent) {
 		notify($ERRORS{'OK'}, 0, "Cloning image, this could take a while.");
 		undef @sshcmd;
-	        @sshcmd = run_ssh_command($hostnode, $management_node_keys, "VBoxManage -q clonehd $datastorepath\/$requestedimagename $datastorepath\/$requestedimagename\_IMAGING\_$shortname ", "root");
-        	undef @sshcmd;
-                @sshcmd = run_ssh_command($hostnode, $management_node_keys, "VBoxManage -q storageattach $vm_name --storagectl $shortname\_stor --port 0 --device 0 --type hdd --medium $datastorepath\/$requestedimagename\_IMAGING\_$shortname", "root"); 
-        } ## end if ($persistent)
-        else {
-        	undef @sshcmd;
-        	@sshcmd = run_ssh_command($hostnode, $management_node_keys, "VBoxManage -q storageattach $vm_name --storagectl $shortname\_stor --port 0 --device 0 --type hdd --medium $datastorepath\/$requestedimagename", "root");
-        }
-        undef @sshcmd;
-        @sshcmd = run_ssh_command($hostnode, $management_node_keys, "VBoxManage -q modifyvm $vm_name --pae on", "root");
+		@sshcmd = run_ssh_command($hostnode, $management_node_keys, "VBoxManage -q clonehd $datastorepath\/$requestedimagename $datastorepath\/$requestedimagename\_IMAGING\_$shortname ", "root");
+		undef @sshcmd;
+		@sshcmd = run_ssh_command($hostnode, $management_node_keys, "VBoxManage -q storageattach $vm_name --storagectl $shortname\_stor --port 0 --device 0 --type hdd --medium $datastorepath\/$requestedimagename\_IMAGING\_$shortname", "root"); 
+	} ## end if ($persistent)
+	else {
+		undef @sshcmd;
+		@sshcmd = run_ssh_command($hostnode, $management_node_keys, "VBoxManage -q storageattach $vm_name --storagectl $shortname\_stor --port 0 --device 0 --type hdd --medium $datastorepath\/$requestedimagename", "root");
+	}
+	undef @sshcmd;
+	@sshcmd = run_ssh_command($hostnode, $management_node_keys, "VBoxManage -q modifyvm $vm_name --pae on", "root");
 
 	#turn on vm
 	#set loop control
@@ -427,7 +409,7 @@ sub load {
 	if (open(FILE, $known_hosts)) {
 		@file = <FILE>;
 		close FILE;
-        
+	
 		foreach my $line (@file) {
 			if ($line =~ s/$computer_shortname.*\n//) {
 				notify($ERRORS{'OK'}, 0, "removing $computer_shortname ssh public key from $known_hosts");
@@ -436,7 +418,7 @@ sub load {
 				notify($ERRORS{'OK'}, 0, "removing $vmclient_privateIPaddress ssh public key from $known_hosts");
 			}
 		}
-        
+	
 		if (open(FILE, ">$known_hosts")) {
 			print FILE @file;
 			close FILE;
@@ -477,151 +459,151 @@ sub capture { ## This is going to need to be implemented before the module is co
 		return 0;
 	}
 	my $request_id     = $self->data->get_request_id;
-        my $reservation_id = $self->data->get_reservation_id;
-        my $management_node_keys     = $self->data->get_management_node_keys();
+	my $reservation_id = $self->data->get_reservation_id;
+	my $management_node_keys     = $self->data->get_management_node_keys();
 
 	my $requestedimagename = $self->data->get_image_name;
 
-        my $datastorepath     = $self->data->get_vmhost_profile_datastore_path;
+	my $datastorepath     = $self->data->get_vmhost_profile_datastore_path;
 
-        my $image_id       = $self->data->get_image_id;
-        my $image_os_name  = $self->data->get_image_os_name;
-        my $image_identity = $self->data->get_image_identity;
-        my $image_os_type  = $self->data->get_image_os_type;
-        my $image_name     = $self->data->get_image_name();
+	my $image_id       = $self->data->get_image_id;
+	my $image_os_name  = $self->data->get_image_os_name;
+	my $image_identity = $self->data->get_image_identity;
+	my $image_os_type  = $self->data->get_image_os_type;
+	my $image_name     = $self->data->get_image_name();
 
-        my $computer_id        = $self->data->get_computer_id;
-        my $computer_shortname = $self->data->get_computer_short_name;
-        my $computer_nodename  = $computer_shortname;
-        my $computer_hostname  = $self->data->get_computer_hostname;
-        my $computer_type      = $self->data->get_computer_type;
+	my $computer_id        = $self->data->get_computer_id;
+	my $computer_shortname = $self->data->get_computer_short_name;
+	my $computer_nodename  = $computer_shortname;
+	my $computer_hostname  = $self->data->get_computer_hostname;
+	my $computer_type      = $self->data->get_computer_type;
 
-        my $vmtype_name             = $self->data->get_vmhost_type_name;
-        my $vmhost_vmpath           = $self->data->get_vmhost_profile_vmpath;
-        my $vmprofile_vmdisk        = $self->data->get_vmhost_profile_vmdisk;
-        my $vmprofile_datastorepath = $self->data->get_vmhost_profile_datastore_path;
-        my $vmhost_hostname         = $self->data->get_vmhost_hostname;
-        my $host_type               = $self->data->get_vmhost_type;
-        my $vmhost_imagename        = $self->data->get_vmhost_image_name;
+	my $vmtype_name             = $self->data->get_vmhost_type_name;
+	my $vmhost_vmpath           = $self->data->get_vmhost_profile_vmpath;
+	my $vmprofile_vmdisk        = $self->data->get_vmhost_profile_vmdisk;
+	my $vmprofile_datastorepath = $self->data->get_vmhost_profile_datastore_path;
+	my $vmhost_hostname         = $self->data->get_vmhost_hostname;
+	my $host_type               = $self->data->get_vmhost_type;
+	my $vmhost_imagename        = $self->data->get_vmhost_image_name;
 
-        my $image_repository_path   = $self->_get_image_repository_path();
+	my $image_repository_path   = $self->_get_image_repository_path();
 	my $hostnodename = $vmhost_hostname;
-        # Assemble a consistent prefix for notify messages
-        my $notify_prefix = "req=$request_id, res=$reservation_id:";
-        my $image_filename;
+	# Assemble a consistent prefix for notify messages
+	my $notify_prefix = "req=$request_id, res=$reservation_id:";
+	my $image_filename;
 
 
-        # Print some preliminary information
-        notify($ERRORS{'OK'}, 0, "$notify_prefix new name: $image_name");
-        notify($ERRORS{'OK'}, 0, "$notify_prefix computer_name: $computer_shortname");
-        notify($ERRORS{'OK'}, 0, "$notify_prefix vmhost_hostname: $vmhost_hostname");
-        notify($ERRORS{'OK'}, 0, "$notify_prefix vmtype_name: $vmtype_name");
+	# Print some preliminary information
+	notify($ERRORS{'OK'}, 0, "$notify_prefix new name: $image_name");
+	notify($ERRORS{'OK'}, 0, "$notify_prefix computer_name: $computer_shortname");
+	notify($ERRORS{'OK'}, 0, "$notify_prefix vmhost_hostname: $vmhost_hostname");
+	notify($ERRORS{'OK'}, 0, "$notify_prefix vmtype_name: $vmtype_name");
 
-        # Modify currentimage.txt
-        if (write_currentimage_txt($self->data)) {
-                notify($ERRORS{'OK'}, 0, "$notify_prefix currentimage.txt updated on $computer_shortname");
-        }
-        else {
-                notify($ERRORS{'WARNING'}, 0, "$notify_prefix unable to update currentimage.txt on $computer_shortname");
-                return 0;
-        }
-        my @sshcmd;
+	# Modify currentimage.txt
+	if (write_currentimage_txt($self->data)) {
+		notify($ERRORS{'OK'}, 0, "$notify_prefix currentimage.txt updated on $computer_shortname");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "$notify_prefix unable to update currentimage.txt on $computer_shortname");
+		return 0;
+	}
+	my @sshcmd;
 
-        # Check if pre_capture() subroutine has been implemented by the OS module
-        if ($self->os->can("pre_capture")) {
-                # Call OS pre_capture() - it should perform all OS steps necessary to capture an image
-                # pre_capture() should shut down the computer when it is done
-                notify($ERRORS{'OK'}, 0, "calling OS module's pre_capture() subroutine");
+	# Check if pre_capture() subroutine has been implemented by the OS module
+	if ($self->os->can("pre_capture")) {
+		# Call OS pre_capture() - it should perform all OS steps necessary to capture an image
+		# pre_capture() should shut down the computer when it is done
+		notify($ERRORS{'OK'}, 0, "calling OS module's pre_capture() subroutine");
 
-                if (!$self->os->pre_capture({end_state => 'off'})) {
-                        notify($ERRORS{'WARNING'}, 0, "OS module pre_capture() failed");
-                        return 0;
-                }
+		if (!$self->os->pre_capture({end_state => 'off'})) {
+			notify($ERRORS{'WARNING'}, 0, "OS module pre_capture() failed");
+			return 0;
+		}
 
-                # Get the power status, make sure computer is off
-                my $power_status = $self->power_status();
-                notify($ERRORS{'DEBUG'}, 0, "retrieved power status: $power_status");
-                if ($power_status eq 'off') {
-                        notify($ERRORS{'OK'}, 0, "verified $computer_nodename power is off");
-                }
-                elsif ($power_status eq 'on') {
-                        notify($ERRORS{'WARNING'}, 0, "$computer_nodename power is still on, turning computer off");
+		# Get the power status, make sure computer is off
+		my $power_status = $self->power_status();
+		notify($ERRORS{'DEBUG'}, 0, "retrieved power status: $power_status");
+		if ($power_status eq 'off') {
+			notify($ERRORS{'OK'}, 0, "verified $computer_nodename power is off");
+		}
+		elsif ($power_status eq 'on') {
+			notify($ERRORS{'WARNING'}, 0, "$computer_nodename power is still on, turning computer off");
 
-                        # Attempt to power off computer
-                        if ($self->power_off()) {
-                                notify($ERRORS{'OK'}, 0, "$computer_nodename was powered off");
-                        }
-                        else {
-                                notify($ERRORS{'WARNING'}, 0, "failed to power off $computer_nodename");
-                                return 0;
-                        }
-                }
-                else {
-                        notify($ERRORS{'WARNING'}, 0, "failed to determine power status of $computer_nodename");
-                        return 0;
-                }
-        }
-	
-        if ($vmprofile_vmdisk =~ /(local|dedicated)/) {
-                # copy vdi files
-                # confirm they were copied
-
-                undef @sshcmd;
-        	@sshcmd = run_ssh_command($hostnodename, $management_node_keys, "ls $datastorepath/*_IMAGING_$computer_shortname", "root");
-	        for my $l (@{$sshcmd[1]}) {
-                	if ($l =~ /\/(.*_IMAGING_$computer_shortname)/) {
-				$image_filename = $l;
-                        	notify($ERRORS{'OK'}, 0, "Image filename is: $image_filename");
+			# Attempt to power off computer
+			if ($self->power_off()) {
+				notify($ERRORS{'OK'}, 0, "$computer_nodename was powered off");
 			}
-        	} ## end for my $l (@{$sshcmd[1]})
+			else {
+				notify($ERRORS{'WARNING'}, 0, "failed to power off $computer_nodename");
+				return 0;
+			}
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "failed to determine power status of $computer_nodename");
+			return 0;
+		}
+	}
+	
+	if ($vmprofile_vmdisk =~ /(local|dedicated)/) {
+		# copy vdi files
+		# confirm they were copied
 
-                notify($ERRORS{'OK'}, 0, "attemping to copy vdi file to $image_repository_path");
-                if (run_scp_command("$hostnodename:\"$image_filename\"", "$image_repository_path\/$image_name", $management_node_keys)) {
-
-                # set file premissions on images to 644
-                # to allow for other management nodes to fetch image if neccessary
-                # useful in a large distributed framework
-                if (open(CHMOD, "/bin/chmod -R 644 $image_repository_path\/$image_name 2>&1 |")) {
-                        close(CHMOD);
-                        notify($ERRORS{'DEBUG'}, 0, "$notify_prefix recursive update file permssions 644 on $image_repository_path\/$image_name");
-                }
 		undef @sshcmd;
-                @sshcmd = run_ssh_command($hostnodename, $management_node_keys, "VBoxManage closemedium disk $datastorepath/$image_filename --delete", "root");
-                return 1;
-                } ## end if (run_scp_command("$hostnodename:\"$vmhost_vmpath/$vmx_directory/*.vmdk\""...
-                else {
-                        notify($ERRORS{'CRITICAL'}, 0, "failed to copy .vdi file to image repository");
-                        return 0;
-                }
+		@sshcmd = run_ssh_command($hostnodename, $management_node_keys, "ls $datastorepath/*_IMAGING_$computer_shortname", "root");
+		for my $l (@{$sshcmd[1]}) {
+			if ($l =~ /\/(.*_IMAGING_$computer_shortname)/) {
+				$image_filename = $l;
+				notify($ERRORS{'OK'}, 0, "Image filename is: $image_filename");
+			}
+		} ## end for my $l (@{$sshcmd[1]})
 
-                notify($ERRORS{'OK'}, 0, "Removing VM");
+		notify($ERRORS{'OK'}, 0, "attemping to copy vdi file to $image_repository_path");
+		if (run_scp_command("$hostnodename:\"$image_filename\"", "$image_repository_path\/$image_name", $management_node_keys)) {
+
+		# set file premissions on images to 644
+		# to allow for other management nodes to fetch image if neccessary
+		# useful in a large distributed framework
+		if (open(CHMOD, "/bin/chmod -R 644 $image_repository_path\/$image_name 2>&1 |")) {
+			close(CHMOD);
+			notify($ERRORS{'DEBUG'}, 0, "$notify_prefix recursive update file permssions 644 on $image_repository_path\/$image_name");
+		}
+		undef @sshcmd;
+		@sshcmd = run_ssh_command($hostnodename, $management_node_keys, "VBoxManage closemedium disk $datastorepath/$image_filename --delete", "root");
+		return 1;
+		} ## end if (run_scp_command("$hostnodename:\"$vmhost_vmpath/$vmx_directory/*.vmdk\""...
+		else {
+			notify($ERRORS{'CRITICAL'}, 0, "failed to copy .vdi file to image repository");
+			return 0;
+		}
+
+		notify($ERRORS{'OK'}, 0, "Removing VM");
 		if ($self->control_VM("remove")) {
-        	        notify($ERRORS{'OK'}, 0, "removed node $computer_shortname from vmhost $hostnodename");
-	        }
-        } elsif ($vmprofile_vmdisk =~ /shared/) { ## end if ($vmprofile_vmdisk =~ /(local|dedicated)/)
+			notify($ERRORS{'OK'}, 0, "removed node $computer_shortname from vmhost $hostnodename");
+		}
+	} elsif ($vmprofile_vmdisk =~ /shared/) { ## end if ($vmprofile_vmdisk =~ /(local|dedicated)/)
 		
- 		if (open(FILELIST, "/bin/ls $image_repository_path/*_IMAGING_$computer_shortname 2>&1 |")) {
-                	my @filelist = <FILELIST>;
-                	close(FILELIST);
-                	my $size = 0;
-                	foreach my $f (@filelist) {
-                        	if ($f =~ /\/(.*_IMAGING_$computer_shortname)/) {
-                                	$image_filename = $f;
+		if (open(FILELIST, "/bin/ls $image_repository_path/*_IMAGING_$computer_shortname 2>&1 |")) {
+			my @filelist = <FILELIST>;
+			close(FILELIST);
+			my $size = 0;
+			foreach my $f (@filelist) {
+				if ($f =~ /\/(.*_IMAGING_$computer_shortname)/) {
+					$image_filename = $f;
 					$image_filename =~ s/(\r|\n)//g;
-                                	notify($ERRORS{'OK'}, 0, "Image filename is: $image_filename");
-                        	}
-                	}	
-        	} 
+					notify($ERRORS{'OK'}, 0, "Image filename is: $image_filename");
+				}
+			}	
+		} 
 		
 		if (open(MV, "/bin/mv $image_filename $image_repository_path\/$image_name 2>&1 |")) {
 			close(MV);
-        	       notify($ERRORS{'OK'}, 0, "renamed $image_filename to $image_repository_path\/$image_name");
-	        	if (open(CHMOD, "/bin/chmod -R 644 $image_repository_path\/$image_name 2>&1 |")) {
+			notify($ERRORS{'OK'}, 0, "renamed $image_filename to $image_repository_path\/$image_name");
+			if (open(CHMOD, "/bin/chmod -R 644 $image_repository_path\/$image_name 2>&1 |")) {
 				close(CHMOD);
 				notify($ERRORS{'DEBUG'}, 0, "$notify_prefix recursive update file permssions 644 on $image_repository_path\/$image_name");
 			}
 			#undef @sshcmd;
-                	#@sshcmd = run_ssh_command($hostnodename, $management_node_keys, "VBoxManage closemedium disk $datastorepath/$image_filename --delete", "root");
+			#@sshcmd = run_ssh_command($hostnodename, $management_node_keys, "VBoxManage closemedium disk $datastorepath/$image_filename --delete", "root");
 			return 1;
 		}
 	}
@@ -644,44 +626,44 @@ sub remove_snapshots {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return 0;
 	}
-        my $vmhost_fullhostname = $self->data->get_vmhost_hostname;
-        my $hostnode = $1 if ($vmhost_fullhostname =~ /([-_a-zA-Z0-9]*)(\.?)/);
-        my $management_node_keys = $self->data->get_management_node_keys();
-        my @sshcmd;
-        my @sshcmd2;
-        my $is_snapshot = 0;
-        my $delete_flag = 0;
-        my $current_uuid;
+	my $vmhost_fullhostname = $self->data->get_vmhost_hostname;
+	my $hostnode = $1 if ($vmhost_fullhostname =~ /([-_a-zA-Z0-9]*)(\.?)/);
+	my $management_node_keys = $self->data->get_management_node_keys();
+	my @sshcmd;
+	my @sshcmd2;
+	my $is_snapshot = 0;
+	my $delete_flag = 0;
+	my $current_uuid;
 	notify($ERRORS{'OK'}, 0, "Removing unused snapshots");
-        @sshcmd = run_ssh_command($hostnode, $management_node_keys, "VBoxManage -q list hdds | sed s/^\$/----/g", "root");
+	@sshcmd = run_ssh_command($hostnode, $management_node_keys, "VBoxManage -q list hdds | sed s/^\$/----/g", "root");
 	foreach my $l (@{$sshcmd[1]}) {
-        	if ($l =~ m/^UUID/) { # UUID line is the start of a section
-        	        $l =~ m/(........-....-....-....-............)/;
+		if ($l =~ m/^UUID/) { # UUID line is the start of a section
+			$l =~ m/(........-....-....-....-............)/;
 			$current_uuid = $1;
-	        	notify($ERRORS{'OK'}, 0, "Checking hdd with UUID $1");
-                        $is_snapshot = 0; # reset this flag
-                        $delete_flag = 0; # reset this flag
-                }
+			notify($ERRORS{'OK'}, 0, "Checking hdd with UUID $1");
+			$is_snapshot = 0; # reset this flag
+			$delete_flag = 0; # reset this flag
+		}
 		if ($l =~ m/^Parent/) {
 			if ($l =~ m/Parent UUID: base/) { # This is a base image, not a snapshot
 				notify($ERRORS{'OK'}, 0, "UUID $current_uuid is not a snapshot");
-                        	$is_snapshot = 0; # Mark as a snapshot.
-                        	$delete_flag = 0; # Default is to remove this snapshot, unless it is found to be in use.
+				$is_snapshot = 0; # Mark as a snapshot.
+				$delete_flag = 0; # Default is to remove this snapshot, unless it is found to be in use.
 			} else { # This is a snapshot
 				$l =~ m/(........-....-....-....-............)/;
 				notify($ERRORS{'OK'}, 0, "UUID $current_uuid is a snapshot of $1");
-                        	$is_snapshot = 1; # Mark as a snapshot.
-                        	$delete_flag = 1; # Default is to remove this snapshot, unless it is found to be in use.
+				$is_snapshot = 1; # Mark as a snapshot.
+				$delete_flag = 1; # Default is to remove this snapshot, unless it is found to be in use.
 			}
 		}
 		if ($l =~ m/^Usage/) { # This image is still in use
-                        notify($ERRORS{'OK'}, 0, "UUID $current_uuid is in use, will not be removed");
-                        $delete_flag = 0; #Will not delete as this is still in use 
-                }
-                if ($l eq '----') { # end of one section, time to remove the image if it is an unused snapshot.
+			notify($ERRORS{'OK'}, 0, "UUID $current_uuid is in use, will not be removed");
+			$delete_flag = 0; #Will not delete as this is still in use 
+		}
+		if ($l eq '----') { # end of one section, time to remove the image if it is an unused snapshot.
 			if ($is_snapshot && $delete_flag) {
-                        	notify($ERRORS{'OK'}, 0, "UUID $current_uuid is not in use, will be removed");
-        			@sshcmd2 = run_ssh_command($hostnode, $management_node_keys, "VBoxManage -q closemedium disk $current_uuid --delete", "root");
+				notify($ERRORS{'OK'}, 0, "UUID $current_uuid is not in use, will be removed");
+				@sshcmd2 = run_ssh_command($hostnode, $management_node_keys, "VBoxManage -q closemedium disk $current_uuid --delete", "root");
 			} 
 		}
 	}
@@ -701,7 +683,7 @@ sub remove_snapshots {
 
 sub control_VM {
 	my $self = shift;
-        my $ret = 0;
+	my $ret = 0;
 
 	# Check if subroutine was called as a class method
 	if (ref($self) !~ /vbox/i) {
@@ -731,53 +713,53 @@ sub control_VM {
 	my $requestedimagename = $self->data->get_image_name;
 	my $image_repository_path     = $self->_get_image_repository_path();
 	my $vm_name = "$requestedimagename\_$shortname ";
-        my @sshcmd;
+	my @sshcmd;
 
 	if ($control =~ /off|remove/) {
-        	undef @sshcmd;
-        	@sshcmd = run_ssh_command($hostnode, $management_node_keys, "VBoxManage -q list vms", "root");
-        	foreach my $l (@{$sshcmd[1]}) {
-                	if ($l =~ m/\_$shortname\"/) {
-                        	$l =~ m/{(.*)}/;         
-                        	notify($ERRORS{'OK'}, 0, "VM $shortname has UUID  $1");
-                        	notify($ERRORS{'OK'}, 0, "UUID  $1 - POWER OFF");
-                        	undef @sshcmd;
-                        	@sshcmd = run_ssh_command($hostnode, $management_node_keys, "VBoxManage -q controlvm $1 poweroff", "root");
-                                if ($control eq 'remove') {
-                        		notify($ERRORS{'OK'}, 0, "UUID  $1 - REMOVE");
-                        		undef @sshcmd;
-                        		@sshcmd = run_ssh_command($hostnode, $management_node_keys, "VBoxManage -q unregistervm $1 --delete", "root");
+		undef @sshcmd;
+		@sshcmd = run_ssh_command($hostnode, $management_node_keys, "VBoxManage -q list vms", "root");
+		foreach my $l (@{$sshcmd[1]}) {
+			if ($l =~ m/\_$shortname\"/) {
+				$l =~ m/{(.*)}/;         
+				notify($ERRORS{'OK'}, 0, "VM $shortname has UUID  $1");
+				notify($ERRORS{'OK'}, 0, "UUID  $1 - POWER OFF");
+				undef @sshcmd;
+				@sshcmd = run_ssh_command($hostnode, $management_node_keys, "VBoxManage -q controlvm $1 poweroff", "root");
+				if ($control eq 'remove') {
+					notify($ERRORS{'OK'}, 0, "UUID  $1 - REMOVE");
+					undef @sshcmd;
+					@sshcmd = run_ssh_command($hostnode, $management_node_keys, "VBoxManage -q unregistervm $1 --delete", "root");
 					notify($ERRORS{'OK'}, 0, "Waiting 30 seconds to allow unregister to settle");
 					sleep 30
-                                }
-                                $ret = 1;
-                	}
-        	}
+				}
+				$ret = 1;
+			}
+		}
 		
 	}
-        if ($control eq 'pause') {
+	if ($control eq 'pause') {
 		undef @sshcmd;
-                @sshcmd = run_ssh_command($hostnode, $management_node_keys, "VBoxManage -q list vms", "root");
-                foreach my $l (@{$sshcmd[1]}) {
-                        if ($l =~ m/\_$shortname\"/) {
-                                $l =~ m/{(.*)}/;
-                                notify($ERRORS{'OK'}, 0, "VM $shortname has UUID  $1");
-                                notify($ERRORS{'OK'}, 0, "UUID  $1 - PAUSE");
-                                undef @sshcmd;
-                                @sshcmd = run_ssh_command($hostnode, $management_node_keys, "VBoxManage -q controlvm $1 pause", "root");
+		@sshcmd = run_ssh_command($hostnode, $management_node_keys, "VBoxManage -q list vms", "root");
+		foreach my $l (@{$sshcmd[1]}) {
+			if ($l =~ m/\_$shortname\"/) {
+				$l =~ m/{(.*)}/;
+				notify($ERRORS{'OK'}, 0, "VM $shortname has UUID  $1");
+				notify($ERRORS{'OK'}, 0, "UUID  $1 - PAUSE");
+				undef @sshcmd;
+				@sshcmd = run_ssh_command($hostnode, $management_node_keys, "VBoxManage -q controlvm $1 pause", "root");
 			}
 		}
 	}
-        if ($control eq 'resume') {
+	if ($control eq 'resume') {
 		undef @sshcmd;
-                @sshcmd = run_ssh_command($hostnode, $management_node_keys, "VBoxManage -q list vms", "root");
-                foreach my $l (@{$sshcmd[1]}) {
-                        if ($l =~ m/\_$shortname\"/) {
-                                $l =~ m/{(.*)}/;
-                                notify($ERRORS{'OK'}, 0, "VM $shortname has UUID  $1");
-                                notify($ERRORS{'OK'}, 0, "UUID  $1 - RESUME");
-                                undef @sshcmd;
-                                @sshcmd = run_ssh_command($hostnode, $management_node_keys, "VBoxManage -q controlvm $1 resume", "root");
+		@sshcmd = run_ssh_command($hostnode, $management_node_keys, "VBoxManage -q list vms", "root");
+		foreach my $l (@{$sshcmd[1]}) {
+			if ($l =~ m/\_$shortname\"/) {
+				$l =~ m/{(.*)}/;
+				notify($ERRORS{'OK'}, 0, "VM $shortname has UUID  $1");
+				notify($ERRORS{'OK'}, 0, "UUID  $1 - RESUME");
+				undef @sshcmd;
+				@sshcmd = run_ssh_command($hostnode, $management_node_keys, "VBoxManage -q controlvm $1 resume", "root");
 			}
 		}
 	}
@@ -839,8 +821,6 @@ sub get_image_size {
 	return 0;
 } ## end sub get_image_size
 
-
-
 #/////////////////////////////////////////////////////////////////////////////
 
 =head2 node_status
@@ -854,174 +834,169 @@ sub get_image_size {
 # This is where VBoxManage will need to be called, and the output parsed into useable data, currently always returning RELOAD to force the code into creating a new VM.
 
 sub node_status {
-        my $self = shift;
+	my $self = shift;
 
-        my $vmpath             = 0;
-        my $datastorepath      = 0;
-        my $requestedimagename = 0;
-        my $vmhost_type        = 0;
-        my $log                = 0;
-        my $vmhost_hostname    = 0;
-        my $vmhost_imagename   = 0;
-        my $vmclient_shortname = 0;
-        my $image_os_type      = 0;
-        my $request_forimaging = 0;
-        my $computer_node_name = 0;
-        my $identity_keys      = 0;
-		  my $imagerevision_id 	 = 0;
+	my $vmpath             = 0;
+	my $datastorepath      = 0;
+	my $requestedimagename = 0;
+	my $vmhost_type        = 0;
+	my $log                = 0;
+	my $vmhost_hostname    = 0;
+	my $vmhost_imagename   = 0;
+	my $vmclient_shortname = 0;
+	my $image_os_type      = 0;
+	my $request_forimaging = 0;
+	my $computer_node_name = 0;
+	my $identity_keys      = 0;
+	my $imagerevision_id   = 0;
 
 	# Check if subroutine was called as a class method
-        if (ref($self) !~ /vbox/i) {
-                if (ref($self) eq 'HASH') {
-                        $log = $self->{logfile};
-                        #notify($ERRORS{'DEBUG'}, $log, "self is a hash reference");
+	if (ref($self) !~ /vbox/i) {
+		if (ref($self) eq 'HASH') {
+			$log = $self->{logfile};
+			#notify($ERRORS{'DEBUG'}, $log, "self is a hash reference");
 
-                        $computer_node_name = $self->{computer}->{hostname};
-                        $identity_keys      = $self->{managementnode}->{keys};
-                        $requestedimagename = $self->{imagerevision}->{imagename};
-                        $image_os_type      = $self->{image}->{OS}->{type};
-                        $vmhost_type        = $self->{vmhost}->{vmprofile}->{vmtype}->{name};
-                        $vmhost_imagename   = $self->{vmhost}->{imagename};
-                        $vmpath             = $self->{vmhost}->{vmprofile}->{vmpath};
-                        $datastorepath      = $self->{vmhost}->{vmprofile}->{datastorepath};
-                        $vmhost_hostname    = $self->{vmhost}->{hostname};
+			$computer_node_name = $self->{computer}->{hostname};
+			$identity_keys      = $self->{managementnode}->{keys};
+			$requestedimagename = $self->{imagerevision}->{imagename};
+			$image_os_type      = $self->{image}->{OS}->{type};
+			$vmhost_type        = $self->{vmhost}->{vmprofile}->{vmtype}->{name};
+			$vmhost_imagename   = $self->{vmhost}->{imagename};
+			$vmpath             = $self->{vmhost}->{vmprofile}->{vmpath};
+			$datastorepath      = $self->{vmhost}->{vmprofile}->{datastorepath};
+			$vmhost_hostname    = $self->{vmhost}->{hostname};
 
-                } ## end if (ref($self) eq 'HASH')
-                # Check if node_status returned an array ref
-                elsif (ref($self) eq 'ARRAY') {
-                        notify($ERRORS{'DEBUG'}, $log, "self is a array reference");
-                }
+		} ## end if (ref($self) eq 'HASH')
+		# Check if node_status returned an array ref
+		elsif (ref($self) eq 'ARRAY') {
+			notify($ERRORS{'DEBUG'}, $log, "self is a array reference");
+		}
 
-                $vmclient_shortname = $1 if ($computer_node_name =~ /([-_a-zA-Z0-9]*)(\.?)/);
+		$vmclient_shortname = $1 if ($computer_node_name =~ /([-_a-zA-Z0-9]*)(\.?)/);
 
-        } ## end if (ref($self) !~ /vbox/i)
-        else {
-                # called as an object
-                # Collect local variables from DataStructure
+	} ## end if (ref($self) !~ /vbox/i)
+	else {
+		# called as an object
+		# Collect local variables from DataStructure
 
-                $vmpath             = $self->data->get_vmhost_profile_vmpath;
-                $datastorepath      = $self->data->get_vmhost_profile_datastore_path;
-                $requestedimagename = $self->data->get_image_name;
-                $vmhost_type        = $self->data->get_vmhost_type;
-                $vmhost_hostname    = $self->data->get_vmhost_hostname;
-                $vmhost_imagename   = $self->data->get_vmhost_image_name;
-                $vmclient_shortname = $self->data->get_computer_short_name;
-                $image_os_type      = $self->data->get_image_os_type;
-                $request_forimaging = $self->data->get_request_forimaging();
-                $identity_keys      = $self->data->get_management_node_keys;
-					 $imagerevision_id 	= $self->data->get_imagerevision_id();
-					 
-        } ## end else [ if (ref($self) !~ /vbox/i)
+		$vmpath             = $self->data->get_vmhost_profile_vmpath;
+		$datastorepath      = $self->data->get_vmhost_profile_datastore_path;
+		$requestedimagename = $self->data->get_image_name;
+		$vmhost_type        = $self->data->get_vmhost_type;
+		$vmhost_hostname    = $self->data->get_vmhost_hostname;
+		$vmhost_imagename   = $self->data->get_vmhost_image_name;
+		$vmclient_shortname = $self->data->get_computer_short_name;
+		$image_os_type      = $self->data->get_image_os_type;
+		$request_forimaging = $self->data->get_request_forimaging();
+		$identity_keys      = $self->data->get_management_node_keys;
+		$imagerevision_id 	= $self->data->get_imagerevision_id();
+	} ## end else [ if (ref($self) !~ /vbox/i)
 
-        notify($ERRORS{'DEBUG'}, $log, "identity_keys= $identity_keys");
-        notify($ERRORS{'DEBUG'}, $log, "requestedimagename= $requestedimagename");
-        notify($ERRORS{'DEBUG'}, $log, "image_os_type= $image_os_type");
-        notify($ERRORS{'DEBUG'}, $log, "request_forimaging= $request_forimaging");
-        notify($ERRORS{'DEBUG'}, $log, "vmpath= $vmpath");
-        notify($ERRORS{'DEBUG'}, $log, "datastorepath= $datastorepath");
+	notify($ERRORS{'DEBUG'}, $log, "identity_keys= $identity_keys");
+	notify($ERRORS{'DEBUG'}, $log, "requestedimagename= $requestedimagename");
+	notify($ERRORS{'DEBUG'}, $log, "image_os_type= $image_os_type");
+	notify($ERRORS{'DEBUG'}, $log, "request_forimaging= $request_forimaging");
+	notify($ERRORS{'DEBUG'}, $log, "vmpath= $vmpath");
+	notify($ERRORS{'DEBUG'}, $log, "datastorepath= $datastorepath");
 
-        # Create a hash to store status components
-        my %status;
+	# Create a hash to store status components
+	my %status;
 
-        # Initialize all hash keys here to make sure they're defined
-        $status{status}       = 0;
-        $status{currentimage} = 0;
-        $status{ping}         = 0;
-        $status{ssh}          = 0;
-        $status{vmstate}      = 0;    #on or off
-        $status{image_match}  = 0;
+	# Initialize all hash keys here to make sure they're defined
+	$status{status}       = 0;
+	$status{currentimage} = 0;
+	$status{ping}         = 0;
+	$status{ssh}          = 0;
+	$status{vmstate}      = 0;    #on or off
+	$status{image_match}  = 0;
 
-        if (!$identity_keys) {
-                notify($ERRORS{'CRITICAL'}, $log, "could not set ssh identity variable for image $vmhost_imagename type= $vmhost_type host= $vmhost_hostname");
-        }
+	if (!$identity_keys) {
+		notify($ERRORS{'CRITICAL'}, $log, "could not set ssh identity variable for image $vmhost_imagename type= $vmhost_type host= $vmhost_hostname");
+	}
 
-        # Check if node is pingable
-        notify($ERRORS{'DEBUG'}, $log, "checking if $vmclient_shortname is pingable");
-        if (_pingnode($vmclient_shortname)) {
-                $status{ping} = 1;
-                notify($ERRORS{'OK'}, $log, "$vmclient_shortname is pingable ($status{ping})");
-        }
-        else {
-                notify($ERRORS{'OK'}, $log, "$vmclient_shortname is not pingable ($status{ping})");
-                $status{ping}         = 0;
-        }
+	# Check if node is pingable
+	notify($ERRORS{'DEBUG'}, $log, "checking if $vmclient_shortname is pingable");
+	if (_pingnode($vmclient_shortname)) {
+		$status{ping} = 1;
+		notify($ERRORS{'OK'}, $log, "$vmclient_shortname is pingable ($status{ping})");
+	}
+	else {
+		notify($ERRORS{'OK'}, $log, "$vmclient_shortname is not pingable ($status{ping})");
+		$status{ping}         = 0;
+	}
 
-        my $mybasedirname = $requestedimagename;
-        my $myimagename   = $requestedimagename;
+	my $mybasedirname = $requestedimagename;
+	my $myimagename   = $requestedimagename;
 
-        # #vm running
-        my @sshcmd = run_ssh_command($vmhost_hostname, $identity_keys, "VBoxManage -q showvminfo $requestedimagename\_$vmclient_shortname --machinereadable | grep VMState=", "root");
-        foreach my $l (@{$sshcmd[1]}) {
-                notify($ERRORS{'OK'}, $log, "$l");
-                $status{vmstate} = "on"    if ($l =~ /running/);
-                $status{vmstate} = "off"   if ($l =~ /poweroff/);
-                $status{vmstate} = "stuck" if ($l =~ /paused/);
-                ##if ($l =~ /No such virtual machine/) {
-                ##        #ok wait something is using that hostname
-                ##        #reset $status{image_match} controlVM will detect and remove it
-                ##        $status{image_match} = 0;
-                ##}
-        } ## end foreach my $l (@{$sshcmd[1]})
-        notify($ERRORS{'OK'}, $log, "$vmclient_shortname vmstate reports $status{vmstate}");
+	# #vm running
+	my @sshcmd = run_ssh_command($vmhost_hostname, $identity_keys, "VBoxManage -q showvminfo $requestedimagename\_$vmclient_shortname --machinereadable | grep VMState=", "root");
+	foreach my $l (@{$sshcmd[1]}) {
+		notify($ERRORS{'OK'}, $log, "$l");
+		$status{vmstate} = "on"    if ($l =~ /running/);
+		$status{vmstate} = "off"   if ($l =~ /poweroff/);
+		$status{vmstate} = "stuck" if ($l =~ /paused/);
+		##if ($l =~ /No such virtual machine/) {
+		##        #ok wait something is using that hostname
+		##        #reset $status{image_match} controlVM will detect and remove it
+		##        $status{image_match} = 0;
+		##}
+	} ## end foreach my $l (@{$sshcmd[1]})
+	notify($ERRORS{'OK'}, $log, "$vmclient_shortname vmstate reports $status{vmstate}");
 
-			# Check if $self->os is defined, it may not be if xCAT.pm object is created from a monitoring script
-			my $os = $self->os(0);
-			if (!$os) {
-				my $data = $self->create_datastructure_object({computer_identifier => $computer_node_name, image_identifier => $requestedimagename});
-				if (!$data) {
-					notify($ERRORS{'WARNING'}, 0, "unable to determine status of $computer_node_name, \$self->os is not defined, failed to create DataStructure object for image set as image: '$requestedimagename'");
-					return;
-			   }
-			 
-		   	# Set the data, create_os_object copies the data from the calling object to the new OS object
-		   	$self->set_data($data);
-	
-       		my $image_os_module_perl_package = $data->get_image_os_module_perl_package();
-		 		$os = $self->create_os_object($image_os_module_perl_package);
-		 		if (!$os) {
-		    		notify($ERRORS{'WARNING'}, 0, "unable to determine status of $computer_node_name, failed to create OS object for image set as imagename: 'requestedimagename'");
-		    		return;
-		 		}
-		 	}
+	# Check if $self->os is defined, it may not be if xCAT.pm object is created from a monitoring script
+	my $os = $self->os(0);
+	if (!$os) {
+		my $data = $self->create_datastructure_object({computer_identifier => $computer_node_name, image_identifier => $requestedimagename});
+		if (!$data) {
+			notify($ERRORS{'WARNING'}, 0, "unable to determine status of $computer_node_name, \$self->os is not defined, failed to create DataStructure object for image set as image: '$requestedimagename'");
+			return;
+		}
+		
+		# Set the data, create_os_object copies the data from the calling object to the new OS object
+		$self->set_data($data);
+		
+		my $image_os_module_perl_package = $data->get_image_os_module_perl_package();
+		$os = $self->create_os_object($image_os_module_perl_package);
+		if (!$os) {
+			notify($ERRORS{'WARNING'}, 0, "unable to determine status of $computer_node_name, failed to create OS object for image set as imagename: 'requestedimagename'");
+			return;
+		}
+	}
 
-			# Check if the node is responding to SSH
-			my $ssh_responding = $os->is_ssh_responding();
-		   if ($ssh_responding) {
-
-                $status{ssh} = 1;
-
-					 $status{currentimage} = $self->os->get_current_image_info("current_image_name");
-					 $status{currentimagerevisionid} = $self->os->get_current_image_info();
-
-                if ($status{currentimagerevisionid}) {
-                        chomp($status{currentimagerevisionid});
-                        if ($status{currentimagerevisionid} eq $imagerevision_id) {
-                                $status{image_match} = 1;
-                                notify($ERRORS{'OK'}, $log, "$vmclient_shortname is loaded with requestedimagename imagerevision_id=$imagerevision_id $requestedimagename");
-                        }
-                        else {
-                                notify($ERRORS{'OK'}, $log, "$vmclient_shortname reports current image is currentimage= $status{currentimage} requestedimagename= $requestedimagename");
-                        }
-                } ## end if ($status{currentimage})
-        } ## end if ($sshd eq "on")
+	# Check if the node is responding to SSH
+	my $ssh_responding = $os->is_ssh_responding();
+	if ($ssh_responding) {
+		$status{ssh} = 1;
+		$status{currentimage} = $self->os->get_current_image_info("current_image_name");
+		$status{currentimagerevisionid} = $self->os->get_current_image_info();
+		if ($status{currentimagerevisionid}) {
+			chomp($status{currentimagerevisionid});
+			if ($status{currentimagerevisionid} eq $imagerevision_id) {
+				$status{image_match} = 1;
+				notify($ERRORS{'OK'}, $log, "$vmclient_shortname is loaded with requestedimagename imagerevision_id=$imagerevision_id $requestedimagename");
+			}
+			else {
+				notify($ERRORS{'OK'}, $log, "$vmclient_shortname reports current image is currentimage= $status{currentimage} requestedimagename= $requestedimagename");
+			}
+		} ## end if ($status{currentimage})
+	} ## end if ($sshd eq "on")
 
 
-        # Determine the overall machine status based on the individual status results
-        if ($status{ssh} && $status{image_match}) {
-                $status{status} = 'READY';
-        }
-        else {
-                $status{status} = 'RELOAD';
-        }
+	# Determine the overall machine status based on the individual status results
+	if ($status{ssh} && $status{image_match}) {
+		$status{status} = 'READY';
+	}
+	else {
+		$status{status} = 'RELOAD';
+	}
 
-        if ($request_forimaging) {
-                $status{status} = 'RELOAD';
-                notify($ERRORS{'OK'}, $log, "forimaging flag enabled RELOAD machine");
-        }
+	if ($request_forimaging) {
+		$status{status} = 'RELOAD';
+		notify($ERRORS{'OK'}, $log, "forimaging flag enabled RELOAD machine");
+	}
 
-        notify($ERRORS{'OK'}, $log, "returning node status hash reference (\$node_status->{status}=$status{status})");
-        return \%status;
-
+	notify($ERRORS{'OK'}, $log, "returning node status hash reference (\$node_status->{status}=$status{status})");
+	return \%status;
 } ## end sub node_status
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -1031,8 +1006,8 @@ sub node_status {
  Parameters  : imagename
  Returns     : 0 or 1
  Description : scans  our image local image library for requested image
-					returns 1 if found or 0 if not
-					attempts to scp image files from peer management nodes
+               returns 1 if found or 0 if not
+               attempts to scp image files from peer management nodes
 
 =cut
 
@@ -1064,7 +1039,7 @@ sub does_image_exist {
 	# Run du to get the size of the image files if the image exists
 	my $du_command = "du -c $image_repository_path\/*$image_name* 2>&1 | grep total 2>&1";
 	my ($du_exit_status, $du_output) = run_command($du_command);
-        notify($ERRORS{'OK'}, 0, "$du_command");
+	notify($ERRORS{'OK'}, 0, "$du_command");
 	
 	# If the partner doesn't have the image, a "no such file" error should be displayed
 	my $image_files_exist;
@@ -1092,9 +1067,8 @@ sub does_image_exist {
 		notify($ERRORS{'DEBUG'}, 0, "image does NOT exist: $image_name");
 		return 0;
 	}
-
 } ## end sub does_image_exist
-	
+
 #/////////////////////////////////////////////////////////////////////////////
 
 =head2 retrieve_image
@@ -1271,10 +1245,10 @@ sub _get_image_repository_path {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 put_node_in_maintenance
+=head2 post_maintenance_action
 
  Parameters  : none, must be called as an object method
- Returns     :  1,0
+ Returns     : boolean
  Description : preforms any actions on node before putting in maintenance state
 
 =cut
@@ -1303,12 +1277,12 @@ sub post_maintenance_action {
 	}
 
 	if (switch_vmhost_id($computer_id, 'NULL')) {
-                notify($ERRORS{'OK'}, 0, "set vmhostid to NULL for for VM $computer_short_name");
-        }
-        else {
-                notify($ERRORS{'WARNING'}, 0, "failed to set the vmhostid to NULL for VM $computer_short_name");
-                return;
-        }
+		notify($ERRORS{'OK'}, 0, "set vmhostid to NULL for for VM $computer_short_name");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to set the vmhostid to NULL for VM $computer_short_name");
+		return;
+	}
 
 	return 1;
 
@@ -1332,23 +1306,23 @@ sub power_on {
 	}
 	
 	## Get necessary data
-        my $shortname  = $self->data->get_computer_short_name;
-        my $vmhost_hostname    = $self->data->get_vmhost_hostname();
-        my $vmhost_fullhostname = $self->data->get_vmhost_hostname;
-        my $hostnode = $1 if ($vmhost_fullhostname =~ /([-_a-zA-Z0-9]*)(\.?)/);
-        my $management_node_keys = $self->data->get_management_node_keys();
-        my @sshcmd;
-        undef @sshcmd;
-        @sshcmd = run_ssh_command($hostnode, $management_node_keys, "VBoxManage -q list vms", "root");
-        foreach my $l (@{$sshcmd[1]}) {
-                if ($l =~ m/\_$shortname\"/) {
-                        $l =~ m/{(.*)}/;
-                        notify($ERRORS{'OK'}, 0, "VM $shortname has UUID  $1");
-                        notify($ERRORS{'OK'}, 0, "UUID  $1 - POWERON");
-                        undef @sshcmd;
-                        @sshcmd = run_ssh_command($hostnode, $management_node_keys, "VBoxManage -q  startvm $1 --type headless", "root");
-                }
-        }
+	my $shortname  = $self->data->get_computer_short_name;
+	my $vmhost_hostname    = $self->data->get_vmhost_hostname();
+	my $vmhost_fullhostname = $self->data->get_vmhost_hostname;
+	my $hostnode = $1 if ($vmhost_fullhostname =~ /([-_a-zA-Z0-9]*)(\.?)/);
+	my $management_node_keys = $self->data->get_management_node_keys();
+	my @sshcmd;
+	undef @sshcmd;
+	@sshcmd = run_ssh_command($hostnode, $management_node_keys, "VBoxManage -q list vms", "root");
+	foreach my $l (@{$sshcmd[1]}) {
+		if ($l =~ m/\_$shortname\"/) {
+			$l =~ m/{(.*)}/;
+			notify($ERRORS{'OK'}, 0, "VM $shortname has UUID  $1");
+			notify($ERRORS{'OK'}, 0, "UUID  $1 - POWERON");
+			undef @sshcmd;
+			@sshcmd = run_ssh_command($hostnode, $management_node_keys, "VBoxManage -q  startvm $1 --type headless", "root");
+		}
+	}
 	
 	return 1;
 }
@@ -1371,23 +1345,23 @@ sub power_off {
 	}
 	
 	## Get necessary data
-        my $shortname  = $self->data->get_computer_short_name;
+	my $shortname  = $self->data->get_computer_short_name;
 	my $vmhost_hostname    = $self->data->get_vmhost_hostname();
-        my $vmhost_fullhostname = $self->data->get_vmhost_hostname;
-        my $hostnode = $1 if ($vmhost_fullhostname =~ /([-_a-zA-Z0-9]*)(\.?)/);
-        my $management_node_keys = $self->data->get_management_node_keys();
-        my @sshcmd;
-        undef @sshcmd;
-        @sshcmd = run_ssh_command($hostnode, $management_node_keys, "VBoxManage -q list vms", "root");
-        foreach my $l (@{$sshcmd[1]}) {
-       		if ($l =~ m/\_$shortname\"/) {
-                	$l =~ m/{(.*)}/;
-                        notify($ERRORS{'OK'}, 0, "VM $shortname has UUID  $1");
-                        notify($ERRORS{'OK'}, 0, "UUID  $1 - POWEROFF");
-                        undef @sshcmd;
-                        @sshcmd = run_ssh_command($hostnode, $management_node_keys, "VBoxManage -q controlvm $1 poweroff", "root");
-                }
-        }
+	my $vmhost_fullhostname = $self->data->get_vmhost_hostname;
+	my $hostnode = $1 if ($vmhost_fullhostname =~ /([-_a-zA-Z0-9]*)(\.?)/);
+	my $management_node_keys = $self->data->get_management_node_keys();
+	my @sshcmd;
+	undef @sshcmd;
+	@sshcmd = run_ssh_command($hostnode, $management_node_keys, "VBoxManage -q list vms", "root");
+	foreach my $l (@{$sshcmd[1]}) {
+		if ($l =~ m/\_$shortname\"/) {
+			$l =~ m/{(.*)}/;
+			notify($ERRORS{'OK'}, 0, "VM $shortname has UUID  $1");
+			notify($ERRORS{'OK'}, 0, "UUID  $1 - POWEROFF");
+			undef @sshcmd;
+			@sshcmd = run_ssh_command($hostnode, $management_node_keys, "VBoxManage -q controlvm $1 poweroff", "root");
+		}
+	}
 	
 	return 1;
 }
@@ -1411,25 +1385,25 @@ sub power_reset {
 	
 	## Get necessary data
 	my $shortname  = $self->data->get_computer_short_name;
-        my $vmhost_hostname    = $self->data->get_vmhost_hostname();
-        my $vmhost_fullhostname = $self->data->get_vmhost_hostname;
-        my $hostnode = $1 if ($vmhost_fullhostname =~ /([-_a-zA-Z0-9]*)(\.?)/);
-        my $management_node_keys = $self->data->get_management_node_keys();
-        my @sshcmd;
-        undef @sshcmd;
-        @sshcmd = run_ssh_command($hostnode, $management_node_keys, "VBoxManage -q list vms", "root");
-        foreach my $l (@{$sshcmd[1]}) {
-                if ($l =~ m/\_$shortname\"/) {
-                        $l =~ m/{(.*)}/;
-                        notify($ERRORS{'OK'}, 0, "VM $shortname has UUID  $1");
-                        notify($ERRORS{'OK'}, 0, "UUID  $1 - RESET");
-                        undef @sshcmd;
-                        @sshcmd = run_ssh_command($hostnode, $management_node_keys, "VBoxManage -q controlvm $1 reset", "root");
-                }
-        }
-        
+	my $vmhost_hostname    = $self->data->get_vmhost_hostname();
+	my $vmhost_fullhostname = $self->data->get_vmhost_hostname;
+	my $hostnode = $1 if ($vmhost_fullhostname =~ /([-_a-zA-Z0-9]*)(\.?)/);
+	my $management_node_keys = $self->data->get_management_node_keys();
+	my @sshcmd;
+	undef @sshcmd;
+	@sshcmd = run_ssh_command($hostnode, $management_node_keys, "VBoxManage -q list vms", "root");
+	foreach my $l (@{$sshcmd[1]}) {
+		if ($l =~ m/\_$shortname\"/) {
+			$l =~ m/{(.*)}/;
+			notify($ERRORS{'OK'}, 0, "VM $shortname has UUID  $1");
+			notify($ERRORS{'OK'}, 0, "UUID  $1 - RESET");
+			undef @sshcmd;
+			@sshcmd = run_ssh_command($hostnode, $management_node_keys, "VBoxManage -q controlvm $1 reset", "root");
+		}
+	}
+	
 
-        return 1;
+	return 1;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -1451,34 +1425,34 @@ sub power_status {
 		return;	
 	}
 	## Get necessary data
-        my $shortname  = $self->data->get_computer_short_name;
-        my $vmhost_hostname    = $self->data->get_vmhost_hostname();
-        my $vmhost_fullhostname = $self->data->get_vmhost_hostname;
-        my $hostnode = $1 if ($vmhost_fullhostname =~ /([-_a-zA-Z0-9]*)(\.?)/);
-        my $management_node_keys = $self->data->get_management_node_keys();
-        my @sshcmd;
-        my $vm_uuid;
-        my $vm_status = "UNKNOWN";
-        undef @sshcmd;
-        @sshcmd = run_ssh_command($hostnode, $management_node_keys, "VBoxManage -q list vms", "root");
-        foreach my $l (@{$sshcmd[1]}) {
-                if ($l =~ m/\_$shortname\"/) {
-                        $l =~ m/{(.*)}/;
-                        notify($ERRORS{'OK'}, 0, "VM $shortname has UUID  $1");
-                        $vm_uuid = $1;
-                }
-        }
+	my $shortname  = $self->data->get_computer_short_name;
+	my $vmhost_hostname    = $self->data->get_vmhost_hostname();
+	my $vmhost_fullhostname = $self->data->get_vmhost_hostname;
+	my $hostnode = $1 if ($vmhost_fullhostname =~ /([-_a-zA-Z0-9]*)(\.?)/);
+	my $management_node_keys = $self->data->get_management_node_keys();
+	my @sshcmd;
+	my $vm_uuid;
+	my $vm_status = "UNKNOWN";
+	undef @sshcmd;
+	@sshcmd = run_ssh_command($hostnode, $management_node_keys, "VBoxManage -q list vms", "root");
+	foreach my $l (@{$sshcmd[1]}) {
+		if ($l =~ m/\_$shortname\"/) {
+			$l =~ m/{(.*)}/;
+			notify($ERRORS{'OK'}, 0, "VM $shortname has UUID  $1");
+			$vm_uuid = $1;
+		}
+	}
 
 	undef @sshcmd;
 	@sshcmd = run_ssh_command($vmhost_hostname, $management_node_keys, "VBoxManage -q showvminfo $vm_uuid --machinereadable | grep VMState=", "root");
-        foreach my $l (@{$sshcmd[1]}) {
-                $vm_status = "on"    if ($l =~ /running/);
-                $vm_status = "off"   if ($l =~ /poweroff/);
-                $vm_status = "stuck" if ($l =~ /paused/);
-        } ## end foreach my $l (@{$sshcmd[1]})
-        notify($ERRORS{'OK'}, 0, "$shortname vmstate reports $vm_status");
+	foreach my $l (@{$sshcmd[1]}) {
+		$vm_status = "on"    if ($l =~ /running/);
+		$vm_status = "off"   if ($l =~ /poweroff/);
+		$vm_status = "stuck" if ($l =~ /paused/);
+	} ## end foreach my $l (@{$sshcmd[1]})
+	notify($ERRORS{'OK'}, 0, "$shortname vmstate reports $vm_status");
 	
-        return $vm_status;
+	return $vm_status;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
