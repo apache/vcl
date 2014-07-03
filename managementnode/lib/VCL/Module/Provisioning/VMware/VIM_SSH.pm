@@ -176,6 +176,8 @@ sub _run_vim_cmd {
 	my $attempt_limit = 5;
 	my $wait_seconds = 2;
 	
+	my $connection_reset_errors = 0;
+	
 	while ($attempt++ < $attempt_limit) {
 		if ($attempt > 1) {
 			# Wait before making next attempt
@@ -203,6 +205,17 @@ sub _run_vim_cmd {
 		elsif (grep(/already been deleted/i, @$output)) {
 			notify($ERRORS{'OK'}, 0, "attempt $attempt/$attempt_limit: fault occurred attempting to run command on VM host $vmhost_computer_name: $command, output:\n" . join("\n", @$output));
 		}
+		elsif (grep(/(connection reset)/i, @$output)) {
+			# Try to catch these errors:
+			# Failed to login: Connection reset by peer
+			$connection_reset_errors++;
+			notify($ERRORS{'OK'}, 0, "attempt $attempt/$attempt_limit: connection reset while attempting to run command on VM host $vmhost_computer_name: $command, output:\n" . join("\n", @$output));
+			
+			# If 3 connection reset errors occured, attempt to run services.sh restart
+			if ($connection_reset_errors == 3) {
+				$self->_services_restart();
+			}
+		}
 		else {
 			# VIM command command was executed
 			if ($attempt > 1) {
@@ -217,6 +230,39 @@ sub _run_vim_cmd {
 	
 	notify($ERRORS{'WARNING'}, 0, "failed to run VIM command on VM host $vmhost_computer_name: '$command', made $attempt_limit attempts");
 	return;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 _services_restart
+
+ Parameters  : none
+ Returns     : boolean
+ Description : Calls 'services.sh restart' on the VM host. This may resolve
+               problems where the host is not responding due to a problem with
+               one or more services. This should rarely be called.
+
+=cut
+
+sub _services_restart {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $vmhost_computer_name = $self->vmhost_os->data->get_computer_short_name();
+	
+	my $command = "services.sh restart";
+	my ($exit_status, $output) = $self->vmhost_os->execute($command);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to run command on VM host $vmhost_computer_name: $command");
+		return;
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "executed command to restart VMware services on $vmhost_computer_name, command: '$command', output:\n" . join("\n", @$output));
+	}
+	return 1;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
