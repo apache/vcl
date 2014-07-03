@@ -213,6 +213,7 @@ sub _run_vim_cmd {
 			
 			# If 3 connection reset errors occured, attempt to run services.sh restart
 			if ($connection_reset_errors == 3) {
+				notify($ERRORS{'CRITICAL'}, 0, "calling 'services.sh restart', encountered $connection_reset_errors connection reset on VM host $vmhost_computer_name, output:\n" . join("\n", @$output));
 				$self->_services_restart();
 			}
 		}
