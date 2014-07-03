@@ -205,9 +205,10 @@ sub _run_vim_cmd {
 		elsif (grep(/already been deleted/i, @$output)) {
 			notify($ERRORS{'OK'}, 0, "attempt $attempt/$attempt_limit: fault occurred attempting to run command on VM host $vmhost_computer_name: $command, output:\n" . join("\n", @$output));
 		}
-		elsif (grep(/(connection reset)/i, @$output)) {
+		elsif (grep(/(Failed to login|connection reset|SSL Exception)/i, @$output)) {
 			# Try to catch these errors:
 			# Failed to login: Connection reset by peer
+			# Failed to login: SSL Exception: The SSL handshake timed out local: 127.0.0.1:52713 peer: 127.0.0.1:443.
 			$connection_reset_errors++;
 			notify($ERRORS{'OK'}, 0, "attempt $attempt/$attempt_limit: connection reset while attempting to run command on VM host $vmhost_computer_name: $command, output:\n" . join("\n", @$output));
 			
