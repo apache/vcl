@@ -213,7 +213,7 @@ sub main () {
 			$ENV{state} = $request_state_name;
 			
 			# Make sure the request state is valid
-			if ($request_state_name !~ /inuse|reserved|deleted|timeout|reclaim|reload|new|tomaintenance|image|imageprep|makeproduction|imageinuse|complete|failed|pending|maintenance|tovmhostinuse|rebootsoft|reboothard|reinstall|servermodified|test/) {
+			if ($request_state_name !~ /inuse|reserved|deleted|timeout|reclaim|reload|new|tomaintenance|image|imageprep|makeproduction|imageinuse|complete|failed|pending|maintenance|tovmhostinuse|rebootsoft|reboothard|reinstall|servermodified|checkpoint|test/) {
 				notify($ERRORS{'WARNING'}, $LOGFILE, "assigned request in unsupported state: $request_state_name");
 				next REQUEST;
 			}
@@ -279,7 +279,7 @@ sub main () {
 				my $being_processed = reservation_being_processed($reservation_id);
 				if ($being_processed) {
 					# It's OK for if a process is already running for some user-initated state changes
-					if ($request_state_name =~ /^(deleted|makeproduction|image|reinstall|rebootsoft|reboothard|servermodified)$/) {
+					if ($request_state_name =~ /^(deleted|makeproduction|image|reinstall|rebootsoft|reboothard|servermodified|checkpoint)$/) {
 						notify($ERRORS{'DEBUG'}, $LOGFILE, "$request_state_name processing delayed, reservation $reservation_id is currently being processed");
 						next RESERVATION;
 					}
@@ -500,13 +500,19 @@ sub make_new_child {
 		notify($ERRORS{'DEBUG'}, $LOGFILE, "request will be processed by inuse.pm");
 		$state_module = "VCL::inuse";
 	}
-
+	
 	# The tomaintenance state is handled by new.pm
 	if ($state =~ /^(tomaintenance|imageprep|reload|reinstall|tovmhostinuse)$/) {
 		notify($ERRORS{'DEBUG'}, $LOGFILE, "request will be processed by new.pm");
 		$state_module = "VCL::new";
 	}
-
+	
+	# The checkpoint state is handled by image.pm
+	if ($state =~ /^(image|checkpoint)$/) {
+		notify($ERRORS{'DEBUG'}, $LOGFILE, "request will be processed by image.pm");
+		$state_module = "VCL::image";
+	}
+	
 	# Build a signal set using POSIX::SigSet->new, contains only the SIGINT signal
 	my $sigset = POSIX::SigSet->new(SIGINT);
 	
