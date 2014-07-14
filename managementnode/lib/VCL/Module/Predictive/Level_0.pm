@@ -172,10 +172,6 @@ sub get_next_image {
 	AND computer.id = $computer_id
 	";
 
-	#Clear next_imageid
-	if(!clear_next_image_id($computer_id)){
-	   notify($ERRORS{'WARNING'}, 0, "$notify_prefix failed to clear next_image_id for computerid $computer_id");
-	}
 
 	# Call the database select subroutine
 	# This will return an array of one or more rows based on the select statement
@@ -192,6 +188,10 @@ sub get_next_image {
 	}
 	notify($ERRORS{'OK'}, 0, "$notify_prefix returning nextimage image=$next_selected_rows[0]{imagename} imageid=$next_selected_rows[0]{imageid}");
 	push(@ret_array, $next_selected_rows[0]{imagename}, $next_selected_rows[0]{imageid}, $next_selected_rows[0]{imagerevisionid});
+	#Clear next_imageid
+	if(!clear_next_image_id($computer_id)){
+	   notify($ERRORS{'WARNING'}, 0, "$notify_prefix failed to clear next_image_id for computerid $computer_id");
+	}
 	return @ret_array;
 
 } ## end sub get_next_image_revision
