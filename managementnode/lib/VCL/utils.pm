@@ -5809,11 +5809,13 @@ sub clear_next_image_id {
 
 	my $update_statement = "
 	UPDATE
-	computer
+	computer,
+	image
 	SET
-	nextimageid = '0'
+	computer.nextimageid = image.id
 	WHERE
-	id = $computer_id
+	image.name LIKE 'noimage'
+	AND computer.id = $computer_id
 	";
 
 	if (database_execute($update_statement)) {
