@@ -142,6 +142,20 @@ our %VM_OS_CONFIGURATION = (
 		"scsi-virtualDev" => "lsiLogic",
 		"memsize" => 2048,
 		"cpu_socket_limit" => 2,
+	},
+	"win8-x86" => {
+		"guestOS" => "windows8",
+		"ethernet-virtualDev" => "e1000",
+		"scsi-virtualDev" => "lsiLogic",
+		"memsize" => 1024,
+		"cpu_socket_limit" => 2,
+	}, 
+	"win8-x86_64" => {
+		"guestOS" => "windows8-64",
+		"ethernet-virtualDev" => "e1000",
+		"scsi-virtualDev" => "lsiLogic",
+		"memsize" => 2048,
+		"cpu_socket_limit" => 2,
 	}, 
 	"win2003-x86" => {
 		"guestOS" => "winNetEnterprise",
@@ -166,6 +180,12 @@ our %VM_OS_CONFIGURATION = (
 		"guestOS" => "winServer2008Enterprise-64",
 		"ethernet-virtualDev" => "e1000",
 		"scsi-virtualDev" => "lsiLogic",
+		"cpu_socket_limit" => 64,
+	},
+	"win2012-x86_64" => {
+		"guestOS" => "windows8srv-64",
+		"ethernet-virtualDev" => "e1000e",
+		"scsi-virtualDev" => "lsisas1068",
 		"cpu_socket_limit" => 64,
 	},
 	# Default Windows configuration if Windows version isn't found above:
