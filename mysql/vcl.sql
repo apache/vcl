@@ -1533,7 +1533,8 @@ INSERT INTO `module` (`id`, `name`, `prettyname`, `description`, `perlpackage`) 
 (24, 'provisioning_vbox', 'Virtual Box Provisioning Module', '', 'VCL::Module::Provisioning::vbox'),
 (25, 'os_esxi', 'VMware ESXi OS Module', '', 'VCL::Module::OS::Linux::ESXi'),
 (26, 'os_osx', 'OSX OS Module', '', 'VCL::Module::OS::OSX'),
-(27, 'provisioning_libvirt', 'Libvirt Provisioning Module', '', 'VCL::Module::Provisioning::libvirt');
+(27, 'provisioning_libvirt', 'Libvirt Provisioning Module', '', 'VCL::Module::Provisioning::libvirt'),
+(28, 'os_linux_managementnode', 'Management Node Linux OS Module', '', 'VCL::Module::OS::Linux::ManagementNode');
 
 -- 
 -- Dumping data for table `OS`
