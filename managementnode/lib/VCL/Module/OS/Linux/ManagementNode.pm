@@ -170,6 +170,114 @@ sub copy_file_to {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 check_private_ip_addresses
+
+ Parameters  : none
+ Returns     : boolean
+ Description : Retrieves private IP information for all computers in the
+               database assigned to the management node and checks if the
+               hostname resolves on the management node. If it resolves to a
+               different address than the value stored in the database, the
+               database is updated.
+
+=cut
+
+sub check_private_ip_addresses {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Get computers assigned to this management node
+	my @management_node_computer_ids = get_management_node_computer_ids();
+	
+	# Get private IP addresses from the database for all computers assigned to this managment node
+	my $database_private_ip_address_info = get_computer_private_ip_address_info(@management_node_computer_ids);
+	
+	my @database_no_resolve;
+	my @database_resolve_match;
+	my @database_resolve_no_match;
+	my @no_database_resolve;
+	my @no_database_no_resolve;
+	
+	for my $hostname (sort keys %$database_private_ip_address_info) {
+		my $database_private_ip_address = $database_private_ip_address_info->{$hostname};
+		my ($hostname) = $hostname =~ /^([^\.]+)/g;
+		
+		# Attempt to detmine the IP address the hostname resolves to via gethostip
+		#my $resolved_ip_address = get_host_ip($hostname) || get_host_ip($hostname);
+		my $resolved_ip_address = hostname_to_ip_address($hostname);
+		
+		if ($database_private_ip_address) {
+			if (!$resolved_ip_address) {
+				push @database_no_resolve, $hostname;
+				#print "private IP address of $hostname set in the database: $database_private_ip_address, hostname does NOT resolve\n";
+				#notify($ERRORS{'DEBUG'}, 0, "private IP address of $hostname set in the database: $database_private_ip_address, hostname does NOT resolve");
+			}
+			elsif ($database_private_ip_address eq $resolved_ip_address) {
+				push @database_resolve_match, $hostname;
+				print "private IP address of $hostname set in database matches IP address hostname resolves to: $database_private_ip_address\n";
+				notify($ERRORS{'DEBUG'}, 0, "private IP address of $hostname set in database matches IP address hostname resolves to: $database_private_ip_address");
+			}
+			else {
+				push @database_resolve_no_match, $hostname;
+				print "private IP address $hostname resolves to ($resolved_ip_address) does NOT match database ($database_private_ip_address)\n";
+				notify($ERRORS{'DEBUG'}, 0, "private IP address $hostname resolves to ($resolved_ip_address) does NOT match database ($database_private_ip_address)");
+				update_computer_private_ip_address($hostname, $resolved_ip_address);
+			}
+		}
+		else {
+			# Private IP address is not set in the database
+			if ($resolved_ip_address) {
+				push @no_database_resolve, $hostname;
+				print "private IP address of $hostname NOT set in database, hostname resolves to $resolved_ip_address\n";
+				notify($ERRORS{'DEBUG'}, 0, "private IP address of $hostname NOT set in database, hostname resolves to $resolved_ip_address");
+				update_computer_private_ip_address($hostname, $resolved_ip_address);
+			}
+			else {
+				push @no_database_no_resolve, $hostname;
+				#print "private IP address of $hostname NOT set in database and hostname does NOT resolve\n";
+				notify($ERRORS{'DEBUG'}, 0, "private IP address of $hostname NOT set in database and hostname does NOT resolve");
+			}
+		}
+	}
+	
+	my $database_no_resolve_count = scalar(@database_no_resolve);
+	my $database_resolve_match_count = scalar(@database_resolve_match);
+	my $database_resolve_no_match_count = scalar(@database_resolve_no_match);
+	my $no_database_resolve_count = scalar(@no_database_resolve);
+	my $no_database_no_resolve_count = scalar(@no_database_no_resolve);
+	
+	notify($ERRORS{'DEBUG'}, 0, "private IP address results:\n" .
+		"database set, hostname does not resolve: $database_no_resolve_count\n" .
+		"database set, hostname resolves to matching address: $database_resolve_match_count\n" .
+		"database set, hostname resolves to different address: $database_resolve_no_match_count (" . join(', ', @database_resolve_no_match) . ")\n" .
+		"database not set, hostname resolves: $no_database_resolve_count (" . join(', ', @no_database_resolve) . ")\n" .
+		"database not set, hostname does not resolve: $no_database_no_resolve_count (" . join(', ', @no_database_no_resolve) . ")"
+	);
+	
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 setup_get_menu
+
+ Parameters  : none
+ Returns     : hash reference
+ Description : Assembles the MN-related 'vcld -setup' menu items.
+
+=cut
+
+sub setup_get_menu {
+	return {
+		'Management Node Operations' => {
+			'Check private IP addresses' => \&check_private_ip_addresses,
+		},
+	};
+}
+
 #/////////////////////////////////////////////////////////////////////////////
 
 1;
