@@ -60,7 +60,7 @@ use Fcntl qw(:DEFAULT :flock);
 use File::Temp qw( tempfile );
 use List::Util qw( max );
 use VCL::utils;
-use JSON qw(from_json to_json);
+use JSON qw(from_json to_json decode_json);
 use LWP::UserAgent;
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -77,7 +77,7 @@ sub initialize {
 	my $self = shift;
 	notify($ERRORS{'DEBUG'}, 0, "OpenStack module initialized");
 	
-	if($self->_set_openstack_user_conf()) {
+	if ($self->_set_os_auth_conf()) {
 		notify($ERRORS{'OK'}, 0, "Success to OpenStack user configuration");
 	}
 	else {
@@ -115,38 +115,25 @@ sub load {
 	insertloadlog($reservation_id, $computer_id, "startload", "$computer_name $image_name");
 
 	# Remove existing VMs which were created for the reservation computer
-	if (!$self->_terminate_instances()) {
-		notify($ERRORS{'WARNING'}, 0, " No instance or failed to remove existing VMs");
+	if (_pingnode($computer_name)) {
+		if (!$self->_terminate_os_instance()) {
+			notify($ERRORS{'WARNING'}, 0, " no instance or failed to remove existing VMs");
+			return;
+		}
 	}
 
 	# Create new instance 
-	if (!$self->_run_instances()) {
-		notify($ERRORS{'WARNING'}, 0, "failed to create VMs for computer $computer_name on VM host: $vmhost_name");
-		return;
-	}
-	my $instance_id = $self->_get_instance_id();
-	if (!$instance_id) {
-		notify($ERRORS{'WARNING'}, 0, "failed to get the instance id for $computer_name");
+	my $os_instance_id = $self->_post_os_run_instance();
+	if (!defined($os_instance_id)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to create an instance for computer $computer_name on VM host: $vmhost_name");
 		return;
 	}
 
-	# Update the private ip of the instance in /etc/hosts file
-	if ($self->_update_private_ip($instance_id)) 
-	{
-		notify($ERRORS{'OK'}, 0, "Update the private ip of instance $instance_id is succeeded\n");
-	}
-	else
-	{
-		notify($ERRORS{'CRITICAL'}, 0, "Fail to update private ip of the instance in /etc/hosts");
+	# Update the private ip of the instance in database
+	if (!$self->_update_private_ip($os_instance_id)) {
+		notify($ERRORS{'CRITICAL'}, 0, "failed to update private ip of the instance in database");
 		return;
 	}
-
-
-	# An instance has an ip instantly when it uses FlatNetworkManager
-	# Need to wait for copying images from repository or cache to instance directory
-	# 15G for 3 to 5 minutes (depends on network and systems)
-	#sleep 300;
-	sleep 10;
 
 	# Call post_load 
 	if ($self->os->can("post_load")) {
@@ -161,6 +148,7 @@ sub load {
 	}
 	else {
 		notify($ERRORS{'DEBUG'}, 0, ref($self->os) . "::post_load() has not been implemented");
+		return;
 	}
 
 	return 1;
@@ -171,9 +159,9 @@ sub load {
 
 =head2 capture
 
- Parameters  : $request_data_hash_reference
+ Parameters  : None
  Returns     : 1 if sucessful, 0 if failed
- Description : Creates a new vmware image.
+ Description : capturing a new OpenStack image.
 
 =cut
 
@@ -182,52 +170,58 @@ sub capture {
 
 	if (ref($self) !~ /openstack/i) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return 0;
+		return;
 	}
 
 	my $reservation_id = $self->data->get_reservation_id() || return;
+	my $current_imagerevision_id = $self->os->get_current_image_info();
 	my $computer_id = $self->data->get_computer_id() || return;
 	my $image_name = $self->data->get_image_name() || return;
 	my $computer_name = $self->data->get_computer_short_name() || return;
-	my $instance_id;
 	insertloadlog($reservation_id, $computer_id, "startcapture", "$computer_name $image_name");
 	
-	if (_pingnode($computer_name))
-	{
-		$instance_id = $self->_get_instance_id();
-		notify($ERRORS{'OK'}, 0, "instance id: $instance_id is done");
-		if (!$instance_id)
-		{
-			notify($ERRORS{'DEBUG'}, 0, "unable to get instance id for $computer_name");
-			return 0;
-		}
+	if (!_pingnode($computer_name)) {
+		notify($ERRORS{'WARNING'}, 0, "unable to ping to $computer_name");
+		return;
 	}
-	else {
-		notify($ERRORS{'DEBUG'}, 0, "unable to ping to $computer_name");
-		return 0;
+
+	my $os_instance_id = $self->_get_os_instance_id();
+	if (!defined($os_instance_id)) {
+		notify($ERRORS{'WARNING'}, 0, "unable to get instance id for $computer_name");
+		return;
+	}
+	notify($ERRORS{'DEBUG'}, 0, "os_instance_id: $os_instance_id");
+
+	my $os_flavor_id = _get_os_flavor_id($current_imagerevision_id);
+	notify($ERRORS{'DEBUG'}, 0, "current imagerevision id is $current_imagerevision_id, flavor_id: $os_flavor_id");
+	if (!defined($os_flavor_id)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to get current openstack flavor id");
+		return;
 	}
 		
-	if ($self->_prepare_capture())
-	{
-		notify($ERRORS{'OK'}, 0, "Prepare_Capture for $computer_name is done");
+	if (!$self->_prepare_capture()) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute prepare_capture");
+		return;
 	}
 	
-	my $new_image_name = $self->_image_create($instance_id);
+	my $os_image_id = $self->_post_os_create_image($os_instance_id);
+	if (!defined($os_image_id)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to create image for $computer_name");
+		return;
+	}
+	notify($ERRORS{'DEBUG'}, 0, "os_image_id: $os_image_id");
 
-	if(defined($new_image_name))
-	{
-		notify($ERRORS{'OK'}, 0, "Create Image for $computer_name is done");
+	if (!$self->_wait_for_copying_image($os_image_id)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute _wait_for_copying_image for $os_image_id");
+		return;
 	}
 
-	if($self->_insert_openstack_image_name($new_image_name))
-	{
-		notify($ERRORS{'OK'}, 0, "Successfully insert image name");
+	# insert image details and flavor details, check status is ACTIVE before insert
+	if (!$self->_insert_os_image_id($os_image_id, $os_flavor_id)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to insert openstack image id");
+		return;
 	}
-
-	if($self->_wait_for_copying_image($new_image_name)) 
-	{
-		notify($ERRORS{'OK'}, 0, "Wait for copying $new_image_name is succeeded\n");
-	}
+	notify($ERRORS{'DEBUG'}, 0, "capturing $os_instance_id into $os_image_id is done");
 
 	return 1;
 } ## end sub capture
@@ -238,7 +232,7 @@ sub capture {
 
  Parameters  : $computer_id or $hash->{computer}{id} (optional)
  Returns     : string -- 'READY', 'POST_LOAD', or 'RELOAD'
- Description : Checks the status of a VM. 'READY' is returned if the VM is
+ Description : Checks the status of an openstack VM. 'READY' is returned if the VM is
 	       accessible via SSH, and the OS module's post-load tasks have 
 	       run. 'POST_LOAD' is returned if the VM only needs to have 
 	       the OS module's post-load tasks run before it is ready. 
@@ -275,7 +269,6 @@ sub node_status {
 		if ($computer_id) {
 			notify($ERRORS{'DEBUG'}, 0, "computer ID: $computer_id");
 		}
-
 		else {
 			notify($ERRORS{'WARNING'}, 0, "unable to determine computer ID from argument:\n" . format_data($argument));
 			return;
@@ -315,10 +308,10 @@ sub node_status {
 		}
 	}
 
-	my $reservation_id = $self->data->get_reservation_id();
-	my $computer_name = $self->data->get_computer_node_name();
-	my $image_name = $self->data->get_image_name();
-	my $imagerevision_id = $self->data->get_imagerevision_id();
+	my $reservation_id = $self->data->get_reservation_id() || return;
+	my $computer_name = $self->data->get_computer_node_name() || return;
+	my $image_name = $self->data->get_image_name() || return;
+	my $imagerevision_id = $self->data->get_imagerevision_id() || return;
 
 	notify($ERRORS{'DEBUG'}, 0, "attempting to check the status of computer $computer_name, image: $image_name");
 
@@ -360,23 +353,23 @@ sub node_status {
 		return $status;
 	}
 
-	my $current_image_revision_id = $self->os->get_current_image_info();
-	$status->{currentimagerevision_id} = $current_image_revision_id;
+	my $current_imagerevision_id = $self->os->get_current_image_info();
+	$status->{currentimagerevision_id} = $current_imagerevision_id;
 
 	$status->{currentimage} = $self->data->get_computer_currentimage_name();
 	my $current_image_name = $status->{currentimage};
 	my $vcld_post_load_status = $self->data->get_computer_currentimage_vcld_post_load();
 
-	if (!$current_image_revision_id) {
+	if (!$current_imagerevision_id) {
 		notify($ERRORS{'OK'}, 0, "unable to retrieve image name from currentimage.txt on VM $computer_name, returning 'RELOAD'");
 		return $status;
 	}
-	elsif ($current_image_revision_id eq $imagerevision_id) {
-		notify($ERRORS{'OK'}, 0, "currentimage.txt image $current_image_revision_id ($current_image_name) matches requested imagerevision_id $imagerevision_id  on VM $computer_name");
+	elsif ($current_imagerevision_id eq $imagerevision_id) {
+		notify($ERRORS{'OK'}, 0, "currentimage.txt image $current_imagerevision_id ($current_image_name) matches requested imagerevision_id $imagerevision_id  on VM $computer_name");
 		$status->{image_match} = 1;
 	}
 	else {
-		notify($ERRORS{'OK'}, 0, "currentimage.txt imagerevision_id $current_image_revision_id ($current_image_name) does not match requested imagerevision_id $imagerevision_id on VM $computer_name, returning 'RELOAD'");
+		notify($ERRORS{'OK'}, 0, "currentimage.txt imagerevision_id $current_imagerevision_id ($current_image_name) does not match requested imagerevision_id $imagerevision_id on VM $computer_name, returning 'RELOAD'");
 		return $status;
 	}
 
@@ -403,8 +396,6 @@ sub node_status {
 	return $status;
 } ## end sub node_status
 
-
-
 #/////////////////////////////////////////////////////////////////////////
 
 =head2 does_image_exist
@@ -418,42 +409,51 @@ sub node_status {
 sub does_image_exist {
 	my $self = shift;
 	if (ref($self) !~ /openstack/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "does_image_exist() subroutine was called as a function, it must be called as a class method");
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return 0;
 	}
 
-	my $vcl_image_name = $self->data->get_image_name();
-
-	# Match image name between VCL database and openstack Hbase database
-	my $openstack_image_id = _match_image_name($vcl_image_name);
-	if (!defined($openstack_image_id))
-	{
-		notify($ERRORS{'DEBUG'}, 0, "Fail to acquire the Image ID: $openstack_image_id");
+	my $imagerevision_id = $self->data->get_imagerevision_id() || return 0;
+	my $image_name = $self->data->get_image_name() || return 0;
+	my ($os_token, $os_compute_url) = $self->_get_os_token_compute_url();
+	my $os_project_id = $ENV{'OS_PROJECT_ID'};
+	if (!defined($os_token) || !defined($os_compute_url) || !defined($os_project_id)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to get openstack auth info");
 		return 0;
 	}
-	my ($token, $compute_url) = $self->_get_token_account_info();
+
+	# Get the openstack image id for the corresponding VCL image revision id
+	my $os_image_id = _get_os_image_id($imagerevision_id);
+	if (!defined($os_image_id)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to acquire the openstack image id : $os_image_id");
+		return 0;
+	}
+
 	my $ua = LWP::UserAgent->new();
 	my $resp = $ua->get(
-		$compute_url . "/images/" . $openstack_image_id,
-		x_auth_token => $token,
-		x_auth_project_id => $ENV{'OS_PROJECT_ID'},
+		$os_compute_url . "/images/" . $os_image_id,
+		x_auth_token => $os_token,
+		x_auth_project_id => $os_project_id,
 	);
 
-	if(!$resp->is_success) {
+	if (!$resp->is_success) {
 		notify($ERRORS{'WARNING'}, 0, "failed to execute post token: " . join("\n", $resp->content));
 		return 0;
 	}
 
 	my $output = from_json($resp->content);
-	my $image_status = $output->{image}{status};
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "Fail to parse json ouput: $output");
+		return 0;
+	}
 
+	my $image_status = $output->{image}{status};
 	if (defined($image_status) && $image_status eq 'ACTIVE') {
-		notify($ERRORS{'OK'}, 0, "The openstack image for $vcl_image_name exists");
+		notify($ERRORS{'OK'}, 0, "The openstack image for $image_name exists");
 		return 1;
 	}
-	else
-	{
-		notify($ERRORS{'WARNING'}, 0, "The openstack image for $vcl_image_name does NOT exists");
+	else {
+		notify($ERRORS{'WARNING'}, 0, "The openstack image for $image_name does NOT exists");
 		return 0;
 	}
 
@@ -472,471 +472,593 @@ sub does_image_exist {
 sub get_image_size {
 	my $self = shift;
 	if (ref($self) !~ /openstack/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "get_image_size subroutine was called as a function, it must be called as a class method");
-		return 0;
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
 	}
  
-	notify($ERRORS{'OK'}, 0, "No image size information in Openstack");
-
-	return 0;
-} ## end sub get_image_size
-
-sub _delete_computer_mapping {
-	my $self = shift;
-	my $computer_id = $self->data->get_computer_id();
-
-	my $delete_statement = "
-	DELETE FROM
-	openstackComputerMap
-	WHERE
-	computerid = '$computer_id'
-	";
-
-	notify($ERRORS{'OK'}, 0, "$delete_statement");
-	my $success = database_execute($delete_statement);
-
-	if ($success) {
-		notify($ERRORS{'OK'}, 0, "Successfully deleted computer mapping");
-		return 1;
+	# Attempt to get the image name argument
+	my $image_name = shift;
+	my $imagerevision_id = $self->data->get_imagerevision_id() || return;
+	my ($os_token, $os_compute_url) = $self->_get_os_token_compute_url();
+	my $os_project_id = $ENV{'OS_PROJECT_ID'};
+	if (!defined($os_token) || !defined($os_compute_url) || !defined($os_project_id)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to get openstack auth info");
+		return;
 	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "Unable to delete computer mapping");
-		return 0;
+	my $os_image_id = _get_os_image_id($imagerevision_id);
+	if (!defined($os_image_id)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to acquire the openstack image id : $os_image_id for $image_name");
+		return;
 	}
-}
-
-sub _get_flavor_type {
-	my $openstack_image_name = shift;
-	my $image_disk_size;
-	# Change the glance image path based on your confirguration
-	my $openstack_image_info = "qemu-img info /var/lib/glance/images/$openstack_image_name";
-	my $openstack_image_info_output = qx/$openstack_image_info/;
-	if ($openstack_image_info_output =~ m/virtual size:(\s\d{1,4})G/g)
-	{
-		$image_disk_size = $1;
-		notify($ERRORS{'OK'}, 0, "The disk size for $openstack_image_name  is $image_disk_size G");
-	} else {
-		notify($ERRORS{'WARNING'}, 0, "Unable to find $openstack_image_name in /var/lib/glance/images");
-		return 0;
-	}
-	my @flavor_ids;
-	my @flavor_disk_sizes;
-	my $openstack_flavor_info = "nova flavor-list";
-	my $openstack_flavor_info_output = `$openstack_flavor_info`;
-	my @lines = split /\n/, $openstack_flavor_info_output;
-	foreach my $line (@lines) {
-		if($line =~ m/^\|\s(\d+)\s+\|/g) {
-			push(@flavor_ids, $1);
-		}
-		if($line =~ m/\|\s\d+\s+\|\s(\d{1,4})\s+\|/g) {
-			push(@flavor_disk_sizes, $1);
-		}
-	}
-	notify($ERRORS{'OK'}, 0, "OpenStack flavor IDs: @flavor_ids, disk sizes: @flavor_disk_sizes");
-	my $num_of_ids = @flavor_ids;
-	if (!defined($num_of_ids) || $image_disk_size > $flavor_disk_sizes[$num_of_ids-1]) {
-		notify($ERRORS{'WARNING'}, 0, "No flavor information or disk size is greater than the maximum flavor");
-		return 0;
-	}
-	my $flavor_type;
-	my $index=0;
-	foreach my $x (@flavor_disk_sizes) {
-		if ($x >= $image_disk_size) {
-			$flavor_type = $flavor_ids[$index];
-			last;
-		}
-		$index = $index + 1;
-	}
-	notify($ERRORS{'OK'}, 0, "OpenStack flavor type = $flavor_type");
-	
-	return $flavor_type;
-}
-
-sub _get_instance_id {
-	my $self = shift;
-	my $computer_id = $self->data->get_computer_id();
-
-	my $select_statement = "
-	SELECT
-	instanceid
-	FROM
-	openstackComputerMap
-	WHERE
-	computerid = '$computer_id'
-	";
-
-	notify($ERRORS{'OK'}, 0, "$select_statement");
-	my @selected_rows = database_select($select_statement);
-
-	if (scalar @selected_rows == 0) {
-		notify($ERRORS{'WARNING'}, 0, "Unable to find the instance id");
-		return 0;
-	}
-
-	my $instance_id = $selected_rows[0]{instanceid};
-	notify($ERRORS{'OK'}, 0, "Openstack id for $computer_id is $instance_id");
-
-	return $instance_id;
-}
-
-sub _get_token_account_info {
-	my $self = shift;
 
 	my $ua = LWP::UserAgent->new();
-	my $url = $ENV{'OS_AUTH_URL'};
-	my $auth_data = {
-		auth =>  {
-		tenantName => $ENV{'OS_TENANT_NAME'},
-		passwordCredentials => {
-			username => $ENV{'OS_USERNAME'},
-			password => $ENV{'OS_PASSWORD'},
-		}
-		}
-	};
-	my $resp =  $ua->post(
-		$url . "/tokens",
-		content_type => 'application/json', 
-		content => to_json($auth_data)
+	my $resp = $ua->get(
+		$os_compute_url . "/images/" . $os_image_id,
+		x_auth_token => $os_token,
+		x_auth_project_id => $os_project_id,
 	);
-	notify($ERRORS{'OK'}, 0, "resp->request: " . join("\n", $resp->request));
 
-	if(!$resp->is_success) {
+	if (!$resp->is_success) {
 		notify($ERRORS{'WARNING'}, 0, "failed to execute post token: " . join("\n", $resp->content));
 		return;
 	}
-	
-	my $output = from_json($resp->content);
-	my $token = $output->{access}{token}{id};
 
-	my @serviceCatalog = @{ $output->{access}{serviceCatalog} };
-	@serviceCatalog = grep { $_->{type} eq 'compute' } @serviceCatalog;
-	if(!@serviceCatalog) {
-		notify($ERRORS{'WARNING'}, 0, "failed to get compute serviceCatalog");
+	my $output = from_json($resp->content);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "Fail to parse json ouput: $output");
 		return;
 	}
 
-	my $service_name = $ENV{'OS_SERVICE_NAME'};
-	if ($service_name) {
-		@serviceCatalog = grep { $_->{name} eq $service_name } @serviceCatalog;
-		if(!@serviceCatalog) {
-			notify($ERRORS{'WARNING'}, 0, "failed to get service name: $service_name");
-			return;
-		}
-	}
-	my $serviceCatalog = $serviceCatalog[0];
-	my $compute_url = $serviceCatalog->{endpoints}[0]{publicURL};
-
-	if(!defined($token) || !defined($compute_url)) {
-		notify($ERRORS{'WARNING'}, 0, "Unable to get token or tenant account information");
-		return 0;
-	}
-
-	notify($ERRORS{'OK'}, 0, "compute_url: $compute_url");
-	return ($token, $compute_url);
-}
-
-sub _image_create{
-	my $self = shift;
-	my $instance_id = shift;
-	my $imagerevision_comments = $self->data->get_imagerevision_comments(0);
-	my $image_name     = $self->data->get_image_name();
-	
-	my $image_version;
-	if ($image_name =~ m/(-+)(.+)(-v\d+)/g)
-	{
-		$image_version = $3;
-		notify($ERRORS{'OK'}, 0, "Acquire the Image Version: $image_version");
-	}
-	my $openstack_image_name = $image_name . $imagerevision_comments;
-
-	my $ua = LWP::UserAgent->new();
-	my ($token, $compute_url) = $self->_get_token_account_info();
-	my $server_data = {
-		createImage =>  {
-			name => $openstack_image_name,
-			metadata => {
-				version => $image_version,
-			}
-		}
-	};
-
-	my $res =  $ua->post(
-		$compute_url . "/servers/" . $instance_id . "/action",
-		content_type => 'application/json',
-		x_auth_token => $token,
-		content => to_json($server_data)
-	);
-
-	if(!$res->is_success) {
-		notify($ERRORS{'WARNING'}, 0, "failed to execute capture image: " . join("\n", $res->content));
+	my $os_image_size_bytes = $output->{'image'}{'OS-EXT-IMG-SIZE:size'};
+	if (!defined($os_image_size_bytes)){
+		notify($ERRORS{'WARNING'}, 0, "The openstack image for $image_name does NOT exists");
 		return;
 	}
-	notify($ERRORS{'OK'}, 0, "Capturing an image of $instance_id");
 
-	my $resp =  $ua->get(
-		$compute_url . "/images/detail", 
-		server => $instance_id,
-		content_type => 'application/json',
-		x_auth_project_id => $ENV{'OS_PROJECT_ID'},
-		x_auth_token => $token
-	);
-
-	if(!$resp->is_success) {
-		notify($ERRORS{'WARNING'}, 0, "failed to get image info: " . join("\n", $resp->content));
-		return 0;
-	}
-
-	my $output = from_json($resp->content);
-	my $openstack_image_id = $output->{images}[0]{id};
-	if (!defined($openstack_image_id)) {
-		notify($ERRORS{'OK'}, 0, "No image name for new captured instance of $instance_id");
-		return 0;
-	}
-	else {
-		my $new_image_name = $openstack_image_id . $image_version;
-		notify($ERRORS{'OK'}, 0, "New openstack image name is $new_image_name");
-		return $new_image_name;
-	}
-}
-
-sub _insert_instance_id {
-	my $self = shift;
-	my $instance_id = shift;
-	my $computer_id = $self->data->get_computer_id;
-
-	my $insert_statement = "
-	INSERT INTO
-	openstackComputerMap (
-	instanceid,
-	computerid
-	) VALUES (
-		'$instance_id',
-		'$computer_id'
-	)";
-
-	notify($ERRORS{'OK'}, 0, "$insert_statement");
-	my $success = database_execute($insert_statement);
-
-	if ($success) {
-		notify($ERRORS{'OK'}, 0, "Successfully inserted instance id");
-		return 1;
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "Unable to insert instance id");
-		return 0;
-	}
-}
-
-
-sub _insert_openstack_image_name {
-
-	my $self = shift;
-	my $openstack_image_name = shift;
-	my $image_name     = $self->data->get_image_name();       
-
-	my $insert_statement = "
-	INSERT INTO
-	openstackImageNameMap (
-	  openstackImageNameMap.openstackimagename,
-	  openstackImageNameMap.vclimagename
-	) VALUES (
-	  '$openstack_image_name',
-	  '$image_name')";
-
-	notify($ERRORS{'OK'}, 0, "$insert_statement");
-
-	my $requested_id = database_execute($insert_statement);
-	notify($ERRORS{'OK'}, 0, "SQL Insert is first time or requested_id : $requested_id");
-
-	if (!$requested_id) {
-		notify($ERRORS{'DEBUG'}, 0, "unable to insert image name");
-		return 0;
-	}
-	notify($ERRORS{'OK'}, 0, "Successfully insert image name");
-	return 1;
-}
+	notify($ERRORS{'DEBUG'}, 0, "os_image_size_bytes: $os_image_size_bytes");
+	return round($os_image_size_bytes / 1024 / 1024);
+} ## end sub get_image_size
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 _match_image_name 
+=head2 _get_os_flavor_id
 
- Parameters  : None 
- Returns     : image_name of Openstack 
- Description : match VCL image name with Openstack image name and set the image_name
+ Parameters  : image revision id 
+ Returns     : OpenStack image id or 0
+ Description : match VCL image revision id with OpenStack image id 
 
 =cut
 
-sub _match_image_name {
+sub _get_os_flavor_id {
+	my $imagerevision_id = shift;
+	if (!defined($imagerevision_id)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to get image revision id");
+		return;
+	}
 
-	# Set image name
-	my $vcl_image_name = shift;
+	my $sql_statement = <<EOF;
+SELECT
+flavordetails as flavor
+FROM
+openstackimagerevision 
+WHERE
+imagerevisionid = '$imagerevision_id'
+EOF
 
-	my $select_statement = "
-	SELECT
-	openstackImageNameMap.openstackimagename as openstack_name, 
-	openstackImageNameMap.vclimagename as vcl_name 
-	FROM
-	openstackImageNameMap
-	WHERE
-	openstackImageNameMap.vclimagename = '$vcl_image_name'
-	";
+	#notify($ERRORS{'DEBUG'}, 0, "get_os_flavor_id: $sql_statement");
+	my @selected_rows = database_select($sql_statement);
+	if (scalar @selected_rows == 0 || scalar @selected_rows > 1) {
+		notify($ERRORS{'WARNING'}, 0, "" . scalar @selected_rows . " rows were returned from database select");
+		return;
+	}
+	my $os_flavor_detail  = decode_json($selected_rows[0]{flavor});
+	if (!defined($os_flavor_detail)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to get openstack flavor detail");
+		return;
+	}
+	my $os_flavor_id = $os_flavor_detail->{flavor}{id};
+	if (!defined($os_flavor_id)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to get openstack flavor id");
+		return;
+	}
 
-	notify($ERRORS{'OK'}, 0, "$select_statement");
-	# Call the database select subroutine
-	# This will return an array of one or more rows based on the select statement
-	my @selected_rows = database_select($select_statement);
-	# Check to make sure 1 row was returned
+	notify($ERRORS{'DEBUG'}, 0, "os_flavor_id: $os_flavor_id");
+	return $os_flavor_id;
+} ## end sub _get_os_flavor_id
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 _get_os_image_disk_size
+
+ Parameters  : image revision id 
+ Returns     : OpenStack image id or 0
+ Description : Get the OpenStack image id corresponding to the VCL image revision id  
+
+=cut
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 _get_os_image_id
+
+ Parameters  : image revision id 
+ Returns     : OpenStack image id or 0
+ Description : Get the OpenStack image id corresponding to the VCL image revision id  
+
+=cut
+
+sub _get_os_image_id {
+	my $imagerevision_id = shift;
+	if (!defined($imagerevision_id)) {
+		notify($ERRORS{'DEBUG'}, 0, "failed to get image revision id");
+		return 0;
+	}
+
+	my $sql_statement = <<EOF;
+SELECT
+imagedetails as image
+FROM
+openstackimagerevision 
+WHERE
+imagerevisionid = '$imagerevision_id'
+EOF
+
+	#notify($ERRORS{'DEBUG'}, 0, "get_os_image_id: $sql_statement");
+	my @selected_rows = database_select($sql_statement);
 	if (scalar @selected_rows == 0 || scalar @selected_rows > 1) {
 		notify($ERRORS{'WARNING'}, 0, "" . scalar @selected_rows . " rows were returned from database select");
 		return 0;
 	}
-	my $openstack_image_name = $selected_rows[0]{openstack_name};
-	my $vcl_imagename  = $selected_rows[0]{vcl_name};
-	if ($openstack_image_name  =~ m/(\w{8}-\w{4}-\w{4}-\w{4}-\w{12})-v/g )
-	{
-		$openstack_image_name = $1;
-		notify($ERRORS{'OK'}, 0, "Acquire the Image ID: $openstack_image_name");
-	}
-	else {
-		notify($ERRORS{'DEBUG'}, 0, "Fail to acquire the Image ID: $openstack_image_name");
+	my $os_image_detail = decode_json($selected_rows[0]{image});
+	if (!defined($os_image_detail)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to get openstack image detail");
 		return 0;
 	}
 
-	notify($ERRORS{'OK'}, 0, "The OpenStack image name $openstack_image_name is matched to $vcl_imagename");
+	my $os_image_id = $os_image_detail->{image}{id};
+	if (!defined($os_image_id)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to get openstack image id");
+		return 0;
+	}
 
-	return $openstack_image_name;
+	notify($ERRORS{'DEBUG'}, 0, "openstack image_id: $os_image_id");
+
+	return $os_image_id;
+} ## end sub _get_os_image_id
+
+#/////////////////////////////////////////////////////////////////////////
+
+=head2 _get_os_instance_id
+
+ Parameters  : None
+ Returns     : OpenStack instance id or 0
+ Description : Checks the existence of an OpenStack instance.
+
+=cut
+sub _get_os_instance_id {
+	my $self = shift;
+
+	my $computer_name  = $self->data->get_computer_short_name() || return 0;
+	my ($os_token, $os_compute_url) = $self->_get_os_token_compute_url();
+	my $os_project_id = $ENV{'OS_PROJECT_ID'};
+	if (!defined($os_token) || !defined($os_compute_url) || !defined($os_project_id)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to get the openstack auth info");
+		return 0;
+	}
+
+	my $ua = LWP::UserAgent->new();
+	my $resp =  $ua->get(
+		$os_compute_url . "/servers/detail",
+		name => $computer_name,
+		content_type => 'application/json',
+		x_auth_project_id => $os_project_id,
+		x_auth_token => $os_token,
+	);
+
+	if (!$resp->is_success) {
+		notify($ERRORS{'WARNING'}, 0, "failed to get openstack token: " . join("\n", $resp->content));
+		return 0;
+	}
+	
+	my $output = from_json($resp->content);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to parse json output");
+		return 0;
+	}
+	my $os_instance_id = $output->{servers}[0]{id};
+	if (!defined($os_instance_id)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to get openstack instance id");
+		return 0;
+	}
+	
+	notify($ERRORS{'DEBUG'}, 0, "os_instance_id: $os_instance_id");
+	return $os_instance_id;
 }
 
-sub _prepare_capture {
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 _get_os_token_computer_url
+
+ Parameters  : None 
+ Returns     : Openstack auth (token, compute url) or 0
+ Description : Get the OpenStack auth token and compute url   
+
+=cut
+
+sub _get_os_token_compute_url {
 	my $self = shift;
-	
-	my ($package, $filename, $line, $sub) = caller(0);
-	my $request_data = $self->data->get_request_data;
 
-	if (!$request_data) {
-		notify($ERRORS{'WARNING'}, 0, "unable to retrieve request data hash");
+	my $os_auth_url = $ENV{'OS_AUTH_URL'};
+	my $os_tenant_name = $ENV{'OS_TENANT_NAME'};
+	my $os_user_name = $ENV{'OS_USERNAME'};
+	my $os_user_password = $ENV{'OS_PASSWORD'};
+	my $os_service_name = $ENV{'OS_SERVICE_NAME'};
+	if (!defined($os_auth_url) || !defined($os_tenant_name) 
+		|| !defined($os_user_name) || !defined($os_user_password) || !defined($os_service_name)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to get openstack auth information from environment");
 		return 0;
 	}
 
-	my $request_id     = $self->data->get_request_id;
-	my $reservation_id = $self->data->get_reservation_id;
-	my $management_node_keys     = $self->data->get_management_node_keys();
-
-	my $image_id       = $self->data->get_image_id;
-	my $image_os_name  = $self->data->get_image_os_name;
-	my $image_identity = $self->data->get_image_identity;
-	my $image_os_type  = $self->data->get_image_os_type;
-	my $image_name     = $self->data->get_image_name();
-
-	my $computer_id        = $self->data->get_computer_id;
-	my $computer_name = $self->data->get_computer_short_name;
-	my $computer_nodename  = $computer_name;
-	my $computer_hostname  = $self->data->get_computer_hostname;
-	my $computer_type      = $self->data->get_computer_type;
-
-	if (write_currentimage_txt($self->data)) {
-		notify($ERRORS{'OK'}, 0, "currentimage.txt updated on $computer_name");
-	}
-	else {
-		notify($ERRORS{'DEBUG'}, 0, "unable to update currentimage.txt on $computer_name");
-		return 0;
-	}
-
-	$self->data->set_imagemeta_sysprep(0);
-	notify($ERRORS{'OK'}, 0, "Set the imagemeta Sysprep value to 0");
-
-	if ($self->os->can("pre_capture")) {
-		notify($ERRORS{'OK'}, 0, "calling OS module's pre_capture() subroutine");
-
-		if (!$self->os->pre_capture({end_state => 'on'})) {
-			notify($ERRORS{'DEBUG'}, 0, "OS module pre_capture() failed");
-			return 0;
+	my $os_auth_data = {
+		auth =>  {
+			tenantName => $os_tenant_name,
+			passwordCredentials => {
+				username => $os_user_name,
+				password => $os_user_password,
+			}
 		}
-	}
-	return 1;
-}
+	};
 
-sub _run_instances {
-	my $self = shift;
+	my $ua = LWP::UserAgent->new();
+	my $resp =  $ua->post(
+		$os_auth_url . "/tokens",
+		content_type => 'application/json', 
+		content => to_json($os_auth_data)
+	);
+	if (!$resp->is_success) {
+		notify($ERRORS{'WARNING'}, 0, "failed to get openstack token: " . join("\n", $resp->content));
+		return 0;
+	}
 	
-
-	my $image_full_name = $self->data->get_image_name;
-	my $computer_name  = $self->data->get_computer_short_name;
-
-	my $openstack_image_id = _match_image_name($image_full_name);
-	if (!defined($openstack_image_id))
-	{
-		notify($ERRORS{'DEBUG'}, 0, "Fail to acquire the Image ID: $openstack_image_id");
+	my $output = from_json($resp->content);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to parse json output");
 		return 0;
 	}
 
-	my $flavor_type = _get_flavor_type($openstack_image_id);
-	if(!$flavor_type) {
-		notify($ERRORS{'DEBUG'}, 0, "Fail to acquire openstack flavor type for $openstack_image_id");
+	my $os_token = $output->{access}{token}{id};
+	if (!defined($os_token)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to get token");
 		return 0;
 	}
 
-	my $openstack_key;
-	my $image_os_type  = $self->data->get_image_os_type;
-	if ($image_os_type eq 'linux') {
-		$openstack_key =  $ENV{'VCL_LINUX_KEY'}; 	
-		notify($ERRORS{'OK'}, 0, "VCL Linux key is $openstack_key");
-	} 
-	elsif ($image_os_type eq 'windows') {
-		$openstack_key =  $ENV{'VCL_WINDOWS_KEY'}; 	
-		notify($ERRORS{'OK'}, 0, "VCL Windows key is $openstack_key");
+	my @serviceCatalog = @{ $output->{access}{serviceCatalog} };
+	@serviceCatalog = grep { $_->{type} eq 'compute' } @serviceCatalog;
+	if (!@serviceCatalog) {
+		notify($ERRORS{'WARNING'}, 0, "failed to get compute service catalog");
+		return 0;
 	}
-	else {
-		notify($ERRORS{'OK'}, 0, "No available openstack keys for $image_full_name");
+
+	@serviceCatalog = grep { $_->{name} eq $os_service_name } @serviceCatalog;
+	my $serviceCatalog = $serviceCatalog[0];
+	if (!defined($serviceCatalog)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to get service name: $os_service_name");
+		return 0;
+	}
+
+	my $os_compute_url = $serviceCatalog->{endpoints}[0]{publicURL};
+	if (!defined($os_compute_url)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to get compute server url");
+		return 0;
+	}
+
+	#notify($ERRORS{'DEBUG'}, 0, "token: $os_token, compute_url: $os_compute_url");
+	return ($os_token, $os_compute_url);
+} ## end sub get_os_token_compute_url
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 _insert_os_image_id
+
+ Parameters  : OpenStack image id
+ Returns     : 1 or 0
+ Description : insert OpenStack image id and corresponding imagerevision id     
+
+=cut
+
+sub _insert_os_image_id {
+	my $self = shift;
+	my ($os_image_id, $os_flavor_id) = @_;
+	notify($ERRORS{'DEBUG'}, 0, "the openstack id: $os_image_id,  flavor id: $os_flavor_id");
+	if (!defined($os_image_id) || !defined($os_flavor_id)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to get the openstack id: $os_image_id or flavor id: $os_flavor_id");
+		return 0;
+	}
+	my $imagerevision_id = $self->data->get_imagerevision_id();
+	if (!defined($imagerevision_id)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to get the imagerevision id");
+		return 0;
+	}
+	my ($os_token, $os_compute_url) = $self->_get_os_token_compute_url();
+	my $os_project_id = $ENV{'OS_PROJECT_ID'};
+	if (!defined($os_token) || !defined($os_compute_url) || !defined($os_project_id)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to get the openstack auth info");
+		return 0;
+	}
+
+	my $ua = LWP::UserAgent->new();
+	my $res = $ua->get(
+		$os_compute_url . "/images/" . $os_image_id,
+		x_auth_token => $os_token,
+		x_auth_project_id => $os_project_id,
+	);
+	if (!$res->is_success) {
+		notify($ERRORS{'WARNING'}, 0, "failed to get openstack image info: " . join("\n", $res->content));
+		return 0;
+	}
+	my $os_image_details = $res->content;
+	if (!defined($os_image_details)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to parse json output");
+		return 0;
+	}
+
+	my $resp = $ua->get(
+		$os_compute_url . "/flavors/". $os_flavor_id,
+		x_auth_token => $os_token,
+		x_auth_project_id => $os_project_id,
+	);
+	if (!$resp->is_success) {
+		notify($ERRORS{'WARNING'}, 0, "failed to get openstack flavor info: " . join("\n", $resp->content));
+		return 0;
+	}
+	my $os_flavor_details = $resp->content;
+	if (!defined($os_flavor_details)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to parse json output");
+		return 0;
+	}
+
+	my $sql_statement = <<EOF;
+INSERT INTO
+openstackimagerevision (
+imagerevisionid, 
+imagedetails,
+flavordetails) 
+VALUES ( 
+	'$imagerevision_id',
+	'$os_image_details',
+	'$os_flavor_details')
+EOF
+
+	#notify($ERRORS{'DEBUG'}, 0, "$sql_statement");
+	my $result = database_execute($sql_statement);
+
+	if (!defined($result)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to insert openstack image id");
+		return 0;
+	}
+
+	notify($ERRORS{'DEBUG'}, 0, "successfully insert openstack image id");
+	sleep 5;
+	return 1;
+} ## end sub _insert_os_image_id
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 _post_os_create_image
+
+ Parameters  : OpenStack instance id
+ Returns     : 1 or 0
+ Description : capture OpenStack instance    
+
+=cut
+
+sub _post_os_create_image{
+	my $self = shift;
+	my $os_instance_id = shift;
+	if (!defined($os_instance_id)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to get the openstack instance id");
 		return;
 	}
+	notify($ERRORS{'DEBUG'}, 0, "os_instance_id: $os_instance_id in sub _post_os_create_image");
+	my $image_name     = $self->data->get_image_name();
+	if (!defined($image_name)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to get openstack auth information from environment");
+		return;
+	}
+	notify($ERRORS{'DEBUG'}, 0, "os_image_name: $image_name in sub _post_os_create_image");
+	my ($os_token, $os_compute_url) = $self->_get_os_token_compute_url();
+	my $os_project_id = $ENV{'OS_PROJECT_ID'};
+	if (!defined($os_token) || !defined($os_compute_url) || !defined($os_project_id)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to get openstack auth information from environment");
+		return;
+	}
+
 	my $ua = LWP::UserAgent->new();
-	my ($token, $compute_url) = $self->_get_token_account_info();
+	my $server_data = {
+		createImage =>  {
+			name => $image_name,
+		}
+	};
+
+	my $res =  $ua->post(
+		$os_compute_url . "/servers/" . $os_instance_id . "/action",
+		content_type => 'application/json',
+		x_auth_token => $os_token,
+		content => to_json($server_data)
+	);
+
+	if (!$res->is_success) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute capture image: " . join("\n", $res->content));
+		return;
+	}
+
+	my $resp =  $ua->get(
+		$os_compute_url . "/images/detail", 
+		server => $os_instance_id,
+		content_type => 'application/json',
+		x_auth_project_id => $os_project_id,
+		x_auth_token => $os_token
+	);
+
+	if (!$resp->is_success) {
+		notify($ERRORS{'WARNING'}, 0, "failed to get image info: " . join("\n", $resp->content));
+		return;
+	}
+
+	my $output = from_json($resp->content);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to parse json output");
+		return;
+	}
+	my $os_image_id = $output->{images}[0]{id};
+	if (!defined($os_image_id)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to capture instance of $os_instance_id");
+		return;
+	}
+
+	notify($ERRORS{'DEBUG'}, 0, "openstack image id for caputed instance of $os_instance_id is $os_image_id");
+	return $os_image_id;
+} ## end sub _post_os_create_image
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 _post_os_run_instance
+
+ Parameters  : None
+ Returns     : 1 or 0
+ Description : run an OpenStack instance    
+
+=cut
+
+sub _post_os_run_instance {
+	my $self = shift;
+	
+	my $imagerevision_id = $self->data->get_imagerevision_id() || return;
+	my $computer_name  = $self->data->get_computer_short_name() || return;
+	my $image_os_type  = $self->data->get_image_os_type() || return;
+	my $os_project_id = $ENV{'OS_PROJECT_ID'};
+	my $os_key_name = $ENV{'VCL_LINUX_KEY'}; 	
+	if (!defined($os_project_id) || !defined($os_key_name)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to get the openstack project id or key name");
+		return;
+	}
+	if ($image_os_type eq 'linux') {
+		$os_key_name =  $ENV{'VCL_LINUX_KEY'}; 	
+		notify($ERRORS{'OK'}, 0, "The $os_key_name is the key for Linux (default)");
+	} 
+	elsif ($image_os_type eq 'windows') {
+		$os_key_name =  $ENV{'VCL_WINDOWS_KEY'}; 	
+		notify($ERRORS{'OK'}, 0, "The $os_key_name is the key for Windows");
+	}
+
+	my $os_image_id = _get_os_image_id($imagerevision_id);
+	if (!defined($os_image_id)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to get the openstack image id");
+		return;
+	}
+
+	my $os_flavor_id = _get_os_flavor_id($imagerevision_id);
+	if (!$os_flavor_id) {
+		notify($ERRORS{'WARNING'}, 0, "failed to get the openstack flavor id");
+		return;
+	}
+
+	my $ua = LWP::UserAgent->new();
+	my ($os_token, $os_compute_url) = $self->_get_os_token_compute_url();
 	my $server_data = {
 		server =>  {
 			name => $computer_name,
-			imageRef => $openstack_image_id,
-			key_name => $openstack_key,
-			flavorRef => $flavor_type
+			imageRef => $os_image_id,
+			key_name => $os_key_name,
+			flavorRef => $os_flavor_id
 		}
 	};
 
 	my $resp =  $ua->post(
-		$compute_url . "/servers",
+		$os_compute_url . "/servers",
 		content_type => 'application/json',
-		x_auth_token => $token,
-		x_auth_project_id => $ENV{'OS_PROJECT_ID'},
+		x_auth_token => $os_token,
+		x_auth_project_id => $os_project_id,
 		content => to_json($server_data)
 	);
 
-	if(!$resp->is_success) {
+	if (!$resp->is_success) {
 		notify($ERRORS{'WARNING'}, 0, "failed to execute run instance: " . join("\n", $resp->content));
 		return;
 	}
 
 	my $output = from_json($resp->content);
-	my $instance_id = $output->{'server'}{'id'};
-	if (!defined($instance_id)){
-		notify($ERRORS{'WARNING'}, 0, "failed to execute command to get the instance id on $computer_name");
-		return 0;
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to parse json output");
+		return;
 	}
-	notify($ERRORS{'OK'}, 0, "The run_instance: $instance_id\n");
-	
-	if (!$self->_insert_instance_id($instance_id)) {
-		notify($ERRORS{'OK'}, 0, "Failed to insert the instance id : $instance_id");
-		return 0;
+	my $os_instance_id = $output->{'server'}{'id'};
+	if (!defined($os_instance_id)){
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to get the instance id on $computer_name");
+		return;
 	}
 
-	return 1;
-}
+	notify($ERRORS{'DEBUG'}, 0, "The run_instance: $os_instance_id\n");
+	return $os_instance_id;
+} ## end sub _post_os_run_instance
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 _set_openstack_user_conf 
+=head2 _prepare_capture
+
+ Parameters  : None
+ Returns     : 1 or 0
+ Description : prepare capturing instance     
+
+=cut
+
+sub _prepare_capture {
+	my $self = shift;
+	
+	my ($package, $filename, $line, $sub) = caller(0);
+	my $request_data = $self->data->get_request_data();
+	if (!$request_data) {
+		notify($ERRORS{'WARNING'}, 0, "unable to retrieve request data hash");
+		return 0;
+	}
+	my $computer_name = $self->data->get_computer_short_name();
+	if (!defined($computer_name)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to get computer name");
+		return 0;
+	}
+
+	if (write_currentimage_txt($self->data)) {
+		notify($ERRORS{'DEBUG'}, 0, "currentimage.txt updated on $computer_name");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "unable to update currentimage.txt on $computer_name");
+		return 0;
+	}
+
+	if (!$self->data->set_imagemeta_sysprep(0)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to set the imagemeta Sysprep value to 0");
+		return 0;
+	}
+
+	if ($self->os->can("pre_capture")) {
+		notify($ERRORS{'OK'}, 0, "calling OS module's pre_capture() subroutine");
+
+		if (!$self->os->pre_capture({end_state => 'on'})) {
+			notify($ERRORS{'WARNING'}, 0, "OS module pre_capture() failed");
+			return 0;
+		}
+	}
+
+	notify($ERRORS{'DEBUG'}, 0, "pre_capture() is done");
+	return 1;
+} ## end sub _prepare_capture
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 _set_os_auth_conf 
 
  Parameters  : None 
  Returns     : 1(success) or 0(failure)
- Description : load environment profile and set global environemnt variables 
+ Description : load openstack environment profile and set global environemnt variables 
 
 example: openstack.conf
 "os_tenant_name" => "admin",
@@ -949,18 +1071,15 @@ example: openstack.conf
 
 =cut
 
-sub _set_openstack_user_conf {
+sub _set_os_auth_conf {
 	my $self = shift;
-	my $computer_name   = $self->data->get_computer_short_name;
+	my $computer_name   = $self->data->get_computer_short_name() || return;
 	# User's environment file
 	my $user_config_file = '/etc/vcl/openstack/openstack.conf';
-	notify($ERRORS{'OK'}, 0, "********* Set OpenStack User Configuration******************");
-	notify($ERRORS{'OK'}, 0,  "computer_name: $computer_name");
-	notify($ERRORS{'OK'}, 0,  "loading $user_config_file");
 	my %config = do($user_config_file);
 	if (!%config) {
 		notify($ERRORS{'CRITICAL'},0, "failure to process $user_config_file");
-		return 0;
+		return;
 	}
 	$self->{config} = \%config;
 	my $os_auth_url = $self->{config}->{os_auth_url};
@@ -983,150 +1102,172 @@ sub _set_openstack_user_conf {
 	$ENV{'VCL_LINUX_KEY'} = $vcl_linux_key;
 
 	return 1;
-}# _set_openstack_user_conf close
+}# end sub _set_os_auth_conf
 
-sub _terminate_instances {
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 _terminate_os_instance
+
+ Parameters  : None
+ Returns     : 1 or 0
+ Description : terminate an OpenStack instance    
+
+=cut
+
+sub _terminate_os_instance {
 	my $self = shift;
 
-	my $instance_id = $self->_get_instance_id();
-	my $computer_name = $self->data->get_computer_short_name();
-	if (!$instance_id) {
-		notify($ERRORS{'WARNING'}, 0, "failed to get the instance id for $computer_name");
+	my $computer_name = $self->data->get_computer_short_name() || return 0;
+		
+	my ($os_token, $os_compute_url) = $self->_get_os_token_compute_url();
+	my $os_instance_id = $self->_get_os_instance_id();
+	if (!defined($os_token) || !defined($os_compute_url) || !defined($os_instance_id)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to get the openstack auth info");
 		return 0;
 	}
-
-	$self->_delete_computer_mapping;
-
-	my ($token, $compute_url) = $self->_get_token_account_info();
 
 	my $ua = LWP::UserAgent->new();
 	my $resp =  $ua->delete(
-		$compute_url . "/servers/" . $instance_id,
-		x_auth_token => $token
+		$os_compute_url . "/servers/" . $os_instance_id,
+		x_auth_token => $os_token
 	);
-	if(!$resp->is_success) {
+	if (!$resp->is_success) {
 		notify($ERRORS{'WARNING'}, 0, "failed to execute terminate instance: " . join("\n", $resp->content));
 		return 0;
 	}
-	notify($ERRORS{'OK'}, 0, "successfully terminate the instance for $computer_name");
+	notify($ERRORS{'DEBUG'}, 0, "successfully terminate the instance for $computer_name");
 	sleep 30;
 
 	return 1;
-}
+} ## end sub _terminate_os_instance
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 _update_os_instance
+
+ Parameters  : OpenStack instance id
+ Returns     : 1 or 0
+ Description : update the private ip address of the OpenStack instance 
+
+=cut
 
 sub _update_private_ip {
 	my $self = shift;
 	
-	my $instance_id = shift;
-	my $main_loop = 60;
-	my $private_ip;
-	my $describe_instance_output;
-	my $computer_id = $self->data->get_computer_id;
-	my $computer_name  = $self->data->get_computer_short_name;
-
-	my ($token, $compute_url) = $self->_get_token_account_info();
+	my $os_instance_id = shift;
+	my $computer_id = $self->data->get_computer_id() || return 0;
+	my $computer_name  = $self->data->get_computer_short_name() || return 0;
+	my ($os_token, $os_compute_url) = $self->_get_os_token_compute_url();
+	if (!defined($os_instance_id) || !defined($os_token) || !defined($os_compute_url)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to get the openstack auth info");
+		return 0;
+	}
 	my $ua = LWP::UserAgent->new();
-	my $output;	
-	my $resp;
-
+	my ($private_ip, $output, $resp);
+	my $main_loop = 60;
 
 	# Find the correct instance among running instances using the private IP
-	while ($main_loop > 0)
-	{
-		notify($ERRORS{'OK'}, 0, "Try to fetch the Private IP on Computer $computer_name: Number $main_loop");	
+	while ($main_loop > 0) {
+		notify($ERRORS{'DEBUG'}, 0, "try to fetch the private IP address for $computer_name, loop of $main_loop");	
 		$resp =  $ua->get(
-			$compute_url . "/servers/" . $instance_id,
-			x_auth_token => $token
+			$os_compute_url . "/servers/" . $os_instance_id,
+			x_auth_token => $os_token
 		);
-		if(!$resp->is_success) {
+		if (!$resp->is_success) {
 			notify($ERRORS{'WARNING'}, 0, "failed to execute instance detail: " . join("\n", $resp->content));
-			return;
+			return 0;
 		}
 
 		$output = from_json($resp->content);
+		if (!defined($output)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to parse json output");
+			return 0;
+		}
 		$private_ip = $output->{'server'}{'addresses'}{'private'}[0]->{'addr'};
 
-		if (defined($private_ip) && $private_ip ne "") {
-			my $new_private_ip = update_computer_private_ip_address($computer_id, $private_ip);
-			if (!defined($new_private_ip)) {
-				notify($ERRORS{'OK'}, 0, "The $private_ip on Computer $computer_name is NOT updated");
+		if (defined($private_ip)) {
+			my $result = update_computer_private_ip_address($computer_id, $private_ip);
+			if (!defined($result)) {
+				notify($ERRORS{'WARNING'}, 0, "The $private_ip on Computer $computer_name is NOT updated");
 				return 0;
 			}
-			notify($ERRORS{'OK'}, 0, "Private IP is $new_private_ip for $computer_name");
+			notify($ERRORS{'DEBUG'}, 0, "private IP address is $private_ip for $computer_name");
+			sleep 10;
 			return 1;
 		}
 		else {
-			notify($ERRORS{'DEBUG'}, 0, "Waiting for assinging private ip address to $computer_name");
+			notify($ERRORS{'DEBUG'}, 0, "waiting for assinging private IP address to $computer_name");
 		}
-
+		
 		sleep 20;
 		$main_loop--;
 	}
-	notify($ERRORS{'DEBUG'}, 0, "Private IP for $computer_name is not determined");
+
+	notify($ERRORS{'DEBUG'}, 0, "private IP address for $computer_name is not determined");
 	return 0;
-}
+} ## end sub _update_private_ip
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 _wait_for_copying_image
+
+ Parameters  : OpenStack image id
+ Returns     : 1 or 0
+ Description : wait for copying the OpenStack image 
+
+=cut
 
 sub _wait_for_copying_image {
 	my $self = shift;
 	
-	my $openstack_image_id = shift;
-	if ($openstack_image_id  =~ m/(\w{8}-\w{4}-\w{4}-\w{4}-\w{12})-v/g )
-	{
-		$openstack_image_id = $1;
-		notify($ERRORS{'OK'}, 0, "Acquire the Image ID: $openstack_image_id");
-	}
-	else {
-		notify($ERRORS{'DEBUG'}, 0, "Fail to acquire the Image ID: $openstack_image_id");
+	my $os_image_id = shift;
+	my ($os_token, $os_compute_url) = $self->_get_os_token_compute_url();
+	my $os_project_id = $ENV{'OS_PROJECT_ID'};
+	if (!defined($os_image_id) || !defined($os_token) || !defined($os_compute_url) || !defined($os_project_id)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to get openstack auth info or image id: $os_image_id");
 		return 0;
 	}
-	my ($token, $compute_url) = $self->_get_token_account_info();
 	my $ua = LWP::UserAgent->new();
-	my $resp;
+	my ($resp, $output, $image_status);
 
-	my $output;
-	my $image_status;
- 
-	my $loop = 100;
-	while ($loop > 0)
-	{
+	my $main_loop = 100;
+	while ($main_loop > 0) {
 		$resp =  $ua->get(
-			$compute_url . "/images/" . $openstack_image_id,
+			$os_compute_url . "/images/" . $os_image_id,
 			content_type => 'application/json',
-			x_auth_project_id => $ENV{'OS_PROJECT_ID'},
-			x_auth_token => $token
+			x_auth_project_id => $os_project_id,
+			x_auth_token => $os_token
 		);
 
-		if(!$resp->is_success) {
+		if (!$resp->is_success) {
 			notify($ERRORS{'WARNING'}, 0, "failed to get image info: " . join("\n", $resp->content));
-			return;
+			return 0;
 		}
 
 		$output = from_json($resp->content);
 		$image_status = $output->{'image'}{'status'};
 		if (defined($image_status)) {
-			notify($ERRORS{'OK'}, 0, "The describe image output of loop #$loop: $image_status");
-			if($image_status eq 'ACTIVE') {
-				notify($ERRORS{'OK'}, 0, "$openstack_image_id is available now");
-				last;
+			notify($ERRORS{'DEBUG'}, 0, "image status: $image_status for loop #$main_loop");
+			if ($image_status eq 'ACTIVE') {
+				notify($ERRORS{'OK'}, 0, "$os_image_id is available now");
+				return 1;
 			}
 			elsif ($image_status eq 'SAVING') {
-				notify($ERRORS{'OK'}, 0, "Sleep to capture New Image for 25 secs");
+				notify($ERRORS{'DEBUG'}, 0, "wait 25 seconds for capturing instance");
 				sleep 25;
 			}
 			else {
-				notify($ERRORS{'DEBUG'}, 0, "Failure for $openstack_image_id");
+				notify($ERRORS{'DEBUG'}, 0, "failed to capture image for $os_image_id");
 				return 0;
 			}
 		}
 		sleep 10;
-		$loop--;
+		$main_loop--;
 	}
 
-	return 1;
-}
-
+	return 0;
+} ## end sub _wait_for_copying_image
 
 #/////////////////////////////////////////////////////////////////////////////
-
 1;
 __END__
