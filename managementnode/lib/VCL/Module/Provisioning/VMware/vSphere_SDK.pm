@@ -610,6 +610,7 @@ sub copy_virtual_disk {
 	my $source_datastore = $self->_get_datastore_object($source_datastore_name) || return;
 	my $destination_datastore = $self->_get_datastore_object($destination_datastore_name) || return;
 	
+	my $destination_file_name = $self->_get_file_name($destination_path);
 	my $destination_base_name = $self->_get_file_base_name($destination_path);
 	
 	# Get the source vmdk file info so the source adapter and disk type can be displayed
@@ -725,6 +726,9 @@ sub copy_virtual_disk {
 	my $source_vm_directory_path = "[$source_datastore_name] $source_vm_name";
 	my $clone_vm_directory_path = "[$destination_datastore_name] $clone_vm_name";
 	
+	# Make sure the "source-..." directory doesn't exist or else the clone will fail
+	$self->delete_file($source_vm_directory_path);
+	
 	# Check if VMs already exist using the source/clone directories
 	my @existing_vmx_file_paths = $self->get_vmx_file_paths();
 	for my $existing_vmx_file_path (@existing_vmx_file_paths) {
@@ -758,7 +762,7 @@ sub copy_virtual_disk {
 		notify($ERRORS{'WARNING'}, 0, "unable to copy virtual disk, clone VM directory path already exists: $clone_vm_directory_path");
 		return;
 	}
-
+	
 	# Create a virtual machine on top of this virtual disk
 	# First, create a controller for the virtual disk
 	my $controller;
@@ -877,6 +881,7 @@ EOF
 		"clone VM directory path: $clone_vm_directory_path"
 	);
 	
+	
 	# Clone the temporary VM, thus creating a copy of its virtual disk
 	notify($ERRORS{'DEBUG'}, 0, "attempting to clone VM: $source_vm_name --> $clone_vm_name\nclone VM directory path: '$clone_vm_directory_path'");
 	my $clone_vm_view;
@@ -909,7 +914,7 @@ EOF
 		}
 		return;
 	}
-	
+
 	notify($ERRORS{'DEBUG'}, 0, "deleting source VM: $source_vm_name");
 	$self->vm_unregister($source_vm_view);
 	notify($ERRORS{'DEBUG'}, 0, "deleting source VM directory: $source_vm_directory_path");
@@ -917,10 +922,35 @@ EOF
 	
 	notify($ERRORS{'DEBUG'}, 0, "deleting cloned VM: $clone_vm_name");
 	$self->vm_unregister($clone_vm_view);
+
+	# Get all files created for cloned VM
 	my @clone_files = $self->find_files($clone_vm_directory_path, '*', 1);
+	
+	# Delete all non-vmdk files
 	for my $clone_file_path (grep(!/\.(vmdk)$/i, @clone_files)) {
-		notify($ERRORS{'DEBUG'}, 0, "deleting cloned VM file: $clone_file_path");
+		notify($ERRORS{'DEBUG'}, 0, "deleting clone VM file: $clone_file_path");
 		$self->delete_file($clone_file_path);
+	}
+	
+	# Get the clone vmdk file names
+	my (@clone_vmdk_file_paths) = grep(/\.(vmdk)$/i, @clone_files);
+	if (@clone_vmdk_file_paths) {
+		my ($clone_vmdk_file_path) = grep(/$clone_vm_name-\d+\.vmdk$/, @clone_vmdk_file_paths);
+		if ($clone_vmdk_file_path) {
+			my $clone_vmdk_file_name = $self->_get_file_name($clone_vmdk_file_path);
+			notify($ERRORS{'OK'}, 0, "clone vmdk name is different than requested, attempting to rename clone vmdk: $clone_vmdk_file_name --> $destination_file_name");
+			if (!$self->move_virtual_disk($clone_vmdk_file_path, $destination_path)) {
+				$self->delete_file($clone_vm_directory_path);
+				return;
+			}
+		}
+		else {
+			notify($ERRORS{'DEBUG'}, 0, "clone vmdk name matches requested:\n" . join("\n", @clone_vmdk_file_paths));
+		}
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "no file created for clone VM ends with .vmdk:\n" . join("\n", @clone_files));
+		return;
 	}
 	
 	# Set this as a class value so that it is retrievable from within 
