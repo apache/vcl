@@ -60,7 +60,7 @@ use Fcntl qw(:DEFAULT :flock);
 use File::Temp qw( tempfile );
 use List::Util qw( max );
 use VCL::utils;
-use JSON qw(from_json to_json decode_json);
+use JSON qw(from_json to_json);
 use LWP::UserAgent;
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -123,7 +123,7 @@ sub load {
 	}
 
 	# Create new instance 
-	my $os_instance_id = $self->_post_os_run_instance();
+	my $os_instance_id = $self->_post_os_create_instance();
 	if (!defined($os_instance_id)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to create an instance for computer $computer_name on VM host: $vmhost_name");
 		return;
@@ -465,7 +465,7 @@ sub does_image_exist {
 
  Parameters  : imagename
  Returns     : 0 failure or size of image
- Description : in size of Kilobytes
+ Description : in size of Megabytes
 
 =cut
 
@@ -511,11 +511,11 @@ sub get_image_size {
 
 	my $os_image_size_bytes = $output->{'image'}{'OS-EXT-IMG-SIZE:size'};
 	if (!defined($os_image_size_bytes)){
-		notify($ERRORS{'WARNING'}, 0, "The openstack image for $image_name does NOT exists");
+		notify($ERRORS{'WARNING'}, 0, "The openstack image size for $image_name does NOT exists");
 		return;
 	}
 
-	notify($ERRORS{'DEBUG'}, 0, "os_image_size_bytes: $os_image_size_bytes");
+	notify($ERRORS{'DEBUG'}, 0, "os_image_size_bytes: $os_image_size_bytes for $image_name");
 	return round($os_image_size_bytes / 1024 / 1024);
 } ## end sub get_image_size
 
@@ -551,7 +551,7 @@ EOF
 		notify($ERRORS{'WARNING'}, 0, "" . scalar @selected_rows . " rows were returned from database select");
 		return;
 	}
-	my $os_flavor_detail  = decode_json($selected_rows[0]{flavor});
+	my $os_flavor_detail  = from_json($selected_rows[0]{flavor});
 	if (!defined($os_flavor_detail)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to get openstack flavor detail");
 		return;
@@ -608,7 +608,7 @@ EOF
 		notify($ERRORS{'WARNING'}, 0, "" . scalar @selected_rows . " rows were returned from database select");
 		return 0;
 	}
-	my $os_image_detail = decode_json($selected_rows[0]{image});
+	my $os_image_detail = from_json($selected_rows[0]{image});
 	if (!defined($os_image_detail)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to get openstack image detail");
 		return 0;
@@ -921,15 +921,15 @@ sub _post_os_create_image{
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 _post_os_run_instance
+=head2 _post_os_create_instance
 
  Parameters  : None
  Returns     : 1 or 0
- Description : run an OpenStack instance    
+ Description : create an OpenStack instance    
 
 =cut
 
-sub _post_os_run_instance {
+sub _post_os_create_instance {
 	my $self = shift;
 	
 	my $imagerevision_id = $self->data->get_imagerevision_id() || return;
@@ -997,9 +997,9 @@ sub _post_os_run_instance {
 		return;
 	}
 
-	notify($ERRORS{'DEBUG'}, 0, "The run_instance: $os_instance_id\n");
+	notify($ERRORS{'DEBUG'}, 0, "The create_instance: $os_instance_id\n");
 	return $os_instance_id;
-} ## end sub _post_os_run_instance
+} ## end sub _post_os_create_instance
 
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -1073,7 +1073,6 @@ example: openstack.conf
 
 sub _set_os_auth_conf {
 	my $self = shift;
-	my $computer_name   = $self->data->get_computer_short_name() || return;
 	# User's environment file
 	my $user_config_file = '/etc/vcl/openstack/openstack.conf';
 	my %config = do($user_config_file);
