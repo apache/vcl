@@ -1209,6 +1209,8 @@ INSERT IGNORE INTO `module` (`name`, `prettyname`, `description`, `perlpackage`)
 INSERT IGNORE INTO `module` (`name`, `prettyname`, `description`, `perlpackage`) VALUES ('os_osx', 'OSX OS Module', '', 'VCL::Module::OS::OSX');
 INSERT IGNORE INTO `module` (`name`, `prettyname`, `description`, `perlpackage`) VALUES ('provisioning_libvirt', 'Libvirt Provisioning Module', '', 'VCL::Module::Provisioning::libvirt');
 INSERT IGNORE INTO `module` (`name`, `prettyname`, `description`, `perlpackage`) VALUES ('os_linux_managementnode', 'Management Mode Linux OS Module', '', 'VCL::Module::OS::Linux::ManagementNode');
+INSERT IGNORE INTO `module` (`name`, `prettyname`, `description`, `perlpackage`) VALUES ('os_win8', 'Windows 8.x OS Module', '', 'VCL::Module::OS::Windows::Version_6::8');
+INSERT IGNORE INTO `module` (`name`, `prettyname`, `description`, `perlpackage`) VALUES ('os_win2012', 'Windows Server 2012 OS Module', '', 'VCL::Module::OS::Windows::Version_6::2012');
 
 -- --------------------------------------------------------
 
@@ -1235,6 +1237,11 @@ INSERT IGNORE INTO `OS` (`name`, `prettyname`, `type`, `installtype`, `sourcepat
 INSERT IGNORE INTO `OS` (`name`, `prettyname`, `type`, `installtype`, `sourcepath`, `moduleid`) VALUES ('fedora16', 'Fedora 16 (Kickstart)', 'linux', 'kickstart', 'fedora16', (SELECT `id` FROM `module` WHERE `name` LIKE 'os_linux'));
 INSERT IGNORE INTO `OS` (`name`, `prettyname`, `type`, `installtype`, `sourcepath`, `moduleid`) VALUES ('fedoraimage', 'Fedora 16 (Bare Metal)', 'linux', 'partimage', 'image', (SELECT `id` FROM `module` WHERE `name` LIKE 'os_linux'));
 INSERT IGNORE INTO `OS` (`name`, `prettyname`, `type`, `installtype`, `sourcepath`, `moduleid`) VALUES ('vmwareubuntu', 'Ubuntu (VMware)', 'linux', 'vmware', 'vmware_images', (SELECT `id` FROM `module` WHERE `name` LIKE 'os_linux_ubuntu'));
+
+INSERT IGNORE INTO `OS` (`name`, `prettyname`, `type`, `installtype`, `sourcepath`, `moduleid`) VALUES ('vmwarewin8', 'Windows 8.x (VMware)', 'windows', 'vmware', 'vmware_images', (SELECT `id` FROM `module` WHERE `name` LIKE 'os_win8'));
+INSERT IGNORE INTO `OS` (`name`, `prettyname`, `type`, `installtype`, `sourcepath`, `moduleid`) VALUES ('win8', 'Windows 8.x (Bare Metal)', 'windows', 'partimage', 'image', (SELECT `id` FROM `module` WHERE `name` LIKE 'os_win8'));
+INSERT IGNORE INTO `OS` (`name`, `prettyname`, `type`, `installtype`, `sourcepath`, `moduleid`) VALUES ('vmwarewin2012', 'Windows Server 2012 (VMware)', 'windows', 'vmware', 'vmware_images', (SELECT `id` FROM `module` WHERE `name` LIKE 'os_win2012'));
+INSERT IGNORE INTO `OS` (`name`, `prettyname`, `type`, `installtype`, `sourcepath`, `moduleid`) VALUES ('win2012', 'Windows Server 2012 (Bare Metal)', 'windows', 'partimage', 'image', (SELECT `id` FROM `module` WHERE `name` LIKE 'os_win2012'));
 
 -- --------------------------------------------------------
 

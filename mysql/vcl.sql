@@ -1534,7 +1534,9 @@ INSERT INTO `module` (`id`, `name`, `prettyname`, `description`, `perlpackage`) 
 (25, 'os_esxi', 'VMware ESXi OS Module', '', 'VCL::Module::OS::Linux::ESXi'),
 (26, 'os_osx', 'OSX OS Module', '', 'VCL::Module::OS::OSX'),
 (27, 'provisioning_libvirt', 'Libvirt Provisioning Module', '', 'VCL::Module::Provisioning::libvirt'),
-(28, 'os_linux_managementnode', 'Management Node Linux OS Module', '', 'VCL::Module::OS::Linux::ManagementNode');
+(28, 'os_linux_managementnode', 'Management Node Linux OS Module', '', 'VCL::Module::OS::Linux::ManagementNode'),
+(29, 'os_win8', 'Windows 8.x OS Module', '', 'VCL::Module::OS::Windows::Version_6::8'),
+(30, 'os_win2012', 'Windows Server 2012 OS Module', '', 'VCL::Module::OS::Windows::Version_6::2012');
 
 -- 
 -- Dumping data for table `OS`
@@ -1581,7 +1583,11 @@ INSERT INTO `OS` (`id`, `name`, `prettyname`, `type`, `installtype`, `sourcepath
 (41, 'rh6image', 'Red Hat Enterprise 6 (Bare Metal)', 'linux', 'partimage', 'image', 5),
 (42, 'fedora16', 'Fedora 16 (Kickstart)', 'linux', 'kickstart', 'fedora16', 5),
 (43, 'fedoraimage', 'Fedora 16 (Bare Metal)', 'linux', 'partimage', 'image', 5),
-(44, 'vmwareubuntu', 'Ubuntu (VMware)', 'linux', 'vmware', 'vmware_images', 14);
+(44, 'vmwareubuntu', 'Ubuntu (VMware)', 'linux', 'vmware', 'vmware_images', 14),
+(45, 'vmwarewin8', 'Windows 8.x (VMware)', 'windows', 'vmware', 'vmware_images', 29),
+(46, 'win8', 'Windows 8.x (Bare Metal)', 'windows', 'partimage', 'image', 29),
+(47, 'vmwarewin2012', 'Windows Server 2012 (VMware)', 'windows', 'vmware', 'vmware_images', 30),
+(48, 'win2012', 'Windows Server 2012 (Bare Metal)', 'windows', 'partimage', 'image', 30);
 
 -- 
 -- Dumping data for table `OSinstalltype`
