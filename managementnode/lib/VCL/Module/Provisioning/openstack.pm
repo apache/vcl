@@ -78,10 +78,10 @@ sub initialize {
 	notify($ERRORS{'DEBUG'}, 0, "OpenStack module initialized");
 	
 	if ($self->_set_os_auth_conf()) {
-		notify($ERRORS{'OK'}, 0, "Success to OpenStack user configuration");
+		notify($ERRORS{'OK'}, 0, "successfully set openStack auth configuration");
 	}
 	else {
-		notify($ERRORS{'CRITICAL'}, 0, "Failure to Openstack user configuration");
+		notify($ERRORS{'CRITICAL'}, 0, "failed to set openstack auth configuration");
 		return 0;
 	}
 	
@@ -120,6 +120,12 @@ sub load {
 			notify($ERRORS{'WARNING'}, 0, " no instance or failed to remove existing VMs");
 			return;
 		}
+	}
+	# Remove existing openstack id for computer mapping in database 
+	# Althought the instance is not pingable (delete it accidently), it should delete the instance from database
+	if (!$self->_delete_os_computer_mapping()) {
+		notify($ERRORS{'WARNING'}, 0, "failed to delete the openstack instance id for computer mapping in database");
+		return;
 	}
 
 	# Create new instance 
@@ -521,6 +527,59 @@ sub get_image_size {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 _delete_os_computer_mapping
+
+ Parameters  : computer id
+ Returns     : 1 or 0
+ Description : delete match VCL computer id with OpenStack instance id
+
+=cut
+
+sub _delete_os_computer_mapping {
+	my $self = shift;
+	my $computer_id = $self->data->get_computer_id();
+	if (!defined($computer_id)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to get computer id");
+		return 0;
+	}
+
+	my $sql_statement = <<EOF;
+SELECT
+computerid
+FROM
+openstackComputerMap
+WHERE
+computerid = '$computer_id'
+EOF
+
+	#notify($ERRORS{'DEBUG'}, 0, "delete_os_computer_mapping: $sql_statement");
+	my @selected_rows = database_select($sql_statement);
+	if (scalar @selected_rows == 0) {
+		notify($ERRORS{'OK'}, 0, "no instance for $computer_id");
+		return 1;
+	}
+
+	$sql_statement = <<EOF;
+DELETE FROM
+openstackComputerMap
+WHERE
+computerid = '$computer_id'
+EOF
+	#notify($ERRORS{'DEBUG'}, 0, "$sql_statement");
+	my $result = database_execute($sql_statement);
+
+	if (!defined($result)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to delete computer mapping");
+		return 0;
+	}
+
+	notify($ERRORS{'DEBUG'}, 0, "successfully deleted computer mapping");
+	sleep 5;
+	return 1;
+} ## end sub _delete_os_computer_mapping
+
+#/////////////////////////////////////////////////////////////////////////////
+
 =head2 _get_os_flavor_id
 
  Parameters  : image revision id 
@@ -636,41 +695,35 @@ EOF
 =cut
 sub _get_os_instance_id {
 	my $self = shift;
-
-	my $computer_name  = $self->data->get_computer_short_name() || return 0;
-	my ($os_token, $os_compute_url) = $self->_get_os_token_compute_url();
-	my $os_project_id = $ENV{'OS_PROJECT_ID'};
-	if (!defined($os_token) || !defined($os_compute_url) || !defined($os_project_id)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to get the openstack auth info");
-		return 0;
+	my $computer_id = $self->data->get_computer_id();
+	if (!defined($computer_id)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to get computer id");
+		return;
 	}
 
-	my $ua = LWP::UserAgent->new();
-	my $resp =  $ua->get(
-		$os_compute_url . "/servers/detail",
-		name => $computer_name,
-		content_type => 'application/json',
-		x_auth_project_id => $os_project_id,
-		x_auth_token => $os_token,
-	);
+	my $sql_statement = <<EOF;
+SELECT
+instanceid as id
+FROM
+openstackComputerMap
+WHERE
+computerid = '$computer_id'
+EOF
 
-	if (!$resp->is_success) {
-		notify($ERRORS{'WARNING'}, 0, "failed to get openstack token: " . join("\n", $resp->content));
-		return 0;
+	#notify($ERRORS{'DEBUG'}, 0, "$sql_statement");
+	my @selected_rows = database_select($sql_statement);
+	if (scalar @selected_rows == 0 || scalar @selected_rows > 1) {
+		notify($ERRORS{'WARNING'}, 0, "" . scalar @selected_rows . " rows were returned from database select");
+		return;
 	}
-	
-	my $output = from_json($resp->content);
-	if (!defined($output)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to parse json output");
-		return 0;
-	}
-	my $os_instance_id = $output->{servers}[0]{id};
+
+	my $os_instance_id = $selected_rows[0]{id};
 	if (!defined($os_instance_id)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to get openstack instance id");
-		return 0;
+		return;
 	}
-	
-	notify($ERRORS{'DEBUG'}, 0, "os_instance_id: $os_instance_id");
+
+	notify($ERRORS{'DEBUG'}, 0, "Openstack instance id for $computer_id is $os_instance_id");
 	return $os_instance_id;
 }
 
@@ -843,6 +896,46 @@ EOF
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 _insert_os_instance_id
+
+ Parameters  : OpenStack instance id
+ Returns     : 1 or 0
+ Description : insert OpenStack instance id and corresponding computer id
+
+=cut
+
+sub _insert_os_instance_id {
+	my $self = shift;
+	my $os_instance_id = shift;
+	my $computer_id = $self->data->get_computer_id();
+	if (!defined($os_instance_id) || !defined($computer_id)) {
+		notify($ERRORS{'DEBUG'}, 0, "failed to get the openstack instance id: $os_instance_id or computer id: $computer_id");
+		return 0;
+	}
+
+	my $sql_statement = <<EOF;
+INSERT INTO
+openstackComputerMap (
+instanceid,
+computerid)
+VALUES
+('$os_instance_id', '$computer_id')
+EOF
+
+	#notify($ERRORS{'DEBUG'}, 0, "$sql_statement");
+	my $result = database_execute($sql_statement);
+	if (!defined($result)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to insert openstack instance id");
+		return 0;
+	}
+
+	notify($ERRORS{'DEBUG'}, 0, "successfully insert openstack instance id and comptuer id");
+	sleep 5;
+	return 1;
+} ## end sub_insert_os_instance_id
+
+#/////////////////////////////////////////////////////////////////////////////
+
 =head2 _post_os_create_image
 
  Parameters  : OpenStack instance id
@@ -997,6 +1090,11 @@ sub _post_os_create_instance {
 		return;
 	}
 
+	if (!$self->_insert_os_instance_id($os_instance_id)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to insert the instance id : $os_instance_id");
+		return; 
+	}
+
 	notify($ERRORS{'DEBUG'}, 0, "The create_instance: $os_instance_id\n");
 	return $os_instance_id;
 } ## end sub _post_os_create_instance
@@ -1119,8 +1217,9 @@ sub _terminate_os_instance {
 	my $computer_name = $self->data->get_computer_short_name() || return 0;
 		
 	my ($os_token, $os_compute_url) = $self->_get_os_token_compute_url();
+	my $os_project_id = $ENV{'OS_PROJECT_ID'};
 	my $os_instance_id = $self->_get_os_instance_id();
-	if (!defined($os_token) || !defined($os_compute_url) || !defined($os_instance_id)) {
+	if (!defined($os_token) || !defined($os_compute_url) || !defined($os_project_id) || !defined($os_instance_id)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to get the openstack auth info");
 		return 0;
 	}
@@ -1134,10 +1233,29 @@ sub _terminate_os_instance {
 		notify($ERRORS{'WARNING'}, 0, "failed to execute terminate instance: " . join("\n", $resp->content));
 		return 0;
 	}
-	notify($ERRORS{'DEBUG'}, 0, "successfully terminate the instance for $computer_name");
-	sleep 30;
 
-	return 1;
+	# normally takes more 10 seconds to delete the instance from the database
+	sleep 30;
+	my $main_loop = 20;
+	while ($main_loop) {
+		notify($ERRORS{'DEBUG'}, 0, "waiting for deleting the instance of $os_instance_id in loop#$main_loop");
+		$resp =  $ua->get(
+			$os_compute_url . "/servers/" . $os_instance_id,
+			content_type => 'application/json',
+			x_auth_project_id => $os_project_id,
+			x_auth_token => $os_token,
+		);
+		if (!$resp->is_success) {
+			notify($ERRORS{'DEBUG'}, 0, "successfully terminate the instance for $computer_name");
+			return 1;
+		}
+
+		sleep 5;
+		$main_loop--;
+	}
+
+	notify($ERRORS{'WARNING'}, 0, "failed to terminate the instance for $computer_name");
+	return 0;
 } ## end sub _terminate_os_instance
 
 #/////////////////////////////////////////////////////////////////////////////
