@@ -277,12 +277,34 @@ sub pre_capture {
 
 =item 1
 
+ Disable RDP access from any IP address
+
+=cut
+
+	if (!$self->firewall_disable_rdp()) {
+		notify($ERRORS{'WARNING'}, 0, "unable to disable RDP from all addresses");
+		return 0;
+	}
+
+=item *
+
  Log off all currently logged in users
 
 =cut
 
 	if (!$self->logoff_users()) {
 		notify($ERRORS{'WARNING'}, 0, "unable to log off all currently logged in users on $computer_node_name");
+		return 0;
+	}
+
+=item *
+
+ Set Administrator account password to known value
+
+=cut
+
+	if (!$self->set_password('Administrator', $WINDOWS_ROOT_PASSWORD)) {
+		notify($ERRORS{'WARNING'}, 0, "unable to set Administrator password");
 		return 0;
 	}
 
@@ -305,7 +327,7 @@ sub pre_capture {
 
 	my $deleted_user = $self->delete_user();
 	if (!$deleted_user) {
-		notify($ERRORS{'WARNING'}, 0, "unable to delete user, will try again after reboot");
+		notify($ERRORS{'DEBUG'}, 0, "unable to delete user, will try again after reboot");
 	}
 
 =item *
@@ -455,16 +477,6 @@ sub pre_capture {
 		notify($ERRORS{'WARNING'}, 0, "unable to disable IE configuration");
 	}
 
-#=item *
-#
-# Disable Windows Defender
-#
-#=cut
-#
-#	if (!$self->disable_windows_defender()) {
-#		notify($ERRORS{'WARNING'}, 0, "unable to disable Windows Defender");
-#	}
-
 =item *
 
  Disable Automatic Updates
@@ -565,17 +577,6 @@ sub pre_capture {
 
 =item *
 
- Disable RDP access from any IP address
-
-=cut
-
-	if (!$self->firewall_disable_rdp()) {
-		notify($ERRORS{'WARNING'}, 0, "unable to disable RDP from all addresses");
-		return 0;
-	}
-
-=item *
-
  Enable SSH access from any IP address
 
 =cut
@@ -656,7 +657,7 @@ sub post_load {
 	my $computer_node_name   = $self->data->get_computer_node_name();
 	
 	notify($ERRORS{'OK'}, 0, "beginning Windows post-load tasks on $computer_node_name");
-	
+
 =item 1
 
  Wait for computer to respond to SSH
@@ -4275,7 +4276,7 @@ sub get_scheduled_task_info {
 	}
 	
 	$self->{scheduled_task_info} = $scheduled_task_info;
-	notify($ERRORS{'DEBUG'}, 0, "found " . scalar(keys %$scheduled_task_info) . " scheduled tasks:\n" . join("\n", sort keys(%$scheduled_task_info)));
+	notify($ERRORS{'DEBUG'}, 0, "found " . scalar(keys %$scheduled_task_info) . " scheduled tasks");
 	return $scheduled_task_info;
 }
 
@@ -7124,7 +7125,7 @@ EOF
 		my $total_wait_seconds = 120;
 		notify($ERRORS{'OK'}, 0, "started cleanmgr.exe, waiting up to $total_wait_seconds seconds for it to finish");
 		
-		if ($self->code_loop_timeout(sub{!$self->is_process_running(@_)}, ['cleanmgr.exe'], $message, $total_wait_seconds, 5)) {
+		if ($self->code_loop_timeout(sub{!$self->is_process_running(@_)}, ['cleanmgr.exe'], $message, $total_wait_seconds, 15)) {
 			notify($ERRORS{'DEBUG'}, 0, "cleanmgr.exe has finished");
 		}
 		else {
