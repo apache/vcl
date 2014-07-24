@@ -144,65 +144,6 @@ sub capture {
 
 
 #/////////////////////////////////////////////////////////////////////////
-=head2 node_status
-
- Parameters  : $nodename, $log
- Returns     : array of related status checks.  See the $status variable for an example of the return
- Description : checks if sshd is active, and returns information regarding if a node should be reloaded or not.
-
-=cut
-
-sub node_status {
-	my $self = shift;
-
-	# Check if subroutine was called as a class method
-	if (ref($self) !~ /helloworld/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return 0;
-	}
-
-	#my ($vmhash) = shift;
-
-	my ($package, $filename, $line, $sub) = caller(0);
-
-	# try to contact vm
-	# $self->data->get_request_data;
-	# get state of vm
-	my $vmpath             = $self->data->get_vmhost_profile_vmpath;
-	my $datastorepath      = $self->data->get_vmhost_profile_datastore_path;
-	my $requestedimagename = $self->data->get_image_name;
-	my $vmhost_type        = $self->data->get_vmhost_type;
-	my $vmhost_hostname    = $self->data->get_vmhost_hostname;
-	my $vmhost_imagename   = $self->data->get_vmhost_image_name;
-	my $vmclient_shortname = $self->data->get_computer_short_name;
-	my $request_forimaging              = $self->data->get_request_forimaging();
-
-	#notify($ERRORS{'OK'}, 0, "Entering node_status, checking status of $vmclient_shortname");
-	#notify($ERRORS{'DEBUG'}, 0, "request_for_imaging: $request_forimaging");
-	#notify($ERRORS{'DEBUG'}, 0, "requeseted image name: $requestedimagename");
-
-	my ($hostnode, $identity);
-
-	# Create a hash to store status components
-	my %status;
-
-	# Initialize all hash keys here to make sure they're defined
-	$status{status}       = 0;
-	$status{currentimage} = 0;
-	$status{ping}         = 0;
-	$status{ssh}          = 0;
-	$status{vmstate}      = 0;    #on or off
-	$status{image_match}  = 0;
-
-	#$status{status} = 'READY';
-	#$status{status} = 'RELOAD';
-
-	notify($ERRORS{'DEBUG'}, 0, "status set to $status{status}");
-
-	notify($ERRORS{'DEBUG'}, 0, "returning node status hash reference (\$node_status->{status}=$status{status})");
-	return \%status;
-
-} ## end sub node_status
 
 sub does_image_exist {
 	my $self = shift;
