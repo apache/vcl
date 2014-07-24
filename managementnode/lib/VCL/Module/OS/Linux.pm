@@ -377,7 +377,7 @@ sub post_load {
 	}
 	
 	# Change password
-	if (!$self->changepasswd($computer_node_name, "root")) {
+	if (!$self->changepasswd("root")) {
 		notify($ERRORS{'OK'}, 0, "failed to edit root password on $computer_node_name");
 	}
 	
@@ -636,7 +636,7 @@ sub update_hostname_file {
 		return 0;
 	}
 
-	my $computer_node_name   = $self->data->get_computer_node_name();
+	my $computer_node_name = $self->data->get_computer_node_name();
 	my $network_file_path = '/etc/sysconfig/network';
 
 	my $command = "sed -i -e \"/^HOSTNAME=/d\" $network_file_path; echo \"HOSTNAME=$public_hostname\" >> $network_file_path";
@@ -1185,9 +1185,11 @@ sub synchronize_time {
 
 =head2 changepasswd
 
- Parameters  : called as an object
- Returns     : 1 - success , 0 - failure
- Description : changes or sets password for given account
+ Parameters  : $username, $password (optional)
+ Returns     : boolean
+ Description : Sets password for the account specified by the username argument.
+               If no password argument is supplied, a random password is
+               generated.
 
 =cut
 
@@ -1198,25 +1200,32 @@ sub changepasswd {
 		return 0;
 	}
 	
-	my $management_node_keys = $self->data->get_management_node_keys();
+	my $username = shift;
+	my $password  = shift;
 	
-	# change the privileged account passwords on the blade images
-	my $node    = shift;
-	my $account = shift;
-	my $passwd  = shift;
-	
-	notify($ERRORS{'WARNING'}, 0, "node is not defined")    if (!(defined($node)));
-	notify($ERRORS{'WARNING'}, 0, "account is not defined") if (!(defined($account)));
-	
-	$passwd = getpw(15) if (!(defined($passwd)));
-	
-	my ($exit_status, $output) = run_ssh_command($node, $management_node_keys, "echo $passwd \| /usr/bin/passwd -f $account --stdin", "root");
-	if (!defined($output)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to run SSH command to set password for account: $account");
+	if (!$username) {
+		notify($ERRORS{'WARNING'}, 0, "username argument was not provided");
 		return;
 	}
-	notify($ERRORS{'OK'}, 0, "changed password for account: $account, output:\n" . join("\n", @$output));
-	return 1;
+	
+	if (!$password) {
+		$password = getpw(15);
+	}
+	
+	my $command = "echo $password \| /usr/bin/passwd -f $username --stdin";
+	my ($exit_status, $output) = $self->execute($command);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to run SSH command to set password for $username");
+		return;
+	}
+	elsif (grep(/(unknown user|warning|error)/i, @$output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to change password for $username to '$password', command: '$command', output:\n" . join("\n", @$output));
+		return;
+	}
+	else {
+		notify($ERRORS{'OK'}, 0, "changed password for $username to '$password', output:\n" . join("\n", @$output));
+		return 1;
+	}
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -1283,25 +1292,23 @@ sub add_vcl_usergroup {
 		return;
 	}
 	
-	my $management_node_keys = $self->data->get_management_node_keys();
 	my $computer_node_name   = $self->data->get_computer_node_name();
-	my $identity             = $self->data->get_image_identity;
 	
-	if (run_ssh_command($computer_node_name, $identity, "groupadd vcl", "root")) {
-		notify($ERRORS{'DEBUG'}, 0, "successfully added the vcl user group");
+	if ($self->execute("groupadd vcl")) {
+		notify($ERRORS{'DEBUG'}, 0, "successfully added the vcl user group to $computer_node_name");
 	}
 	
 	return 1;
-
 }
 
 #/////////////////////////////////////////////////////////////////////////////
 
 =head2 is_connected
 
- Parameters  :
- Returns     :
- Description :
+ Parameters  : none
+ Returns     : boolean, undefined if error occurred
+ Description : Checks if a connection on port 22 is established to the
+               computer's public IP address.
 
 =cut
 
@@ -1312,27 +1319,33 @@ sub is_connected {
 		return;
 	}
 	
-	my $computer_node_name         = $self->data->get_computer_node_name();
-	my $identity                   = $self->data->get_image_identity;
-	my $remote_ip                  = $self->data->get_reservation_remote_ip();
+	my $computer_node_name = $self->data->get_computer_node_name();
+	
 	my $computer_public_ip_address = $self->data->get_computer_public_ip_address();
-	
-	my @SSHCMD = run_ssh_command($computer_node_name, $identity, "netstat -an", "root", 22, 0);
-	foreach my $line (@{$SSHCMD[1]}) {
-		chomp($line);
-		next if ($line =~ /Warning/);
-		
-		if ($line =~ /Connection refused/) {
-			notify($ERRORS{'WARNING'}, 0, "$line");
-			return 1;
-		}
-		if ($line =~ /tcp\s+([0-9]*)\s+([0-9]*)\s($computer_public_ip_address:22)\s+([.0-9]*):([0-9]*)(.*)(ESTABLISHED)/) {
-			return 1;
-		}
-	} ## end foreach my $line (@{$SSHCMD[1]})
-	
-	return 0;
+	if (!$computer_public_ip_address) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine if connection exists to $computer_node_name, public IP address could not be determined");
+		return;
+	}
 
+	my $command = "netstat -an | grep ESTABLISHED";
+	my ($exit_status, $output) = $self->execute($command);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command on $computer_node_name: $command");
+		return;
+	}
+	
+	if (grep(/(Warning|Connection refused)/i, @$output)) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine if connection exists to $computer_public_ip_address on $computer_node_name, output:\n" . join("\n", @$output));
+		return;
+	}
+	elsif (my ($line) = grep(/tcp\s+([0-9]*)\s+([0-9]*)\s($computer_public_ip_address:22)\s+([.0-9]*):([0-9]*)(.*)(ESTABLISHED)/, @$output)) {
+		notify($ERRORS{'DEBUG'}, 0, "connection exists to $computer_public_ip_address on $computer_node_name:\n$line");
+		return 1;
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "connection does not exist to $computer_public_ip_address on $computer_node_name");
+		return 0;
+	}
 } ## end sub is_connected
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -4514,7 +4527,7 @@ sub stop_external_sshd {
 		return;
 	}
 	
-	my $computer_node_name   = $self->data->get_computer_node_name();
+	my $computer_node_name = $self->data->get_computer_node_name();
 	
 	$self->stop_service('ext_sshd');
 	

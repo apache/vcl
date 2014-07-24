@@ -245,56 +245,47 @@ sub enable_dhcp {
 
 =head2 changepasswd
 
- Parameters  : called as an object
- Returns     : 1 - success , 0 - failure
- Description : changes or sets password for given account
+ Parameters  : $username, $password (optional)
+ Returns     : boolean
+ Description : Sets password for the account specified by the username argument.
+               If no password argument is supplied, a random password is
+               generated.
 
 =cut
 
 sub changepasswd {
-   my $self = shift;
-   if (ref($self) !~ /linux/i) {
-      notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-      return 0;
-   }
-
-   # change the privileged account passwords on the blade images
-	my $computer_short_name = shift;
-   my $account = shift;
-   my $passwd = shift;
-
-   my $management_node_keys = $self->data->get_management_node_keys();
-	
-	if($computer_short_name) {
-		$computer_short_name = $self->data->get_computer_short_name();
-	}
-
-
-	if(!defined($account)) {
-		$account = $self->data->get_user_login_id();
+	my $self = shift;
+	if (ref($self) !~ /linux/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return 0;
 	}
 	
+	my $username = shift;
+	my $password  = shift;
 	
-   $passwd = getpw(15) if (!(defined($passwd)));
-
-	my $command = "echo $account:$passwd | chpasswd";
+	if (!$username) {
+		notify($ERRORS{'WARNING'}, 0, "username argument was not provided");
+		return;
+	}
 	
+	if (!$password) {
+		$password = getpw(15);
+	}
+	
+	my $command = "echo $username:$password | chpasswd";
 	my ($exit_status, $output) = $self->execute($command);
-   if (!defined($output)) {
-      notify($ERRORS{'WARNING'}, 0, "failed to run command to determine if file or directory exists on $computer_short_name:\ncommand: '$command'");
-      return;
-   }
-   elsif (grep(/token manipulation error/i, @$output)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to change password fro $account on $computer_short_name:\ncommand: '$command'\nexit status: $exit_status, output:\n" . join("\n", @$output));
-      return;
-   }
-   elsif (grep(/stat: /i, @$output)) {
-      notify($ERRORS{'WARNING'}, 0, "failed to determine if file or directory exists on $computer_short_name:\ncommand: '$command'\nexit status: $exit_status, output:\n" . join("\n", @$output));
-      return;
-   }	
-
-	notify($ERRORS{'OK'}, 0, "changed password for account: $account");	
-	return 1;
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to run SSH command to set password for $username");
+		return;
+	}
+	elsif (grep(/(unknown user|warning|error)/i, @$output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to change password for $username to '$password', command: '$command', output:\n" . join("\n", @$output));
+		return;
+	}
+	else {
+		notify($ERRORS{'OK'}, 0, "changed password for $username to '$password', output:\n" . join("\n", @$output));
+		return 1;
+	}
 }
 
 #/////////////////////////////////////////////////////////////////////////////
