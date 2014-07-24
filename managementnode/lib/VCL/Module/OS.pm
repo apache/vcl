@@ -708,7 +708,7 @@ sub is_ssh_responding {
 		#	ignore_error => 1,
 		#});
 		
-		my ($exit_status, $output) = run_ssh_command({
+		my ($exit_status, $output) = $self->execute({
 			node => $computer_node_name,
 			command => "echo \"testing ssh on $computer_node_name\"",
 			max_attempts => $max_attempts,
@@ -1122,7 +1122,6 @@ sub set_vcld_post_load_status {
 	}
 
 	my $image_os_type = $self->data->get_image_os_type();
-	my $management_node_keys = $self->data->get_management_node_keys();
 	my $computer_node_name   = $self->data->get_computer_node_name();
 	
 	my $time = localtime;
@@ -1146,7 +1145,7 @@ sub set_vcld_post_load_status {
 		$command .= " && unix2dos currentimage.txt";
 	}
 	
-	my ($exit_status, $output) = run_ssh_command($computer_node_name, $management_node_keys, $command, '', '', 1);
+	my ($exit_status, $output) = $self->execute($command, 1);
 	if (defined($exit_status) && $exit_status == 0) {
 		notify($ERRORS{'DEBUG'}, 0, "added line to currentimage.txt on $computer_node_name: '$post_load_line'");
 	}
