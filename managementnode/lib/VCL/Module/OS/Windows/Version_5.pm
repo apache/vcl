@@ -162,7 +162,6 @@ sub run_sysprep {
 		return;
 	}
 
-	my $management_node_keys = $self->data->get_management_node_keys();
 	my $computer_node_name   = $self->data->get_computer_node_name();
 	my $system32_path        = $self->get_system32_path();
 	
@@ -199,11 +198,7 @@ sub run_sysprep {
 	}
 	
 	# SCP the sysprep.inf tempfile to the computer
-	my $scp_result = run_scp_command($tmp_sysprep_inf_path, "$computer_node_name:$node_configuration_sysprep_inf_path", $management_node_keys);
-	if ($scp_result) {
-		notify($ERRORS{'OK'}, 0, "copied $tmp_sysprep_inf_path to $computer_node_name:$node_configuration_sysprep_inf_path");
-	}
-	else {
+	if (!$self->copy_file_to($tmp_sysprep_inf_path, $node_configuration_sysprep_inf_path)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to copy $tmp_sysprep_inf_path to $computer_node_name:$node_configuration_sysprep_inf_path");
 		return;
 	}
@@ -226,7 +221,7 @@ sub run_sysprep {
 	
 	# Copy Sysprep files to C:\Sysprep
 	my $xcopy_command = "cp -rvf \"$node_configuration_sysprep_directory\" \"$node_working_sysprep_directory\"";
-	my ($xcopy_status, $xcopy_output) = run_ssh_command($computer_node_name, $management_node_keys, $xcopy_command);
+	my ($xcopy_status, $xcopy_output) = $self->execute($xcopy_command);
 	if (defined($xcopy_status) && $xcopy_status == 0) {
 		notify($ERRORS{'OK'}, 0, "copied Sysprep files to $node_working_sysprep_directory");
 	}
@@ -289,7 +284,7 @@ sub run_sysprep {
 	
 	$sysprep_command .= "\"";
 	
-	my ($sysprep_status, $sysprep_output) = run_ssh_command($computer_node_name, $management_node_keys, $sysprep_command);
+	my ($sysprep_status, $sysprep_output) = $self->execute($sysprep_command);
 	if (defined($sysprep_status) && $sysprep_status == 0) {
 		notify($ERRORS{'OK'}, 0, "initiated Sysprep.exe, waiting for $computer_node_name to become unresponsive");
 	}
@@ -524,9 +519,6 @@ sub get_sysprep_inf_mass_storage_section {
 		return;
 	}
 	
-	my $management_node_keys = $self->data->get_management_node_keys();
-	my $computer_node_name   = $self->data->get_computer_node_name();
-	
 	my $drivers_directory = $self->get_node_configuration_directory() . '/Drivers';
 	
 	# Find the paths of .inf files in the drivers directory with a Class=SCSIAdapter or HDC line
@@ -549,7 +541,7 @@ sub get_sysprep_inf_mass_storage_section {
 	for my $storage_inf_path (@storage_inf_paths) {
 		my @hwid_lines;
 		my $grep_hwid_command .= '/usr/bin/grep -E ",[ ]*PCI.VEN[^\s]*" ' . $storage_inf_path;
-		my ($grep_hwid_exit_status, $grep_hwid_output) = run_ssh_command($computer_node_name, $management_node_keys, $grep_hwid_command, '', '', 1);
+		my ($grep_hwid_exit_status, $grep_hwid_output) = $self->execute($grep_hwid_command, 1);
 		if (defined($grep_hwid_exit_status) && $grep_hwid_exit_status == 0) {
 			@hwid_lines = @$grep_hwid_output;
 			notify($ERRORS{'DEBUG'}, 0, "found hardware ID lines in $storage_inf_path:\n" . join("\n", @hwid_lines));
@@ -602,13 +594,11 @@ sub firewall_enable_sessmgr {
 		return;
 	}
 	
-	my $management_node_keys = $self->data->get_management_node_keys();
-	my $computer_node_name   = $self->data->get_computer_node_name();
-	my $system32_path        = $self->get_system32_path();
+	my $system32_path = $self->get_system32_path();
 	
 	# Configure the firewall to allow the sessmgr.exe program
 	my $netsh_command = "$system32_path/netsh.exe firewall set allowedprogram name = \"Microsoft Remote Desktop Help Session Manager\" mode = ENABLE scope = ALL profile = ALL program = \"$system32_path/sessmgr.exe\"";
-	my ($netsh_status, $netsh_output) = run_ssh_command($computer_node_name, $management_node_keys, $netsh_command);
+	my ($netsh_status, $netsh_output) = $self->execute($netsh_command);
 	if (defined($netsh_status) && $netsh_status == 0) {
 		notify($ERRORS{'DEBUG'}, 0, "configured firewall to allow sessmgr.exe");
 	}
@@ -665,12 +655,10 @@ sub disable_sleep {
 		return;	
 	}
 	
-	my $management_node_keys = $self->data->get_management_node_keys();
-	my $computer_node_name   = $self->data->get_computer_node_name();
-	my $system32_path        = $self->get_system32_path() || return;
+	my $system32_path = $self->get_system32_path() || return;
 	
 	my $query_command = "$system32_path/powercfg.exe /QUERY";
-	my ($query_exit_status, $query_output) = run_ssh_command($computer_node_name, $management_node_keys, $query_command, '', '', 1);
+	my ($query_exit_status, $query_output) = $self->execute($query_command, 1);
 	if (!defined($query_output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to run SSH command to retrieve power scheme name");
 		return;
@@ -696,7 +684,7 @@ sub disable_sleep {
 	$powercfg_command .= "$system32_path/powercfg.exe /CHANGE \"$scheme_name\" /hibernate-timeout-ac 0 ; ";
 	$powercfg_command .= "$system32_path/powercfg.exe /CHANGE \"$scheme_name\" /hibernate-timeout-dc 0";
 	
-	my ($powercfg_exit_status, $powercfg_output) = run_ssh_command($computer_node_name, $management_node_keys, $powercfg_command, '', '', 1);
+	my ($powercfg_exit_status, $powercfg_output) = $self->execute($powercfg_command, 1);
 	if (!defined($powercfg_output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to run SSH command to disable sleep");
 		return;
