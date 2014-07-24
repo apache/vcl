@@ -512,9 +512,7 @@ sub run_slmgr_ipk {
 		return;
 	}
 	
-	my $management_node_keys = $self->data->get_management_node_keys();
-	my $computer_node_name   = $self->data->get_computer_node_name();
-	my $system32_path        = $self->get_system32_path() || return;
+	my $system32_path = $self->get_system32_path() || return;
 	
 	# Get the arguments
 	my $product_key = shift;
@@ -525,7 +523,7 @@ sub run_slmgr_ipk {
 	
 	# Run cscript.exe slmgr.vbs -ipk to install the product key
 	my $ipk_command = "$system32_path/cscript.exe //NoLogo \$SYSTEMROOT/System32/slmgr.vbs -ipk $product_key";
-	my ($ipk_exit_status, $ipk_output) = run_ssh_command($computer_node_name, $management_node_keys, $ipk_command);
+	my ($ipk_exit_status, $ipk_output) = $self->execute($ipk_command);
 	if (defined($ipk_exit_status) && $ipk_exit_status == 0 && grep(/successfully/i, @$ipk_output)) {
 		notify($ERRORS{'OK'}, 0, "installed product key: $product_key");
 	}
@@ -559,14 +557,12 @@ sub run_slmgr_ckms {
 		return;
 	}
 	
-	my $management_node_keys = $self->data->get_management_node_keys();
-	my $computer_node_name   = $self->data->get_computer_node_name();
-	my $system32_path        = $self->get_system32_path() || return;
+	my $system32_path = $self->get_system32_path() || return;
 	
 	# Run slmgr.vbs -ckms to clear an existing KMS server from a computer
 	# slmgr.vbs must be run in a command shell using the correct System32 path or the task it's supposed to do won't really take effect
 	my $skms_command = "$system32_path/cscript.exe //NoLogo \$SYSTEMROOT/System32/slmgr.vbs -ckms";
-	my ($skms_exit_status, $skms_output) = run_ssh_command($computer_node_name, $management_node_keys, $skms_command);
+	my ($skms_exit_status, $skms_output) = $self->execute($skms_command);
 	if (defined($skms_exit_status) && $skms_exit_status == 0 && grep(/successfully/i, @$skms_output)) {
 		notify($ERRORS{'OK'}, 0, "cleared kms server");
 	}
@@ -600,14 +596,12 @@ sub run_slmgr_cpky {
 		return;
 	}
 	
-	my $management_node_keys = $self->data->get_management_node_keys();
-	my $computer_node_name   = $self->data->get_computer_node_name();
-	my $system32_path        = $self->get_system32_path() || return;
+	my $system32_path = $self->get_system32_path() || return;
 	
 	# Run slmgr.vbs -cpky to clear an existing product key from a computer
 	# slmgr.vbs must be run in a command shell using the correct System32 path or the task it's supposed to do won't really take effect
 	my $skms_command = "$system32_path/cscript.exe //NoLogo \$SYSTEMROOT/System32/slmgr.vbs -cpky";
-	my ($skms_exit_status, $skms_output) = run_ssh_command($computer_node_name, $management_node_keys, $skms_command);
+	my ($skms_exit_status, $skms_output) = $self->execute($skms_command);
 	if (defined($skms_exit_status) && $skms_exit_status == 0 && grep(/successfully/i, @$skms_output)) {
 		notify($ERRORS{'OK'}, 0, "cleared product key");
 	}
@@ -641,9 +635,7 @@ sub run_slmgr_skms {
 		return;
 	}
 	
-	my $management_node_keys = $self->data->get_management_node_keys();
-	my $computer_node_name   = $self->data->get_computer_node_name();
-	my $system32_path        = $self->get_system32_path() || return;
+	my $system32_path = $self->get_system32_path() || return;
 	
 	# Get the KMS address argument
 	my $kms_address = shift;
@@ -659,7 +651,7 @@ sub run_slmgr_skms {
 	# slmgr.vbs must be run in a command shell using the correct System32 path or the task it's supposed to do won't really take effect
 	my $skms_command = "$system32_path/cscript.exe //NoLogo \$SYSTEMROOT/System32/slmgr.vbs -skms $kms_address:$kms_port";
 	
-	my ($skms_exit_status, $skms_output) = run_ssh_command($computer_node_name, $management_node_keys, $skms_command);
+	my ($skms_exit_status, $skms_output) = $self->execute($skms_command);
 	if (defined($skms_exit_status) && $skms_exit_status == 0 && grep(/successfully/i, @$skms_output)) {
 		notify($ERRORS{'OK'}, 0, "set kms server to $kms_address:$kms_port");
 	}
@@ -693,13 +685,11 @@ sub run_slmgr_ato {
 		return;
 	}
 	
-	my $management_node_keys = $self->data->get_management_node_keys();
-	my $computer_node_name   = $self->data->get_computer_node_name();
-	my $system32_path        = $self->get_system32_path() || return;
+	my $system32_path = $self->get_system32_path() || return;
 	
 	# Run cscript.exe slmgr.vbs -ato to install the product key
 	my $ato_command = "$system32_path/cscript.exe //NoLogo \$SYSTEMROOT/System32/slmgr.vbs -ato";
-	my ($ato_exit_status, $ato_output) = run_ssh_command($computer_node_name, $management_node_keys, $ato_command);
+	my ($ato_exit_status, $ato_output) = $self->execute($ato_command);
 	if (defined($ato_exit_status) && $ato_exit_status == 0 && grep(/successfully/i, @$ato_output)) {
 		notify($ERRORS{'OK'}, 0, "activated license");
 	}
@@ -733,13 +723,11 @@ sub run_slmgr_dlv {
 		return;
 	}
 	
-	my $management_node_keys = $self->data->get_management_node_keys();
-	my $computer_node_name   = $self->data->get_computer_node_name();
-	my $system32_path        = $self->get_system32_path() || return;
+	my $system32_path = $self->get_system32_path() || return;
 	
 	# Run cscript.exe slmgr.vbs -dlv to install the product key
 	my $dlv_command = "$system32_path/cscript.exe //NoLogo \$SYSTEMROOT/System32/slmgr.vbs -dlv";
-	my ($dlv_exit_status, $dlv_output) = run_ssh_command($computer_node_name, $management_node_keys, $dlv_command, '', '', 0);
+	my ($dlv_exit_status, $dlv_output) = $self->execute($dlv_command);
 	if (defined($dlv_exit_status) && $dlv_exit_status == 0) {
 		notify($ERRORS{'OK'}, 0, "licensing information:\n" . join("\n", @$dlv_output));
 	}
@@ -774,13 +762,11 @@ sub get_license_status {
 		return;
 	}
 	
-	my $management_node_keys = $self->data->get_management_node_keys();
-	my $computer_node_name   = $self->data->get_computer_node_name();
-	my $system32_path        = $self->get_system32_path() || return;
+	my $system32_path = $self->get_system32_path() || return;
 	
 	# Run cscript.exe slmgr.vbs -dlv to get the activation status
 	my $dlv_command = "$system32_path/cscript.exe //NoLogo \$SYSTEMROOT/System32/slmgr.vbs -dlv";
-	my ($dlv_exit_status, $dlv_output) = run_ssh_command($computer_node_name, $management_node_keys, $dlv_command, '', '', 0);
+	my ($dlv_exit_status, $dlv_output) = $self->execute($dlv_command);
 	if ($dlv_output && grep(/License Status/i, @$dlv_output)) {
 		#notify($ERRORS{'DEBUG'}, 0, "retrieved license information");
 	}
@@ -865,9 +851,6 @@ sub set_network_location {
 		return;
 	}
 	
-	my $management_node_keys     = $self->data->get_management_node_keys();
-	my $computer_node_name       = $self->data->get_computer_node_name();
-	
 	#Category key: Home/Work=00000000, Public=00000001
 	
 	my $registry_string .= <<"EOF";
@@ -905,9 +888,7 @@ sub firewall_enable_ping {
 		return;
 	}
 	
-	my $management_node_keys = $self->data->get_management_node_keys();
-	my $computer_node_name   = $self->data->get_computer_node_name();
-	my $system32_path        = $self->get_system32_path() || return;
+	my $system32_path = $self->get_system32_path() || return;
 	
 	# First delete any rules which allow ping and then add a new rule
 	my $add_rule_command;
@@ -928,9 +909,9 @@ sub firewall_enable_ping {
 	$add_rule_command .= ' remoteip=any';
 	
 	# Add the firewall rule
-	my ($add_rule_exit_status, $add_rule_output) = run_ssh_command($computer_node_name, $management_node_keys, $add_rule_command);
+	my ($add_rule_exit_status, $add_rule_output) = $self->execute($add_rule_command);
 	
-	if (defined($add_rule_output)  && @$add_rule_output[-1] =~ /(Ok|The object already exists)/i) {
+	if (defined($add_rule_output) && @$add_rule_output[-1] =~ /(Ok|The object already exists)/i) {
 		notify($ERRORS{'OK'}, 0, "added firewall rule to enable ping from any address");
 	}
 	elsif (defined($add_rule_exit_status)) {
@@ -962,9 +943,7 @@ sub firewall_enable_ping_private {
 		return;
 	}
 	
-	my $management_node_keys = $self->data->get_management_node_keys();
-	my $computer_node_name   = $self->data->get_computer_node_name();
-	my $system32_path        = $self->get_system32_path() || return;
+	my $system32_path = $self->get_system32_path() || return;
 	
 	# Get the computer's private IP address
 	my $private_ip_address = $self->get_private_ip_address();
@@ -991,9 +970,9 @@ sub firewall_enable_ping_private {
 	$add_rule_command .= ' localip=' . $private_ip_address;
 	
 	# Add the firewall rule
-	my ($add_rule_exit_status, $add_rule_output) = run_ssh_command($computer_node_name, $management_node_keys, $add_rule_command);
+	my ($add_rule_exit_status, $add_rule_output) = $self->execute($add_rule_command);
 	
-	if (defined($add_rule_output)  && @$add_rule_output[-1] =~ /(Ok|The object already exists)/i) {
+	if (defined($add_rule_output) && @$add_rule_output[-1] =~ /(Ok|The object already exists)/i) {
 		notify($ERRORS{'OK'}, 0, "added firewall rule to allow incoming ping to: $private_ip_address");
 	}
 	elsif (defined($add_rule_exit_status)) {
@@ -1025,9 +1004,7 @@ sub firewall_disable_ping {
 		return;
 	}
 	
-	my $management_node_keys = $self->data->get_management_node_keys();
-	my $computer_node_name   = $self->data->get_computer_node_name();
-	my $system32_path        = $self->get_system32_path() || return;
+	my $system32_path = $self->get_system32_path() || return;
 	
 	# First delete any rules which allow ping and then add a new rule
 	my $netsh_command;
@@ -1037,12 +1014,12 @@ sub firewall_disable_ping {
 	$netsh_command .= ' protocol=icmpv4:8,any';
 	
 	# Execute the netsh.exe command
-	my ($netsh_exit_status, $netsh_output) = run_ssh_command($computer_node_name, $management_node_keys, $netsh_command);
+	my ($netsh_exit_status, $netsh_output) = $self->execute($netsh_command);
 	
-	if (defined($netsh_output)  && @$netsh_output[-1] =~ /Ok/i) {
+	if (defined($netsh_output) && @$netsh_output[-1] =~ /Ok/i) {
 		notify($ERRORS{'OK'}, 0, "configured firewall to disallow ping");
 	}
-	elsif (defined($netsh_output)  && @$netsh_output[-1] =~ /No rules match/i) {
+	elsif (defined($netsh_output) && @$netsh_output[-1] =~ /No rules match/i) {
 		notify($ERRORS{'OK'}, 0, "no firewall rules exist which enable ping");
 	}
 	elsif (defined($netsh_exit_status)) {
@@ -1083,9 +1060,7 @@ sub firewall_enable_rdp {
 		return;
 	}
 	
-	my $management_node_keys = $self->data->get_management_node_keys();
-	my $computer_node_name   = $self->data->get_computer_node_name();
-	my $system32_path        = $self->get_system32_path() || return;
+	my $system32_path = $self->get_system32_path() || return;
 	
 	my $remote_ip;
 	my $rule_name;
@@ -1176,8 +1151,8 @@ sub firewall_enable_rdp {
 	$remote_ip = 'private only' if !$remote_ip;
 	
 	# Add the firewall rule
-	my ($add_rule_exit_status, $add_rule_output) = run_ssh_command($computer_node_name, $management_node_keys, $add_rule_command);
-	if (defined($add_rule_output)  && @$add_rule_output[-1] =~ /(Ok|The object already exists)/i) {
+	my ($add_rule_exit_status, $add_rule_output) = $self->execute($add_rule_command);
+	if (defined($add_rule_output) && @$add_rule_output[-1] =~ /(Ok|The object already exists)/i) {
 		notify($ERRORS{'OK'}, 0, "added firewall rule to enable RDP from $remote_ip");
 	}
 	elsif (defined($add_rule_exit_status)) {
@@ -1229,9 +1204,7 @@ sub firewall_disable_rdp {
 		return;
 	}
 	
-	my $management_node_keys = $self->data->get_management_node_keys();
-	my $computer_node_name   = $self->data->get_computer_node_name();
-	my $system32_path        = $self->get_system32_path() || return;
+	my $system32_path = $self->get_system32_path() || return;
 	
 	# First delete any rules which allow ping and then add a new rule
 	my $netsh_command;
@@ -1242,12 +1215,12 @@ sub firewall_disable_rdp {
 	$netsh_command .= ' localport=3389';
 	
 	# Delete the firewall rule
-	my ($netsh_exit_status, $netsh_output) = run_ssh_command($computer_node_name, $management_node_keys, $netsh_command);
+	my ($netsh_exit_status, $netsh_output) = $self->execute($netsh_command);
 	
-	if (defined($netsh_output)  && @$netsh_output[-1] =~ /(Ok|The object already exists)/i) {
+	if (defined($netsh_output) && @$netsh_output[-1] =~ /(Ok|The object already exists)/i) {
 		notify($ERRORS{'OK'}, 0, "deleted firewall rules which enable RDP");
 	}
-	elsif (defined($netsh_output)  && @$netsh_output[-1] =~ /No rules match/i) {
+	elsif (defined($netsh_output) && @$netsh_output[-1] =~ /No rules match/i) {
 		notify($ERRORS{'OK'}, 0, "no firewall rules exist which enable RDP");
 	}
 	elsif (defined($netsh_exit_status)) {
@@ -1286,9 +1259,7 @@ sub firewall_enable_ssh {
 		return;
 	}
 	
-	my $management_node_keys = $self->data->get_management_node_keys();
-	my $computer_node_name   = $self->data->get_computer_node_name();
-	my $system32_path        = $self->get_system32_path() || return;
+	my $system32_path = $self->get_system32_path() || return;
 	
 	my $rule_name;
 	my $rule_description;
@@ -1342,9 +1313,9 @@ sub firewall_enable_ssh {
 	$add_rule_command .= " remoteip=any";
 	
 	# Add the firewall rule
-	my ($add_rule_exit_status, $add_rule_output) = run_ssh_command($computer_node_name, $management_node_keys, $add_rule_command);
+	my ($add_rule_exit_status, $add_rule_output) = $self->execute($add_rule_command);
 	
-	if (defined($add_rule_output)  && @$add_rule_output[-1] =~ /(Ok|The object already exists)/i) {
+	if (defined($add_rule_output) && @$add_rule_output[-1] =~ /(Ok|The object already exists)/i) {
 		notify($ERRORS{'OK'}, 0, "added firewall rule to enable SSH to address: $rule_localip");
 	}
 	elsif (defined($add_rule_exit_status)) {
@@ -1359,8 +1330,8 @@ sub firewall_enable_ssh {
 	# Turn the firewall back on after SSH exceptions are set
 	if ($firewall_state eq 'ON') {
 		my $firewall_enable_command = "$system32_path/netsh.exe advfirewall set currentprofile state on";
-		my ($firewall_enable_exit_status, $firewall_enable_output) = run_ssh_command($computer_node_name, $management_node_keys, $firewall_enable_command);
-		if (defined($firewall_enable_output)  && @$firewall_enable_output[-1] =~ /Ok/i) {
+		my ($firewall_enable_exit_status, $firewall_enable_output) = $self->execute($firewall_enable_command);
+		if (defined($firewall_enable_output) && @$firewall_enable_output[-1] =~ /Ok/i) {
 			notify($ERRORS{'OK'}, 0, "turned on firewall after turning it off to alter SSH port exceptions");
 		}
 		elsif (defined($firewall_enable_exit_status)) {
@@ -1415,13 +1386,11 @@ sub get_firewall_state {
 		return;
 	}
 	
-	my $management_node_keys = $self->data->get_management_node_keys();
-	my $computer_node_name   = $self->data->get_computer_node_name();
-	my $system32_path        = $self->get_system32_path() || return;
+	my $system32_path = $self->get_system32_path() || return;
 	
 	# Run netsh.exe to get the state of the current firewall profile
 	my $netsh_command = "$system32_path/netsh.exe advfirewall show currentprofile state";
-	my ($netsh_exit_status, $netsh_output) = run_ssh_command($computer_node_name, $management_node_keys, $netsh_command, '', '', 0);
+	my ($netsh_exit_status, $netsh_output) = $self->execute($netsh_command);
 	if (defined($netsh_output)) {
 		notify($ERRORS{'DEBUG'}, 0, "retrieved firewall state");
 	}
@@ -1667,8 +1636,8 @@ sub _enable_firewall_port_helper {
 		return;
 	}
 	
-	my $computer_node_name   = $self->data->get_computer_node_name();
-	my $system32_path        = $self->get_system32_path() || return;
+	my $computer_node_name = $self->data->get_computer_node_name();
+	my $system32_path = $self->get_system32_path() || return;
 	
 	$scope = 'any' if $scope eq '0.0.0.0/0.0.0.0';
 	
@@ -1758,7 +1727,6 @@ sub run_sysprep {
 		return;
 	}
 
-	my $management_node_keys = $self->data->get_management_node_keys();
 	my $computer_node_name = $self->data->get_computer_node_name();
 	my $system32_path = $self->get_system32_path() || return;
 	my $node_configuration_directory = $self->get_node_configuration_directory();
@@ -1904,7 +1872,7 @@ EOF
 	
 	# Uninstall and reinstall MsDTC
 	my $msdtc_command = "$system32_path/msdtc.exe -uninstall ; $system32_path/msdtc.exe -install";
-	my ($msdtc_status, $msdtc_output) = run_ssh_command($computer_node_name, $management_node_keys, $msdtc_command);
+	my ($msdtc_status, $msdtc_output) = $self->execute($msdtc_command);
 	if (defined($msdtc_status) && $msdtc_status == 0) {
 		notify($ERRORS{'DEBUG'}, 0, "reinstalled MsDtc");
 	}
@@ -1977,7 +1945,7 @@ EOF
 	$sysprep_command .= "\"";
 	
 	# Run Sysprep.exe, use cygstart to lauch the .exe and return immediately
-	my ($sysprep_status, $sysprep_output) = run_ssh_command($computer_node_name, $management_node_keys, $sysprep_command);
+	my ($sysprep_status, $sysprep_output) = $self->execute($sysprep_command);
 	if (defined($sysprep_status) && $sysprep_status == 0) {
 		notify($ERRORS{'OK'}, 0, "initiated Sysprep.exe, waiting for $computer_node_name to become unresponsive");
 	}
@@ -2038,9 +2006,7 @@ sub set_ignore_default_routes {
 		return;	
 	}
 	
-	my $management_node_keys = $self->data->get_management_node_keys();
-	my $computer_node_name   = $self->data->get_computer_node_name();
-	my $system32_path        = $self->get_system32_path() || return;
+	my $system32_path = $self->get_system32_path() || return;
 	
 	# Get the private interface name
 	my $private_interface_name = $self->get_private_interface_name();
@@ -2068,7 +2034,7 @@ sub set_ignore_default_routes {
 		notify($ERRORS{'DEBUG'}, 0, "computer has a single network interface, configuring ignore default routes:\ninterface '$private_interface_name': enabled");
 	}
 	
-	my ($netsh_exit_status, $netsh_output) = run_ssh_command($computer_node_name, $management_node_keys, $netsh_command);
+	my ($netsh_exit_status, $netsh_output) = $self->execute($netsh_command);
 	if (!defined($netsh_output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to configure ignore default routes");
 		return;
@@ -2184,9 +2150,7 @@ sub disable_sleep {
 		return;	
 	}
 	
-	my $management_node_keys = $self->data->get_management_node_keys();
-	my $computer_node_name   = $self->data->get_computer_node_name();
-	my $system32_path        = $self->get_system32_path() || return;
+	my $system32_path = $self->get_system32_path() || return;
 
 	# Run powercfg.exe to disable sleep
 	my $powercfg_command;
@@ -2199,7 +2163,7 @@ sub disable_sleep {
 	$powercfg_command .= "$system32_path/powercfg.exe -CHANGE -hibernate-timeout-ac 0 ; ";
 	$powercfg_command .= "$system32_path/powercfg.exe -CHANGE -hibernate-timeout-dc 0";
 	
-	my ($powercfg_exit_status, $powercfg_output) = run_ssh_command($computer_node_name, $management_node_keys, $powercfg_command, '', '', 1);
+	my ($powercfg_exit_status, $powercfg_output) = $self->execute($powercfg_command);
 	if (!defined($powercfg_output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to run SSH command to disable sleep");
 		return;
@@ -2253,7 +2217,7 @@ sub query_event_log {
 	$xpath_query = '*' if !$xpath_query;
 	
 	my $computer_node_name = $self->data->get_computer_node_name();
-	my $system32_path = $self->get_system32_path();
+	my $system32_path = $self->get_system32_path() || return;
 	
 	# Fix problems with the query - replace all single quotes with double quotes
 	# Escape all double quote characters
