@@ -329,15 +329,15 @@ sub pre_capture {
 		notify($ERRORS{'DEBUG'}, 0, "unable to delete user, will try again after reboot");
 	}
 
-=item *
-
- Make sure Cygwin is configured correctly
-
-=cut
-
-	if (!$self->check_cygwin()) {
-		notify($ERRORS{'WARNING'}, 0, "failed to verify that Cygwin is configured correctly");
-	}
+#=item *
+#
+# Make sure Cygwin is configured correctly
+#
+#=cut
+#
+#	if (!$self->check_cygwin()) {
+#		notify($ERRORS{'WARNING'}, 0, "failed to verify that Cygwin is configured correctly");
+#	}
 
 =item *
 
@@ -4090,7 +4090,7 @@ sub get_scheduled_task_info {
 	
 	# Attempt to retrieve scheduled task information
 	my $command = $system32_path . '/schtasks.exe /Query /V /FO CSV';
-	my ($exit_status, $output) = $self->execute($command);
+	my ($exit_status, $output) = $self->execute($command, 0);
 	if (!defined($output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to run command to retrieve scheduled task information");
 		return;
