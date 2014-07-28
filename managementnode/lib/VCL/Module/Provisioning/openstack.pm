@@ -81,7 +81,7 @@ sub initialize {
 		notify($ERRORS{'OK'}, 0, "successfully set openStack auth configuration");
 	}
 	else {
-		notify($ERRORS{'CRITICAL'}, 0, "failed to set openstack auth configuration");
+		notify($ERRORS{'WARNING'}, 0, "failed to set openstack auth configuration");
 		return 0;
 	}
 	
@@ -117,27 +117,26 @@ sub load {
 	# Remove existing VMs which were created for the reservation computer
 	if (_pingnode($computer_name)) {
 		if (!$self->_terminate_os_instance()) {
-			notify($ERRORS{'WARNING'}, 0, " no instance or failed to remove existing VMs");
-			return;
+			notify($ERRORS{'CRITICAL'}, 0, "failed to delete VM $computer_name on VM host $vmhost_name");
 		}
 	}
 	# Remove existing openstack id for computer mapping in database 
 	# Althought the instance is not pingable (delete it accidently), it should delete the instance from database
 	if (!$self->_delete_os_computer_mapping()) {
-		notify($ERRORS{'WARNING'}, 0, "failed to delete the openstack instance id for computer mapping in database");
+		notify($ERRORS{'WARNING'}, 0, "failed to delete the openstack instance id from openstackComputerMap");
 		return;
 	}
 
 	# Create new instance 
 	my $os_instance_id = $self->_post_os_create_instance();
 	if (!defined($os_instance_id)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to create an instance for computer $computer_name on VM host: $vmhost_name");
+		notify($ERRORS{'CRITICAL'}, 0, "failed to create an instance for computer $computer_name on VM host: $vmhost_name");
 		return;
 	}
 
 	# Update the private ip of the instance in database
 	if (!$self->_update_private_ip($os_instance_id)) {
-		notify($ERRORS{'CRITICAL'}, 0, "failed to update private ip of the instance in database");
+		notify($ERRORS{'WARNING'}, 0, "failed to update private ip of the instance in database");
 		return;
 	}
 
@@ -153,7 +152,7 @@ sub load {
 		}
 	}
 	else {
-		notify($ERRORS{'DEBUG'}, 0, ref($self->os) . "::post_load() has not been implemented");
+		notify($ERRORS{'WARNING'}, 0, ref($self->os) . "::post_load() has not been implemented");
 		return;
 	}
 
@@ -212,7 +211,7 @@ sub capture {
 	
 	my $os_image_id = $self->_post_os_create_image($os_instance_id);
 	if (!defined($os_image_id)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to create image for $computer_name");
+		notify($ERRORS{'CRITICAL'}, 0, "failed to create image for $computer_name");
 		return;
 	}
 	notify($ERRORS{'DEBUG'}, 0, "os_image_id: $os_image_id");
@@ -279,7 +278,7 @@ sub does_image_exist {
 
 	my $output = from_json($resp->content);
 	if (!defined($output)) {
-		notify($ERRORS{'WARNING'}, 0, "Fail to parse json ouput: $output");
+		notify($ERRORS{'WARNING'}, 0, "failed to parse json ouput: $output");
 		return 0;
 	}
 
@@ -297,7 +296,7 @@ sub does_image_exist {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2  getimagesize
+=head2  get_image_size
 
  Parameters  : imagename
  Returns     : 0 failure or size of image
@@ -341,7 +340,7 @@ sub get_image_size {
 
 	my $output = from_json($resp->content);
 	if (!defined($output)) {
-		notify($ERRORS{'WARNING'}, 0, "Fail to parse json ouput: $output");
+		notify($ERRORS{'WARNING'}, 0, "failed to parse json ouput: $output");
 		return;
 	}
 
@@ -454,16 +453,6 @@ EOF
 	notify($ERRORS{'DEBUG'}, 0, "os_flavor_id: $os_flavor_id");
 	return $os_flavor_id;
 } ## end sub _get_os_flavor_id
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 _get_os_image_disk_size
-
- Parameters  : image revision id 
- Returns     : OpenStack image id or 0
- Description : Get the OpenStack image id corresponding to the VCL image revision id  
-
-=cut
 
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -782,7 +771,7 @@ sub _post_os_create_image{
 		return;
 	}
 	notify($ERRORS{'DEBUG'}, 0, "os_instance_id: $os_instance_id in sub _post_os_create_image");
-	my $image_name     = $self->data->get_image_name();
+	my $image_name = $self->data->get_image_name();
 	if (!defined($image_name)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to get openstack auth information from environment");
 		return;
@@ -1005,7 +994,7 @@ sub _set_os_auth_conf {
 	my $user_config_file = '/etc/vcl/openstack/openstack.conf';
 	my %config = do($user_config_file);
 	if (!%config) {
-		notify($ERRORS{'CRITICAL'},0, "failure to process $user_config_file");
+		notify($ERRORS{'WARNING'},0, "failure to process $user_config_file");
 		return;
 	}
 	$self->{config} = \%config;
@@ -1064,28 +1053,7 @@ sub _terminate_os_instance {
 		return 0;
 	}
 
-	# normally takes more 10 seconds to delete the instance from the database
-	sleep 30;
-	my $main_loop = 20;
-	while ($main_loop) {
-		notify($ERRORS{'DEBUG'}, 0, "waiting for deleting the instance of $os_instance_id in loop#$main_loop");
-		$resp =  $ua->get(
-			$os_compute_url . "/servers/" . $os_instance_id,
-			content_type => 'application/json',
-			x_auth_project_id => $os_project_id,
-			x_auth_token => $os_token,
-		);
-		if (!$resp->is_success) {
-			notify($ERRORS{'DEBUG'}, 0, "successfully terminate the instance for $computer_name");
-			return 1;
-		}
-
-		sleep 5;
-		$main_loop--;
-	}
-
-	notify($ERRORS{'WARNING'}, 0, "failed to terminate the instance for $computer_name");
-	return 0;
+	return 1;
 } ## end sub _terminate_os_instance
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -1094,7 +1062,7 @@ sub _terminate_os_instance {
 
  Parameters  : OpenStack instance id
  Returns     : 1 or 0
- Description : update the private ip address of the OpenStack instance 
+ Description : update the private ip address of the OpenStack instance in database 
 
 =cut
 
@@ -1160,7 +1128,7 @@ sub _update_private_ip {
 
  Parameters  : OpenStack image id
  Returns     : 1 or 0
- Description : wait for copying the OpenStack image 
+ Description : wait for copying the OpenStack image to repository
 
 =cut
 
