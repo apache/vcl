@@ -6521,9 +6521,16 @@ sub run_gpupdate {
 
 =head2 fix_cygwin_nodosfilewarning
 
- Parameters  : 
- Returns     :
- Description : 
+ Parameters  : none
+ Returns     : boolean
+ Description : Cygwin will include a warning message in the output of a command
+               such as sed.exe or grep.exe which uses a DOS-style file path.
+               This warning is only displayed the first time this is
+               encountered, and not for subsequent commands. The extra warning
+               output can cause problems for other subroutines which parse the
+               output. This subroutine intentionally attempts to trigger the
+               warning so that it does not appear in the output for other
+               subroutines.
 
 =cut
 
