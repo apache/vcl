@@ -329,16 +329,6 @@ sub pre_capture {
 		notify($ERRORS{'DEBUG'}, 0, "unable to delete user, will try again after reboot");
 	}
 
-#=item *
-#
-# Make sure Cygwin is configured correctly
-#
-#=cut
-#
-#	if (!$self->check_cygwin()) {
-#		notify($ERRORS{'WARNING'}, 0, "failed to verify that Cygwin is configured correctly");
-#	}
-
 =item *
 
  Set root as the owner of /home/root
@@ -667,6 +657,14 @@ sub post_load {
 		notify($ERRORS{'WARNING'}, 0, "$computer_node_name never responded to SSH");
 		return 0;
 	}
+
+=item *
+
+ Attempt to trigger and fix Cygwin's nodosfilewarning
+
+=cut
+
+	$self->fix_cygwin_nodosfilewarning();
 
 =item *
 
@@ -6521,6 +6519,50 @@ sub run_gpupdate {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 fix_cygwin_nodosfilewarning
+
+ Parameters  : 
+ Returns     :
+ Description : 
+
+=cut
+
+sub fix_cygwin_nodosfilewarning {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Run useless command with the goal of triggering Cygwin's "nodosfilewarning"
+	# This occurs one and only one time when a DOS path is used in a Cygwin command
+	# When it occurs, it causes problems for other subroutines which parse the output
+	# Example:
+	# cygwin warning:
+	#    MS-DOS style path detected: C:/foo
+	#    Preferred POSIX equivalent is: /cygdrive/c/foo
+	#    CYGWIN environment variable option "nodosfilewarning" turns off this warning.
+	#    Consult the user's guide for more details about POSIX paths:
+	#      http://cygwin.com/cygwin-ug-net/using.html#using-pathnames
+	
+	my $command = 'grep foo C:/foo';
+	my ($exit_status, $output) = $self->execute($command);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to trigger Cygwin nodosfilewarning");
+		return;
+	}
+	elsif (grep(/nodosfilewarning/, @$output)) {
+		notify($ERRORS{'DEBUG'}, 0, "intentionally triggered Cygwin nodosfilewarning, output:\n" . join("\n", @$output));
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "Cygwin nodosfilewarning was not triggered, this is not necessarily a problem, command: '$command', output:\n" . join("\n", @$output));
+	}
+	
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 =head2 run_unix2dos
 
  Parameters  : 
@@ -10670,62 +10712,6 @@ EOF
 	}
 
 	return 1;
-}
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 check_cygwin
-
- Parameters  : none
- Returns     : boolean
- Description : Checks the CYGWIN environment variable to make sure it is set
-               to 'ntsec nodosfilewarning'. If not, the registry is updated, the
-               sshd service is restarted, and the value is checked again.
-
-=cut
-
-sub check_cygwin {
-	my $self = shift;
-	if (ref($self) !~ /windows/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return;
-	}
-	
-	my $computer_node_name   = $self->data->get_computer_node_name();
-	
-	my $environment_variable_name = 'CYGWIN';
-	my $correct_value = 'ntsec nodosfilewarning';
-	
-	my $environment_variable_value = $self->get_environment_variable_value($environment_variable_name);
-	if ($environment_variable_value && $environment_variable_value eq $correct_value) {
-		notify($ERRORS{'DEBUG'}, 0, "$environment_variable_name environment variable is set correctly on $computer_node_name: '$environment_variable_value'");
-		return 1;
-	}
-	else {
-		notify($ERRORS{'DEBUG'}, 0, "$environment_variable_name environment variable is not set correctly on $computer_node_name:\ncorrect value: $correct_value\ncurrent value: '$environment_variable_value'");
-	}
-	
-	# Set the correct value in the registry for the sshd service parameters
-	my $key = 'HKLM\\SYSTEM\\CurrentControlSet\\services\\sshd\\Parameters\\Environment'; 
-	if (!$self->reg_add($key, $environment_variable_name, 'REG_SZ', $correct_value)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to set sshd service $environment_variable_name environment variable in the registry to '$correct_value'");
-		return;
-	}
-	
-	if (!$self->restart_service('sshd')) {
-		notify($ERRORS{'WARNING'}, 0, "failed to restart the sshd service after the $environment_variable_name environment variable was set in the registry to '$correct_value'");
-		return;
-	}
-	
-	$environment_variable_value = $self->get_environment_variable_value($environment_variable_name);
-	if ($environment_variable_value && $environment_variable_value eq $correct_value) {
-		notify($ERRORS{'DEBUG'}, 0, "verified $environment_variable_name environment variable is set correctly after updating the registry: '$environment_variable_value'");
-		return 1;
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "$environment_variable_name environment variable is still not set correctly after updating the registry:\ncorrect value: $correct_value\ncurrent value: '$environment_variable_value'");
-		return;
-	}
 }
 
 #/////////////////////////////////////////////////////////////////////////////
