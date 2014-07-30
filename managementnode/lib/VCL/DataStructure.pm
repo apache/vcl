@@ -487,6 +487,7 @@ $SUBROUTINE_MAPPINGS{management_node_predictive_module_perl_package} = '$ENV{man
 
 $SUBROUTINE_MAPPINGS{general_inuse_check} = '$ENV{management_node_info}{GENERAL_INUSE_CHECK}';
 $SUBROUTINE_MAPPINGS{server_inuse_check} = '$ENV{management_node_info}{SERVER_INUSE_CHECK}';
+$SUBROUTINE_MAPPINGS{cluster_inuse_check} = '$ENV{management_node_info}{cluster_INUSE_CHECK}';
 
 $SUBROUTINE_MAPPINGS{subroutine_mappings} = '\%SUBROUTINE_MAPPINGS';
 

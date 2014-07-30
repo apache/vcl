@@ -3327,6 +3327,7 @@ sub get_timings {
       wait_for_reconnect => '900',
       general_inuse_check => '300',
       server_inuse_check => '900',
+      cluster_inuse_check => '900',
       general_end_notice_first => '600',
       general_end_notice_second => '300',
       ignore_connections_gte => '1440'

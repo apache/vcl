@@ -996,7 +996,7 @@ sub check_blockrequest_time {
 =cut
 
 sub check_time {
-	my ($request_start, $request_end, $reservation_lastcheck, $request_state_name, $request_laststate_name, $serverrequest) = @_;
+	my ($request_start, $request_end, $reservation_lastcheck, $request_state_name, $request_laststate_name, $serverrequest, $reservation_cnt) = @_;
 	
 	# Check the arguments
 	if (!defined($request_state_name)) {
@@ -1110,6 +1110,15 @@ sub check_time {
 				else {
 					return 0;
 				}
+			}
+			elsif($reservation_cnt > 1 ){ 
+				my $cluster_inuse_check_time = ($ENV{management_node_info}->{CLUSTER_INUSE_CHECK} * -1);; 
+				if ($lastcheck_diff_minutes <= $cluster_inuse_check_time) {
+					return "poll";
+				}
+				else {
+					return 0;
+					}
 			}
 			else {
 			#notify($ERRORS{'DEBUG'}, 0, "reservation will end in more than 10 minutes ($end_diff_minutes)");
@@ -4753,6 +4762,10 @@ AND managementnode.id != $management_node_id
 	my $server_inuse_check = get_variable('server_inuse_check') || 300;
 	$management_node_info->{SERVER_INUSE_CHECK} = round($server_inuse_check / 60);
 	$ENV{management_node_info}{SERVER_INUSE_CHECK} = $management_node_info->{SERVER_INUSE_CHECK};
+	
+	my $cluster_inuse_check = get_variable('cluster_inuse_check') || 300;
+	$management_node_info->{CLUSTER_INUSE_CHECK} = round($cluster_inuse_check / 60);
+	$ENV{management_node_info}{CLUSTER_INUSE_CHECK} = $management_node_info->{CLUSTER_INUSE_CHECK};
 
 	# Get the OS name
 	my $os_name = lc($^O);
