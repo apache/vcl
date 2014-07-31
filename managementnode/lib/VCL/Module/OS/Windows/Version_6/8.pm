@@ -84,8 +84,6 @@ our $SOURCE_CONFIGURATION_DIRECTORY = "$TOOLS/Windows_8";
  Description : Performs the steps necessary before a Windows 8.x image is
                captured.
 
-=over 3
-
 =cut
 
 sub pre_capture {
@@ -95,14 +93,11 @@ sub pre_capture {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return;
 	}
-
-=item 1
-
-Call parent class's pre_capture subroutine
-
-=cut
-
-	# Call parent class's pre_capture() subroutine
+	
+	my $computer_node_name   = $self->data->get_computer_node_name();
+	my $end_state = $self->{end_state} || 'off';
+	
+	# Call parent class's pre_capture subroutine
 	notify($ERRORS{'OK'}, 0, "calling parent class pre_capture() subroutine");
 	if (!$self->SUPER::pre_capture($args)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to execute parent class pre_capture() subroutine");
@@ -110,63 +105,6 @@ Call parent class's pre_capture subroutine
 	}
 	
 	notify($ERRORS{'OK'}, 0, "beginning Windows 8 image capture preparation tasks");
-
-=item *
-
-Prepare the computer for Sysprep or prepare the non-Sysprep post_load steps
-
-=cut
-
-	if ($self->data->get_imagemeta_sysprep()) {
-		if (!$self->run_sysprep()) {
-			notify($ERRORS{'WARNING'}, 0, "capture preparation failed, failed to run Sysprep");
-			return;
-		}
-	}
-	else {
-		if (!$self->prepare_post_load()) {
-			notify($ERRORS{'WARNING'}, 0, "capture preparation failed, failed to run prepare post_load");
-			return;
-		}
-	}
-	
-=back
-
-=cut
-
-	notify($ERRORS{'OK'}, 0, "returning 1");
-	return 1;
-} ## end sub pre_capture
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 prepare_post_load
-
- Parameters  : none
- Returns     : boolean
- Description : This subroutine should be called as the last step before an image
-               is captured if Sysprep is not is used. It prepares the computer
-               to perform the necessary tasks after the image is loaded and the
-               computer boots.
-
-=cut
-
-sub prepare_post_load {
-	my $self = shift;
-	if (ref($self) !~ /windows/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return;
-	}
-
-	my $computer_node_name   = $self->data->get_computer_node_name();
-	my $end_state = $self->{end_state} || 'off';
-	
-	# Set the DevicePath registry key
-	# This is used to locate device drivers
-	if (!$self->set_device_path_key()) {
-		notify($ERRORS{'WARNING'}, 0, "failed to set the DevicePath registry key");
-		return;
-	}
 	
 	# Get the node configuration directory
 	my $node_configuration_directory = $self->get_node_configuration_directory();
@@ -175,14 +113,12 @@ sub prepare_post_load {
 		return;
 	}
 	
-	# Set the sshd service startup mode to disabled so that it does not start up until properly configured
-	if (!$self->set_service_startup_mode('sshd', 'disabled')) {
-		notify($ERRORS{'WARNING'}, 0, "sshd service could not be disabled before shutting down computer");
+	# Set the DevicePath registry key
+	# This is used to locate device drivers
+	if (!$self->set_device_path_key()) {
+		notify($ERRORS{'WARNING'}, 0, "failed to set the DevicePath registry key");
 		return;
 	}
-	
-	# Make sure any old log files are deleted
-	$self->delete_file("$node_configuration_directory/Logs/*");
 	
 	# Create a scheduled task to run post_load.cmd when the image boots
 	my $task_name     = 'VCL Post Load';
@@ -193,17 +129,32 @@ sub prepare_post_load {
 		notify($ERRORS{'WARNING'}, 0, "failed to create '$task_name' scheduled task");
 		return;
 	}
-
-	# Shut down computer unless end_state argument was passed with a value other than 'off'
-	if ($end_state eq 'off') {
-		if (!$self->shutdown(1)) {
-			notify($ERRORS{'WARNING'}, 0, "failed to shut down computer");
+	
+	# Set the sshd service startup mode to disabled so that it does not start up until properly configured
+	if (!$self->set_service_startup_mode('sshd', 'disabled')) {
+		notify($ERRORS{'WARNING'}, 0, "sshd service could not be disabled before shutting down computer");
+		return;
+	}
+	
+	# Prepare the computer for Sysprep or prepare the non-Sysprep post_load steps
+	if ($self->data->get_imagemeta_sysprep()) {
+		if (!$self->run_sysprep()) {
+			notify($ERRORS{'WARNING'}, 0, "capture preparation failed, failed to run Sysprep");
 			return;
 		}
 	}
-	
+	else {
+		if ($end_state eq 'off') {
+			if (!$self->shutdown(1)) {
+				notify($ERRORS{'WARNING'}, 0, "failed to shut down computer");
+				return;
+			}
+		}
+	}
+
+	notify($ERRORS{'OK'}, 0, "completed Windows 8 image capture preparation tasks");
 	return 1;
-}
+} ## end sub pre_capture
 
 #/////////////////////////////////////////////////////////////////////////////
 
