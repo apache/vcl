@@ -255,15 +255,127 @@ sub _services_restart {
 	
 	my $vmhost_computer_name = $self->vmhost_os->data->get_computer_short_name();
 	
-	my $command = "services.sh restart";
-	my ($exit_status, $output) = $self->vmhost_os->execute($command);
-	if (!defined($output)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to run command on VM host $vmhost_computer_name: $command");
+	# Check if the PID files for the following services are correct
+	$self->_check_service_pid('hostd-worker', '/var/run/vmware/vmware-hostd.PID');
+	$self->_check_service_pid('sfcb-vmware_bas', '/var/run/vmware/vicimprovider.PID');
+	
+	my $services_command = "services.sh restart";
+	my $semaphore = $self->get_semaphore("$vmhost_computer_name-vmware_services_restart", 0);
+	if (!$semaphore) {
+		notify($ERRORS{'OK'}, 0, "unable to obtain semaphore, another process is likely running '$services_command' on $vmhost_computer_name, sleeping for 30 seconds and then proceeding");
+		sleep_uninterrupted(30);
+		return 1;
+	}
+	
+	notify($ERRORS{'DEBUG'}, 0, "restarting VMware services on $vmhost_computer_name");
+	my ($services_exit_status, $services_output) = $self->vmhost_os->execute($services_command, 1, 90);
+	if (!defined($services_output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to run command on VM host $vmhost_computer_name: $services_command");
 		return;
 	}
 	else {
-		notify($ERRORS{'DEBUG'}, 0, "executed command to restart VMware services on $vmhost_computer_name, command: '$command', output:\n" . join("\n", @$output));
+		notify($ERRORS{'OK'}, 0, "executed command to restart VMware services on $vmhost_computer_name, command: '$services_command', output:\n" . join("\n", @$services_output));
 	}
+	
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 _check_service_pid
+
+ Parameters  : $process_name, $pid_file_path
+ Returns     : boolean
+ Description : Checks if the PID stored in the PID file matches the parent PID
+               of the running service process. Problems occur if the file does
+               not match the running process PID. Most often, vim-cmd commands
+               fail with an error such as:
+               Connect to localhost failed: Connection failure
+               
+               The PID file is updated with the correct PID if the PID file
+               contents cannot be retrieved and parsed or if the PID stored in
+               the file does not match the running process.
+
+=cut
+
+sub _check_service_pid {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my ($process_name, $pid_file_path) = @_;
+	if (!defined($process_name) || !defined($pid_file_path)) {
+		notify($ERRORS{'WARNING'}, 0, "process name and PID file path arguments were not supplied");
+		return;
+	}
+	
+	my $vmhost_computer_name = $self->vmhost_os->data->get_computer_short_name();
+	
+	# Retrieve the running PID
+	my $running_pid;
+	my $ps_command = "ps |grep $process_name |awk '{print \$2}'";
+	my ($ps_exit_status, $ps_output) = $self->vmhost_os->execute($ps_command);
+	if (!defined($ps_output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to run command to determine main $process_name PID on $vmhost_computer_name");
+	}
+	else {
+		($running_pid) = "@$ps_output" =~ /(\d+)/g;
+		if ($running_pid) {
+			notify($ERRORS{'DEBUG'}, 0, "retrieved parent $process_name PID: $running_pid");
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "unable to determine parent $process_name PID, command: '$ps_command', output:\n" . join("\n", @$ps_output));
+			return;
+		}
+	}
+	
+	# Retrieve the PID stored in the PID file
+	my $file_pid;
+	my @pid_file_contents = $self->vmhost_os->get_file_contents($pid_file_path);
+	if (@pid_file_contents) {
+		($file_pid) = "@pid_file_contents" =~ /(\d+)/g;
+		if ($file_pid) {
+			notify($ERRORS{'DEBUG'}, 0, "retrieved PID stored in $pid_file_path: $file_pid");
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "unable to determine PID stored in $pid_file_path, contents:\n" . join("\n", @pid_file_contents));
+		}
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve contents of $pid_file_path");
+	}
+	
+	# Check if it is necessary to update the PID file
+	if ($file_pid) {
+		if ($file_pid eq $running_pid) {
+			notify($ERRORS{'OK'}, 0, "PID in $pid_file_path ($file_pid) matches PID of parent $process_name process ($running_pid), update not necessary");
+			return 1;
+		}
+		else {
+			notify($ERRORS{'OK'}, 0, "PID in $pid_file_path ($file_pid) does not match PID of parent $process_name process ($running_pid), updating $pid_file_path to contain $running_pid");
+		}
+	}
+	else {
+		notify($ERRORS{'OK'}, 0, "PID in $pid_file_path could not be determined, updating $pid_file_path to contain $running_pid");
+	}
+	
+	# Update the PID file with the correct PID
+	my $echo_command = "echo -n $running_pid > $pid_file_path";
+	my ($echo_exit_status, $echo_output) = $self->vmhost_os->execute($echo_command);
+	if (!defined($echo_output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to run command to update $pid_file_path on $vmhost_computer_name");
+		return;
+	}
+	elsif (grep(/(ash:|echo:)/, @$echo_output)) {
+		notify($ERRORS{'WARNING'}, 0, "error occurred updating $pid_file_path on $vmhost_computer_name, command: '$echo_command', output:\n" . joini("\n", @$echo_output));
+		return;
+	}
+	else {
+		notify($ERRORS{'OK'}, 0, "updated $pid_file_path on $vmhost_computer_name to contain the correct PID: $running_pid");
+	}
+	
 	return 1;
 }
 
