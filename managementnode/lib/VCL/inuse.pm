@@ -528,19 +528,11 @@ EOF
 			$user_login_id= "administrator" if($request_forimaging);
 			notify_via_msg($computer_short_name, $user_login_id, $short_message);
 		}
-		elsif ($image_os_type =~ /linux/){
-			# Notify via wall
-			notify_via_wall($computer_short_name, $user_login_id, $short_message, $image_os_name, $computer_type);
-		}
 		elsif ($image_os_type =~ /osx/){
         # Notify via oascript
         notify_via_oascript($computer_short_name, $user_login_id, $short_message);
      }
 	} ## end if ($computer_type =~ /blade|virtualmachine/)
-	elsif ($computer_type eq "lab") {
-		# Notify via wall
-		notify_via_wall($computer_public_ip_address, $user_login_id, $short_message, $image_os_name, $computer_type);
-	}
 	
 	# Send IM
 	if ($user_imtype_name ne "none") {
@@ -693,15 +685,7 @@ EOF
 			$user_login_id= "administrator" if($request_forimaging);
 			notify_via_msg($computer_short_name, $user_login_id, $short_message);
 		}
-		elsif ($image_os_type =~ /linux/){
-			# Notify via wall
-			notify_via_wall($computer_short_name, $user_login_id, $short_message, $image_os_name, $computer_type);
-		}
 	} ## end if ($computer_type =~ /blade|virtualmachine/)
-	elsif ($computer_type eq "lab") {
-		# Notify via wall
-		notify_via_wall($computer_public_ip_address, $user_login_id, $short_message, $image_os_name, $computer_type);
-	}
 	
 	return 1;
 } ## end sub _notify_user_disconnect
