@@ -544,7 +544,7 @@ sub notify_user_console {
 
 	my $computer_node_name = $self->data->get_computer_node_name();
 
-	my $cmd = "echo $message \| write $username";
+	my $cmd = "echo \"$message\" \| write $username";
 	my ($exit_status, $output) = $self->execute({
 		 node => $computer_node_name,
 		 command => $cmd,
@@ -552,7 +552,7 @@ sub notify_user_console {
 		 timeout => 30,
 		 max_attempts => 2,
 		 port => 24,
-		 user => "vclstaff"
+		 user => "vclstaff",
 		});
 	if (!defined($output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to execute command to determine if the '$cmd' shell command exists on $computer_node_name");
@@ -561,6 +561,73 @@ sub notify_user_console {
 	else {
 		notify($ERRORS{'DEBUG'}, 0, "executed command to determine if the '$cmd' shell command exists on $computer_node_name");
 		return 1;
+	}
+}
+
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_current_image_info
+
+ Parameters  : optional 
+					id,computer_hostname,computer_id,current_image_name,imagerevision_datecreated,imagerevision_id,prettyname,vcld_post_load 
+ Returns     : If successful: 
+					if no parameter return the imagerevision_id
+					return the value of parameter input
+               If failed: false
+ Description : Collects currentimage hash on a computer and returns a
+               value containing of the input paramter or the imagerevision_id if no inputs.
+					This also updates the DataStructure.pm so data matches what is currently loaded.
+=cut
+
+sub get_current_image_info {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+
+	my $input = shift;
+
+	if(!defined $input) {
+		$input = "imagerevision_id";
+	}
+
+	my $computer_node_name = $self->data->get_computer_node_name();
+	my $imagerevision_id = $self->data->get_imagerevision_id();
+
+	#The Lab machine image does have a currentimage.txt file.
+	#Predefine matching variables so it doesn't fail.
+
+	my %current_image_txt_contents;
+	$current_image_txt_contents{"imagerevision_id"} = $imagerevision_id;
+	my $time = localtime;
+	$current_image_txt_contents{"vcld_post_load"} = "vcld_post_load=success ($time)";
+
+	# Make sure an empty hash wasn't returned
+	if (defined $current_image_txt_contents{imagerevision_id}) {
+		notify($ERRORS{'DEBUG'}, 0, "user selected content of image currently loaded on $computer_node_name: $current_image_txt_contents{current_image_name}");
+	
+		if (my $imagerevision_info = get_imagerevision_info($current_image_txt_contents{imagerevision_id})){
+			$self->data->set_computer_currentimage_data($imagerevision_info->{image});
+			$self->data->set_computer_currentimagerevision_data($imagerevision_info);
+			
+			if (defined $current_image_txt_contents{"vcld_post_load"}) {
+				$self->data->set_computer_currentimage_vcld_post_load($current_image_txt_contents{vcld_post_load});
+			}
+		}
+		
+		if (defined($current_image_txt_contents{$input})){
+			return $current_image_txt_contents{$input};
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "$input was not defined in current_image_txt");	
+			return;
+		}
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "empty hash was returned when currentimage.txt contents were retrieved from $computer_node_name");
+		return;
 	}
 }
 #/////////////////////////////////////////////////////////////////////////////
