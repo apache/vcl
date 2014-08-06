@@ -523,12 +523,7 @@ EOF
 	
 	# Send message to machine
 	if ($computer_type =~ /blade|virtualmachine/) {
-		if ($image_os_type =~ /windows/) {
-			# Notify via windows msg cmd
-			$user_login_id= "administrator" if($request_forimaging);
-			notify_via_msg($computer_short_name, $user_login_id, $short_message);
-		}
-		elsif ($image_os_type =~ /osx/){
+		sif ($image_os_type =~ /osx/){
         # Notify via oascript
         notify_via_oascript($computer_short_name, $user_login_id, $short_message);
      }
@@ -677,15 +672,6 @@ EOF
 	if ($is_parent_reservation && $user_imtype_name ne "none") {
 		notify_via_IM($user_imtype_name, $user_im_id, $message);
 	}
-	
-	# Send message to machine
-	if ($computer_type =~ /blade|virtualmachine/) {
-		if ($image_os_type =~ /windows/) {
-			# Notify via windows msg cmd
-			$user_login_id= "administrator" if($request_forimaging);
-			notify_via_msg($computer_short_name, $user_login_id, $short_message);
-		}
-	} ## end if ($computer_type =~ /blade|virtualmachine/)
 	
 	return 1;
 } ## end sub _notify_user_disconnect

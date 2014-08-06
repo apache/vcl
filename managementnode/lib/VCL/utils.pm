@@ -191,9 +191,7 @@ our @EXPORT = qw(
 	normalize_file_path
 	notify
 	notify_via_IM
-	notify_via_msg
 	notify_via_oascript
-	notify_via_wall
 	parent_directory_path
 	preplogfile
 	read_file_to_array
@@ -2339,123 +2337,6 @@ sub notify_via_oascript {
         }
 
 } ## end sub notify_via_oascript
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 notify_via_wall
-
- Parameters  : empty
- Returns     : 0 or 1
- Description : talks to user at the console using wall
-
-=cut
-
-sub notify_via_wall {
-	my ($hostname, $username, $string, $OSname, $type) = @_;
-	my ($package, $filename, $line, $sub) = caller(0);
-	notify($ERRORS{'WARNING'}, 0, "hostname is not defined") if (!(defined($hostname)));
-	notify($ERRORS{'WARNING'}, 0, "username is not defined") if (!(defined($username)));
-	notify($ERRORS{'WARNING'}, 0, "string is not defined")   if (!(defined($string)));
-	notify($ERRORS{'WARNING'}, 0, "OSname is not defined")   if (!(defined($OSname)));
-	notify($ERRORS{'WARNING'}, 0, "type is not defined")     if (!(defined($type)));
-	my @ssh;
-	my $n;
-	my $identity;
-	#create file, copy to remote host, then run wall
-	if (open(TMP, ">/tmp/wall.$hostname")) {
-		print TMP $string;
-		close TMP;
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "could not open tmp file $!");
-	}
-	my $identity_keys = get_management_node_info()->{keys};
-	if ($type eq "blade") {
-		#this is only going to be rhel
-		if (run_scp_command("/tmp/wall.$hostname", "$hostname:/root/wall.txt", $identity_keys)) {
-			unlink "/tmp/wall.$hostname";
-			if (run_ssh_command($hostname, $identity_keys, " cat /root/wall.txt \| wall; /bin/rm -v /root/wall.txt", "root")) {
-				notify($ERRORS{'OK'}, 0, "successfully sent wall notification to $hostname");
-				return 1;
-			}
-		}
-	} ## end if ($type eq "blade")
-	elsif ($type eq "lab") {
-		
-		if (run_scp_command("/tmp/wall.$hostname", "vclstaff\@$hostname:/home/vclstaff/wall.txt", $identity_keys, 24)) {
-			unlink "/tmp/wall.$hostname";
-		}
-		else {
-			notify($ERRORS{'WARNING'}, 0, "could not scp tmp file for wall notification$!");
-		}
-
-		if ($OSname =~ /sun4x_/) {
-			if (run_ssh_command($hostname, $identity_keys, "wall -a /home/vclstaff/wall.txt; /bin/rm -v /home/vclstaff/wall.txt", "vclstaff", "24")) {
-				notify($ERRORS{'OK'}, 0, "successfully sent wall notification to $hostname");
-				return 1;
-			}
-			else {
-				notify($ERRORS{'OK'}, 0, "wall notification $hostname failed ");
-			}
-		}
-		elsif ($OSname =~ /rhel/) {
-			if (run_ssh_command($hostname, $identity_keys, "cat /home/vclstaff/wall.txt \| wall ; /bin/rm -v /home/vclstaff/wall.txt", "vclstaff", "24")) {
-				notify($ERRORS{'OK'}, 0, "successfully sent wall notification to $hostname");
-				return 1;
-			}
-			else {
-				notify($ERRORS{'WARNING'}, 0, "wall notification $hostname failed ");
-			}
-		}
-		else {
-			notify($ERRORS{'WARNING'}, 0, "not an OS I can handle, os is $OSname");
-		}
-		return 1;
-	} ## end elsif ($type eq "lab")  [ if ($type eq "blade")
-} ## end sub notify_via_wall
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 notify_via_msg
-
- Parameters  : $node, $user, $message
- Returns     : 0 or 1
- Description : using windows msg.exe cmd writes supplied $message
-               to windows user console
-
-=cut
-
-sub notify_via_msg {
-	my ($node, $user, $message) = @_;
-	my ($package, $filename, $line, $sub) = caller(0);
-
-	my $osname = lc($^O);
-	if ($osname =~ /win/i) {
-		notify($ERRORS{'OK'}, 0, "notifying from Windows not yet supported\n-----\nTo: $user\nNode: $node\n$message\n-----");
-		return;
-	}
-	notify($ERRORS{'WARNING'}, 0, "node is not defined")    if (!(defined($node)));
-	notify($ERRORS{'WARNING'}, 0, "message is not defined") if (!(defined($message)));
-	notify($ERRORS{'WARNING'}, 0, "user is not defined")    if (!(defined($user)));
-
-	# Escape new lines
-	$message =~ s/\n/ /gs;
-	$message =~ s/\'/\\\\\\\'/gs;
-	notify($ERRORS{'DEBUG'}, 0, "message:\n$message");
-
-	my $command = "msg $user /TIME:180 '$message'";
-	
-	my $identity_keys = get_management_node_info()->{keys};
-	if (run_ssh_command($node, $identity_keys, $command)) {
-		notify($ERRORS{'OK'}, 0, "successfully sent message to Windows user $user on $node");
-		return 1;
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to send message to Windows user $user on $node");
-		return 0;
-	}
-
-} ## end sub notify_via_msg
 
 #/////////////////////////////////////////////////////////////////////////////
 
