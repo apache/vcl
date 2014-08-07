@@ -451,6 +451,42 @@ sub post_reserve {
 	my @post_reserve_script_paths = ('/usr/local/vcl/vcl_post_reserve', '/etc/init.d/vcl_post_reserve');
 	
 	notify($ERRORS{'OK'}, 0, "initiating Linux post_reserve: $image_name on $computer_short_name");
+
+
+	# User supplied data
+	#check if variable is set
+	#get variable from variable table related to server reservation id ‘userdata|<reservation id>’
+	# write contents to local temp file /tmp/resrvationid_post_reserve_userdata
+	# scp tmpfile to ‘/root/.vclcontrol/post_reserve_userdata’
+	# assumes the image has the call in vcl_post_reserve to import/read the user data file
+	#
+	
+	my $reservation_id = $self->data->get_reservation_id();
+	my $variable_name = "userdata|$reservation_id"; 
+	my $variable_data;
+	my $target_location = "/root/.vclcontrol/post_reserve_userdata";
+
+	if ($self->data->is_variable_set($variable_name)) {
+		$variable_data = $self->data->get_variable($variable_name);
+		
+		#write to local temp file
+		my $tmpfile = "/tmp/$reservation_id" ."_post_reserve_userdata";
+		if(open(TMP, ">$tmpfile")){
+			print TMP $variable_data;
+			close(TMP);
+
+			if ($self->copy_file_to($tmpfile, $target_location)) {
+				notify($ERRORS{'DEBUG'}, 0, "copied $tmpfile to $target_location on $computer_short_name");	
+			}
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "failed to open $tmpfile for writing userdata");
+		}
+		#Clean variable from variable table
+		if(delete_variable($variable_name)){
+			notify($ERRORS{'DEBUG'}, 0, "Deleted variable_name $variable_name from variable table");
+		}
+	}
 	
 	# Check if script exists
 	foreach my $script_path (@post_reserve_script_paths) {

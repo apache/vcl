@@ -98,6 +98,7 @@ our @EXPORT = qw(
 	database_select
 	delete_computerloadlog_reservation
 	delete_request
+	delete_variable
 	escape_file_path
 	format_data
 	format_hash_keys
@@ -10803,6 +10804,52 @@ EOF
 	return 1;
 }
 
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 delete_variable
+
+ Parameters  : variable name
+ Returns     : If successful: true
+               If failed: false
+ Description : Deletes record related to variable name from variable table
+
+=cut
+
+sub delete_variable {
+	# Check if 1st argument is a reference meaning this was called as an object method
+	# If so, ignore 1st reference argument
+	shift @_ if ($_[0] && ref($_[0]) && ref($_[0]) =~ /VCL/);
+	
+	my $variable_name = shift;
+	
+	# Check the arguments
+	if (!defined($variable_name)) {
+		notify($ERRORS{'WARNING'}, 0, "variable name argument was not supplied");
+		return;
+	}
+	
+	notify($ERRORS{'DEBUG'}, 0, "attempting to delete variable: $variable_name");
+	
+	# Assemble delete statement, if the variable already exists, update the existing row
+	my $delete_statement .= <<"EOF";
+DELETE 
+FROM 
+variable
+WHERE
+name = '$variable_name'
+EOF
+	
+	# Execute the delete statement, the return value should be the id of the row
+	if (database_execute($delete_statement)) {
+		notify($ERRORS{'OK'}, 0, "deleted variable '$variable_name' from variable table");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to delete variable '$variable_name'");
+		return;
+	}
+	
+	return 1;
+}
 #/////////////////////////////////////////////////////////////////////////////
 
 =head2 yaml_serialize
