@@ -2616,7 +2616,7 @@ sub create_user {
 	
 	if ($user_standalone) {
 		# Set password
-		if (!$self->changepasswd($computer_node_name, $user_login_id, $password)) {
+		if (!$self->changepasswd($user_login_id, $password)) {
 			notify($ERRORS{'CRITICAL'}, 0, "Failed to set password on useracct: $user_login_id on $computer_node_name");
 			return;
 		}
