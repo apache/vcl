@@ -523,7 +523,7 @@ EOF
 	
 	# Send message to machine
 	if ($computer_type =~ /blade|virtualmachine/) {
-		sif ($image_os_type =~ /osx/){
+		if ($image_os_type =~ /osx/){
         # Notify via oascript
         notify_via_oascript($computer_short_name, $user_login_id, $short_message);
      }
