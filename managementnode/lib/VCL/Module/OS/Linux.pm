@@ -2582,7 +2582,7 @@ sub create_user {
 	my $home_directory_on_local_disk = $self->is_file_on_local_disk($home_directory_root);
 	if($home_directory_on_local_disk ) {
 
-	my $useradd_command = "/usr/sbin/useradd -m -d /home/$user_login_id -g vcl";
+	my $useradd_command = "/usr/sbin/useradd --shell /bin/bash -m -d /home/$user_login_id -g vcl";
 	$useradd_command .= " -u $uid" if ($uid);
 	$useradd_command .= " $user_login_id";
 	my ($useradd_exit_status, $useradd_output) = $self->execute($useradd_command);
