@@ -2762,6 +2762,9 @@ sub delete_user {
 	elsif (grep(/does not exist/i, @$userdel_output)) {
 		notify($ERRORS{'DEBUG'}, 0, "user '$username' NOT deleted from $computer_node_name because it does not exist");
 	}
+	elsif (grep(/not found/i, @$userdel_output)) {
+		notify($ERRORS{'DEBUG'}, 0, "userdel warning '$username' $computer_node_name :\n" . join("\n", @$userdel_output));
+	}
 	elsif (grep(/userdel: /i, @$userdel_output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to delete user '$username' from $computer_node_name, command: '$userdel_command', exit status: $userdel_exit_status, output:\n" . join("\n", @$userdel_output));
 		return;
