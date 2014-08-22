@@ -2483,13 +2483,7 @@ sub _get_file_info {
 	my @file_queries = (
 		$vm_disk_file_query,
 		FileQuery->new(),
-		FloppyImageFileQuery->new(),
 		FolderFileQuery->new(),
-		IsoImageFileQuery->new(),
-		VmConfigFileQuery->new(),
-		VmLogFileQuery->new(),
-		VmNvramFileQuery->new(),
-		VmSnapshotFileQuery->new(),
 	);
 	
 	my $hostdb_search_spec = HostDatastoreBrowserSearchSpec->new(
