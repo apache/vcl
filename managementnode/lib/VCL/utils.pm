@@ -2303,7 +2303,7 @@ sub getnewdbh {
 	return 0;
 } ## end sub getnewdbh
 
- #/////////////////////////////////////////////////////////////////////////////
+#/////////////////////////////////////////////////////////////////////////////
 
 =head2 notify_via_oascript
 
@@ -4373,7 +4373,7 @@ sub write_currentimage_txt {
 
 	#Make sure currentimage.txt writable
 	my $chown_command = "chown root currentimage.txt; chmod 777 currentimage.txt";
-	if(run_ssh_command($computer_node_name, $image_identity, $chown_command)){
+	if (run_ssh_command($computer_node_name, $image_identity, $chown_command)){
 		notify($ERRORS{'OK'}, 0, "updated ownership and permissions  on currentimage.txt");
 	}
 
@@ -5113,15 +5113,23 @@ EOF
 		my $reservation_id = $row->{reservation_id};
 		
 		my %request_info = get_request_info($request_id);
+		
 		if (!%request_info) {
-			notify($ERRORS{'CRITICAL'}, 0, "failed to retrieve request info, request ID: $request_id");
-			return;
+			# Request may have been deleted in this brief period
+			if (is_request_deleted($request_id)) {
+				notify($ERRORS{'OK'}, 0, "request was deleted before request info could be retrieved: $request_id");
+				next;
+			}
+			else {
+				notify($ERRORS{'WARNING'}, 0, "failed to retrieve request info, request ID: $request_id");
+				return;
+			}
 		}
 		
 		my $data_structure;
 		eval {$data_structure = new VCL::DataStructure({request_data => \%request_info, reservation_id => $reservation_id});};
 		if (my $exception = Exception::Class::Base->caught()) {
-			notify($ERRORS{'CRITICAL'}, 0, "unable to create DataStructure object" . $exception->message);
+			notify($ERRORS{'WARNING'}, 0, "unable to create DataStructure object" . $exception->message);
 			return;
 		}
 		
@@ -5693,6 +5701,7 @@ sub update_blockrequest_processing {
  Description : sets next_image_id to 0
 
 =cut
+
 sub clear_next_image_id {
 	my ($computer_id) = @_;
 	my ($package, $filename, $line, $sub) = caller(0);
@@ -6972,7 +6981,7 @@ EOF
 	
 	# Check if the computer associated with this reservation has a vmhostid set
 	if (my $vmhost_id = $computer_info->{vmhostid}) {
-		my $vmhost_info = get_vmhost_info($vmhost_id);
+		my $vmhost_info = get_vmhost_info($vmhost_id, $no_cache);
 		
 		if ($vmhost_info) {
 			$computer_info->{vmhost} = $vmhost_info;
@@ -7558,8 +7567,36 @@ sub get_management_node_id {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 get_database_table_columns
+
+ Parameters  : $no_cache (optional)
+ Returns     : hash reference
+ Description : Retrieves information for all tables and columns from the VCL
+               database and constructs a hash. The hash keys are the table
+               names. Each key contains an array reference containing the
+               table's column names. Example:
+               {
+                  "OStype" => [
+                    "id",
+                    "name"
+                  ],
+                  "adminlevel" => [
+                    "id",
+                    "name"
+                  ],
+                 "affiliation" => [
+                    "id",
+                    "name",
+                    "shibname",
+                    ...
+                  ],
+               }
+
+=cut
+
 sub get_database_table_columns {
-	return $ENV{database_table_columns} if $ENV{database_table_columns};
+	my $no_cache = shift;
+	return $ENV{database_table_columns} if $ENV{database_table_columns} && !$no_cache;
 	
 	my $database = 'information_schema';
 
