@@ -98,6 +98,7 @@ sub process {
 	my $computer_state_name                 = $self->data->get_computer_state_name();
 	my $computer_currentimage_name          = $self->data->get_computer_currentimage_name(0);
 	my $server_request_id     					 = $self->data->get_server_request_id();
+	my $public_ip_configuration			    = $self->data->get_management_node_public_ip_configuration() || return;
 
 	# Remove related fixedIPsr variable, if it exists
 	if ($server_request_id) {
@@ -106,10 +107,24 @@ sub process {
                #Delete from variable table.
                my $delete_sql_statement = "DELETE variable FROM variable WHERE name = '$variable_name' ";
                if (database_execute($delete_sql_statement)) {
-         				notify($ERRORS{'OK'}, 0, "Detected server reservation entry for $variable_name from variable table");
+         				notify($ERRORS{'DEBUG'}, 0, "Deleted server reservation entry for $variable_name from variable table");
                }   
          }   
-      }
+		
+		if($public_ip_configuration =~ /static/i) {
+			my $original_IPvalue = "originalIPaddr_" . $server_request_id;
+			if(is_variable_set($original_IPvalue)) {
+				my $original_Public_IP = get_variable($original_IPvalue);
+				if(update_computer_public_ip_address($computer_id, $original_Public_IP)) {
+					notify($ERRORS{'DEBUG'}, 0, "restored original IP address: $original_Public_IP for $computer_state_name ");
+				}
+            my $delete_sql_statement = "DELETE variable FROM variable WHERE name = '$original_IPvalue' ";
+            if (database_execute($delete_sql_statement)) {
+         		notify($ERRORS{'DEBUG'}, 0, "Deleted server reservation entry for $original_IPvalue from variable table");
+            }   
+			}
+		}
+	}
 
 	
 	# Insert into computerloadlog if request state = timeout
@@ -139,7 +154,7 @@ sub process {
 		
 		# If server reservations and in reserved - reload
 		if ($server_request_id) {
-			notify($ERRORS{'OK'}, 0, "Detected server reservations, computer will be reloaded");
+			notify($ERRORS{'DEBUG'}, 0, "Detected server reservations, computer will be reloaded");
 			$self->insert_reload_and_exit();
 		}
 
@@ -158,11 +173,11 @@ sub process {
 		
 		# Compare the database current image value with what's on the computer
 		if ($computer_currentimage_name eq $os_current_image_name) {
-			notify($ERRORS{'OK'}, 0, "computer table current image name ($computer_currentimage_name) matches image name on computer ($os_current_image_name), computer will be sanitized");
+			notify($ERRORS{'DEBUG'}, 0, "computer table current image name ($computer_currentimage_name) matches image name on computer ($os_current_image_name), computer will be sanitized");
 			$self->call_os_sanitize();
 		}
 		else {
-			notify($ERRORS{'OK'}, 0, "computer table current image name ($computer_currentimage_name) does NOT match image name on computer ($os_current_image_name), computer will be reloaded");
+			notify($ERRORS{'DEBUG'}, 0, "computer table current image name ($computer_currentimage_name) does NOT match image name on computer ($os_current_image_name), computer will be reloaded");
 			$self->insert_reload_and_exit();
 		}
 	}

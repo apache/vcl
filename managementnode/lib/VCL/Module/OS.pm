@@ -921,6 +921,14 @@ sub server_request_set_fixedIP {
 				insertloadlog($reservation_id, $computer_id, "failed","$server_request_fixedIP is NOT available");
 				return 0;
 			}
+
+			#if set for static IPs, save the old address to restore
+			if($public_ip_configuration =~ /static/i) {
+				notify($ERRORS{'DEBUG'}, 0, "saving original IP for restore on post reseration");
+				my $original_IPvalue = "originalIPaddr_" . $server_request_id;
+				set_variable($original_IPvalue, $computer_public_ip_address);
+			}
+
          # Try to set the static public IP address using the OS module
            if ($self->can("set_static_public_address")) {
               if ($self->set_static_public_address()) {
