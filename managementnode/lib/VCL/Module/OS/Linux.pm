@@ -3726,7 +3726,7 @@ sub disable_firewall_port {
 		return;
 	}
 	elsif ($port eq '22') {
-		notify($ERRORS{'CRITICAL'}, 0, "disabling firewall port 22 is not allowed because it will cut off access from the management node");
+		notify($ERRORS{'WARNING'}, 0, "disabling firewall port 22 is not allowed because it will cut off access from the management node");
 		return;
 	}
 	

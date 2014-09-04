@@ -2542,6 +2542,8 @@ sub manage_server_access {
 	# Collect users in reservationaccounts table
 	my %res_accounts = get_reservation_accounts($reservation_id);
 	my $not_standalone_list = $self->data->get_management_node_not_standalone();
+	#notify($ERRORS{'WARNING'}, 0, "request_laststate_name= $request_laststate_name Res account info" . format_data(%res_accounts));
+	#notify($ERRORS{'WARNING'}, 0, "request_laststate_name= $request_laststate_name User_hash info" . format_data(%user_hash));
 
 	#Add users
 	foreach my $userid (sort keys %user_hash) {
@@ -2552,12 +2554,13 @@ sub manage_server_access {
 		}
 		my $standalone = $user_hash{$userid}{user_info}{STANDALONE};
 
-		if(!$self->user_exists($user_hash{$userid}{unityid})){
+		if(!$self->user_exists($user_hash{$userid}{username})){
 			delete($res_accounts{$userid});
 		}
 		
 		if(!exists($res_accounts{$userid}) || $request_laststate_name eq "reinstall" ){
 			if($request_laststate_name ne "reinstall" ){	
+
 				$user_hash{$userid}{"passwd"} = 0;
 				# Generate password if linux and standalone affiliation
 				unless ($image_os_type =~ /linux/ && !$standalone) {
@@ -2569,15 +2572,21 @@ sub manage_server_access {
 				}
 			}
 			# if reinstall and standalone check for existing password
-			if($request_laststate_name eq "reinstall" && $standalone) {
+			if($request_laststate_name eq "reinstall") {
+				#notify($ERRORS{'OK'}, 0, "Reinstall mode for $user_hash{$userid}{unityid}" . format_data(%res_accounts));
 				if ( $res_accounts{$userid}{password} ) {
-					$user_hash{$userid}{passwd} = $res_accounts{$userid}{password}
+					$user_hash{$userid}{passwd} = $res_accounts{$userid}{password};
 				}
 				else {
 					#should have password for standalone accounts
-					$user_hash{$userid}{"passwd"} = getpw();
+					unless ($image_os_type =~ /linux/ && !$standalone) {
+						$user_hash{$userid}{"passwd"} = getpw();
+					}
+
+					if (update_reservation_accounts($reservation_id,$userid,0,"delete")) {
+					}
 					if (update_reservation_accounts($reservation_id,$userid,$user_hash{$userid}{passwd},"add")) {
-						notify($ERRORS{'OK'}, 0, "Inserted $reservation_id,$userid into reservationsaccounts table");
+						notify($ERRORS{'OK'}, 0, "Inserted new password for $reservation_id,$userid into reservationsaccounts table");
 					}
 				}
 			}
@@ -2597,7 +2606,7 @@ sub manage_server_access {
 
 	#Remove anyone listed in reservationaccounts list that is not in user_hash
 	foreach my $res_userid (sort keys %res_accounts) {
-		notify($ERRORS{'OK'}, 0, "res_userid= $res_userid username= $res_accounts{$res_userid}{username}");
+		#notify($ERRORS{'OK'}, 0, "res_userid= $res_userid username= $res_accounts{$res_userid}{username}");
 		#Skip reservation owner, this account is not to be removed from the reservation.
       if ($res_userid eq $user_login_id_owner) {
 			#Skip group checks as the owner may not be a member
