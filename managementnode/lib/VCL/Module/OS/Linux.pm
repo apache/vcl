@@ -3612,28 +3612,32 @@ sub enable_firewall_port {
 			}
 		}
 	}
+
+	my @new_scope_list = split(/,/,$new_scope);
 	
-	# Add the new rule to the array of iptables commands
-	my $new_rule_command;
-	$new_rule_command .= "/sbin/iptables -v -I INPUT 1";
-	$new_rule_command .= " -p $protocol";
-	$new_rule_command .= " -j ACCEPT";
-	$new_rule_command .= " -s $new_scope";
+	for my $scope_string (@new_scope_list) {
+		# Add the new rule to the array of iptables commands
+		my $new_rule_command;
+		$new_rule_command .= "/sbin/iptables -v -I INPUT 1";
+		$new_rule_command .= " -p $protocol";
+		$new_rule_command .= " -j ACCEPT";
+		$new_rule_command .= " -s $scope_string";
 	
-	if ($protocol =~ /icmp/i) {
-		if ($port ne '255') {
-			$new_rule_command .= "  --icmp-type $port";
+		if ($protocol =~ /icmp/i) {
+			if ($port ne '255') {
+				$new_rule_command .= "  --icmp-type $port";
+			}
 		}
-	}
-	else {
-		$new_rule_command .= " -m state --state NEW,RELATED,ESTABLISHED";
+		else {
+			$new_rule_command .= " -m state --state NEW,RELATED,ESTABLISHED";
 		
-		if ($port =~ /^\d+$/) {
-			$new_rule_command .= " -m $protocol --dport $port";
+			if ($port =~ /^\d+$/) {
+				$new_rule_command .= " -m $protocol --dport $port";
+			}
 		}
-	}
 	
-	push @commands, $new_rule_command;
+		push @commands, $new_rule_command;
+	}
 	
 	# Join the iptables commands together with ' && '
 	my $command = join(' && ', @commands);
@@ -3651,7 +3655,7 @@ sub enable_firewall_port {
 		return;
 	}
 	elsif ($exit_status == 0) {
-		notify($ERRORS{'DEBUG'}, 0, "enabled firewall port on $computer_node_name, protocol: $protocol, port: $port, scope: $new_scope");
+		notify($ERRORS{'DEBUG'}, 0, "enabled firewall port on $computer_node_name, protocol: $protocol, port: $port, scope: $new_scope, command:\n$command");
 	}
 	else {
 		notify($ERRORS{'WARNING'}, 0, "failed to enable firewall port on $computer_node_name, protocol: $protocol, port: $port, scope: $new_scope, exit status: $exit_status, command:\n$command\noutput:\n" . join("\n", @$output));
