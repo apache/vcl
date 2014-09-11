@@ -3032,7 +3032,7 @@ function processBlockAllocationInput() {
 	if(! $err) {
 		$imgdata = getImages(0, $return['imageid']);
 		$concur = $imgdata[$return['imageid']]['maxconcurrent'];
-		if(! is_null($concur) && $return['seats'] > $concur) {
+		if(! is_null($concur) && $concur != 0 && $return['seats'] > $concur) {
 			$errmsg = "The selected image can only have $concur concurrent "
 			        . "reservations. Please reduce the number of requested "
 			        . "seats to $concur or less.";
