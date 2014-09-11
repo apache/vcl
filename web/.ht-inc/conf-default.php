@@ -85,6 +85,8 @@ define("USEFILTERINGSELECT", 1); // set to 1 to use a dojo filteringselects for 
                                  // the filteringselect can be a little slow for a large number of items
 define("FILTERINGSELECTTHRESHOLD", 1000); // if USEFILTERINGSELECT = 1, only use them for selects up to this size
 
+define("SEMTIMEOUT", "45");
+
 define("DEFAULTTHEME", 'default'); // this is the theme that will be used for the login screen and when the site is placed in maintenance if $_COOKIE['VCLSKIN'] is not set
 define("HELPFAQURL", "http://vcl.example.org/help-faq/");
 
