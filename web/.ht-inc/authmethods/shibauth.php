@@ -163,13 +163,21 @@ function addShibUser($user) {
 ///
 /// \param $usernid - id from user table
 /// \param $groups - data provided in the eduPersonScopedAffiliation attribute
+/// or an array with a single element where the key is 'shibaffil' and the
+/// value matches an entry for shibname from the affiliation table
 ///
 /// \brief converts the shibboleth affiliation to VCL affiliation, prepends
 /// 'shib-' to each of the group names and calls updateGroups to add the user
-/// to each of the shibboleth groups
+/// to each of the shibboleth groups; if $groups is the array option, user is
+/// added to a single group named "All <affil name> users" where <affil name>
+/// is the name field from the affiliation table
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function updateShibGroups($usernid, $groups) {
+	if(is_array($groups) && array_key_exists('shibaffil', $groups)) {
+		$shibaffil = $groups['shibaffil'];
+		$groups = '';
+	}
 	$groups = explode(';', $groups);
 	$newusergroups = array();
 	foreach($groups as $group) {
@@ -186,13 +194,14 @@ function updateShibGroups($usernid, $groups) {
 		$grp = mysql_real_escape_string("shib-" . $name);
 		array_push($newusergroups, getUserGroupID($grp, $affilid));
 	}
-	/*if($shibaffil == 'example1.edu') {
-		$query = "SELECT id FROM affiliation WHERE shibname = '$shibaffil'";
-		$qh = doQuery($query, 101);
-		$row = mysql_fetch_assoc($qh);
-		$affilid = $row['id'];
-		array_push($newusergroups, getUserGroupID('All Example1 users', $affilid));
-	}*/
+
+	$query = "SELECT id, name FROM affiliation WHERE shibname = '$shibaffil'";
+	$qh = doQuery($query, 101);
+	$row = mysql_fetch_assoc($qh);
+	$affilid = $row['id'];
+	$grp = mysql_real_escape_string("All {$row['name']} users");
+	array_push($newusergroups, getUserGroupID($grp, $affilid));
+
 	$newusergroups = array_unique($newusergroups);
 	if(! empty($newusergroups))
 		updateGroups($newusergroups, $usernid);

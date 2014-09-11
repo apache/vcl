@@ -112,7 +112,7 @@ function addLDAPUser($authtype, $userid) {
 /// \param $type - an array from the $authMechs table
 /// \param $loginid - a userid without the affiliation part
 ///
-/// \return 1 if user was found in ldap, 0 if not
+/// \return 1 if user was found in ldap, 0 if not, -1 on ldap error
 ///
 /// \brief checks to see if a user is in ldap
 ///
@@ -120,6 +120,11 @@ function addLDAPUser($authtype, $userid) {
 function validateLDAPUser($type, $loginid) {
 	global $authMechs;
 	$auth = $authMechs[$type];
+	$savehdlr = set_error_handler(create_function('', ''));
+	if(! ($fh = fsockopen($auth['server'], 636, $errno, $errstr, 5)))
+		return -1;
+	set_error_handler($savehdlr);
+	fclose($fh);
 	$ds = ldap_connect("ldaps://{$auth['server']}/");
 	if(! $ds)
 		return -1;
@@ -140,6 +145,7 @@ function validateLDAPUser($type, $loginid) {
 	                      $auth['binddn'], 
 	                      "{$auth['unityid']}=$loginid",
 	                      $return, 0, 3, 15);
+
 	if(! $search)
 		return -1;
 
@@ -173,7 +179,7 @@ function updateLDAPUser($authtype, $userid) {
 	$now = unixToDatetime(time());
 
 	// select desired data from db
-	$query = "SELECT i.name AS IMtype, "
+	$qbase = "SELECT i.name AS IMtype, "
 	       .        "u.IMid AS IMid, "
 	       .        "u.affiliationid, "
 	       .        "af.name AS affiliation, "
@@ -197,12 +203,22 @@ function updateLDAPUser($authtype, $userid) {
 	       .       "af.id = $affilid AND ";
 	if(array_key_exists('numericid', $userData) &&
 	   is_numeric($userData['numericid']))
-		$query .=   "u.uid = {$userData['numericid']}";
+		$query = $qbase . "u.uid = {$userData['numericid']}";
 	else {
-		$query .=   "u.unityid = '$esc_userid' AND "
-		       .    "u.affiliationid = $affilid";
+		$query = $qbase . "u.unityid = '$esc_userid' AND "
+		       .          "u.affiliationid = $affilid";
 	}
 	$qh = doQuery($query, 255);
+	$updateuid = 0;
+	# check to see if there is a matching entry where uid is NULL but unityid and affiliationid match
+	if(array_key_exists('numericid', $userData) &&
+	   is_numeric($userData['numericid']) &&
+	   ! mysql_num_rows($qh)) {
+		$updateuid = 1;
+		$query = $qbase . "u.unityid = '$esc_userid' AND "
+		       .          "u.affiliationid = $affilid";
+		$qh = doQuery($query, 255);
+	}
 	// if get a row
 	//    update db
 	//    update results from select
@@ -216,10 +232,13 @@ function updateLDAPUser($authtype, $userid) {
 		       . "SET unityid = '$esc_userid', "
 		       .     "firstname = '{$userData['first']}', "
 		       .     "lastname = '{$userData['last']}', "
-		       .     "email = '{$userData['email']}', "
-		       .     "lastupdated = '$now' ";
+		       .     "email = '{$userData['email']}', ";
+		if($updateuid)
+			$query .= "uid = {$userData['numericid']}, ";
+		$query .=    "lastupdated = '$now' ";
 		if(array_key_exists('numericid', $userData) &&
-		   is_numeric($userData['numericid']))
+		   is_numeric($userData['numericid']) &&
+		   ! $updateuid)
 			$query .= "WHERE uid = {$userData['numericid']}";
 		else
 			$query .= "WHERE unityid = '$esc_userid' AND "
@@ -248,6 +267,8 @@ function updateLDAPUser($authtype, $userid) {
 		       .        "u.mapprinters AS mapprinters, "
 		       .        "u.mapserial AS mapserial, "
 		       .        "u.showallgroups, "
+		       .        "u.usepublickeys, "
+		       .        "u.sshpublickeys, "
 		       .        "u.lastupdated AS lastupdated "
 		       . "FROM user u, "
 		       .      "IMtype i, "
@@ -258,6 +279,7 @@ function updateLDAPUser($authtype, $userid) {
 		$qh = doQuery($query, 101);
 		if(! $user = mysql_fetch_assoc($qh))
 			return NULL;
+		$user['sshpublickeys'] = htmlspecialchars($user['sshpublickeys']);
 	}
 
 	// TODO handle generic updating of groups
@@ -325,6 +347,7 @@ function getLDAPUserData($authtype, $userid) {
 	                      $auth['binddn'], 
 	                      "{$auth['unityid']}=$searchuser",
 	                      $ldapsearch, 0, 3, 15);
+
 	$return = array();
 	if($search) {
 		$tmpdata = ldap_get_entries($ds, $search);

@@ -94,8 +94,8 @@ function siteMaintenance() {
 				$reason = substr($item['reason'], 0, 30) . '...';
 				$rt .= "  <span id=\"morereason\">$reason</span>\n";
 				$rt .= "  <div dojoType=\"dijit.Tooltip\" connectId=\"morereason\">\n";
-				$reason = preg_replace('/(.{1,50}[ \n])/', '\1<br>', $item['reason']);
-				$reason = preg_replace('/\n<br>\n/', "<br><br>\n", $reason);
+				$reason = preg_replace("/(.{1,50}([ \n]|$))/", '\1<br>', $item['reason']);
+				$reason = preg_replace("/\n<br>\n/", "<br><br>\n", $reason);
 				$rt .= "$reason</div>\n";
 				$rt .= "</td>\n";
 			}
@@ -106,7 +106,7 @@ function siteMaintenance() {
 				$msg = substr($item['usermessage'], 0, 30) . '...';
 				$rt .= "  <span id=\"moreusermsg\">$msg</span>\n";
 				$rt .= "  <div dojoType=\"dijit.Tooltip\" connectId=\"moreusermsg\">\n";
-				$msg = preg_replace('/(.{1,50}[ \n])/', '\1<br>', $item['usermessage']);
+				$msg = preg_replace("/(.{1,50}([ \n]|$))/", "\1<br>", $item['usermessage']);
 				$msg = preg_replace('/\n<br>\n/', "<br><br>\n", $msg);
 				$rt .=  "$msg</div>\n";
 				$rt .= "</td>\n";
@@ -366,9 +366,9 @@ function AJgetDelSiteMaintenanceData() {
 		$allowres = 'Yes';
 	else
 		$allowres = 'No';
-	$reason = preg_replace('/(.{1,50}[ \n])/', '\1<br>', $data['reason']);
+	$reason = preg_replace("/(.{1,50}([ \n]|$))/", '\1<br>', $data['reason']);
 	$reason = preg_replace('/\n<br>\n/', "<br><br>\n", $reason);
-	$usermsg = preg_replace('/(.{1,50}[ \n])/', '\1<br>', $data['usermessage']);
+	$usermsg = preg_replace("/(.{1,50}([ \n]|$))/", '\1<br>', $data['usermessage']);
 	$usermsg = preg_replace('/\n<br>\n/', "<br><br>\n", $usermsg);
 	$arr = array('start' => $start,
 	             'end' => $end,

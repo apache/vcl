@@ -60,7 +60,9 @@ function dashboard() {
 
 	print "</tr>\n";
 	print "</table>\n";
-	print addWidget('newreservations', 'Loading Reservations', '');
+	print addWidget('newreservations', 'Notable Reservations', '');
+	if(checkUserHasPerm('View Dashboard (global)'))
+		print addWidget('failedimaging', 'Failed Imaging Reservations', '(Imaging Reservations in the maintenance state)');
 	$cont = addContinuationsEntry('AJupdateDashboard', array('val' => 0), 90, 1, 0);
 	print "<input type=\"hidden\" id=\"updatecont\" value=\"$cont\">\n";
 }
@@ -84,6 +86,7 @@ function AJupdateDashboard() {
 	$data['reschart'] = getActiveResChartData();
 	$data['blockallocation'] = getBlockAllocationData();
 	$data['newreservations'] = getNewReservationData();
+	$data['failedimaging'] = getFailedImagingData();
 	sendJSON($data);
 }
 
@@ -166,6 +169,7 @@ function getStatusData() {
 	$data = array();
 	$data[] = array('key' => 'Active Reservations', 'val' => 0);
 	$data[] = array('key' => 'Online Computers', 'val' => 0, 'tooltip' => 'Computers in states available, reserved,<br>reloading, inuse, or timeout');
+	$data[] = array('key' => 'In Use Computers', 'val' => 0, 'tooltip' => 'Computers in inuse state');
 	$data[] = array('key' => 'Failed Computers', 'val' => 0);
 	$reloadid = getUserlistID('vclreload@Local');
 	if($affilid == 0) {
@@ -196,10 +200,15 @@ function getStatusData() {
 	if($row = mysql_fetch_row($qh))
 		$data[1]['val'] = $row[0];
 
-	$query = "SELECT COUNT(id) FROM computer WHERE stateid = 5";
+	$query = "SELECT COUNT(id) FROM computer WHERE stateid = 8";
 	$qh = doQuery($query, 101);
 	if($row = mysql_fetch_row($qh))
 		$data[2]['val'] = $row[0];
+
+	$query = "SELECT COUNT(id) FROM computer WHERE stateid = 5";
+	$qh = doQuery($query, 101);
+	if($row = mysql_fetch_row($qh))
+		$data[3]['val'] = $row[0];
 	return $data;
 }
 
@@ -666,9 +675,9 @@ function getNewReservationData() {
 	       . "LEFT JOIN state s1 ON (s1.id = rq.stateid) "
 	       . "LEFT JOIN state s2 ON (s2.id = rq.laststateid) "
 	       . "LEFT JOIN managementnode m ON (m.id = rs.managementnodeid) "
-	       . "WHERE (rq.stateid IN (13, 19, 6) OR "
-	       .       "(rq.stateid = 14 AND rq.laststateid IN (6, 13, 19))) AND "
-	       .       "rq.start < NOW() "
+	       . "WHERE (rq.stateid IN (6, 13, 19) AND rq.start < NOW()) OR "
+	       .       "(rq.stateid = 14 AND rq.laststateid IN (6, 13, 16, 19) AND "
+	       .       "rq.start < DATE_ADD(NOW(), INTERVAL 1 HOUR)) "
 	       . "ORDER BY rq.start";
 	$qh = doQuery($query, 101);
 	$data = array();
@@ -682,6 +691,101 @@ function getNewReservationData() {
 		$data[] = $row;
 	}
 	return $data;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn getFailedImagingData()
+///
+/// \return array of data with these keys:\n
+/// \b computer - hostname of computer (without domain)\n
+/// \b image - image being loaded\n
+/// \b id - id of request\n
+/// \b start - start date\n
+/// \b state - current and last state\n
+/// \b installtype - install for reservation\n
+/// \b managementnode - hostname of mangementnode
+///
+/// \brief gets information about loading reservations
+///
+////////////////////////////////////////////////////////////////////////////////
+function getFailedImagingData() {
+	$query = "SELECT c.hostname AS computer, "
+	       .        "i.prettyname AS image, "
+	       .        "rq.id, "
+	       .        "rq.start, "
+	       .        "o.installtype, "
+	       .        "m.hostname AS managementnode, "
+	       .        "ch.hostname AS vmhost, "
+	       .        "u.unityid AS owner "
+	       . "FROM request rq "
+	       . "LEFT JOIN reservation rs ON (rs.requestid = rq.id) "
+	       . "LEFT JOIN computer c ON (c.id = rs.computerid) "
+	       . "LEFT JOIN image i ON (i.id = rs.imageid) "
+	       . "LEFT JOIN OS o ON (o.id = i.OSid) "
+	       . "LEFT JOIN managementnode m ON (m.id = rs.managementnodeid) "
+	       . "LEFT JOIN vmhost vh ON (c.vmhostid = vh.id) "
+	       . "LEFT JOIN computer ch ON (vh.computerid = ch.id) "
+	       . "LEFT JOIN user u ON (rq.userid = u.id) "
+	       . "WHERE rq.stateid = 10 AND "
+	       .       "rq.laststateid = 16 "
+	       . "ORDER BY rq.start";
+	$qh = doQuery($query, 101);
+	$data = array();
+	while($row = mysql_fetch_assoc($qh)) {
+		$tmp = explode('.', $row['computer']);
+		$row['computer'] = $tmp[0];
+		$tmp = explode('.', $row['vmhost']);
+		$row['vmhost'] = $tmp[0];
+		$tmp = explode(' ', $row['start']);
+		$row['start'] = "{$tmp[0]}<br>{$tmp[1]}";
+		$tmp = explode('.', $row['managementnode']);
+		$row['managementnode'] = $tmp[0];
+		if($row['vmhost'] == '')
+			$row['vmhost'] = "N/A";
+		$row['contid'] = addContinuationsEntry('AJrestartImageCapture', array('requestid' => $row['id']), 120, 1, 0);
+		$data[] = $row;
+	}
+	return $data;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn restartImageCapture()
+///
+/// \return array of data with these keys:\n
+/// \b computer - hostname of computer (without domain)\n
+/// \b image - image being loaded\n
+/// \b id - id of request\n
+/// \b start - start date\n
+/// \b state - current and last state\n
+/// \b installtype - install for reservation\n
+/// \b managementnode - hostname of mangementnode
+///
+/// \brief gets information about loading reservations
+///
+////////////////////////////////////////////////////////////////////////////////
+function AJrestartImageCapture() {
+	$requestid = getContinuationVar('requestid');
+	if(! checkUserHasPerm('View Dashboard (global)')) {
+		sendJSON(array('status' => 'noaccess'));
+		return;
+	}
+	$request = getRequestInfo($requestid);
+	if($request['stateid'] != 10 || $request['laststateid'] != 16 ||
+	   count($request['reservations']) > 1) {
+		sendJSON(array('status' => 'wrongstate'));
+		return;
+	}
+	$compid = $request['reservations'][0]['computerid'];
+	$query = "UPDATE computer c, "
+	       .        "request rq "
+	       . "SET c.stateid = 8, "
+	       .     "rq.stateid = 16 "
+	       . "WHERE c.id = $compid AND "
+	       .       "rq.id = $requestid";
+	doQuery($query);
+	sendJSON(array('status' => 'success'));
 }
 
 ////////////////////////////////////////////////////////////////////////////////

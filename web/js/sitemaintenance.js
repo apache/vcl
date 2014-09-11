@@ -14,27 +14,6 @@
 * See the License for the specific language governing permissions and
 * limitations under the License.
 */
-function RPCwrapper(data, CB, dojson) {
-	if(dojson) {
-		dojo.xhrPost({
-			url: 'index.php',
-			load: CB,
-			handleAs: "json",
-			error: errorHandler,
-			content: data,
-			timeout: 15000
-		});
-	}
-	else {
-		dojo.xhrPost({
-			url: 'index.php',
-			load: CB,
-			error: errorHandler,
-			content: data,
-			timeout: 15000
-		});
-	}
-}
 
 function generalReqCB(data, ioArgs) {
 	eval(data);

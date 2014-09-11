@@ -26,15 +26,10 @@ $actions["pages"] = array();
 $actions["nextmodes"] = array();
 
 $actions["entry"] = array('main',
-                          'newRequest',
                           'viewRequests',
                           'blockAllocations',
                           'userpreferences',
                           'viewGroups',
-                          'selectImageOption',
-                          'viewSchedules',
-                          'selectComputers',
-                          'selectMgmtnodeOption',
                           'serverProfiles',
                           'pickTimeTable',
                           'viewNodes',
@@ -49,13 +44,22 @@ $actions["entry"] = array('main',
                           'selectauth',
                           'xmlrpcaffiliations',
                           'submitLogin',
-                          'imageClickThrough',
                           'clearCache',
                           'errorrpt',
                           'auth',
                           'continuationsError',
                           'requestBlockAllocation',
                           'dashboard',
+                          'resource',
+                          'config',
+                          'image',
+                          'computer',
+                          'managementnode',
+                          'schedule',
+                          'RESTresourceBasic',
+                          'RESTresourceDetail',
+                          #'testDojoREST',
+                          'siteconfig',
 );
 
 $noHTMLwrappers = array('sendRDPfile',
@@ -73,35 +77,11 @@ $noHTMLwrappers = array('sendRDPfile',
                         'AJsubmitRenameNode',
                         'AJupdateWaitTime',
                         'AJviewRequests',
-                        'submitRequest',
-                        'submitTestProd',
+                        'AJnewRequest',
                         'selectauth',
                         'submitLogin',
                         'submitgeneralprefs',
-                        'AJupdateImage',
-                        'jsonImageGroupingImages',
-                        'jsonImageGroupingGroups',
-                        'jsonImageMapCompGroups',
-                        'jsonImageMapImgGroups',
-                        'AJaddImageToGroup',
-                        'AJremImageFromGroup',
-                        'AJaddGroupToImage',
-                        'AJremGroupFromImage',
-                        'imageGroupingGrid',
-                        'AJaddCompGrpToImgGrp',
-                        'AJremCompGrpFromImgGrp',
-                        'AJaddImgGrpToCompGrp',
-                        'AJremImgGrpFromCompGrp',
-                        'imageMappingGrid',
                         'jsonGetGroupInfo',
-                        'jsonCompGroupingComps',
-                        'jsonCompGroupingGroups',
-                        'compGroupingGrid',
-                        'AJaddCompToGroup',
-                        'AJremCompFromGroup',
-                        'AJaddGroupToComp',
-                        'AJremGroupFromComp',
-                        'generateDHCP',
                         'errorrpt',
                         'vmhostdata',
                         'updateVMlimit',
@@ -117,6 +97,7 @@ $noHTMLwrappers = array('sendRDPfile',
                         'AJupdateRevisionProduction',
                         'AJupdateRevisionComments',
                         'AJdeleteRevisions',
+                        'AJfilterCompGroups',
                         'AJupdateBlockStatus',
                         'JSONprivnodelist',
                         'jsonGetUserGroupMembers',
@@ -144,8 +125,6 @@ $noHTMLwrappers = array('sendRDPfile',
                         'AJgetDelSiteMaintenanceData',
                         'AJeditSiteMaintenance',
                         'AJdeleteSiteMaintenance',
-                        'AJgetScheduleTimesData',
-                        'AJsaveScheduleTimes',
                         'AJvalidateUserid',
                         'AJupdateDashboard',
                         'AJgetStatData',
@@ -163,7 +142,7 @@ $noHTMLwrappers = array('sendRDPfile',
                         'AJaddProfileToGroup',
                         'AJremProfileFromGroup',
                         'AJserverProfileStoreData',
-                        'AJdeployServer',
+                        'AJfetchRouterDNS',
                         'AJconfirmDeleteRequest',
                         'AJsubmitDeleteRequest',
                         'AJconfirmRemoveRequest',
@@ -177,35 +156,68 @@ $noHTMLwrappers = array('sendRDPfile',
                         'AJshowReinstallRequest',
                         'AJreinstallRequest',
                         'AJshowRequestSuggestedTimes',
-                        'AJgenerateUtilData',
                         'AJcanceltovmhostinuse',
                         'jsonUserGroupStore',
                         'jsonResourceGroupStore',
                         'changeLocale',
-                        'submitEditImage',
+                        'AJviewBlockAllocationUsage',
+                        'AJrestartImageCapture',
+                        'jsonResourceStore',
+                        'AJpromptToggleDeleteResource',
+                        'AJsubmitToggleDeleteResource',
+                        'AJsaveResource',
+                        'AJeditResource',
+                        'jsonResourceGroupingGroups',
+                        'AJaddRemGroupResource',
+                        'AJaddRemResourceGroup',
+                        'jsonResourceGroupingResources',
+                        'jsonResourceMappingMapToGroups',
+                        'AJaddRemMapToGroup',
+                        'jsonResourceMappingGroups',
+                        'AJaddRemGroupMapTo',
+                        'jsonConfigMapStore',
+                        'AJeditConfigMapping',
+                        'AJsaveConfigMapping',
+                        'AJdeleteConfigMapping',
+                        'AJsubmitDeleteConfigMapping',
+                        'AJconfigSystem',
+                        'RESTresourceBasic',
+                        'RESTresourceDetail',
+                        'AJstartImage',
+                        'AJupdateImage',
+                        'AJupdateTimeSource',
+                        'AJreloadComputers',
+                        'AJsubmitReloadComputers',
+                        'AJdeleteComputers',
+                        'AJsubmitDeleteComputers',
+                        'AJcompScheduleChange',
+                        'AJsubmitCompScheduleChange',
+                        'AJgenerateDHCPdata',
+                        'AJhostsData',
+                        'AJcompStateChange',
+                        'AJcompProvisioningChange',
+                        'AJsubmitCompProvisioningChange',
+                        'AJsubmitCompStateChange',
+                        'AJsubmitComputerStateLater',
+                        'AJconnectRequest',
 );
 
 # main
 $actions['mode']['main'] = "main"; # entry
 $actions['pages']['main'] = "main";
 
-# new reservations
-$actions['mode']['newRequest'] = "newReservation"; # entry
-$actions['mode']['submitRequest'] = "submitRequest";
+# reservations
+$actions['mode']['AJnewRequest'] = "AJnewRequest";
 $actions['mode']['AJupdateWaitTime'] = "AJupdateWaitTime";
-$actions['mode']['submitTestProd'] = "submitRequest";
+$actions['mode']['AJconfigSystem'] = "AJconfigSystem";
 $actions['mode']['selectTimeTable'] = "showTimeTable";
-$actions['mode']['AJshowRequestSuggestedTimes'] = "AJshowRequestSuggestedTimes";
 $actions['args']['selectTimeTable'] = 1;
-$actions['pages']['newRequest'] = "newReservations";
-$actions['pages']['submitRequest'] = "newReservations";
-$actions['pages']['AJupdateWaitTime'] = "newReservations";
-$actions['pages']['submitTestProd'] = "newReservations";
-$actions['pages']['selectTimeTable'] = "newReservations";
-$actions['pages']['AJshowRequestSuggestedTimes'] = "newReservations";
-$actions['nextmodes']['newRequest'] = array();
-
-# current reservations
+$actions['mode']['AJshowRequestSuggestedTimes'] = "AJshowRequestSuggestedTimes";
+$actions['mode']['AJrebootRequest'] = "AJrebootRequest";
+$actions['mode']['AJreinstallRequest'] = "AJreinstallRequest";
+$actions['mode']['AJsetImageProduction'] = "AJsetImageProduction";
+$actions['mode']['AJsubmitSetImageProduction'] = "AJsubmitSetImageProduction";
+$actions['mode']['AJshowReinstallRequest'] = "AJshowReinstallRequest";
 $actions['mode']['viewRequests'] = "viewRequests"; # entry
 $actions['mode']['AJviewRequests'] = "viewRequests"; # entry
 $actions['mode']['AJeditRequest'] = "AJeditRequest";
@@ -214,22 +226,31 @@ $actions['mode']['AJconfirmDeleteRequest'] = "AJconfirmDeleteRequest";
 $actions['mode']['AJsubmitDeleteRequest'] = "AJsubmitDeleteRequest";
 $actions['mode']['AJconfirmRemoveRequest'] = "AJconfirmRemoveRequest";
 $actions['mode']['AJsubmitRemoveRequest'] = "AJsubmitRemoveRequest";
-$actions['mode']['connectRequest'] = "connectRequest";
+$actions['mode']['AJconnectRequest'] = "AJconnectRequest";
 $actions['mode']['sendRDPfile'] = "sendRDPfile";
 $actions['mode']['AJcheckConnectTimeout'] = "AJcheckConnectTimeout";
 #$actions['mode']['connectMindterm'] = "connectMindterm";
 #$actions['mode']['connectRDPapplet'] = "connectRDPapplet";
-$actions['pages']['viewRequests'] = "currentReservations";
-$actions['pages']['AJviewRequests'] = "currentReservations";
-$actions['pages']['AJeditRequest'] = "currentReservations";
-$actions['pages']['AJsubmitEditRequest'] = "currentReservations";
-$actions['pages']['AJconfirmDeleteRequest'] = "currentReservations";
-$actions['pages']['AJsubmitDeleteRequest'] = "currentReservations";
-$actions['pages']['AJconfirmRemoveRequest'] = "currentReservations";
-$actions['pages']['AJsubmitRemoveRequest'] = "currentReservations";
-$actions['pages']['connectRequest'] = "currentReservations";
-$actions['pages']['sendRDPfile'] = "currentReservations";
-$actions['pages']['AJcheckConnectTimeout'] = "currentReservations";
+$actions['pages']['AJnewRequest'] = "reservations";
+$actions['pages']['AJupdateWaitTime'] = "reservations";
+$actions['pages']['AJconfigSystem'] = "reservations";
+$actions['pages']['selectTimeTable'] = "reservations";
+$actions['pages']['AJshowRequestSuggestedTimes'] = "reservations";
+$actions['pages']['AJrebootRequest'] = "reservations";
+$actions['pages']['AJreinstallRequest'] = "reservations";
+$actions['pages']['AJsubmitSetImageProduction'] = "reservations";
+$actions['pages']['AJshowReinstallRequest'] = "reservations";
+$actions['pages']['viewRequests'] = "reservations";
+$actions['pages']['AJviewRequests'] = "reservations";
+$actions['pages']['AJeditRequest'] = "reservations";
+$actions['pages']['AJsubmitEditRequest'] = "reservations";
+$actions['pages']['AJconfirmDeleteRequest'] = "reservations";
+$actions['pages']['AJsubmitDeleteRequest'] = "reservations";
+$actions['pages']['AJconfirmRemoveRequest'] = "reservations";
+$actions['pages']['AJsubmitRemoveRequest'] = "reservations";
+$actions['pages']['AJconnectRequest'] = "reservations";
+$actions['pages']['sendRDPfile'] = "reservations";
+$actions['pages']['AJcheckConnectTimeout'] = "reservations";
 #$actions['pages']['connectMindterm'] = "currentReservations";
 #$actions['pages']['connectRDPapplet'] = "currentReservations";
 
@@ -253,6 +274,7 @@ $actions['mode']['AJviewBlockAllocationTimes'] = "AJviewBlockAllocationTimes";
 $actions['mode']['AJtoggleBlockTime'] = "AJtoggleBlockTime";
 $actions['mode']['viewBlockAllocatedMachines'] = "viewBlockAllocatedMachines";
 $actions['mode']['AJgetBlockAllocatedMachineData'] = "AJgetBlockAllocatedMachineData";
+$actions['mode']['AJviewBlockAllocationUsage'] = "AJviewBlockAllocationUsage";
 $actions['pages']['blockAllocations'] = "blockAllocations";
 $actions['pages']['newBlockAllocation'] = "blockAllocations";
 $actions['pages']['editBlockAllocation'] = "blockAllocations";
@@ -272,6 +294,7 @@ $actions['pages']['AJtoggleBlockTime'] = "blockAllocations";
 $actions['pages']['AJviewBlockAllocation'] = "blockAllocations";
 $actions['pages']['viewBlockAllocatedMachines'] = "blockAllocations";
 $actions['pages']['AJgetBlockAllocatedMachineData'] = "blockAllocations";
+$actions['pages']['AJviewBlockAllocationUsage'] = "blockAllocations";
 
 # user preferences
 $actions['mode']['userpreferences'] = "userpreferences"; # entry
@@ -321,249 +344,6 @@ $actions['pages']['jsonGetGroupInfo'] = "manageGroups";
 $actions['pages']['jsonUserGroupStore'] = "manageGroups";
 $actions['pages']['jsonResourceGroupStore'] = "manageGroups";
 
-# manage images
-$actions['mode']['selectImageOption'] = "selectImageOption"; # entry
-$actions['mode']['viewImages'] = "viewImages";
-$actions['mode']['viewImageGrouping'] = "viewImageGrouping";
-$actions['mode']['viewImageMapping'] = "viewImageMapping";
-$actions['mode']['newImage'] = "editOrAddImage";
-$actions['args']['newImage'] = "1";
-$actions['mode']['startImage'] = "startImage";
-$actions['mode']['startCheckpoint'] = "startCheckpoint";
-$actions['mode']['submitCheckpoint'] = "submitCheckpoint";
-$actions['mode']['updateExistingImageComments'] = "updateExistingImageComments";
-$actions['mode']['updateExistingImage'] = "updateExistingImage";
-$actions['mode']['setImageProduction'] = "setImageProduction";
-$actions['mode']['AJsetImageProduction'] = "AJsetImageProduction";
-$actions['mode']['submitSetImageProduction'] = "submitSetImageProduction";
-$actions['mode']['AJsubmitSetImageProduction'] = "AJsubmitSetImageProduction";
-$actions['mode']['submitImageButton'] = "submitImageButton";
-$actions['mode']['submitEditImage'] = "submitEditImage";
-$actions['mode']['AJupdateImage'] = "AJupdateImage";
-$actions['mode']['submitEditImageButtons'] = "submitEditImageButtons";
-$actions['mode']['imageClickThroughAgreement'] = "imageClickThroughAgreement";
-$actions['mode']['submitAddImage'] = "submitAddImage";
-$actions['mode']['submitImageGroups'] = "submitImageGroups";
-$actions['mode']['submitImageMapping'] = "submitImageMapping";
-$actions['mode']['submitDeleteImage'] = "submitDeleteImage";
-$actions['mode']['imageClickThrough'] = "imageClickThrough";
-$actions['mode']['jsonImageGroupingImages'] = "jsonImageGroupingImages";
-$actions['mode']['jsonImageGroupingGroups'] = "jsonImageGroupingGroups";
-$actions['mode']['AJaddImageToGroup'] = "AJaddImageToGroup";
-$actions['mode']['AJremImageFromGroup'] = "AJremImageFromGroup";
-$actions['mode']['AJaddGroupToImage'] = "AJaddGroupToImage";
-$actions['mode']['AJremGroupFromImage'] = "AJremGroupFromImage";
-$actions['mode']['imageGroupingGrid'] = "imageGroupingGrid";
-$actions['mode']['jsonImageMapCompGroups'] = "jsonImageMapCompGroups";
-$actions['mode']['AJaddCompGrpToImgGrp'] = "AJaddCompGrpToImgGrp";
-$actions['mode']['AJremCompGrpFromImgGrp'] = "AJremCompGrpFromImgGrp";
-$actions['mode']['jsonImageMapImgGroups'] = "jsonImageMapImgGroups";
-$actions['mode']['AJaddImgGrpToCompGrp'] = "AJaddImgGrpToCompGrp";
-$actions['mode']['AJremImgGrpFromCompGrp'] = "AJremImgGrpFromCompGrp";
-$actions['mode']['imageMappingGrid'] = "imageMappingGrid";
-$actions['mode']['AJupdateRevisionProduction'] = "AJupdateRevisionProduction";
-$actions['mode']['AJupdateRevisionComments'] = "AJupdateRevisionComments";
-$actions['mode']['AJdeleteRevisions'] = "AJdeleteRevisions";
-$actions['mode']['connectmethodDialogContent'] = "connectmethodDialogContent";
-$actions['mode']['jsonImageConnectMethods'] = "jsonImageConnectMethods";
-$actions['mode']['AJaddImageConnectMethod'] = "AJaddImageConnectMethod";
-$actions['mode']['AJremImageConnectMethod'] = "AJremImageConnectMethod";
-$actions['mode']['subimageDialogContent'] = "subimageDialogContent";
-$actions['mode']['AJaddSubimage'] = "AJaddSubimage";
-$actions['mode']['AJremSubimage'] = "AJremSubimage";
-$actions['mode']['AJrebootRequest'] = "AJrebootRequest";
-$actions['mode']['AJshowReinstallRequest'] = "AJshowReinstallRequest";
-$actions['mode']['AJreinstallRequest'] = "AJreinstallRequest";
-$actions['pages']['selectImageOption'] = "manageImages";
-$actions['pages']['viewImages'] = "manageImages";
-$actions['pages']['viewImageGrouping'] = "manageImages";
-$actions['pages']['viewImageMapping'] = "manageImages";
-$actions['pages']['newImage'] = "manageImages";
-$actions['pages']['startImage'] = "manageImages";
-$actions['pages']['startCheckpoint'] = "manageImages";
-$actions['pages']['submitCheckpoint'] = "manageImages";
-$actions['pages']['updateExistingImageComments'] = "manageImages";
-$actions['pages']['updateExistingImage'] = "manageImages";
-$actions['pages']['setImageProduction'] = "manageImages";
-$actions['pages']['AJsetImageProduction'] = "manageImages";
-$actions['pages']['submitSetImageProduction'] = "manageImages";
-$actions['pages']['AJsubmitSetImageProduction'] = "manageImages";
-$actions['pages']['submitImageButton'] = "manageImages";
-$actions['pages']['submitEditImage'] = "manageImages";
-$actions['pages']['submitEditImageButtons'] = "manageImages";
-$actions['pages']['imageClickThroughAgreement'] = "manageImages";
-$actions['pages']['submitAddImage'] = "manageImages";
-$actions['pages']['submitImageGroups'] = "manageImages";
-$actions['pages']['submitImageMapping'] = "manageImages";
-$actions['pages']['submitDeleteImage'] = "manageImages";
-$actions['pages']['imageClickThrough'] = "manageImages";
-$actions['pages']['AJupdateImage'] = "manageImages";
-$actions['pages']['jsonImageGroupingImages'] = "manageImages";
-$actions['pages']['jsonImageGroupingGroups'] = "manageImages";
-$actions['pages']['AJaddImageToGroup'] = "manageImages";
-$actions['pages']['AJremImageFromGroup'] = "manageImages";
-$actions['pages']['AJaddGroupToImage'] = "manageImages";
-$actions['pages']['AJremGroupFromImage'] = "manageImages";
-$actions['pages']['imageGroupingGrid'] = "manageImages";
-$actions['pages']['jsonImageMapCompGroups'] = "manageImages";
-$actions['pages']['AJaddCompGrpToImgGrp'] = "manageImages";
-$actions['pages']['AJremCompGrpFromImgGrp'] = "manageImages";
-$actions['pages']['jsonImageMapImgGroups'] = "manageImages";
-$actions['pages']['AJaddImgGrpToCompGrp'] = "manageImages";
-$actions['pages']['AJremImgGrpFromCompGrp'] = "manageImages";
-$actions['pages']['imageMappingGrid'] = "manageImages";
-$actions['pages']['AJupdateRevisionProduction'] = "manageImages";
-$actions['pages']['AJupdateRevisionComments'] = "manageImages";
-$actions['pages']['AJdeleteRevisions'] = "manageImages";
-$actions['pages']['connectmethodDialogContent'] = "manageImages";
-$actions['pages']['jsonImageConnectMethods'] = "manageImages";
-$actions['pages']['AJaddImageConnectMethod'] = "manageImages";
-$actions['pages']['AJremImageConnectMethod'] = "manageImages";
-$actions['pages']['subimageDialogContent'] = "manageImages";
-$actions['pages']['AJaddSubimage'] = "manageImages";
-$actions['pages']['AJremSubimage'] = "manageImages";
-$actions['pages']['AJrebootRequest'] = "manageImages";
-$actions['pages']['AJshowReinstallRequest'] = "manageImages";
-$actions['pages']['AJreinstallRequest'] = "manageImages";
-
-# manage schedules
-$actions['mode']['viewSchedules'] = "viewSchedules"; # entry
-$actions['mode']['editSchedule'] = "editOrAddSchedule";
-$actions['args']['editSchedule'] = 0;
-$actions['mode']['confirmEditSchedule'] = "confirmEditOrAddSchedule";
-$actions['args']['confirmEditSchedule'] = 0;
-$actions['mode']['submitEditSchedule'] = "submitEditSchedule";
-$actions['mode']['confirmAddSchedule'] = "confirmEditOrAddSchedule";
-$actions['args']['confirmAddSchedule'] = 1;
-$actions['mode']['submitAddSchedule'] = "submitAddSchedule";
-$actions['mode']['confirmDeleteSchedule'] = "confirmDeleteSchedule";
-$actions['mode']['submitDeleteSchedule'] = "submitDeleteSchedule";
-$actions['mode']['submitScheduleGroups'] = "submitScheduleGroups";
-$actions['mode']['AJgetScheduleTimesData'] = "AJgetScheduleTimesData";
-$actions['mode']['AJsaveScheduleTimes'] = "AJsaveScheduleTimes";
-$actions['pages']['viewSchedules'] = "manageSchedules";
-$actions['pages']['editSchedule'] = "manageSchedules";
-$actions['pages']['confirmEditSchedule'] = "manageSchedules";
-$actions['pages']['submitEditSchedule'] = "manageSchedules";
-$actions['pages']['confirmAddSchedule'] = "manageSchedules";
-$actions['pages']['submitAddSchedule'] = "manageSchedules";
-$actions['pages']['confirmDeleteSchedule'] = "manageSchedules";
-$actions['pages']['submitDeleteSchedule'] = "manageSchedules";
-$actions['pages']['submitScheduleGroups'] = "manageSchedules";
-$actions['pages']['AJgetScheduleTimesData'] = "manageSchedules";
-$actions['pages']['AJsaveScheduleTimes'] = "manageSchedules";
-
-# manage computers
-$actions['mode']['selectComputers'] = "selectComputers"; # entry
-$actions['mode']['viewComputers'] = "viewComputers";
-$actions['mode']['viewComputerGroups'] = "viewComputerGroups";
-$actions['mode']['computerUtilities'] = "computerUtilities";
-$actions['mode']['reloadComputers'] = "reloadComputers";
-$actions['mode']['submitReloadComputers'] = "submitReloadComputers";
-$actions['mode']['compStateChange'] = "compStateChange";
-$actions['mode']['submitCompStateChange'] = "submitCompStateChange";
-$actions['mode']['compScheduleChange'] = "compScheduleChange";
-$actions['mode']['submitCompScheduleChange'] = "submitCompScheduleChange";
-$actions['mode']['AJgenerateUtilData'] = "AJgenerateUtilData";
-$actions['mode']['editComputer'] = "editOrAddComputer";
-$actions['args']['editComputer'] = 0;
-$actions['mode']['addComputer'] = "editOrAddComputer";
-$actions['args']['addComputer'] = 1;
-$actions['mode']['confirmEditComputer'] = "confirmEditOrAddComputer";
-$actions['args']['confirmEditComputer'] = 0;
-$actions['mode']['confirmAddComputer'] = "confirmEditOrAddComputer";
-$actions['args']['confirmAddComputer'] = 1;
-$actions['mode']['submitEditComputer'] = "submitEditComputer";
-$actions['mode']['computerAddMaintenanceNote'] = "computerAddMaintenanceNote";
-$actions['mode']['AJcanceltovmhostinuse'] = "AJcanceltovmhostinuse";
-$actions['mode']['addComputerSetVMHostProfile'] = "addComputerSetVMHostProfile";
-$actions['mode']['submitAddComputer'] = "submitAddComputer";
-$actions['mode']['submitComputerVMHostLater'] = "submitComputerVMHostLater";
-$actions['mode']['submitComputerGroups'] = "submitComputerGroups";
-$actions['mode']['confirmDeleteComputer'] = "confirmDeleteComputer";
-$actions['mode']['submitDeleteComputer'] = "submitDeleteComputer";
-$actions['mode']['bulkAddComputer'] = "bulkAddComputer";
-$actions['mode']['confirmAddBulkComputers'] = "confirmAddBulkComputers";
-$actions['mode']['submitAddBulkComputers'] = "submitAddBulkComputers";
-$actions['mode']['jsonCompGroupingComps'] = "jsonCompGroupingComps";
-$actions['mode']['jsonCompGroupingGroups'] = "jsonCompGroupingGroups";
-$actions['mode']['compGroupingGrid'] = "compGroupingGrid";
-$actions['mode']['AJaddCompToGroup'] = "AJaddCompToGroup";
-$actions['mode']['AJremCompFromGroup'] = "AJremCompFromGroup";
-$actions['mode']['AJaddGroupToComp'] = "AJaddGroupToComp";
-$actions['mode']['AJremGroupFromComp'] = "AJremGroupFromComp";
-$actions['mode']['generateDHCP'] = "generateDHCP";
-$actions['pages']['selectComputers'] = "manageComputers";
-$actions['pages']['viewComputers'] = "manageComputers";
-$actions['pages']['viewComputerGroups'] = "manageComputers";
-$actions['pages']['computerUtilities'] = "manageComputers";
-$actions['pages']['reloadComputers'] = "manageComputers";
-$actions['pages']['submitReloadComputers'] = "manageComputers";
-$actions['pages']['compStateChange'] = "manageComputers";
-$actions['pages']['submitCompStateChange'] = "manageComputers";
-$actions['pages']['compScheduleChange'] = "manageComputers";
-$actions['pages']['submitCompScheduleChange'] = "manageComputers";
-$actions['pages']['AJgenerateUtilData'] = "manageComputers";
-$actions['pages']['editComputer'] = "manageComputers";
-$actions['pages']['addComputer'] = "manageComputers";
-$actions['pages']['confirmEditComputer'] = "manageComputers";
-$actions['pages']['confirmAddComputer'] = "manageComputers";
-$actions['pages']['submitEditComputer'] = "manageComputers";
-$actions['pages']['computerAddMaintenanceNote'] = "manageComputers";
-$actions['pages']['AJcanceltovmhostinuse'] = "manageComputers";
-$actions['pages']['computerAddedMaintenceNote'] = "manageComputers";
-$actions['pages']['addComputerSetVMHostProfile'] = "manageComputers";
-$actions['pages']['submitAddComputer'] = "manageComputers";
-$actions['pages']['submitComputerVMHostLater'] = "manageComputers";
-$actions['pages']['submitComputerGroups'] = "manageComputers";
-$actions['pages']['confirmDeleteComputer'] = "manageComputers";
-$actions['pages']['submitDeleteComputer'] = "manageComputers";
-$actions['pages']['bulkAddComputer'] = "manageComputers";
-$actions['pages']['confirmAddBulkComputers'] = "manageComputers";
-$actions['pages']['submitAddBulkComputers'] = "manageComputers";
-$actions['pages']['jsonCompGroupingComps'] = "manageComputers";
-$actions['pages']['jsonCompGroupingGroups'] = "manageComputers";
-$actions['pages']['compGroupingGrid'] = "manageComputers";
-$actions['pages']['AJaddCompToGroup'] = "manageComputers";
-$actions['pages']['AJremCompFromGroup'] = "manageComputers";
-$actions['pages']['AJaddGroupToComp'] = "manageComputers";
-$actions['pages']['AJremGroupFromComp'] = "manageComputers";
-$actions['pages']['generateDHCP'] = "manageComputers";
-
-# management nodes
-$actions['mode']['selectMgmtnodeOption'] = "selectMgmtnodeOption"; # entry
-$actions['mode']['viewMgmtnodes'] = "viewMgmtnodes";
-$actions['mode']['editMgmtNode'] = "editOrAddMgmtnode";
-$actions['args']['editMgmtNode'] = "0";
-$actions['mode']['addMgmtNode'] = "editOrAddMgmtnode";
-$actions['args']['addMgmtNode'] = "1";
-$actions['mode']['confirmEditMgmtnode'] = "confirmEditOrAddMgmtnode";
-$actions['args']['confirmEditMgmtnode'] = "0";
-$actions['mode']['confirmAddMgmtnode'] = "confirmEditOrAddMgmtnode";
-$actions['args']['confirmAddMgmtnode'] = "1";
-$actions['mode']['submitEditMgmtnode'] = "submitEditMgmtnode";
-$actions['mode']['submitAddMgmtnode'] = "submitAddMgmtnode";
-$actions['mode']['confirmDeleteMgmtnode'] = "confirmDeleteMgmtnode";
-$actions['mode']['submitDeleteMgmtnode'] = "submitDeleteMgmtnode";
-$actions['mode']['viewMgmtnodeGrouping'] = "viewMgmtnodeGrouping";
-$actions['mode']['submitMgmtnodeGroups'] = "submitMgmtnodeGroups";
-$actions['mode']['viewMgmtnodeMapping'] = "viewMgmtnodeMapping";
-$actions['mode']['submitMgmtnodeMapping'] = "submitMgmtnodeMapping";
-$actions['pages']['selectMgmtnodeOption'] = "managementNodes";
-$actions['pages']['viewMgmtnodes'] = "managementNodes";
-$actions['pages']['editMgmtNode'] = "managementNodes";
-$actions['pages']['addMgmtNode'] = "managementNodes";
-$actions['pages']['confirmEditMgmtnode'] = "managementNodes";
-$actions['pages']['confirmAddMgmtnode'] = "managementNodes";
-$actions['pages']['submitEditMgmtnode'] = "managementNodes";
-$actions['pages']['submitAddMgmtnode'] = "managementNodes";
-$actions['pages']['confirmDeleteMgmtnode'] = "managementNodes";
-$actions['pages']['submitDeleteMgmtnode'] = "managementNodes";
-$actions['pages']['viewMgmtnodeGrouping'] = "managementNodes";
-$actions['pages']['submitMgmtnodeGroups'] = "managementNodes";
-$actions['pages']['viewMgmtnodeMapping'] = "managementNodes";
-$actions['pages']['submitMgmtnodeMapping'] = "managementNodes";
-
 # server profiles
 $actions['mode']['serverProfiles'] = "serverProfiles"; # entry
 $actions['mode']['AJsaveServerProfile'] = "AJsaveServerProfile";
@@ -576,7 +356,7 @@ $actions['mode']['AJremGroupFromProfile'] = "AJremGroupFromProfile";
 $actions['mode']['AJaddProfileToGroup'] = "AJaddProfileToGroup";
 $actions['mode']['AJremProfileFromGroup'] = "AJremProfileFromGroup";
 $actions['mode']['AJserverProfileStoreData'] = "AJserverProfileStoreData";
-$actions['mode']['AJdeployServer'] = "AJdeployServer";
+$actions['mode']['AJfetchRouterDNS'] = "AJfetchRouterDNS";
 $actions['pages']['serverProfiles'] = "serverProfiles";
 $actions['pages']['AJsaveServerProfile'] = "serverProfiles";
 $actions['pages']['AJserverProfileData'] = "serverProfiles";
@@ -588,7 +368,7 @@ $actions['pages']['AJremGroupFromProfile'] = "serverProfiles";
 $actions['pages']['AJaddProfileToGroup'] = "serverProfiles";
 $actions['pages']['AJremProfileFromGroup'] = "serverProfiles";
 $actions['pages']['AJserverProfileStoreData'] = "serverProfiles";
-$actions['pages']['AJdeployServer'] = "serverProfiles";
+$actions['pages']['AJfetchRouterDNS'] = "serverProfiles";
 
 # time table
 # TODO a few of these belong to new reservation
@@ -749,8 +529,139 @@ $actions['pages']['AJdeleteSiteMaintenance'] = "sitemaintenance";
 # dashboard
 $actions['mode']['dashboard'] = "dashboard";
 $actions['mode']['AJupdateDashboard'] = "AJupdateDashboard";
+$actions['mode']['AJrestartImageCapture'] = "AJrestartImageCapture";
 $actions['pages']['dashboard'] = "dashboard";
 $actions['pages']['AJupdateDashboard'] = "dashboard";
+$actions['pages']['AJrestartImageCapture'] = "dashboard";
+
+# site configuration
+$actions['mode']['siteconfig'] = "siteconfig";
+$actions['mode']['AJupdateTimeSource'] = "AJupdateTimeSource";
+$actions['pages']['siteconfig'] = "siteconfig";
+$actions['pages']['AJupdateTimeSource'] = "siteconfig";
+
+# resource
+$actions['mode']['resource'] = "resource";
+$actions['mode']['config'] = "resource";
+$actions['args']['config'] = 'config';
+$actions['mode']['image'] = "resource";
+$actions['args']['image'] = 'image';
+$actions['mode']['computer'] = "resource";
+$actions['args']['computer'] = 'computer';
+$actions['mode']['managementnode'] = "resource";
+$actions['args']['managementnode'] = 'managementnode';
+$actions['mode']['schedule'] = "resource";
+$actions['args']['schedule'] = 'schedule';
+$actions['mode']['viewResources'] = "viewResources";
+$actions['mode']['jsonResourceStore'] = "jsonResourceStore";
+$actions['mode']['AJpromptToggleDeleteResource'] = "AJpromptToggleDeleteResource";
+$actions['mode']['AJsubmitToggleDeleteResource'] = "AJsubmitToggleDeleteResource";
+$actions['mode']['AJsaveResource'] = "AJsaveResource";
+$actions['mode']['AJeditResource'] = "AJeditResource";
+$actions['mode']['groupMapHTML'] = "groupMapHTML";
+$actions['mode']['editConfigMap'] = "editConfigMap";
+$actions['mode']['jsonResourceGroupingGroups'] = "jsonResourceGroupingGroups";
+$actions['mode']['AJaddRemGroupResource'] = "AJaddRemGroupResource";
+$actions['mode']['AJaddRemResourceGroup'] = "AJaddRemResourceGroup";
+$actions['mode']['jsonResourceGroupingResources'] = "jsonResourceGroupingResources";
+$actions['mode']['jsonResourceMappingMapToGroups'] = "jsonResourceMappingMapToGroups";
+$actions['mode']['AJaddRemMapToGroup'] = "AJaddRemMapToGroup";
+$actions['mode']['jsonResourceMappingGroups'] = "jsonResourceMappingGroups";
+$actions['mode']['AJaddRemGroupMapTo'] = "AJaddRemGroupMapTo";
+$actions['mode']['jsonConfigMapStore'] = "jsonConfigMapStore";
+$actions['mode']['AJeditConfigMapping'] = "AJeditConfigMapping";
+$actions['mode']['AJsaveConfigMapping'] = "AJsaveConfigMapping";
+$actions['mode']['AJdeleteConfigMapping'] = "AJdeleteConfigMapping";
+$actions['mode']['AJsubmitDeleteConfigMapping'] = "AJsubmitDeleteConfigMapping";
+$actions['mode']['connectmethodDialogContent'] = "connectmethodDialogContent";
+$actions['mode']['subimageDialogContent'] = "subimageDialogContent";
+$actions['mode']['AJaddSubimage'] = "AJaddSubimage";
+$actions['mode']['AJremSubimage'] = "AJremSubimage";
+$actions['mode']['AJupdateImage'] = "AJupdateImage";
+$actions['mode']['AJcanceltovmhostinuse'] = "AJcanceltovmhostinuse";
+$actions['mode']['AJreloadComputers'] = "AJreloadComputers";
+$actions['mode']['AJsubmitReloadComputers'] = "AJsubmitReloadComputers";
+$actions['mode']['AJdeleteComputers'] = "AJdeleteComputers";
+$actions['mode']['AJsubmitDeleteComputers'] = "AJsubmitDeleteComputers";
+$actions['mode']['AJcompScheduleChange'] = "AJcompScheduleChange";
+$actions['mode']['AJsubmitCompScheduleChange'] = "AJsubmitCompScheduleChange";
+$actions['mode']['AJgenerateDHCPdata'] = "AJgenerateDHCPdata";
+$actions['mode']['AJhostsData'] = "AJhostsData";
+$actions['mode']['AJcompStateChange'] = "AJcompStateChange";
+$actions['mode']['AJcompProvisioningChange'] = "AJcompProvisioningChange";
+$actions['mode']['AJsubmitCompProvisioningChange'] = "AJsubmitCompProvisioningChange";
+$actions['mode']['AJsubmitCompStateChange'] = "AJsubmitCompStateChange";
+$actions['mode']['AJsubmitComputerStateLater'] = "AJsubmitComputerStateLater";
+$actions['mode']['jsonImageConnectMethods'] = "jsonImageConnectMethods";
+$actions['mode']['AJaddImageConnectMethod'] = "AJaddImageConnectMethod";
+$actions['mode']['AJremImageConnectMethod'] = "AJremImageConnectMethod";
+$actions['mode']['AJstartImage'] = "AJstartImage";
+$actions['mode']['AJupdateRevisionComments'] = "AJupdateRevisionComments";
+$actions['mode']['AJdeleteRevisions'] = "AJdeleteRevisions";
+$actions['mode']['AJupdateRevisionProduction'] = "AJupdateRevisionProduction";
+$actions['mode']['AJfilterCompGroups'] = "AJfilterCompGroups";
+$actions['pages']['resource'] = "resource";
+$actions['pages']['config'] = "config";
+$actions['pages']['image'] = "image";
+$actions['pages']['computer'] = "computer";
+$actions['pages']['managementnode'] = "managementnode";
+$actions['pages']['schedule'] = "schedule";
+$actions['pages']['viewResources'] = "resource";
+$actions['pages']['jsonResourceStore'] = "resource";
+$actions['pages']['AJpromptToggleDeleteResource'] = "resource";
+$actions['pages']['AJsubmitToggleDeleteResource'] = "resource";
+$actions['pages']['AJsaveResource'] = "resource";
+$actions['pages']['AJeditResource'] = "resource";
+$actions['pages']['groupMapHTML'] = "resource";
+$actions['pages']['editConfigMap'] = "resource";
+$actions['pages']['jsonResourceGroupingGroups'] = "resource";
+$actions['pages']['AJaddRemGroupResource'] = "resource";
+$actions['pages']['AJaddRemResourceGroup'] = "resource";
+$actions['pages']['jsonResourceGroupingResources'] = "resource";
+$actions['pages']['jsonResourceMappingMapToGroups'] = "resource";
+$actions['pages']['AJaddRemMapToGroup'] = "resource";
+$actions['pages']['jsonResourceMappingGroups'] = "resource";
+$actions['pages']['AJaddRemGroupMapTo'] = "resource";
+$actions['pages']['jsonConfigMapStore'] = "resource";
+$actions['pages']['AJeditConfigMapping'] = "resource";
+$actions['pages']['AJsaveConfigMapping'] = "resource";
+$actions['pages']['AJdeleteConfigMapping'] = "resource";
+$actions['pages']['AJsubmitDeleteConfigMapping'] = "resource";
+$actions['pages']['connectmethodDialogContent'] = "resource";
+$actions['pages']['subimageDialogContent'] = "resource";
+$actions['pages']['AJaddSubimage'] = "resource";
+$actions['pages']['AJremSubimage'] = "resource";
+$actions['pages']['AJupdateImage'] = "resource";
+$actions['pages']['AJcanceltovmhostinuse'] = "resource";
+$actions['pages']['AJreloadComputers'] = "resource";
+$actions['pages']['AJsubmitReloadComputers'] = "resource";
+$actions['pages']['AJdeleteComputers'] = "resource";
+$actions['pages']['AJsubmitDeleteComputers'] = "resource";
+$actions['pages']['AJcompScheduleChange'] = "resource";
+$actions['pages']['AJsubmitCompScheduleChange'] = "resource";
+$actions['pages']['AJgenerateDHCPdata'] = "resource";
+$actions['pages']['AJhostsData'] = "resource";
+$actions['pages']['AJcompStateChange'] = "resource";
+$actions['pages']['AJcompProvisioningChange'] = "resource";
+$actions['pages']['AJsubmitCompProvisioningChange'] = "resource";
+$actions['pages']['AJsubmitCompStateChange'] = "resource";
+$actions['pages']['AJsubmitComputerStateLater'] = "resource";
+$actions['pages']['jsonImageConnectMethods'] = "resource";
+$actions['pages']['AJaddImageConnectMethod'] = "resource";
+$actions['pages']['AJremImageConnectMethod'] = "resource";
+$actions['pages']['AJstartImage'] = "resource";
+$actions['pages']['AJupdateRevisionComments'] = "resource";
+$actions['pages']['AJupdateRevisionProduction'] = "resource";
+$actions['pages']['AJdeleteRevisions'] = "resource";
+$actions['pages']['AJfilterCompGroups'] = "resource";
+
+# storebackend
+$actions['mode']['RESTresourceBasic'] = "RESTresourceBasic";
+$actions['mode']['RESTresourceDetail'] = "RESTresourceDetail";
+#$actions['mode']['testDojoREST'] = "testDojoREST";
+$actions['pages']['RESTresourceBasic'] = "storebackend";
+$actions['pages']['RESTresourceDetail'] = "storebackend";
+#$actions['pages']['testDojoREST'] = "storebackend";
 
 # RPC
 $actions['mode']['xmlrpccall'] = "xmlrpccall";

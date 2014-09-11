@@ -32,27 +32,7 @@ var blockFormAddListData = {
 	items: []
 }
 
-function RPCwrapper(data, CB, dojson) {
-	if(dojson) {
-		dojo.xhrPost({
-			url: 'index.php',
-			load: CB,
-			handleAs: "json",
-			error: errorHandler,
-			content: data,
-			timeout: 15000
-		});
-	}
-	else {
-		dojo.xhrPost({
-			url: 'index.php',
-			load: CB,
-			error: errorHandler,
-			content: data,
-			timeout: 15000
-		});
-	}
-}
+var usagechart = null;
 
 function generalReqCB(data, ioArgs) {
 	eval(data);
@@ -1367,3 +1347,49 @@ function timestampToTimeVirtual(val) {
 function machinecntfilter(val) {
 	return parseInt(val);
 }
+
+function viewBlockUsage(blockid) {
+	var cont = dojo.byId('viewblockusagecont').value;
+	RPCwrapper({continuation: cont, blockid: blockid}, viewBlockUsageCB, 1);
+}
+
+function viewBlockUsageCB(data, ioArgs) {
+	if(data.items.status == 'success') {
+		if(usagechart)
+			usagechart.destroy();
+		usagechart = new dojox.charting.Chart2D('blockusagechartdiv');
+		usagechart.setTheme(dojox.charting.themes.ThreeD);
+		var xtickstep = parseInt(data.items.usage.xlabels.length / 10) || 1;
+		usagechart.addAxis("x", {
+			includeZero: false,
+			labels: data.items.usage.xlabels,
+			rotation: -90,
+			minorTicks: false,
+			font: 'normal normal normal 11px verdana',
+			majorTickStep: xtickstep
+		});
+		usagechart.addAxis('y', {
+			vertical: true,
+			max: 100,
+			includeZero: true,
+			minorTicks: true,
+			minorLabels: false,
+			majorTickStep: 20,
+			minorTickStep: 10
+		});
+		usagechart.addPlot('default', {type: "Columns", gap: 1});
+		usagechart.addPlot('Grid', {type: 'Grid', hMajorLines: true, vMajorLines: false});
+		usagechart.addSeries("Main", data.items.usage.points, {stroke: {width: 1}});
+		var a = new dojox.charting.action2d.Tooltip(usagechart);
+		usagechart.render();
+		dojo.addClass('blockusageemptydiv', 'hidden');
+		dojo.removeClass('blockusagechartdiv', 'hidden');
+		dijit.byId('viewUsageDialog').show();
+	}
+	else if(data.items.status == 'empty') {
+		dojo.addClass('blockusagechartdiv', 'hidden');
+		dojo.removeClass('blockusageemptydiv', 'hidden');
+		dijit.byId('viewUsageDialog').show();
+	}
+}
+

@@ -835,10 +835,10 @@ function editOrAddGroup($state) {
 		print "</TABLE>\n";
 	}
 
-    if($data["type"] != "user"){
-        print "</DIV>\n";
-        return;
-    }
+	if($data["type"] != "user") {
+		print "</DIV>\n";
+		return;
+	}
 	if($editusergroup) {
 		$newuser = processInputVar("newuser", ARG_STRING);
 		print "<H3>Group Membership</H3>\n";
@@ -894,7 +894,7 @@ function editOrAddGroup($state) {
 		}
 		print "</TABLE>\n";
 	}
-    print "</DIV>\n";
+	print "</DIV>\n";
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1158,13 +1158,10 @@ function checkForGroupUsage($groupid, $type) {
 			return 1;
 		$query = "SELECT id "
 		       . "FROM blockRequest "
-		       . "WHERE groupid = $groupid "
-		       .    "OR admingroupid = $groupid";
+		       . "WHERE (groupid = $groupid "
+		       .    "OR admingroupid = $groupid) "
+		       .   "AND status IN ('requested', 'accepted')";
 		$qh = doQuery($query, 311);
-		if(mysql_num_rows($qh))
-			return 1;
-		$query = "SELECT id FROM imagemeta WHERE usergroupid = $groupid";
-		$qh = doQuery($query, 312);
 		if(mysql_num_rows($qh))
 			return 1;
 		$query = "SELECT id "
@@ -1329,7 +1326,7 @@ function confirmEditOrAddGroup($state) {
 	print "    </TD>\n";
 	print "  </TR>\n";
 	print "</TABLE>\n";
-    print "</DIV>\n";
+	print "</DIV>\n";
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1506,7 +1503,7 @@ function confirmDeleteGroup() {
 	print "    </TD>\n";
 	print "  </TR>\n";
 	print "</TABLE>\n";
-    print "</DIV>\n";
+	print "</DIV>\n";
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1519,8 +1516,13 @@ function confirmDeleteGroup() {
 function submitDeleteGroup() {
 	$groupid = getContinuationVar("groupid");
 	$type = getContinuationVar("type");
-	if($type == "user")
+	if($type == "user") {
+		$query = "UPDATE blockRequest "
+		       . "SET groupid = 0 "
+		       . "WHERE groupid = $groupid";
+		doQuery($query);
 		$table = "usergroup";
+	}
 	else
 		$table = "resourcegroup";
 	$query = "DELETE FROM $table "
@@ -1541,7 +1543,7 @@ function addGroupUser() {
 	global $submitErr, $submitErrMsg;
 	$groupid = getContinuationVar("groupid");
 	$newuser = processInputVar("newuser", ARG_STRING);
-	if(! validateUserid($newuser)) {
+	if(validateUserid($newuser) != 1) {
 		$submitErr |= IDNAMEERR;
 		$submitErrMsg[IDNAMEERR] = "Invalid login ID";
 		editOrAddGroup(0);

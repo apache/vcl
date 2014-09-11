@@ -29,241 +29,26 @@
 ////////////////////////////////////////////////////////////////////////////////
 function serverProfiles() {
 	global $user;
+	if(! in_array("serverProfileAdmin", $user["privileges"])) {
+		print "No access to manage server profiles.<br>\n";
+		return;
+	}
 	print "<div dojoType=\"dojo.data.ItemFileWriteStore\" jsId=\"profilesstore\" ";
 	print "data=\"profilesstoredata\"></div>\n";
-	if(in_array("serverProfileAdmin", $user["privileges"])) {
-		print "<div id=\"mainTabContainer\" dojoType=\"dijit.layout.TabContainer\"\n";
-		print "     style=\"width:630px;height:600px\">\n";
-	}
-	print "<div id=\"deploytab\" dojoType=\"dijit.layout.ContentPane\" title=\"Deploy Server\" selected=\"true\">\n";
-	$data = deployHTML();
+	print "<div id=\"mainTabContainer\" dojoType=\"dijit.layout.TabContainer\"\n";
+	print "     style=\"width:630px;height:600px\">\n";
+
+	print "<div id=\"manageprofiles\" dojoType=\"dijit.layout.ContentPane\" title=\"Manage Profiles\">\n";
+	$data = manageProfilesHTML();
 	print $data['html'];
-	print "</div>\n"; # deploy tab
+	print "</div>\n"; # manageprofiles tab
 
-	if(in_array("serverProfileAdmin", $user["privileges"])) {
-		print "<div id=\"manageprofiles\" dojoType=\"dijit.layout.ContentPane\" title=\"Manage Profiles\">\n";
-		$data = manageProfilesHTML();
-		print $data['html'];
-		print "</div>\n"; # manageprofiles tab
-
-		print "<div id=\"grouping\" dojoType=\"dijit.layout.ContentPane\" title=\"Manage Grouping\">\n";
-		$data = manageGroupingHTML();
-		print $data['html'];
-		print "</div>\n"; # grouping tab
-	}
+	print "<div id=\"grouping\" dojoType=\"dijit.layout.ContentPane\" title=\"Manage Grouping\">\n";
+	$data = manageGroupingHTML();
+	print $data['html'];
+	print "</div>\n"; # grouping tab
 
 	print "</div>\n"; # tab container
-}
-
-////////////////////////////////////////////////////////////////////////////////
-///
-/// \fn deployHTML()
-///
-/// \return an array with one element with a key of 'html' whose value is the
-/// html content for the deploy tab
-///
-/// \brief builds the html for the deploy tab
-///
-////////////////////////////////////////////////////////////////////////////////
-function deployHTML() {
-	global $user, $skin;
-	$profiles = getUserResources(array("serverCheckOut"), array("available"));
-
-	$h = '';
-	$h .= "<h2>Deploy Server</h2>\n";
-	$h .= "<span id=\"deployprofileslist\"";
-	if(! count($profiles['serverprofile']))
-		$h .= " class=\"hidden\"";
-	$h .= ">\n";
-	$h .= "Profile: ";
-	$h .= "<select dojoType=\"dijit.form.Select\" id=\"deployprofileid\" ";
-	$h .= "onChange=\"deployProfileChanged();\" sortByLabel=\"true\"></select><br>\n";
-	$h .= "<fieldset>\n";
-	$h .= "<legend>Description:</legend>\n";
-	$h .= "<div id=\"deploydesc\"></div>\n";
-	$h .= "</fieldset>\n";
-	$cont = addContinuationsEntry('AJserverProfileData', array('mode' => 'checkout'));
-	$h .= "<button dojoType=\"dijit.form.Button\" id=\"deployFetchProfilesBtn\">\n";
-	$h .= "	Apply Profile\n";
-	$h .= "	<script type=\"dojo/method\" event=onClick>\n";
-	$h .= "		getServerProfileData('$cont', 'deployprofileid', getServerProfileDataDeployCB);\n";
-	$h .= "	</script>\n";
-	$h .= "</button>";
-	$h .= "<br><hr><br>\n";
-	$h .= "<input type=\"hidden\" id=\"appliedprofileid\" value=\"0\">\n";
-	$h .= "</span>\n"; # deployprofileslist
-
-	$h .= "<div id=\"deployprofilediv\">\n";
-	$h .= "<table summary=\"\">\n";
-	$h .= "  <tr>\n";
-	$h .= "    <th align=right>Name:</th>\n";
-	$h .= "    <td><input type=\"text\" name=\"deployname\" id=\"deployname\" ";
-	$h .= "dojoType=\"dijit.form.TextBox\" style=\"width: 400px\"></td>\n";
-	$h .= "  </tr>\n";
-	$h .= "  <tr>\n";
-	$h .= "    <th align=right>Environment:</th>\n";
-	$h .= "    <td>\n";
-	$resources = getUserResources(array("imageAdmin", "imageCheckOut"));
-	$images = removeNoCheckout($resources["image"]);
-	$extraimages = getServerProfileImages($user['id']);
-	foreach($extraimages as $id => $image)
-		$images[$id] = $image;
-	uasort($images, 'sortKeepIndex');
-	if(USEFILTERINGSELECT && count($images) < FILTERINGSELECTTHRESHOLD) {
-		$h .= "      <select dojoType=\"dijit.form.FilteringSelect\" id=\"deployimage\" ";
-		$h .= "style=\"width: 400px\" queryExpr=\"*\${0}*\" required=\"true\" ";
-		$h .= "highlightMatch=\"all\" autoComplete=\"false\">\n";
-	}
-	else
-		$h .= "      <select dojoType=\"dijit.form.Select\" id=\"deployimage\">\n";
-	foreach($images as $id => $image) {
-		$image = preg_replace('/&/', '&amp;', $image);
-		$h .= "        <option value=\"$id\">$image</option>\n";
-	}
-	$h .= "      </select>\n";
-	$h .= "    </td>\n";
-	$h .= "  </tr>\n";
-	/*$h .= "  <tr>\n";
-	$h .= "    <th align=right>Fixed IP Address:</th>\n";
-	$h .= "    <td><input type=\"text\" id=\"deployfixedIP\" ";
-	$h .= "dojoType=\"dijit.form.ValidationTextBox\" ";
-	$h .= "regExp=\"([0-9]{1,3}\\.){3}([0-9]{1,3})\">(optional)</td>\n";
-	$h .= "  </tr>\n";*/
-	/*$h .= "  <tr>\n";
-	$h .= "    <th align=right>Fixed MAC Address:</th>\n";
-	$h .= "    <td><input type=\"text\" id=\"deployfixedMAC\" ";
-	$h .= "dojoType=\"dijit.form.ValidationTextBox\" ";
-	$h .= "regExp=\"([0-9a-fA-F]{2}:){5}([0-9a-fA-F]{2})\">(optional)</td>\n";
-	$h .= "  </tr>\n";*/
-	$h .= "  <tr>\n";
-	$h .= "    <th align=right>Admin User Group:</th>\n";
-	$h .= "    <td>\n";
-	$admingroups = getUserGroups();
-	$logingroups = $admingroups;
-	/*$admingroups = getUserEditGroups($user['id']);
-	$logingroups = $admingroups;
-	$extraadmingroups = getServerProfileGroups($user['id'], 'admin');
-	foreach($extraadmingroups as $id => $group)
-		$admingroups[$id] = $group;
-	uasort($admingroups, 'sortKeepIndex');*/
-	if(USEFILTERINGSELECT && count($admingroups) < FILTERINGSELECTTHRESHOLD) {
-		$h .= "      <select dojoType=\"dijit.form.FilteringSelect\" id=\"deployadmingroup\" ";
-		$h .= "style=\"width: 400px\" queryExpr=\"*\${0}*\" required=\"true\" ";
-		$h .= "highlightMatch=\"all\" autoComplete=\"false\">\n";
-	}
-	else
-		$h .= "      <select id=\"deployadmingroup\">\n";
-	$h .= "        <option value=\"0\">None</option>\n";
-	foreach($admingroups as $id => $group) {
-		if($group['name'] == 'None' || preg_match('/^None@.*$/', $group['name']))
-			continue;
-		$h .= "        <option value=\"$id\">{$group['name']}</option>\n";
-	}
-	#foreach($admingroups as $id => $group)
-	#	$h .= "        <option value=\"$id\">$group</option>\n";
-	$h .= "      </select>\n";
-	$h .= "    </td>\n";
-	$h .= "  </tr>\n";
-	$h .= "  <tr>\n";
-	$h .= "    <th align=right>Access User Group:</th>\n";
-	$h .= "    <td>\n";
-	/*$extralogingroups = getServerProfileGroups($user['id'], 'login');
-	foreach($extralogingroups as $id => $group)
-		$logingroups[$id] = $group;
-	uasort($logingroups, 'sortKeepIndex');*/
-	if(USEFILTERINGSELECT && count($logingroups) < FILTERINGSELECTTHRESHOLD) {
-		$h .= "      <select dojoType=\"dijit.form.FilteringSelect\" id=\"deploylogingroup\" ";
-		$h .= "style=\"width: 400px\" queryExpr=\"*\${0}*\" required=\"true\" ";
-		$h .= "highlightMatch=\"all\" autoComplete=\"false\">\n";
-	}
-	else
-		$h .= "      <select id=\"deploylogingroup\">\n";
-	$h .= "        <option value=\"0\">None</option>\n";
-	foreach($logingroups as $id => $group) {
-		if($group['name'] == 'None' || preg_match('/^None@.*$/', $group['name']))
-			continue;
-		$h .= "        <option value=\"$id\">{$group['name']}</option>\n";
-	}
-	#foreach($logingroups as $id => $group)
-	#	$h .= "        <option value=\"$id\">$group</option>\n";
-	$h .= "      </select>\n";
-	$h .= "    </td>\n";
-	$h .= "  </tr>\n";
-	$h .= "  <tr class=\"hidden\">\n";
-	$h .= "    <th align=right>Monitored:</th>\n";
-	$h .= "    <td><input type=\"checkbox\" ";
-	$h .= "id=\"deploymonitored\" dojoType=\"dijit.form.CheckBox\"></td>\n";
-	$h .= "  </tr>\n";
-	$h .= "</table><br><br>\n";
-	$h .= "When would you like to deploy the server?<br>\n";
-	$h .= "&nbsp;&nbsp;&nbsp;";
-	$h .= "<input type=\"radio\" id=\"startnow\" name=\"deploystart\" ";
-	$h .= "onclick=\"setStartNow();\" checked>\n";
-	$h .= "<label for=\"startnow\">Now</label><br>\n";
-	$h .= "&nbsp;&nbsp;&nbsp;";
-	$h .= "<input type=\"radio\" id=\"startlater\" name=\"deploystart\" ";
-	$h .= "onclick=\"setStartLater();\">\n";
-	$h .= "<label for=\"startlater\">Later:</label>\n";
-	$h .= "<div dojoType=\"dijit.form.DateTextBox\" ";
-	$h .= "id=\"deploystartdate\" onChange=\"setStartLater();\" ";
-	$h .= "style=\"width: 88px\"></div>\n";
-	$h .= "<div id=\"deploystarttime\" dojoType=\"dijit.form.TimeTextBox\" ";
-	$h .= "style=\"width: 88px\" onChange=\"setStartLater();\"></div>\n";
-	$h .= "<small>(" . date('T') . ")</small><br><br>\n";
-	$h .= "Ending for server:<br>\n";
-	$h .= "&nbsp;&nbsp;&nbsp;";
-	$h .= "<input type=\"radio\" id=\"endindef\" name=\"deployend\" ";
-	$h .= "onclick=\"setEndIndef();\" checked>\n"; # TODO should this 'checked' be hard coded?
-	$h .= "<label for=\"endindef\">Indefinite</label><br>\n";
-	$h .= "&nbsp;&nbsp;&nbsp;";
-	$h .= "<input type=\"radio\" id=\"endat\" name=\"deployend\" ";
-	$h .= "onclick=\"setEndAt();\">\n";
-	$h .= "<label for=\"endat\">At this time:</label>\n";
-	$h .= "<div type=\"text\" dojoType=\"dijit.form.DateTextBox\" ";
-	$h .= "id=\"deployenddate\" onChange=\"setEndAt();\" ";
-	$h .= "style=\"width: 88px\"></div>\n";
-	$h .= "<div type=\"text\" id=\"deployendtime\" dojoType=\"dijit.form.TimeTextBox\" ";
-	$h .= "style=\"width: 88px\" onChange=\"setEndAt();\"></div>\n";
-	$h .= "<small>(" . date('T') . ")</small><br><br>\n";
-	$h .= "<div class=\"rederrormsg hidden\" id=\"deployerr\"></div>\n";
-	$cont = addContinuationsEntry('AJdeployServer', array(), SECINDAY, 1, 0);
-	$h .= "<button dojoType=\"dijit.form.Button\" id=\"deploybtn\">\n";
-	$h .= "  Deploy Server\n";
-	$h .= "  <script type=\"dojo/method\" event=onClick>\n";
-	$h .= "    submitDeploy();\n";
-	$h .= "  </script>\n";
-	$h .= "</button><br><br>\n";
-	$h .= "<input type=\"hidden\" id=\"deploycont\" value=\"$cont\">\n";
-	$h .= "</div>\n"; # deployprofilediv
-
-	$h .= "<div dojoType=dijit.Dialog\n";
-	$h .= "      id=\"suggestedTimes\"\n";
-	$h .= "      title=\"Available Times\"\n";
-	$h .= "      duration=250\n";
-	$h .= "      draggable=true>\n";
-	$h .= "   <div id=\"suggestloading\" style=\"text-align: center\">";
-	$h .= "<img src=\"themes/$skin/css/dojo/images/loading.gif\" style=\"vertical-align: middle;\"> Loading...</div>\n";
-	$h .= "   <div id=\"suggestContent\"></div>\n";
-	$h .= "   <input type=\"hidden\" id=\"suggestcont\">\n";
-	$h .= "   <input type=\"hidden\" id=\"selectedslot\">\n";
-	$h .= "   <div align=\"center\">\n";
-	$h .= "   <button id=\"suggestDlgBtn\" dojoType=\"dijit.form.Button\" disabled>\n";
-	$h .= "     Use Selected Time\n";
-	$h .= "	   <script type=\"dojo/method\" event=\"onClick\">\n";
-	$h .= "       useSuggestedDeploySlot();\n";
-	$h .= "     </script>\n";
-	$h .= "   </button>\n";
-	$h .= "   <button id=\"suggestDlgCancelBtn\" dojoType=\"dijit.form.Button\">\n";
-	$h .= "     Cancel\n";
-	$h .= "	   <script type=\"dojo/method\" event=\"onClick\">\n";
-	$h .= "       dijit.byId('suggestDlgBtn').set('disabled', true);\n";
-	$h .= "       dijit.byId('suggestedTimes').hide();\n";
-	$h .= "       dojo.byId('suggestContent').innerHTML = '';\n";
-	$h .= "     </script>\n";
-	$h .= "   </button>\n";
-	$h .= "   </div>\n";
-	$h .= "</div>\n";
-	return array('html' => $h);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -343,12 +128,6 @@ function manageProfilesHTML() {
 	$h .= "    </td>\n";
 	$h .= "  </tr>\n";
 	/*$h .= "  <tr>\n";
-	$h .= "    <th align=right>Fixed IP Address:</th>\n";
-	$h .= "    <td><input type=\"text\" name=\"profilefixedIP\" id=\"profilefixedIP\" ";
-	$h .= "dojoType=\"dijit.form.ValidationTextBox\" ";
-	$h .= "regExp=\"([0-9]{1,3}\\.){3}([0-9]{1,3})\">(optional)</td>\n";
-	$h .= "  </tr>\n";*/
-	/*$h .= "  <tr>\n";
 	$h .= "    <th align=right>Fixed MAC Address:</th>\n";
 	$h .= "    <td><input type=\"text\" name=\"profilefixedMAC\" id=\"profilefixedMAC\" ";
 	$h .= "dojoType=\"dijit.form.ValidationTextBox\" ";
@@ -357,7 +136,10 @@ function manageProfilesHTML() {
 	$h .= "  <tr>\n";
 	$h .= "    <th align=right>Admin User Group:</th>\n";
 	$h .= "    <td>\n";
-	$admingroups = getUserGroups();
+	if($user['showallgroups'])
+		$admingroups = getUserGroups();
+	else
+		$admingroups = getUserGroups(0, $user['affiliationid']);
 	$logingroups = $admingroups;
 	/*$admingroups = getUserEditGroups($user['id']);
 	$logingroups = $admingroups;
@@ -413,6 +195,36 @@ function manageProfilesHTML() {
 	$h .= "    <td><input type=\"checkbox\" name=\"profilemonitored\" ";
 	$h .= "id=\"profilemonitored\" dojoType=\"dijit.form.CheckBox\"></td>\n";
 	$h .= "  </tr>\n";
+	$h .= "  <tbody class=\"boxedtablerows\">\n";
+	$regip1 = "(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)";
+	$regip4 = "$regip1\\.$regip1\\.$regip1\\.$regip1";
+	$h .= "  <tr>\n";
+	$h .= "    <th align=right>Fixed IP Address:</th>\n";
+	$h .= "    <td><input type=\"text\" name=\"profilefixedIP\" id=\"profilefixedIP\" ";
+	$h .= "dojoType=\"dijit.form.ValidationTextBox\" ";
+	$h .= "regExp=\"$regip4\" onKeyUp=\"checkFixedSet('profile');\">(optional)</td>\n";
+	$h .= "  </tr>\n";
+	$h .= "  <tr>\n";
+	$h .= "    <th align=right>Netmask:</th>\n";
+	$h .= "    <td><input type=\"text\" id=\"profilenetmask\" ";
+	$h .= "dojoType=\"dijit.form.ValidationTextBox\" ";
+	$h .= "regExp=\"$regip4\" validator=\"validateNetmask\" ";
+	$h .= "onKeyUp=\"fetchRouterDNS('profile');\" disabled>";
+	$h .= "</td>\n";
+	$h .= "  </tr>\n";
+	$h .= "  <tr>\n";
+	$h .= "    <th align=right>Router:</th>\n";
+	$h .= "    <td><input type=\"text\" id=\"profilerouter\" ";
+	$h .= "dojoType=\"dijit.form.ValidationTextBox\" ";
+	$h .= "regExp=\"$regip4\" disabled></td>\n";
+	$h .= "  </tr>\n";
+	$h .= "  <tr>\n";
+	$h .= "    <th align=right>DNS Server(s):</th>\n";
+	$h .= "    <td><input type=\"text\" id=\"profiledns\" ";
+	$h .= "dojoType=\"dijit.form.ValidationTextBox\" ";
+	$h .= "regExp=\"($regip4)(,$regip4){0,2}\" disabled></td>\n";
+	$h .= "  </tr>\n";
+	$h .= "  </tbody>\n";
 	$h .= "</table>\n";
 	$cont = addContinuationsEntry('AJsaveServerProfile');
 	$h .= "<br><br>\n";
@@ -639,8 +451,12 @@ function AJserverProfileData() {
 	unset($data['owner']);
 	unset($data['admingroup']);
 	unset($data['logingroup']);
-	if($data['fixedIP'] == 'NULL')
+	if($data['fixedIP'] == 'NULL') {
 		$data['fixedIP'] = '';
+		$data['netmask'] = '';
+		$data['router'] = '';
+		$data['dns'] = '';
+	}
 	if($data['fixedMAC'] == 'NULL')
 		$data['fixedMAC'] = '';
 	if(is_null($data['admingroupid']))
@@ -678,296 +494,6 @@ function AJserverProfileStoreData() {
 	                'access' => 'admin',
 	                'desc' => '');
 	sendJSON($data);
-}
-
-////////////////////////////////////////////////////////////////////////////////
-///
-/// \fn AJdeployServer()
-///
-/// \brief processes request information and creates reservation if everything
-/// ok
-///
-////////////////////////////////////////////////////////////////////////////////
-function AJdeployServer() {
-	global $user, $remoteIP;
-	$profilename = processInputVar('name', ARG_STRING);
-	$profileid = processInputVar('profileid', ARG_NUMERIC);
-	$imageid = processInputVar('imageid', ARG_NUMERIC);
-	$resources = getUserResources(array("imageAdmin", "imageCheckOut"));
-	$images = removeNoCheckout($resources["image"]);
-	$extraimages = getServerProfileImages($user['id']);
-	if(! array_key_exists($imageid, $images) &&
-	   ! array_key_exists($imageid, $extraimages)) {
-		$cont = addContinuationsEntry('AJdeployServer', array(), SECINDAY, 1, 0);
-		$data = array('error' => 1,
-		              'cont' => $cont,
-		              'msg' => 'You do not have access to use this environment.');
-		sendJSON($data);
-		return;
-	}
-	if(! preg_match('/^([-a-zA-Z0-9_\. ]){0,255}$/', $profilename)) {
-		$cont = addContinuationsEntry('AJdeployServer', array(), SECINDAY, 1, 0);
-		$data = array('error' => 1,
-		              'cont' => $cont,
-		              'msg' => "The name can only contain letters, numbers, spaces, dashes(-), "
-		                    . "underscores(_), and periods(.) and can be up to 255 characters long");
-		sendJSON($data);
-		return;
-	}
-	$ipaddr = processInputVar('ipaddr', ARG_STRING);
-	$ipaddrArr = explode('.', $ipaddr);
-	if($ipaddr != '' && (! preg_match('/^(([0-9]){1,3}\.){3}([0-9]){1,3}$/', $ipaddr) ||
-		$ipaddrArr[0] < 1 || $ipaddrArr[0] > 255 ||
-		$ipaddrArr[1] < 0 || $ipaddrArr[1] > 255 ||
-		$ipaddrArr[2] < 0 || $ipaddrArr[2] > 255 ||
-		$ipaddrArr[3] < 0 || $ipaddrArr[3] > 255)) {
-		$cont = addContinuationsEntry('AJdeployServer', array(), SECINDAY, 1, 0);
-		$data = array('error' => 1,
-		              'cont' => $cont,
-		              'msg' => "Invalid IP address. Must be w.x.y.z with each of "
-		                    . "w, x, y, and z being between 1 and 255 (inclusive)");
-		sendJSON($data);
-		return;
-	}
-	$macaddr = processInputVar('macaddr', ARG_STRING);
-	if($macaddr != '' && ! preg_match('/^(([A-Fa-f0-9]){2}:){5}([A-Fa-f0-9]){2}$/', $macaddr)) {
-		$cont = addContinuationsEntry('AJdeployServer', array(), SECINDAY, 1, 0);
-		$data = array('error' => 1,
-		              'cont' => $cont,
-		              'msg' => "Invalid MAC address.  Must be XX:XX:XX:XX:XX:XX "
-		                    . "with each pair of XX being from 00 to FF (inclusive)");
-		sendJSON($data);
-		return;
-	}
-	$admingroupid = processInputVar('admingroupid', ARG_NUMERIC);
-	$usergroups = getUserGroups();
-	/*$usergroups = getUserEditGroups($user['id']);
-	$extraadmingroups = getServerProfileGroups($user['id'], 'admin');*/
-	if($admingroupid != 0 && ! array_key_exists($admingroupid, $usergroups) /*&&
-		! array_key_exists($admingroupid, $extraadmingroups)*/) {
-		$cont = addContinuationsEntry('AJdeployServer', array(), SECINDAY, 1, 0);
-		$data = array('error' => 1,
-		              'cont' => $cont,
-		              'msg' => "You do not have access to use the specified admin user group.");
-		sendJSON($data);
-		return;
-	}
-	$logingroupid = processInputVar('logingroupid', ARG_NUMERIC);
-	#$extralogingroups = getServerProfileGroups($user['id'], 'login');
-	if($logingroupid != 0 && ! array_key_exists($logingroupid, $usergroups) /*&&
-		! array_key_exists($logingroupid, $extralogingroups)*/) {
-		$cont = addContinuationsEntry('AJdeployServer', array(), SECINDAY, 1, 0);
-		$data = array('error' => 1,
-		              'cont' => $cont,
-		              'msg' => "You do not have access to use the specified access user group.");
-		sendJSON($data);
-		return;
-	}
-	$monitored = processInputVar('monitored', ARG_NUMERIC);
-	if($monitored != 0 && $monitored != 1)
-		$monitored = 0;
-	$startmode = processInputVar('startmode', ARG_NUMERIC);
-	if($startmode != 0 && $startmode != 1) {
-		$cont = addContinuationsEntry('AJdeployServer', array(), SECINDAY, 1, 0);
-		$data = array('error' => 1,
-		              'cont' => $cont,
-		              'msg' => "Invalid start information submitted");
-		sendJSON($data);
-		return;
-	}
-	$endmode = processInputVar('endmode', ARG_NUMERIC);
-	if($endmode != 0 && $endmode != 1) {
-		$cont = addContinuationsEntry('AJdeployServer', array(), SECINDAY, 1, 0);
-		$data = array('error' => 1,
-		              'cont' => $cont,
-		              'msg' => "Invalid end information submitted");
-		sendJSON($data);
-		return;
-	}
-	if($startmode == 1) {
-		$tmp = processInputVar('start', ARG_NUMERIC);
-		if(! preg_match('/^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})$/', $tmp, $matches)) {
-			$cont = addContinuationsEntry('AJdeployServer', array(), SECINDAY, 1, 0);
-			$data = array('error' => 1,
-			              'cont' => $cont,
-			              'msg' => "Invalid start date/time submitted");
-			sendJSON($data);
-			return;
-		}
-		$startts = datetimeToUnix("{$matches[1]}-{$matches[2]}-{$matches[3]} {$matches[4]}:{$matches[5]}:00");
-	}
-	else {
-		$tmp = time();
-		$startts = unixFloor15();
-	}
-	if($endmode == 1) {
-		$tmp = processInputVar('end', ARG_NUMERIC);
-		if(! preg_match('/^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})$/', $tmp, $matches)) {
-			$cont = addContinuationsEntry('AJdeployServer', array(), SECINDAY, 1, 0);
-			$data = array('error' => 1,
-			              'cont' => $cont,
-			              'msg' => "Invalid end date/time submitted");
-			sendJSON($data);
-			return;
-		}
-		$endts = datetimeToUnix("{$matches[1]}-{$matches[2]}-{$matches[3]} {$matches[4]}:{$matches[5]}:00");
-	}
-	else {
-		$tmp = time();
-		$endts = datetimeToUnix("2038-01-01 00:00:00");
-	}
-
-	$resources = getUserResources(array("serverCheckOut", "serverProfileAdmin"),
-	                              array("available","administer"));
-	if(! array_key_exists($profileid, $resources['serverprofile']))
-		$profileid = 0;
-	elseif($profileid != 0) {
-		$tmp = getServerProfiles($profileid);
-		$tmp = $tmp[$profileid];
-		if($tmp['imageid'] != $imageid &&
-		   (($tmp['fixedIP'] != $ipaddr && $tmp['fixedMAC'] != $macaddr) ||
-		   ($tmp['fixedIP'] == $ipaddr && $ipaddr == '' && $tmp['fixedMAC'] == $macaddr && $macaddr == '')))
-			$profileid = 0;
-	}
-
-	// TODO handle selection of multiple revisions
-
-	// get semaphore lock
-	if(! semLock())
-		abort(3);
-
-	$revisionid = getProductionRevisionid($imageid);
-	$images = getImages(0, $imageid);
-	$availablerc = isAvailable($images, $imageid, $revisionid, $startts, $endts,
-	                           0, 0, 0, 0, $ipaddr, $macaddr);
-	if($availablerc < 1) {
-		$cdata = array('start' => $startts, 
-		               'end' => $endts,
-		               'imageid' => $imageid,
-		               'server' => 1,
-		               'ip' => $ipaddr,
-		               'mac' => $macaddr);
-		if($startmode == 0)
-			$cdata['now'] = 1;
-		else 
-			$cdata['now'] = 0;
-		$sugcont = addContinuationsEntry('AJshowRequestSuggestedTimes', $cdata);
-	}
-	if($availablerc == -3) {
-		$cont = addContinuationsEntry('AJdeployServer', array(), SECINDAY, 1, 0);
-		$msg = "The IP or MAC address you specified overlaps with another "
-		     . "reservation using the same IP or MAC address you specified. "
-		     . "Please use a different IP or MAC or select a different time "
-		     . "to deploy the server.";
-		$data = array('error' => 2,
-		              'cont' => $cont,
-		              'sugcont' => $sugcont,
-		              'msg' => $msg);
-		sendJSON($data);
-		return;
-	}
-	$max = getMaxOverlap($user['id']);
-	if($availablerc > 0 && checkOverlap($startts, $endts, $max)) {
-		$cont = addContinuationsEntry('AJdeployServer', array(), SECINDAY, 1, 0);
-		if($max == 0)
-			$msg = "The time you specified overlaps with another reservation you "
-			     . "currently have. You are only allowed to have a single "
-			     . "reservation at a time. You either need to end your existing "
-			     . "reservation or specify a time for this one that does not "
-			     . "overlap with your other reservation.";
-		else
-			$msg = "The time you specified overlaps with other reservations you "
-			     . "currently have. You are allowed to have $max overlapping "
-			     . "reservations at a time. You either need to end an existing "
-			     . "reservation or specify a time for this one that does not "
-			     . "overlap with your other reservations.";
-		$data = array('error' => 1,
-		              'cont' => $cont,
-		              'msg' => $msg);
-		sendJSON($data);
-		return;
-	}
-	if($availablerc == -1) {
-		$cont = addContinuationsEntry('AJdeployServer', array(), SECINDAY, 1, 0);
-		$msg = "You have requested an environment that is limited in the number "
-		     . "of concurrent reservations that can be made. No further "
-		     . "reservations for the environment can be made for the time you "
-		     . "have selected. Please select another time to use the "
-		     . "environment.";
-		$data = array('error' => 2,
-		              'cont' => $cont,
-		              'sugcont' => $sugcont,
-		              'msg' => $msg);
-		sendJSON($data);
-		return;
-	}
-	if($availablerc == -2) {
-		$cont = addContinuationsEntry('AJdeployServer', array(), SECINDAY, 1, 0);
-		$msg = "The time period you selected is not available due to scheduled "
-		     . "system downtime for maintenance. Please select another time to use "
-		     . "the environment.";
-		$data = array('error' => 2,
-		              'cont' => $cont,
-		              'sugcont' => $sugcont,
-		              'msg' => $msg);
-		sendJSON($data);
-		return;
-	}
-	if($availablerc == 0) {
-		$cont = addContinuationsEntry('AJdeployServer', array(), SECINDAY, 1, 0);
-		$msg = "The requested time period is not available. Please select a "
-		     . "different time.";
-		$data = array('error' => 2,
-		              'cont' => $cont,
-		              'sugcont' => $sugcont,
-		              'msg' => $msg);
-		sendJSON($data);
-		return;
-	}
-	$requestid = addRequest();
-	$query = "UPDATE reservation "
-	       . "SET remoteIP = '$remoteIP' "
-	       . "WHERE requestid = $requestid";
-	doQuery($query);
-	$fields = array('requestid', 'serverprofileid');
-	$values = array($requestid, $profileid);
-	if($profilename == '') {
-		$fields[] = 'name';
-		$profilename = $images[$imageid]['prettyname'];
-		$values[] = "'$profilename'";
-	}
-	else {
-		$fields[] = 'name';
-		$profilename = mysql_real_escape_string($profilename);
-		$values[] = "'$profilename'";
-	}
-	if($ipaddr != '') {
-		$fields[] = 'fixedIP';
-		$values[] = "'$ipaddr'";
-	}
-	if($macaddr != '') {
-		$fields[] = 'fixedMAC';
-		$values[] = "'$macaddr'";
-	}
-	if($admingroupid != 0) {
-		$fields[] = 'admingroupid';
-		$values[] = $admingroupid;
-	}
-	if($logingroupid != 0) {
-		$fields[] = 'logingroupid';
-		$values[] = $logingroupid;
-	}
-	if($monitored != 0) {
-		$fields[] = 'monitored';
-		$values[] = 1;
-	}
-	$allfields = implode(',', $fields);
-	$allvalues = implode(',', $values);
-	$query = "INSERT INTO serverrequest ($allfields) VALUES ($allvalues)";
-	doQuery($query, 101);
-	$ret['success'] = 1;
-	$ret['redirecturl'] = BASEURL . SCRIPT . "?mode=viewRequests";
-	sendJSON($ret);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1023,14 +549,20 @@ function AJsaveServerProfile() {
 		$ret['name'] = $data['name'];
 		$ret['id'] = $id;
 		$ret['newprofile'] = 1;
+		if($fixedIP != '') {
+			$vdata = array('netmask' => $data['netmask'],
+			               'router' => $data['router'],
+			               'dns' => $data['dnsArr']);
+			setVariable("fixedIPsp$id", $vdata, 'yaml');
+		}
 	}
 	else {
 		$query = "UPDATE serverprofile SET "
 		       .        "name = '$name', "
 		       .        "description = '$desc', "
 		       .        "imageid = {$data['imageid']}, "
-		       .        "fixedIP = '{$data['fixedIP']}', "
-		       .        "fixedMAC = '{$data['fixedMAC']}', "
+		       .        "fixedIP = '$fixedIP', "
+		       .        "fixedMAC = '$fixedMAC', "
 		       .        "admingroupid = {$data['admingroupid']}, "
 		       .        "logingroupid = {$data['logingroupid']}, "
 		       .        "monitored = {$data['monitored']} "
@@ -1040,6 +572,21 @@ function AJsaveServerProfile() {
 		$ret['name'] = $data['name'];
 		$ret['id'] = $data['profileid'];
 		$ret['newprofile'] = 0;
+	}
+	if($data['fixedIP'] != '') {
+		$vdata = array('netmask' => $data['netmask'],
+		               'router' => $data['router'],
+		               'dns' => $data['dnsArr']);
+		setVariable("fixedIPsp{$ret['id']}", $vdata, 'yaml');
+		$ret['netmask'] = $data['netmask'];
+		$ret['router'] = $data['router'];
+		$ret['dns'] = $data['dns'];
+		$allnets = getVariable('fixedIPavailnetworks', array());
+		$network = ip2long($data['fixedIP']) & ip2long($data['netmask']);
+		$key = long2ip($network) . "/{$data['netmask']}";
+		$allnets[$key] = array('router' => $data['router'],
+		                       'dns' => $data['dnsArr']);
+		setVariable('fixedIPavailnetworks', $allnets, 'yaml');
 	}
 	$ret['access'] = 'admin';
 	$ret['desc'] = preg_replace("/\n/", "<br>", $data['desc']);
@@ -1105,11 +652,15 @@ function processProfileInput() {
 	$ret['name'] = processInputVar('name', ARG_STRING);
 	$ret['desc'] = processInputVar('desc', ARG_STRING);
 	$ret['imageid'] = processInputVar('imageid', ARG_NUMERIC);
-	$ret['fixedIP'] = processInputVar('fixedIP', ARG_STRING);
 	$ret['fixedMAC'] = processInputVar('fixedMAC', ARG_STRING);
 	$ret['admingroupid'] = processInputVar('admingroupid', ARG_NUMERIC);
 	$ret['logingroupid'] = processInputVar('logingroupid', ARG_NUMERIC);
 	$monitored = processInputVar('monitored', ARG_STRING);
+	$ret['fixedIP'] = processInputVar('fixedIP', ARG_STRING);
+	$ret['netmask'] = processInputVar('netmask', ARG_STRING);
+	$ret['router'] = processInputVar('router', ARG_STRING);
+	$ret['dns'] = processInputVar('dns', ARG_STRING);
+	$ret['dnsArr'] = array();
 
 	$err = array();
 
@@ -1150,16 +701,55 @@ function processProfileInput() {
 	$addrArr = explode('.', $ret['fixedIP']);
 	if($ret['fixedIP'] == '')
 		$ret['fixedIP'] = 'NULL';
-	elseif(! preg_match('/^(([0-9]){1,3}\.){3}([0-9]){1,3}$/', $ret['fixedIP']) ||
-		$addrArr[0] < 1 || $addrArr[0] > 255 ||
-		$addrArr[1] < 0 || $addrArr[1] > 255 ||
-		$addrArr[2] < 0 || $addrArr[2] > 255 ||
-		$addrArr[3] < 1 || $addrArr[3] > 255) {
-	   $err['msg'] = "Invalid value for Fixed IP Address. Must be w.x.y.z with each of "
-		        . "w, x, y, and z being between 1 and 255 (inclusive)";
+	elseif(! validateIPv4addr($ret['fixedIP'])) {
+		$err['msg'] = "Invalid value for Fixed IP Address. Must be w.x.y.z with each of "
+		            . "w, x, y, and z being between 1 and 255 (inclusive)";
 		$err['field'] = 'fixedIP';
 		$err['error'] = 1;
 		return $err;
+	}
+	elseif(! preg_match('/^[1]+0[^1]+$/', sprintf('%032b', ip2long($ret['netmask'])))) {
+		$err['msg'] = "Invalid netmask specified";
+		$err['field'] = 'netmask';
+		$err['error'] = 1;
+		return $err;
+	}
+	elseif(! validateIPv4addr($ret['router'])) {
+		$err['msg'] = "Invalid value for Router. Must be w.x.y.z with each of "
+		            . "w, x, y, and z being between 1 and 255 (inclusive)";
+		$err['field'] = 'router';
+		$err['error'] = 1;
+		return $err;
+	}
+	elseif((ip2long($ret['fixedIP']) & ip2long($ret['netmask'])) !=
+	       (ip2long($ret['router']) & ip2long($ret['netmask']))) {
+		$err['msg'] = "IP address and router are not on the same subnet "
+		            . "based on the specified netmask.";
+		$err['field'] = 'router';
+		$err['error'] = 1;
+		return $err;
+	}
+	if($ret['fixedIP'] != '') {
+		$tmp = explode(',', $ret['dns']);
+		$cnt = 0;
+		foreach($tmp as $dnsaddr) {
+			if($cnt && $dnsaddr == '')
+				continue;
+			if($cnt == 3) {
+				$err['msg'] = "Too many DNS servers specified - up to 3 are allowed.";
+				$err['field'] = 'dns';
+				$err['error'] = 1;
+				return $err;
+			}
+			if(! validateIPv4addr($dnsaddr)) {
+				$err['msg'] = "Invalid DNS server specified";
+				$err['field'] = 'dns';
+				$err['error'] = 1;
+				return $err;
+			}
+			$ret['dnsArr'][] = $dnsaddr;
+			$cnt++;
+		}
 	}
 
 	if($ret['fixedMAC'] == '')
@@ -1206,111 +796,6 @@ function processProfileInput() {
 	else
 		$ret['monitored'] = 0;
 	return $ret;
-}
-
-////////////////////////////////////////////////////////////////////////////////
-///
-/// \fn getServerProfiles($id)
-///
-/// \param $id - (optional) if specified, only return data for specified profile
-///
-/// \return an array where each key is a profile id whose value is an array with
-/// these values:\n
-/// \b name - profile name\n
-/// \b description - profile description\n
-/// \b imageid - id of image associated with profile\n
-/// \b image - pretty name of image associated with profile\n
-/// \b ownerid - user id of owner of profile\n
-/// \b owner - unityid of owner of profile\n
-/// \b fixedIP - IP address to be used with deployed profile\n
-/// \b fixedMAC - MAC address to be used with deployed profile\n
-/// \b admingroupid - id of admin user group associated with profile\n
-/// \b admingroup - name of admin user group associated with profile\n
-/// \b logingroupid - id of login user group associated with profile\n
-/// \b logingroup - name of login user group associated with profile\n
-/// \b monitored - whether or not deployed profile should be monitored\n
-/// \b resourceid - resource id of profile
-///
-/// \brief gets information about server profiles
-///
-////////////////////////////////////////////////////////////////////////////////
-function getServerProfiles($id=0) {
-	$key = getKey(array('getServerProfiles', $id));
-	if(array_key_exists($key, $_SESSION['usersessiondata']))
-		return $_SESSION['usersessiondata'][$key];
-	$query = "SELECT s.id, "
-	       .        "s.name, "
-	       .        "s.description, "
-	       .        "s.imageid, "
-	       .        "i.prettyname AS image, "
-	       .        "s.ownerid, "
-	       .        "CONCAT(u.unityid, '@', a.name) AS owner, "
-	       .        "s.fixedIP, "
-	       .        "s.fixedMAC, "
-	       .        "s.admingroupid, "
-	       .        "CONCAT(ga.name, '@', aa.name) AS admingroup, "
-	       .        "s.logingroupid, "
-	       .        "CONCAT(gl.name, '@', al.name) AS logingroup, "
-	       .        "s.monitored, "
-	       .        "r.id AS resourceid "
-	       . "FROM serverprofile s "
-	       . "LEFT JOIN image i ON (i.id = s.imageid) "
-	       . "LEFT JOIN user u ON (u.id = s.ownerid) "
-	       . "LEFT JOIN affiliation a ON (a.id = u.affiliationid) "
-	       . "LEFT JOIN usergroup ga ON (ga.id = s.admingroupid) "
-	       . "LEFT JOIN affiliation aa ON (aa.id = ga.affiliationid) "
-	       . "LEFT JOIN usergroup gl ON (gl.id = s.logingroupid) "
-	       . "LEFT JOIN affiliation al ON (al.id = gl.affiliationid) "
-	       . "LEFT JOIN resource r ON (r.subid = s.id) "
-	       . "WHERE r.resourcetypeid = 17 ";
-	if($id != 0)
-		$query .= "AND s.id = $id";
-	else
-		$query .= "ORDER BY name";
-	$qh = doQuery($query, 101);
-	$profiles = array();
-	while($row = mysql_fetch_assoc($qh))
-		$profiles[$row['id']] = $row;
-	$_SESSION['usersessiondata'][$key] = $profiles;
-	return $profiles;
-}
-
-////////////////////////////////////////////////////////////////////////////////
-///
-/// \fn getServerProfileImages($userid)
-///
-/// \param $userid - id from user table
-///
-/// \return array where the key is the id of the image and the value is the
-/// prettyname of the image
-///
-/// \brief builds an array of images that user has access to via server profiles
-///
-////////////////////////////////////////////////////////////////////////////////
-function getServerProfileImages($userid) {
-	$key = getKey(array('getServerProfileImages', $userid));
-	if(array_key_exists($key, $_SESSION['usersessiondata']))
-		return $_SESSION['usersessiondata'][$key];
-	$resources = getUserResources(array('serverCheckOut', 'serverProfileAdmin'),
-	                              array('available', 'administer'));
-	$ids = array_keys($resources['serverprofile']);
-	$inids = implode(',', $ids);
-	if(empty($inids)) {
-		$_SESSION['usersessiondata'][$key] = array();
-		return array();
-	}
-	$query = "SELECT i.id, "
-	       .        "i.prettyname AS image "
-	       . "FROM serverprofile s, "
-	       .      "image i "
-	       . "WHERE s.imageid = i.id AND "
-	       .       "s.id IN ($inids)";
-	$qh = doQuery($query, 101);
-	$profiles = array();
-	while($row = mysql_fetch_assoc($qh))
-		$profiles[$row['id']] = $row['image'];
-	$_SESSION['usersessiondata'][$key] = $profiles;
-	return $profiles;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1639,4 +1124,44 @@ function AJremProfileFromGroup() {
 	}
 	sendJSON($arr);
 }
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn AJfetchRouterDNS()
+///
+/// \brief get router and dns information for a given IP address
+///
+////////////////////////////////////////////////////////////////////////////////
+function AJfetchRouterDNS() {
+	$data = array('status' => 'none');
+	$page = processInputVar('page', ARG_STRING);
+	if($page != 'deploy' && $page != 'profile') {
+		sendJSON($data);
+		return;
+	}
+	$ipaddr = processInputVar('ipaddr', ARG_STRING);
+	# validate fixed IP address
+	if(! validateIPv4addr($ipaddr)) {
+		sendJSON($data);
+		return;
+	}
+	# validate netmask
+	$netmask = processInputVar('netmask', ARG_STRING);
+	$bnetmask = ip2long($netmask);
+	if(! preg_match('/^[1]+0[^1]+$/', sprintf('%032b', $bnetmask))) {
+		sendJSON($data);
+		return;
+	}
+	$network = ip2long($ipaddr) & $bnetmask;
+	$availnets = getVariable('fixedIPavailnetworks', array());
+	$key = long2ip($network) . "/$netmask";
+	if(array_key_exists($key, $availnets)) {
+		$data = array('status' => 'success',
+		              'page' => $page,
+		              'router' => $availnets[$key]['router'],
+		              'dns' => implode(',', $availnets[$key]['dns']));
+	}
+	sendJSON($data);
+}
+
 ?>

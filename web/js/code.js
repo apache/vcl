@@ -48,52 +48,47 @@ function testJS() {
 		document.getElementById('testjavascript').value = '1';
 }
 
-function checkAllCompUtils() {
-	var count = 0;
-	var obj;
-	while(obj = document.getElementById('comp' + count)) {
-		obj.checked = true;
-		document.getElementById('compid' + count).className = 'hlrow';
-		toggledRows['compid' + count] = 1;
-		count++;
+function RPCwrapper(data, CB, dojson, timeout) {
+	if(typeof timeout === 'undefined')
+		timeout = 15000;
+	if(dojson) {
+		return dojo.xhrPost({
+			url: 'index.php',
+			load: function(data, ioArgs) {returnCheck(CB, data, ioArgs);},
+			//load: CB,
+			//handleAs: "json",
+			error: errorHandler,
+			content: data,
+			timeout: timeout
+		});
 	}
-	return true;
-}
-
-function uncheckAllCompUtils() {
-	var count = 0;
-	var obj;
-	while(obj = document.getElementById('comp' + count)) {
-		obj.checked = false;
-		document.getElementById('compid' + count).className = '';
-		toggledRows['compid' + count] = 0;
-		count++;
+	else {
+		return dojo.xhrPost({
+			url: 'index.php',
+			load: CB,
+			error: errorHandler,
+			content: data,
+			timeout: timeout
+		});
 	}
-	return true;
 }
 
-function reloadComputerSubmit() {
-	var formobj = document.getElementById('utilform');
-	var obj = document.getElementById('utilformcont');
-	var contobj = document.getElementById('reloadcont');
-	obj.value = contobj.value;
-	formobj.submit();
-}
-
-function compStateChangeSubmit() {
-	var formobj = document.getElementById('utilform');
-	var obj = document.getElementById('utilformcont');
-	var contobj = document.getElementById('statecont');
-	obj.value = contobj.value;
-	formobj.submit();
-}
-
-function compScheduleChangeSubmit() {
-	var formobj = document.getElementById('utilform');
-	var obj = document.getElementById('utilformcont');
-	var contobj = document.getElementById('schcont');
-	obj.value = contobj.value;
-	formobj.submit();
+function returnCheck(CB, data, ioArgs) {
+	try {
+		var json = dojo.fromJson(data);
+	}
+	catch(error) {
+		if(data.match(/<html/) || ! error.message.match(/syntax error/)) {
+			alert(_('Error encountered:') + " " + _('Please try again later'));
+			return;
+		}
+		var div = document.createElement('div');
+		div.innerHTML = data;
+		var msg = div.textContent || div.innerText || "";
+		alert(_('Error encountered:') + '\n\n' + msg);
+		return;
+	}
+	CB(json, ioArgs);
 }
 
 Array.prototype.inArray = function(data) {
@@ -114,7 +109,7 @@ Array.prototype.search = function(data) {
 	return false;
 }
 
-var genericCB = function(type, data, evt) {
+function generalCB(data, ioArgs) {
 	unsetLoading();
 	var regex = new RegExp('^<!DOCTYPE html');
 	if(data.match(regex)) {
@@ -125,7 +120,7 @@ var genericCB = function(type, data, evt) {
 		alert(mesg);
 		var d = {mode: 'errorrpt',
 		         data: data};
-		RPCwrapper(d, function(type, data, evt) {});
+		RPCwrapper(d, function(data, ioArgs) {});
 		return;
 	}
 	eval(data);
@@ -135,6 +130,7 @@ var errorHandler = function(error, ioArgs) {
 	/*if(error.name == 'cancel')
 		return;
 	alert('AJAX Error: ' + error.message + '\nLine ' + error.lineNumber + ' in ' + error.fileName);*/
+	//console.log(error);
 }
 
 function errorHandler(data, ioArgs) {
@@ -149,38 +145,14 @@ function AJdojoCreate(objid) {
 
 function setLoading() {
    document.body.style.cursor = 'wait';
-	if(dojo.widget.byId('workingDialog'))
-		dojo.widget.byId('workingDialog').show();
+	if(dijit.byId('workingDialog'))
+		dijit.byId('workingDialog').show();
 }
 
 function unsetLoading() {
 	document.body.style.cursor = 'default';
-	if(dojo.widget.byId('workingDialog'))
-		dojo.widget.byId('workingDialog').hide();
-}
-
-function toggleRowSelect(id) {
-	var row = document.getElementById(id);
-	if(toggledRows[id] && toggledRows[id] == 1) {
-		row.className = '';
-		toggledRows[id] = 0;
-	}
-	else {
-		row.className = 'hlrow';
-		toggledRows[id] = 1;
-	}
-}
-
-function toggleColSelect(id) {
-	var col = document.getElementById(id);
-	if(toggledCols[id] && toggledCols[id] == 1) {
-		col.className = '';
-		toggledCols[id] = 0;
-	}
-	else {
-		col.className = 'hlcol';
-		toggledCols[id] = 1;
-	}
+	if(dijit.byId('workingDialog'))
+		dijit.byId('workingDialog').hide();
 }
 
 function updateMouseXY(e) {
@@ -344,4 +316,60 @@ function recenterDijitDialog(id) {
 	if(dijit.byId(id)._relativePosition)
 		delete dijit.byId(id)._relativePosition;
 	dijit.byId(id)._position();
+}
+
+function resizeRecenterDijitDialog(id) {
+	// taken from Dialog.js _size function
+	/*var d = dijit.byId(id);
+	var mb = dojo._getMarginSize(d.domNode);
+	var viewport = dojo.window.getBox();
+	if(mb.h >= viewport.h) {
+		// Reduce size of dialog contents so that dialog fits in viewport
+		var h = Math.min(mb.h, Math.floor(viewport.h * 0.75));
+		dojo.style(d.containerNode, {
+			height: h + "px",
+			overflow: "auto",
+			position: "relative"	// workaround IE bug moving scrollbar or dragging dialog
+		});
+	}*/
+	dijit.byId(id)._size();
+	recenterDijitDialog(id);
+}
+
+function checkValidatedObj(objid, errobj) {
+	if(dijit.byId(objid) && ! dijit.byId(objid).get('disabled') &&
+	   ! dijit.byId(objid).isValid()) {
+		dijit.byId(objid)._hasBeenBlurred = true;
+		dijit.byId(objid).validate();
+		//dijit.byId(objid).focus();
+		if(typeof errobj == 'string') {
+			if(dijit.byId(errobj))
+				dijit.byId(errobj).set('value', '');
+			else if(dojo.byId(errobj))
+				dojo.byId(errobj).innerHTML = '';
+			else
+				errobj = null;
+		}
+		if(errobj !== null && typeof errobj != 'undefined')
+			errobj.innerHTML = '';
+		return 0;
+	}
+	return 1;
+}
+
+function resetSelect(objid) {
+	if(dijit.byId(objid)) {
+		dijit.byId(objid).reset();
+		return;
+	}
+	var obj = dojo.byId(objid);
+	var found = 0;
+	for(var i = 0; i < obj.options.length; i++) {
+		if(obj.options[i].defaultSelected) {
+			obj.selectedIndex = i;
+			found = 1;
+		}
+	}
+	if(! found)
+		obj.selectedIndex = 0;
 }

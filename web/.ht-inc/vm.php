@@ -31,6 +31,7 @@ function editVMInfo() {
 	print "<h2>Manage Virtual Hosts</h2>\n";
 
 	$profiles = getVMProfiles();
+	uasort($profiles, 'sortKeepIndex');
 	if(checkUserHasPerm('Manage VM Profiles')) {
 		print "<div id=\"mainTabContainer\" dojoType=\"dijit.layout.TabContainer\"\n";
 		print "     style=\"width:650px;height:600px\">\n";
@@ -554,7 +555,6 @@ function updateVMlimit() {
 	}
 	$resources = getUserResources(array("computerAdmin"), array("administer"));
 	if(! array_key_exists($data[$vmhostid]['computerid'], $resources['computer'])) {
-		print "alert('You do not have access to manage this host.');";
 		$rc = array('status' => 'ERROR',
 		            'msg' => "You do not have access to manage this host.");
 		sendJSON($rc);
@@ -718,6 +718,7 @@ function AJvmFromHost() {
 		}
 		# try to remove reservations off of computer
 		moveReservationsOffComputer($compid);
+		cleanSemaphore();
 
 		# check for unmovable or active reservations
 		$query = "SELECT DATE_FORMAT(rq.end, '%l:%i%p %c/%e/%y') AS end, "
@@ -960,19 +961,19 @@ function AJupdateVMprofileItem() {
 
 	$item = mysql_real_escape_string($item);
 	$profile = getVMProfiles($profileid);
-    if($item == 'password' && $profile[$profileid]['rsapub']){
-        $encrypted = encryptDataAsymmetric($newvalue, $profile[$profileid]['rsapub']);
-        $escaped = mysql_real_escape_string($encrypted);
-        $query = "UPDATE vmprofile "
-               . "SET `encryptedpasswd` = '$escaped' "
-               . "WHERE id=$profileid";
-        doQuery($query, 101);
-        # don't store the unencrypted password
-        $newvalue2 = 'NULL';
-        $newvalue = '';
-    } else if($profile[$profileid][$item] == $newvalue){
+	if($item == 'password' && $profile[$profileid]['rsapub']) {
+		$encrypted = encryptDataAsymmetric($newvalue, $profile[$profileid]['rsapub']);
+		$escaped = mysql_real_escape_string($encrypted);
+		$query = "UPDATE vmprofile "
+		       . "SET `encryptedpasswd` = '$escaped' "
+		       . "WHERE id = $profileid";
+		doQuery($query, 101);
+		# don't store the unencrypted password
+		$newvalue2 = 'NULL';
+		$newvalue = '';
+	}
+	else if($profile[$profileid][$item] == $newvalue)
 		return;
-    }
 	$query = "UPDATE vmprofile "
 	       . "SET `$item` = $newvalue2 "
 	       . "WHERE id = $profileid";

@@ -251,7 +251,8 @@ function userpreferences() {
 	print "      <div id=uiprefs class=shown>\n";
 	print "      <fieldset>\n";
 	print _("      <legend>General Preferences</legend>\n");
-	print "      <FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
+	print "      <FORM action=\"" . BASEURL . SCRIPT . "\" method=post ";
+	print "onsubmit=\"return validatePublicKeys();\">\n";
 	$cdata = array();
 	if($user['showallgroups']) {
 		$selected['affiliation'] = '';
@@ -283,6 +284,51 @@ function userpreferences() {
 	print "      <INPUT type=radio id=r4 name=emailnotify value=1 ";
 	print "{$selected['disabled']}" . _("><label for=r4>Disabled");
 	print "</label></p>\n";
+
+	###########################
+	# temporary
+	if(! array_key_exists('usepublickeys', $user)) {
+		$user['usepublickeys'] = 0;
+		$_SESSION['user']['usepublickeys'] = 0;
+		$user['sshpublickeys'] = '';
+		$_SESSION['user']['sshpublickeys'] = '';
+	}
+	# end temporary
+	###########################
+
+	if($user['usepublickeys']) {
+		$selected['enabled'] = 'checked';
+		$selected['disabled'] = '';
+	}
+	else {
+		$selected['enabled'] = '';
+		$selected['disabled'] = 'checked';
+	}
+	print "      <p>" . _("Use public key authentication for SSH logins:") . "<br>\n";
+	print "      <INPUT type=radio id=r5 name=pubkeyauth value=2 ";
+	print "{$selected['enabled']} onclick=\"togglePubKeys(1);\"><label for=r5>";
+	print _("Enabled") .  "</label><br>\n";
+	print "      <INPUT type=radio id=r6 name=pubkeyauth value=1 ";
+	print "{$selected['disabled']} onclick=\"togglePubKeys(0);\"><label for=r6>";
+	print _("Disabled") . "</label><br><br>\n";
+	print "      " . _("Public keys:") . "<br>\n";
+	print "      <div style=\"width: 300px;\" id=\"pubkeyerr\" ";
+	print "class=\"hidden\">";
+	print "<font color=\"red\"><em>\n      ";
+	print _("Public keys can only contain letters, numbers, spaces, and these characters: + / @ . =");
+	print "</em></font></div>\n";
+	print "      <textarea id=\"pubkeys\" dojoType=\"dijit.form.Textarea\" ";
+	print "name=\"pubkeys\" style=\"width: 27em;\"";
+	if(! $user['usepublickeys'])
+		print " disabled=\"disabled\"";
+	print ">{$user['sshpublickeys']}</textarea><br>\n";
+	print "<strong>NOTE</strong>: Images using network storage (such as AFS) may not<br>\n";
+	print "work well with public key authentication. In some cases,<br>\n";
+	print "you may still be prompted for a password. In other cases,<br>\n";
+	print "you may need to run additional commands after logging in<br>\n";
+	print "to gain access to the network storage.<br>\n";
+	print "      </p>\n";
+
 	$cont = addContinuationsEntry('submitgeneralprefs', $cdata, SECINDAY, 1, 0);
 	print "      <INPUT type=hidden name=continuation value=\"$cont\">\n";
 	print _("      <INPUT type=submit value=\"Submit General Preferences\">\n");
@@ -331,7 +377,7 @@ function confirmUserPrefs($type) {
 	else
 		$serial = _("Yes");
 
-	print "<DIV align=center>\n";
+	print "<div align=center>\n";
 	if($type == 0) {
 		print _("<H2>Personal Information</H2>\n");
 		print _("<H3>Submit the following changes?</H3>\n");
@@ -395,7 +441,7 @@ function confirmUserPrefs($type) {
 	print "    </TD>\n";
 	print "  </TR>\n";
 	print "</table>\n";
-    print "</DIV>\n";
+	print "</div>\n";
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -455,6 +501,8 @@ function submitGeneralPreferences() {
 	global $user, $HTMLheader, $printedHTMLheader, $mode;
 	$groupview = getContinuationVar('groupview', processInputVar('groupview', ARG_STRING));
 	$emailnotify = processInputVar('emailnotify', ARG_NUMERIC);
+	$pubkeyauth = processInputVar('pubkeyauth', ARG_NUMERIC);
+	$pubkeys = processInputVar('pubkeys', ARG_STRING);
 	if($groupview != 'affiliation' && $groupview != 'allgroups') {
 		$printedHTMLheader = 1;
 		print $HTMLheader;
@@ -462,6 +510,12 @@ function submitGeneralPreferences() {
 		return;
 	}
 	if($emailnotify != 1 && $emailnotify != 2) {
+		$printedHTMLheader = 1;
+		print $HTMLheader;
+		userpreferences();
+		return;
+	}
+	if($pubkeyauth != 1 && $pubkeyauth != 2) {
 		$printedHTMLheader = 1;
 		print $HTMLheader;
 		userpreferences();
@@ -485,6 +539,23 @@ function submitGeneralPreferences() {
 		doQuery($query, 101);
 		$_SESSION['user']['emailnotices'] = $newval;
 		$user['emailnotices'] = $newval;
+	}
+	if(($user['usepublickeys'] == 1 && $pubkeyauth == 1) ||
+	   ($user['usepublickeys'] == 0 && $pubkeyauth == 2)) {
+		$newval = $pubkeyauth - 1;
+		$query = "UPDATE user SET usepublickeys = $newval WHERE id = {$user['id']}";
+		doQuery($query);
+		$_SESSION['user']['usepublickeys'] = $newval;
+		$user['usepublickeys'] = $newval;
+	}
+	if($pubkeyauth == 2 && preg_match('|^[-a-zA-Z0-9\+/ @=\.]*$|', $pubkeys)) {
+		if(get_magic_quotes_gpc())
+			$pubkeys = stripslashes($pubkeys);
+		$_pubkeys = mysql_real_escape_string($pubkeys);
+		$query = "UPDATE user SET sshpublickeys = '$_pubkeys' WHERE id = {$user['id']}";
+		doQuery($query);
+		$_SESSION['user']['sshpublickeys'] = htmlspecialchars($pubkeys);
+		$user['sshpublickeys'] = htmlspecialchars($pubkeys);
 	}
 	print $HTMLheader;
 	$printedHTMLheader = 1;
@@ -512,7 +583,7 @@ function processUserPrefsInput($checks=1) {
 	$return = array();
 
 	$defaultres = $user["width"] . 'x' . $user["height"];
-	$return["preferredname"] = processInputVar("preferredname" , ARG_STRING);
+	$return["preferredname"] = processInputVar("preferredname" , ARG_STRING, $user["preferredname"]);
 	$return["resolution"] = processInputVar("resolution" , ARG_STRING, $defaultres);
 	$return["bpp"] = processInputVar("bpp" , ARG_NUMERIC, $user["bpp"]);
 	$return["audiomode"] = processInputVar("audiomode" , ARG_STRING, $user["audiomode"]);
@@ -576,6 +647,22 @@ function show(id) {
 	if(id == 'personal' && ! obj)
 		id = 'rdpfile';
 	document.getElementById(id).className = "shown";
+}
+function validatePublicKeys() {
+	var data = dijit.byId('pubkeys').value;
+	var patt = /^[-a-zA-Z0-9\+/ @=\.\\n]{0,65535}$/;
+	if(! patt.test(data)) {
+		dojo.removeClass('pubkeyerr', 'hidden');
+		return false;
+	}
+	dojo.addClass('pubkeyerr', 'hidden');
+	return true;
+}
+function togglePubKeys(mode) {
+	if(mode)
+		dijit.byId('pubkeys').set('disabled', false);
+	else
+		dijit.byId('pubkeys').set('disabled', true);
 }
 show("personal");
 document.getElementById("preflinks").className = "shown";

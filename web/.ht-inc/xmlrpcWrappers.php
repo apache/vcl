@@ -108,9 +108,11 @@ function XMLRPCtest($string) {
 ///
 /// \fn XMLRPCgetImages()
 ///
-/// \return an array of image arrays, each with 2 indices:\n
+/// \return an array of image arrays, each with these indices:\n
 /// \b id - id of the image\n
-/// \b name - name of the image
+/// \b name - name of the image\n
+/// \b description - description of image\n
+/// \b usage - usage instructions for image
 ///
 /// \brief gets the images to which the user has access
 ///
@@ -215,7 +217,7 @@ function XMLRPCaddRequest($imageid, $start, $length, $foruser='') {
 
 	$images = getImages();
 	$revisionid = getProductionRevisionid($imageid);
-	$rc = isAvailable($images, $imageid, $revisionid, $start, $end);
+	$rc = isAvailable($images, $imageid, $revisionid, $start, $end, 1);
 	if($rc < 1) {
 		addLogEntry($nowfuture, unixToDatetime($start), 
 		            unixToDatetime($end), 0, $imageid);
@@ -323,7 +325,7 @@ function XMLRPCaddRequestWithEnding($imageid, $start, $end, $foruser='') {
 
 	$images = getImages();
 	$revisionid = getProductionRevisionid($imageid);
-	$rc = isAvailable($images, $imageid, $revisionid, $start, $end);
+	$rc = isAvailable($images, $imageid, $revisionid, $start, $end, 1);
 	if($rc < 1) {
 		addLogEntry($nowfuture, unixToDatetime($start), 
 		            unixToDatetime($end), 0, $imageid);
@@ -376,7 +378,7 @@ function XMLRPCdeployServer($imageid, $start, $end, $admingroup='',
                             $logingroup='', $ipaddr='', $macaddr='',
                             $monitored=0, $foruser='', $name='') {
 	global $user, $remoteIP;
-	if(! in_array("serverProfileAdmin", $user["privileges"])) {
+	if(! in_array("serverCheckOut", $user["privileges"])) {
 		return array('status' => 'error',
 		             'errorcode' => 60,
 		             'errormsg' => "access denied to deploy server");
@@ -527,7 +529,7 @@ function XMLRPCdeployServer($imageid, $start, $end, $admingroup='',
 	$images = getImages();
 	$revisionid = getProductionRevisionid($imageid);
 	$rc = isAvailable($images, $imageid, $revisionid, $start, $end,
-	                  0, 0, 0, 0, $ipaddr, $macaddr);
+	                  1, 0, 0, 0, 0, $ipaddr, $macaddr);
 	if($rc < 1) {
 		addLogEntry($nowfuture, unixToDatetime($start), 
 		            unixToDatetime($end), 0, $imageid);
@@ -582,7 +584,7 @@ function XMLRPCdeployServer($imageid, $start, $end, $admingroup='',
 /// \li \b errorcode - error number\n
 /// \li \b errormsg - error string\n
 ///
-/// \b success - request was successfully ended; there will be an additional
+/// \b success - request was successfully found; there will be an additional
 /// element whose index is 'requests' which is an array of arrays, each having
 /// these elements (or empty if no existing requests):\n
 /// \li \b requestid - id of the request\n
@@ -614,7 +616,8 @@ function XMLRPCgetRequestIds() {
 		             'start' => $start,
 		             'end' => $end,
 		             'OS' => $req['OS'],
-		             'isserver' => $req['server']);
+		             'isserver' => $req['server'],
+		             'admin' => $req['serveradmin']);
 		if($req['currstateid'] == 14)
 			$tmp['state'] = $states[$req['laststateid']];
 		else
@@ -884,12 +887,33 @@ function XMLRPCextendRequest($requestid, $extendtime) {
 	$timeToNext = timeToNextReservation($request);
 	$movedall = 1;
 	if($timeToNext > -1) {
-		foreach($request["reservations"] as $res) {
-			if(! moveReservationsOffComputer($res["computerid"])) {
-				$movedall = 0;
-				break;
+		$lockedall = 1;
+		if(count($request['reservations']) > 1) {
+			# get semaphore on each existing node in cluster so that nothing 
+			# can get moved to the nodes during this process
+			$checkend = unixToDatetime($unixend + 900);
+			foreach($request["reservations"] as $res) {
+				if(! retryGetSemaphore(1, 1, $res['managementnodeid'], $res['computerid'], $request['start'], $checkend, $requestid)) {
+					$lockedall = 0;
+					break;
+				}
 			}
 		}
+		if($lockedall) {
+			foreach($request["reservations"] as $res) {
+				if(! moveReservationsOffComputer($res["computerid"])) {
+					$movedall = 0;
+					break;
+				}
+			}
+		}
+		else {
+			cleanSemaphore();
+			return array('status' => 'error',
+			             'errorcode' => 42,
+			             'errormsg' => 'cannot extend due to another reservation immediately after this one');
+		}
+		cleanSemaphore();
 	}
 	if(! $movedall) {
 		$timeToNext = timeToNextReservation($request);
@@ -912,7 +936,7 @@ function XMLRPCextendRequest($requestid, $extendtime) {
 	}
 	$rc = isAvailable(getImages(), $request['reservations'][0]["imageid"],
 	                  $request['reservations'][0]['imagerevisionid'],
-	                  $startts, $newendts, $requestid);
+	                  $startts, $newendts, 1, $requestid);
 	// conflicts with scheduled maintenance
 	if($rc == -2) {
 		addChangeLogEntry($request["logid"], NULL, unixToDatetime($newendts),
@@ -939,6 +963,7 @@ function XMLRPCextendRequest($requestid, $extendtime) {
 	}
 	// success
 	updateRequest($requestid);
+	cleanSemaphore();
 	return array('status' => 'success');
 }
 
@@ -1022,12 +1047,33 @@ function XMLRPCsetRequestEnding($requestid, $end) {
 	$timeToNext = timeToNextReservation($request);
 	$movedall = 1;
 	if($timeToNext > -1) {
-		foreach($request["reservations"] as $res) {
-			if(! moveReservationsOffComputer($res["computerid"])) {
-				$movedall = 0;
-				break;
+		$lockedall = 1;
+		if(count($request['reservations']) > 1) {
+			# get semaphore on each existing node in cluster so that nothing 
+			# can get moved to the nodes during this process
+			$checkend = unixToDatetime($unixend + 900);
+			foreach($request["reservations"] as $res) {
+				if(! retryGetSemaphore(1, 1, $res['managementnodeid'], $res['computerid'], $request['start'], $checkend, $requestid)) {
+					$lockedall = 0;
+					break;
+				}
 			}
 		}
+		if($lockedall) {
+			foreach($request["reservations"] as $res) {
+				if(! moveReservationsOffComputer($res["computerid"])) {
+					$movedall = 0;
+					break;
+				}
+			}
+		}
+		else {
+			cleanSemaphore();
+			return array('status' => 'error',
+			             'errorcode' => 42,
+			             'errormsg' => 'cannot extend due to another reservation immediately after this one');
+		}
+		cleanSemaphore();
 	}
 	if(! $movedall) {
 		$timeToNext = timeToNextReservation($request);
@@ -1051,7 +1097,7 @@ function XMLRPCsetRequestEnding($requestid, $end) {
 	}
 	$rc = isAvailable(getImages(), $request['reservations'][0]["imageid"],
 	                  $request['reservations'][0]['imagerevisionid'],
-	                  $startts, $end, $requestid);
+	                  $startts, $end, 1, $requestid);
 	// conflicts with scheduled maintenance
 	if($rc == -2) {
 		addChangeLogEntry($request["logid"], NULL, unixToDatetime($end),
@@ -1078,6 +1124,7 @@ function XMLRPCsetRequestEnding($requestid, $end) {
 	}
 	// success
 	updateRequest($requestid);
+	cleanSemaphore();
 	return array('status' => 'success');
 }
 
@@ -1164,7 +1211,7 @@ function XMLRPCautoCapture($requestid) {
 		             'errorcode' => 48,
 		             'errormsg' => 'cannot image a cluster reservation');
 	}
-	require_once(".ht-inc/images.php");
+	require_once(".ht-inc/image.php");
 	$imageid = $reqData['reservations'][0]['imageid'];
 	$imageData = getImages(0, $imageid);
 	$captime = unixToDatetime(time());
@@ -1175,7 +1222,7 @@ function XMLRPCautoCapture($requestid) {
 	# create new revision if requestor is owner and not a kickstart image
 	if($imageData[$imageid]['installtype'] != 'kickstart' &&
 	   $reqData['userid'] == $imageData[$imageid]['ownerid']) {
-		$rc = updateExistingImage($requestid, $reqData['userid'], $comments, 1);
+		$rc = Image::AJupdateImage($requestid, $reqData['userid'], $comments, 1);
 		if($rc == 0) {
 			return array('status' => 'error',
 			             'errorcode' => 49,
@@ -1191,7 +1238,7 @@ function XMLRPCautoCapture($requestid) {
 		      . "owner: {$ownerdata['unityid']}@{$ownerdata['affiliation']}<br>";
 		$connectmethods = getImageConnectMethods($imageid, $reqData['reservations'][0]['imagerevisionid']);
 		$data = array('requestid' => $requestid,
-		              'description' => $desc,
+		              'desc' => $desc,
 		              'usage' => '',
 		              'owner' => "{$ownerdata['unityid']}@{$ownerdata['affiliation']}",
 		              'prettyname' => "Autocaptured ({$ownerdata['unityid']} - $requestid)",
@@ -1203,9 +1250,15 @@ function XMLRPCautoCapture($requestid) {
 		              'checkuser' => 1,
 		              'rootaccess' => 1,
 		              'sysprep' => 1,
+		              'basedoffrevisionid' => $reqData['reservations'][0]['imagerevisionid'],
+		              'platformid' => $imageData[$imageid]['platformid'],
+		              'osid' => $imageData[$imageid]["osid"],
+		              'reload' => 20,
 		              'comments' => $comments,
-		              'connectmethodids' => implode(',', array_keys($connectmethods)));
-		$rc = submitAddImage($data, 1);
+		              'connectmethodids' => implode(',', array_keys($connectmethods)),
+		              'autocaptured' => 1);
+		$obj = new Image();
+		$rc = $obj->addResource($data);
 		if($rc == 0) {
 			return array('status' => 'error',
 			             'errorcode' => 50,
@@ -1608,7 +1661,7 @@ function XMLRPCaddNode($nodeName, $parentNode) {
 	}
 	if(in_array("nodeAdmin", $user['privileges'])) {
 		$nodeInfo = getNodeInfo($parentNode);
-		if(is_null($tmp)) {
+		if(is_null($nodeInfo)) {
 			return array('status' => 'error',
 			             'errorcode' => 78,
 			             'errormsg' => 'Invalid nodeid specified');
@@ -1821,7 +1874,8 @@ function XMLRPCaddUserGroupPriv($name, $affiliation, $nodeid, $permissions) {
 	array_push($usertypes["users"], "cascade");
 
 	$diff = array_diff($perms, $usertypes['users']);
-	if(count($diff) || (count($perms) == 1 && $perms[0] == 'cascade')) {
+	if(! count($perms) || count($diff) ||
+	   (count($perms) == 1 && $perms[0] == 'cascade')) {
 		return array('status' => 'error',
 		             'errorcode' => 66,
 		             'errormsg' => 'Invalid or missing permissions list supplied');
@@ -1830,9 +1884,13 @@ function XMLRPCaddUserGroupPriv($name, $affiliation, $nodeid, $permissions) {
 	$cnp = getNodeCascadePrivileges($nodeid, "usergroups");
 	$np = getNodePrivileges($nodeid, "usergroups", $cnp);
 
-	$diff = array_diff($perms, $np['usergroups'][$name]['privs']);
-	if(empty($diff))
-		return array('status' => 'success');
+	if(array_key_exists($name, $np['usergroups'])) {
+		$diff = array_diff($perms, $np['usergroups'][$name]['privs']);
+		if(empty($diff))
+			return array('status' => 'success');
+	}
+	else
+		$diff = $perms;
 
 	updateUserOrGroupPrivs($groupid, $nodeid, $diff, array(), "group");
 	return array('status' => 'success');
@@ -2430,7 +2488,7 @@ function XMLRPCeditUserGroup($name, $affiliation, $newName, $newAffiliation,
 		return $rc;
 
 	# get info about group
-	$query = "SELECT ownerid "
+	$query = "SELECT ownerid, "
 	       .        "affiliationid, "
 	       .        "custom, "
 	       .        "courseroll "
@@ -3014,23 +3072,23 @@ function XMLRPCremoveResourceGroup($name, $type) {
 /// created block time and at least one other index named 'status' which will
 /// have one of these values:\n
 /// \b error - error occurred; there will be 2 additional elements in the
-/// array:
-/// \li \b errorcode - error number
-/// \li \b errormsg - error string
+/// array:\n
+/// \li \b errorcode - error number\n
+/// \li \b errormsg - error string\n
 ///
 /// \b success - blockTimesid was processed; there will be two additional
-/// elements in this case:
+/// elements in this case:\n
 /// \li \b allocated - total number of desired allocations that have been
-/// processed
+/// processed\n
 /// \li \b unallocated - total number of desired allocations that have not been
-/// processed
+/// processed\n
 ///
 /// \b warning - there was a non-fatal issue that occurred while processing
-/// the call; there will be four additional elements in this case:
-/// \li \b warningcode - warning number
-/// \li \b warningmsg - warning string
+/// the call; there will be four additional elements in this case:\n
+/// \li \b warningcode - warning number\n
+/// \li \b warningmsg - warning string\n
 /// \li \b allocated - total number of desired allocations that have been
-/// processed
+/// processed\n
 /// \li \b unallocated - total number of desired allocations that have not been
 /// processed\n\n
 ///
@@ -3206,18 +3264,18 @@ function XMLRPCblockAllocation($imageid, $start, $end, $numMachines,
 ///
 /// \b completed - blockTimesid was previously successfully processed\n
 /// \b success - blockTimesid was processed; there will be two additional
-/// elements in this case:
+/// elements in this case:\n
 /// \li \b allocated - total number of desired allocations that have been
-/// processed
+/// processed\n
 /// \li \b unallocated - total number of desired allocations that have not been
-/// processed
+/// processed\n
 ///
 /// \b warning - there was a non-fatal issue that occurred while processing
-/// the call; there will be four additional elements in this case:
-/// \li \b warningcode - warning number
-/// \li \b warningmsg - warning string
+/// the call; there will be four additional elements in this case:\n
+/// \li \b warningcode - warning number\n
+/// \li \b warningmsg - warning string\n
 /// \li \b allocated - total number of desired allocations that have been
-/// processed
+/// processed\n
 /// \li \b unallocated - total number of desired allocations that have not been
 /// processed\n\n
 ///
@@ -3332,7 +3390,7 @@ function XMLRPCprocessBlockTime($blockTimesid, $ignoreprivileges=0) {
 			}
 			# check to see if computer is available for whole block
 			$rc = isAvailable($images, $rqdata['imageid'], $revisionid, $checkstart,
-			                  $unixend, $row['reqid'], $row['userid'],
+			                  $unixend, 1, $row['reqid'], $row['userid'],
 			                  $ignoreprivileges, 0, '', '', 1);
 			// if not available for whole block, just skip this one
 			if($rc < 1)
@@ -3375,6 +3433,7 @@ function XMLRPCprocessBlockTime($blockTimesid, $ignoreprivileges=0) {
 			       . "VALUES $blockComps";
 			doQuery($query);
 		}
+		cleanSemaphore();
 	}
 
 	# check to see if all computers have been allocated
@@ -3451,7 +3510,7 @@ function XMLRPCprocessBlockTime($blockTimesid, $ignoreprivileges=0) {
 			$userid = array_pop($userids);
 		# use end of block time to find available computers, but...
 		$rc = isAvailable($images, $rqdata['imageid'], $revisionid, $stagunixstart,
-		                  $unixend, 0, $userid, $ignoreprivileges);
+		                  $unixend, 1, 0, $userid, $ignoreprivileges);
 		if($rc < 1)
 			continue;
 
@@ -3488,12 +3547,12 @@ function XMLRPCprocessBlockTime($blockTimesid, $ignoreprivileges=0) {
 			       .       "$mgmtnodeid)";
 			doQuery($query, 101);
 		}
-		semUnlock();
 		$blockComps = implode(',', $blockCompVals);
 		$query = "INSERT INTO blockComputers "
 		       .        "(blockTimeid, computerid, imageid, reloadrequestid) "
 		       . "VALUES $blockComps";
 		doQuery($query, 101);
+		cleanSemaphore();
 		$blockCompVals = array();
 	}
 	if($allocated == 0) {

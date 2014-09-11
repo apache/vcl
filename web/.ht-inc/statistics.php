@@ -267,7 +267,7 @@ function viewStatistics() {
 	$nows = 0;
 	$futures = 0;
 	$notavailable = 0;
-	$loadtimes = array("2less" => 0, "2more" => 0);
+	$loadtimes = array("2less" => 0, "2to6" => 0, "6to8" => 0, "8more" => 0);
 	$ending = array("deleted" => 0,
 	                "released" => 0,
 	                "failed" => 0,
@@ -280,20 +280,29 @@ function viewStatistics() {
 	$imageusers = array();
 	$imagehours = array();
 	$imageload2less = array();
-	$imageload2more = array();
+	$imageload2to6 = array();
+	$imageload6to8 = array();
+	$imageload8more = array();
 	$imagefails = array();
 	$lengths = array("30min" => 0,
 	                 "1hour" => 0,
 	                 "2hours" => 0,
 	                 "4hours" => 0,
-	                 "4hrsplus" => 0);
+	                 "6hours" => 0,
+	                 "8hours" => 0,
+	                 "10hours" => 0,
+	                 "10hrsplus" => 0);
 	$totalhours = 0;
 	$osusers = array();
 	while($row = mysql_fetch_assoc($qh)) {
 		if(! array_key_exists($row["prettyname"], $imageload2less))
 			$imageload2less[$row["prettyname"]] = 0;
-		if(! array_key_exists($row["prettyname"], $imageload2more))
-			$imageload2more[$row["prettyname"]] = 0;
+		if(! array_key_exists($row["prettyname"], $imageload2to6))
+			$imageload2to6[$row["prettyname"]] = 0;
+		if(! array_key_exists($row["prettyname"], $imageload6to8))
+			$imageload6to8[$row["prettyname"]] = 0;
+		if(! array_key_exists($row["prettyname"], $imageload8more))
+			$imageload8more[$row["prettyname"]] = 0;
 
 		# notavailable
 		if($row["wasavailable"] == 0) {
@@ -303,15 +312,22 @@ function viewStatistics() {
 			$totalreservations++;
 
 			# load times
-			if($row['loadtime'] < 120) {
+			if($row['loadtime'] <= 120) {
 				$loadtimes['2less']++;
 				# imageload2less
 				$imageload2less[$row['prettyname']]++;
 			}
+			elseif( ($row['loadtime'] > 120) && ($row['loadtime'] <= 360) ) {
+				$loadtimes['2to6']++;
+				$imageload2to6[$row['prettyname']]++;
+			}
+			elseif( ($row['loadtime'] > 360) && ($row['loadtime'] <= 480) ) {
+				$loadtimes['6to8']++;
+				$imageload6to8[$row['prettyname']]++;
+			}
 			else {
-				$loadtimes['2more']++;
-				# imageload2more
-				$imageload2more[$row['prettyname']]++;
+				$loadtimes['8more']++;
+				$imageload8more[$row['prettyname']]++;
 			}
 		}
 
@@ -349,8 +365,14 @@ function viewStatistics() {
 			$lengths["2hours"]++;
 		elseif($length <= 14400)
 			$lengths["4hours"]++;
+		elseif($length <= 21600)
+			$lengths["6hours"]++;
+		elseif($length <= 28800)
+			$lengths["8hours"]++;
+		elseif($length <= 36000)
+			$lengths["10hours"]++;
 		else
-			$lengths["4hrsplus"]++;
+			$lengths["10hrsplus"]++;
 
 		# imagehours
 		if(! array_key_exists($row["prettyname"], $imagehours))
@@ -397,9 +419,14 @@ function viewStatistics() {
 	print _("    <TH align=right>Load times &lt; 2 minutes:</TH>\n");
 	print "    <TD>{$loadtimes['2less']}</TD>\n";
 	print "  </TR>\n";
+	print _("    <TH align=right>Load times 2-6 minutes:</TH>\n");
+	print "    <TD>{$loadtimes['2to6']}</TD>\n";
+	print "  </TR>\n";
+	print _("    <TH align=right>Load times 6-8 minutes:</TH>\n");
+	print "    <TD>{$loadtimes['6to8']}</TD>\n";
 	print "  <TR>\n";
-	print _("    <TH align=right>Load times &gt;= 2 minutes:</TH>\n");
-	print "    <TD>{$loadtimes['2more']}</TD>\n";
+	print _("    <TH align=right>Load times &gt;= 8 minutes:</TH>\n");
+	print "    <TD>{$loadtimes['8more']}</TD>\n";
 	print "  </TR>\n";
 	print "  <TR>\n";
 	print _("    <TH align=right>Total Unique Users:</TH>\n");
@@ -419,8 +446,10 @@ function viewStatistics() {
 	print _("    <TH>Reservations</TH>\n");
 	print _("    <TH>Unique Users</TH>\n");
 	print _("    <TH>Hours Used</TH>\n");
-	print _("    <TH>&lt; 2 min load time</TH>\n");
-	print _("    <TH>&gt;= 2 min load time</TH>\n");
+	print _("    <TH>&lt; 2 min wait</TH>\n");
+	print _("    <TH>2-6 min wait</TH>\n");
+	print _("    <TH>6-8 min wait</TH>\n");
+	print _("    <TH>&gt;= 8 min wait</TH>\n");
 	print _("    <TH>Failures</TH>\n");
 	print "  </TR>\n";
 	foreach($imagecount as $key => $value) {
@@ -433,7 +462,9 @@ function viewStatistics() {
 		else
 			print "    <TD align=center>" . (int)$imagehours[$key] . "</TD>\n";
 		print "    <TD align=center>{$imageload2less[$key]}</TD>\n";
-		print "    <TD align=center>{$imageload2more[$key]}</TD>\n";
+		print "    <TD align=center>{$imageload2to6[$key]}</TD>\n";
+		print "    <TD align=center>{$imageload6to8[$key]}</TD>\n";
+		print "    <TD align=center>{$imageload8more[$key]}</TD>\n";
 		if($imagefails[$key]) {
 			$percent = $imagefails[$key] * 100 / $value;
 			if($percent < 1)
@@ -468,8 +499,20 @@ function viewStatistics() {
 	print "    <TD>" . $lengths["4hours"] . "</TD>\n";
 	print "  </TR>\n";
 	print "  <TR>\n";
-	print _("    <TH align=right>&gt; 4 Hours:</TH>\n");
-	print "    <TD>" . $lengths["4hrsplus"] . "</TD>\n";
+	print _("    <TH align=right>4 Hours - 6 Hours:</TH>\n");
+	print "    <TD>" . $lengths["6hours"] . "</TD>\n";
+	print "  </TR>\n";
+	print "  <TR>\n";
+	print _("    <TH align=right>6 Hours - 8 Hours:</TH>\n");
+	print "    <TD>" . $lengths["8hours"] . "</TD>\n";
+	print "  </TR>\n";
+	print "  <TR>\n";
+	print _("    <TH align=right>8 Hours - 10 Hours:</TH>\n");
+	print "    <TD>" . $lengths["10hours"] . "</TD>\n";
+	print "  </TR>\n";
+	print "  <TR>\n";
+	print _("    <TH align=right>&gt; 10 Hours:</TH>\n");
+	print "    <TD>" . $lengths["10hrsplus"] . "</TD>\n";
 	print "  </TR>\n";
 	print "</TABLE>\n";
 

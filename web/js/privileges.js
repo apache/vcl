@@ -16,28 +16,6 @@
 */
 var currentOver = '';
 
-function RPCwrapper(data, CB, dojson) {
-	if(dojson) {
-		dojo.xhrPost({
-			url: 'index.php',
-			load: CB,
-			handleAs: "json",
-			error: errorHandler,
-			content: data,
-			timeout: 15000
-		});
-	}
-	else {
-		dojo.xhrPost({
-			url: 'index.php',
-			load: CB,
-			error: errorHandler,
-			content: data,
-			timeout: 15000
-		});
-	}
-}
-
 function generalPrivCB(data, ioArgs) {
 	eval(data);
 	unsetLoading2();
@@ -447,7 +425,10 @@ function submitAddUserGroup() {
 	var obj = dijit.byId('blockgrpchk');
 	if(obj.checked)
 		perms.push('block');
-	for(var i = 0; obj = dijit.byId('usergrpck0:' + i); i++) {
+	obj = dijit.byId('usergrpck0:0');
+	if(obj.checked)
+		perms.push('cascade');
+	for(var i = 1; obj = dijit.byId('usergrpck0:' + i); i++) {
 		if(obj.checked)
 			perms.push(obj.name);
 	}

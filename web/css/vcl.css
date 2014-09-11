@@ -14,6 +14,14 @@
 * See the License for the specific language governing permissions and
 * limitations under the License.
 */
+html {
+	height: 100%;
+	width: 100%;
+}
+body {
+	height: 100%;
+	width: 100%;
+}
 .scriptonly {
 	display: none;
 }
@@ -219,6 +227,14 @@
 	color: red;
 }
 
+.ready {
+	color: #008000;
+}
+
+.wait {
+	color: #e58304;
+}
+
 #revisiontable th {
 	border: solid 1px #000000;
 	padding: 2px;
@@ -311,9 +327,232 @@
 	margin: 10px;
 }
 
+#gridcontainer table th,
+#gridcontainer table td,
 #usergroupcontainer table th,
 #usergroupcontainer table td,
 #resourcegroupcontainer table th,
-#resourcegroupcontainer table td {
+#resourcegroupcontainer table td,
+#extrafiltersdiv table th,
+#extrafiltersdiv table td {
 	font-size: 1em;
+}
+
+.editmntable, #deployprofilediv table, #serverprofiledata table {
+	border-collapse: collapse;
+}
+
+.boxedtablerows {
+	border: 1px solid #000000;
+}
+
+#systemconfigdiv .dojoxMultiSelectSelectedOption,
+#groupbyresourcediv .dojoxMultiSelectSelectedOption,
+#groupbygroupdiv .dojoxMultiSelectSelectedOption,
+#mapbyresgroupdiv .dojoxMultiSelectSelectedOption,
+#mapbymaptogroupdiv .dojoxMultiSelectSelectedOption {
+	background-color: black;
+	color: white;
+}
+
+/*#configvariablegriddiv .dojoxGridCellFocus {
+	background-color: black;
+	color: white;
+}*/
+
+#systemconfigdiv .dojoxGridHeader,
+#groupbyresourcediv .dojoxGridHeader,
+#groupbygroupdiv .dojoxGridHeader, 
+#mapbyresgroupdiv .dojoxGridHeader, 
+#mapbymaptogroupdiv .dojoxGridHeader, 
+#configvariablegriddiv .dojoxGridHeader {
+	display: none;
+}
+
+#systemconfigdiv .dojoxGrid,
+#groupbyresourcediv .dojoxGrid,
+#groupbygroupdiv .dojoxGrid,
+#mapbyresgroupdiv .dojoxGrid,
+#mapbymaptogroupdiv .dojoxGrid,
+#subimagegriddiv .dojoxGrid,
+#configvariablegriddiv .dojoxGrid {
+	background-color: white;
+	border: 1px solid black;
+}
+
+#systemconfigdiv .dojoxGridRow,
+#systemconfigdiv .dojoxGridRowOdd,
+#groupbyresourcediv .dojoxGridRow,
+#groupbyresourcediv .dojoxGridRowOdd,
+#groupbygroupdiv .dojoxGridRow,
+#groupbygroupdiv .dojoxGridRowOdd,
+#mapbyresgroupdiv .dojoxGridRow,
+#mapbyresgroupdiv .dojoxGridRowOdd,
+#mapbymaptogroupdiv .dojoxGridRow,
+#mapbymaptogroupdiv .dojoxGridRowOdd,
+#subimagegriddiv .dojoxGridRow,
+#subimagegriddiv .dojoxGridRowOdd,
+#configvariablegriddiv .dojoxGridRow,
+#configvariablegriddiv .dojoxGridRowOdd {
+	width: 300px;
+	background-color: white;
+	border: none;
+	padding: 0;
+	margin: 0;
+}
+
+#content #systemconfigdiv table,
+#content #groupbyresourcediv table,
+#content #groupbygroupdiv table,
+#content #mapbyresgroupdiv table,
+#content #mapbymaptogroupdiv table,
+#content #subimagegriddiv table,
+#content #configvariablegriddiv table {
+	border-spacing: 0;
+}
+
+#systemconfigdiv .dojoxGridRowSelected,
+#groupbyresourcediv .dojoxGridRowSelected,
+#groupbygroupdiv .dojoxGridRowSelected,
+#mapbyresgroupdiv .dojoxGridRowSelected,
+#mapbymaptogroupdiv .dojoxGridRowSelected,
+#subimagegriddiv .dojoxGridRowSelected,
+#configvariablegriddiv .dojoxGridRowSelected {
+	width: 300px;
+	background-color: black;
+	border: none;
+	padding: 0;
+	margin: 0;
+	color: white;
+}
+
+#systemconfigdiv .dojoxGridRowSelected td,
+#groupbyresourcediv .dojoxGridRowSelected td,
+#groupbygroupdiv .dojoxGridRowSelected td,
+#mapbyresgroupdiv .dojoxGridRowSelected td,
+#mapbymaptogroupdiv .dojoxGridRowSelected td,
+#subimagegriddiv .dojoxGridRowSelected td,
+#configvariablegriddiv .dojoxGridRowSelected td {
+	background-color: black;
+	color: white;
+}
+
+#systemconfigdiv .dojoxGridCell,
+#systemconfigdiv .dojoxGridCellFocus,
+#systemconfigdiv .dojoxGridCellOver,
+#groupbyresourcediv .dojoxGridCell,
+#groupbyresourcediv .dojoxGridCellFocus,
+#groupbyresourcediv .dojoxGridCellOver,
+#groupbygroupdiv .dojoxGridCell,
+#groupbygroupdiv .dojoxGridCellFocus,
+#groupbygroupdiv .dojoxGridCellOver,
+#mapbyresgroupdiv .dojoxGridCell,
+#mapbyresgroupdiv .dojoxGridCellFocus,
+#mapbyresgroupdiv .dojoxGridCellOver,
+#mapbymaptogroupdiv .dojoxGridCell,
+#mapbymaptogroupdiv .dojoxGridCellFocus,
+#mapbymaptogroupdiv .dojoxGridCellOver,
+#subimagegriddiv .dojoxGridCell,
+#subimagegriddiv .dojoxGridCellFocus,
+#subimagegriddiv .dojoxGridCellOver,
+#configvariablegriddiv .dojoxGridCell,
+#configvariablegriddiv .dojoxGridCellFocus,
+#configvariablegriddiv .dojoxGridCellOver {
+	border: none;
+	border-style: none;
+}
+
+#systemconfigdiv .dojoxMultiSelectItemBox,
+#groupbyresourcediv .dojoxMultiSelectItemBox,
+#groupbygroupdiv .dojoxMultiSelectItemBox,
+#mapbyresgroupdiv .dojoxMultiSelectItemBox,
+#mapbymaptogroupdiv .dojoxMultiSelectItemBox,
+#subimagegriddiv .dojoxMultiSelectItemBox,
+#configvariablegriddiv .dojoxMultiSelectItemBox {
+	display: none;
+}
+
+#addeditdlgcontent label,
+#newreslabelfields label {
+	position: absolute;
+	text-align: right;
+	width: 9em;
+	font-weight: bold;
+}
+
+#newreslabelfields label {
+	width: 10em;
+}
+
+#addeditdlgcontent .labeledform {
+	margin-left: 9.5em;
+}
+
+#advancedoptions .labeledform {
+	margin-left: 17em;
+}
+
+#mgmtnodedlgcontent label {
+	width: 18.5em;
+}
+
+#mgmtnodedlgcontent .labeledform {
+	margin-left: 19em;
+}
+
+#computerdlgcontent label {
+	width: 12em;
+}
+
+#computerdlgcontent .labeledform {
+	margin-left: 12.5em;
+}
+
+#advancedoptions label {
+	width: 16.5em;
+}
+
+#cfgvartypelbl {
+	margin-top: 6px;
+}
+
+#addeditdlgcontent .labeledforminnerlabel {
+	text-align: left;
+	font-weight: normal;
+	position: static;
+}
+
+#newreslabelfields .labeledform {
+	margin-left: 10.5em;
+}
+
+#configvariables {
+	border: 1px solid black;
+	margin: 3px;
+}
+
+.strikethrough {
+	text-decoration: line-through;
+}
+
+#nrfixedipdiv {
+	border: 1px solid black;
+	padding: 3px;
+	margin: 3px;
+	display: inline-block;
+}
+
+.boxedoptions {
+	border: 1px solid black;
+	padding: 3px;
+	margin: 3px 1px;
+}
+
+#imageRevisionDlg .dijitDialogPaneContent {
+	height: 100%;
+	width: 100%;
+}
+
+.disabledlabel {
+	color: #888888;
 }

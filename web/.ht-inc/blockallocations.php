@@ -986,9 +986,11 @@ function createListBlockData($blockid, $slots, $method) {
 			$sdatedt = unixToDatetime($sdatets);
 			$edatets = strtotime("$date {$tmp[2]}:00");
 			$edatedt = unixToDatetime($edatets);
-			$btvals[] = "($blockid, "
-			          . "'$sdatedt', "
-			          . "'$edatedt')";
+			if($method != 'edit' || $edatets >= time()) {
+				$btvals[] = "($blockid, "
+				          . "'$sdatedt', "
+				          . "'$edatedt')";
+			}
 		}
 		if($method != 'accept') {
 			$start = explode(':', $tmp[1]);
@@ -1346,7 +1348,7 @@ function getCurrentBlockHTML($listonly=0) {
 		$rt .= "    </TD>\n";
 		$rt .= "    <TD>{$block['blockname']}</TD>\n";
 		$rt .= "    <TD>{$block['image']}</TD>\n";
-		$rt .= "    <TD>{$block['machinecnt']}</TD>\n";
+		$rt .= "    <TD><a href=\"javascript:void(0)\" onclick=\"viewBlockUsage({$block['id']});\">{$block['machinecnt']}</a></TD>\n";
 		$rt .= "    <TD>{$block['group']}</TD>\n";
 		$rt .= "    <TD>{$block['available']}</TD>\n";
 		if($block['nextstartactive']) {
@@ -1448,6 +1450,22 @@ function getCurrentBlockHTML($listonly=0) {
 	$rt .= "</div>\n";
 	$rt .= "<input type=hidden id=toggletimecont>\n";
 	$rt .= "</div>\n"; # times dialog
+
+	$rt .= "<div id=\"viewUsageDialog\" dojoType=\"dijit.Dialog\" title=\"Block Allocation Usage\">\n";
+	$rt .= "<div id=\"blockusagechartdiv\" class=\"hidden\"></div>\n";
+	$rt .= "<div id=\"blockusageemptydiv\" class=\"hidden\">This block allocation has never been used.</div>\n";
+	$rt .= "<div align=\"center\">\n";
+	$rt .= "<button dojoType=\"dijit.form.Button\" type=\"button\">\n";
+	$rt .= "  Close\n";
+	$rt .= "  <script type=\"dojo/method\" event=\"onClick\">\n";
+	$rt .= "    dijit.byId('viewUsageDialog').hide();\n";
+	$rt .= "  </script>\n";
+	$rt .= "</button>\n";
+	$rt .= "</div>\n";
+	$blockids = array_keys($blocks);
+	$cont = addContinuationsEntry('AJviewBlockAllocationUsage', array('blockids' => $blockids), SECINDAY);
+	$rt .= "<input type=hidden id=viewblockusagecont value=\"$cont\">\n";
+	$rt .= "</div>\n"; # usage dialog
 	return $rt;
 }
 
@@ -3728,5 +3746,75 @@ function AJgetBlockAllocatedMachineData() {
 	$cont = addContinuationsEntry('AJgetBlockAllocatedMachineData', array('val' => $val), SECINDAY, 1, 0);
 	$alldata['cont'] = $cont;
 	sendJSON($alldata);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn AJviewBlockAllocationUsage()
+///
+/// \brief generates graph data showing how usage of a block allocation
+///
+////////////////////////////////////////////////////////////////////////////////
+function AJviewBlockAllocationUsage() {
+	$blockid = processInputVar('blockid', ARG_NUMERIC);
+	$allowedblockids = getContinuationVar('blockids');
+	if(! in_array($blockid, $allowedblockids)) {
+		sendJSON(array('status' => 'failed', 'message' => 'noaccess'));
+		return;
+	}
+	$query = "SELECT COUNT(s.computerid) AS used, "
+	       .        "br.numMachines AS allocated, "
+	       .        "s.blockStart "
+	       . "FROM blockRequest br "
+	       . "LEFT JOIN sublog s ON (s.blockRequestid = br.id) "
+	       . "WHERE br.id = $blockid "
+	       . "GROUP BY s.blockRequestid, s.blockStart, s.blockEnd "
+	       . "ORDER BY s.blockStart";
+	$qh = doQuery($query);
+	$usage = array();
+	$first = 1;
+	$firststart = '';
+	$laststart = '';
+	while($row = mysql_fetch_assoc($qh)) {
+		if($first && ! is_null($row['blockStart'])) {
+			$firststart = datetimeToUnix($row['blockStart']);
+			$first = 0;
+		}
+		elseif(! is_null($row['blockStart']))
+			$laststart = datetimeToUnix($row['blockStart']);
+		if(is_null($row['blockStart']))
+			continue;
+		$percent = (int)($row['used'] / $row['allocated'] * 100);
+		$startts = datetimeToUnix($row['blockStart']);
+		$usage[$startts] = array('percent' => $percent,
+		                         'label' => $row['blockStart']);
+	}
+	if($firststart == '') {
+		sendJSON(array('status' => 'empty', 'message' => 'nousage'));
+		return;
+	}
+	$data = array('points' => array(), 'xlabels' => array());
+	$cnt = 0;
+	$tmp = localtime($firststart, 1);
+	$firstisdst = 0;
+	if($tmp['tm_isdst'])
+		$firstisdst = 1;
+	for($i = $firststart; $i <= $laststart + 3600; $i += SECINDAY) {
+		$tmp = localtime($i, 1);
+		$time = $i;
+		if($firstisdst && ! $tmp['tm_isdst'])
+			$time += 3600;
+		if(! $firstisdst && $tmp['tm_isdst'])
+			$time -= 3600;
+		$cnt++;
+		$label = date('m/d g:i a', $time);
+		if(array_key_exists($time, $usage))
+			$data['points'][] = array('y' => $usage[$time]['percent'], 'tooltip' => "$label: " . $usage[$time]['percent'] . " %");
+		else
+			$data['points'][] = array('y' => 0, 'tooltip' => "$label: 0");
+		$data['xlabels'][] = array('value' => $cnt, 'text' => $label);
+	}
+	sendJSON(array('status' => 'success',
+	               'usage' => $data));
 }
 ?>

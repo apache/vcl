@@ -16,10 +16,9 @@
   limitations under the License.
 */
 
-# ASF VCL v2.3
-$VCLversion = '2.3';
+# ASF VCL v2.4
+$VCLversion = '2.4';
 
-@include_once("fckeditor/fckeditor.php");
 require_once(".ht-inc/conf.php");
 if(! isset($_SERVER['HTTPS']) || $_SERVER['HTTPS'] != "on") {
 	header("Location: " . BASEURL . "/");
@@ -84,14 +83,30 @@ if(checkUserHasPerm('View Debug Information')) {
 }
 
 if($hasArg) {
-	$actionFunction($arg);
+	if(function_exists($actionFunction))
+		$actionFunction($arg);
+	else {
+		$obj = getContinuationVar('obj');
+		if(! is_null($obj) && method_exists($obj, $actionFunction))
+			$obj->$actionFunction($arg);
+		else
+			main();
+	}
 }
 else {
-	$actionFunction();
+	if(function_exists($actionFunction))
+		$actionFunction();
+	else {
+		$obj = getContinuationVar('obj');
+		if(! is_null($obj) && method_exists($obj, $actionFunction))
+			$obj->$actionFunction();
+		else
+			main();
+	}
 }
 printHTMLFooter();
 
-dbDisconnect();
+cleanSemaphore();
 
-semUnlock();
+dbDisconnect();
 ?>

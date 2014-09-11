@@ -232,7 +232,7 @@ function printLoginPage($servertimeout=0) {
 	if($userid == _('Proceed to Login'))
 		$userid = '';
 	if(! array_key_exists($authtype, $authMechs)) {
-		// FIXME - hackerish
+		// FIXME - hackish
 		dbDisconnect();
 		exit;
 	}
@@ -423,8 +423,9 @@ function ldapLogin($authtype, $userid, $passwd) {
 	}
 	else {
 		addLoginLog($userid, $authtype, $authMechs[$authtype]['affiliationid'], 1);
+		# used to rely on later code to update user info if update timestamp was expired
 		// see if user in our db
-		$query = "SELECT id "
+		/*$query = "SELECT id "
 		       . "FROM user "
 		       . "WHERE unityid = '$esc_userid' AND "
 		       .       "affiliationid = {$authMechs[$authtype]['affiliationid']}";
@@ -434,7 +435,11 @@ function ldapLogin($authtype, $userid, $passwd) {
 			$newid = updateLDAPUser($authtype, $userid);
 			if(is_null($newid))
 				abort(8);
-		}
+		}*/
+		# now, we always update the user info
+		$newid = updateLDAPUser($authtype, $userid);
+		if(is_null($newid))
+			abort(8);
 		// get cookie data
 		$cookie = getAuthCookieData("$userid@" . getAffiliationName($authMechs[$authtype]['affiliationid']));
 		// set cookie
@@ -627,7 +632,7 @@ function checkExpiredDemoUser($userid, $groups=0) {
 				print "mailto:" . HELPEMAIL . "\">" . HELPEMAIL . "</a> if you need ";
 				print "further access to VCL.<br>\n";
 			}
-			semUnlock();
+			cleanSemaphore(); # probably not needed but ensures we do not leave stale entries
 			printHTMLFooter();
 			dbDisconnect();
 			exit;

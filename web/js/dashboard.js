@@ -15,27 +15,7 @@
 * limitations under the License.
 */
 
-function RPCwrapper(data, CB, dojson) {
-	if(dojson) {
-		dojo.xhrPost({
-			url: 'index.php',
-			load: CB,
-			handleAs: "json",
-			error: errorHandler,
-			content: data,
-			timeout: 15000
-		});
-	}
-	else {
-		dojo.xhrPost({
-			url: 'index.php',
-			load: CB,
-			error: errorHandler,
-			content: data,
-			timeout: 15000
-		});
-	}
-}
+var refreshtimer;
 
 function generalReqCB(data, ioArgs) {
 	eval(data);
@@ -61,7 +41,9 @@ function updateDashboardCB(data, ioArgs) {
 	updateBlockAllocation(data.items.blockallocation);
 	if(dojo.byId('newreservations'))
 		updateNewReservations(data.items.newreservations);
-	setTimeout(updateDashboard, 15000);
+	if(dojo.byId('failedimaging'))
+		updateFailedImaging(data.items.failedimaging);
+	refreshtimer = setTimeout(updateDashboard, 15000);
 }
 
 function updateStatus(data) {
@@ -157,11 +139,15 @@ function updateTopFailed(data) {
 		return;
 	}
 	var txt = '<table>';
+	txt += '<tr><th align="right">'
+	txt += 'Image</th><th>User</th><th>Reload</th></tr>'
 	for(var i = 0; i < data.length; i++) {
 		txt += '<tr><th align="right">'
 		    + data[i].prettyname
 		    + '</th><td>'
 		    + data[i].count
+		    + '</td><td>'
+		    + data[i].reloadcount
 		    + '</td></tr>';
 	}
 	txt += '</table>';
@@ -242,6 +228,74 @@ function updateNewReservations(data) {
 	}
 	txt += '</table>';
 	obj.innerHTML = txt;
+}
+
+function updateFailedImaging(data) {
+	var obj = dojo.byId('failedimaging');
+	var txt = '<table>';
+	txt += '<tr>'
+	    +  '<td></td>'
+	    +  '<th>Start</th>'
+	    +  '<th>ReqID</th>'
+	    +  '<th>Computer</th>'
+	    +  '<th>VM Host</th>'
+	    +  '<th>Image</th>'
+	    +  '<th>Owner</th>'
+	    +  '<th>Management Node</th>'
+	    +  '</tr>';
+	for(var i = 0; i < data.length; i++) {
+		if(i % 2)
+			txt += '<tr style=\"background-color: #D8D8D8;\">';
+		else
+			txt += '<tr style=\"background-color: #EEEEEE;\">';
+		txt += '<td style=\"padding: 1px; border-right: 1px solid;\">'
+		    + '<button id=\"imgbtn' + data[i].id + '\" type=\"button\"></button>'
+		    + '<input type=\"hidden\" id=\"iptimgbtn' + data[i].id + '\">'
+		    + '</td><td style=\"padding: 1px; border-right: 1px solid;\">'
+		    + data[i].start
+		    + '</td><td style=\"padding: 1px; border-right: 1px solid;\">'
+		    + data[i].id
+		    + '</td><td style=\"padding: 1px; border-right: 1px solid;\">'
+		    + data[i].computer
+		    + '</td><td style=\"padding: 1px; border-right: 1px solid;\">'
+		    + data[i].vmhost
+		    + '</td><td style=\"padding: 1px; border-right: 1px solid;\">'
+		    + data[i].image
+		    + '</td><td style=\"padding: 1px; border-right: 1px solid;\">'
+		    //+ data[i].installtype
+		    + data[i].owner
+		    + '</td><td style=\"padding: 1px; border-right: 1px solid;\">'
+		    + data[i].managementnode
+		    + '</td></tr>';
+	}
+	txt += '</table>';
+	obj.innerHTML = txt;
+	for(var i = 0; i < data.length; i++) {
+		var btnid = 'imgbtn' + data[i].id
+		if(dijit.byId(btnid))
+			dijit.byId(btnid).destroy(true);
+		dojo.byId('ipt' + btnid).value = data[i].contid;
+		var btn = new dijit.form.Button({
+			label: "Restart Imaging",
+			onClick: function() {
+				var contid = dojo.byId('ipt' + this.id).value;
+				RPCwrapper({continuation: contid}, restartImagingCB, 1);
+			}
+		}, btnid);
+	}
+}
+
+function restartImagingCB(data, ioArgs) {
+	if(data.items.status == 'noaccess') {
+		alert('You do not have access to restart the imaging process for this reservation');
+		return;
+	}
+	else if(data.items.status == 'wrongstate') {
+		alert('The state of this reservation changed and is no longer valid for restarting the reservation');
+		return;
+	}
+	clearTimeout(refreshtimer);
+	updateDashboard();
 }
 
 function timestampToTime(val) {

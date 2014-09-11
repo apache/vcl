@@ -601,8 +601,8 @@ function getVMprofileDataCB(data, ioArgs) {
 	dijit.byId('pvs2').noValueIndicator = '(empty)';
 	dijit.byId('pvs3').noValueIndicator = '(empty)';
 	dijit.byId('pusername').noValueIndicator = '(empty)';
-    dijit.byId('prsakey').noValueIndicator = '(empty)';
-    dijit.byId('prsapub').noValueIndicator = '(empty)';
+	dijit.byId('prsakey').noValueIndicator = '(empty)';
+	dijit.byId('prsapub').noValueIndicator = '(empty)';
 
 	dijit.byId('pname').setValue(curprofile.profilename);
 	dijit.byId('presourcepath').setValue(curprofile.resourcepath);
@@ -618,8 +618,8 @@ function getVMprofileDataCB(data, ioArgs) {
 	dijit.byId('pusername').setValue(curprofile.username);
 	dijit.byId('pgenmac0').setValue(curprofile.eth0generated);
 	dijit.byId('pgenmac1').setValue(curprofile.eth1generated);
-    dijit.byId('prsapub').setValue(curprofile.rsapub);
-    dijit.byId('prsakey').setValue(curprofile.rsakey);
+	dijit.byId('prsapub').setValue(curprofile.rsapub);
+	dijit.byId('prsakey').setValue(curprofile.rsakey);
 	dojo.byId('ppassword').value = curprofile.password;
 	dojo.byId('ppwdconfirm').value = curprofile.password;
 	checkProfilePassword();

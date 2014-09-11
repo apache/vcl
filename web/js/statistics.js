@@ -15,28 +15,6 @@
 * limitations under the License.
 */
 
-function RPCwrapper(data, CB, dojson) {
-	if(dojson) {
-		dojo.xhrPost({
-			url: 'index.php',
-			load: CB,
-			handleAs: "json",
-			error: errorHandler,
-			content: data,
-			timeout: 300000
-		});
-	}
-	else {
-		dojo.xhrPost({
-			url: 'index.php',
-			load: CB,
-			error: errorHandler,
-			content: data,
-			timeout: 300000
-		});
-	}
-}
-
 function generalReqCB(data, ioArgs) {
 	eval(data);
 	document.body.style.cursor = 'default';
@@ -44,20 +22,20 @@ function generalReqCB(data, ioArgs) {
 
 function generateGraphs() {
 	var cont = dojo.byId('statdaycont').value;
-	RPCwrapper({continuation: cont}, generateColGraphsCB, 1);
+	RPCwrapper({continuation: cont}, generateColGraphsCB, 1, 300000);
 	var cont = dojo.byId('statreshourcont').value;
-	RPCwrapper({continuation: cont}, generateHourGraphsCB, 1);
+	RPCwrapper({continuation: cont}, generateHourGraphsCB, 1, 300000);
 	if(dojo.byId('statconcurrescont')) {
 		var cont = dojo.byId('statconcurrescont').value;
-		RPCwrapper({continuation: cont}, generateColGraphsCB, 1);
+		RPCwrapper({continuation: cont}, generateColGraphsCB, 1, 300000);
 	}
 	if(dojo.byId('statconcurbladecont')) {
 		var cont = dojo.byId('statconcurbladecont').value;
-		RPCwrapper({continuation: cont}, generateColGraphsCB, 1);
+		RPCwrapper({continuation: cont}, generateColGraphsCB, 1, 300000);
 	}
 	if(dojo.byId('statconcurvmcont')) {
 		var cont = dojo.byId('statconcurvmcont').value;
-		RPCwrapper({continuation: cont}, generateColGraphsCB, 1);
+		RPCwrapper({continuation: cont}, generateColGraphsCB, 1, 300000);
 	}
 }
 

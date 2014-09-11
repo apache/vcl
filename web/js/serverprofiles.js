@@ -22,46 +22,9 @@ var profilesstoredata = {
 var allprofiles = '';
 var allgroups = '';
 
-function RPCwrapper(data, CB, dojson) {
-	if(dojson) {
-		dojo.xhrPost({
-			url: 'index.php',
-			load: CB,
-			handleAs: "json",
-			error: errorHandler,
-			content: data,
-			timeout: 15000
-		});
-	}
-	else {
-		dojo.xhrPost({
-			url: 'index.php',
-			load: CB,
-			error: errorHandler,
-			content: data,
-			timeout: 15000
-		});
-	}
-}
-
 function generalReqCB(data, ioArgs) {
 	eval(data);
 	document.body.style.cursor = 'default';
-}
-
-function populateProfileStore(cont) {
-	RPCwrapper({continuation: cont}, populateProfileStoreCB, 1);
-}
-
-function populateProfileStoreCB(data, ioArgs) {
-	var store = profilesstore;
-	for(var i = 0; i < data.items.length; i++) {
-		store.newItem({id: data.items[i].id, name: data.items[i].name, desc: data.items[i].desc, access: data.items[i].access});
-	}
-	dijit.byId('deployprofileid').setStore(profilesstore, '', {query: {id:new RegExp("^(?:(?!70000).)*$")}});
-	dijit.byId('profileid').setStore(profilesstore, '', {query: {id:new RegExp("^(?:(?!70000).)*$"),access:'admin'}});
-	dijit.byId('profiles').setStore(profilesstore, '', {query: {id:new RegExp("^(?:(?!70000).)*$"),access:'admin'}});
-	getGroups();
 }
 
 function selectProfileChanged() {
@@ -73,19 +36,6 @@ function selectProfileChanged() {
 	if(dijit.byId('profileid').getOptions(0) &&
 	   dijit.byId('profileid').getOptions(0).value == 70000)
 		dijit.byId('profileid').setStore(profilesstore, '', {query: {id:new RegExp("^(?:(?!70000).)*$"),access:'admin'}});
-}
-
-function deployProfileChanged() {
-	profilesstore.fetch({
-		query: {id: dijit.byId('deployprofileid').get('value')},
-		onItem: function(item, request) {
-			var desc = profilesstore.getValue(item, 'desc');
-			if(desc == '') {
-				desc = '(No description)';
-			}
-			dojo.byId('deploydesc').innerHTML = desc;
-		}
-	});
 }
 
 function newServerProfile(cont) {
@@ -101,7 +51,7 @@ function clearProfileItems() {
 	dijit.byId('profilename').set('value', '');
 	dijit.byId('profiledesc').set('value', '');
 	dijit.byId('profileimage').reset();
-	//dijit.byId('profilefixedIP').set('value', '');
+	dijit.byId('profilefixedIP').set('value', '');
 	//dijit.byId('profilefixedMAC').set('value', '');
 	if(dijit.byId('profileadmingroup'))
 		dijit.byId('profileadmingroup').reset();
@@ -117,8 +67,8 @@ function clearProfileItems() {
 function saveServerProfile(cont) {
 	if((dijit.byId('profileimage') && ! dijit.byId('profileimage').isValid()) ||
 	   (dijit.byId('profileadmingroup') && ! dijit.byId('profileadmingroup').isValid()) ||
-	   (dijit.byId('profilelogingroup') && ! dijit.byId('profilelogingroup').isValid()) /*||
-	   ! dijit.byId('profilefixedIP').isValid() ||
+	   (dijit.byId('profilelogingroup') && ! dijit.byId('profilelogingroup').isValid()) ||
+	   ! dijit.byId('profilefixedIP').isValid() /*||
 	   ! dijit.byId('profilefixedMAC').isValid()*/) {
 		alert('Please correct the fields with invalid input');
 		return;
@@ -142,11 +92,14 @@ function saveServerProfile(cont) {
 	            name: dijit.byId('profilename').get('value'),
 	            desc: dijit.byId('profiledesc').get('value'),
 	            imageid: imageid,
-	            //fixedIP: dijit.byId('profilefixedIP').get('value'),
 	            //fixedMAC: dijit.byId('profilefixedMAC').get('value'),
 	            admingroupid: admingroupid,
 	            logingroupid: logingroupid,
-	            monitored: dijit.byId('profilemonitored').get('value')};
+	            monitored: dijit.byId('profilemonitored').get('value'),
+	            fixedIP: dijit.byId('profilefixedIP').get('value'),
+	            netmask: dijit.byId('profilenetmask').get('value'),
+	            router: dijit.byId('profilerouter').get('value'),
+	            dns: dijit.byId('profiledns').get('value')};
 	RPCwrapper(data, saveServerProfileCB, 1);
 }
 
@@ -197,39 +150,6 @@ function saveServerProfileCB(data, ioArgs) {
 	setTimeout(clearSaveStatus, 10000);
 }
 
-function getServerProfileData(cont, id, cb) {
-	if(id == 'profileid') {
-		dijit.byId('fetchProfilesBtn').set('label', 'Working...');
-		dijit.byId('fetchProfilesBtn').set('disabled', true);
-	}
-	var data = {continuation: cont,
-	            id: dijit.byId(id).get('value')};
-	RPCwrapper(data, cb, 1);
-	document.body.style.cursor = 'wait';
-}
-
-function getServerProfileDataDeployCB(data, ioArgs) {
-	document.body.style.cursor = 'default';
-	if(data.items.error) {
-		alert('You do not have access to apply this server profile.');
-		return;
-	}
-	dijit.byId('deployname').set('value', data.items.name);
-	dojo.byId('appliedprofileid').value = data.items.id;
-	dijit.byId('deployimage').set('value', data.items.imageid);
-	//dijit.byId('deployfixedIP').set('value', data.items.fixedIP);
-	//dijit.byId('deployfixedMAC').set('value', data.items.fixedMAC);
-	if(dijit.byId('deployadmingroup'))
-		dijit.byId('deployadmingroup').set('value', data.items.admingroupid);
-	else
-		dojo.byId('deployadmingroup').value = data.items.admingroupid;
-	if(dijit.byId('deploylogingroup'))
-		dijit.byId('deploylogingroup').set('value', data.items.logingroupid);
-	else
-		dojo.byId('deploylogingroup').value = data.items.logingroupid;
-	dijit.byId('deploymonitored').set('value', parseInt(data.items.monitored));
-}
-
 function getServerProfileDataManageCB(data, ioArgs) {
 	document.body.style.cursor = 'default';
 	dijit.byId('fetchProfilesBtn').set('label', 'Configure Profile');
@@ -242,7 +162,6 @@ function getServerProfileDataManageCB(data, ioArgs) {
 	dijit.byId('profilename').set('value', data.items.name);
 	dijit.byId('profiledesc').set('value', data.items.description);
 	dijit.byId('profileimage').set('value', data.items.imageid);
-	//dijit.byId('profilefixedIP').set('value', data.items.fixedIP);
 	//dijit.byId('profilefixedMAC').set('value', data.items.fixedMAC);
 	if(dijit.byId('profileadmingroup'))
 		dijit.byId('profileadmingroup').set('value', data.items.admingroupid);
@@ -253,6 +172,23 @@ function getServerProfileDataManageCB(data, ioArgs) {
 	else
 		dojo.byId('profilelogingroup').value = data.items.logingroupid;
 	dijit.byId('profilemonitored').set('value', parseInt(data.items.monitored));
+	dijit.byId('profilefixedIP').set('value', data.items.fixedIP);
+	if(dijit.byId('profilefixedIP').isValid() && dijit.byId('profilefixedIP') != '') {
+		dijit.byId('profilenetmask').set('value', data.items.netmask);
+		dijit.byId('profilerouter').set('value', data.items.router);
+		dijit.byId('profiledns').set('value', data.items.dns);
+		dijit.byId('profilenetmask').set('disabled', false);
+		dijit.byId('profilerouter').set('disabled', false);
+		dijit.byId('profiledns').set('disabled', false);
+	}
+	else {
+		dijit.byId('profilenetmask').set('value', '');
+		dijit.byId('profilerouter').set('value', '');
+		dijit.byId('profiledns').set('value', '');
+		dijit.byId('profilenetmask').set('disabled', true);
+		dijit.byId('profilerouter').set('disabled', true);
+		dijit.byId('profiledns').set('disabled', true);
+	}
 	dojo.removeClass('serverprofiledata', 'hidden');
 }
 
@@ -377,14 +313,11 @@ function getProfilesCB(data, ioArgs) {
 	allprofiles = data.items.all;
 	if(allprofiles.length == 0) {
 		dojo.addClass('profileslist', 'hidden');
-		if(! dijit.byId('deployprofileid').options.length)
-			dojo.addClass('deployprofileslist', 'hidden');
 		dojo.addClass('groupprofilesspan', 'hidden');
 		dojo.removeClass('noprofilegroupsspan', 'hidden');
 	}
 	else {
 		dojo.removeClass('profileslist', 'hidden');
-		dojo.removeClass('deployprofileslist', 'hidden');
 		if(dijit.byId('profileGroups').options.length) {
 			dojo.removeClass('groupprofilesspan', 'hidden');
 			dojo.addClass('noprofilegroupsspan', 'hidden');
@@ -569,36 +502,6 @@ function addRemProfileCB(data, ioArgs) {
 		getProfiles();
 }
 
-function setStartNow() {
-	dijit.byId('deploystarttime').set('required', false);
-	dijit.byId('deploystartdate').set('required', false);
-	dojo.addClass('deployerr', 'hidden');
-	dijit.byId('deploybtn').set('label', 'Deploy Server');
-}
-
-function setStartLater() {
-	dojo.byId('startlater').checked = true;
-	dijit.byId('deploystarttime').set('required', true);
-	dijit.byId('deploystartdate').set('required', true);
-	dojo.addClass('deployerr', 'hidden');
-	dijit.byId('deploybtn').set('label', 'Deploy Server');
-}
-
-function setEndIndef() {
-	dijit.byId('deployendtime').set('required', false);
-	dijit.byId('deployenddate').set('required', false);
-	dojo.addClass('deployerr', 'hidden');
-	dijit.byId('deploybtn').set('label', 'Deploy Server');
-}
-
-function setEndAt() {
-	dojo.byId('endat').checked = true;
-	dijit.byId('deployendtime').set('required', true);
-	dijit.byId('deployenddate').set('required', true);
-	dojo.addClass('deployerr', 'hidden');
-	dijit.byId('deploybtn').set('label', 'Deploy Server');
-}
-
 function submitDeploy() {
 	var cont = dojo.byId('deploycont').value;
 	if((dijit.byId('deployimage') && ! dijit.byId('deployimage').isValid()) ||
@@ -685,12 +588,22 @@ function submitDeploy() {
 		data.logingroupid = dijit.byId('deploylogingroup').get('value');
 	else
 		data.logingroupid = dojo.byId('deploylogingroup').value;
-	//data.ipaddr = dijit.byId('deployfixedIP').get('value');
+	data.ipaddr = dijit.byId('deployfixedIP').get('value');
+	if(data.ipaddr != '') {
+		data.netmask = dijit.byId('deploynetmask').get('value');
+		data.router = dijit.byId('deployrouter').get('value');
+		data.dns = dijit.byId('deploydns').get('value');
+	}
+	else {
+		data.netmask = '';
+		data.router = '';
+		data.dns = '';
+	}
 	//data.macaddr = dijit.byId('deployfixedMAC').get('value');
-	if(dijit.byId('deploymonitored').get('value') == 'on')
+	/*if(dijit.byId('deploymonitored').get('value') == 'on')
 		data.monitored = 1;
 	else
-		data.monitored = 0;
+		data.monitored = 0;*/
 	if(dojo.byId('startnow').checked) {
 		data.startmode = 0;
 	}

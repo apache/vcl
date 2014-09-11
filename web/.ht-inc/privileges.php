@@ -1485,6 +1485,7 @@ function userLookup() {
 		       .        "DATE_FORMAT(l.finalend, '%W, %b %D, %Y, %h:%i %p') AS end, "
 		       .        "c.hostname, "
 		       .        "i.prettyname AS prettyimage, "
+		       .        "s.IPaddress, "
 		       .        "l.ending "
 		       . "FROM log l, "
 		       .      "image i, "
@@ -1528,6 +1529,12 @@ function userLookup() {
 				print "    <th align=right>End:</th>\n";
 				print "    <td>{$req['end']}</td>\n";
 				print "  </tr>\n";
+				if($req['IPaddress'] != '') {
+					print "  <tr>\n";
+					print "    <th align=right>IP Address:</th>\n";
+					print "    <td>{$req['IPaddress']}</td>\n";
+					print "  </tr>\n";
+				}
 				print "  <tr>\n";
 				print "    <th align=right>Ending:</th>\n";
 				print "    <td>{$req['ending']}</td>\n";
@@ -1537,6 +1544,132 @@ function userLookup() {
 		}
 		else
 			print "User made no reservations in the past week.<br>\n";
+
+		# current reservations
+		$requests = array();
+		$query = "SELECT DATE_FORMAT(rq.start, '%W, %b %D, %Y, %h:%i %p') AS start, "
+		       .        "DATE_FORMAT(rq.end, '%W, %b %D, %Y, %h:%i %p') AS end, "
+		       .        "rq.id AS requestid, "
+		       .        "MIN(rs.id) AS reservationid, "
+		       .        "c.hostname AS computer, "
+		       .        "i.prettyname AS prettyimage, "
+		       .        "c.IPaddress AS compIP, "
+		       .        "rs.remoteIP AS userIP, "
+		       .        "ch.hostname AS vmhost, "
+		       .        "mn.hostname AS managementnode, "
+		       .        "srq.name AS servername, "
+		       .        "aug.name AS admingroup, "
+		       .        "lug.name AS logingroup, "
+		       .        "s1.name AS state, "
+		       .        "s2.name AS laststate "
+		       . "FROM image i, "
+		       .      "managementnode mn, "
+		       .      "request rq "
+		       . "LEFT JOIN reservation rs ON (rs.requestid = rq.id) "
+		       . "LEFT JOIN computer c ON (rs.computerid = c.id) "
+		       . "LEFT JOIN vmhost vh ON (c.vmhostid = vh.id) "
+		       . "LEFT JOIN computer ch ON (vh.computerid = ch.id) "
+		       . "LEFT JOIN serverrequest srq ON (srq.requestid = rq.id) "
+		       . "LEFT JOIN usergroup aug ON (aug.id = srq.admingroupid) "
+		       . "LEFT JOIN usergroup lug ON (lug.id = srq.logingroupid) "
+		       . "LEFT JOIN state s1 ON (s1.id = rq.stateid) "
+		       . "LEFT JOIN state s2 ON (s2.id = rq.laststateid) "
+		       . "WHERE rq.userid = {$userdata['id']} AND "
+		       .        "i.id = rs.imageid AND "
+		       .        "mn.id = rs.managementnodeid "
+		       . "GROUP BY rq.id "
+		       . "ORDER BY rq.start";
+		$qh = doQuery($query, 290);
+		while($row = mysql_fetch_assoc($qh))
+			array_push($requests, $row);
+		$requests = array_reverse($requests);
+		if(! empty($requests)) {
+			print "<h3>User's current reservations:</h3>\n";
+			print "<table>\n";
+			$first = 1;
+			foreach($requests as $req) {
+				if($first)
+					$first = 0;
+				else {
+					print "  <tr>\n";
+					print "    <td colspan=2><hr></td>\n";
+					print "  </tr>\n";
+				}
+				print "  <tr>\n";
+				print "    <th align=right>Request ID:</th>\n";
+				print "    <td>{$req['requestid']}</td>\n";
+				print "  </tr>\n";
+				if($req['servername'] != '') {
+					print "  <tr>\n";
+					print "    <th align=right>Reservation Name:</th>\n";
+					print "    <td>{$req['servername']}</td>\n";
+					print "  </tr>\n";
+				}
+				print "  <tr>\n";
+				print "    <th align=right>Image:</th>\n";
+				print "    <td>{$req['prettyimage']}</td>\n";
+				print "  </tr>\n";
+				print "  <tr>\n";
+				print "    <th align=right>State:</th>\n";
+				if($req['state'] == 'pending')
+					print "    <td>{$req['laststate']}</td>\n";
+				else
+					print "    <td>{$req['state']}</td>\n";
+				print "  </tr>\n";
+				print "  <tr>\n";
+				print "    <th align=right>Computer:</th>\n";
+				print "    <td>{$req['computer']}</td>\n";
+				print "  </tr>\n";
+				if(! empty($req['vmhost'])) {
+					print "  <tr>\n";
+					print "    <th align=right>VM Host:</th>\n";
+					print "    <td>{$req['vmhost']}</td>\n";
+					print "  </tr>\n";
+				}
+				print "  <tr>\n";
+				print "    <th align=right>Start:</th>\n";
+				print "    <td>{$req['start']}</td>\n";
+				print "  </tr>\n";
+				print "  <tr>\n";
+				print "    <th align=right>End:</th>\n";
+				if($req['end'] == 'Friday, Jan 1st, 2038, 12:00 AM')
+					print "    <td>(indefinite)</td>\n";
+				else
+					print "    <td>{$req['end']}</td>\n";
+				print "  </tr>\n";
+				if($req['compIP'] != '') {
+					print "  <tr>\n";
+					print "    <th align=right>Node's IP Address:</th>\n";
+					print "    <td>{$req['compIP']}</td>\n";
+					print "  </tr>\n";
+				}
+				if($req['userIP'] != '') {
+					print "  <tr>\n";
+					print "    <th align=right>User's IP Address:</th>\n";
+					print "    <td>{$req['userIP']}</td>\n";
+					print "  </tr>\n";
+				}
+				if($req['admingroup'] != '') {
+					print "  <tr>\n";
+					print "    <th align=right>Admin Group:</th>\n";
+					print "    <td>{$req['admingroup']}</td>\n";
+					print "  </tr>\n";
+				}
+				if($req['logingroup'] != '') {
+					print "  <tr>\n";
+					print "    <th align=right>Access Group:</th>\n";
+					print "    <td>{$req['logingroup']}</td>\n";
+					print "  </tr>\n";
+				}
+				print "  <tr>\n";
+				print "    <th align=right>Management Node:</th>\n";
+				print "    <td>{$req['managementnode']}</td>\n";
+				print "  </tr>\n";
+			}
+			print "</table>\n";
+		}
+		else
+			print "User does not have any current reservations.<br>\n";
 	}
 	print "</div>\n";
 }
@@ -1849,6 +1982,9 @@ function jsonGetUserGroupMembers() {
 	$usergrpid = processInputVar('groupid', ARG_NUMERIC);
 	$domid = processInputVar('domid', ARG_STRING);
 	$query = "SELECT g.ownerid, "
+	       .        "g.affiliationid, "
+	       .        "g.custom, "
+	       .        "g.courseroll, "
 	       .        "g2.name AS editgroup, "
 	       .        "g2.editusergroupid AS editgroupid "
 	       . "FROM usergroup g "
@@ -1862,7 +1998,12 @@ function jsonGetUserGroupMembers() {
 		sendJSON($arr);
 		return;
 	}
-	if($grpdata["ownerid"] != $user["id"] && ! (array_key_exists($grpdata["editgroupid"], $user["groups"]))) {
+	if(($grpdata['custom'] == 1 && $user['id'] != $grpdata['ownerid'] &&
+	   ! array_key_exists($grpdata['editgroupid'], $user['groups'])) ||
+	   (($grpdata['custom'] == 0 || $grpdata['courseroll'] == 1) &&
+	   ! checkUserHasPerm('Manage Federated User Groups (global)') &&
+	   (! checkUserHasPerm('Manage Federated User Groups (affiliation only)') ||
+	   $grpdata['affiliationid'] != $user['affiliationid']))) {
 		# user doesn't have access to view membership
 		$msg = '(not authorized to view membership)';
 		$arr = array('members' => $msg, 'domid' => $domid);
@@ -2045,6 +2186,8 @@ function jsonGetResourceGroupMembers() {
 		       . "WHERE rgm.resourcegroupid = $resgrpid AND "
 		       .       "rgm.resourceid = r.id AND "
 		       .       "r.subid = t.id";
+		if($type == 'computer' || $type == 'image')
+			$query .= " AND t.deleted = 0";
 		$qh = doQuery($query, 101);
 		$members = '';
 		while($row = mysql_fetch_assoc($qh))

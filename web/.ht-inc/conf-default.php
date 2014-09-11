@@ -96,6 +96,10 @@ define("ALLOWADDSHIBUSERS", 0); // this is only related to using Shibboleth auth
                                 // a userid, there is no way to verify that it was entered incorrectly so the user
                                 // will be added to the database with the typoed userid
 
+define("MAXINITIALIMAGINGTIME", 720); // for imaging reservations, users will have at least this long as the max selectable duration
+
+define("MAXSUBIMAGES", 5000);  // maximum allowed number for subimages in a config
+
 $ENABLE_ITECSAUTH = 0;     // use ITECS accounts (also called "Non-NCSU" accounts)
 
 # xmlrpcBlockAPIUsers is an array of ids from user table for users that are

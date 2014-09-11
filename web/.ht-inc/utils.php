@@ -20,6 +20,7 @@ require_once(".ht-inc/secrets.php");
 @include_once("itecsauth/itecsauth.php");
 require_once(".ht-inc/authentication.php");
 require_once(".ht-inc/phpseclib/Crypt/AES.php");
+require_once(".ht-inc/spyc-0.5/spyc.php");
 if(file_exists(".ht-inc/vcldocs.php"))
 	require_once(".ht-inc/vcldocs.php");
 
@@ -35,14 +36,10 @@ define("ARG_STRING", 1 << 1);
 define("ARG_MULTINUMERIC", 1 << 2);
 /// used for processInputVar, means the input variable should be an array of strings
 define("ARG_MULTISTRING", 1 << 3);
-/// define semaphore key
-define("SEMKEY", 192365819256598);
 
 /// global array used to hold request information between calling isAvailable
 /// and addRequest
 $requestInfo = array();
-#$requestInfo["freeComputerids"] = array();
-#$requestInfo["imageids"] = array();
 
 /// global array to cache arrays of node parents for getNodeParents
 $nodeparents = array();
@@ -62,20 +59,25 @@ $printedHTMLheader = 0;
 ////////////////////////////////////////////////////////////////////////////////
 function initGlobals() {
 	global $mode, $user, $remoteIP, $authed, $oldmode, $semid;
-	global $semislocked, $days, $phpVer, $keys, $pemkey, $AUTHERROR;
+	global $days, $phpVer, $keys, $pemkey, $AUTHERROR;
 	global $passwdArray, $skin, $contdata, $lastmode, $inContinuation;
-	global $totalQueries, $ERRORS, $queryTimes, $actions;
+	global $ERRORS, $actions;
 	global $affilValFunc, $addUserFunc, $updateUserFunc, $addUserFuncArgs;
+	global $uniqid;
 
 	define("SECINDAY", 86400);
 	define("SECINWEEK", 604800);
 	define("SECINMONTH", 2678400);
 	define("SECINYEAR", 31536000);
+	# TODO validate security of this
+	if(array_key_exists("PATH_INFO", $_SERVER)) {
+		$pathdata = explode("/", $_SERVER["PATH_INFO"]);
+		$tmp = explode('.', $pathdata[1]);
+		$_GET["mode"] = $tmp[0];
+	}
 	$mode = processInputVar("mode", ARG_STRING, 'main');
-	$totalQueries = 0;
 	$inContinuation = 0;
 	$contdata = array();
-	$queryTimes = array();
 	$contuserid = '';
 	$continuation = processInputVar('continuation', ARG_STRING);
 	if(! empty($continuation)) {
@@ -101,6 +103,7 @@ function initGlobals() {
 	$days = array(_('Sunday'), _('Monday'), _('Tuesday'), _('Wednesday'), _('Thursday'), _('Friday'), _('Saturday'));
 	$phpVerArr = explode('.', phpversion());
 	$phpVer = $phpVerArr[0];
+	$uniqid = uniqid($_SERVER['HTTP_HOST'] . "-" . getmypid() . "-");
 
 	$passwdArray = array('A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K',
 	                     'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V',
@@ -185,10 +188,6 @@ function initGlobals() {
 			$mode = "auth";
 		}
 		if($mode == 'xmlrpccall' || $mode == 'xmlrpcaffiliations') {
-			// get the semaphore id
-			if(! ($semid = sem_get(SEMKEY, 1, 0666, 1)))
-				abort(2);
-			$semislocked = 0;
 			require_once(".ht-inc/xmlrpcWrappers.php");
 			require_once(".ht-inc/requests.php");
 			require_once(".ht-inc/serverprofiles.php");
@@ -257,28 +256,10 @@ function initGlobals() {
 			$updateUserFunc[$id] = create_function('', 'return NULL;');
 	}
 
-	// get the semaphore id
-	if(! ($semid = sem_get(SEMKEY, 1, 0666, 1)))
-		abort(2);
-	$semislocked = 0;
-
 	# include appropriate files
 	switch($actions['pages'][$mode]) {
 		case 'blockAllocations':
 			require_once(".ht-inc/blockallocations.php");
-			break;
-		case 'manageComputers':
-			require_once(".ht-inc/computers.php");
-			break;
-		case 'managementNodes':
-			require_once(".ht-inc/managementnodes.php");
-			break;
-		case 'manageImages':
-			require_once(".ht-inc/images.php");
-			require_once(".ht-inc/requests.php");
-			break;
-		case 'manageSchedules':
-			require_once(".ht-inc/schedules.php");
 			break;
 		case 'help':
 			require_once(".ht-inc/help.php");
@@ -305,6 +286,20 @@ function initGlobals() {
 		case 'dashboard':
 			require_once(".ht-inc/dashboard.php");
 			break;
+		case 'siteconfig':
+			require_once(".ht-inc/siteconfig.php");
+			break;
+		case 'resource':
+		case 'config':
+		case 'image':
+		case 'computer':
+		case 'managementnode':
+		case 'schedule':
+			require_once(".ht-inc/resource.php");
+			break;
+		case 'storebackend':
+			require_once(".ht-inc/storebackend.php");
+			break;
 		case 'serverProfiles':
 			require_once(".ht-inc/serverprofiles.php");
 			require_once(".ht-inc/requests.php");
@@ -312,6 +307,21 @@ function initGlobals() {
 		default:
 			require_once(".ht-inc/requests.php");
 	}
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn __autoload($class)
+///
+/// \param $class - name of a class
+///
+/// \brief handles loading class implementation file for a specified class
+///
+////////////////////////////////////////////////////////////////////////////////
+function __autoload($class) {
+	$class = strtolower($class);
+	require_once(".ht-inc/resource.php");
+	require_once(".ht-inc/$class.php");
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -345,6 +355,11 @@ function checkAccess() {
 				dbDisconnect();
 				exit;
 			}
+		}
+		if(! array_key_exists('HTTP_X_PASS', $_SERVER) || strlen($_SERVER['HTTP_X_PASS']) == 0) {
+			printXMLRPCerror(3);   # access denied
+			dbDisconnect();
+			exit;
 		}
 		$xmlpass = $_SERVER['HTTP_X_PASS'];
 		if(get_magic_quotes_gpc())
@@ -439,16 +454,16 @@ function checkAccess() {
 					exit;
 				}
 			}
-            elseif($authMechs[$authtype]['type'] == 'redirect'){
-                $affilid = $authMechs[$authtype]['affiliationid'];
-                if(!(isset($apiValidateFunc) && is_array($apiValidateFunc) &&
-                        array_key_exists($affilid, $apiValidateFunc) && 
-                        $apiValidateFunc[$affilid]($xmluser, $xmlpass))){
-                    printXMLRPCerror(3);    # access denied
-                    dbDisconnect();
-                    exit;
-                }
-            }
+			elseif($authMechs[$authtype]['type'] == 'redirect') {
+				$affilid = $authMechs[$authtype]['affiliationid'];
+				if(!(isset($apiValidateFunc) && is_array($apiValidateFunc) &&
+				   array_key_exists($affilid, $apiValidateFunc) && 
+				   $apiValidateFunc[$affilid]($xmluser, $xmlpass))) {
+					printXMLRPCerror(3);    # access denied
+					dbDisconnect();
+					exit;
+				}
+			}
 			else {
 				printXMLRPCerror(6);    # unable to auth passed in X-User
 				dbDisconnect();
@@ -491,46 +506,8 @@ function checkAccess() {
 			if(! $inContinuation) {
 				# check that user has access to this area
 				switch($mode) {
-					case 'viewRequests':
-						$requests = getUserRequests("all", $user["id"]);
-						if(! in_array("imageCheckOut", $user["privileges"]) &&
-							! in_array("imageAdmin", $user["privileges"]) &&
-						   ! count($requests)) {
-							$mode = "";
-							$actionFunction = "main";
-							return;
-						}
-						break;
 					case 'viewGroups':
 						if(! in_array("groupAdmin", $user["privileges"])) {
-							$mode = "";
-							$actionFunction = "main";
-							return;
-						}
-						break;
-					case 'selectImageOption':
-						if(! in_array("imageAdmin", $user["privileges"])) {
-							$mode = "";
-							$actionFunction = "main";
-							return;
-						}
-						break;
-					case 'viewSchedules':
-						if(! in_array("scheduleAdmin", $user["privileges"])) {
-							$mode = "";
-							$actionFunction = "main";
-							return;
-						}
-						break;
-					case 'selectComputers':
-						if(! in_array("computerAdmin", $user["privileges"])) {
-							$mode = "";
-							$actionFunction = "main";
-							return;
-						}
-						break;
-					case 'selectMgmtnodeOption':
-						if(! in_array("mgmtNodeAdmin", $user["privileges"])) {
 							$mode = "";
 							$actionFunction = "main";
 							return;
@@ -756,6 +733,7 @@ function clearPrivCache() {
 	$_SESSION['userhaspriv'] = array();
 	$_SESSION['compstateflow'] = array();
 	$_SESSION['usersessiondata'] = array();
+	$_SESSION['variables'] = array();
 	unset($_SESSION['user']);
 	unset($_SESSION['locales']);
 }
@@ -808,6 +786,8 @@ function setupSession() {
 		$_SESSION['compstateflow'] = array();
 	if(! array_key_exists('usersessiondata', $_SESSION))
 		$_SESSION['usersessiondata'] = array();
+	if(! array_key_exists('variables', $_SESSION))
+		$_SESSION['variables'] = array();
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -899,7 +879,8 @@ function abort($errcode, $query="") {
 		$message = "";
 		if($errcode >= 100 && $errcode < 400) {
 			$message .= mysql_error($mysql_link_vcl) . "\n";
-			$message .= mysql_error($mysql_link_acct) . "\n";
+			if($ENABLE_ITECSAUTH)
+				$message .= mysql_error($mysql_link_acct) . "\n";
 			$message .= $query . "\n";
 		}
 		$message .= "ERROR($errcode): " . $ERRORS["$errcode"] . "\n";
@@ -926,10 +907,10 @@ function abort($errcode, $query="") {
 		print HELPEMAIL . "</a> " . _("for further assistance.  Please include the ");
 		print _("steps you took that led up to this problem in your email message.");
 	}
+	// release semaphore lock
+	cleanSemaphore();
 	dbDisconnect();
 	printHTMLFooter();
-	// release semaphore lock
-	semUnlock();
 	exit;
 }
 
@@ -1115,10 +1096,9 @@ function dbDisconnect() {
 ////////////////////////////////////////////////////////////////////////////////
 function doQuery($query, $errcode=101, $db="vcl", $nolog=0) {
 	global $mysql_link_vcl, $mysql_link_acct, $user, $mode, $ENABLE_ITECSAUTH;
-	global $totalQueries, $queryTimes;
-	$totalQueries++;
 	if($db == "vcl") {
-		if((! $nolog) && preg_match('/^(UPDATE|INSERT|DELETE)/', $query)) {
+		if((! $nolog) && preg_match('/^(UPDATE|INSERT|DELETE)/', $query) &&
+		   strpos($query, 'UPDATE continuations SET expiretime = ') === FALSE) {
 			$logquery = str_replace("'", "\'", $query);
 			$logquery = str_replace('"', '\"', $logquery);
 			if(isset($user['id']))
@@ -1137,7 +1117,12 @@ function doQuery($query, $errcode=101, $db="vcl", $nolog=0) {
 			   .        "'$logquery')";
 			mysql_query($q, $mysql_link_vcl);
 		}
-		$qh = mysql_query($query, $mysql_link_vcl) or abort($errcode, $query);
+		for($i = 0; ! ($qh = mysql_query($query, $mysql_link_vcl)) && $i < 3; $i++) {
+			if(mysql_errno() == '1213') # DEADLOCK, sleep and retry
+				usleep(50);
+			else
+				abort($errcode, $query);
+		}
 	}
 	elseif($db == "accounts") {
 		if($ENABLE_ITECSAUTH)
@@ -1172,7 +1157,8 @@ function dbLastInsertID() {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function getOSList() {
-	$qh = doQuery("SELECT id, name, prettyname, type FROM OS", "115");
+	$query = "SELECT id, name, prettyname, type, installtype FROM OS ORDER BY prettyname";
+	$qh = doQuery($query, "115");
 	$oslist = array();
 	while($row = mysql_fetch_assoc($qh))
 		$oslist[$row['id']] = $row;
@@ -1197,6 +1183,8 @@ function getOSList() {
 /// \b osid - osid for the os on the image\n
 /// \b os - os the image contains\n
 /// \b installtype - method used to install image\n
+/// \b ostypeid - id of the OS type in the image\n
+/// \b ostype - name of the OS type in the image\n
 /// \b minram - minimum amount of RAM needed for image\n
 /// \b minprocnumber - minimum number of processors needed for image\n
 /// \b minprocspeed - minimum speed of processor(s) needed for image\n
@@ -1255,14 +1243,17 @@ function getImages($includedeleted=0, $imageid=0) {
 	       .        "CONCAT(u.unityid, '@', a.name) AS user, "
 	       .        "i.datecreated, "
 	       .        "DATE_FORMAT(i.datecreated, '%c/%d/%y %l:%i %p') AS prettydate, "
+	       .        "i.deleted, "
+	       .        "i.datedeleted, "
 	       .        "i.production, "
 	       .        "i.imagename "
 	       . "FROM imagerevision i, "
 	       .      "affiliation a, "
 	       .      "user u "
-	       . "WHERE i.deleted = 0 AND "
-	       .       "i.userid = u.id AND "
-	       .       "u.affiliationid = a.id";
+	       . "WHERE i.userid = u.id AND ";
+	if(! $includedeleted)
+		$query .=   "i.deleted = 0 AND ";
+	$query .=      "u.affiliationid = a.id";
 	$qh = doQuery($query, 101);
 	while($row = mysql_fetch_assoc($qh)) {
 		$id = $row['imageid'];
@@ -1281,6 +1272,8 @@ function getImages($includedeleted=0, $imageid=0) {
 	       .        "i.OSid AS osid, "
 	       .        "o.name AS os, "
 	       .        "o.installtype, "
+	       .        "ot.id AS ostypeid, "
+	       .        "ot.name AS ostype, "
 	       .        "i.minram AS minram, "
 	       .        "i.minprocnumber AS minprocnumber, "
 	       .        "i.minprocspeed AS minprocspeed, "
@@ -1297,6 +1290,7 @@ function getImages($includedeleted=0, $imageid=0) {
 	       . "FROM image i, "
 	       .      "platform p, "
 	       .      "OS o, "
+	       .      "OStype ot, "
 	       .      "resource r, "
 	       .      "resourcetype t, "
 	       .      "user u, "
@@ -1306,6 +1300,7 @@ function getImages($includedeleted=0, $imageid=0) {
 	       .       "t.name = 'image' AND "
 	       .       "r.subid = i.id AND "
 	       .       "i.OSid = o.id AND "
+	       .       "o.type = ot.name AND "
 	       .       "i.ownerid = u.id AND "
 	       .       "u.affiliationid = a.id ";
 	if(! $includedeleted)
@@ -1313,7 +1308,11 @@ function getImages($includedeleted=0, $imageid=0) {
    $query .= "ORDER BY i.prettyname";
 	$qh = doQuery($query, 120);
 	while($row = mysql_fetch_assoc($qh)) {
+		if(is_null($row['maxconcurrent']))
+			$row['maxconcurrent'] = 0;
 		$imagelist[$includedeleted][$row["id"]] = $row;
+		$imagelist[$includedeleted][$row["id"]]['checkuser'] = 1;
+		$imagelist[$includedeleted][$row["id"]]['rootaccess'] = 1;
 		if($row["imagemetaid"] != NULL) {
 			if(array_key_exists($row['imagemetaid'], $allmetadata)) {
 				$metaid = $row['imagemetaid'];
@@ -1331,7 +1330,7 @@ function getImages($includedeleted=0, $imageid=0) {
 				}
 			}
 			else
-				$row["imagemetaid"] = NULL;
+				$imagelist[$includedeleted][$row["id"]]["imagemetaid"] = NULL;
 		}
 		if(array_key_exists($row['id'], $allrevisiondata))
 			$imagelist[$includedeleted][$row['id']]['imagerevision'] = $allrevisiondata[$row['id']];
@@ -1340,6 +1339,131 @@ function getImages($includedeleted=0, $imageid=0) {
 	if($imageid != 0)
 		return array($imageid => $imagelist[$includedeleted][$imageid]);
 	return $imagelist[$includedeleted];
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn getServerProfiles($id)
+///
+/// \param $id - (optional) if specified, only return data for specified profile
+///
+/// \return an array where each key is a profile id whose value is an array with
+/// these values:\n
+/// \b name - profile name\n
+/// \b description - profile description\n
+/// \b imageid - id of image associated with profile\n
+/// \b image - pretty name of image associated with profile\n
+/// \b ownerid - user id of owner of profile\n
+/// \b owner - unityid of owner of profile\n
+/// \b fixedIP - IP address to be used with deployed profile\n
+/// \b fixedMAC - MAC address to be used with deployed profile\n
+/// \b admingroupid - id of admin user group associated with profile\n
+/// \b admingroup - name of admin user group associated with profile\n
+/// \b logingroupid - id of login user group associated with profile\n
+/// \b logingroup - name of login user group associated with profile\n
+/// \b monitored - whether or not deployed profile should be monitored\n
+/// \b resourceid - resource id of profile
+///
+/// \brief gets information about server profiles
+///
+////////////////////////////////////////////////////////////////////////////////
+function getServerProfiles($id=0) {
+	$key = getKey(array('getServerProfiles', $id));
+	if(array_key_exists($key, $_SESSION['usersessiondata']))
+		return $_SESSION['usersessiondata'][$key];
+
+	$fixeddata = array();
+	$query = "SELECT name, value FROM variable WHERE name LIKE 'fixedIPsp%'";
+	$qh = doQuery($query);
+	while($row = mysql_fetch_assoc($qh)) {
+		$spid = str_replace('fixedIPsp', '', $row['name']);
+		$fixeddata[$spid] = Spyc::YAMLLoad($row['value']);
+	}
+
+	$query = "SELECT s.id, "
+	       .        "s.name, "
+	       .        "s.description, "
+	       .        "s.imageid, "
+	       .        "i.prettyname AS image, "
+	       .        "s.ownerid, "
+	       .        "CONCAT(u.unityid, '@', a.name) AS owner, "
+	       .        "s.fixedIP, "
+	       .        "s.fixedMAC, "
+	       .        "s.admingroupid, "
+	       .        "CONCAT(ga.name, '@', aa.name) AS admingroup, "
+	       .        "s.logingroupid, "
+	       .        "CONCAT(gl.name, '@', al.name) AS logingroup, "
+	       .        "s.monitored, "
+	       .        "r.id AS resourceid "
+	       . "FROM serverprofile s "
+	       . "LEFT JOIN image i ON (i.id = s.imageid) "
+	       . "LEFT JOIN user u ON (u.id = s.ownerid) "
+	       . "LEFT JOIN affiliation a ON (a.id = u.affiliationid) "
+	       . "LEFT JOIN usergroup ga ON (ga.id = s.admingroupid) "
+	       . "LEFT JOIN affiliation aa ON (aa.id = ga.affiliationid) "
+	       . "LEFT JOIN usergroup gl ON (gl.id = s.logingroupid) "
+	       . "LEFT JOIN affiliation al ON (al.id = gl.affiliationid) "
+	       . "LEFT JOIN resource r ON (r.subid = s.id) "
+	       . "WHERE r.resourcetypeid = 17 ";
+	if($id != 0)
+		$query .= "AND s.id = $id";
+	else
+		$query .= "ORDER BY name";
+	$qh = doQuery($query, 101);
+	$profiles = array();
+	while($row = mysql_fetch_assoc($qh)) {
+		$profiles[$row['id']] = $row;
+		if(array_key_exists($row['id'], $fixeddata)) {
+			$profiles[$row['id']]['netmask'] = $fixeddata[$row['id']]['netmask'];
+			$profiles[$row['id']]['router'] = $fixeddata[$row['id']]['router'];
+			$profiles[$row['id']]['dns'] = implode(',', $fixeddata[$row['id']]['dns']);
+		}
+		else {
+			$profiles[$row['id']]['netmask'] = '';
+			$profiles[$row['id']]['router'] = '';
+			$profiles[$row['id']]['dns'] = '';
+		}
+	}
+	$_SESSION['usersessiondata'][$key] = $profiles;
+	return $profiles;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn getServerProfileImages($userid)
+///
+/// \param $userid - id from user table
+///
+/// \return array where the key is the id of the image and the value is the
+/// prettyname of the image
+///
+/// \brief builds an array of images that user has access to via server profiles
+///
+////////////////////////////////////////////////////////////////////////////////
+function getServerProfileImages($userid) {
+	$key = getKey(array('getServerProfileImages', $userid));
+	if(array_key_exists($key, $_SESSION['usersessiondata']))
+		return $_SESSION['usersessiondata'][$key];
+	$resources = getUserResources(array('serverCheckOut', 'serverProfileAdmin'),
+	                              array('available', 'administer'));
+	$ids = array_keys($resources['serverprofile']);
+	$inids = implode(',', $ids);
+	if(empty($inids)) {
+		$_SESSION['usersessiondata'][$key] = array();
+		return array();
+	}
+	$query = "SELECT i.id, "
+	       .        "i.prettyname AS image "
+	       . "FROM serverprofile s, "
+	       .      "image i "
+	       . "WHERE s.imageid = i.id AND "
+	       .       "s.id IN ($inids)";
+	$qh = doQuery($query, 101);
+	$profiles = array();
+	while($row = mysql_fetch_assoc($qh))
+		$profiles[$row['id']] = $row['image'];
+	$_SESSION['usersessiondata'][$key] = $profiles;
+	return $profiles;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1420,10 +1544,12 @@ function getImageNotes($imageid) {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
-/// \fn getImageConnectMethods($imageid, $revisionid)
+/// \fn getImageConnectMethods($imageid, $revisionid, $nostatic=0)
 ///
 /// \param $imageid - id of an image
 /// \param $revisionid - (optional, default=0) revision id of image
+/// \param $nostatic - (optional, default=0) pass 1 to keep from using the
+/// static variable defined in the function
 ///
 /// \return an array of connect methods enabled for specified image where the
 /// key is the id of the connect method and the value is the description
@@ -1431,18 +1557,20 @@ function getImageNotes($imageid) {
 /// \brief builds an array of connect methods enabled for the image
 ///
 ////////////////////////////////////////////////////////////////////////////////
-function getImageConnectMethods($imageid, $revisionid=0) {
-	$key = getKey(array('getImageConnectMethods', $imageid, $revisionid));
+function getImageConnectMethods($imageid, $revisionid=0, $nostatic=0) {
+	$key = getKey(array('getImageConnectMethods', (int)$imageid, (int)$revisionid));
 	if(array_key_exists($key, $_SESSION['usersessiondata']))
 		return $_SESSION['usersessiondata'][$key];
 	if($revisionid == 0)
-		$revisionid = getProductionRevisionid($imageid);
+		$revisionid = getProductionRevisionid($imageid, $nostatic);
 	if($revisionid == '') {
 		$_SESSION['usersessiondata'][$key] = array();
 		return array();
 	}
 
 	static $allmethods = array();
+	if($nostatic)
+		$allmethods = array();
 	if(empty($allmethods)) {
 		$query = "SELECT DISTINCT c.id, "
 		      .                  "c.description, "
@@ -1622,9 +1750,11 @@ function checkClearImageMeta($imagemetaid, $imageid, $ignorefield='') {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
-/// \fn getProductionRevisionid($imageid)
+/// \fn getProductionRevisionid($imageid, $nostatic=0)
 ///
 /// \param $imageid
+/// \param $nostatic - (optional, default=0) pass 1 to keep from using the
+/// static variable defined in the function
 ///
 /// \return the production revision id for $imageid
 ///
@@ -1632,8 +1762,10 @@ function checkClearImageMeta($imagemetaid, $imageid, $ignorefield='') {
 /// table
 ///
 ////////////////////////////////////////////////////////////////////////////////
-function getProductionRevisionid($imageid) {
+function getProductionRevisionid($imageid, $nostatic=0) {
 	static $alldata = array();
+	if($nostatic)
+		$alldata = array();
 	if(! empty($alldata))
 		if(array_key_exists($imageid, $alldata))
 			return $alldata[$imageid];
@@ -1709,6 +1841,8 @@ function removeNoCheckout($images) {
 function getUserResources($userprivs, $resourceprivs=array("available"),
                           $onlygroups=0, $includedeleted=0, $userid=0) {
 	global $user;
+	if(in_array('managementnodeAdmin', $userprivs))
+		$userprivs[] = 'mgmtnodeAdmin';
 	$key = getKey(array($userprivs, $resourceprivs, $onlygroups, $includedeleted, $userid));
 	if(array_key_exists($key, $_SESSION['userresources']))
 		return $_SESSION['userresources'][$key];
@@ -1840,6 +1974,9 @@ function getUserResources($userprivs, $resourceprivs=array("available"),
 		   getResourcesFromGroups($resourcegroups[$type], $type, $includedeleted);
 	}
 	addOwnedResources($resources, $includedeleted, $userid);
+	$noimageid = getImageId('noimage');
+	if(array_key_exists($noimageid, $resources['image']))
+		unset($resources['image'][$noimageid]);
 	$_SESSION['userresources'][$key] = $resources;
 	return $resources;
 }
@@ -2082,23 +2219,25 @@ function addUserResources(&$nodeprivs, $userid) {
 ////////////////////////////////////////////////////////////////////////////////
 function addOwnedResources(&$resources, $includedeleted, $userid) {
 	foreach(array_keys($resources) as $type) {
-		if($type == "image")
-			$field = "prettyname";
-		elseif($type == "computer")
-			$field = "hostname";
-		elseif($type == "schedule")
-			$field = "name";
-		elseif($type == "managementnode")
-			$field = "hostname";
-		elseif($type == "serverprofile")
-			$field = "name";
-		else
-			continue;
+		# TODO make this get name field from classes
+		switch($type) {
+			case "image":
+				$field = 'prettyname';
+				break;
+			case "computer":
+			case "managementnode":
+				$field = 'hostname';
+				break;
+			default:
+				$field = 'name';
+				break;
+		}
 		$query = "SELECT id, "
 		       .        "$field "
 		       . "FROM $type "
 		       . "WHERE ownerid = $userid";
-		if(! $includedeleted && ($type == "image" || $type == "computer"))
+		if(! $includedeleted &&
+		   ($type == "image" || $type == "computer" || $type == 'config'))
 			$query .= " AND deleted = 0";
 		$qh = doQuery($query, 101);
 		while($row = mysql_fetch_assoc($qh)) {
@@ -2157,18 +2296,18 @@ function addOwnedResourceGroups(&$resourcegroups, $userid) {
 ////////////////////////////////////////////////////////////////////////////////
 function getResourcesFromGroups($groups, $type, $includedeleted) {
 	$return = array();
-	if($type == "image")
-		$field = "prettyname";
-	elseif($type == "computer")
-		$field = "hostname";
-	elseif($type == "schedule")
-		$field = "name";
-	elseif($type == "managementnode")
-		$field = "hostname";
-	elseif($type == "serverprofile")
-		$field = "name";
-	else
-		return array();
+	switch($type) {
+		case "image":
+			$field = 'prettyname';
+			break;
+		case "computer":
+		case "managementnode":
+			$field = 'hostname';
+			break;
+		default:
+			$field = 'name';
+			break;
+	}
 
 	$groups = implode("','", $groups);
 	$inlist = "'$groups'";
@@ -2186,7 +2325,8 @@ function getResourcesFromGroups($groups, $type, $includedeleted) {
 	       .       "g.name IN ($inlist) AND "
 	       .       "g.resourcetypeid = rt.id AND "
 	       .       "rt.name = '$type'";
-	if(! $includedeleted && ($type == "image" || $type == "computer")) {
+	if(! $includedeleted &&
+	   ($type == "image" || $type == "computer" || $type == 'config')) {
 		$query .= "AND deleted = 0 ";
 	}
 	/*if($type == "image")
@@ -2354,17 +2494,18 @@ function decryptData($data) {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-//
-//  \fn encryptDataAsymmetric($data, $public_key)
-//
-//  \param $data - a string
-//
-//  \param $public_key - either a filename for a public key or the public key itself
-//
-//  \return hex-encoded, encrypted form of $data
-//
-//  \brief generate public key encrypted data
-//
+///
+/// \fn encryptDataAsymmetric($data, $public_key)
+///
+/// \param $data - a string
+///
+/// \param $public_key - either a filename for a public key or the public key
+/// itself
+///
+/// \return hex-encoded, encrypted form of $data
+///
+/// \brief generate public key encrypted data
+///
 ////////////////////////////////////////////////////////////////////////////////
 function encryptDataAsymmetric($data, $public_key){
 	if(file_exists($public_key)){
@@ -3176,7 +3317,7 @@ function processInputVar($vartag, $type, $defaultvalue=NULL, $stripwhitespace=0)
 		if(! is_string($return)) {
 			print "ERROR (code:3)<br>\n";
 			printHTMLFooter();
-			semUnlock();
+			cleanSemaphore();
 			exit();
 		}
 		#print "before - $return<br>\n";
@@ -3198,7 +3339,7 @@ function processInputVar($vartag, $type, $defaultvalue=NULL, $stripwhitespace=0)
 			if(! is_string($value)) {
 				print "ERROR (code:3)<br>\n";
 				printHTMLFooter();
-				semUnlock();
+				cleanSemaphore();
 				exit();
 			}
 		}
@@ -3406,6 +3547,8 @@ function getUserInfo($id, $noupdate=0, $numeric=0) {
 	       .        "u.mapserial AS mapserial, "
 	       .        "u.showallgroups, "
 	       .        "u.lastupdated AS lastupdated, "
+	       .        "u.usepublickeys, "
+	       .        "u.sshpublickeys, "
 	       .        "af.shibonly "
 	       . "FROM user u, "
 	       .      "IMtype i, "
@@ -3419,6 +3562,7 @@ function getUserInfo($id, $noupdate=0, $numeric=0) {
 
 	$qh = doQuery($query, "105");
 	if($user = mysql_fetch_assoc($qh)) {
+		$user['sshpublickeys'] = htmlspecialchars($user['sshpublickeys']);
 		if((datetimeToUnix($user["lastupdated"]) > time() - SECINDAY) ||
 		   $user['unityid'] == 'vclreload' ||
 		   $user['affiliation'] == 'Local' ||
@@ -3723,9 +3867,10 @@ function getOverallUserPrivs($userid) {
 	       .                         "WHERE ownerid = $userid))";
 	$qh = doQuery($query, 107);
 	$privileges = array();
-	while($row = mysql_fetch_row($qh)) {
-		array_push($privileges, $row[0]);
-	}
+	while($row = mysql_fetch_row($qh))
+		$privileges[] = $row[0];
+	if(in_array("mgmtNodeAdmin", $privileges))
+		$privileges[] = 'managementnodeAdmin';
 	return $privileges;
 }
 
@@ -3765,14 +3910,17 @@ function getBlockAllocationIDs($user) {
 ////////////////////////////////////////////////////////////////////////////////
 ///
 /// \fn isAvailable($images, $imageid, $imagerevisionid, $start, $end,
-///                 $requestid, $userid, $ignoreprivileges, $forimaging, $ip,
-///                 $mac, $skipconcurrentcheck)
+///                 $holdcomps, $requestid, $userid, $ignoreprivileges,
+///                 $forimaging, $ip, $mac, $skipconcurrentcheck)
 ///
 /// \param $images - array as returned from getImages
 /// \param $imageid - imageid from the image table
 /// \param $imagerevisionid - id of revision of image from imagerevision table
 /// \param $start - unix timestamp for start of reservation
 /// \param $end - unix timestamp for end of reservation
+/// \param $holdcomps - bool - 1 to lock computers for later adding to
+/// reservation, 0 not to; use 0 when just checking for estimated availability,
+/// use 1 when finding computers to actually reserve
 /// \param $requestid - (optional) a requestid; if checking for an available
 /// timeslot to update a request, pass the request id that will be updated;
 /// otherwise, don't pass this argument
@@ -3790,7 +3938,8 @@ function getBlockAllocationIDs($user) {
 /// \param $skipconcurrentcheck (optional, default=0) - set to 1 to skip check
 /// for concurrent use of image; useful for setting up reload reservations
 ///
-/// \return -3 if unavailable due to an ip/mac conflict
+/// \return -4 if unavailable due to an ip/mac conflict with another machine
+///         -3 if unavailable due to an ip/mac conflict with another reservation
 ///         -2 if specified time period is during a maintenance window
 ///         -1 if $imageid is limited in the number of concurrent reservations
 ///         available, and the limit has been reached
@@ -3801,16 +3950,25 @@ function getBlockAllocationIDs($user) {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function isAvailable($images, $imageid, $imagerevisionid, $start, $end,
-                     $requestid=0, $userid=0, $ignoreprivileges=0,
+                     $holdcomps, $requestid=0, $userid=0, $ignoreprivileges=0,
                      $forimaging=0, $ip='', $mac='', $skipconcurrentcheck=0) {
-	global $requestInfo;
+	global $requestInfo, $user;
 	$requestInfo["start"] = $start;
 	$requestInfo["end"] = $end;
 	$requestInfo["imageid"] = $imageid;
+	$requestInfo["ipwarning"] = 0;
 	$allocatedcompids = array(0);
 
+	if(! is_array($imagerevisionid))
+		$imagerevisionid = array($imageid => array($imagerevisionid));
+	elseif(empty($imagerevisionid))
+		$imagerevisionid = array($imageid => array(getProductionRevisionid($imageid)));
+
 	if(schCheckMaintenance($start, $end))
-		return -2;
+		return debugIsAvailable(-2, 1, $start, $end, $imagerevisionid);
+
+	if(! array_key_exists($imageid, $images))
+		return debugIsAvailable(0, 20, $start, $end, $imagerevisionid);
 
 	if($requestInfo["start"] <= time()) {
 		$now = 1;
@@ -3826,26 +3984,29 @@ function isAvailable($images, $imageid, $imagerevisionid, $start, $end,
 	$requestInfo["computers"] = array();
 	$requestInfo["computers"][0] = 0;
 	$requestInfo["images"][0] = $imageid;
+	$requestInfo["imagerevisions"][0] = $imagerevisionid[$imageid][0];
 
-	# loop to check for available computers for all needed images
+	# build array of subimages
+	# TODO handle mininstance
 	if(! $forimaging && $images[$imageid]["imagemetaid"] != NULL) {
 		$count = 1;
 		foreach($images[$imageid]["subimages"] as $imgid) {
 			$requestInfo['computers'][$count] = 0;
 			$requestInfo['images'][$count] = $imgid;
+			if(array_key_exists($imgid, $imagerevisionid) &&
+			   array_key_exists($count, $imagerevisionid[$imgid]))
+				$requestInfo['imagerevisions'][$count] = $imagerevisionid[$imgid][$count];
+			else
+				$requestInfo['imagerevisions'][$count] = getProductionRevisionid($imgid);
 			$count++;
 		}
 	}
 
-	// get semaphore lock
-	if(! semLock())
-		abort(3);
-
 	$startstamp = unixToDatetime($start);
 	$endstamp = unixToDatetime($end + 900);
 
-	# check for overlapping use of mac or ip
 	if(! empty($mac) || ! empty($ip)) {
+		# check for overlapping use of mac or ip
 		$query = "SELECT rq.id "
 		       . "FROM reservation rs, "
 		       .      "request rq, "
@@ -3862,8 +4023,17 @@ function isAvailable($images, $imageid, $imagerevisionid, $start, $end,
 		$query .= "LIMIT 1";
 		$qh = doQuery($query, 101);
 		if(mysql_num_rows($qh)) {
-			semUnlock();
-			return -3;
+			return debugIsAvailable(-3, 2, $start, $end, $imagerevisionid);
+		}
+
+		# check for IP being used by a management node
+		$query = "SELECT id "
+		       . "FROM managementnode "
+		       . "WHERE IPaddress = '$ip' AND "
+		       .       "stateid != 1";
+		$qh = doQuery($query, 101);
+		if(mysql_num_rows($qh)) {
+			return debugIsAvailable(-4, 16, $start, $end, $imagerevisionid);
 		}
 	}
 
@@ -3874,10 +4044,19 @@ function isAvailable($images, $imageid, $imagerevisionid, $start, $end,
 	$ignorestates = "'maintenance','vmhostinuse','hpc','failed'";
 	if($now)
 		$ignorestates .= ",'reloading','reload','timeout','inuse'";
+
 	foreach($requestInfo["images"] as $key => $imageid) {
 		# check for max concurrent usage of image
 		if(! $skipconcurrentcheck && 
 		   $images[$imageid]['maxconcurrent'] != NULL) {
+			if($userid == 0)
+				$usersgroups = $user['groups'];
+			else {
+				$testuser = getUserInfo($userid, 0, 1);
+				if(is_null($testuser))
+					return debugIsAvailable(0, 17, $start, $end, $imagerevisionid);
+				$usersgroups = $testuser['groups'];
+			}
 			$decforedit = 0;
 			$compids = array();
 			$reloadid = getUserlistID('vclreload@Local');
@@ -3899,6 +4078,7 @@ function isAvailable($images, $imageid, $imagerevisionid, $start, $end,
 			}
 			$usagecnt = count($compids);
 			$allids = implode("','", $compids);
+			$ignoregroups = implode("','", array_keys($usersgroups));
 			$query = "SELECT COUNT(bc.imageid) AS currentusage "
 			       . "FROM blockComputers bc, "
 			       .      "blockRequest br, "
@@ -3907,34 +4087,55 @@ function isAvailable($images, $imageid, $imagerevisionid, $start, $end,
 			       .       "bt.blockRequestid = br.id AND "
 			       .       "bc.imageid = $imageid AND "
 			       .       "bc.computerid NOT IN ('$allids') AND "
+			       .       "br.groupid NOT IN ('$ignoregroups') AND "
 			       .       "'$startstamp' < (bt.end + INTERVAL 900 SECOND) AND "
 			       .       "'$endstamp' > bt.start AND "
 			       .       "bt.skip != 1 AND "
 			       .       "br.status != 'deleted'";
 			$qh = doQuery($query);
 			if(! $row = mysql_fetch_assoc($qh)) {
-				semUnlock();
-				return 0;
+				cleanSemaphore();
+				return debugIsAvailable(0, 3, $start, $end, $imagerevisionid);
 			}
 			if(($usagecnt + $row['currentusage'] - $decforedit) >= $images[$imageid]['maxconcurrent']) {
-				semUnlock();
-				return -1;
+				cleanSemaphore();
+				return debugIsAvailable(-1, 4, $start, $end, $imagerevisionid);
 			}
 		}
 
 		$platformid = getImagePlatform($imageid);
 		if(is_null($platformid)) {
-			semUnlock();
-			return 0;
+			cleanSemaphore();
+			return debugIsAvailable(0, 5, $start, $end, $imagerevisionid);
 		}
 
 		# get computers $imageid maps to
-		$tmp = getMappedResources($imageid, "image", "computer");
-		if(! count($tmp)) {
-			semUnlock();
-			return 0;
+		$compids = getMappedResources($imageid, "image", "computer");
+		if(! count($compids)) {
+			cleanSemaphore();
+			return debugIsAvailable(0, 6, $start, $end, $imagerevisionid);
 		}
-		$mappedcomputers = implode(',', $tmp);
+		$mappedcomputers = implode(',', $compids);
+
+		// if $ip specified, only look at computers under management nodes that can
+		#   handle that network
+		if($ip != '') {
+			$mappedmns = getMnsFromImage($imageid);
+			$mnnets = checkAvailableNetworks($ip);
+			$intersect = array_intersect($mappedmns, $mnnets);
+			$tmpcompids = array();
+			foreach($intersect as $mnid) {
+				$tmp2 = getMappedResources($mnid, 'managementnode', 'computer');
+				$tmpcompids = array_merge($tmpcompids, $tmp2);
+			}
+			$tmpcompids = array_unique($tmpcompids);
+			$newcompids = array_intersect($compids, $tmpcompids);
+			if(! count($newcompids)) {
+				cleanSemaphore();
+				return debugIsAvailable(0, 18, $start, $end, $imagerevisionid);
+			}
+			$mappedcomputers = implode(',', $newcompids);
+		}
 
 		#get computers for available schedules and platforms
 		$computerids = array();
@@ -3960,8 +4161,8 @@ function isAvailable($images, $imageid, $imagerevisionid, $start, $end,
 			$qh = doQuery($query, 128);
 			$row = mysql_fetch_row($qh);
 			if(! in_array($row[0], $scheduleids)) {
-				semUnlock();
-				return 0;
+				cleanSemaphore();
+				return debugIsAvailable(0, 7, $start, $end, $imagerevisionid, $computerids, $currentids, $blockids);
 			}
 			// set $virtual to 0 so that it is defined later but skips the additional code
 			$virtual = 0;
@@ -3975,9 +4176,10 @@ function isAvailable($images, $imageid, $imagerevisionid, $start, $end,
 			       . "WHERE i.id = $imageid";
 			$qh = doQuery($query, 101);
 			if(! ($row = mysql_fetch_assoc($qh))) {
-				semUnlock();
-				return 0;
+				cleanSemaphore();
+				return debugIsAvailable(0, 8, $start, $end, $imagerevisionid, $computerids, $currentids, $blockids);
 			}
+			# TODO might need to check for other strings for KVM, OpenStack, etc
 			if(preg_match('/(vmware)/', $row['installtype']))
 				$virtual = 1;
 			else
@@ -4006,6 +4208,7 @@ function isAvailable($images, $imageid, $imagerevisionid, $start, $end,
 			       . "LEFT JOIN OSinstalltype oi ON (oi.name = o.installtype) "
 			       . "LEFT JOIN provisioningOSinstalltype poi ON (poi.OSinstalltypeid = oi.id) "
 			       . "LEFT JOIN computer c ON (poi.provisioningid = c.provisioningid) "
+			       . "LEFT JOIN semaphore se ON (c.id = se.computerid) "
 			       . "WHERE i.id = $imageid AND "
 			       .       "c.scheduleid IN ($schedules) AND "
 			       .       "c.platformid = $platformid AND "
@@ -4020,16 +4223,17 @@ function isAvailable($images, $imageid, $imagerevisionid, $start, $end,
 			if(! $ignoreprivileges)
 				$query .=   "c.id IN ($usercomputers) AND ";
 			$query .=      "c.id IN ($mappedcomputers) AND "
-			       .       "c.id NOT IN ($alloccompids) "
-			       . "ORDER BY (c.procspeed * c.procnumber) DESC, "
-			       .          "RAM DESC, "
-			       .          "network DESC";
+			       .       "c.id NOT IN ($alloccompids) AND "
+			       .       "(se.expires IS NULL OR se.expires < NOW()) "
+			       . "ORDER BY RAM, "
+			       .          "(c.procspeed * c.procnumber), "
+			       .          "network";
 
 			$qh = doQuery($query, 129);
 			while($row = mysql_fetch_assoc($qh)) {
 				array_push($computerids, $row['id']);
 				if($row['currentimageid'] == $imageid &&
-				   $row['imagerevisionid'] == $imagerevisionid) {
+				   $row['imagerevisionid'] == $requestInfo['imagerevisions'][$key]) {
 					array_push($currentids, $row['id']);
 				}
 			}
@@ -4038,6 +4242,10 @@ function isAvailable($images, $imageid, $imagerevisionid, $start, $end,
 			                                          $allocatedcompids);
 			$blockids = $blockdata['compids'];
 		}
+
+		# return 0 if no computers available
+		if(empty($computerids) && empty($blockids))
+			return debugIsAvailable(0, 21, $start, $end, $imagerevisionid, $computerids, $currentids, $blockids, array(), $virtual);
 
 		#remove computers from list that are already scheduled
 		$usedComputerids = array();
@@ -4060,15 +4268,19 @@ function isAvailable($images, $imageid, $imagerevisionid, $start, $end,
 
 		// if modifying a reservation and $computerids is now empty, return 0
 		if($requestid && empty($computerids)) {
-			semUnlock();
-			return 0;
+			cleanSemaphore();
+			return debugIsAvailable(0, 9, $start, $end, $imagerevisionid, $computerids, $currentids, $blockids, array(), $virtual);
 		}
+
+		# return 0 if no computers available
+		if(empty($computerids) && empty($currentids) && empty($blockids))
+			return debugIsAvailable(0, 19, $start, $end, $imagerevisionid, $computerids, $currentids, $blockids, array(), $virtual);
 
 		# remove computers from list that are allocated to block allocations
 		if($altRemoveBlockCheck) {
 			if(editRequestBlockCheck($computerids[0], $imageid, $start, $end)) {
-				semUnlock();
-				return 0;
+				cleanSemaphore();
+				return debugIsAvailable(0, 10, $start, $end, $imagerevisionid, $computerids, $currentids, $blockids, array(), $virtual);
 			}
 		}
 		elseif(! count($blockids)) {  # && ! $altRemoveBlockCheck
@@ -4104,7 +4316,7 @@ function isAvailable($images, $imageid, $imagerevisionid, $start, $end,
 				       . "LEFT JOIN computer c2 ON (v.id = c2.vmhostid) "
 				       . "LEFT JOIN image i ON (c2.currentimageid = i.id) "
 				       . "WHERE c.stateid = 20 "
-				       . "GROUP BY c.id";
+				       . "GROUP BY v.id";
 				doQuery($query, 101);
 			}
 
@@ -4116,14 +4328,56 @@ function isAvailable($images, $imageid, $imagerevisionid, $start, $end,
 			       . "LEFT JOIN image i ON (c.currentimageid = i.id) "
 			       . "WHERE c.id IN ($inids) AND "
 			       .       "(v.allocRAM - i.minram + {$images[$imageid]['minram']}) < v.RAM "
-			       . "ORDER BY (c.procspeed * c.procnumber) DESC, "
-			       .          "c.RAM DESC, "
-			       .          "c.network DESC";
+			       . "ORDER BY c.RAM, "
+			       .          "(c.procspeed * c.procnumber), "
+			       .          "c.network";
 			$qh = doQuery($query, 101);
 			$newcompids = array();
 			while($row = mysql_fetch_assoc($qh))
 				$newcompids[] = $row['id'];
 			$computerids = $newcompids;
+		}
+
+		# check for use of specified IP address, have to wait until here
+		#   because there may be a computer already assigned the IP that
+		#   can be used for this reservation
+		if(! empty($ip) && $now) {
+			$allcompids = array_merge($computerids, $blockids);
+			if(empty($allcompids))
+				return debugIsAvailable(0, 13, $start, $end, $imagerevisionid, $computerids, $currentids, $blockids, array(), $virtual);
+			$inids = implode(',', $allcompids);
+			$query = "SELECT id "
+			       . "FROM computer "
+			       . "WHERE id NOT IN ($inids) AND "
+			       .       "deleted = 0 AND "
+			       .       "stateid != 1 AND "
+			       .       "IPaddress = '$ip' AND "
+			       .       "(type != 'virtualmachine' OR "
+			       .       "vmhostid IS NOT NULL)";
+			$qh = doQuery($query);
+			if(mysql_num_rows($qh)) {
+				if($now)
+					return debugIsAvailable(-4, 18, $start, $end, $imagerevisionid, $computerids, $currentids, $blockids, array(), $virtual);
+				$requestInfo['ipwarning'] = 1;
+			}
+			$query = "SELECT id "
+			       . "FROM computer "
+			       . "WHERE id in ($inids) AND "
+			       .       "IPaddress = '$ip'";
+			if($requestid)
+				$query .= " AND id != $compid"; # TODO test this
+			$qh = doQuery($query);
+			$cnt = mysql_num_rows($qh);
+			if($cnt > 1) {
+				if($now)
+					return debugIsAvailable(-4, 19, $start, $end, $imagerevisionid, $computerids, $currentids, $blockids, array(), $virtual);
+				$requestInfo['ipwarning'] = 1;
+			}
+			elseif($cnt == 1) {
+				$row = mysql_fetch_assoc($qh);
+				$computerids = array($row['id']);
+				$blockids = array();
+			}
 		}
 
 		# remove any recently reserved computers that could have been an
@@ -4152,14 +4406,17 @@ function isAvailable($images, $imageid, $imagerevisionid, $start, $end,
 		}
 
 		# allocate a computer
+		$_imgrevid = $requestInfo['imagerevisions'][$key];
 		$comparr = allocComputer($blockids, $currentids, $computerids,
-		                         $startstamp, $nowfuture);
+		                         $startstamp, $endstamp, $nowfuture, $imageid, $_imgrevid,
+		                         $holdcomps, $requestid);
 		if(empty($comparr) && $shortened)
 			$comparr = allocComputer($origblockids, $origcurrentids,
-			                         $origcomputerids, $startstamp, $nowfuture);
+			                         $origcomputerids, $startstamp, $endstamp, $nowfuture,
+			                         $imageid, $_imgrevid, $holdcomps, $requestid);
 		if(empty($comparr)) {
-			semUnlock();
-			return 0;
+			cleanSemaphore();
+			return debugIsAvailable(0, 11, $start, $end, $imagerevisionid, $computerids, $currentids, $blockids, $failedids, $virtual);
 		}
 
 		$requestInfo["computers"][$key] = $comparr['compid'];
@@ -4171,7 +4428,110 @@ function isAvailable($images, $imageid, $imagerevisionid, $start, $end,
 		array_push($allocatedcompids, $comparr['compid']);
 	}
 
-	return 1;
+	return debugIsAvailable(1, 12, $start, $end, $imagerevisionid, $computerids, $currentids, $blockids, array(), $virtual);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn debugIsAvailable($rc, $loc, $start, $end, $imagerevisionid,
+///                      $compids=array(), $currentids=array(),
+///                      $blockids=array(), $failedids=array(), $virtual='')
+///
+/// \param $rc - return code
+/// \param $loc - location from isAvailable function
+/// \param $start - as passed to isAvailable function
+/// \param $end - as passed to isAvailable function
+/// \param $imagerevisionid - as passed to isAvailable function
+/// \param $compids - $computerids from isAvailable
+/// \param $currentids - $currentids from isAvailable
+/// \param $blockids - $blockids from isAvailable
+/// \param $failedids - $failedids from isAvailable
+/// \param $virtual - $virtual from isAvailable
+///
+/// \return $rc as passed in
+///
+/// \brief prints debug line about why isAvailable returned specified return
+/// code in javascript console if user has 'View Debug Information' user group
+/// permission and has set the debug flag; most data passed in is currently
+/// unused, but allows for a single place to add code for debugging
+///
+////////////////////////////////////////////////////////////////////////////////
+function debugIsAvailable($rc, $loc, $start, $end, $imagerevisionid,
+	                       $compids=array(), $currentids=array(),
+	                       $blockids=array(), $failedids=array(), $virtual='') {
+	global $user, $mode;
+	$debug = getContinuationVar('debug', 0);
+	if(! $debug ||
+	   $mode != 'AJupdateWaitTime' ||
+	   ! checkUserHasPerm('View Debug Information'))
+		return $rc;
+	switch($loc) {
+		case "1":
+			$msg = "site maintenance is scheduled for the requested time";
+			break;
+		case "20":
+			$msg = "invalid image id submitted - not found in images available to the user";
+			break;
+		case "2":
+			$msg = "an overlapping server reservation has the same fixed IP or MAC address";
+			break;
+		case "16":
+			$msg = "the requested fixed IP address is currently in use by a management node";
+			break;
+		case "17":
+			$msg = "failed to look up information about the specified user";
+			break;
+		case "3":
+			$msg = "failed to get image usage count for block allocations";
+			break;
+		case "4":
+			$msg = "max concurrent usage of image exceeded (includes those set aside for block allocations)";
+			break;
+		case "5":
+			$msg = "failed to get platform of image";
+			break;
+		case "6":
+			$msg = "image is not mapped to any computers";
+			break;
+		case "18":
+			$msg = "no available computers under a management node that can handle the specified IP address";
+			break;
+		case "7":
+			$msg = "the schedule of the currently reserved computer does not allow for the requested time";
+			break;
+		case "8":
+			$msg = "failed to get OSinstalltype for image";
+			break;
+		case "21":
+			$msg = "no computers with a matching schedule and platform, and in an available state, and available to the user, and mapped to the image, and matching image resource requirements";
+			break;
+		case "9":
+			$msg = "not able to change existing reservation time for currently reserved computer";
+			break;
+		case "19":
+			$msg = "no computers available (after removing scheduled computers/before performing virtual host resource checks)";
+			break;
+		case "10":
+			$msg = "modification time overlaps with time computer is set aside for block allocation";
+			break;
+		case "13":
+			$msg = "no computers available (after virtual host resource checks/before performing overlapping IP address check)";
+			break;
+		case "18":
+			$msg = "requested IP address in use by another computer";
+			break;
+		case "19":
+			$msg = "at least 2 computers have the requested IP address assigned to them";
+			break;
+		case "11":
+			$msg = "unable to get either a management node or semaphore for available computer";
+			break;
+		case "12":
+			$msg = "successfully found a computer";
+			break;
+	}
+	print "console.log('$msg');";
+	return $rc;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -4274,14 +4634,20 @@ function schCheckMaintenance($start, $end) {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
-/// \fn allocComputer($blockids, $currentids, $computerids, $start,
-///                   $nowfuture)
+/// \fn allocComputer($blockids, $currentids, $computerids, $start, $end,
+///                   $nowfuture, $imageid, $imagerevisionid, $holdcomps,
+///                   $requestid)
 ///
 /// \param $blockids - array of computer ids
 /// \param $currentids - array of computer ids
 /// \param $computerids - array of computer ids
 /// \param $start - start time in datetime format
+/// \param $start - end time in datetime format
 /// \param $nowfuture - "now" or "future"
+/// \param $holdcomps - bool - 1 to lock computers for later adding to
+/// reservation, 0 not to; use 0 when just checking for estimated availability,
+/// use 1 when finding computers to actually reserve
+/// \param $requestid - id of request if called for editing an existing one
 ///
 /// \return empty array if failed to allocate a computer; array with these keys
 /// on success:\n
@@ -4294,8 +4660,10 @@ function schCheckMaintenance($start, $end) {
 /// tries to allocate a management node for it
 ///
 ////////////////////////////////////////////////////////////////////////////////
-function allocComputer($blockids, $currentids, $computerids, $start,
-                       $nowfuture) {
+function allocComputer($blockids, $currentids, $computerids, $start, $end,
+                       $nowfuture, $imageid, $imagerevisionid, $holdcomps,
+                       $requestid) {
+	global $requestInfo;
 	$ret = array();
 	if(SCHEDULER_ALLOCATE_RANDOM_COMPUTER) {
 		shuffle($blockids);
@@ -4305,6 +4673,8 @@ function allocComputer($blockids, $currentids, $computerids, $start,
 	foreach($blockids as $compid) {
 		$mgmtnodeid = findManagementNode($compid, $start, $nowfuture);
 		if($mgmtnodeid == 0)
+			continue;
+		if($holdcomps && ! getSemaphore($imageid, $imagerevisionid, $mgmtnodeid, $compid, $start, $end, $requestid))
 			continue;
 		$ret['compid'] = $compid;
 		$ret['mgmtid'] = $mgmtnodeid;
@@ -4316,6 +4686,8 @@ function allocComputer($blockids, $currentids, $computerids, $start,
 		$mgmtnodeid = findManagementNode($compid, $start, $nowfuture);
 		if($mgmtnodeid == 0)
 			continue;
+		if($holdcomps && ! getSemaphore($imageid, $imagerevisionid, $mgmtnodeid, $compid, $start, $end, $requestid))
+			continue;
 		$ret['compid'] = $compid;
 		$ret['mgmtid'] = $mgmtnodeid;
 		$ret['loaded'] = 1;
@@ -4326,6 +4698,8 @@ function allocComputer($blockids, $currentids, $computerids, $start,
 		$mgmtnodeid = findManagementNode($compid, $start, $nowfuture);
 		if($mgmtnodeid == 0)
 			continue;
+		if($holdcomps && ! getSemaphore($imageid, $imagerevisionid, $mgmtnodeid, $compid, $start, $end, $requestid))
+			continue;
 		$ret['compid'] = $compid;
 		$ret['mgmtid'] = $mgmtnodeid;
 		$ret['loaded'] = 0;
@@ -4333,6 +4707,103 @@ function allocComputer($blockids, $currentids, $computerids, $start,
 		return $ret;
 	}
 	return $ret;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn getSemaphore($imageid, $imagerevisionid, $mgmtnodeid, $compid, $start,
+///                  $end, $requestid=0)
+///
+/// \param $imageid - id of image
+/// \param $imagerevisionid - id of image revision
+/// \param $mgmtnodeid - id of management node
+/// \param $compid - id of computer
+/// \param $start - start of reservation in datetime format
+/// \param $end - end of reservation in datetime format
+/// \param $requestid - (optional) if passed, ignores checking for conflict
+/// in request table for matching id
+///
+/// \return 0 on failure, 1 on success
+///
+/// \brief tries to get a semaphore for the requested computer
+///
+////////////////////////////////////////////////////////////////////////////////
+function getSemaphore($imageid, $imagerevisionid, $mgmtnodeid, $compid, $start,
+                      $end, $requestid=0) {
+	global $mysql_link_vcl, $uniqid;
+	$query = "INSERT INTO semaphore "
+	       . "SELECT c.id, "
+	       .        "$imageid, "
+	       .        "$imagerevisionid, "
+	       .        "$mgmtnodeid, "
+	       .        "NOW() + INTERVAL " . SEMTIMEOUT . " SECOND, "
+	       .        "'$uniqid' "
+			 . "FROM computer c "
+	       . "LEFT JOIN semaphore s ON (c.id = s.computerid) "
+	       . "WHERE c.id = $compid AND "
+	       .       "(s.expires IS NULL OR s.expires < NOW()) "
+	       . "LIMIT 1";
+	doQuery($query);
+	$rc = mysql_affected_rows($mysql_link_vcl);
+
+	# check to see if another process allocated this one
+	if($rc) {
+		$query = "SELECT rq.id "
+		       . "FROM request rq, "
+		       .      "reservation rs "
+		       . "WHERE rs.requestid = rq.id AND "
+		       .       "rs.computerid = $compid AND "
+		       .       "rq.start < '$end' AND "
+		       .       "rq.end > '$start' AND "
+		       .       "rq.stateid NOT IN (1, 5, 12)";
+		if($requestid)
+			$query .= " AND rq.id != $requestid";
+		$qh = doQuery($query);
+		$rc2 = mysql_num_rows($qh);
+		if($rc2) {
+			$query = "DELETE FROM semaphore "
+			       . "WHERE computerid = $compid AND "
+			       .       "procid = '$uniqid'";
+			doQuery($query);
+			return 0;
+		}
+	}
+	return $rc;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn retryGetSemaphore($imageid, $imagerevisionid, $mgmtnodeid, $compid,
+///                       $start, $end, $requestid=0, $tries=5, $delay=200000)
+///
+/// \param $imageid - id of image
+/// \param $imagerevisionid - id of image revision
+/// \param $mgmtnodeid - id of management node
+/// \param $compid - id of computer
+/// \param $start - start of reservation in datetime format
+/// \param $end - end of reservation in datetime format
+/// \param $requestid - (optional) if passed, ignores checking for conflict
+/// \param $tries - (optional, default=5) number of attempts to make for getting
+/// a semaphore
+/// \param $delay - (optional, default=200000) microseconds to wait between
+/// tries
+///
+/// \return 0 on failure, 1 on success
+///
+/// \brief makes multiple attempts to get a semaphore for a computer; useful
+/// when needing to do an operation on a specific computer
+///
+////////////////////////////////////////////////////////////////////////////////
+function retryGetSemaphore($imageid, $imagerevisionid, $mgmtnodeid, $compid,
+                           $start, $end, $requestid=0, $tries=5, $delay=200000) {
+	for($i = 0; $i < $tries; $i++) {
+		if(getSemaphore($imageid, $imagerevisionid, $mgmtnodeid, $compid, $start, $end, $requestid)) {
+			return 1;
+		}
+		else
+			usleep($delay);
+	}
+	return 0;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -4373,8 +4844,7 @@ function getPossibleRecentFailures($userid, $imageid) {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
-/// \fn getMappedResources($resourcesubid, $resourcetype1,
-///                                 $resourcetype2)
+/// \fn getMappedResources($resourcesubid, $resourcetype1, $resourcetype2)
 ///
 /// \param $resourcesubid - id of a resource from its table (ie an imageid)
 /// \param $resourcetype1 - type of $resourcesubid (name or id)
@@ -4606,7 +5076,7 @@ function getMaxOverlap($userid) {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function addRequest($forimaging=0, $revisionid=array()) {
-	global $requestInfo, $user;
+	global $requestInfo, $user, $uniqid, $mysql_link_vcl;
 	$startstamp = unixToDatetime($requestInfo["start"]);
 	$endstamp = unixToDatetime($requestInfo["end"]);
 	$now = time();
@@ -4627,18 +5097,6 @@ function addRequest($forimaging=0, $revisionid=array()) {
 		abort(132);
 	}
 	$logid = $row[0];
-
-	$query = "INSERT INTO changelog "
-	       .        "(logid, "
-	       .        "start, "
-	       .        "end, "
-	       .        "timestamp) "
-	       . "VALUES "
-	       .        "($logid, "
-	       .        "'$start', "
-	       .        "'$endstamp', "
-	       .        "NOW())";
-	doQuery($query, 136);
 
 	# add single entry to request table
 	$query = "INSERT INTO request "
@@ -4690,24 +5148,51 @@ function addRequest($forimaging=0, $revisionid=array()) {
 		else
 			$blockdata = array();
 
-		$query = "INSERT INTO reservation "
-		       .        "(requestid, "
-		       .        "computerid, "
-		       .        "imageid, "
-		       .        "imagerevisionid, "
-		       .        "managementnodeid) "
-		       . "VALUES "
-		       .       "($requestid, "
-		       .       "$computerid, "
-		       .       "$imageid, "
-		       .       "$imagerevisionid, "
-		       .       "$mgmtnodeid)";
-		doQuery($query, 133);
 		addSublogEntry($logid, $imageid, $imagerevisionid, $computerid,
 		               $mgmtnodeid, $fromblock, $blockdata);
 	}
+
+	$query = "INSERT INTO reservation "
+	       .        "(requestid, "
+	       .        "computerid, "
+	       .        "imageid, "
+	       .        "imagerevisionid, "
+	       .        "managementnodeid) "
+	       . "SELECT $requestid, "
+	       .        "computerid, "
+	       .        "imageid, "
+	       .        "imagerevisionid, "
+	       .        "managementnodeid " 
+	       . "FROM semaphore "
+	       . "WHERE expires > NOW() AND "
+	       .       "procid = '$uniqid'";
+	doQuery($query);
+	$cnt = mysql_affected_rows($mysql_link_vcl);
+	if($cnt == 0) {
+		# reached this point SEMTIMEOUT seconds after getting semaphore, clean up and abort
+		$query = "DELETE FROM request WHERE id = $requestid";
+		doQuery($query);
+		$query = "UPDATE log SET wasavailable = 0 WHERE id = $logid";
+		doQuery($query);
+		$query = "DELETE FROM sublog WHERE logid = $logid";
+		doQuery($query);
+		abort(400);
+	}
+	else {
+		$query = "INSERT INTO changelog "
+		       .        "(logid, "
+		       .        "start, "
+		       .        "end, "
+		       .        "timestamp) "
+		       . "VALUES "
+		       .        "($logid, "
+		       .        "'$start', "
+		       .        "'$endstamp', "
+		       .        "NOW())";
+		doQuery($query, 136);
+	}
 	// release semaphore lock
-	semUnlock();
+	cleanSemaphore();
 
 	return $requestid;
 }
@@ -5033,7 +5518,11 @@ function updateRequest($requestid) {
 		       .     "managementnodeid = $mgmtnodeid "
 		       . "WHERE requestid = $requestid AND "
 		       .       "imageid = $imgid AND "
-		       .       "computerid = $oldCompid";
+		       .       "computerid = $oldCompid "
+				 . "LIMIT 1"; # without this, it can update one row to have the
+		                    # same computer as another row; then, the later row
+		                    # could be updated, which would end up setting both
+		                    # rows to the same computer
 		doQuery($query, 147);
 		addChangeLogEntry($logid, NULL, $endstamp, $startstamp, $computerid, NULL, 
 		                  1);
@@ -5120,12 +5609,17 @@ function deleteRequest($request) {
 	}
 
 	if($request['serverrequest']) {
-		$query = "DELETE FROM serverrequest WHERE requestid = {$request['id']}";
-		$qh = doQuery($query, 152);
+		$query = "SELECT id FROM serverrequest WHERE requestid = {$request['id']}";
+		$qh = doQuery($query);
+		if($row = mysql_fetch_assoc($qh)) {
+			$query = "DELETE FROM serverrequest WHERE requestid = {$request['id']}";
+			doQuery($query, 152);
+			deleteVariable("fixedIPsr{$row['id']}");
+		}
 	}
 
 	$query = "DELETE FROM request WHERE id = {$request['id']}";
-	$qh = doQuery($query, 153);
+	doQuery($query, 153);
 
 	$query = "DELETE FROM reservation WHERE requestid = {$request['id']}";
 	doQuery($query, 154);
@@ -5145,7 +5639,8 @@ function deleteRequest($request) {
 /// reservations were found on $compid
 ///
 /// \brief attempts to move reservations off of a $compid - if $compid is not
-/// given, removes all reservations from the computer with the least number
+/// given, removes all reservations from the computer with the least number;
+/// NOTE - cleanSemaphore should be called after this by the calling function
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function moveReservationsOffComputer($compid=0, $count=0) {
@@ -5198,10 +5693,14 @@ function moveReservationsOffComputer($compid=0, $count=0) {
 		return -1;
 	$images = getImages();
 	$allmovable = 1;
+	# TODO eventually, for clusters, there will probably be restrictions on how the computers
+	# relate to each other; at that point, this will need to be updated to make sure the computer
+	# a reservation is reassigned to meets the same restrictions
 	foreach($resInfo as $res) {
+		// pass forimaging = 1 so that isAvailable only looks at one computer
 		$rc = isAvailable($images, $res["imageid"], $res['imagerevisionid'], 
 		      datetimeToUnix($res["start"]), datetimeToUnix($res["end"]), 0,
-		      $res["userid"]);
+		      0, $res["userid"], 0, 1);
 		if($rc < 1) {
 			$allmovable = 0;
 			break;
@@ -5211,8 +5710,8 @@ function moveReservationsOffComputer($compid=0, $count=0) {
 		return 0;
 	foreach($resInfo as $res) {
 		$rc = isAvailable($images, $res["imageid"], $res['imagerevisionid'],
-		      datetimeToUnix($res["start"]), datetimeToUnix($res["end"]), 0, 
-		      $res["userid"]);
+		      datetimeToUnix($res["start"]), datetimeToUnix($res["end"]), 1, 
+		      0, $res["userid"], 0, 1);
 		if($rc > 0) {
 			$newcompid = array_shift($requestInfo["computers"]);
 			# get mgmt node for computer
@@ -5227,7 +5726,8 @@ function moveReservationsOffComputer($compid=0, $count=0) {
 			addChangeLogEntry($res['logid'], NULL, NULL, NULL, $newcompid);
 			# update sublog entry
 			$query = "UPDATE sublog "
-			       . "SET computerid = $newcompid "
+			       . "SET computerid = $newcompid, "
+			       .     "managementnodeid = $mgmtnodeid "
 			       . "WHERE logid = {$res['logid']} AND "
 			       .       "computerid = $compid";
 			doQuery($query, 101);
@@ -5240,23 +5740,71 @@ function moveReservationsOffComputer($compid=0, $count=0) {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
-/// \fn getCompFinalReservationTime($compid)
+/// \fn moveReservationsOffVMs($compid, $sem)
+///
+/// \param $compid - id of host computer from which to move
+/// reservations
+/// \param $sem - (optional) array of data to be used when getting a semaphore
+/// for a VM after reservations have been moved off of it; must include these
+/// keys: imageid, revid, mnid, start (datetime), end (datetime)
+///
+/// \return 0 if failed to move reservations, 1 if succeeded, -1 if no
+/// reservations were found on $compid
+///
+/// \brief attempts to move reservations off of any VMs assigned to a $compid
+/// NOTE - cleanSemaphore should be called after this by the calling function
+///
+////////////////////////////////////////////////////////////////////////////////
+function moveReservationsOffVMs($compid, $sem=0) {
+	if(! is_array($sem)) {
+		$sem = array();
+		$resources = getUserResources(array("imageAdmin", "imageCheckOut"));
+		$tmp = array_keys($resources['image']);
+		$sem['imageid'] = $tmp[0];
+		$sem['revid'] = getProductionRevisionid($sem['imageid']);
+		$tmp = array_keys($resources['managementnode']);
+		$sem['mnid'] = $tmp[0];
+		$sem['start'] = unixToDatetime(time());
+		$sem['end'] = '2038-01-01 00:00:00';
+	}
+	$query = "SELECT vm.id "
+	       . "FROM computer vm, "
+	       .      "vmhost v "
+	       . "WHERE v.computerid = $compid AND "
+	       .       "vm.vmhostid = v.id";
+	$qh = doQuery($query);
+	while($row = mysql_fetch_assoc($qh)) {
+		$rc = moveReservationsOffComputer($row['id']);
+		if($rc != 0)
+			# lock computer so that reservations on other VMs on this host do not get moved to it
+			getSemaphore($sem['imageid'], $sem['revid'], $sem['mnid'], $row['id'], $sem['start'], $sem['end']);
+	}
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn getCompFinalReservationTime($compid, $extraskipstate=0)
 ///
 /// \param $compid - a computer id
+/// \param $extraskipstate - (default=0) id of an additional request state to
+/// ignore; if 0 passed, no additional states are ignored
 ///
 /// \return unix timestamp of last end time of any reservations for $compid
 ///
 /// \brief determines the final end time of all reservations on a computer
 ///
 ////////////////////////////////////////////////////////////////////////////////
-function getCompFinalReservationTime($compid) {
+function getCompFinalReservationTime($compid, $extraskipstate=0) {
 	$end = 0;
+	$skipstates = "1,5,12";
+	if($extraskipstate)
+		$skipstates .= ",$extraskipstate";
 	$query = "SELECT UNIX_TIMESTAMP(rq.end) as end "
 	       . "FROM request rq, "
 	       .      "reservation rs "
 	       . "WHERE rs.requestid = rq.id AND "
 	       .       "rs.computerid = $compid AND "
-	       .       "rq.stateid NOT IN (1,5,12) "
+	       .       "rq.stateid NOT IN ($skipstates) "
 	       . "ORDER BY rq.end DESC "
 	       . "LIMIT 1";
 	$qh = doQuery($query, 101);
@@ -5275,6 +5823,153 @@ function getCompFinalReservationTime($compid) {
 		if($row['end'] > $end)
 			$end = $row['end'];
 	return $end;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn getCompFinalVMReservationTime($hostid, $addsemaphores, $notomaintenance)
+///
+/// \param $hostid - computer id of a vm host
+/// \param $addsemaphores - (optional, default = 0) 1 to add semaphores for each
+/// of the VMs
+/// \param $notomaintenance - (optional, default = 0) 1 to ignore any
+/// tomaintenance reservations
+///
+/// \return unix timestamp of last end time of any reservations for VMs on
+/// $hostid; 0 if no reservations; -1 if $addsemaphores = 1 and failed to get
+/// semaphores
+///
+/// \brief determines the final end time of all reservations of all VMs on a
+/// VM host computer
+///
+////////////////////////////////////////////////////////////////////////////////
+function getCompFinalVMReservationTime($hostid, $addsemaphores=0,
+                                       $notomaintenance=0) {
+	global $uniqid, $mysql_link_vcl;
+	if($addsemaphores) {
+		$query = "SELECT vm.id "
+		       . "FROM computer vm, "
+		       .      "vmhost v "
+		       . "WHERE v.computerid = $hostid AND "
+		       .       "vm.vmhostid = v.id";
+		$qh = doQuery($query);
+		$compids = array();
+		while($row = mysql_fetch_assoc($qh))
+			$compids[] = $row['id'];
+		if(empty($compids))
+			return 0;
+		$allcompids = implode(',', $compids);
+		$imageid = getImageId('noimage');
+		$revid = getProductionRevisionid($imageid);
+		$tmp = getManagementNodes();
+		$tmp = array_keys($tmp);
+		$mnid = $tmp[0];
+		$query = "INSERT INTO semaphore "
+		       . "SELECT c.id, "
+		       .        "$imageid, "
+		       .        "$revid, "
+		       .        "$mnid, "
+		       .        "NOW() + INTERVAL " . SEMTIMEOUT . " SECOND, "
+		       .        "'$uniqid' "
+				 . "FROM computer c "
+		       . "LEFT JOIN semaphore s ON (c.id = s.computerid) "
+		       . "WHERE c.id IN ($allcompids) AND "
+		       .       "(s.expires IS NULL OR s.expires < NOW()) "
+		       . "GROUP BY c.id";
+		doQuery($query);
+		$cnt = mysql_affected_rows($mysql_link_vcl);
+		if($cnt != count($compids))
+			return -1;
+	}
+
+	$end = 0;
+	$skipstates = '1,5,12';
+	if($notomaintenance)
+		$skipstates .= ',18';
+	$query = "SELECT UNIX_TIMESTAMP(rq.end) as end "
+	       . "FROM request rq, "
+	       .      "reservation rs "
+	       . "WHERE rs.requestid = rq.id AND "
+	       .       "rq.stateid NOT IN ($skipstates) AND "
+	       .       "rs.computerid IN (SELECT vm.id "
+	       .                          "FROM computer vm, "
+	       .                               "vmhost v "
+	       .                          "WHERE v.computerid = $hostid AND "
+	       .                                "vm.vmhostid = v.id) "
+	       . "ORDER BY rq.end DESC "
+	       . "LIMIT 1";
+	$qh = doQuery($query, 101);
+	if($row = mysql_fetch_assoc($qh))
+		$end = $row['end'];
+	$query = "SELECT UNIX_TIMESTAMP(t.end) as end "
+	       . "FROM blockComputers c, "
+	       .      "blockTimes t "
+	       . "WHERE c.blockTimeid = t.id AND "
+	       .       "t.end > NOW() AND "
+	       .       "c.computerid IN (SELECT vm.id "
+	       .                        "FROM computer vm, "
+	       .                             "vmhost v "
+	       .                        "WHERE v.computerid = $hostid AND "
+	       .                              "vm.vmhostid = v.id) "
+	       . "ORDER BY t.end DESC "
+	       . "LIMIT 1";
+	$qh = doQuery($query, 101);
+	if($row = mysql_fetch_assoc($qh))
+		if($row['end'] > $end)
+			$end = $row['end'];
+	return $end;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn getExistingChangeStateStartTime($compid, $stateid)
+///
+/// \param $compid - computer id
+/// \param $stateid - id of state of reservation
+///
+/// \return unix timestamp
+///
+/// \brief gets the start time for the earliest existing reservation for $compid
+/// that has a state of $stateid
+///
+////////////////////////////////////////////////////////////////////////////////
+function getExistingChangeStateStartTime($compid, $stateid) {
+	$query = "SELECT rq.start "
+	       . "FROM request rq, "
+	       .      "reservation rs "
+	       . "WHERE rs.requestid = rq.id AND "
+	       .       "rs.computerid = $compid AND "
+	       .       "rq.stateid = $stateid AND "
+	       .       "rq.start > NOW() "
+	       . "ORDER BY rq.start "
+	       . "LIMIT 1";
+	$qh = doQuery($query);
+	if($row = mysql_fetch_assoc($qh))
+		return datetimeToUnix($row['start']);
+	return 0;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn updateExistingToState($compid, $start, $stateid)
+///
+/// \param $compid - computer id
+/// \param $start - new start time in datetime format
+/// \param $stateid - id of state for existing reservation
+///
+/// \brief updates the start time of an existing reservation for $compid with a
+/// state of $stateid
+///
+////////////////////////////////////////////////////////////////////////////////
+function updateExistingToState($compid, $start, $stateid) {
+	$query = "UPDATE request rq, "
+	       .        "reservation rs "
+	       . "SET rq.start = '$start' "
+	       . "WHERE rs.requestid = rq.id AND "
+	       .       "rq.stateid = $stateid AND "
+	       .       "rq.start > '$start' AND "
+	       .       "rs.computerid = $compid";
+	doQuery($query);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -5850,6 +6545,50 @@ function getProvisioning() {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
+/// \fn getProvisioningTypes()
+///
+/// \return array of provisioning types allowed for each computer type of this
+/// form:\n
+/// {[blade] => {[id] => type,\n
+///              [id] => type},\n
+///  [lab] => {[id] => type}\n
+///  [virtualmachine] => {[id] => type,\n
+///                       [id] => type}\n
+///
+/// \brief generates an array of provisioning types allowed for each computer
+/// type
+///
+////////////////////////////////////////////////////////////////////////////////
+function getProvisioningTypes() {
+	$query = "SELECT id, prettyname FROM provisioning WHERE name = 'none'";
+	$qh = doQuery($query);
+	$none = mysql_fetch_assoc($qh);
+	$query = "SELECT p.id, "
+	       .        "p.prettyname, "
+	       .        "o.name AS `type` "
+	       . "FROM provisioning p, "
+	       .      "OSinstalltype o, "
+	       .      "provisioningOSinstalltype po "
+	       . "WHERE po.provisioningid = p.id AND "
+	       .       "po.OSinstalltypeid = o.id "
+	       . "ORDER BY o.name";
+	$qh = doQuery($query);
+	$types = array('blade' => array($none['id'] => $none['prettyname']),
+	               'lab' => array(),
+	               'virtualmachine' => array());
+	while($row = mysql_fetch_assoc($qh)) {
+		if($row['type'] == 'kickstart' || $row['type'] == 'partimage')
+			$types['blade'][$row['id']] = $row['prettyname'];
+		if($row['type'] == 'none')
+			$types['lab'][$row['id']] = $row['prettyname'];
+		if($row['type'] == 'vbox' || $row['type'] == 'vmware')
+			$types['virtualmachine'][$row['id']] = $row['prettyname'];
+	}
+	return $types;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
 /// \fn getSchedules()
 ///
 /// \return array of schedules where the index are the id from the schedule table,
@@ -5857,6 +6596,7 @@ function getProvisioning() {
 /// \b name - name of schedule\n
 /// \b ownerid - user id of owner\n
 /// \b owner - unity id of owner\n
+/// \b resourceid - id from resource table\n
 /// \b times - array of start and end times for the schedule
 ///
 /// \brief gets information for schedules in schedule table
@@ -5943,11 +6683,15 @@ function formatMinOfWeek($min) {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
-/// \fn getManagementNodes($alive)
+/// \fn getManagementNodes($alive, $includedeleted, $id)
 ///
 /// \param $alive - (optional) if given, only return "alive" nodes, can be
 ///                 either "now" or "future" so we know how recently it must
 ///                 have checked in
+/// \param $includedeleted - (optional, default=0) 1 to include management
+///                 nodes with a state of deleted, 0 to leave them out
+/// \param $id - (optional, default is all nodes) specify an id of a management
+///                 node to only have data for that node returned
 ///
 /// \return an array of management nodes where eash index is the id from the
 /// managementnode table and each element is an array of data about the node
@@ -5957,7 +6701,7 @@ function formatMinOfWeek($min) {
 /// if $alive = future, must have checked in within 1 hour
 ///
 ////////////////////////////////////////////////////////////////////////////////
-function getManagementNodes($alive="neither") {
+function getManagementNodes($alive="neither", $includedeleted=0, $id=0) {
 	if($alive == "now")
 		$lastcheckin = unixToDatetime(time() - 300);
 	elseif($alive == "future")
@@ -5988,7 +6732,9 @@ function getManagementNodes($alive="neither") {
 	       .        "m.sharedMailBox AS sharedmailbox, "
 	       .        "r.id as resourceid, "
 	       .        "m.predictivemoduleid, "
-	       .        "mo.prettyname AS predictivemodule "
+	       .        "mo.prettyname AS predictivemodule, "
+	       .        "m.availablenetworks, "
+	       .        "m.NOT_STANDALONE AS federatedauth "
 	       . "FROM user u, "
 	       .      "state s, "
 	       .      "resource r, "
@@ -6004,6 +6750,10 @@ function getManagementNodes($alive="neither") {
 	       .       "rt.name = 'managementnode' AND "
 	       .       "u.affiliationid = a.id AND "
 	       .       "m.predictivemoduleid = mo.id";
+	if($id != 0)
+		$query .= " AND m.id = $id";
+	if($includedeleted == 0)
+		$query .= " AND s.name != 'deleted'";
 	if($alive == "now" || $alive == "future") {
 		$query .= " AND m.lastcheckin > '$lastcheckin'"
 		       .  " AND s.name != 'maintenance'";
@@ -6012,8 +6762,103 @@ function getManagementNodes($alive="neither") {
 	$return = array();
 	while($row = mysql_fetch_assoc($qh)) {
 		$return[$row["id"]] = $row;
+		$return[$row['id']]['availablenetworks'] = explode(',', $row['availablenetworks']);
+		if($row['state'] == 'deleted')
+			$return[$row['id']]['deleted'] = 1;
+		else
+			$return[$row['id']]['deleted'] = 0;
 	}
+
+	# Get items from variable table for specific management node id
+	foreach ($return as $mn_id => $value ) {
+		if(array_key_exists("hostname", $value)) {
+			$mn_hostname = $value['hostname'];
+			$timeservers = getVariable('timesource|'.$mn_hostname);
+			if($timeservers == NULL) {
+				$timeservers = getVariable('timesource|global');
+			}
+			$return[$mn_id]['timeservers'] = $timeservers;
+		}
+	}
+	
 	return $return;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn getMnsFromImage($imageid)
+///
+/// \param $imageid - id of an image
+///
+/// \return array of management node ids
+///
+/// \brief determines which management nodes can handle an image based on
+/// image group to computer group, then computer group to management node group
+/// mapping
+///
+////////////////////////////////////////////////////////////////////////////////
+function getMnsFromImage($imageid) {
+	$comps = getMappedResources($imageid, 'image', 'computer');
+	if(empty($comps))
+		return array();
+	$inlist = implode(',', $comps);
+	$query = "SELECT DISTINCT rgm.resourcegroupid "
+	       . "FROM resourcegroupmembers rgm, "
+	       .      "resource r, "
+	       .      "computer c "
+	       . "WHERE c.id = r.subid AND "
+	       .       "r.resourcetypeid = 12 AND "
+	       .       "r.id = rgm.resourceid AND "
+	       .       "c.id in ($inlist)";
+	$qh = doQuery($query);
+	$compgroups = array();
+	while($row = mysql_fetch_assoc($qh))
+		$compgroups[] = $row['resourcegroupid'];
+	$mngrps = array();
+	foreach($compgroups as $grpid) {
+		$mngrpset = getResourceMapping('managementnode', 'computer', '', implode(',', $compgroups));
+		foreach($mngrpset as $mngrpid => $compgrpset)
+			$mngrps[$mngrpid] = 1;
+	}
+	$mngrpnames = array();
+	foreach(array_keys($mngrps) as $mnid) {
+		$mngrpnames[] = getResourceGroupName($mnid);
+	}
+	$mns = getResourcesFromGroups($mngrpnames, 'managementnode', 0);
+	$mnids = array();
+	foreach($mns as $mnid => $name)
+		$mnids[$mnid] = 1;
+	return array_keys($mnids);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn checkAvailableNetworks($ip)
+///
+/// \param $ip - public ip address for a reservation
+///
+/// \return array of management node ids that can handle $ip
+///
+/// \brief finds any management nodes that can manage networks containing $ip
+///
+////////////////////////////////////////////////////////////////////////////////
+function checkAvailableNetworks($ip) {
+	$ip = ip2long($ip);
+	$mnids = array();
+	$mns = getManagementNodes();
+	foreach($mns as $mn) {
+		foreach($mn['availablenetworks'] as $net) {
+			if($net == '')
+				continue;
+			list($net, $netmask) = explode('/', $net);
+			$net = ip2long($net);
+			$mask = pow(2, (32 - $netmask)) - 1;
+			$mask = ~ $mask;
+			if(($ip & $mask) == ($net & $mask))
+				$mnids[$mn['id']] = 1;
+		}
+	}
+	return array_keys($mnids);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -6043,8 +6888,9 @@ function getPredictiveModules() {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
-/// \fn getTimeSlots($end, $start)
+/// \fn getTimeSlots($compids, $end, $start)
 ///
+/// \param $compids - array of computer ids
 /// \param $end - (optional) end time as unix timestamp
 /// \param $start - (optional) start time as unix timestamp
 ///
@@ -6755,12 +7601,19 @@ function findAvailableTimes($start, $end, $imageid, $userid, $usedaysahead,
 	$query = "SELECT c.id AS compid "
 	       . "FROM computer c, "
 	       .      "image i, "
-	       .      "state s "
+	       .      "state s, "
+	       .      "provisioningOSinstalltype poi, "
+	       .      "OSinstalltype oi, "
+	       .      "OS o "
 	       . "WHERE c.stateid = s.id AND "
 	       .       "i.id = $imageid AND "
 	       .       "s.name NOT IN ($nowignorestates) AND "
 	       .       "c.platformid = $platformid AND "
 	       .       "c.scheduleid IN ($schedules) AND "
+	       .       "i.OSid = o.id AND "
+	       .       "o.installtype = oi.name AND "
+	       .       "oi.id = poi.OSinstalltypeid AND "
+	       .       "poi.provisioningid = c.provisioningid AND "
 	       .       "c.RAM >= i.minram AND "
 	       .       "c.procnumber >= i.minprocnumber AND "
 	       .       "c.procspeed >= i.minprocspeed AND "
@@ -6774,9 +7627,9 @@ function findAvailableTimes($start, $end, $imageid, $userid, $usedaysahead,
 	$query .=                         "DATE_ADD(rq.end, INTERVAL 15 MINUTE) >= '$startdt' AND "
 	       .                          "rs.computerid IN ($incompids)) AND "
 	       .       "c.id IN ($incompids) "
-	       . "ORDER BY (c.procspeed * c.procnumber) DESC, "
-	       .          "RAM DESC, "
-	       .          "network DESC";
+	       . "ORDER BY RAM, "
+	       .          "(c.procspeed * c.procnumber), "
+	       .          "network";
 	$qh = doQuery($query, 101);
 	while($row = mysql_fetch_assoc($qh)) {
 		$row['duration'] = $reqduration;
@@ -6799,7 +7652,10 @@ function findAvailableTimes($start, $end, $imageid, $userid, $usedaysahead,
 		       .      "reservation rs2, "
 		       .      "image i, "
 		       .      "state s, "
-		       .      "computer c "
+		       .      "computer c, "
+		       .      "provisioningOSinstalltype poi, "
+		       .      "OSinstalltype oi, "
+		       .      "OS o "
 		       . "WHERE rq1.id = rs1.requestid AND "
 		       .       "rs2.requestid = rq2.id AND "
 		       .       "rq1.id != rq2.id AND "
@@ -6811,6 +7667,10 @@ function findAvailableTimes($start, $end, $imageid, $userid, $usedaysahead,
 		       .       "c.id = rs1.computerid AND "
 		       .       "c.platformid = $platformid AND "
 		       .       "c.scheduleid IN ($schedules) AND "
+		       .       "i.OSid = o.id AND "
+		       .       "o.installtype = oi.name AND "
+		       .       "oi.id = poi.OSinstalltypeid AND "
+		       .       "poi.provisioningid = c.provisioningid AND "
 		       .       "c.RAM >= i.minram AND "
 		       .       "c.procnumber >= i.minprocnumber AND "
 		       .       "c.procspeed >= i.minprocspeed AND "
@@ -6857,7 +7717,10 @@ function findAvailableTimes($start, $end, $imageid, $userid, $usedaysahead,
 	       .      "reservation rs, "
 	       .      "image i, "
 	       .      "state s, "
-	       .      "computer c "
+	       .      "computer c, "
+	       .      "provisioningOSinstalltype poi, "
+	       .      "OSinstalltype oi, "
+	       .      "OS o "
 	       . "WHERE rs.requestid = rq.id AND "
 	       .       "(rq.start > '$startdt' OR "
 	       .        "(DATE_ADD(rq.end, INTERVAL 15 MINUTE) > '$startdt' AND rq.start <= '$startdt')) AND "
@@ -6866,6 +7729,10 @@ function findAvailableTimes($start, $end, $imageid, $userid, $usedaysahead,
 	       .       "c.id = rs.computerid AND "
 	       .       "c.platformid = $platformid AND "
 	       .       "c.scheduleid IN ($schedules) AND "
+	       .       "i.OSid = o.id AND "
+	       .       "o.installtype = oi.name AND "
+	       .       "oi.id = poi.OSinstalltypeid AND "
+	       .       "poi.provisioningid = c.provisioningid AND "
 	       .       "c.RAM >= i.minram AND "
 	       .       "c.procnumber >= i.minprocnumber AND "
 	       .       "c.procspeed >= i.minprocspeed AND "
@@ -6904,7 +7771,10 @@ function findAvailableTimes($start, $end, $imageid, $userid, $usedaysahead,
 	       .      "reservation rs, "
 	       .      "image i, "
 	       .      "state s, "
-	       .      "computer c "
+	       .      "computer c, "
+	       .      "provisioningOSinstalltype poi, "
+	       .      "OSinstalltype oi, "
+	       .      "OS o "
 	       . "WHERE rs.requestid = rq.id AND "
 	       .       "(rq.start > '$startdt' OR "
 	       .        "(DATE_ADD(rq.end, INTERVAL 15 MINUTE) > '$startdt' AND rq.start <= '$startdt')) AND "
@@ -6913,10 +7783,15 @@ function findAvailableTimes($start, $end, $imageid, $userid, $usedaysahead,
 	       .       "c.id = rs.computerid AND "
 	       .       "c.platformid = $platformid AND "
 	       .       "c.scheduleid IN ($schedules) AND "
+	       .       "i.OSid = o.id AND "
+	       .       "o.installtype = oi.name AND "
+	       .       "oi.id = poi.OSinstalltypeid AND "
+	       .       "poi.provisioningid = c.provisioningid AND "
 	       .       "c.RAM >= i.minram AND "
 	       .       "c.procnumber >= i.minprocnumber AND "
 	       .       "c.procspeed >= i.minprocspeed AND "
 	       .       "c.network >= i.minnetwork AND "
+	       .       "c.deleted = 0 AND "
 	       .       "c.stateid = s.id AND "
 	       .       "s.name NOT IN ($ignorestates) AND ";
 	if($reqid != '')
@@ -7249,7 +8124,7 @@ function getComputers($sort=0, $includedeleted=0, $compid="") {
 	       .        "c.platformid AS platformid, "
 	       .        "sc.name AS schedule, "
 	       .        "c.scheduleid AS scheduleid, "
-	       .        "cur.name AS currentimg, "
+	       .        "cur.prettyname AS currentimg, "
 	       .        "c.currentimageid AS currentimgid, "
 	       .        "c.imagerevisionid, "
 	       .        "next.name AS nextimg, "
@@ -7269,6 +8144,7 @@ function getComputers($sort=0, $includedeleted=0, $compid="") {
 	       .        "c.notes, "
 	       .        "c.vmhostid, "
 	       .        "c2.hostname AS vmhost, "
+	       .        "c2.id AS vmhostcomputerid, "
 	       .        "c.location, "
 	       .        "c.provisioningid, "
 	       .        "pr.prettyname AS provisioning, "
@@ -7852,7 +8728,7 @@ function isImageBlockTimeActive($imageid) {
 /// \param $selectedid - (optional) index of $dataArr to be initially selected;
 /// use -1 for nothing to be selected
 /// \param $skip - (optional) this is used if the array from getImages is passed
-/// as $dataArr so we know to skip index 4 since it is the noimage element
+/// as $dataArr so we know to skip the 'No Image" element
 /// \param $multiple - (optional) use this to print select input with the
 /// multiple tag set
 /// \param $domid - (optional) use this to pass in the javascript id to be used
@@ -7867,6 +8743,66 @@ function isImageBlockTimeActive($imageid) {
 ////////////////////////////////////////////////////////////////////////////////
 function printSelectInput($name, $dataArr, $selectedid=-1, $skip=0, $multiple=0,
                           $domid="", $extra="") {
+	print selectInputHTML($name, $dataArr, $domid, $extra, $selectedid, $skip,
+	                      $multiple);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn selectInputAutoDijitHTML($name, $dataArr, $domid='', $extra='',
+///                              $selectedid=-1) {
+///
+/// \param $name - name of input element
+/// \param $dataArr - array containing options
+/// \param $domid - (optional) use this to pass in the javascript id to be used
+/// for the select object
+/// \param $extra - (optional) any extra attributes that need to be set
+/// \param $selectedid - (optional) index of $dataArr to be initially selected;
+/// use -1 for nothing to be selected
+///
+/// \return html
+///
+/// \brief wrapper for calling selectInputHTML with the resulting element
+/// being a dijit.form.Select if number of items is <= 10 and being a
+/// dijit.form.FilteringSelect if number of items is > 10
+///
+////////////////////////////////////////////////////////////////////////////////
+function selectInputAutoDijitHTML($name, $dataArr, $domid='', $extra='',
+                                  $selectedid=-1) {
+	if(count($dataArr) > 10 &&
+	   USEFILTERINGSELECT && count($dataArr) < FILTERINGSELECTTHRESHOLD)
+		$type = 'dojoType="dijit.form.FilteringSelect" queryExpr="*${0}*"';
+	else
+		$type = 'dojoType="dijit.form.Select" maxHeight="250"';
+	return selectInputHTML($name, $dataArr, $domid, "$type $extra", $selectedid);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn selectInputHTML($name, $dataArr, $domid, $extra, $selectedid, $skip,
+///                     $multiple)
+///
+/// \param $name - name of input element
+/// \param $dataArr - array containing options
+/// \param $domid - (optional) use this to pass in the javascript id to be used
+/// for the select object
+/// \param $extra - (optional) any extra attributes that need to be set
+/// \param $selectedid - (optional) index of $dataArr to be initially selected;
+/// use -1 for nothing to be selected
+/// \param $skip - (optional) this is used if the array from getImages is passed
+/// as $dataArr so we know to skip the 'No Image" element
+/// \param $multiple - (optional) use this to print select input with the
+/// multiple tag set
+///
+/// \brief generates HTML for select input
+/// it is assumed that if $selectedid is left off, we assume $dataArr has no 
+/// index '-1'\n
+/// each OPTION's value is the index of that element of the array
+///
+////////////////////////////////////////////////////////////////////////////////
+function selectInputHTML($name, $dataArr, $domid="", $extra="", $selectedid=-1,
+                         $skip=0, $multiple=0) {
+	$h = '';
 	if(! empty($domid))
 		$domid = "id=\"$domid\"";
 	if($multiple)
@@ -7874,52 +8810,218 @@ function printSelectInput($name, $dataArr, $selectedid=-1, $skip=0, $multiple=0,
 	else
 		$multiple = "";
 	if($name != '')
-		print "      <select name=$name $multiple $domid $extra>\n";
+		$h .= "      <select name=$name $multiple $domid $extra>\n";
 	else
-		print "      <select $multiple $domid $extra>\n";
+		$h .= "      <select $multiple $domid $extra>\n";
 	foreach(array_keys($dataArr) as $id) {
-		if(($skip && $id == 4) || ($dataArr[$id] != 0 && empty($dataArr[$id])))
+		if(($dataArr[$id] != 0 && empty($dataArr[$id])))
 			continue;
 		if($id == $selectedid)
-		   print "        <option value=\"$id\" selected=\"selected\">";
+		   $h .= "        <option value=\"$id\" selected=\"selected\">";
 		else
-		   print "        <option value=\"$id\">";
+		   $h .= "        <option value=\"$id\">";
 		if(is_array($dataArr[$id]) && array_key_exists("prettyname", $dataArr[$id]))
-			print $dataArr[$id]["prettyname"] . "</option>\n";
+			$h .= $dataArr[$id]["prettyname"] . "</option>\n";
 		elseif(is_array($dataArr[$id]) && array_key_exists("name", $dataArr[$id]))
-			print $dataArr[$id]["name"] . "</option>\n";
+			$h .= $dataArr[$id]["name"] . "</option>\n";
+		elseif(is_array($dataArr[$id]) && array_key_exists("hostname", $dataArr[$id]))
+			$h .= $dataArr[$id]["hostname"] . "</option>\n";
 		else
-			print $dataArr[$id] . "</option>\n";
+			$h .= $dataArr[$id] . "</option>\n";
 	}
-	print "      </select>\n";
+	$h .= "      </select>\n";
+	return $h;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
-/// \fn printHiddenInputs($data)
+/// \fn labeledFormItem($id, $label, $type, $constraints='', $required=1,
+///                     $value='', $errmsg='', $validator='', $extra=array(),
+///                     $width='', $help='', $addbr=1) {
 ///
-/// \param $data - an array with index/value pairs that match the name/value
-/// pairs that will be used in the form
+/// \param $id - dom id of form element
+/// \param $label - text for label of element
+/// \param $type - type of element; one of: text, textarea, spinner, select,
+/// selectonly, check (selectonly forces dijit.form.Select rather than
+/// possibily being dijit.form.FilteringSelect based on number of elements)
+/// \param $constraints - (optional, default='') constraints for element; if
+/// a select element, the array of options
+/// \param $required - (optional, default=1) whether or not the form element is
+/// required
+/// \param $value - (optional, default='') initial value of form element
+/// \param $errmsg - (optional, default='') error message; only used for text
+/// elements
+/// \param $validator - (optional, default='') validation function; only used
+/// for text elements
+/// \param $extra - (optional, default=array()) array of additional attributes
+/// to set for the element
+/// \param $width - (optional, default varies per element) width of element;
+/// must include units
+/// \param $help - (optional, default='') text to display after the form
+/// element
+/// \param $addbr - (optional, default=1) add an html break tag after the
+/// element
 ///
-/// \brief prints INPUT forms that are type hidden with the data from $data
+/// \return html
+///
+/// \brief generates HTML form element with a preceding label tag
 ///
 ////////////////////////////////////////////////////////////////////////////////
-/*function printHiddenInputs($data) {
-	foreach(array_keys($data) as $key) {
-		if(is_array($data[$key])) {
-			foreach(($data[$key]) as $index => $value) {
-				print "      <INPUT type=hidden name=$key" . "[$index] value=";
-				print "$value>\n";
-			}
-		}
-		else {
-			if($data[$key] != "") {
-				print "      <INPUT type=hidden name=$key value=\"";
-				print $data["$key"] . "\">\n";
-			}
-		}
+function labeledFormItem($id, $label, $type, $constraints='', $required=1,
+                         $value='', $errmsg='', $validator='', $extra=array(),
+                         $width='', $help='', $addbr=1) {
+	if($extra == '')
+		$extra = array();
+	$h = '';
+	$label = _($label);
+	$errmsg = _($errmsg);
+	$help = _($help);
+	if($required)
+		$required = 'true';
+	else
+		$required = 'false';
+	switch($type) {
+		case 'text':
+			if($width == '')
+				$width = '300px';
+			$h .= "<label for=\"$id\">$label:</label>\n";
+			$h .= "<span class=\"labeledform\">\n";
+			$h .= "<input type=\"text\" ";
+			$h .=        "dojoType=\"dijit.form.ValidationTextBox\" ";
+			$h .=        "required=\"$required\" ";
+			if($constraints != '')
+				$h .=     "regExp=\"$constraints\" ";
+			if($errmsg != '')
+				$h .=     "invalidMessage=\"$errmsg\" ";
+			$h .=        "style=\"width: $width\" ";
+			if($validator != '')
+				$h .=     "validator=\"$validator\" ";
+			if($value != '')
+				$h .=     "value=\"$value\" ";
+			foreach($extra as $key => $val)
+				$h .=     "$key=\"$val\" ";
+			$h .=        "id=\"$id\">";
+			if($help != '')
+				$h .= $help;
+			$h .= "</span>";
+			if($addbr)
+				$h .= "<br>";
+			$h .= "\n";
+			break;
+		case 'textarea':
+			if($width == '')
+				$width = '300px';
+			$h .= "<label for=\"$id\">$label:</label>\n";
+			$h .= "<span class=\"labeledform\">\n";
+			$h .= "<textarea ";
+			$h .=        "dojoType=\"dijit.form.Textarea\" ";
+			$h .=        "style=\"width: $width; text-align: left;\" ";
+			foreach($extra as $key => $val)
+				$h .=     "$key=\"$val\" ";
+			$h .=        "id=\"$id\">";
+			$h .= $value;
+			$h .= "</textarea>\n";
+			if($help != '')
+				$h .= $help;
+			$h .= "</span>";
+			if($addbr)
+				$h .= "<br>";
+			$h .= "\n";
+			break;
+		case 'spinner':
+			if($width == '')
+				$width = '70px';
+			$h .= "<label for=\"$id\">$label:</label>\n";
+			$h .= "<span class=\"labeledform\">\n";
+			$h .= "<input dojoType=\"dijit.form.NumberSpinner\" ";
+			$h .=        "required=\"$required\" ";
+			$h .=        "style=\"width: $width\" ";
+			if($value !== '')
+				$h .=     "value=\"$value\" ";
+			if($constraints != '')
+				$h .=     "constraints=\"$constraints\" ";
+			foreach($extra as $key => $val)
+				$h .=     "$key=\"$val\" ";
+			$h .=        "id=\"$id\">";
+			if($help != '')
+				$h .= $help;
+			$h .= "</span>";
+			if($addbr)
+				$h .= "<br>";
+			$h .= "\n";
+			break;
+		case 'select':
+		case 'selectonly':
+			if($value == '')
+				$value = -1;
+			$h .= "<label for=\"$id\">$label:</label>\n";
+			$h .= "<span class=\"labeledform\">\n";
+			$flat = '';
+			foreach($extra as $key => $val)
+				$flat .= "$key=\"$val\" ";
+			if($type == 'selectonly')
+				$h .= selectInputHTML('', $constraints, $id, "dojoType=\"dijit.form.Select\" maxHeight=\"250\" $flat", $value);
+			else
+				$h .= selectInputAutoDijitHTML('', $constraints, $id, $flat, $value);
+			if($help != '')
+				$h .= $help;
+			$h .= "</span>";
+			if($addbr)
+				$h .= "<br>";
+			$h .= "\n";
+			break;
+		case 'check':
+			$h .= "<label for=\"$id\">$label:</label>\n";
+			$h .= "<span class=\"labeledform\">\n";
+			$h .= "<input dojoType=\"dijit.form.CheckBox\" ";
+			if($value !== '')
+				$h .=     "value=\"$value\" ";
+			foreach($extra as $key => $val)
+				$h .=     "$key=\"$val\" ";
+			$h .=        "id=\"$id\">";
+			if($help != '')
+				$h .= $help;
+			$h .= "</span>";
+			if($addbr)
+				$h .= "<br>";
+			$h .= "\n";
+			break;
 	}
-}*/
+	return $h;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn dijitButton($id, $label, $onclick='', $wraprightdiv=0)
+///
+/// \param $id - dom id of button
+/// \param $label - label for button
+/// \param $onclick - javascript function to call when clicked including
+/// parenthesis, arguments, and semicolon
+/// \param $wraprightdiv - (optional, default=0) set to 1 to wrap button in
+/// a div element set to right align text
+///
+/// \return html
+///
+/// \brief generates HTML for a dijit button
+///
+////////////////////////////////////////////////////////////////////////////////
+function dijitButton($id, $label, $onclick='', $wraprightdiv=0) {
+	$h = '';
+	if($wraprightdiv)
+		$h .= "<div style=\"text-align: right;\">\n";
+	$h .= "<button dojoType=\"dijit.form.Button\" id=\"$id\">\n";
+	$h .= "  $label\n";
+	if($onclick != '') {
+		$h .= "  <script type=\"dojo/method\" event=\"onClick\">\n";
+		$h .= "    $onclick\n";
+		$h .= "  </script>\n";
+	}
+	$h .= "</button>\n";
+	if($wraprightdiv)
+		$h .= "</div>\n";
+	return $h;
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
@@ -7942,8 +9044,6 @@ function requestIsReady($request) {
 	   $request["laststateid"] == 3 &&        //   and last state reserved and
 	   $request["computerstateid"] == 3) ||   //   computer reserved
 	   ($request["currstateid"] == 8 &&       // request current state inuse
-	   $request["computerstateid"] == 8) ||   //   and computer state inuse
-	   ($request["currstateid"] == 24 &&      // request current state checkpoint
 	   $request["computerstateid"] == 8) ||   //   and computer state inuse
 	   ($request["currstateid"] == 29 &&      // request current state servermodified
 	   $request["computerstateid"] == 8) ||   //   and computer state inuse
@@ -8495,7 +9595,7 @@ function sendRDPfile() {
 	print "redirectsmartcards:i:1\r\n";
 	print "displayconnectionbar:i:1\r\n";
 	print "autoreconnection enabled:i:1\r\n";
-	if($request["forimaging"])
+	if($request["forimaging"] && $res['OStype'] == 'windows')
 		print "username:s:Administrator\r\n";
 	else {
 		if(preg_match('/(.*)@(.*)/', $user['unityid'], $matches))
@@ -8998,6 +10098,29 @@ function getResourceGroupID($groupname) {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
+/// \fn getResourceGroupName($groupid)
+///
+/// \param $groupid - resource group id
+///
+/// \return name of the group
+///
+/// \brief gets the name of a resource group from the resourcegroup table for
+/// $id
+///
+////////////////////////////////////////////////////////////////////////////////
+function getResourceGroupName($groupid) {
+	$query = "SELECT name "
+	       . "FROM resourcegroup "
+	       . "WHERE id = $groupid";
+	$qh = doQuery($query);
+	if($row = mysql_fetch_assoc($qh))
+		return $row['name'];
+	else
+		return NULL;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
 /// \fn getResourceTypeID($name)
 ///
 /// \param $name - name of resource type
@@ -9036,6 +10159,513 @@ function getResourcePrivs() {
 	preg_match("/^enum\(([a-zA-Z0-9,']+)\)$/", $row['Type'], $matches);
 	$tmp = str_replace("'", '', $matches[1]);
 	return explode(',', $tmp);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn getConfigTypes()
+///
+/// \return array of config types where each key is the id of the type and each
+/// value is the prettyname of the type
+///
+/// \brief gets ids and names from configtype table
+///
+////////////////////////////////////////////////////////////////////////////////
+function getConfigTypes() {
+	$query = "SELECT id, prettyname FROM configtype ORDER BY name";
+	$qh = doQuery($query);
+	$types = array();
+	while($row = mysql_fetch_assoc($qh))
+		$types[$row['id']] = $row['prettyname'];
+	return $types;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn getConfigDataTypes()
+///
+/// \return array of config data types where each key is the id of the data type
+/// and each value is the name of the data type
+///
+/// \brief gets ids and names from datatype table
+///
+////////////////////////////////////////////////////////////////////////////////
+function getConfigDataTypes() {
+	$query = "SELECT id, name FROM datatype ORDER BY name";
+	$qh = doQuery($query);
+	$types = array();
+	while($row = mysql_fetch_assoc($qh))
+		$types[$row['id']] = $row['name'];
+	return $types;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn getConfigMapTypes($skipreservation=0)
+///
+/// \param $skipreservation - (optional, default=0) pass 1 to skip the
+/// 'reservation' config map type
+///
+/// \return array of config map types where each key is the id of the map type
+/// and each value is the name of the map type
+///
+/// \brief gets ids and names from configmaptype table
+///
+////////////////////////////////////////////////////////////////////////////////
+function getConfigMapTypes($skipreservation=0) {
+	$query = "SELECT id, prettyname FROM configmaptype ";
+	if($skipreservation)
+		$query .= "WHERE name != 'reservation' ";
+	$query .= "ORDER BY prettyname";
+	$qh = doQuery($query);
+	$types = array();
+	while($row = mysql_fetch_assoc($qh))
+		$types[$row['id']] = $row['prettyname'];
+	return $types;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn getMappedConfigs($imageid)
+///
+/// \param $imageid - id of an image
+///
+/// \return array of configs
+///
+/// \brief generates an array of configs mapped to an image, including configs
+/// mapped to any sub images
+///
+////////////////////////////////////////////////////////////////////////////////
+function getMappedConfigs($imageid) {
+	global $user;
+	$imgdata = getImages(0, $imageid);
+	$query = "SELECT cm.id, "
+	       .        "cmt.prettyname AS configmaptype, "
+	       .        "c.id AS configid, "
+	       .        "c.name AS config, "
+	       .        "c.data AS configdata, "
+	       .        "c.ownerid, "
+	       .        "CONCAT(u.unityid, '@', ua.name) AS owner, "
+	       .        "c.configtypeid, "
+	       .        "ct.prettyname AS configtype, "
+	       .        "c.optional, "
+	       .        "cm.configmaptypeid, "
+	       .        "cm.subid, "
+	       .        "cm.affiliationid, "
+	       .        "a.name AS affiliation, "
+	       .        "cm.configstageid, "
+	       .        "cs.name AS configstage, "
+	       .        "csi.imageid AS subimageid, "
+	       .        "csi.id AS configsubimageid, "
+	       .        "cm.disabled "
+	       . "FROM configmap cm, "
+	       .      "config c "
+	       . "LEFT JOIN configsubimage csi ON (c.id = csi.configid), "
+	       .      "user u, "
+	       .      "affiliation ua, "
+	       .      "configtype ct, "
+	       .      "configmaptype cmt, " 
+	       .      "affiliation a, "
+	       .      "configstage cs "
+	       . "WHERE cm.configid = c.id AND "
+	       .       "c.ownerid = u.id AND "
+	       .       "u.affiliationid = ua.id AND "
+	       .       "c.configtypeid = ct.id AND "
+	       .       "cm.configmaptypeid = cmt.id AND "
+	       .       "cm.affiliationid = a.id AND "
+	       .       "(cm.affiliationid = {$user['affiliationid']} OR "
+	       .        "a.name = 'Global') AND "
+	       .       "cm.configstageid = cs.id AND "
+	       .       "((cmt.name = 'image' AND "
+	       .         "cm.subid = $imageid) OR "
+	       .        "(cmt.name = 'OStype' AND "
+	       .         "cm.subid = {$imgdata[$imageid]['ostypeid']}) OR "
+	       .        "(cmt.name = 'OS' AND "
+	       .         "cm.subid = {$imgdata[$imageid]['osid']}))";
+	$qh = doQuery($query);
+	$configs = array();
+	$configids = array();
+	while($row = mysql_fetch_assoc($qh)) {
+		$row['configmapid'] = $row['id'];
+		if(is_null($row['subimageid']))
+			$configids[] = $row['configid'];
+		if($row['configtype'] == 'Cluster') {
+			$row['id'] = "{$row['id']}-{$row['configsubimageid']}";
+			$row['cluster'] = 1;
+		}
+		else
+			$row['cluster'] = 0;
+		$row['configdata'] = htmlspecialchars($row['configdata']);
+		$row['optional'] = (int)$row['optional'];
+		$row['applied'] = true;
+		$row['disabled'] = (int)$row['disabled'];
+		$row['id'] = "0/{$row['id']}";
+		$configs[$row['id']] = $row;
+		if($row['configtype'] == 'Cluster') {
+			$subconfigs = getMappedSubConfigs(0, $row['configsubimageid'], $row['subimageid']);
+			#printArray($subconfigs);
+			#$configs = array_merge($configs, $subconfigs);
+			$configs = $configs + $subconfigs;
+		}
+	}
+	if(! empty($configids)) {
+		$subconfigs = getMappedSubConfigs(1, $configids, 0);
+		#printArray($subconfigs);
+		#$configs = array_merge($configs, $subconfigs);
+		$configs = $configs + $subconfigs;
+	}
+	return $configs;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn getMappedSubConfigs($mode, $arg1, $arg2, $rec)
+///
+/// \param $mode - 0 for subimages, 1 for subconfigs
+/// \param $arg1 - for subimages, config subimage id; for subconfigs, array of
+/// configmap subids
+/// \param $arg2 - for subimages, image id; for subconfigs, search id (TODO?)
+/// \param $rec - always pass 0; used by function for recursive calls to itself
+///
+/// \return array of sub configs mapped to image
+///
+/// \brief generates array of configs mapped to sub images
+///
+////////////////////////////////////////////////////////////////////////////////
+function getMappedSubConfigs($mode, $arg1, $arg2, $rec=0) {
+	# $mode - 0: subimages, 1: subconfigs
+	global $user;
+	if($mode == 0) {
+		$configsubimageid = $arg1;
+		$imageid = $arg2;
+		$imgdata = getImages(0, $imageid);
+	}
+	else {
+		$inlist = implode(',', $arg1);
+		$searchid = $arg2;
+	}
+	$query = "SELECT cm.id, "
+	       .        "cmt.prettyname AS configmaptype, "
+	       .        "c.id AS configid, "
+	       .        "c.name AS config, "
+	       .        "c.data AS configdata, "
+	       .        "c.ownerid, "
+	       .        "CONCAT(u.unityid, '@', ua.name) AS owner, "
+	       .        "c.configtypeid, "
+	       .        "ct.prettyname AS configtype, "
+	       .        "c.optional, "
+	       .        "cm.configmaptypeid, "
+	       .        "cm.subid, "
+	       .        "cm.affiliationid, "
+	       .        "a.name AS affiliation, "
+	       .        "cm.configstageid, "
+	       .        "cs.name AS configstage, "
+	       .        "csi.imageid AS subimageid, "
+	       .        "csi.id AS configsubimageid, "
+	       .        "cm.disabled "
+	       . "FROM configmap cm, "
+	       .      "config c "
+	       . "LEFT JOIN configsubimage csi ON (c.id = csi.configid), "
+	       .      "user u, "
+	       .      "affiliation ua, "
+	       .      "configtype ct, "
+	       .      "configmaptype cmt, " 
+	       .      "affiliation a, "
+	       .      "configstage cs "
+	       . "WHERE cm.configid = c.id AND "
+	       .       "c.ownerid = u.id AND "
+	       .       "u.affiliationid = ua.id AND "
+	       .       "c.configtypeid = ct.id AND "
+	       .       "cm.configmaptypeid = cmt.id AND "
+	       .       "cm.affiliationid = a.id AND "
+	       .       "(cm.affiliationid = {$user['affiliationid']} OR "
+	       .        "a.name = 'Global') AND "
+			 .       "cm.configstageid = cs.id AND ";
+	if($mode) {
+	$query .=      "cmt.name = 'config' AND "
+	       .       " cm.subid IN ($inlist)";
+	}
+	else {
+	$query .=      "((cmt.name = 'configsubimage' AND "
+	       .       "  cm.subid = $configsubimageid) OR "
+	       .       " (cmt.name = 'OStype' AND "
+	       .       "  cm.subid = {$imgdata[$imageid]['ostypeid']}) OR "
+	       .       " (cmt.name = 'OS' AND "
+	       .       "  cm.subid = {$imgdata[$imageid]['osid']}))";
+	}
+	$qh = doQuery($query);
+	$configs = array();
+	$configids = array();
+	while($row = mysql_fetch_assoc($qh)) {
+		$row['configmapid'] = $row['id'];
+		if(is_null($row['subimageid']))
+			$configids[] = $row['configid'];
+		if($row['configtype'] == 'Cluster') {
+			$row['id'] = "{$row['id']}-{$row['configsubimageid']}";
+			$row['cluster'] = 1;
+		}
+		else
+			$row['cluster'] = 0;
+		$row['configdata'] = htmlspecialchars($row['configdata']);
+		$row['optional'] = (int)$row['optional'];
+		$row['applied'] = true;
+		$row['disabled'] = (int)$row['disabled'];
+		if($mode == 0)
+			$row['id'] = "$configsubimageid/{$row['id']}";
+		else
+			$row['id'] = "$searchid/{$row['id']}";
+		$configs[$row['id']] = $row;
+		if($rec < 20 && $row['configtype'] == 'Cluster') {
+			$subconfigs = getMappedSubConfigs(0, $row['configsubimageid'], $row['subimageid'], ++$rec);
+			$configs = $configs + $subconfigs;
+		}
+	}
+	if($rec < 20 && ! empty($configids)) {
+		if($mode == 0)
+			$subconfigs = getMappedSubConfigs(1, $configids, $configsubimageid, ++$rec);
+		else
+			$subconfigs = getMappedSubConfigs(1, $configids, $searchid, ++$rec);
+		$configs = $configs + $subconfigs;
+	}
+	return $configs;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn getImageConfigVariables($configs)
+///
+/// \param $configs - array of configs
+///
+/// \return array of config variables for $configs
+///
+/// \brief builds array of config variables that corespond to $configs
+///
+////////////////////////////////////////////////////////////////////////////////
+function getImageConfigVariables($configs) {
+	if(empty($configs))
+		return array();
+	$configids = array();
+	foreach($configs as $config)
+		$configids[] = $config['configid'];
+	$inlist = implode(',', $configids);
+	$query = "SELECT cv.id, "
+	       .        "cv.name, "
+	       .        "cv.description, "
+	       .        "cv.configid, "
+	       .        "cv.`type`, "
+	       .        "d.name AS datatype, "
+	       .        "cv.datatypeid, "
+	       .        "cv.defaultvalue, "
+	       .        "cv.required, "
+	       .        "cv.identifier, "
+	       .        "cv.ask "
+	       . "FROM configvariable cv, "
+	       .      "datatype d "
+	       . "WHERE cv.datatypeid = d.id AND "
+	       .       "cv.configid IN ($inlist) "
+	       . "ORDER BY cv.configid";
+	$data = array();
+	$qh = doQuery($query);
+	while($row = mysql_fetch_assoc($qh)) {
+		$row['required'] = (int)$row['required'];
+		$row['ask'] = (int)$row['ask'];
+		#$row['defaultvalue'] = htmlspecialchars($row['defaultvalue']);
+		$row['identifier'] = htmlspecialchars($row['identifier']);
+		if(! array_key_exists($row['configid'], $data))
+			$data[$row['configid']] = array();
+		$data[$row['configid']][] = $row;
+	}
+	$vars = array();
+	foreach($configs as $config) {
+		if(array_key_exists($config['configid'], $data)) {
+			foreach($data[$config['configid']] as $var) {
+				$var['id'] = "{$config['id']}/{$var['id']}";
+				$vars[$var['id']] = $var;
+			}
+		}
+	}
+	return $vars;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn getConfigClusters($imageid, $flat=0)
+///
+/// \param $imageid - id of image
+/// \param $flat - (optional, default=0) pass 1 to return a flat array instead
+/// of a hierarchical array
+///
+/// \return array of cluster information
+///
+/// \brief builds an array of data of configs related to subimages assigned to
+/// an image
+///
+////////////////////////////////////////////////////////////////////////////////
+function getConfigClusters($imageid, $flat=0) {
+	global $user;
+	$query = "SELECT csi.id, "
+	       .        "c.name, "
+	       .        "cmt.name AS maptype, "
+	       .        "cm.subid AS parentimageid, "
+	       .        "csi.imageid AS childimageid, "
+	       .        "csi.id AS configsubimageid, "
+	       .        "i.prettyname AS image, "
+	       .        "i.OSid AS osid, "
+	       .        "ot.id AS ostypeid, "
+	       .        "csi.mininstance, "
+	       .        "csi.maxinstance "
+	       . "FROM config c, "
+	       .      "configtype ct, "
+	       .      "configmap cm, "
+	       .      "configmaptype cmt, "
+	       .      "configsubimage csi, "
+	       .      "image i, "
+	       .      "OS o,  "
+	       .      "OStype ot, "
+	       .      "affiliation a "
+	       . "WHERE ct.name = 'cluster' AND "
+	       .       "c.configtypeid = ct.id AND "
+	       .       "cm.configid = c.id AND "
+	       .       "cm.configmaptypeid = cmt.id AND "
+	       .       "cmt.name = 'image' AND "
+	       .       "cm.subid = $imageid AND "
+	       .       "csi.imageid = i.id AND "
+	       .       "i.OSid = o.id AND "
+	       .       "o.type = ot.name AND "
+	       .       "csi.configid = c.id AND "
+	       .       "cm.affiliationid = a.id AND "
+	       .       "(cm.affiliationid = {$user['affiliationid']} OR "
+	       .        "a.name = 'Global')";
+	$qh = doQuery($query);
+	$clusters = array();
+	$subimageids = array();
+	while($row = mysql_fetch_assoc($qh)) {
+		$children = getConfigClustersRec($row['configsubimageid'], $flat);
+		if(! empty($children)) {
+			if($flat)
+				$clusters = array_merge($clusters, $children);
+			else
+				$row['children'] = $children;
+		}
+		$clusters[] = $row;
+	}
+	return $clusters;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn getConfigClustersRec($subimageid, $flat, $rec=0)
+///
+/// \param $subimageid - id of sub image
+/// \param $flat - pass 1 to return a flat array instead of a hierarchical array
+/// \param $rec - recursion count
+///
+/// \return array of cluster information
+///
+/// \brief recursive helper function for getConfigClusters
+///
+////////////////////////////////////////////////////////////////////////////////
+function getConfigClustersRec($subimageid, $flat, $rec=0) {
+	global $user;
+	$query = "SELECT csi.id, "
+	       .        "c.name, "
+	       .        "cmt.name AS maptype, "
+	       .        "cm.subid AS parentsubimageid, "
+	       .        "csi.imageid AS childimageid, "
+	       .        "csi.id AS configsubimageid, "
+	       .        "i.prettyname AS image, "
+	       .        "i.OSid AS osid, "
+	       .        "ot.id AS ostypeid, "
+	       .        "csi.mininstance, "
+	       .        "csi.maxinstance "
+	       . "FROM config c, "
+	       .      "configtype ct, "
+	       .      "configmap cm, "
+	       .      "configmaptype cmt, "
+	       .      "configsubimage csi, "
+	       .      "image i, "
+	       .      "OS o,  "
+	       .      "OStype ot, "
+	       .      "affiliation a "
+	       . "WHERE ct.name = 'cluster' AND "
+	       .       "c.configtypeid = ct.id AND "
+	       .       "cm.configid = c.id AND "
+	       .       "cm.configmaptypeid = cmt.id AND "
+	       .       "cmt.name = 'configsubimage' AND "
+	       .       "cm.subid = $subimageid AND "
+	       .       "csi.imageid = i.id AND "
+	       .       "i.OSid = o.id AND "
+	       .       "o.type = ot.name AND "
+	       .       "csi.configid = c.id AND "
+	       .       "cm.affiliationid = a.id AND "
+	       .       "(cm.affiliationid = {$user['affiliationid']} OR "
+	       .        "a.name = 'Global')";
+	$qh = doQuery($query);
+	$clusters = array();
+	while($row = mysql_fetch_assoc($qh)) {
+		if($rec < 20)
+			$children = getConfigClustersRec($row['configsubimageid'], $flat, ++$rec);
+		if($rec < 20 && ! empty($children)) {
+			if($flat)
+				$clusters = array_merge($clusters, $children);
+			else
+				$row['children'] = $children;
+		}
+		$clusters[] = $row;
+	}
+	return $clusters;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn getOStypes()
+///
+/// \return array of OS types where each key is the id of an OStype and each
+/// value is the name
+///
+/// \brief gets data from the OStype table ordered by name
+///
+////////////////////////////////////////////////////////////////////////////////
+function getOStypes() {
+	$query = "SELECT id, name FROM OStype ORDER BY name";
+	$qh = doQuery($query);
+	$types = array();
+	while($row = mysql_fetch_assoc($qh))
+		$types[$row['id']] = $row['name'];
+	return $types;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn getConfigSubimages($configs)
+///
+/// \param $configs - array of configs
+///
+/// \return array of config subimages for $configs
+///
+/// \brief builds array of config information related to subimages of $configs
+///
+////////////////////////////////////////////////////////////////////////////////
+function getConfigSubimages($configs) {
+	if(empty($configs))
+		return array();
+	$inlist = implode(',', array_keys($configs));
+	$query = "SELECT cs.id, "
+	       .        "CONCAT(c.name, ' - ', i.prettyname) AS name "
+	       . "FROM config c, "
+	       .      "configtype ct, "
+	       .      "configsubimage cs, "
+	       .      "image i "
+	       . "WHERE ct.name = 'cluster' AND "
+	       .       "c.configtypeid = ct.id AND "
+	       .       "cs.configid = c.id AND "
+	       .       "cs.imageid = i.id AND "
+	       .       "c.id IN ($inlist)";
+	$configs = array();
+	$qh = doQuery($query);
+	while($row = mysql_fetch_assoc($qh))
+		$configs[$row['id']] = $row['name'];
+	return $configs;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -9133,10 +10763,10 @@ function compareDashedNumbers($a, $b) {
 	$letters2 = preg_replace('([^a-zA-Z])', '', $h2);
 
 	// if different domain names, return based on that
-	$cmp = strcasecmp($domain1, $domain2);
+	/*$cmp = strcasecmp($domain1, $domain2);
 	if($cmp) {
 		return $cmp;
-	}
+	}*/
 
 	// if non-numeric part is different, return based on that
 	$cmp = strcasecmp($letters1, $letters2);
@@ -9167,7 +10797,7 @@ function compareDashedNumbers($a, $b) {
 ////////////////////////////////////////////////////////////////////////////////
 ///
 /// \fn getResourceMapping($resourcetype1, $resourcetype2,
-///                                 $resource1inlist, $resource2inlist)
+///                        $resource1inlist, $resource2inlist)
 ///
 /// \param $resourcetype1 - get mapping between this type and $resourcetype2
 /// \param $resourcetype2 - get mapping between this type and $resourcetype1
@@ -9282,11 +10912,15 @@ function getConnectMethods($imageid) {
 function timeToNextReservation($request) {
 	if(! is_array($request))
 		$request = getRequestInfo($request);
+	$comps = array();
+	foreach($request['reservations'] as $res)
+		$comps[] = $res['computerid'];
+	$compids = implode(',', $comps);
 	$res = array_shift($request["reservations"]);
 	$query = "SELECT rq.start "
 	       . "FROM reservation rs, "
 	       .      "request rq "
-	       . "WHERE rs.computerid = {$res['computerid']} AND "
+	       . "WHERE rs.computerid IN ($compids) AND "
 	       .       "rq.start >= '{$request['end']}' AND "
 	       .       "rs.requestid = rq.id "
 	       . "ORDER BY start "
@@ -9346,47 +10980,19 @@ function weekOfYear($ts) {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
-/// \fn semLock();
+/// \fn cleanSemaphore()
 ///
-/// \return TRUE or FALSE
-///
-/// \brief tries to acquire a semaphore lock, and sets a global to know we
-/// have acquired it
+/// \brief deletes any semaphore entries created by current instantiation of
+/// this script
 ///
 ////////////////////////////////////////////////////////////////////////////////
-function semLock() {
-	global $semid, $semislocked;
-	if($semislocked)
-		return TRUE;
-
-	if(sem_acquire($semid)) {
-		$semislocked = 1;
-		return TRUE;
-	}
-	else
-		return FALSE;
-}
-
-////////////////////////////////////////////////////////////////////////////////
-///
-/// \fn semUnlock()
-///
-/// \return TRUE or FALSE
-///
-/// \brief unlocks the semaphore and sets a global to know we have released it
-///
-////////////////////////////////////////////////////////////////////////////////
-function semUnlock() {
-	global $semid, $semislocked;
-	if($semislocked) {
-		if(sem_release($semid)) {
-			$semislocked = 0;
-			return TRUE;
-		}
-		else
-			return FALSE;
-	}
-	return TRUE;
+function cleanSemaphore() {
+	global $mysql_link_vcl, $uniqid;
+	if(! is_resource($mysql_link_vcl) || ! get_resource_type($mysql_link_vcl) == 'mysql link')
+		return;
+	$query = "DELETE FROM semaphore "
+	       . "WHERE procid = '$uniqid'";
+	doQuery($query);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -9552,7 +11158,10 @@ function addContinuationsEntry($nextmode, $data=array(), $duration=SECINWEEK,
 	if($repeatProtect)
 		$data['______parent'] = $continuationid;
 	$serdata = serialize($data);
-	$contid = md5($mode . $nextmode . $serdata . $user['id']);
+	if(array_key_exists('HTTP_USER_AGENT', $_SERVER))
+		$contid = md5($mode . $nextmode . $serdata . $user['id'] . $_SERVER['REMOTE_ADDR'] . $_SERVER['HTTP_USER_AGENT']);
+	else
+		$contid = md5($mode . $nextmode . $serdata . $user['id'] . $_SERVER['REMOTE_ADDR']);
 	$serdata = mysql_real_escape_string($serdata);
 	$expiretime = unixToDatetime(time() + $duration);
 	$query = "SELECT id, "
@@ -9789,6 +11398,225 @@ function getShibauthData($id) {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
+/// \fn getVariable($key, $default, $incparams=0)
+///
+/// \param $key - name in variable table
+/// \param $default - (optional, default=NULL) value to return if $key not found
+/// \param $incparams - (optional, default=0) return only value or return array
+/// that includes additional variable parameters
+///
+/// \return value from variable table; $default if $key not found in table; if
+/// $incparams is 1, returns array with these keys:\n
+/// \b value - variable value\n
+/// \b serialization - encoding used to store variable\n
+/// \b setby - what last set the variable\n
+/// \b timestamp - when variable was last set\n
+/// \b description (can be NULL)\n
+/// \b regexp - regular expression used to validate variable (can be NULL)
+///
+/// \brief gets data from the variable table for $key
+///
+////////////////////////////////////////////////////////////////////////////////
+function getVariable($key, $default=NULL, $incparams=0) {
+	if(array_key_exists($key, $_SESSION['variables']))
+		return $_SESSION['variables'][$key];
+	$query = "SELECT serialization, ";
+	if($incparams)
+		$query .=    "setby, "
+	       .        "timestamp, "
+	       .        "description, "
+	       .        "`regexp`, ";
+	$query .=       "value ";
+	$query .= "FROM variable "
+	       .  "WHERE name = '$key'";
+	$qh = doQuery($query);
+	if($row = mysql_fetch_assoc($qh)) {
+		if($incparams) {
+			switch($row['serialization']) {
+				case 'yaml':
+					$row['value'] = Spyc::YAMLLoad($row['value']);
+					break;
+				case 'phpserialize':
+					$row['value'] = unserialize($row['value']);
+					break;
+			}
+			return $row;
+		}
+		else {
+			switch($row['serialization']) {
+				case 'none':
+					return $row['value'];
+				case 'yaml':
+					return Spyc::YAMLLoad($row['value']);
+				case 'phpserialize':
+					return unserialize($row['value']);
+			}
+		}
+	}
+	elseif(! $incparams)
+		return $default;
+	return array('value' => $default,
+	             'serialization' => 'none',
+	             'setby' => 'none',
+	             'timestamp' => NULL,
+	             'description' => NULL,
+	             'regexp' => NULL);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn getVariablesRegex($pattern)
+///
+/// \param $pattern - pattern to match in variable table
+///
+/// \return array of values from variable table
+///
+/// \brief gets data from the variable table for $pattern matches 'name' from 
+/// table
+///
+////////////////////////////////////////////////////////////////////////////////
+function getVariablesRegex($pattern) {
+	$query = "SELECT name, "
+	       .        "serialization, "
+	       .        "value, "
+	       .        "description, "
+	       .        "`regexp` "
+	       . "FROM variable "
+	       . "WHERE name REGEXP '$pattern'";
+	$qh = doQuery($query);
+	$ret = array();
+	while($row = mysql_fetch_assoc($qh)) {
+		switch($row['serialization']) {
+			case 'none':
+				$ret[$row['name']] = $row['value'];
+				break;
+			case 'yaml':
+				$ret[$row['name']] = Spyc::YAMLLoad($row['value']);
+				break;
+			case 'phpserialize':
+				$ret[$row['name']] = unserialize($row['value']);
+				break;
+		}
+	}
+	return $ret;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn setVariable($key, $data, $serialization)
+///
+/// \param $key - name in variable table
+/// \param $data - data to save in variable table
+/// \param $serialization - (optional, default=phpserialize) type of
+/// serialization to use - none, yaml, or phpserialize
+///
+/// \brief sets data in the variable table for $key; if entry is already in
+/// variable table and $serialization is not passed in, uses existing
+/// serialization; if entry is already in variable table and $serialization is
+/// passed in, uses $serialization; if entry is not already in variable table,
+/// uses $serialization for serialization with a default of phpserialize
+///
+////////////////////////////////////////////////////////////////////////////////
+function setVariable($key, $data, $serialization='') {
+	$update = 0;
+	$query = "SELECT serialization FROM variable WHERE name = '$key'";
+	$qh = doQuery($query);
+	if($row = mysql_fetch_assoc($qh)) {
+		if($serialization == '')
+			$serialization = $row['serialization'];
+		$update = 1;
+	}
+	elseif($serialization == '')
+		$serialization = 'phpserialize';
+	$_SESSION['variables'][$key] = $data;
+	switch($serialization) {
+		case 'none':
+			$qdata = mysql_real_escape_string($data);
+			break;
+		case 'yaml':
+			$yaml = Spyc::YAMLDump($data);
+			$qdata = mysql_real_escape_string($yaml);
+			break;
+		case 'phpserialize':
+			$qdata = mysql_real_escape_string(serialize($data));
+			break;
+	}
+	if($update)
+		$query = "UPDATE variable "
+		       . "SET value = '$qdata', " 
+		       .     "serialization = '$serialization', "
+		       .     "setby = 'webcode', "
+		       .     "timestamp = NOW() "
+		       . "WHERE name = '$key'";
+	else
+		$query = "INSERT INTO variable "
+		       .        "(name, "
+		       .        "serialization, "
+		       .        "value, "
+		       .        "setby, "
+		       .        "timestamp) "
+		       . "VALUES "
+		       .        "('$key', "
+		       .        "'$serialization', "
+		       .        "'$qdata', "
+		       .        "'webcode', "
+		       .        "NOW())";
+	doQuery($query);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn deleteVariable($key)
+///
+/// \param $key - name in variable table
+///
+/// \brief deletes a record from the variable table having name $key
+///
+////////////////////////////////////////////////////////////////////////////////
+function deleteVariable($key) {
+	if(array_key_exists($key, $_SESSION['variables']))
+		unset($_SESSION['variables'][$key]);
+	$query = "DELETE FROM variable WHERE name = '$key'";
+	doQuery($query);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn validateIPv4addr($ip)
+///
+/// \param $ip - an ip address
+///
+/// \return 1 if $ip is valid, 0 if not
+///
+/// \brief validates that $ip is a valid address
+///
+////////////////////////////////////////////////////////////////////////////////
+function validateIPv4addr($ip) {
+	$arr = explode('.', $ip);
+	if($arr[0] == 0)
+		return 0;
+	$regip1 = "(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)";
+	$regip4 = "$regip1\.$regip1\.$regip1\.$regip1";
+	return preg_match("/^$regip4$/", $ip);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn validateEmailAddress($addr)
+///
+/// \param $addr - an email address
+///
+/// \return 1 if $addr is valid, 0 if not
+///
+/// \brief validates that $addr is a valid email address using a regex
+///
+////////////////////////////////////////////////////////////////////////////////
+function validateEmailAddress($addr) {
+	return preg_match('/[a-z0-9!#$%&\'*+\/=?^_`{|}~-]+(?:\.[a-z0-9!#$%&\'*+\/=?^_`{|}~-]+)*@(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]*[a-z0-9])?/', $addr);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
 /// \fn xmlrpccall()
 ///
 /// \brief registers all functions available to xmlrpc, handles the current
@@ -9845,7 +11673,7 @@ function xmlrpccall() {
 
 	print xmlrpc_server_call_method($xmlrpc_handle, $HTTP_RAW_POST_DATA, '');
 	xmlrpc_server_destroy($xmlrpc_handle);
-	semUnlock();
+	cleanSemaphore();
 	dbDisconnect();
 	exit;
 }
@@ -9866,7 +11694,6 @@ function xmlrpcgetaffiliations() {
 
 	print xmlrpc_server_call_method($xmlrpc_handle, $HTTP_RAW_POST_DATA, '');
 	xmlrpc_server_destroy($xmlrpc_handle);
-	semUnlock();
 	dbDisconnect();
 	exit;
 }
@@ -9914,7 +11741,6 @@ function xmlRPChandler($function, $args, $blah) {
 	else {
 		printXMLRPCerror(2);
 		dbDisconnect();
-		semUnlock();
 		exit;
 	}
 
@@ -9940,6 +11766,7 @@ function xmlRPCabort($errcode, $query='') {
 	if(ONLINEDEBUG && checkUserHasPerm('View Debug Information')) {
 		$msg = '';
 		if($errcode >= 100 && $errcode < 400) {
+			$msg .= "ERROR (" . mysql_errno($mysql_link_vcl) . ") - ";
 			$msg .= mysql_error($mysql_link_vcl) . " $query ";
 		}
 		$msg .= $ERRORS["$errcode"];
@@ -9967,8 +11794,8 @@ function xmlRPCabort($errcode, $query='') {
 		$faultcode = 1;
 	}
 	printXMLRPCerror($faultcode);
+	cleanSemaphore();
 	dbDisconnect();
-	semUnlock();
 	exit;
 }
 
@@ -10137,6 +11964,38 @@ function validateAPIgroupInput($items, $exists) {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
+/// \fn helpIcon($id)
+///
+/// \param $id - dom id for icon image
+///
+/// \brief returns HTML for a help icon with the dom id set to $id
+///
+////////////////////////////////////////////////////////////////////////////////
+function helpIcon($id) {
+	return "<img src=\"images/helpicon.png\" id=\"$id\" />";
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn helpTooltip($id, $text, $width)
+///
+/// \param $id - dom id for Tooltip to connect to
+/// \param $text - text of Tooltip
+/// \param $width - (default=400) wrap text in a div with this width in pixels
+///
+/// \brief returns HTML for a dijit Tooltip
+///
+////////////////////////////////////////////////////////////////////////////////
+function helpTooltip($id, $text, $width=400) {
+	$h  = "<div dojoType=\"dijit.Tooltip\" connectId=\"$id\">\n";
+	$h .= "<div style=\"max-width: {$width}px;\">\n";
+	$h .= "$text\n</div>\n";
+	$h .= "\n</div>\n";
+	return $h;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
 /// \fn json_encode()
 ///
 /// \brief json_encode was introduced in php 5.2, this function was taked from
@@ -10186,21 +12045,26 @@ function json_encode($a=false) {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
-/// \fn sendJSON($arr, $identifier='')
+/// \fn sendJSON($arr, $identifier='', $REST=0)
 ///
 /// \param $arr - an array of data
 /// \param $identifier - (optional, default='') set to non-empty string to have
 /// $identifier printed as the identifier for a dojo datastore
+/// \param $REST - (optional, default=0) pass 1 to strictly send json encoded
+/// data with nothing wrapping it
 ///
 /// \brief sets the content type and sends $arr in json format
 ///
 ////////////////////////////////////////////////////////////////////////////////
-function sendJSON($arr, $identifier='') {
-	header('Content-Type: text/json; charset=utf-8');
-	if(empty($identifier))
-		print '{} && {"items":' . json_encode($arr) . '}';
-	else
+function sendJSON($arr, $identifier='', $REST=0) {
+	#header('Content-Type: application/json; charset=utf-8');
+	header('Content-Type: application/json');
+	if($REST)
+		print json_encode($arr);
+	elseif(! empty($identifier))
 		print "{} && {identifier: '$identifier', 'items':" . json_encode($arr) . '}';
+	else
+		print '{} && {"items":' . json_encode($arr) . '}';
 }
 
 
@@ -10218,11 +12082,17 @@ function sendJSON($arr, $identifier='') {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function menulistLI($page) {
-	global $mode, $actions;
+	global $mode, $actions, $inContinuation;
 	$mymode = $mode;
 	if(empty($mymode))
 		$mymode = "home";
-	if($actions['pages'][$mymode] == $page)
+	$testval = $actions['pages'][$mymode];
+	if($inContinuation) {
+		$obj = getContinuationVar('obj');
+		if(! is_null($obj))
+			$testval = $obj->restype;
+	}
+	if($testval == $page)
 		return "<li class=selected>";
 	else
 		return "<li>";
@@ -10247,6 +12117,7 @@ function sendHeaders() {
 		case 'logout':
 			if($shibauthed) {
 				$shibdata = getShibauthData($shibauthed);
+				// TODO make shib-logouturl comparison caseless
 				if(array_key_exists('Shib-logouturl', $shibdata) &&
 				   ! empty($shibdata['Shib-logouturl'])) {
 					dbDisconnect();
@@ -10416,8 +12287,7 @@ function printHTMLHeader() {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function getNavMenu($inclogout, $inchome, $homeurl=HOMEURL) {
-	global $user, $docreaders, $authed;
-	global $mode;
+	global $user, $docreaders, $authed, $mode;
 	if($authed && $mode != 'expiredemouser') {
 		$computermetadata = getUserComputerMetaData();
 		$requests = getUserRequests("all", $user["id"]);
@@ -10430,16 +12300,15 @@ function getNavMenu($inclogout, $inchome, $homeurl=HOMEURL) {
 		$rt .= menulistLI('home');
 		$rt .= "<a href=\"$homeurl\">" . _("HOME") . "</a></li>\n";
 	}
-	$rt .= menulistLI('newReservations');
-	$rt .= "<a href=\"" . BASEURL . SCRIPT . "?mode=newRequest\">";
-	$rt .= _("New Reservation</a></li>\n");
-	if(in_array("imageCheckOut", $user["privileges"]) ||
-		in_array("imageAdmin", $user["privileges"]) ||
-	   count($requests)) {
-		$rt .= menulistLI('currentReservations');
-		$rt .= "<a href=\"" . BASEURL . SCRIPT . "?mode=viewRequests\">";
-		$rt .= _("Current Reservations</a></li>\n");
-	}
+
+	$rt .= menulistLI('reservations');
+	$rt .= "<a href=\"" . BASEURL . SCRIPT . "?mode=viewRequests\">";
+	$rt .= _("Reservations</a></li>\n");
+
+	#$rt .= menulistLI('config');
+	#$rt .= "<a href=\"" . BASEURL . SCRIPT . "?mode=config\">";
+	#$rt .= _("Manage Configs</a></li>\n");
+
 	$rt .= menulistLI('blockAllocations');
 	$rt .= "<a href=\"" . BASEURL . SCRIPT . "?mode=blockAllocations\">";
 	$rt .= _("Block Allocations</a></li>\n");
@@ -10452,27 +12321,26 @@ function getNavMenu($inclogout, $inchome, $homeurl=HOMEURL) {
 		$rt .= _("Manage Groups</a></li>\n");
 	}
 	if(in_array("imageAdmin", $user["privileges"])) {
-		$rt .= menulistLI('manageImages');
-		$rt .= "<a href=\"" . BASEURL . SCRIPT . "?mode=selectImageOption\">";
+		$rt .= menulistLI('image');
+		$rt .= "<a href=\"" . BASEURL . SCRIPT . "?mode=image\">";
 		$rt .= _("Manage Images</a></li>\n");
 	}
 	if(in_array("scheduleAdmin", $user["privileges"])) {
-		$rt .= menulistLI('manageSchedules');
-		$rt .= "<a href=\"" . BASEURL . SCRIPT . "?mode=viewSchedules\">";
+		$rt .= menulistLI('schedule');
+		$rt .= "<a href=\"" . BASEURL . SCRIPT . "?mode=schedule\">";
 		$rt .= _("Manage Schedules</a></li>\n");
 	}
 	if(in_array("computerAdmin", $user["privileges"])) {
-		$rt .= menulistLI('manageComputers');
-		$rt .= "<a href=\"" . BASEURL . SCRIPT . "?mode=selectComputers\">";
+		$rt .= menulistLI('computer');
+		$rt .= "<a href=\"" . BASEURL . SCRIPT . "?mode=computer\">";
 		$rt .= _("Manage Computers</a></li>\n");
 	}
 	if(in_array("mgmtNodeAdmin", $user["privileges"])) {
-		$rt .= menulistLI('managementNodes');
-		$rt .= "<a href=\"" . BASEURL . SCRIPT;
-		$rt .= _("?mode=selectMgmtnodeOption\">Management Nodes</a></li>\n");
+		$rt .= menulistLI('managementnode');
+		$rt .= "<a href=\"" . BASEURL . SCRIPT . "?mode=managementnode\">";
+		$rt .= _("Management Nodes</a></li>\n");
 	}
-	if(in_array("serverProfileAdmin", $user["privileges"]) ||
-	   in_array("serverCheckOut", $user["privileges"])) {
+	if(in_array("serverProfileAdmin", $user["privileges"])) {
 		$rt .= menulistLI('serverProfiles');
 		$rt .= "<a href=\"" . BASEURL . SCRIPT;
 		$rt .= "?mode=serverProfiles\">" . _("Server Profiles") . "</a></li>\n";
@@ -10514,6 +12382,12 @@ function getNavMenu($inclogout, $inchome, $homeurl=HOMEURL) {
 		$rt .= menulistLI('dashboard');
 		$rt .= "<a href=\"" . BASEURL . SCRIPT . "?mode=dashboard\">";
 		$rt .= _("Dashboard") . "</a></li>\n";
+	}
+	if(checkUserHasPerm('Site Configuration (global)') ||
+	   checkUserHasPerm('Site Configuration (affiliation only)')) {
+		$rt .= menulistLI('siteconfig');
+		$rt .= "<a href=\"" . BASEURL . SCRIPT . "?mode=siteconfig\">";
+		$rt .= _("Site Configuration") . "</a></li>\n";
 	}
 	$rt .= menulistLI('codeDocumentation');
 	$rt .= "<a href=\"" . DOCUMENTATIONURL . "\">";
@@ -10590,36 +12464,35 @@ function getDojoHTML($refresh) {
 			                      'dijit.layout.ContentPane',
 			                      'dijit.layout.TabContainer');
 			break;
-		case 'newRequest':
-		case 'submitRequest':
-		case 'createSelectImage':
-		case 'submitCreateImage':
-			$filename = 'vclNewRequest.js';
-			$dojoRequires = array('dojo.parser',
-			                      'dijit.form.DateTextBox',
-			                      'dijit.form.TimeTextBox',
-			                      'dijit.Dialog',
-			                      'dijit.form.Button',
-			                      'dojox.string.sprintf',
-			                      'dijit.form.FilteringSelect');
-			break;
 		case 'viewRequests':
+			require_once('storebackend.php');
 			$filename = 'vclViewRequests.js';
 			$dojoRequires = array('dojo.parser',
 			                      'dijit.form.DateTextBox',
 			                      'dijit.form.TimeTextBox',
 			                      'dijit.form.Select',
+			                      'dijit.form.CheckBox',
 			                      'dojox.string.sprintf',
 			                      'dijit.Dialog',
+			                      'dijit.layout.ContentPane',
 			                      'dijit.Menu',
 			                      'dijit.form.Button',
 			                      'dijit.form.DropDownButton',
 			                      'dijit.Tooltip',
 			                      'vcldojo.HoverTooltip',
 			                      'dojox.layout.FloatingPane',
-			                      'dijit.form.FilteringSelect');
+			                      'dojox.grid.DataGrid',
+			                      'dijit.form.FilteringSelect',
+			                      'dijit.form.NumberSpinner',
+			                      'dijit.form.Textarea',
+			                      'dijit.Tree',
+			                      'dojo.data.ItemFileWriteStore',
+			                      'dojo.data.ObjectStore',
+			                      'dojo.store.JsonRest',
+			                      'dijit.TitlePane',
+			                      'dijit.layout.BorderContainer',
+			                      'dojo.store.Memory');
 			break;
-		case 'connectRequest':
 		case 'viewRequestInfo':
 			$filename = 'vclConnectRequest.js';
 			$dojoRequires = array('dojo.parser',
@@ -10636,7 +12509,11 @@ function getDojoHTML($refresh) {
 			                      'dojox.grid.DataGrid',
 			                      'dijit.Dialog',
 			                      'dojox.string.sprintf',
-			                      'dojo.data.ItemFileWriteStore');
+			                      'dojo.data.ItemFileWriteStore',
+			                      'dojox.charting.widget.Chart2D',
+			                      'dojox.charting.action2d.Tooltip',
+			                      'dojox.charting.action2d.Magnify',
+			                      'dojox.charting.themes.ThreeD');
 			break;
 		case 'requestBlockAllocation':
 		case 'newBlockAllocation':
@@ -10674,81 +12551,6 @@ function getDojoHTML($refresh) {
 			                      'dojox.charting.action2d.Magnify',
 			                      'dojox.charting.themes.ThreeD');
 			break;
-		case 'editSchedule':
-		case 'submitAddSchedule':
-			$filename = 'vclSchedule.js';
-			$dojoRequires = array('dojo.parser',
-			                      'dijit.form.TimeTextBox',
-			                      'dojox.grid.DataGrid',
-			                      'dojox.string.sprintf',
-			                      'dijit.form.Button',
-			                      'dojo.data.ItemFileWriteStore');
-			break;
-		case 'viewImageGrouping':
-		case 'submitImageGroups':
-		case 'viewImageMapping':
-		case 'submitImageMapping':
-			$filename = 'vclImageGroupingMapping.js';
-			$dojoRequires = array('dojo.parser',
-			                      'dijit.layout.LinkPane',
-			                      'dijit.layout.ContentPane',
-			                      'dijit.layout.TabContainer',
-			                      'dijit.form.Button');
-			break;
-		case 'newImage':
-		case 'submitImageButton':
-		case 'confirmEditOrAddImage':
-		case 'submitEditImageButtons':
-		case 'submitAddSubimage':
-		case 'updateExistingImageComments':
-		case 'updateExistingImage':
-			$filename = 'vclImageProfiles.js';
-			$dojoRequires = array('dojo.parser',
-			                      'dijit.InlineEditBox',
-			                      'dijit.form.Textarea',
-			                      'dijit.form.DropDownButton',
-			                      'dijit.form.FilteringSelect',
-			                      'dijit.form.Select',
-			                      'dijit.form.Button',
-			                      'dijit.Dialog',
-			                      'dijit.TitlePane',
-			                      'dojo.data.ItemFileWriteStore');
-			break;
-		case 'startCheckpoint':
-			$filename = 'vclCheckpoint.js';
-			$dojoRequires = array('dojo.parser',
-			                      'dijit.form.Textarea');
-			break;
-		case 'selectComputers':
-		case 'viewComputerGroups':
-		case 'submitComputerGroups':
-			$filename = 'vclComputerGroups.js';
-			$dojoRequires = array('dojo.parser',
-			                      'dijit.layout.LinkPane',
-			                      'dijit.layout.ContentPane',
-			                      'dijit.layout.TabContainer',
-			                      'dijit.form.Button');
-			break;
-		case 'editComputer':
-		case 'addComputer':
-		case 'confirmEditComputer':
-		case 'confirmAddComputer':
-		case 'bulkAddComputer':
-		case 'confirmAddBulkComputers':
-			$filename = 'vclComputerProfiles.js';
-			$dojoRequires = array('dojo.parser',
-			                      'dijit.form.Select',
-			                      'dijit.form.Button',
-			                      'dijit.Dialog',
-			                      'dijit.form.NumberSpinner');
-			break;
-		case 'computerUtilities':
-			$filename = 'vclComputerUtilities.js';
-			$dojoRequires = array('dojo.parser',
-			                      'dijit.form.Button',
-			                      'dijit.form.Form',
-			                      'dijit.Dialog');
-			break;
 		case 'viewGroups':
 		case 'submitEditGroup':
 		case 'submitAddGroup':
@@ -10765,25 +12567,51 @@ function getDojoHTML($refresh) {
 			                      'dijit.TitlePane',
 			                      'dijit.Tooltip');
 			break;
-		case 'editMgmtNode':
-		case 'addMgmtNode':
-		case 'confirmEditMgmtnode':
-		case 'confirmAddMgmtnode':
-			$filename = 'vclManagementNodes.js';
+		case 'viewResources':
+		case 'editConfigMap':
+			$filename = 'vclResources.js';
 			$dojoRequires = array('dojo.parser',
+			                      'dojo.data.ItemFileReadStore',
+			                      'dojo.data.ItemFileWriteStore',
+			                      'dijit.form.Select',
+			                      'dijit.form.Button',
+			                      'dijit.form.ValidationTextBox',
+			                      'dijit.form.CheckBox',
+			                      'dijit.form.TextBox',
+			                      'dijit.form.NumberSpinner',
+			                      'dijit.form.HorizontalSlider',
+			                      'dojox.grid.DataGrid',
+			                      'dijit.TitlePane',
+			                      'dijit.form.FilteringSelect',
+			                      'dijit.form.ComboBox',
+			                      'dijit.form.Textarea',
+			                      'dijit.InlineEditBox',
+			                      'dijit.form.TimeTextBox',
+			                      'dojox.string.sprintf',
+			                      'dijit.form.CheckBox',
 			                      'dijit.Tooltip',
-			                      'dijit.form.NumberSpinner');
+			                      'dojox.grid._CheckBoxSelector',
+			                      'dijit.Menu',
+			                      'dijit.Dialog');
+			break;
+		case 'groupMapHTML':
+			$filename = 'vclResourceGroupMap.js';
+			$dojoRequires = array('dojo.parser',
+			                      'dijit.layout.LinkPane',
+			                      'dijit.layout.ContentPane',
+			                      'dijit.layout.TabContainer',
+			                      'dojo.data.ItemFileWriteStore',
+			                      'dojox.form.CheckedMultiSelect',
+			                      'dojox.grid.DataGrid',
+			                      'dijit.form.Button');
 			break;
 		case 'serverProfiles':
 			$filename = 'vclServerProfiles.js';
 			$dojoRequires = array('dojo.parser',
 			                      'dijit.Dialog',
-			                      'dijit.form.DateTextBox',
-			                      'dijit.form.TimeTextBox',
 			                      'dijit.form.Button',
 			                      'dijit.form.FilteringSelect',
 			                      'dijit.form.Select',
-			                      'dijit.layout.LinkPane',
 			                      'dijit.form.TextBox',
 			                      'dijit.form.ValidationTextBox',
 			                      'dijit.form.CheckBox',
@@ -10824,6 +12652,12 @@ function getDojoHTML($refresh) {
 			                      'dijit.Tooltip',
 			                      'dijit.Dialog');
 			break;
+		case 'userpreferences':
+		case 'submitgeneralprefs':
+			$filename = 'vclUserPreferences.js';
+			$dojoRequires = array('dojo.parser',
+			                      'dijit.form.Textarea');
+			break;
 		case 'viewstats':
 			$filename = 'vclStats.js';
 			$dojoRequires = array('dojo.parser',
@@ -10836,10 +12670,32 @@ function getDojoHTML($refresh) {
 			$filename = 'vclDashboard.js';
 			$dojoRequires = array('dojo.parser',
 			                      'dijit.Tooltip',
+			                      'dijit.form.Button',
 			                      'dojox.charting.widget.Chart2D',
 			                      'dojox.charting.action2d.Tooltip',
 			                      'dojox.charting.action2d.Magnify',
 			                      'dojox.charting.themes.ThreeD');
+			break;
+		# TODO clean up
+		/*case 'testDojoREST':
+			$filename = '';
+			$dojoRequires = array('dojo.parser',
+			                      'dijit.form.FilteringSelect',
+			                      'dijit.form.Button',
+			                      'dojo.data.ObjectStore',
+			                      'dojo.store.JsonRest');
+			break;*/
+		case 'siteconfig':
+			$filename = 'siteconfig.js';
+			$dojoRequires = array('dojo.parser',
+			                      'dijit.form.Button',
+			                      'dijit.form.Textarea',
+			                      'dijit.form.FilteringSelect',
+			                      'dijit.form.Select',
+			                      'dijit.form.NumberSpinner',
+			                      'dijit.form.ValidationTextBox',
+			                      'dijit.layout.ContentPane',
+			                      'dijit.layout.TabContainer');
 			break;
 	}
 	# END DOJO PARSING
@@ -10852,55 +12708,42 @@ function getDojoHTML($refresh) {
 	$jslocale = strtolower(str_replace('_', '-', $locale));
 	$v = $VCLversion;
 	switch($mode) {
-		case "connectRequest":
-			$rt .= "<style type=\"text/css\">\n";
-			$rt .= "   @import \"themes/$skin/css/dojo/$skin.css\";\n";
-			$rt .= "</style>\n";
-			$rt .= "<script type=\"text/javascript\" src=\"dojo/dojo/dojo.js\"\n";
-			$rt .= "   djConfig=\"parseOnLoad: true, locale: '$jslocale'\">\n";
-			$rt .= "</script>\n";
-			$rt .= "<script type=\"text/javascript\" src=\"js/requests.js?v=$v\"></script>\n";
-			$rt .= $customfile;
-			$rt .= "<script type=\"text/javascript\">\n";
-			$rt .= "   dojo.addOnLoad(function() {\n";
-			foreach($dojoRequires as $req)
-				$rt .= "   dojo.require(\"$req\");\n";
-			$rt .= "   showRDPbutton();\n";
-			$rt .= "   setTimeout(checkConnectTimeout, 15000);\n";
-			$rt .= "   });\n";
-			$rt .= "</script>\n";
-			return $rt;
 
 		case "viewRequests":
 			$rt .= "<style type=\"text/css\">\n";
 			$rt .= "   @import \"themes/$skin/css/dojo/$skin.css\";\n";
 			$rt .= "   @import \"dojo/dojox/layout/resources/FloatingPane.css\";\n";
 			$rt .= "   @import \"dojo/dojox/layout/resources/ResizeHandle.css\";\n";
+			$rt .= "   @import \"dojo/dojox/grid/resources/Grid.css\";\n";
 			$rt .= "</style>\n";
 			$rt .= "<script type=\"text/javascript\" src=\"js/requests.js?v=$v\"></script>\n";
+			$rt .= "<script type=\"text/javascript\" src=\"js/resources.js?v=$v\"></script>\n";
+			$rt .= "<script type=\"text/javascript\" src=\"js/resources/image.js?v=$v\"></script>\n";
+			# TODO keep this or move functions?
+			$rt .= "<script type=\"text/javascript\" src=\"js/newresservercommon.js?v=$v\"></script>\n";
 			$rt .= "<script type=\"text/javascript\" src=\"dojo/dojo/dojo.js\"\n";
 			$rt .= "   djConfig=\"parseOnLoad: true, locale: '$jslocale'\">\n";
 			$rt .= "</script>\n";
 			$rt .= $customfile;
 			$rt .= "<script type=\"text/javascript\">\n";
 			$rt .= "   dojo.addOnLoad(function() {\n";
-			$rt .= "   dojo.registerModulePath(\"vcldojo\", \"../../js/vcldojo\");\n";
+			$rt .= "      dojo.registerModulePath(\"vcldojo\", \"../../js/vcldojo\");\n";
 			foreach($dojoRequires as $req)
-				$rt .= "   dojo.require(\"$req\");\n";
+				$rt .= "      dojo.require(\"$req\");\n";
 			$rt .= "      testJS();\n";
 			$rt .= "      document.onmousemove = updateMouseXY;\n";
 			$rt .= "      showScriptOnly();\n";
+			$cont = addContinuationsEntry('AJserverProfileStoreData', array(), 120, 1, 0);
+			$rt .= "   populateProfileStore('$cont');\n";
 			$rt .= "   });\n";
 			if($refresh)
 				$rt .= "   refresh_timer = setTimeout(resRefresh, 12000);\n";
 			$rt .= "   check_timeout_timer = setTimeout(checkTimeouts, 15000);\n";
+			$imaging = getContinuationVar('imaging', 0);
+			$rt .= "   initViewRequests($imaging);\n";
 			$rt .= "</script>\n";
 			return $rt;
 
-		case 'newRequest':
-		case 'submitRequest':
-		case 'createSelectImage':
-		case 'submitCreateImage':
 		case 'viewRequestInfo':
 			$rt .= "<style type=\"text/css\">\n";
 			$rt .= "   @import \"themes/$skin/css/dojo/$skin.css\";\n";
@@ -10914,9 +12757,6 @@ function getDojoHTML($refresh) {
 			$rt .= "   dojo.addOnLoad(function() {\n";
 			foreach($dojoRequires as $req)
 				$rt .= "   dojo.require(\"$req\");\n";
-			# TODO check flow of which modes should call updateWaitTime
-			if($mode == 'newRequest')
-				$rt .= "     setTimeout(function() {updateWaitTime(0);}, 1000);\n";
 			$rt .= "   });\n";
 			$rt .= "</script>\n";
 			return $rt;
@@ -10988,71 +12828,37 @@ function getDojoHTML($refresh) {
 			$rt .= "</script>\n";
 			return $rt;
 
-		case "editSchedule":
-		case "submitAddSchedule":
+		case 'groupMapHTML':
 			$rt .= "<style type=\"text/css\">\n";
 			$rt .= "   @import \"themes/$skin/css/dojo/$skin.css\";\n";
+			$rt .= "   @import \"dojo/dojox/form/resources/CheckedMultiSelect.css\";\n";
 			$rt .= "   @import \"dojo/dojox/grid/resources/Grid.css\";\n";
 			$rt .= "</style>\n";
-			$rt .= "<script type=\"text/javascript\" src=\"js/schedules.js?v=$v\"></script>\n";
-			$rt .= "<script type=\"text/javascript\" src=\"dojo/dojo/dojo.js\"\n";
-			$rt .= "   djConfig=\"parseOnLoad: true, locale: '$jslocale'\">\n";
-			$rt .= "</script>\n";
-			$rt .= $customfile;
-			$rt .= "<script type=\"text/javascript\">\n";
-			$rt .= "   dojo.addOnLoad(function() {\n";
-			foreach($dojoRequires as $req)
-				$rt .= "   dojo.require(\"$req\");\n";
-			if($mode != 'submitAddSchedule') {
-				$id = getContinuationVar("scheduleid");
-				$cont = addContinuationsEntry('AJgetScheduleTimesData', array('id' => $id), SECINDAY, 1, 0);
-				$rt .= "   populateTimeStore('$cont');\n";
+			$rt .= "<script type=\"text/javascript\" src=\"js/resources.js?v=$v\"></script>\n";
+			$cdata = getContinuationVar();
+			switch($cdata['obj']->restype) {
+				# could make it generic as follows, but consider security risk
+				# of someone being able to get $cdata['obj']->restype set to anything
+				#	$jsfile = "resources/{$cdata['obj']->restype}.js";
+				#	break;
+				case 'config':
+					$jsfile = 'resources/config.js';
+					break;
+				case 'image':
+					$jsfile = 'resources/image.js';
+					break;
+				case 'schedule':
+					$jsfile = 'resources/schedule.js';
+					break;
+				case 'managementnode':
+					$jsfile = 'resources/managementnode.js';
+					break;
+				case 'computer':
+					$jsfile = 'resources/computer.js';
+					break;
 			}
-			$rt .= "   });\n";
-			$rt .= "</script>\n";
-			return $rt;
-
-		case "viewImageGrouping":
-		case "submitImageGroups":
-		case "viewImageMapping":
-		case "submitImageMapping":
-			$rt .= "<style type=\"text/css\">\n";
-			$rt .= "   @import \"themes/$skin/css/dojo/$skin.css\";\n";
-			$rt .= "</style>\n";
-			$rt .= "<script type=\"text/javascript\" src=\"js/images.js?v=$v\"></script>\n";
-			$rt .= "<script type=\"text/javascript\" src=\"dojo/dojo/dojo.js\"\n";
-			$rt .= "   djConfig=\"parseOnLoad: true, locale: '$jslocale'\">\n";
-			$rt .= "</script>\n";
-			$rt .= $customfile;
-			$rt .= "<script type=\"text/javascript\">\n";
-			$rt .= "   dojo.addOnLoad(function() {\n";
-			foreach($dojoRequires as $req)
-				$rt .= "   dojo.require(\"$req\");\n";
-			$rt .= "   });\n";
-			if($mode == "viewImageGrouping" ||
-				$mode == "submitImageGroups") {
-				$rt .= "   dojo.addOnLoad(getImagesButton);\n";
-				$rt .= "   dojo.addOnLoad(getGroupsButton);\n";
-			}
-			elseif($mode == "viewImageMapping" ||
-				$mode == "submitImageMapping") {
-				$rt .= "   dojo.addOnLoad(getMapCompGroupsButton);\n";
-				$rt .= "   dojo.addOnLoad(getMapImgGroupsButton);\n";
-			}
-			$rt .= "</script>\n";
-			return $rt;
-
-		case 'newImage':
-		case 'submitImageButton':
-		case 'confirmEditOrAddImage':
-		case 'submitEditImageButtons':
-		case 'submitAddSubimage':
-		case 'updateExistingImageComments':
-		case 'updateExistingImage':
-			$rt .= "<style type=\"text/css\">\n";
-			$rt .= "   @import \"themes/$skin/css/dojo/$skin.css\";\n";
-			$rt .= "</style>\n";
-			$rt .= "<script type=\"text/javascript\" src=\"js/images.js?v=$v\"></script>\n";
+			if(isset($jsfile))
+				$rt .= "<script type=\"text/javascript\" src=\"js/$jsfile?v=$v\"></script>\n";
 			$rt .= "<script type=\"text/javascript\" src=\"dojo/dojo/dojo.js\"\n";
 			$rt .= "   djConfig=\"parseOnLoad: true, locale: '$jslocale'\">\n";
 			$rt .= "</script>\n";
@@ -11062,13 +12868,7 @@ function getDojoHTML($refresh) {
 			foreach($dojoRequires as $req)
 				$rt .= "   dojo.require(\"$req\");\n";
 			$rt .= "   });\n";
-			$rt .= "   dojo.addOnLoad(function() {\n";
-			$rt .= "      if(document.getElementById('hide1')) {\n";
-			$rt .= "         document.getElementById('hide1').className = 'hidden';\n";
-			$rt .= "         document.getElementById('hide2').className = 'hidden';\n";
-			$rt .= "         document.getElementById('hide3').className = 'hidden';\n";
-			$rt .= "      }\n";
-			$rt .= "   });\n";
+			$rt .= "   dojo.addOnLoad(editGroupMapInit);\n";
 			$rt .= "</script>\n";
 			return $rt;
 
@@ -11102,25 +12902,58 @@ function getDojoHTML($refresh) {
 			$rt .= "<script type=\"text/javascript\" src=\"js/groups.js?v=$v\"></script>\n";
 			return $rt;
 
-		case 'editMgmtNode':
-		case 'addMgmtNode':
-		case 'confirmEditMgmtnode':
-		case 'confirmAddMgmtnode':
+		case 'viewResources':
+		case 'editConfigMap':
 			$rt .= "<style type=\"text/css\">\n";
 			$rt .= "   @import \"themes/$skin/css/dojo/$skin.css\";\n";
+			$rt .= "   @import \"dojo/dojox/grid/resources/Grid.css\";\n";
 			$rt .= "</style>\n";
 			$rt .= "<script type=\"text/javascript\" src=\"dojo/dojo/dojo.js\"\n";
 			$rt .= "   djConfig=\"parseOnLoad: true, locale: '$jslocale'\">\n";
 			$rt .= "</script>\n";
 			$rt .= $customfile;
+			$cdata = getContinuationVar();
 			$rt .= "<script type=\"text/javascript\">\n";
 			$rt .= "   dojo.addOnLoad(function() {\n";
+			$rt .= "      dojo.registerModulePath(\"vcldojo\", \"../../js/vcldojo\");\n";
 			foreach($dojoRequires as $req)
 				$rt .= "   dojo.require(\"$req\");\n";
+			$rt .= "      setTimeout(function() {\n";
+			$rt .= "      if(typeof resourcestore !== 'undefined') {\n";
+			$rt .= "         if(! resourcestore.comparatorMap) {\n";
+			$rt .= "            resourcestore.comparatorMap = {};\n";
+			$rt .= "         }\n";
+			$rt .= "         resourcestore.comparatorMap['name'] = resource.nocasesort;\n";
+			$rt .= "      }\n";
+			$rt .= "      }, 500);\n";
+			if($cdata['obj']->restype == 'computer')
+				$rt .= "      initPage();\n";
 			$rt .= "   });\n";
-			$rt .= "   dojo.addOnLoad(function() {document.onmousemove = updateMouseXY;});\n";
 			$rt .= "</script>\n";
-			$rt .= "<script type=\"text/javascript\" src=\"js/managementnodes.js?v=$v\"></script>\n";
+			switch($cdata['obj']->restype) {
+				# could make it generic as follows, but consider security risk
+				# of someone being able to get $cdata['obj']->restype set to anything
+				#	$jsfile = "resources/{$cdata['obj']->restype}.js";
+				#	break;
+				case 'config':
+					$jsfile = 'resources/config.js';
+					break;
+				case 'image':
+					$jsfile = 'resources/image.js';
+					break;
+				case 'schedule':
+					$jsfile = 'resources/schedule.js';
+					break;
+				case 'managementnode':
+					$jsfile = 'resources/managementnode.js';
+					break;
+				case 'computer':
+					$jsfile = 'resources/computer.js';
+					break;
+			}
+			$rt .= "<script type=\"text/javascript\" src=\"js/resources.js?v=$v\"></script>\n";
+			if(isset($jsfile))
+				$rt .= "<script type=\"text/javascript\" src=\"js/$jsfile?v=$v\"></script>\n";
 			return $rt;
 
 		case "serverProfiles":
@@ -11128,7 +12961,7 @@ function getDojoHTML($refresh) {
 			$rt .= "   @import \"themes/$skin/css/dojo/$skin.css\";\n";
 			$rt .= "</style>\n";
 			$rt .= "<script type=\"text/javascript\" src=\"js/serverprofiles.js?v=$v\"></script>\n";
-			$rt .= "<script type=\"text/javascript\" src=\"js/requests.js?v=$v\"></script>\n";
+			$rt .= "<script type=\"text/javascript\" src=\"js/newresservercommon.js?v=$v\"></script>\n";
 			$rt .= "<script type=\"text/javascript\" src=\"dojo/dojo/dojo.js\"\n";
 			$rt .= "   djConfig=\"parseOnLoad: true, locale: '$jslocale'\">\n";
 			$rt .= "</script>\n";
@@ -11144,50 +12977,6 @@ function getDojoHTML($refresh) {
 			$rt .= "</script>\n";
 			return $rt;
 
-		case "selectComputers":
-		case "viewComputerGroups":
-		case "submitComputerGroups":
-			$rt .= "<style type=\"text/css\">\n";
-			$rt .= "   @import \"themes/$skin/css/dojo/$skin.css\";\n";
-			$rt .= "</style>\n";
-			$rt .= "<script type=\"text/javascript\" src=\"js/computers.js?v=$v\"></script>\n";
-			$rt .= "<script type=\"text/javascript\" src=\"dojo/dojo/dojo.js\"\n";
-			$rt .= "   djConfig=\"parseOnLoad: true, locale: '$jslocale'\">\n";
-			$rt .= "</script>\n";
-			$rt .= $customfile;
-			$rt .= "<script type=\"text/javascript\">\n";
-			$rt .= "   dojo.addOnLoad(function() {\n";
-			foreach($dojoRequires as $req)
-				$rt .= "   dojo.require(\"$req\");\n";
-			$rt .= "   });\n";
-			if($mode != 'selectComputers') {
-				$rt .= "   dojo.addOnLoad(getCompsButton);\n";
-				$rt .= "   dojo.addOnLoad(getGroupsButton);\n";
-			}
-			$rt .= "</script>\n";
-			return $rt;
-		case 'editComputer':
-		case 'addComputer':
-		case 'bulkAddComputer':
-		case 'confirmEditComputer':
-		case 'confirmAddComputer':
-		case 'confirmAddBulkComputers':
-		case 'computerUtilities':
-			$rt .= "<style type=\"text/css\">\n";
-			$rt .= "   @import \"themes/$skin/css/dojo/$skin.css\";\n";
-			$rt .= "</style>\n";
-			$rt .= "<script type=\"text/javascript\" src=\"js/computers.js?v=$v\"></script>\n";
-			$rt .= "<script type=\"text/javascript\" src=\"dojo/dojo/dojo.js\"\n";
-			$rt .= "   djConfig=\"parseOnLoad: true, locale: '$jslocale'\">\n";
-			$rt .= "</script>\n";
-			$rt .= $customfile;
-			$rt .= "<script type=\"text/javascript\">\n";
-			$rt .= "   dojo.addOnLoad(function() {\n";
-			foreach($dojoRequires as $req)
-				$rt .= "   dojo.require(\"$req\");\n";
-			$rt .= "   });\n";
-			$rt .= "</script>\n";
-			return $rt;
 		case 'selectauth':
 			$rt .= "<script type=\"text/javascript\" src=\"dojo/dojo/dojo.js\"></script>\n";
 			$rt .= $customfile;
@@ -11198,6 +12987,7 @@ function getDojoHTML($refresh) {
 			$rt .= "   dojo.addOnLoad(function() {document.loginform.userid.focus(); document.loginform.userid.select();});\n";
 			$rt .= "</script>\n";
 			return $rt;
+
 		case "editVMInfo":
 			$rt .= "<style type=\"text/css\">\n";
 			$rt .= "   @import \"themes/$skin/css/dojo/$skin.css\";\n";
@@ -11215,12 +13005,9 @@ function getDojoHTML($refresh) {
 			$rt .= "dojo.addOnLoad(function() {";
 			$rt .=                   "var dialog = dijit.byId('profileDlg'); ";
 			$rt .=                   "dojo.connect(dialog, 'hide', cancelVMprofileChange);});";
-			/*if($mode != 'selectComputers') {
-				$rt .= "   dojo.addOnLoad(getCompsButton);\n";
-				$rt .= "   dojo.addOnLoad(getGroupsButton);\n";
-			}*/
 			$rt .= "</script>\n";
 			return $rt;
+
 		case "viewNodes":
 			$rt .= "<style type=\"text/css\">\n";
 			$rt .= "   @import \"themes/$skin/css/dojo/$skin.css\";\n";
@@ -11238,6 +13025,7 @@ function getDojoHTML($refresh) {
 			$rt .= "   });\n";
 			$rt .= "</script>\n";
 			return $rt;
+
 		case "siteMaintenance":
 			$rt .= "<style type=\"text/css\">\n";
 			$rt .= "   @import \"themes/$skin/css/dojo/$skin.css\";\n";
@@ -11254,6 +13042,7 @@ function getDojoHTML($refresh) {
 			$rt .= "   });\n";
 			$rt .= "</script>\n";
 			return $rt;
+
 		case "viewstats":
 			$rt .= "<style type=\"text/css\">\n";
 			$rt .= "   @import \"themes/$skin/css/dojo/$skin.css\";\n";
@@ -11271,6 +13060,7 @@ function getDojoHTML($refresh) {
 			$rt .= "   });\n";
 			$rt .= "</script>\n";
 			return $rt;
+
 		case "dashboard":
 			$rt .= "<style type=\"text/css\">\n";
 			$rt .= "   @import \"themes/$skin/css/dojo/$skin.css\";\n";
@@ -11289,6 +13079,37 @@ function getDojoHTML($refresh) {
 			$rt .= "   });\n";
 			$rt .= "</script>\n";
 			return $rt;
+
+		case "siteconfig":
+			$rt .= "<style type=\"text/css\">\n";
+			$rt .= "   @import \"themes/$skin/css/dojo/$skin.css\";\n";
+			$rt .= "   @import \"css/siteconfig.css\";\n";
+			$rt .= "</style>\n";
+			$rt .= "<script type=\"text/javascript\" src=\"js/siteconfig.js?v=$v\"></script>\n";
+			$rt .= "<script type=\"text/javascript\" src=\"dojo/dojo/dojo.js\"\n";
+			$rt .= "   djConfig=\"parseOnLoad: true, locale: '$jslocale'\">\n";
+			$rt .= "</script>\n";
+			$rt .= $customfile;
+			$rt .= "<script type=\"text/javascript\">\n";
+			$rt .= "   dojo.addOnLoad(function() {\n";
+			foreach($dojoRequires as $req)
+				$rt .= "   dojo.require(\"$req\");\n";
+			$rt .= "   });\n";
+			$rt .= "</script>\n";
+			return $rt;
+
+		/*case 'testDojoREST':
+			$rt .= "<style type=\"text/css\">\n";
+			$rt .= "   @import \"themes/$skin/css/dojo/$skin.css\";\n";
+			$rt .= "</style>\n";
+			$rt .= "<script type=\"text/javascript\" src=\"dojo/dojo/dojo.js\"\n";
+			$rt .= "   djConfig=\"parseOnLoad: true, locale: '$jslocale'\">\n";
+			$rt .= "</script>\n";
+			$rt .= "<script type=\"text/javascript\">\n";
+			foreach($dojoRequires as $req)
+				$rt .= "   dojo.require(\"$req\");\n";
+			$rt .= "</script>\n";
+			return $rt;*/
 
 		default:
 			$rt .= "<style type=\"text/css\">\n";

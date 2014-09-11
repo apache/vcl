@@ -190,6 +190,7 @@ $ERRORS = array (
 	"380" => "Failed to fetch last insert id in submitBlockRequest",
 	"385" => "Failed to execute query in submitDeleteMgmtnode",
 	"390" => "Failed to fetch salt while updating locally affiliated user password",
+	"400" => "semaphore for computer(s) expired before adding entry to reservation table",
 );
 
 $XMLRPCERRORS = array(
@@ -224,9 +225,9 @@ $XMLRPCERRORS = array(
 function errorHandler($errno, $errstr, $errfile=NULL, $errline=NULL, $errcontext=NULL) {
 	global $user;
 	if(! ONLINEDEBUG || ! checkUserHasPerm('View Debug Information')) {
+		cleanSemaphore();
 		dbDisconnect();
 		printHTMLFooter();
-		semUnlock();
 		exit();
 	}
 	print "Error encountered<br>\n";
@@ -236,9 +237,10 @@ function errorHandler($errno, $errstr, $errfile=NULL, $errline=NULL, $errcontext
 		echo "  Fatal error in line $errline of file $errfile";
 		echo ", PHP " . PHP_VERSION . " (" . PHP_OS . ")<br />\n";
 		echo "Aborting...<br />\n";
-		semUnlock();
-		 exit(1);
-		 break;
+		cleanSemaphore();
+		dbDisconnect();
+		exit(1);
+		break;
 	case E_USER_WARNING:
 		echo "<b>ERROR</b> [$errno] $errstr<br />\n";
 		break;
@@ -261,9 +263,9 @@ function errorHandler($errno, $errstr, $errfile=NULL, $errline=NULL, $errcontext
 	print "<pre>\n";
 	print getBacktraceString();
 	print "</pre>\n";
+	cleanSemaphore();
 	dbDisconnect();
 	printHTMLFooter();
-	semUnlock();
 	exit();
 }
 
