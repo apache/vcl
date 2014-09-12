@@ -729,7 +729,7 @@ function processProfileInput() {
 		$err['error'] = 1;
 		return $err;
 	}
-	if($ret['fixedIP'] != '') {
+	if($ret['fixedIP'] != 'NULL') {
 		$tmp = explode(',', $ret['dns']);
 		$cnt = 0;
 		foreach($tmp as $dnsaddr) {
