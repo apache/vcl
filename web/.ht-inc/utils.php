@@ -3380,7 +3380,7 @@ function getContinuationVar($name=NULL, $defaultval=NULL) {
 	if(! $inContinuation)
 		return $defaultval;
 	if(array_key_exists($name, $contdata)) {
-		if($contdata[$name] == 'zero')
+		if(! is_object($contdata[$name]) && $contdata[$name] == 'zero')
 			return 0;
 		return $contdata[$name];
 	}
