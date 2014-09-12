@@ -204,7 +204,9 @@ function selectResType() {
 		dojo.addClass('limitstart', 'hidden');
 		dojo.addClass('durationend', 'hidden');
 		dojo.removeClass('whentitleserver', 'hidden');
-		if(profilesstore._arrayOfAllItems.length != 0)
+		if(profilesstore._arrayOfAllItems.length != 0 &&
+		   (profilesstore._arrayOfAllItems.length != 1 ||
+		   profilesstore._arrayOfAllItems[0].name != '(New Profile)'))
 			dojo.removeClass('deployprofileslist', 'hidden');
 		dojo.removeClass('nrnamespan', 'hidden');
 		dojo.removeClass('nrservergroupspan', 'hidden');
