@@ -20,7 +20,7 @@ require_once(".ht-inc/secrets.php");
 @include_once("itecsauth/itecsauth.php");
 require_once(".ht-inc/authentication.php");
 require_once(".ht-inc/phpseclib/Crypt/AES.php");
-require_once(".ht-inc/spyc-0.5/spyc.php");
+require_once(".ht-inc/spyc-0.5.1/Spyc.php");
 if(file_exists(".ht-inc/vcldocs.php"))
 	require_once(".ht-inc/vcldocs.php");
 
