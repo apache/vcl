@@ -257,7 +257,7 @@ sub _services_restart {
 	
 	my $semaphore = $self->get_semaphore("$vmhost_computer_name-vmware_services_restart", 0);
 	if (!$semaphore) {
-		notify($ERRORS{'OK'}, 0, "unable to obtain semaphore, another process is likely running '$services_command' on $vmhost_computer_name, sleeping for 30 seconds and then proceeding");
+		notify($ERRORS{'OK'}, 0, "unable to obtain semaphore, another process is likely restarting services on $vmhost_computer_name, sleeping for 30 seconds and then proceeding");
 		sleep_uninterrupted(30);
 		return 1;
 	}
