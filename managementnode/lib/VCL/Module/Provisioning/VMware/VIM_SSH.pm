@@ -166,7 +166,7 @@ sub _run_vim_cmd {
 		return;
 	}
 	
-	my $timeout_seconds = shift || 30;
+	my $timeout_seconds = shift || 60;
 	
 	my $vmhost_computer_name = $self->vmhost_os->data->get_computer_short_name();
 	
@@ -255,11 +255,6 @@ sub _services_restart {
 	
 	my $vmhost_computer_name = $self->vmhost_os->data->get_computer_short_name();
 	
-	# Check if the PID files for the following services are correct
-	$self->_check_service_pid('hostd-worker', '/var/run/vmware/vmware-hostd.PID');
-	$self->_check_service_pid('sfcb-vmware_bas', '/var/run/vmware/vicimprovider.PID');
-	
-	my $services_command = "services.sh restart";
 	my $semaphore = $self->get_semaphore("$vmhost_computer_name-vmware_services_restart", 0);
 	if (!$semaphore) {
 		notify($ERRORS{'OK'}, 0, "unable to obtain semaphore, another process is likely running '$services_command' on $vmhost_computer_name, sleeping for 30 seconds and then proceeding");
@@ -267,8 +262,26 @@ sub _services_restart {
 		return 1;
 	}
 	
+	my $check_services = {
+		'hostd-worker' => '/var/run/vmware/vmware-hostd.PID',
+		'sfcb-vmware_bas' => '/var/run/vmware/vicimprovider.PID',
+		'vmkdevmgr' => '/var/run/vmware/vmkdevmgr.pid',
+		'vmkeventd' => '/var/run/vmware/vmkeventd.pid',
+		'vmsyslogd' => '/var/run/vmware/vmsyslogd.pid',
+		'rhttpproxy-work' => '/var/run/vmware/vmware-rhttpproxy.PID',
+		'vpxa-worker' => '/var/run/vmware/vmware-vpxa.PID',
+	};
+	
+	# Check if the PID files for the following services are correct
+	for my $service_name (keys %$check_services) {
+		my $pid_file_path = $check_services->{$service_name};
+		$self->_check_service_pid($service_name, $pid_file_path);
+	}
+	
+	my $services_command = "services.sh restart";
+	
 	notify($ERRORS{'DEBUG'}, 0, "restarting VMware services on $vmhost_computer_name");
-	my ($services_exit_status, $services_output) = $self->vmhost_os->execute($services_command, 1, 90);
+	my ($services_exit_status, $services_output) = $self->vmhost_os->execute($services_command, 1, 120);
 	if (!defined($services_output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to run command on VM host $vmhost_computer_name: $services_command");
 		return;
@@ -322,11 +335,15 @@ sub _check_service_pid {
 	}
 	else {
 		($running_pid) = "@$ps_output" =~ /(\d+)/g;
-		if ($running_pid) {
+		if (!$running_pid) {
+			notify($ERRORS{'DEBUG'}, 0, "parent $process_name PID is not running");
+			return;
+		}
+		elsif ($running_pid > 1) {
 			notify($ERRORS{'DEBUG'}, 0, "retrieved parent $process_name PID: $running_pid");
 		}
 		else {
-			notify($ERRORS{'WARNING'}, 0, "unable to determine parent $process_name PID, command: '$ps_command', output:\n" . join("\n", @$ps_output));
+			notify($ERRORS{'WARNING'}, 0, "parent $process_name PID not valid: $running_pid, command: '$ps_command', output:\n" . join("\n", @$ps_output));
 			return;
 		}
 	}
@@ -428,7 +445,7 @@ sub _get_vm_list {
 		my $vmx_normal_path = $self->_get_normal_path($vmx_file_path);
 		if (!$vmx_normal_path) {
 			notify($ERRORS{'WARNING'}, 0, "unable to determine normal path: $vmx_file_path");
-			return;
+			#return;
 		}
 		
 		$vms{$vm_id} = $vmx_normal_path;
@@ -469,7 +486,7 @@ sub _get_vm_id {
 	}
 	
 	for my $vm_id (keys %$vm_list) {
-		return $vm_id if ($vmx_file_path eq $vm_list->{$vm_id});
+		return $vm_id if ($vm_list->{$vm_id} && $vmx_file_path eq $vm_list->{$vm_id});
 	}
 	
 	notify($ERRORS{'WARNING'}, 0, "unable to determine VM ID, vmx file is not registered: $vmx_file_path, registered VMs:\n" . format_data($vm_list));
@@ -1207,7 +1224,7 @@ sub vm_power_off {
 	# Get the task ID
 	my @task_ids = $self->_get_task_ids($vmx_file_path, 'powerOff');
 	if (!@task_ids) {
-		notify($ERRORS{'WARNING'}, 0, "unable to retrieve the ID of the task created to power on the VM");
+		notify($ERRORS{'WARNING'}, 0, "unable to retrieve the ID of the task created to power off the VM");
 		return;
 	}
 	
@@ -1218,6 +1235,84 @@ sub vm_power_off {
 	}
 	else {
 		notify($ERRORS{'WARNING'}, 0, "failed to power off VM: $vmx_file_path, the vim power off task did not complete successfully, vim-cmd $vim_cmd_arguments output:\n" . join("\n", @$output));
+		return;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 vm_suspend
+
+ Parameters  : $vmx_file_path
+ Returns     : boolean
+ Description : Powers off the VM indicated by the vmx file path argument.
+
+=cut
+
+sub vm_suspend {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Get the vmx file path argument
+	my $vmx_file_path = shift;
+	if (!$vmx_file_path) {
+		notify($ERRORS{'WARNING'}, 0, "vmx file path argument was not supplied");
+		return;
+	}
+	
+	# Check if the VM is already powered off
+	my $vm_power_state = $self->get_vm_power_state($vmx_file_path);
+	if ($vm_power_state) {
+		if ($vm_power_state =~ /off/i) {
+			notify($ERRORS{'DEBUG'}, 0, "VM is already powered off: $vmx_file_path");
+			return 1;
+		}
+		elsif ($vm_power_state =~ /suspend/i) {
+			notify($ERRORS{'DEBUG'}, 0, "VM is already suspended: $vmx_file_path");
+			return 1;
+		}
+	}
+	
+	# Get the VM ID
+	my $vm_id = $self->_get_vm_id($vmx_file_path);
+	if (!defined($vm_id)) {
+		notify($ERRORS{'WARNING'}, 0, "unable to power off VM because VM ID could not be determined");
+		return;
+	}
+	
+	my $vim_cmd_arguments = "vmsvc/power.suspend $vm_id";
+	my ($exit_status, $output) = $self->_run_vim_cmd($vim_cmd_arguments, 400);
+	return if !$output;
+	
+	# Expected output if the VM was not previously suspended:
+	# Suspending VM:
+	
+	# Expected output if the VM was previously suspended or powered off:
+	# Suspending VM:
+	# Suspend failed
+	
+	if (!grep(/Suspending VM/i, @$output)) {
+		notify($ERRORS{'WARNING'}, 0, "unexpected output returned while attempting to suspend VM $vmx_file_path, VIM command arguments: '$vim_cmd_arguments', output:\n" . join("\n", @$output));
+		return;
+	}
+
+	# Get the task ID
+	my @task_ids = $self->_get_task_ids($vmx_file_path, 'suspend');
+	if (!@task_ids) {
+		notify($ERRORS{'WARNING'}, 0, "unable to retrieve the ID of the task created to suspend the VM");
+		return;
+	}
+	
+	# Wait for the task to complete
+	if ($self->_wait_for_task($task_ids[0])) {
+		notify($ERRORS{'OK'}, 0, "suspended VM: $vmx_file_path");
+		return 1;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to suspend VM: $vmx_file_path, the vim power off task did not complete successfully, vim-cmd $vim_cmd_arguments output:\n" . join("\n", @$output));
 		return;
 	}
 }

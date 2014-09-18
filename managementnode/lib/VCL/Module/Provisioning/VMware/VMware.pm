@@ -1317,7 +1317,7 @@ sub get_vmhost_api_object {
 		return 0;
 	}
 	notify($ERRORS{'DEBUG'}, 0, "loaded VMware control module: $api_perl_package");
-	
+
 	# Create an API object to control the VM host and VMs
 	my $api;
 	eval { $api = ($api_perl_package)->new({data_structure => $self->data,
@@ -4153,12 +4153,12 @@ sub is_vm_registered {
 		notify($ERRORS{'WARNING'}, 0, "vmx file path argument was not specified and default vmx file path could not be determined");		
 		return;
 	}
-	$vmx_file_path = normalize_file_path($vmx_file_path);
+	$vmx_file_path = $self->_get_normal_path($vmx_file_path);
 	
 	my @registered_vmx_file_paths = $self->api->get_registered_vms();
 	for my $registered_vmx_file_path (@registered_vmx_file_paths) {
-		$registered_vmx_file_path = normalize_file_path($registered_vmx_file_path);
-		if ($vmx_file_path eq $registered_vmx_file_path) {
+		$registered_vmx_file_path = $self->_get_normal_path($registered_vmx_file_path);
+		if ($registered_vmx_file_path && $vmx_file_path eq $registered_vmx_file_path) {
 			notify($ERRORS{'DEBUG'}, 0, "VM is registered: $vmx_file_path");
 			return 1;
 		}
@@ -5305,7 +5305,11 @@ sub delete_vm {
 	
 	# Get the vmx info
 	my $vmx_info = $self->get_vmx_info($vmx_file_path);
-	if (!$vmx_info) {
+	my $vmx_directory_path;
+	if ($vmx_info) {
+		$vmx_directory_path = $vmx_info->{vmx_directory_path};
+	}
+	else {
 		# Failed to retrieve vmx info
 		# VM may have been registered but the vmx file/directory was deleted
 		# Check if the vmx file exists
@@ -5316,11 +5320,18 @@ sub delete_vm {
 			return;
 		}
 		
-		notify($ERRORS{'OK'}, 0, "deleted VM, successfully unregistered VM but it vmx directory was not deleted because the vmx file does not exist: $vmx_file_path");
-		return 1;
+		# Check if the vmx parent directory is named after the vmx file
+		# If so, it's safe to delete the directory
+		my $vmx_file_base_name = $self->_get_file_base_name($vmx_file_path);
+		$vmx_directory_path = $self->_get_parent_directory_normal_path($vmx_file_path) || '';
+		if ($vmx_directory_path && $vmx_directory_path =~ /\/$vmx_file_base_name$/) {
+			notify($ERRORS{'OK'}, 0, "deleted VM, successfully unregistered VM, vmx file does not exist: $vmx_file_path, deleting vmx parent directory: $vmx_directory_path, directory name matches the vmx file base name: $vmx_file_base_name");
+		}
+		else {
+			notify($ERRORS{'OK'}, 0, "deleted VM, successfully unregistered VM but it vmx directory was not deleted because the vmx file does not exist: $vmx_file_path, vmx parent directory name ($vmx_directory_path) does not match the vmx file base name: $vmx_file_base_name");
+			return 1;
+		}
 	}
-	
-	my $vmx_directory_path = $vmx_info->{vmx_directory_path};
 	
 	# Delete the vmx directory
 	my $attempt = 0;
@@ -5356,7 +5367,11 @@ sub delete_vm {
 		}
 		
 		# Check if the directory containing the vmdk is shared among different VMs or dedicated to the VM being deleted
-		if ($self->is_vmdk_directory_shared($vmdk_directory_path)) {
+		my $vmdk_directory_shared = $self->is_vmdk_directory_shared($vmdk_directory_path);
+		if (!defined($vmdk_directory_shared)) {
+			notify($ERRORS{'DEBUG'}, 0, "vmdk directory will NOT be deleted, unable to determine if vmdk appears to be shared: $vmdk_directory_path");
+		}
+		elsif ($vmdk_directory_shared) {
 			# Directory is shared, entire directory can't be deleted
 			notify($ERRORS{'DEBUG'}, 0, "vmdk directory will NOT be deleted because the vmdk appears to be shared: $vmdk_directory_path");
 			
@@ -5521,7 +5536,7 @@ sub copy_vmdk {
 	my $vmhost_product_name = $self->get_vmhost_product_name();
 	
 	# Get the arguments
-	my ($source_vmdk_file_path, $destination_vmdk_file_path, $virtual_disk_type) = @_;
+	my ($source_vmdk_file_path, $destination_vmdk_file_path, $destination_virtual_disk_type) = @_;
 	if (!$source_vmdk_file_path || !$destination_vmdk_file_path) {
 		notify($ERRORS{'WARNING'}, 0, "source and destination vmdk file path arguments were not specified");
 		return;
@@ -5546,12 +5561,12 @@ sub copy_vmdk {
 	my $destination_reference_vmx_file_path = "$destination_directory_path/$destination_reference_vmx_file_name";
 	
 	# Set the default virtual disk type if the argument was not specified
-	if (!$virtual_disk_type) {
+	if (!$destination_virtual_disk_type) {
 		if ($vmhost_product_name =~ /esx/i) {
-			$virtual_disk_type = 'thin';
+			$destination_virtual_disk_type = 'thin';
 		}
 		else {
-			$virtual_disk_type = '2gbsparse';
+			$destination_virtual_disk_type = '2gbsparse';
 		}
 	}
 	
@@ -5577,7 +5592,7 @@ sub copy_vmdk {
 	my $end_time;
 	# Attempt to use the API's copy_virtual_disk subroutine
 	if ($self->api->can('copy_virtual_disk')) {
-		my $copied_destination_vmdk_file_path = $self->api->copy_virtual_disk($source_vmdk_file_path, $destination_vmdk_file_path, $virtual_disk_type);
+		my $copied_destination_vmdk_file_path = $self->api->copy_virtual_disk($source_vmdk_file_path, $destination_vmdk_file_path, $destination_virtual_disk_type);
 		if ($copied_destination_vmdk_file_path) {
 			$end_time = time;
 			$copied_destination_vmdk_file_path = $self->_get_normal_path($copied_destination_vmdk_file_path);
@@ -5615,6 +5630,14 @@ sub copy_vmdk {
 	}
 	
 	if (!$end_time) {
+		# If the source disk is 2gb sparse, make sure multiextent is loaded
+		my $source_virtual_disk_type = $self->api->get_virtual_disk_type($source_vmdk_file_path);
+		if ($source_virtual_disk_type =~ /sparse/i || $destination_virtual_disk_type =~ /sparse/) {
+			if (!$self->check_multiextent()) {
+				notify($ERRORS{'WARNING'}, 0, "copy will likely fail, multiextent kernel module is disabled on VM host $vmhost_name");
+			}
+		}
+		
 		# Create the destination directory
 		if (!$self->vmhost_os->create_directory($destination_directory_path)) {
 			notify($ERRORS{'WARNING'}, 0, "unable to copy vmdk, destination directory could not be created on VM host $vmhost_name: $destination_directory_path");
@@ -5622,8 +5645,8 @@ sub copy_vmdk {
 		}
 		
 		# Try to use vmkfstools
-		my $command = "vmkfstools -i \"$source_vmdk_file_path\" \"$destination_vmdk_file_path\" -d $virtual_disk_type";
-		notify($ERRORS{'DEBUG'}, 0, "attempting to copy virtual disk using vmkfstools, disk type: $virtual_disk_type:\n'$source_vmdk_file_path' --> '$destination_vmdk_file_path'");
+		my $command = "vmkfstools -i \"$source_vmdk_file_path\" \"$destination_vmdk_file_path\" -d $destination_virtual_disk_type";
+		notify($ERRORS{'DEBUG'}, 0, "attempting to copy virtual disk using vmkfstools, disk type: $destination_virtual_disk_type:\n'$source_vmdk_file_path' --> '$destination_vmdk_file_path'");
 		
 		$start_time = time;
 		my ($exit_status, $output) = $self->vmhost_os->execute($command, 1, 7200);
@@ -5672,7 +5695,7 @@ sub copy_vmdk {
 		}
 		else {
 			$end_time = time;
-			notify($ERRORS{'OK'}, 0, "copied virtual disk on VM host using vmkfstools, destination disk type: $virtual_disk_type:\n'$source_vmdk_file_path' --> '$destination_vmdk_file_path'");
+			notify($ERRORS{'OK'}, 0, "copied virtual disk on VM host using vmkfstools, destination disk type: $destination_virtual_disk_type:\n'$source_vmdk_file_path' --> '$destination_vmdk_file_path'");
 		}
 	}
 	
@@ -5944,6 +5967,10 @@ sub move_vmdk {
 		return;
 	}
 	
+	# Normalize the file paths
+	$source_vmdk_file_path = $self->_get_normal_path($source_vmdk_file_path) || return;
+	$destination_vmdk_file_path = $self->_get_normal_path($destination_vmdk_file_path) || return;
+	
 	# Make sure the source vmdk file exists
 	if (!$self->vmhost_os->file_exists($source_vmdk_file_path)) {
 		notify($ERRORS{'WARNING'}, 0, "source vmdk file path does not exist: $source_vmdk_file_path");
@@ -5958,8 +5985,10 @@ sub move_vmdk {
 	
 	notify($ERRORS{'DEBUG'}, 0, "attempting to move vmdk: '$source_vmdk_file_path' --> '$destination_vmdk_file_path'");
 	
+	my $source_vmdk_directory_path = $self->_get_parent_directory_normal_path($source_vmdk_file_path);
+	
 	# Determine the destination vmdk directory path and create the directory
-	my ($destination_vmdk_directory_path) = $destination_vmdk_file_path =~ /(.+)\/[^\/]+\.vmdk$/;
+	my $destination_vmdk_directory_path = $self->_get_parent_directory_normal_path($destination_vmdk_file_path);
 	if (!$destination_vmdk_directory_path) {
 		notify($ERRORS{'WARNING'}, 0, "unable to determine destination vmdk directory path from vmdk file path: $destination_vmdk_file_path");
 		return;
@@ -5976,6 +6005,12 @@ sub move_vmdk {
 	
 	# Check if the VM host OS object implements an execute subroutine and attempt to run vmware-vdiskmanager
 	if ($self->vmhost_os->can("execute")) {
+		# If the source disk is 2gb sparse, make sure multiextent is loaded
+		my $source_virtual_disk_type = $self->api->get_virtual_disk_type($source_vmdk_file_path);
+		if ($source_virtual_disk_type =~ /sparse/i) {
+			$self->check_multiextent();
+		}
+		
 		# Try vmware-vdiskmanager
 		notify($ERRORS{'OK'}, 0, "attempting to move vmdk file using vmware-vdiskmanager: $source_vmdk_file_path --> $destination_vmdk_file_path");
 		my $vdisk_command = "vmware-vdiskmanager -n \"$source_vmdk_file_path\" \"$destination_vmdk_file_path\"";
@@ -5984,6 +6019,15 @@ sub move_vmdk {
 			notify($ERRORS{'WARNING'}, 0, "failed to execute 'vmware-vdiskmanager' command on VM host to move vmdk file:\n$vdisk_command");
 		}
 		elsif (grep(/success/i, @$vdisk_output)) {
+			# Check if the source directory still exists and contains files
+			my @source_directory_files = $self->vmhost_os->find_files($source_vmdk_directory_path, '*');
+			if (@source_directory_files) {
+				notify($ERRORS{'DEBUG'}, 0, "source directory will not be deleted, it still contains files: $source_vmdk_directory_path\n" . join("\n", @source_directory_files));
+			}
+			else {
+				notify($ERRORS{'DEBUG'}, 0, "source directory is empty, attempting to delete: $source_vmdk_directory_path");
+				$self->vmhost_os->delete_file($source_vmdk_directory_path);
+			}
 			notify($ERRORS{'OK'}, 0, "moved vmdk file by executing 'vmware-vdiskmanager' command on VM host:\ncommand: $vdisk_command\noutput: " . join("\n", @$vdisk_output));
 			return 1;
 		}
@@ -5993,7 +6037,6 @@ sub move_vmdk {
 		else {
 			notify($ERRORS{'WARNING'}, 0, "failed to execute 'vmware-vdiskmanager' command on VM host to move vmdk file:\n$vdisk_command\noutput:\n" . join("\n", @$vdisk_output));
 		}
-		
 		
 		# Try vmkfstools
 		notify($ERRORS{'DEBUG'}, 0, "attempting to move vmdk file using vmkfstools: $source_vmdk_file_path --> $destination_vmdk_file_path");
@@ -6015,6 +6058,15 @@ sub move_vmdk {
 			notify($ERRORS{'WARNING'}, 0, "failed to move vmdk file using vmkfstools, destination file does not exist: '$source_vmdk_file_path' --> '$destination_vmdk_file_path'");
 		}
 		else {
+			# Check if the source directory still exists and contains files
+			my @source_directory_files = $self->vmhost_os->find_files($source_vmdk_directory_path, '*');
+			if (@source_directory_files) {
+				notify($ERRORS{'DEBUG'}, 0, "source directory will not be deleted, it still contains files: $source_vmdk_directory_path\n" . join("\n", @source_directory_files));
+			}
+			else {
+				notify($ERRORS{'DEBUG'}, 0, "source directory is empty, attempting to delete: $source_vmdk_directory_path");
+				$self->vmhost_os->delete_file($source_vmdk_directory_path);
+			}
 			notify($ERRORS{'OK'}, 0, "moved vmdk file using vmkfstools: '$source_vmdk_file_path' --> '$destination_vmdk_file_path'");
 			return 1;
 		}
@@ -6025,13 +6077,6 @@ sub move_vmdk {
 	
 	# Unable to move vmdk file using any VMware utilities or APIs
 	# Attempt to manually move the files
-	
-	# Determine the source vmdk directory path
-	my ($source_vmdk_directory_path) = $source_vmdk_file_path =~ /(.+)\/[^\/]+\.vmdk$/;
-	if (!$source_vmdk_directory_path) {
-		notify($ERRORS{'WARNING'}, 0, "unable to determine source vmdk directory path from vmdk file path: $source_vmdk_file_path");
-		return;
-	}
 	
 	# Determine the source vmdk file name
 	my ($source_vmdk_file_name) = $source_vmdk_file_path =~ /\/([^\/]+\.vmdk)$/;
@@ -6169,8 +6214,81 @@ sub move_vmdk {
 		return;
 	}
 	
+	# Check if the source directory still exists and contains files
+	my @source_directory_files = $self->vmhost_os->find_files($source_vmdk_directory_path, '*');
+	if (@source_directory_files) {
+		notify($ERRORS{'DEBUG'}, 0, "source directory will not be deleted, it still contains files: $source_vmdk_directory_path\n" . join("\n", @source_directory_files));
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "source directory is empty, attempting to delete: $source_vmdk_directory_path");
+		$self->vmhost_os->delete_file($source_vmdk_directory_path);
+	}
+	
 	notify($ERRORS{'OK'}, 0, "moved vmdk file: '$source_vmdk_file_path' --> '$destination_vmdk_file_path'");
 	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 check_multiextent
+
+ Parameters  : none
+ Returns     : boolean
+ Description : Checks if the multiextent kernel module is loaded on the VM
+               host. This is required to operate on 2GB sparse vmdk files. If
+               not loaded, an attempt is made to load it.
+
+=cut
+
+sub check_multiextent {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $vmhost_hostname = $self->data->get_vmhost_hostname();
+	
+	my $list_command = 'vmkload_mod -l | grep multiextent';
+	my ($list_exit_status, $list_output) = $self->vmhost_os->execute($list_command);
+	if (!defined($list_output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to determine if multiextent kernel module is loaded on $vmhost_hostname");
+		return;
+	}
+	elsif (grep(/^multiextent/, @$list_output)) {
+		notify($ERRORS{'DEBUG'}, 0, "multiextent kernel module is loaded on $vmhost_hostname");
+		return 1;
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "multiextent kernel module is not loaded on $vmhost_hostname, attempting to load it");
+	}
+	
+	my $load_command = 'vmkload_mod multiextent';
+	my ($load_exit_status, $load_output) = $self->vmhost_os->execute($load_command);
+	if (!defined($load_output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to load multiextent kernel module on $vmhost_hostname");
+	}
+	elsif (grep(/loaded successfully/, @$load_output)) {
+		notify($ERRORS{'DEBUG'}, 0, "loaded multiextent kernel module on $vmhost_hostname");
+		return 1;
+	}
+	elsif (grep(/already loaded/, @$load_output)) {
+		notify($ERRORS{'DEBUG'}, 0, "multiextent kernel module already loaded on $vmhost_hostname");
+		return 1;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to load multiextent kernel module on $vmhost_hostname, exit status: $load_exit_status, output:\n" . join("\n", @$load_output));
+	}
+	
+	notify($ERRORS{'CRITICAL'}, 0, "multiextent kernel module is disabled on VM host $vmhost_hostname, operations on 2GB sparse virtual disk files will fail\n" .
+		'*' x 100 . "\n" .
+		"DO THE FOLLOWING TO FIX THIS PROBLEM:\n" .
+		"Enable the module by running the following command on each VMware host: 'vmkload_mod -u multiextent'\n" .
+		"Add a line containing 'vmkload_mod -u multiextent' to /etc/rc.local.d/local.sh on each ESXi host\n" .
+		'*' x 100
+	);
+	
+	return 0;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -6499,11 +6617,18 @@ sub get_datastore_info {
 		notify($ERRORS{'WARNING'}, 0, "failed to retrieve datastore info from " . ref($self->api) . " API object");
 		return;
 	}
-	else {
-		notify($ERRORS{'DEBUG'}, 0, "retrieved datastore info from VM host: " . join(", ", sort keys %$datastore_info));
-		$self->{datastore_info} = $datastore_info;
-		return $datastore_info;
+	
+	for my $datastore_name (keys %$datastore_info) {
+		# URL may be in the format: 'ds:///vmfs/volumes/51938b70-d1df1a73-459a-3640b58306bb/'
+		# Remove the ds:// from the beginning
+		if ($datastore_info->{$datastore_name}{url}) {
+			$datastore_info->{$datastore_name}{url} =~ s/^.+\/vmfs/\/vmfs/;
+		}
 	}
+
+	notify($ERRORS{'DEBUG'}, 0, "retrieved datastore info from VM host: " . join(", ", sort keys %$datastore_info));
+	$self->{datastore_info} = $datastore_info;
+	return $datastore_info;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -6798,7 +6923,7 @@ sub _get_datastore_name {
 	# Get the datastore information
 	my $datastore_info = $self->get_datastore_info() || return;
 	my @datastore_normal_paths;
-	
+
 	# Loop through the datastores, check if the path begins with the datastore path
 	for my $datastore_name (keys(%{$datastore_info})) {
 		my $datastore_normal_path = $datastore_info->{$datastore_name}{normal_path};
@@ -6809,7 +6934,7 @@ sub _get_datastore_name {
 		$datastore_normal_path = normalize_file_path($datastore_normal_path);
 		
 		my $datastore_url = $datastore_info->{$datastore_name}{url};
-		$datastore_url = normalize_file_path($datastore_url);
+		$datastore_url = normalize_file_path($datastore_url) || '';
 		
 		if ($path =~ /^($datastore_name|\[$datastore_name\]|$datastore_normal_path|$datastore_url)(\s|\/|$)/) {
 			return $datastore_name;

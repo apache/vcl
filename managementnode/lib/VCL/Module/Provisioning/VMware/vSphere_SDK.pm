@@ -685,7 +685,11 @@ sub copy_virtual_disk {
 		# Delete the destination directory path previously created
 		$self->delete_file($destination_directory_path);
 		
-		if ($copy_virtual_disk_fault =~ /No space left/i) {
+		if ($source_disk_type =~ /sparse/i && $copy_virtual_disk_fault =~ /FileNotFound/ && $self->is_multiextent_disabled()) {
+			notify($ERRORS{'WARNING'}, 0, "failed to copy vmdk on VM host $vmhost_name using CopyVirtualDisk function, likely because multiextent kernel module is disabled");
+			return;
+		}
+		elsif ($copy_virtual_disk_fault =~ /No space left/i) {
 			# Check if the output indicates there is not enough space to copy the vmdk
 			# Output will contain:
 			#    Fault string: A general system error occurred: No space left on device
@@ -854,6 +858,7 @@ EOF
 		return;
 	}
 	
+	my $source_vm_vmx_path = $source_vm_view->config->files->vmPathName;
 	
 	# Create the specification for cloning the VM
 	my $clone_spec = VirtualMachineCloneSpec->new(
@@ -884,36 +889,54 @@ EOF
 	
 	# Clone the temporary VM, thus creating a copy of its virtual disk
 	notify($ERRORS{'DEBUG'}, 0, "attempting to clone VM: $source_vm_name --> $clone_vm_name\nclone VM directory path: '$clone_vm_directory_path'");
+	my $clone_vm;
 	my $clone_vm_view;
 	eval {
-		my $clone_vm = $source_vm_view->CloneVM(
+		$clone_vm = $source_vm_view->CloneVM(
 			folder => $vm_folder_view,
 			name => $clone_vm_name,
 			spec => $clone_spec
 		);
-		if ($clone_vm) {
-			$clone_vm_view = Vim::get_view(mo_ref => $clone_vm);
-			notify($ERRORS{'DEBUG'}, 0, "cloned VM: $source_vm_name --> $clone_vm_name");
+	};
+	
+	if ($clone_vm) {
+		$clone_vm_view = Vim::get_view(mo_ref => $clone_vm);
+		notify($ERRORS{'DEBUG'}, 0, "cloned VM: $source_vm_name --> $clone_vm_name");
+	}
+	else {
+		if (my $fault = $@) {
+			if ($source_disk_type =~ /sparse/i && $fault =~ /FileNotFound/ && $self->is_multiextent_disabled()) {
+				notify($ERRORS{'WARNING'}, 0, "failed to clone VM on VM host $vmhost_name, likely because multiextent kernel module is disabled");
+			}
+			elsif ($fault =~ /No space left/i) {
+				# Check if the output indicates there is not enough space to copy the vmdk
+				# Output will contain:
+				#    Fault string: A general system error occurred: No space left on device
+				#    Fault detail: SystemError
+				notify($ERRORS{'CRITICAL'}, 0, "failed to clone VM on VM host $vmhost_name, no space is left on the destination device: '$destination_path'\nerror:\n$fault");
+			}
+			else {
+				notify($ERRORS{'WARNING'}, 0, "failed to clone VM on VM host $vmhost_name: '$source_path' --> '$destination_path'\nerror:\n$fault");
+			}
 		}
 		else {
 			notify($ERRORS{'WARNING'}, 0, "failed to clone VM: $source_vm_name --> $clone_vm_name");
-			return;
 		}
-	};
-	if (my $fault = $@) {
-		if ($fault =~ /No space left/i) {
-			# Check if the output indicates there is not enough space to copy the vmdk
-			# Output will contain:
-			#    Fault string: A general system error occurred: No space left on device
-			#    Fault detail: SystemError
-			notify($ERRORS{'CRITICAL'}, 0, "failed to copy vmdk on VM host $vmhost_name, no space is left on the destination device: '$destination_path'\nerror:\n$fault");
-			return;
+		
+		# Delete the source VM which could not be cloned
+		if (!$source_vm_vmx_path) {
+			notify($ERRORS{'WARNING'}, 0, "source VM not deleted, unable to determine vmx file path");
+		}
+		elsif ($source_vm_vmx_path !~ /\.vmx$/i) {
+			notify($ERRORS{'WARNING'}, 0, "source VM not deleted, vmPathName does not end with '.vmx': $source_vm_vmx_path");
 		}
 		else {
-			notify($ERRORS{'WARNING'}, 0, "failed to copy vmdk on VM host $vmhost_name: '$source_path' --> '$destination_path'\nerror:\n$fault");
+			$self->delete_vm($source_vm_vmx_path);
 		}
+		
 		return;
 	}
+	
 
 	notify($ERRORS{'DEBUG'}, 0, "deleting source VM: $source_vm_name");
 	$self->vm_unregister($source_vm_view);
@@ -1029,9 +1052,13 @@ sub move_virtual_disk {
 	if (my $fault = $@) {
 		# Get the source file info
 		my $source_file_info = $self->_get_file_info($source_path)->{$source_path};
+		my $source_disk_type = $source_file_info->{diskType};
 		
 		# A FileNotFound fault will be generated if the source vmdk file exists but there is a problem with it
-		if ($fault->isa('SoapFault') && ref($fault->detail) eq 'FileNotFound' && defined($source_file_info->{type}) && $source_file_info->{type} !~ /vmdisk/i) {
+		if ($source_disk_type =~ /sparse/i && $fault =~ /FileNotFound/ && $self->is_multiextent_disabled()) {
+			notify($ERRORS{'WARNING'}, 0, "failed to move $source_disk_type virtual disk on VM host $vmhost_name, likely because multiextent kernel module is disabled");
+		}
+		elsif ($fault->isa('SoapFault') && ref($fault->detail) eq 'FileNotFound' && defined($source_file_info->{type}) && $source_file_info->{type} !~ /vmdisk/i) {
 			notify($ERRORS{'WARNING'}, 0, "failed to move virtual disk on VM host $vmhost_name, source file is either not a virtual disk file or there is a problem with its configuration, check the 'Extent description' section of the vmdk file: '$source_path'\nsource file info:\n" . format_data($source_file_info));
 		}
 		elsif ($fault =~ /No space left/i) {
@@ -1950,7 +1977,13 @@ sub file_exists {
 	}
 	
 	# Get and check the file path argument
-	my $file_path = $self->_get_datastore_path(shift) || return;
+	my $file_path_argument = shift;
+	
+	my $file_path = $self->_get_datastore_path($file_path_argument);
+	if (!$file_path) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine if file exists: $file_path_argument, datastore path could not be determined");
+		return;
+	}
 	
 	# Check if the path argument is the root of a datastore
 	if ($file_path =~ /^\[(.+)\]$/) {
@@ -2673,6 +2706,30 @@ sub _get_cluster_view {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 _get_host_system_views
+
+ Parameters  : none
+ Returns     : array of vSphere SDK HostSystem view object
+ Description : Retrieves an array of vSphere SDK HostSystem view objects. There
+               may be multiple if vCenter is used.
+
+=cut
+
+sub _get_host_system_views {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	return @{$self->{host_system_views}} if $self->{host_system_views};
+	my @host_system_views = @{Vim::find_entity_views(view_type => 'HostSystem')};
+	$self->{host_system_views} = \@host_system_views;
+	return @host_system_views;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 =head2 _get_host_system_view
 
  Parameters  : 
@@ -2698,7 +2755,7 @@ sub _get_host_system_view {
 	
 	my $vmhost_name = $self->data->get_vmhost_short_name();
 	
-	my @host_system_views = @{Vim::find_entity_views(view_type => 'HostSystem')};
+	my @host_system_views = $self->_get_host_system_views();
 	if (!scalar(@host_system_views)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to retrieve HostSystem views");
 		return;
@@ -3744,6 +3801,77 @@ sub add_ethernet_adapter {
 	else {
 		notify($ERRORS{'DEBUG'}, 0, "added ethernet adapter to VM: $vmx_path:\n" . format_data($adapter_specification));
 		return 1;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 is_multiextent_disabled
+
+ Parameters  : none
+ Returns     : boolean
+ Description : Checks if the multiextent kernel module is loaded on all hosts.
+               This is required to operate on 2GB sparse vmdk files.
+
+=cut
+
+sub is_multiextent_disabled {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my @host_system_views = $self->_get_host_system_views();
+	if (!scalar(@host_system_views)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve HostSystem views");
+		return;
+	}
+	
+	my $multiextent_disabled = 0;
+	my $multiextent_info = {};
+	HOST: for my $host_system_view (@host_system_views) {
+		my $host_system_name = $host_system_view->{name};
+		
+		my $kernel_module_system = Vim::get_view(mo_ref => $host_system_view->configManager->kernelModuleSystem);
+		if (!$kernel_module_system) {
+			notify($ERRORS{'WARNING'}, 0, "unable to determine if multiextent kernel module is enabled on $host_system_name, kernelModuleSystem could not be retrieved");
+			$multiextent_info->{$host_system_name} = 'unknown';
+			next;
+		}
+		
+		my $kernel_modules = $kernel_module_system->QueryModules;
+		if (!$kernel_modules) {
+			notify($ERRORS{'WARNING'}, 0, "unable to determine if multiextent kernel module is enabled on $host_system_name, kernelModuleSystem failed to query modules");
+			$multiextent_info->{$host_system_name} = 'unknown';
+			next;
+		}
+		
+		for my $kernel_module (@$kernel_modules) {
+			my $kernel_module_name = $kernel_module->name;
+			if ($kernel_module_name eq 'multiextent') {
+				$multiextent_info->{$host_system_name} = 'loaded';
+				next HOST;
+			}
+		}
+		
+		$multiextent_info->{$host_system_name} = 'not loaded';
+		$multiextent_disabled = 1;
+	}
+	
+	if ($multiextent_disabled) {
+		notify($ERRORS{'CRITICAL'}, 0, "multiextent kernel module is disabled on ESXi hosts, operations on sparse virtual disk files will continue to fail:\n" . format_data($multiextent_info) . "\n" .
+			'*' x 100 . "\n" .
+			"DO THE FOLLOWING TO FIX THIS PROBLEM:\n" .
+			"Enable the module by running the following command on each ESXi host: 'vmkload_mod -u multiextent'\n" .
+			"Add a line containing 'vmkload_mod -u multiextent' to /etc/rc.local.d/local.sh on each ESXi host\n" .
+			'*' x 100
+		);
+		return 1;
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "multiextent kernel module is not disabled:\n" . format_data($multiextent_info));
+		return 0;
 	}
 }
 
