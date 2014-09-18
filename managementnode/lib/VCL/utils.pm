@@ -1362,6 +1362,10 @@ EOF
 				notify($ERRORS{'OK'}, $LOGFILE, "request $request_id state already set to: $current_state_name/$current_laststate_name");
 				return 1;
 			}
+			elsif ($current_state_name eq 'deleted' || $current_laststate_name eq 'deleted') {
+				notify($ERRORS{'OK'}, $LOGFILE, "request $request_id has been deleted, state not set to: $state_name/$laststate_name, current state: $current_state_name/$current_laststate_name");
+				return 1;
+			}
 			else {
 				notify($ERRORS{'WARNING'}, $LOGFILE, "unable to update request $request_id state to $state_name/$laststate_name, current state: $current_state_name/$current_laststate_name, SQL statement:\n$update_statement");
 				return;
