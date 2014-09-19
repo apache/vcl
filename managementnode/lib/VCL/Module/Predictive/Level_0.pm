@@ -78,64 +78,63 @@ sub get_next_image {
 		exit 1;
 	}
 	#notify($ERRORS{'WARNING'}, 0, "get_next_image_revision works!");
-
+	
 	# Retrieve variables from the DataStructure
 	my $request_id          = $self->data->get_request_id();
 	my $reservation_id      = $self->data->get_reservation_id();
 	my $computer_id         = $self->data->get_computer_id();
 	my $computer_short_name = $self->data->get_computer_short_name();
-
+	
 	my $notify_prefix = "predictive_reload_Level_0: ";
-
+	
 	notify($ERRORS{'OK'}, 0, "$notify_prefix for $computer_id");
-
+	
 	#check if node is part of block reservation 
-	if(is_inblockrequest($computer_id)){
+	if (is_inblockrequest($computer_id)) {
 		notify($ERRORS{'DEBUG'}, 0, "computer id $computer_id is in blockComputers table");
-		 my @block_ret_array = get_block_request_image_info($computer_id);
-
-		if(defined($block_ret_array[0]) && $block_ret_array[0]){
+		my @block_ret_array = get_block_request_image_info($computer_id);
+		
+		if (defined($block_ret_array[0]) && $block_ret_array[0]) {
 			return @block_ret_array;
 		}
 		else{
 			notify($ERRORS{'WARNING'}, 0, "computer $computer_id is part of blockComputers, failed to return image info"); 
 		}
-
 	}
-
+	
 	my $select_statement = "
-	SELECT DISTINCT
-	req.start AS starttime,
-	ir.imagename AS imagename,
-	res.imagerevisionid AS imagerevisionid,
-	res.imageid AS imageid
-	FROM
-	reservation res,
-	request req,
-	image i,
-	state s,
-	imagerevision ir
-   WHERE
-	res.requestid = req.id
-	AND req.stateid = s.id
-	AND i.id = res.imageid
-	AND ir.id = res.imagerevisionid
-	AND res.computerid = $computer_id
-	AND (s.name = \'new\' OR s.name = \'reload\' OR s.name = \'imageprep\')
-   ";
-
+		SELECT DISTINCT
+		req.start AS starttime,
+		ir.imagename AS imagename,
+		res.imagerevisionid AS imagerevisionid,
+		res.imageid AS imageid
+		FROM
+		reservation res,
+		request req,
+		image i,
+		state s,
+		imagerevision ir
+		WHERE
+		res.requestid = req.id
+		AND req.stateid = s.id
+		AND i.id = res.imageid
+		AND ir.id = res.imagerevisionid
+		AND res.computerid = $computer_id
+		AND (s.name = \'new\' OR s.name = \'reload\' OR s.name = \'imageprep\')
+	";
+	
 	# Call the database select subroutine
 	# This will return an array of one or more rows based on the select statement
 	my @selected_rows = database_select($select_statement);
 	my @ret_array;
-
+	
 	# Check to make sure 1 or more rows were returned
 	if (scalar @selected_rows > 0) {
 		# Loop through list of upcoming reservations
 		# Based on the start time load the next one
-
+		
 		my $now = time();
-
+		
 		# It contains a hash
 		for (@selected_rows) {
 			my %reservation_row = %{$_};
@@ -154,29 +153,29 @@ sub get_next_image {
 			}
 		} ## end for (@selected_rows)
 	} ## end if (scalar @selected_rows > 0)
-
+	
 	# No upcoming reservations - fetch next image information
 	my $select_nextimage = "
-	SELECT DISTINCT
-	imagerevision.imagename AS imagename,
-	imagerevision.id AS imagerevisionid,
-	image.id AS imageid
-	FROM
-	image,
-	computer,
-	imagerevision
-   WHERE
-	imagerevision.imageid = computer.nextimageid
-	AND imagerevision.production = 1
-	AND computer.nextimageid = image.id
-	AND computer.id = $computer_id
+		SELECT DISTINCT
+		imagerevision.imagename AS imagename,
+		imagerevision.id AS imagerevisionid,
+		image.id AS imageid
+		FROM
+		image,
+		computer,
+		imagerevision
+		WHERE
+		imagerevision.imageid = computer.nextimageid
+		AND imagerevision.production = 1
+		AND computer.nextimageid = image.id
+		AND computer.id = $computer_id
 	";
-
-
+	
+	
 	# Call the database select subroutine
 	# This will return an array of one or more rows based on the select statement
 	my @next_selected_rows = database_select($select_nextimage);
-
+	
 	# Check to make sure at least 1 row were returned
 	if (scalar @next_selected_rows == 0) {
 		notify($ERRORS{'WARNING'}, 0, "$notify_prefix failed to fetch next image for computerid $computer_id");
@@ -187,13 +186,12 @@ sub get_next_image {
 		return 0;
 	}
 	notify($ERRORS{'OK'}, 0, "$notify_prefix returning nextimage image=$next_selected_rows[0]{imagename} imageid=$next_selected_rows[0]{imageid}");
-	push(@ret_array, $next_selected_rows[0]{imagename}, $next_selected_rows[0]{imageid}, $next_selected_rows[0]{imagerevisionid});
+	push (@ret_array, $next_selected_rows[0]{imagename}, $next_selected_rows[0]{imageid}, $next_selected_rows[0]{imagerevisionid});
 	#Clear next_imageid
 	if(!clear_next_image_id($computer_id)){
-	   notify($ERRORS{'WARNING'}, 0, "$notify_prefix failed to clear next_image_id for computerid $computer_id");
+		notify($ERRORS{'WARNING'}, 0, "$notify_prefix failed to clear next_image_id for computerid $computer_id");
 	}
 	return @ret_array;
-
 } ## end sub get_next_image_revision
 
 #/////////////////////////////////////////////////////////////////////////////
