@@ -1903,6 +1903,7 @@ function printImageDescription($imageid) {
 		$desc = preg_replace("/\n/", '<br>', $imagenotes['description']);
 		$desc = preg_replace("/\r/", '', $desc);
 		$desc = preg_replace("/'/", '&#39;', $desc);
+		$desc = preg_replace("/(.{1,60}([ \n]|$))/", '\1<br>', $desc);
 		print "dojo.byId('imgdesc').innerHTML = '<strong>";
 		print _("Image Description") . "</strong>:<br>";
 		print "$desc<br><br>'; ";
@@ -4474,7 +4475,8 @@ function processRequestInput() {
 			$return['monitored'] = 0;
 
 		# configs
-		$tmp = getUserResources(array("configAdmin"));
+		# TODO configs
+		/*$tmp = getUserResources(array("configAdmin"));
 		$userconfigs = $tmp['config'];
 		$initconfigs = getMappedConfigs($return['imageid']);
 		if(array_key_exists('configdata', $_POST)) {
@@ -4526,7 +4528,7 @@ function processRequestInput() {
 		#print "/*";
 		#printArray($initconfigvars);
 		#printArray($configvars);
-		#print "*/";
+		#print "*" . "/";
 		$return['configvars'] = array();
 		foreach($initconfigvars as $id => $configvar) {
 			$tmp = explode('/', $id);
@@ -4553,7 +4555,7 @@ function processRequestInput() {
 			}
 			if(isset($configvars->{$id}))
 				unset($configvars->{$id});
-		}
+		}*/
 		/*print "/*";
 		printArray($rescfgmapids);
 		foreach($configvars as $id => $var) {

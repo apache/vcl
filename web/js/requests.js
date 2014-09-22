@@ -304,7 +304,7 @@ function validateDeployInputs() {
 		dijit.byId('newResDlgBtn').set('disabled', true);
 		return false;
 	}
-	if(dojo.byId('endat').checked &&
+	if(dojo.byId('endat') && dojo.byId('endat').checked &&
 	   (! dijit.byId('deployenddate').isValid() ||
 	   ! dijit.byId('deployendtime').isValid())) {
 		dijit.byId('newResDlgBtn').set('disabled', true);
