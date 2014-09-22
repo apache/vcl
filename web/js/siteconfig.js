@@ -20,15 +20,25 @@ function generalSiteConfigCB(data, ioArgs) {
 		dojo.removeClass(data.items.msgid, 'cfgerror');
 		dojo.addClass(data.items.msgid, 'cfgsuccess');
 		dojo.byId(data.items.msgid).innerHTML = data.items.msg;
-		dijit.byId(data.items.btn).set('disabled', false);
+		if('btn' in data.items)
+			dijit.byId(data.items.btn).set('disabled', false);
+		if('extrafunc' in data.items) {
+			if(data.items.extrafunc.match('\.')) {
+				var part1 = data.items.extrafunc.split('.')[0];
+				var part2 = data.items.extrafunc.split('.')[1];
+				window[part1][part2](data);
+			}
+			else
+				window[data.items.extrafunc](data);
+		}
 		clearmsg(data.items.msgid, 20);
 	}
 	else if(data.items.status == 'failed') {
 		dojo.removeClass(data.items.msgid, 'cfgsuccess');
 		dojo.addClass(data.items.msgid, 'cfgerror');
 		dojo.byId(data.items.msgid).innerHTML = data.items.errmsg;
-		dijit.byId(data.items.btn).set('disabled', false);
-		//clearmsg(data.items.msgid, 20);
+		if('btn' in data.items)
+			dijit.byId(data.items.btn).set('disabled', false);
 	}
 	else if(data.items.status == 'noaccess') {
 		alert(data.items.msg);
@@ -50,5 +60,153 @@ function saveTimeSource() {
 	RPCwrapper(data, generalSiteConfigCB, 1);
 }
 
-function saveConnectedUserCheck() {
+function TimeVariable() {}
+
+TimeVariable.prototype.addAffiliationSetting = function() {
+	dijit.byId(this.domidbase + 'addbtn').set('disabled', true);
+	var data = {continuation: dojo.byId(this.domidbase + 'addcont').value,
+	            affilid: dijit.byId(this.domidbase + 'newaffilid').value,
+	            value: dijit.byId(this.domidbase + 'newval').value};
+	RPCwrapper(data, generalSiteConfigCB, 1);
 }
+
+TimeVariable.prototype.addAffiliationSettingCBextra = function(data) {
+	var span = document.createElement('span');
+	span.setAttribute('id', data.items.id + 'span');
+	var label = document.createElement('label');
+	label.setAttribute('for', data.items.id);
+	label.innerHTML = data.items.affil + ': ';
+	span.appendChild(label);
+	var span2 = document.createElement('span');
+	span2.setAttribute('class', 'labeledform');
+	var spinner = new dijit.form.NumberSpinner({
+		id: data.items.id,
+		required: 'true',
+		style: 'width: 70px;',
+		value: data.items.value,
+		constraints: {min: 1, max: data.items.maxval},
+		smallDelta: 1,
+		largeDelta: 10
+	}, document.createElement('div'));
+	span2.appendChild(spinner.domNode);
+	span.appendChild(span2);
+	var func = this.deleteAffiliationSetting;
+	var domidbase = this.domidbase;
+	var btn = new dijit.form.Button({
+		id: data.items.id + 'delbtn',
+		label: _('Delete'),
+		onClick: function() {
+			func(data.items.id, domidbase);
+		}
+	}, document.createElement('div'));
+	span.appendChild(btn.domNode);
+	span.appendChild(document.createElement('br'));
+	dojo.byId(this.domidbase + 'affildiv').appendChild(span);
+	dojo.byId('delete' + this.domidbase + 'cont').value = data.items.deletecont;
+	dojo.byId(this.domidbase + 'cont').value = data.items.savecont;
+	dijit.byId(this.domidbase + 'newaffilid').removeOption({value: data.items.affilid});
+	if(dijit.byId(this.domidbase + 'newaffilid').options.length == 0)
+		dojo.addClass(this.domidbase + 'adddiv', 'hidden');
+	var keys = dojo.byId(this.domidbase + 'savekeys').value.split(',');
+	keys.push(data.items.id);
+	dojo.byId(this.domidbase + 'savekeys').value = keys.join(',');
+}
+
+TimeVariable.prototype.saveSettings = function() {
+	var data = {continuation: dojo.byId(this.domidbase + 'cont').value};
+	var keys = dojo.byId(this.domidbase + 'savekeys').value.split(',');
+	for(var i = 0; i < keys.length; i++) {
+		if(! checkValidatedObj(keys[i])) {
+			dijit.byId(keys[i]).focus();
+			return;
+		}
+		data[keys[i]] = dijit.byId(keys[i]).get('value');
+	}
+	dijit.byId(this.domidbase + 'btn').set('disabled', true);
+	RPCwrapper(data, generalSiteConfigCB, 1);
+}
+
+TimeVariable.prototype.deleteAffiliationSetting = function(key, domidbase) {
+	var data = {key: key,
+	            continuation: dojo.byId('delete' + domidbase + 'cont').value};
+	RPCwrapper(data, generalSiteConfigCB, 1);
+}
+
+TimeVariable.prototype.deleteAffiliationSettingCBextra = function(data) {
+	dijit.byId(data.items.delid).destroy();
+	dijit.byId(data.items.delid + 'delbtn').destroy();
+	dojo.destroy(data.items.delid + 'span');
+	dijit.byId(this.domidbase + 'newaffilid').addOption({value: data.items.affilid, label: data.items.affil});
+	dojo.removeClass(this.domidbase + 'adddiv', 'hidden');
+	var keys = dojo.byId(this.domidbase + 'savekeys').value.split(',');
+	var newkeys = new Array();
+	for(var i = 0; i < keys.length; i++) {
+		if(keys[i] != data.items.delid)
+			newkeys.push(keys[i]);
+	}
+	dojo.byId(this.domidbase + 'savekeys').value = newkeys.join(',');
+	dojo.byId(this.domidbase + 'cont').value = data.items.savecont;
+}
+
+function connectedUserCheck() {
+	TimeVariable.apply(this, Array.prototype.slice.call(arguments));
+	this.domidbase = 'connectedusercheck';
+}
+connectedUserCheck.prototype = new TimeVariable();
+var connectedUserCheck = new connectedUserCheck();
+
+function acknowledge() {
+	TimeVariable.apply(this, Array.prototype.slice.call(arguments));
+	this.domidbase = 'acknowledge';
+}
+acknowledge.prototype = new TimeVariable();
+var acknowledge = new acknowledge();
+
+function connect() {
+	TimeVariable.apply(this, Array.prototype.slice.call(arguments));
+	this.domidbase = 'connect';
+}
+connect.prototype = new TimeVariable();
+var connect = new connect();
+
+function reconnect() {
+	TimeVariable.apply(this, Array.prototype.slice.call(arguments));
+	this.domidbase = 'reconnect';
+}
+reconnect.prototype = new TimeVariable();
+var reconnect = new reconnect();
+
+function generalInuse() {
+	TimeVariable.apply(this, Array.prototype.slice.call(arguments));
+	this.domidbase = 'generalinuse';
+}
+generalInuse.prototype = new TimeVariable();
+var generalInuse = new generalInuse();
+
+function serverInuse() {
+	TimeVariable.apply(this, Array.prototype.slice.call(arguments));
+	this.domidbase = 'serverinuse';
+}
+serverInuse.prototype = new TimeVariable();
+var serverInuse = new serverInuse();
+
+function clusterInuse() {
+	TimeVariable.apply(this, Array.prototype.slice.call(arguments));
+	this.domidbase = 'clusterinuse';
+}
+clusterInuse.prototype = new TimeVariable();
+var clusterInuse = new clusterInuse();
+
+function generalEndNotice1() {
+	TimeVariable.apply(this, Array.prototype.slice.call(arguments));
+	this.domidbase = 'generalendnotice1';
+}
+generalEndNotice1.prototype = new TimeVariable();
+var generalEndNotice1 = new generalEndNotice1();
+
+function generalEndNotice2() {
+	TimeVariable.apply(this, Array.prototype.slice.call(arguments));
+	this.domidbase = 'generalendnotice2';
+}
+generalEndNotice2.prototype = new TimeVariable();
+var generalEndNotice2 = new generalEndNotice2();

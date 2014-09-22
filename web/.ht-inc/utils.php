@@ -319,7 +319,12 @@ function initGlobals() {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function __autoload($class) {
+	global $actions;
 	$class = strtolower($class);
+	if(array_key_exists($class, $actions['classmapping'])) {
+		require_once(".ht-inc/{$actions['classmapping'][$class]}.php");
+		return;
+	}
 	require_once(".ht-inc/resource.php");
 	require_once(".ht-inc/$class.php");
 }

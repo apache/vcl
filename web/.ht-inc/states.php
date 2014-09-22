@@ -200,6 +200,9 @@ $noHTMLwrappers = array('sendRDPfile',
                         'AJsubmitCompStateChange',
                         'AJsubmitComputerStateLater',
                         'AJconnectRequest',
+                        'AJupdateAllSettings',
+                        'AJdeleteAffiliationSetting',
+                        'AJaddAffiliationSetting',
 );
 
 # main
@@ -537,8 +540,25 @@ $actions['pages']['AJrestartImageCapture'] = "dashboard";
 # site configuration
 $actions['mode']['siteconfig'] = "siteconfig";
 $actions['mode']['AJupdateTimeSource'] = "AJupdateTimeSource";
+$actions['mode']['AJaddAffiliationSetting'] = "AJaddAffiliationSetting";
+$actions['mode']['AJupdateAllSettings'] = "AJupdateAllSettings";
+$actions['mode']['AJdeleteAffiliationSetting'] = "AJdeleteAffiliationSetting";
 $actions['pages']['siteconfig'] = "siteconfig";
 $actions['pages']['AJupdateTimeSource'] = "siteconfig";
+$actions['pages']['AJaddAffiliationSetting'] = "siteconfig";
+$actions['pages']['AJupdateAllSettings'] = "siteconfig";
+$actions['pages']['AJdeleteAffiliationSetting'] = "siteconfig";
+$actions['classmapping']['timeoutvariable'] = 'siteconfig';
+$actions['classmapping']['connectedusercheck'] = 'siteconfig';
+$actions['classmapping']['connectedusercheck'] = 'siteconfig';
+$actions['classmapping']['acknowledge'] = 'siteconfig';
+$actions['classmapping']['connect'] = 'siteconfig';
+$actions['classmapping']['reconnect'] = 'siteconfig';
+$actions['classmapping']['generalinuse'] = 'siteconfig';
+$actions['classmapping']['serverinuse'] = 'siteconfig';
+$actions['classmapping']['clusterinuse'] = 'siteconfig';
+$actions['classmapping']['generalendnotice1'] = 'siteconfig';
+$actions['classmapping']['generalendnotice2'] = 'siteconfig';
 
 # resource
 $actions['mode']['resource'] = "resource";
