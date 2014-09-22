@@ -12923,14 +12923,7 @@ function getDojoHTML($refresh) {
 			$rt .= "      dojo.registerModulePath(\"vcldojo\", \"../../js/vcldojo\");\n";
 			foreach($dojoRequires as $req)
 				$rt .= "   dojo.require(\"$req\");\n";
-			$rt .= "      setTimeout(function() {\n";
-			$rt .= "      if(typeof resourcestore !== 'undefined') {\n";
-			$rt .= "         if(! resourcestore.comparatorMap) {\n";
-			$rt .= "            resourcestore.comparatorMap = {};\n";
-			$rt .= "         }\n";
-			$rt .= "         resourcestore.comparatorMap['name'] = resource.nocasesort;\n";
-			$rt .= "      }\n";
-			$rt .= "      }, 500);\n";
+			$rt .= "      setTimeout(initViewResources, 100);\n";
 			if($cdata['obj']->restype == 'computer')
 				$rt .= "      initPage();\n";
 			$rt .= "   });\n";

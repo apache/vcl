@@ -174,8 +174,16 @@ var grouptoresourcesstore;
 var mapbyresgroupstore;
 var mapbymaptogroupstore;
 
-var ignorecasemap = {};
-ignorecasemap['name'] = resource.nocasesort;
+function initViewResources() {
+	if(typeof resourcestore === 'undefined') {
+		setTimeout(initViewResources, 100);
+		return;
+	}
+	if(! resourcestore.comparatorMap) {
+	   resourcestore.comparatorMap = {};
+	}
+	resourcestore.comparatorMap['name'] = resource.nocasesort;
+}
 
 function toggleCmapFieldDisplay(obj, field) {
 	for(var i in configmapgrid.layout.cells) {
