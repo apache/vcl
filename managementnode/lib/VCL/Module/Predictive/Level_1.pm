@@ -119,13 +119,14 @@ sub get_next_image {
 			AND imagerevision.production = 1
 			AND computer.nextimageid = image.id
 			AND computer.id = $computer_id
+			AND image.name NOT LIKE 'noimage'
 		";
 		
 		
 		my @next_selected_rows = database_select($select_nextimage);
 		# Check to make sure at least 1 row were returned
 		if (scalar @next_selected_rows == 0) {
-			notify($ERRORS{'WARNING'}, 0, "$notify_prefix failed to fetch next image for computerid $computer_id");
+			notify($ERRORS{'OK'}, 0, "$notify_prefix next image not set for computerid $computer_id");
 		}   
 		elsif (scalar @next_selected_rows > 1) {
 			notify($ERRORS{'WARNING'}, 0, "" . scalar @next_selected_rows . " rows were returned from database select");
@@ -185,7 +186,7 @@ sub get_next_image {
 			notify($ERRORS{'OK'}, 0, "$notify_prefix diff= $diff image= $reservation_row{imagename} imageid=$reservation_row{imageid}");
 			if ($diff < (50 * 60)) {
 				notify($ERRORS{'OK'}, 0, "$notify_prefix future reservation detected diff= $diff image= $reservation_row{imagename} imageid=$reservation_row{imageid}");
-				push(@ret_array, $reservation_row{imagename}, $reservation_row{imageid}, $reservation_row{imagerevisionid});
+				push(@ret_array, "reload", $reservation_row{imagename}, $reservation_row{imageid}, $reservation_row{imagerevisionid});
 				return @ret_array;
 			}
 		} ## end for (@selected_rows)
@@ -207,7 +208,7 @@ sub get_next_image {
 	
 	my @data = database_select($select_type);
 	if (scalar @data == 0) {
-		notify($ERRORS{'WARNING'}, 0, "$notify_prefix failed to fetch preferred image for computer_id $computer_id");
+		notify($ERRORS{'WARNING'}, 0, "$notify_prefix failed to fetch provisioningid for computer_id $computer_id");
 		return 0;
 	}
 	my $type = $data[0]{type};
@@ -226,7 +227,7 @@ sub get_next_image {
 	
 	@data = database_select($select_online);
 	if (scalar @data == 0) {
-		notify($ERRORS{'WARNING'}, 0, "$notify_prefix failed to fetch preferred image for computer_id $computer_id");
+		notify($ERRORS{'WARNING'}, 0, "$notify_prefix failed to run query for computer_id $computer_id\n $select_online");
 		return 0;
 	}
 	my $online = $data[0]{cnt};
@@ -244,7 +245,7 @@ sub get_next_image {
 	
 	@data = database_select($select_available);
 	if (scalar @data == 0) {
-		notify($ERRORS{'WARNING'}, 0, "$notify_prefix failed to fetch preferred image for computer_id $computer_id");
+		notify($ERRORS{'WARNING'}, 0, "$notify_prefix failed to run query for computer_id $computer_id\n $select_available");
 		return 0;
 	}
 	
@@ -297,7 +298,7 @@ sub get_next_image {
 	";
 	@data = database_select($select_mapped_images);
 	if (scalar @data == 0) {
-		notify($ERRORS{'WARNING'}, 0, "$notify_prefix failed to fetch preferred image for computer_id $computer_id");
+		notify($ERRORS{'WARNING'}, 0, "$notify_prefix failed to run query for computer_id $computer_id\n $select_mapped_images");
 		return 0;
 	}
 	my $resourceid = $data[0]{id};
@@ -313,7 +314,7 @@ sub get_next_image {
 	@data = database_select($select_compgrps1);
 	
 	if (scalar @data == 0) {
-		notify($ERRORS{'WARNING'}, 0, "$notify_prefix failed to fetch preferred image for computer_id $computer_id");
+		notify($ERRORS{'WARNING'}, 0, "$notify_prefix failed to run query for computer_id $computer_id\n $select_compgrps1");
 		return 0;
 	}
 	my @compgroups;
@@ -357,7 +358,7 @@ sub get_next_image {
 		push(@imggroups, $row{resourcegroupid1});
 	}
 	if (scalar @imggroups == 0) {
-		notify($ERRORS{'WARNING'}, 0, "$notify_prefix failed to fetch preferred image for computer_id $computer_id");
+		notify($ERRORS{'WARNING'}, 0, "$notify_prefix failed to run query for computer_id $computer_id\n $select_imggrps2");
 		return 0;
 	}
 	
@@ -386,7 +387,7 @@ sub get_next_image {
 	my @imgids;
 	@data = database_select($select_imageids);
 	if (scalar @data == 0) {
-		notify($ERRORS{'WARNING'}, 0, "$notify_prefix failed to fetch preferred image for computer_id $computer_id");
+		notify($ERRORS{'WARNING'}, 0, "$notify_prefix failed to run query for computer_id $computer_id\n $select_imageids");
 		return 0;
 	}
 	foreach (@data) {
@@ -448,7 +449,7 @@ sub get_next_image {
 	";
 	@data = database_select($select_imageid);
 	if (scalar @data == 0) {
-		notify($ERRORS{'WARNING'}, 0, "$notify_prefix failed to fetch preferred image for computer_id $computer_id");
+		notify($ERRORS{'WARNING'}, 0, "$notify_prefix failed to run query for computer_id $computer_id\n $select_imageid");
 		return 0;
 	}
 	my $imageid = $data[0]{imageid};
@@ -470,12 +471,12 @@ sub get_next_image {
 	";
 	@data = database_select($select_extra);
 	if (scalar @data == 0) {
-		notify($ERRORS{'WARNING'}, 0, "$notify_prefix failed to fetch preferred image for computer_id $computer_id");
+		notify($ERRORS{'WARNING'}, 0, "$notify_prefix failed to run query for computer_id $computer_id\n $select_extra");
 		return 0;
 	}
 	
 	notify($ERRORS{'OK'}, 0, "$notify_prefix $computer_id $data[0]{name}, $imageid, $data[0]{id}");
-	push(@ret_array, $data[0]{name}, $imageid, $data[0]{id});
+	push(@ret_array, "reload", $data[0]{name}, $imageid, $data[0]{id});
 	return @ret_array;
 } ## end sub get_next_image_revision
 

@@ -236,6 +236,16 @@ $SUBROUTINE_MAPPINGS{computer_provisioning_module_pretty_name} = '$self->request
 $SUBROUTINE_MAPPINGS{computer_provisioning_module_description} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{provisioning}{module}{description}';
 $SUBROUTINE_MAPPINGS{computer_provisioning_module_perl_package} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{provisioning}{module}{perlpackage}';
 
+$SUBROUTINE_MAPPINGS{computer_predictive_id} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{predictiveid}';
+$SUBROUTINE_MAPPINGS{computer_predictive_name} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{predictive}{module}{name}';
+$SUBROUTINE_MAPPINGS{computer_predictive_pretty_name} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{predictive}{module}{prettyname}';
+$SUBROUTINE_MAPPINGS{computer_predictive_module_id} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{predictive}{module}{id}';
+
+$SUBROUTINE_MAPPINGS{computer_predictive_module_name} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{predictive}{module}{name}';
+$SUBROUTINE_MAPPINGS{computer_predictive_module_pretty_name} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{predictive}{module}{prettyname}';
+$SUBROUTINE_MAPPINGS{computer_predictive_module_description} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{predictive}{module}{description}';
+$SUBROUTINE_MAPPINGS{computer_predictive_module_perl_package} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{predictive}{module}{perlpackage}';
+
 $SUBROUTINE_MAPPINGS{vmhost_computer_id} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhost}{computerid}';
 $SUBROUTINE_MAPPINGS{vmhost_hostname} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhost}{computer}{hostname}';
 $SUBROUTINE_MAPPINGS{vmhost_short_name} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhost}{computer}{SHORTNAME}';
@@ -1270,29 +1280,33 @@ sub get_next_image_dataStructure {
 	# This will be returned if the predictive method fails
 	my @current_image;
 	if ($image_name && $image_id && $imagerevision_id) {
-		@current_image = ($image_name, $image_id, $imagerevision_id);
+		@current_image = ("reload", $image_name, $image_id, $imagerevision_id);
 	}
 	else {
 		notify($ERRORS{'WARNING'}, 0, "unable to obtain current image information");
       @current_image = ();
 	}
+	
+	my $computer_predictive_module_id = $self->get_computer_predictive_module_id();
 
 	#collect predictive reload information from database.
 	my $management_predictive_info = get_management_predictive_info();
-	if (!$management_predictive_info->{predictivemoduleid}){
+	if (!$computer_predictive_module_id){
 		notify($ERRORS{'CRITICAL'}, 0, "unable to obtain management node info for this node, returning current reservation image information");
       return @current_image;
 	}
 
 	#update ENV in case other modules need to know
 	my $management_node_info = get_management_node_info();
-	$management_node_info->{predictivemoduleid} = $management_predictive_info->{predictivemoduleid};
-	$management_node_info->{predictive_name} = $management_predictive_info->{predictive_name};
-	$management_node_info->{predictive_prettyname} = $management_predictive_info->{predictive_prettyname};
-	$management_node_info->{predictive_description} = $management_predictive_info->{predictive_description};
-	$management_node_info->{predictive_perlpackage} = $management_predictive_info->{predictive_perlpackage};
+	
+	$management_node_info->{predictivemoduleid} = $self->get_computer_predictive_module_id();
+	$management_node_info->{predictive_name} = $self->get_computer_predictive_module_name();
+	$management_node_info->{predictive_prettyname} = $self->get_computer_predictive_pretty_name();
+	$management_node_info->{predictive_description} = $self->get_computer_predictive_module_description();
+	$management_node_info->{predictive_perlpackage} = $self->get_computer_predictive_module_perl_package();
 
-	my $predictive_perl_package = $management_predictive_info->{predictive_perlpackage};
+	my $predictive_perl_package = $self->get_computer_predictive_module_perl_package();
+
 	my @nextimage;
 
 	if ($predictive_perl_package) {
@@ -1306,10 +1320,10 @@ sub get_next_image_dataStructure {
 			return @current_image;
 		}
 		if (my $predictor = ($predictive_perl_package)->new({data_structure => $self})) {
-			notify($ERRORS{'OK'}, 0, ref($predictor) . " predictive loading object successfully created");
 			@nextimage = $predictor->get_next_image();
-			if (scalar(@nextimage) == 3) {
+			notify($ERRORS{'OK'}, 0, ref($predictor) . " predictive loading object successfully created");
 				notify($ERRORS{'OK'}, 0, "predictive loading module retreived image information: @nextimage");
+			if (scalar(@nextimage) >= 3) {
 				return @nextimage;
 			}
 			else {

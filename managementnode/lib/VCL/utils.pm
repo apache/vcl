@@ -4779,6 +4779,7 @@ sub update_currentimage {
 	 ";
 
 	if (defined($nextimagid) && ($nextimagid)) {
+		notify($ERRORS{'WARNING'}, 0, "*******NEXTIMAGE updating computer $computerid: image=$imageid, imagerevision=$imagerevisionid nextimageid = $imageid");
 		$update_statement = "
 			UPDATE
 			computer c, image i
@@ -6864,6 +6865,12 @@ sub get_computer_info {
 			$select_statement .= "$table.$column AS '$table-$column',\n";
 		}
 	}
+
+	# Add the column for predictive module info
+   my @columns = @{$database_table_columns->{module}};
+   for my $column (@columns) {
+         $select_statement .= "predictivemodule.$column AS 'predictivemodule-$column',\n";
+   }
 	
 	# Remove the comma after the last column line
 	$select_statement =~ s/,$//;
@@ -6884,6 +6891,7 @@ ON (
 	AND module.id = provisioning.moduleid
 )
 LEFT JOIN (schedule) ON (schedule.id = computer.scheduleid)
+LEFT JOIN (module AS predictivemodule) ON (predictivemodule.id = computer.predictivemoduleid)
 
 WHERE
 computer.deleted != '1'
@@ -6932,6 +6940,9 @@ EOF
 		}
 		elsif ($table eq 'module') {
 			$computer_info->{provisioning}{$table}{$column} = $value;
+		}
+		elsif ($table eq 'predictivemodule' ) {
+		   $computer_info->{predictive}{module}{$column} = $value;
 		}
 		else {
 			$computer_info->{$table}{$column} = $value;

@@ -159,20 +159,6 @@ sub process {
 		# Computer is not available, not a new request (most likely a simple reload)
 		notify($ERRORS{'WARNING'}, 0, "request state=$request_state_name, $computer_short_name is NOT available");
 		
-		# Set the computer next image so it gets loaded if/when other reservations are complete
-		if (!defined($computer_next_image_name) || $image_name ne $computer_next_image_name) {
-			notify($ERRORS{'OK'}, 0, "$computer_short_name is not available, setting computer next image to $image_name");
-			if (setnextimage($computer_id, $image_id)) {
-				notify($ERRORS{'OK'}, 0, "$computer_short_name next image set to $image_name");
-			}
-			else {
-				notify($ERRORS{'WARNING'}, 0, "failed to set $computer_short_name next image to $image_name");
-			}
-		}
-		else {
-			notify($ERRORS{'OK'}, 0, "$computer_short_name is not available, computer next image is already set to $image_name");
-		}
-		
 		# Update request state to complete
 		if (update_request_state($request_id, "complete", $request_state_name)) {
 			notify($ERRORS{'OK'}, 0, "request state updated to 'complete'/'$request_state_name'");
@@ -373,18 +359,6 @@ sub process {
 	# These steps are not done for simple reloads
 	notify($ERRORS{'OK'}, 0, "request_state_name= $request_state_name");
 	if ($request_state_name =~ /^(new|reinstall)/) {
-		# Set the computer next image to the one for this reservation
-		if (!defined($computer_next_image_name) || $image_name ne $computer_next_image_name) {
-			if (setnextimage($computer_id, $image_id)) {
-				notify($ERRORS{'OK'}, 0, "$computer_short_name next image set to $image_name");
-			}
-			else {
-				notify($ERRORS{'WARNING'}, 0, "failed to set $computer_short_name next image to $image_name");
-			}
-		}
-		else {
-			notify($ERRORS{'OK'}, 0, "$computer_short_name next image is already set to $image_name");
-		}
 		
 		if ($request_preload_only) {
 			# Return back to original states

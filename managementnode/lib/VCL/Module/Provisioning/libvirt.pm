@@ -140,6 +140,34 @@ sub initialize {
 	return 1;
 }
 
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 unload
+
+ Parameters  : none
+ Returns     : boolean
+ Description : Unloads the image on the domain:
+
+=over 3
+
+=cut
+
+sub unload {
+	my $self = shift;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+
+	if(!$self->delete_existing_domains()) {
+		return;
+	}
+
+	return 1;
+
+}
+
 #/////////////////////////////////////////////////////////////////////////////
 
 =head2 load

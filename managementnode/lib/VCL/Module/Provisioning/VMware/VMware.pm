@@ -468,6 +468,36 @@ sub initialize {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 unload
+
+ Parameters  : none
+ Returns     : boolean
+ Description : Unloads a VM with the requested image.
+
+=cut
+
+sub unload {
+	my $self = shift;
+	if (ref($self) !~ /vmware/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+
+	my $computer_name = $self->data->get_computer_short_name() || return;
+	my $vmhost_name = $self->data->get_vmhost_short_name() || return;
+
+	# Remove existing VMs which were created for the reservation computer
+	if (!$self->remove_existing_vms()) {
+		notify($ERRORS{'WARNING'}, 0, "failed to remove existing VMs created for computer $computer_name on VM host: $vmhost_name");
+		return;
+	}
+
+	return 1;
+
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 =head2 load
 
  Parameters  : none

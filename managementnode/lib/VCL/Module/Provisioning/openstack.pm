@@ -88,6 +88,45 @@ sub initialize {
 	return 1;
 } ## end sub initialize
 
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 unload
+
+ Parameters  : hash
+ Returns     : 1(success) or 0(failure)
+ Description : loads virtual machine with requested image
+
+=cut
+
+sub unload {
+	my $self = shift;
+	if (ref($self) !~ /openstack/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+
+	my $computer_name = $self->data->get_computer_short_name() || return;
+	my $vmhost_name = $self->data->get_vmhost_short_name() || return;
+
+	# Remove existing VMs which were created for the reservation computer
+	if (_pingnode($computer_name)) {
+		if (!$self->_terminate_os_instance()) {
+			notify($ERRORS{'WARNING'}, 0, "failed to delete VM $computer_name on VM host $vmhost_name");
+			return 0;
+		}
+	}
+	# Remove existing openstack id for computer mapping in database 
+	# Althought the instance is not pingable (delete it accidently), it should delete the instance from database
+	if (!$self->_delete_os_computer_mapping()) {
+		notify($ERRORS{'WARNING'}, 0, "failed to delete the openstack instance id from openstackComputerMap");
+		return 0;
+	}
+
+	return 1;
+
+}
+
 #/////////////////////////////////////////////////////////////////////////////
 
 =head2 provision

@@ -102,6 +102,35 @@ sub initialize {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 unload
+
+ Parameters  : hash
+ Returns     : 1(success) or 0(failure)
+ Description : loads node with provided image
+
+=cut
+
+sub unload {
+	my $self = shift;
+	if (ref($self) !~ /one/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return 0;
+	}
+
+	my $computer_name = $self->data->get_computer_hostname();
+
+	my $one_computer_id = $self->_one_get_object_id("computer",$computer_name);
+	if ($one_computer_id) {
+		if(!$self->_one_delete_vm($one_computer_id)) {
+			return 0;
+		}
+	}
+
+		return 1;
+}
+	
+#/////////////////////////////////////////////////////////////////////////////
+
 =head2 provision
 
  Parameters  : hash

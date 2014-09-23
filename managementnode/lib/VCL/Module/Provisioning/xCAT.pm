@@ -144,6 +144,31 @@ sub initialize {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 unload
+
+ Parameters  : none
+ Returns     : boolean
+ Description : Powers-off computer with the image defined in the reservation data.
+
+=cut
+
+sub unload {
+	my $self = shift;
+	if (ref($self) !~ /xCAT/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+
+	if (!$self->power_off()) {
+		return 0;
+	}
+
+	return 1;
+
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 =head2 load
 
  Parameters  : none

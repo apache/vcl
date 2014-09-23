@@ -232,34 +232,50 @@ sub insert_reload_and_exit {
 	}
 	
 	# Retrieve next image
-	my ($next_image_name, $next_image_id, $next_imagerevision_id) = $self->data->get_next_image_dataStructure();
-	if (!$next_image_name || !$next_image_id || !$next_imagerevision_id) {
-		notify($ERRORS{'WARNING'}, 0, "predictor module did not return required information, calling get_next_image_default from utils");
-		($next_image_name, $next_image_id, $next_imagerevision_id) = get_next_image_default($computer_id);
-	}
+	my ($action, $next_image_name, $next_image_id, $next_imagerevision_id) = $self->data->get_next_image_dataStructure();
 
-	# Update the DataStructure object with the next image values
-	# These will be used by insert_reload_request()
-	$self->data->set_image_name($next_image_name);
-	$self->data->set_image_id($next_image_id);
-	$self->data->set_imagerevision_id($next_imagerevision_id);
+	if($action =~ /unload/i) {
+		if($self->provisioner->can("unload")){
+			if($self->provisioner->unload()) {
+				if (update_computer_imagename($computer_id, 'noimage')) {
+					notify($ERRORS{'DEBUG'}, 0, "set computer $computer_shortname current image to 'noimage'");
+				}
+				
+				switch_state($request_data, 'complete', 'available', '', '1');
+			}
+		}
 
-	notify($ERRORS{'OK'}, 0, "next image: $next_image_name, image id=$next_image_id, imagerevision id=$next_imagerevision_id");
-	
-	# Insert reload request data into the database
-	if (insert_reload_request($request_data)) {
-		notify($ERRORS{'OK'}, 0, "inserted reload request into database for computer id=$computer_id, image=$next_image_name");
-
-		# Switch the request state to complete, the computer state to reload
-		switch_state($request_data, 'complete', 'reload', '', '1');
 	}
 	else {
-		notify($ERRORS{'CRITICAL'}, 0, "failed to insert reload request into database for computer id=$computer_id image=$next_image_name");
+	#elsif( $action =~ /reload/i ){ 
+		if (!$next_image_name || !$next_image_id || !$next_imagerevision_id) {
+			notify($ERRORS{'WARNING'}, 0, "predictor module did not return required information, calling get_next_image_default from utils");
+			($next_image_name, $next_image_id, $next_imagerevision_id) = get_next_image_default($computer_id);
+		}
 
-		# Switch the request and computer states to failed
-		switch_state($request_data, 'failed', 'failed', '', '1');
-	}
+		# Update the DataStructure object with the next image values
+		# These will be used by insert_reload_request()
+		$self->data->set_image_name($next_image_name);
+		$self->data->set_image_id($next_image_id);
+		$self->data->set_imagerevision_id($next_imagerevision_id);
+
+		notify($ERRORS{'OK'}, 0, "next image: $next_image_name, image id=$next_image_id, imagerevision id=$next_imagerevision_id");
 	
+		# Insert reload request data into the database
+		if (insert_reload_request($request_data)) {
+			notify($ERRORS{'OK'}, 0, "inserted reload request into database for computer id=$computer_id, image=$next_image_name");
+
+			# Switch the request state to complete, the computer state to reload
+			switch_state($request_data, 'complete', 'reload', '', '1');
+		}
+		else {
+			notify($ERRORS{'CRITICAL'}, 0, "failed to insert reload request into database for computer id=$computer_id image=$next_image_name");
+
+			# Switch the request and computer states to failed
+			switch_state($request_data, 'failed', 'failed', '', '1');
+		}
+	}
+
 	notify($ERRORS{'DEBUG'}, 0, "exiting");
 	exit;
 }
