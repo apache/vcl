@@ -158,7 +158,8 @@ function selectResType() {
 			dojo.addClass('endlbl', 'hidden');
 			dojo.addClass('specifyend', 'hidden');
 		}
-		if(dojo.byId('endat') && ! dojo.byId('endat').checked) {
+		if(dojo.byId('endat') && ! dojo.byId('endat').checked &&
+		   dojo.byId('endduration')) {
 			dojo.byId('endduration').checked = true;
 			delayedUpdateWaitTime(0, 50);
 		}

@@ -1574,7 +1574,7 @@ function newReservationHTML() {
 	$h .= "<span id=\"endlbl\"";
 	if(! $openend)
 		$h .= " class=\"hidden\"";
-	$h .= ">" . _("Ending:") . "</span><br>\n";
+	$h .= ">" . _("Ending:") . "<br></span>\n";
 
 	# ending by duration
 	$h .= "<span id=\"durationend\">\n";
@@ -1620,9 +1620,9 @@ function newReservationHTML() {
 		$h .= "style=\"width: 88px\"></div>\n";
 		$h .= "<div type=\"text\" id=\"deployendtime\" dojoType=\"dijit.form.TimeTextBox\" ";
 		$h .= "style=\"width: 88px\" onChange=\"setEndAt();\"></div>\n";
-		$h .= "<small>(" . date('T') . ")</small><br><br>\n";
+		$h .= "<small>(" . date('T') . ")</small><br>\n";
 	}
-	$h .= "</span>\n";
+	$h .= "</span><br>\n";
 
 	$h .= "<div id=\"deployerr\" class=\"rederrormsg\"></div>\n";
 	$h .= "<div id=\"waittime\"></div><br>\n";
