@@ -721,6 +721,7 @@ EXECUTE nextimageid_noimage;
 -- change RAM to mediumint
 ALTER TABLE `computer` CHANGE `RAM` `RAM` MEDIUMINT UNSIGNED NOT NULL DEFAULT '0';
 ALTER TABLE `computer` CHANGE `location` `location` VARCHAR(255) NULL DEFAULT NULL;
+ALTER TABLE `computer` ADD  `predictivemoduleid` SMALLINT(5) UNSIGNED NOT NULL DEFAULT  '8';
 
 -- set datedeleted for deleted computers
 UPDATE computer SET datedeleted = NOW() WHERE deleted = 1 AND datedeleted = '0000-00-00 00:00:00';
@@ -1211,6 +1212,7 @@ INSERT IGNORE INTO `module` (`name`, `prettyname`, `description`, `perlpackage`)
 INSERT IGNORE INTO `module` (`name`, `prettyname`, `description`, `perlpackage`) VALUES ('os_linux_managementnode', 'Management Mode Linux OS Module', '', 'VCL::Module::OS::Linux::ManagementNode');
 INSERT IGNORE INTO `module` (`name`, `prettyname`, `description`, `perlpackage`) VALUES ('os_win8', 'Windows 8.x OS Module', '', 'VCL::Module::OS::Windows::Version_6::8');
 INSERT IGNORE INTO `module` (`name`, `prettyname`, `description`, `perlpackage`) VALUES ('os_win2012', 'Windows Server 2012 OS Module', '', 'VCL::Module::OS::Windows::Version_6::2012');
+INSERT IGNORE INTO `module` (`name`, `prettyname`, `description`, `perlpackage`) VALUES ('predictive_level_2', 'Predictive Loading Module Level 2', 'Power off computer. If a virtual machine, it will be also destroyed.', 'VCL::Module::Predictive::Level_2');
 
 -- --------------------------------------------------------
 
