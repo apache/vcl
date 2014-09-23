@@ -213,6 +213,7 @@ CREATE TABLE IF NOT EXISTS `computer` (
   `privateIPaddress` varchar(15) default NULL,
   `eth0macaddress` varchar(17) default NULL,
   `eth1macaddress` varchar(17) default NULL,
+  `predictivemoduleid` smallint(5) unsigned NOT NULL default '1',
   `type` enum('blade','lab','virtualmachine') NOT NULL default 'blade',
   `provisioningid` smallint(5) unsigned NOT NULL,
   `drivetype` varchar(4) NOT NULL default 'hda',
@@ -238,6 +239,7 @@ CREATE TABLE IF NOT EXISTS `computer` (
   KEY `platformid` (`platformid`),
   KEY `scheduleid` (`scheduleid`),
   KEY `currentimageid` (`currentimageid`),
+  KEY `predictivemoduleid` (`predictivemoduleid`),
   KEY `type` (`type`),
   KEY `vmhostid` (`vmhostid`),
   KEY `vmtypeid` (`vmtypeid`),
@@ -582,7 +584,6 @@ CREATE TABLE IF NOT EXISTS `managementnode` (
   `imagelibuser` varchar(20) default 'vclstaff',
   `imagelibkey` varchar(100) default '/etc/vcl/imagelib.key',
   `keys` varchar(1024) default NULL,
-  `predictivemoduleid` smallint(5) unsigned NOT NULL default '1',
   `sshport` smallint(5) unsigned NOT NULL default '22',
   `publicIPconfiguration` enum('dynamicDHCP','manualDHCP','static') NOT NULL default 'dynamicDHCP',
   `publicSubnetMask` varchar(56) default NULL,
@@ -596,7 +597,6 @@ CREATE TABLE IF NOT EXISTS `managementnode` (
   KEY `ownerid` (`ownerid`),
   KEY `imagelibgroupid` (`imagelibgroupid`),
   KEY `IPaddress` (`IPaddress`),
-  KEY `predictivemoduleid` (`predictivemoduleid`)
 ) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
@@ -1536,7 +1536,8 @@ INSERT INTO `module` (`id`, `name`, `prettyname`, `description`, `perlpackage`) 
 (27, 'provisioning_libvirt', 'Libvirt Provisioning Module', '', 'VCL::Module::Provisioning::libvirt'),
 (28, 'os_linux_managementnode', 'Management Node Linux OS Module', '', 'VCL::Module::OS::Linux::ManagementNode'),
 (29, 'os_win8', 'Windows 8.x OS Module', '', 'VCL::Module::OS::Windows::Version_6::8'),
-(30, 'os_win2012', 'Windows Server 2012 OS Module', '', 'VCL::Module::OS::Windows::Version_6::2012');
+(30, 'os_win2012', 'Windows Server 2012 OS Module', '', 'VCL::Module::OS::Windows::Version_6::2012'),
+(31, 'predictive_level_2', 'Predictive Loading Module Level 2', 'Power off computer. If a virtual machine, it will be also destroyed.', 'VCL::Module::Predictive::Level_2');
 
 -- 
 -- Dumping data for table `OS`
@@ -2068,7 +2069,6 @@ ALTER TABLE `log`
 -- 
 ALTER TABLE `managementnode`
   ADD CONSTRAINT `managementnode_ibfk_6` FOREIGN KEY (`imagelibgroupid`) REFERENCES `resourcegroup` (`id`) ON UPDATE CASCADE,
-  ADD CONSTRAINT `managementnode_ibfk_3` FOREIGN KEY (`predictivemoduleid`) REFERENCES `module` (`id`) ON UPDATE CASCADE,
   ADD CONSTRAINT `managementnode_ibfk_4` FOREIGN KEY (`ownerid`) REFERENCES `user` (`id`) ON UPDATE CASCADE,
   ADD CONSTRAINT `managementnode_ibfk_5` FOREIGN KEY (`stateid`) REFERENCES `state` (`id`) ON UPDATE CASCADE;
 
