@@ -71,6 +71,57 @@ class ManagementNode extends Resource {
 
 	/////////////////////////////////////////////////////////////////////////////
 	///
+	/// \fn fieldWidth($field)
+	///
+	/// \param $field - name of a resource field
+	///
+	/// \return string for setting width of field (includes width= part)
+	///
+	/// \brief generates the required width for the field; can return an empty
+	/// string if field should default to auto width
+	///
+	/////////////////////////////////////////////////////////////////////////////
+	function fieldWidth($field) {
+		switch($field) {
+			case 'IPaddress':
+			case 'publicIPconfig':
+			case 'publicnetmask':
+			case 'publicgateway':
+				$w = 8;
+				break;
+			case 'installpath':
+			case 'publicdnsserver':
+				$w = 11;
+				break;
+			case 'imagelibgroup':
+			case 'imagelibkey':
+			case 'predictivemodule':
+			case 'federatedauth':
+				$w = 9.5;
+				break;
+			case 'keys':
+			case 'sharedmailbox':
+				$w = 12;
+				break;
+			case 'keys':
+			case 'sysadminemail':
+			case 'timeservers':
+				$w = 18;
+				break;
+			default:
+				return '';
+		}
+		if(preg_match('/MSIE/i', $_SERVER['HTTP_USER_AGENT']) ||
+		   preg_match('/Trident/i', $_SERVER['HTTP_USER_AGENT']))
+			$w = round($w * 11.5) . 'px';
+		else
+			$w = "{$w}em";
+		error_log($w);
+		return "width=\"$w\"";
+	}
+
+	/////////////////////////////////////////////////////////////////////////////
+	///
 	/// \fn fieldDisplayName($field)
 	///
 	/// \param $field - name of a resource field

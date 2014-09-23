@@ -8132,7 +8132,7 @@ function getComputers($sort=0, $includedeleted=0, $compid="") {
 	       .        "cur.prettyname AS currentimg, "
 	       .        "c.currentimageid AS currentimgid, "
 	       .        "c.imagerevisionid, "
-	       .        "next.name AS nextimg, "
+	       .        "next.prettyname AS nextimg, "
 	       .        "c.nextimageid AS nextimgid, "
 	       .        "c.RAM AS ram, "
 	       .        "c.procnumber AS procnumber, "

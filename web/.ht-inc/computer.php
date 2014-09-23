@@ -65,6 +65,56 @@ class Computer extends Resource {
 
 	/////////////////////////////////////////////////////////////////////////////
 	///
+	/// \fn fieldWidth($field)
+	///
+	/// \param $field - name of a resource field
+	///
+	/// \return string for setting width of field (includes width= part)
+	///
+	/// \brief generates the required width for the field; can return an empty
+	/// string if field should default to auto width
+	///
+	/////////////////////////////////////////////////////////////////////////////
+	function fieldWidth($field) {
+		switch($field) {
+			case 'currentimg':
+			case 'nextimg':
+				$w = 17;
+				break;
+			case 'notes':
+				$w = 14;
+				break;
+			case 'IPaddress':
+			case 'privateIPaddress':
+				$w = 8;
+				break;
+			case 'eth0macaddress':
+			case 'eth1macaddress':
+				$w = 8.5;
+				break;
+			case 'vmhost':
+				$w = 8;
+				break;
+			case 'location':
+				$w = 9;
+				break;
+			case 'provisioning':
+				$w = 11;
+				break;
+			default:
+				return '';
+		}
+		if(preg_match('/MSIE/i', $_SERVER['HTTP_USER_AGENT']) ||
+		   preg_match('/Trident/i', $_SERVER['HTTP_USER_AGENT']))
+			$w = round($w * 11.5) . 'px';
+		else
+			$w = "{$w}em";
+		error_log($w);
+		return "width=\"$w\"";
+	}
+
+	/////////////////////////////////////////////////////////////////////////////
+	///
 	/// \fn fieldDisplayName($field)
 	///
 	/// \param $field - name of a resource field
@@ -130,7 +180,8 @@ class Computer extends Resource {
 			$h .= "    <div dojoType=\"dijit.layout.ContentPane\"\n";
 			$h .= "         style=\"background-color: white; padding: 5px; border: 1px solid black;\">\n";
 			$h .= "      Reload computers with the following image:<br>\n";
-			$h .= selectInputAutoDijitHTML('', $resources['image'], 'reloadimageid');
+			$extra = 'autoComplete="false"';
+			$h .= selectInputAutoDijitHTML('', $resources['image'], 'reloadimageid', $extra);
 			$cont = addContinuationsEntry('AJreloadComputers', $this->basecdata);
 			$h .= "      <input type=\"hidden\" id=\"reloadcont\" value=\"$cont\"><br>\n";
 			$h .= dijitButton('', 'Confirm Reload Computers', 'confirmReload();', 0);

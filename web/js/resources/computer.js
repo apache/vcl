@@ -186,7 +186,6 @@ Computer.prototype.Selection = function() {
 				dijit.byId('chkb' + comp.id).set('checked', true);
 		}
 	}
-	//console.log(resource.selids.length + ":" + resourcegrid.rowCount);
 	if(resource.selids.length != resourcegrid.rowCount)
 		dijit.byId('selectallchkb').set('checked', false);
 	else
@@ -388,15 +387,23 @@ function buildExtraFilters() {
 					field: item.field,
 					queryExpr: '*${0}*',
 					autoComplete: false,
+					labelFunc: cbformatter,
+					labelType: 'html',
 					searchAttr: 'value'
 				});
 				if(typeof item.width != 'undefined') {
-					var newwidth = parseInt(item.width) - 0.6;
-					cb.set('style', {width: newwidth + "em"});
+					if(item.width.match(/px/))
+						var newwidth = (parseInt(item.width) - 11) + 'px';
+					else
+						var newwidth = (parseInt(item.width) - 0.6) + 'em';
+					cb.set('style', {width: newwidth});
 				}
 				else if(typeof item.unitWidth != 'undefined') {
-					var newwidth = parseInt(item.unitWidth) - 0.6;
-					cb.set('style', {width: newwidth + "em"});
+					if(item.unitWidth.match(/px/))
+						var newwidth = (parseInt(item.unitWidth) - 11) + 'px';
+					else
+						var newwidth = (parseInt(item.unitWidth) - 0.6) + 'em';
+					cb.set('style', {width: newwidth});
 				}
 				return cb;
 			};
@@ -450,6 +457,11 @@ function buildExtraFilters() {
 			}
 		}
 	});
+}
+
+function cbformatter(item, store) {
+	var comp = new Computer();
+	return comp.colformatter(store.getValue(item, 'value'), '', this);
 }
 
 function combofocus(obj) {

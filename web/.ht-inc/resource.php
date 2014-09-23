@@ -291,10 +291,11 @@ class Resource {
 			$h .= "height: 580px;\">\n";
 		$h .= "<thead>\n";
 		$h .= "<tr>\n";
-		if(preg_match('/MSIE/i', $_SERVER['HTTP_USER_AGENT']))
-			$w = array('64px', '38px', '200px', '142px', '65px', '142px', '59px', '58px', '63px', '73px');
+		if(preg_match('/MSIE/i', $_SERVER['HTTP_USER_AGENT']) ||
+		   preg_match('/Trident/i', $_SERVER['HTTP_USER_AGENT']))
+			$w = array('64px', '38px', '200px', '142px');
 		else
-			$w = array('5em', '3em', '17em', '12em', '5em', '12em', '5em', '5em', '5.6em', '6.3em');
+			$w = array('5em', '3em', '17em', '12em');
 		$h .= "<th field=\"id\" id=\"delcolth\" width=\"{$w[0]}\" formatter=\"resource.DeleteBtn\" styles=\"text-align: center;\">&nbsp;</th>\n";
 		$h .= "<th field=\"id\" width=\"{$w[1]}\" formatter=\"resource.EditBtn\" styles=\"text-align: center;\">&nbsp;</th>\n";
 		$h .= "<th field=\"name\" width=\"{$w[2]}\">Name</th>\n";
@@ -306,7 +307,8 @@ class Resource {
 			   is_array($resdata[$testid][$field]) ||
 			   preg_match('/id$/', $field))
 				continue;
-			$h .= "<th field=\"$field\" hidden=\"true\" formatter=\"resource.colformatter\">";
+			$w = $this->fieldWidth($field);
+			$h .= "<th field=\"$field\" $w hidden=\"true\" formatter=\"resource.colformatter\">";
 			$h .= $this->fieldDisplayName($field);
 			$h .= "</th>\n";
 		}
@@ -394,6 +396,22 @@ class Resource {
 			$h .= "</table>\n";
 		}
 		return $h;
+	}
+
+	/////////////////////////////////////////////////////////////////////////////
+	///
+	/// \fn fieldWidth($field)
+	///
+	/// \param $field - name of a resource field
+	///
+	/// \return string for setting width of field (includes width= part)
+	///
+	/// \brief generates the required width for the field; can return an empty
+	/// string if field should default to auto width
+	///
+	/////////////////////////////////////////////////////////////////////////////
+	function fieldWidth($field) {
+		return '';
 	}
 
 	/////////////////////////////////////////////////////////////////////////////
