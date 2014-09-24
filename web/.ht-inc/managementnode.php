@@ -116,7 +116,6 @@ class ManagementNode extends Resource {
 			$w = round($w * 11.5) . 'px';
 		else
 			$w = "{$w}em";
-		error_log($w);
 		return "width=\"$w\"";
 	}
 
