@@ -3590,10 +3590,11 @@ function AJsubmitEditRequest() {
 		return;
 	}
 	elseif($rc == -1) {
-		$h .= _("You have requested an environment that is limited in the<br>");
-		$h .= _("number of concurrent reservations that can be made. No further<br>");
-		$h .= _("reservations for the environment can be made for the time you<br>");
-		$h .= _("have selected. Please select another time for the reservation.<br><br>");
+		$h .= _("The reservation you are modifying is for an environment limited<br>");
+		$h .= _("in the number of concurrent reservations that can be made.<br>");
+		$h .= _("The time or duration you have requested overlaps with too<br>");
+		$h .= _("many other reservations for the same image. Please select<br>");
+		$h .= _("another time or duration for the reservation.<br><br>");
 		$cdata = getContinuationVar();
 		$cont = addContinuationsEntry('AJsubmitEditRequest', $cdata, SECINDAY, 1, 0);
 		$data['status'] = 'conflict';
