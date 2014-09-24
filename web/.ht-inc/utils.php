@@ -865,7 +865,11 @@ function main() {
 ////////////////////////////////////////////////////////////////////////////////
 function abort($errcode, $query="") {
 	global $mysql_link_vcl, $mysql_link_acct, $ERRORS, $user, $mode;
-	global $ENABLE_ITECSAUTH, $requestInfo;
+	global $ENABLE_ITECSAUTH, $requestInfo, $aborting;
+	if(! isset($aborting))
+		$aborting = 1;
+	elseif($aborting == 1)
+		return;
 	if($mode == 'xmlrpccall')
 		xmlRPCabort($errcode, $query);
 	if(ONLINEDEBUG && checkUserHasPerm('View Debug Information')) {
