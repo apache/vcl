@@ -850,6 +850,7 @@ CALL AddColumnIfNotExists('managementnode', 'publicDNSserver', "varchar(56) defa
 CALL AddColumnIfNotExists('managementnode', 'sysadminEmailAddress', "varchar(128) default NULL");
 CALL AddColumnIfNotExists('managementnode', 'sharedMailBox', "varchar(128) default NULL");
 CALL AddColumnIfNotExists('managementnode', 'NOT_STANDALONE', "varchar(128) default NULL");
+CALL AddColumnIfNotExists('managementnode', 'availablenetworks', "text NOT NULL");
 
 -- --------------------------------------------------------
 
@@ -916,6 +917,27 @@ CREATE TABLE IF NOT EXISTS `reservationaccounts` (
 -- Table structure for table `resourcepriv`
 --
 CALL AddManageMapping();
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `semaphore`
+--
+
+CREATE TABLE IF NOT EXISTS `semaphore` (
+  `computerid` smallint(5) unsigned NOT NULL,
+  `imageid` smallint(5) unsigned NOT NULL,
+  `imagerevisionid` mediumint(8) unsigned NOT NULL,
+  `managementnodeid` smallint(5) unsigned NOT NULL,
+  `expires` timestamp NOT NULL default CURRENT_TIMESTAMP on update CURRENT_TIMESTAMP,
+  `procid` varchar(255) NOT NULL,
+  KEY `computerid` (`computerid`),
+  KEY `imageid` (`imageid`),
+  KEY `imagerevisionid` (`imagerevisionid`),
+  KEY `managementnodeid` (`managementnodeid`),
+  KEY `expires` (`expires`),
+  KEY `procid` (`procid`)
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
 

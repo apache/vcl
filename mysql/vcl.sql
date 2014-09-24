@@ -592,6 +592,7 @@ CREATE TABLE IF NOT EXISTS `managementnode` (
   `sysadminEmailAddress` varchar(128) default NULL,
   `sharedMailBox` varchar(128) default NULL,
   `NOT_STANDALONE` varchar(128) default NULL,
+  `availablenetworks` text NOT NULL,
   PRIMARY KEY  (`id`),
   KEY `stateid` (`stateid`),
   KEY `ownerid` (`ownerid`),
@@ -917,6 +918,27 @@ CREATE TABLE IF NOT EXISTS `scheduletimes` (
   `start` smallint(5) unsigned NOT NULL default '0',
   `end` smallint(5) unsigned NOT NULL default '0',
   KEY `scheduleid` (`scheduleid`)
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+
+-- --------------------------------------------------------
+
+-- 
+-- Table structure for table `semaphore`
+-- 
+
+CREATE TABLE IF NOT EXISTS `semaphore` (
+  `computerid` smallint(5) unsigned NOT NULL,
+  `imageid` smallint(5) unsigned NOT NULL,
+  `imagerevisionid` mediumint(8) unsigned NOT NULL,
+  `managementnodeid` smallint(5) unsigned NOT NULL,
+  `expires` timestamp NOT NULL default CURRENT_TIMESTAMP on update CURRENT_TIMESTAMP,
+  `procid` varchar(255) NOT NULL,
+  KEY `computerid` (`computerid`),
+  KEY `imageid` (`imageid`),
+  KEY `imagerevisionid` (`imagerevisionid`),
+  KEY `managementnodeid` (`managementnodeid`),
+  KEY `expires` (`expires`),
+  KEY `procid` (`procid`)
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
@@ -2169,6 +2191,15 @@ ALTER TABLE `resourcepriv`
 -- 
 ALTER TABLE `schedule`
   ADD CONSTRAINT `schedule_ibfk_1` FOREIGN KEY (`ownerid`) REFERENCES `user` (`id`) ON UPDATE CASCADE;
+
+-- 
+-- Constraints for table `semaphore`
+-- 
+ALTER TABLE `semaphore`
+  ADD CONSTRAINT `semaphore_ibfk_1` FOREIGN KEY (`managementnodeid`) REFERENCES `managementnode` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  ADD CONSTRAINT `semaphore_ibfk_2` FOREIGN KEY (`computerid`) REFERENCES `computer` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  ADD CONSTRAINT `semaphore_ibfk_3` FOREIGN KEY (`imageid`) REFERENCES `image` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  ADD CONSTRAINT `semaphore_ibfk_4` FOREIGN KEY (`imagerevisionid`) REFERENCES `imagerevision` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
 
 --
 -- Constraints for table `serverprofile`
