@@ -204,7 +204,7 @@ function viewStatistics() {
 	$tmp = mktime(0, 0, 0, $month2, $day2, $year2);
 	print strftime('%x', $tmp);
 	print ":</H3>\n";
-	$reloadid = getUserlistID('vclreload@local');
+	$reloadid = getUserlistID('vclreload@Local');
 	if($mode2 == 'default') {
 		$query = "SELECT l.userid, "
 		       .        "u.affiliationid, "
@@ -386,7 +386,7 @@ function viewStatistics() {
 			$imagefails[$row["prettyname"]] += 1;
 
 		# total hours
-		$totalhours += ($length / 3600);
+		$totalhours += $length;
 
 		# osusers
 		if(! array_key_exists($row["OS"], $osusers))
@@ -401,7 +401,7 @@ function viewStatistics() {
 	print "  </TR>\n";
 	print "  <TR>\n";
 	print _("    <TH align=right>Total Hours Used:</TH>\n");
-	print "    <TD>" . (int)$totalhours . "</TD>\n";
+	print "    <TD>" . (int)($totalhours / 3600) . "</TD>\n";
 	print "  </TR>\n";
 	print "  <TR>\n";
 	print _("    <TH align=right>\"Now\" Reservations:</TH>\n");
