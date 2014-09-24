@@ -473,7 +473,9 @@ function combofocus(obj) {
 
 function applyExtraFilters(value) {
 	delete resourcegrid.query[this.field];
-	if(value == 'inuse')
+	value = value.replace('(', '\\(');
+	value = value.replace(')', '\\)');
+	if(this.field == 'state' && value == 'inuse')
 		resourcegrid.query[this.field] = value;
 	else if(value != '')
 		resourcegrid.query[this.field] = new RegExp('.*' + value + '.*', 'i');
