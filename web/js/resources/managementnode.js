@@ -19,6 +19,7 @@ function ManagementNode() {
 	Resource.apply(this, Array.prototype.slice.call(arguments));
 	this.selids = [];
 	this.selectingall = false;
+	this.restype = 'managementnode';
 }
 ManagementNode.prototype = new Resource();
 

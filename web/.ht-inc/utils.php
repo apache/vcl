@@ -875,14 +875,21 @@ function abort($errcode, $query="") {
 	if(ONLINEDEBUG && checkUserHasPerm('View Debug Information')) {
 		if($errcode >= 100 && $errcode < 400) {
 			print "<font color=red>" . mysql_error($mysql_link_vcl) . "</font><br>\n";
-			if($ENABLE_ITECSAUTH)
+			error_log(mysql_error($mysql_link_vcl));
+			if($ENABLE_ITECSAUTH) {
 				print "<font color=red>" . mysql_error($mysql_link_acct) . "</font><br>\n";
+				error_log(mysql_error($mysql_link_acct));
+			}
 			print "$query<br>\n";
+			error_log($query);
 		}
 		print "ERROR($errcode): " . $ERRORS["$errcode"] . "<BR>\n";
+		error_log("ERROR($errcode): " . $ERRORS["$errcode"]);
+		$backtrace = getBacktraceString(FALSE);
 		print "<pre>\n";
-		print getBacktraceString(FALSE);
+		print $backtrace;
 		print "</pre>\n";
+		error_log($backtrace);
 	}
 	else {
 		$message = "";
@@ -910,6 +917,7 @@ function abort($errcode, $query="") {
 		}
 		$message .= getBacktraceString(FALSE);
 		$mailParams = "-f" . ENVELOPESENDER;
+		error_log($message);
 		mail(ERROREMAIL, "Error with VCL pages ($errcode)", $message, '', $mailParams);
 		print _("An error has occurred.  If this problem persists, please email ");
 		print "<a href=\"mailto:" . HELPEMAIL . "?Subject=" . _("Problem%20With%20VCL") . "\">";
@@ -12601,6 +12609,7 @@ function getDojoHTML($refresh) {
 			                      'dijit.Tooltip',
 			                      'dojox.grid._CheckBoxSelector',
 			                      'dijit.Menu',
+			                      'dojo.cookie',
 			                      'dijit.Dialog');
 			break;
 		case 'groupMapHTML':

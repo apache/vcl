@@ -501,11 +501,11 @@ body {
 }
 
 #computerdlgcontent label {
-	width: 12em;
+	width: 12.5em;
 }
 
 #computerdlgcontent .labeledform {
-	margin-left: 12.5em;
+	margin-left: 13em;
 }
 
 #advancedoptions label {

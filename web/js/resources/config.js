@@ -15,6 +15,14 @@
 * limitations under the License.
 */
 
+function Config() {
+	Resource.apply(this, Array.prototype.slice.call(arguments));
+	this.restype = 'config';
+}
+Config.prototype = new Resource();
+
+var resource = new Config();
+
 var cfgvartimeout = null;
 var nocfgvarupdates = 1;
 var newcfgvarid = 15000001;

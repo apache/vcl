@@ -19,6 +19,7 @@ function Image() {
 	Resource.apply(this, Array.prototype.slice.call(arguments));
 	this.selids = [];
 	this.selectingall = false;
+	this.restype = 'image';
 }
 Image.prototype = new Resource();
 

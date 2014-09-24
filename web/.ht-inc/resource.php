@@ -254,6 +254,20 @@ class Resource {
 			return;
 		}
 
+		$selfields = array();
+		if(array_key_exists("{$this->restype}selfields", $_COOKIE)) {
+			$tmp = explode('|', $_COOKIE["{$this->restype}selfields"]);
+			foreach($tmp as $pair) {
+				$pair = explode(':', $pair);
+				if(count($pair) != 2)
+					continue;
+				$field = $pair[0];
+				$val = $pair[1];
+				if(preg_match('/^[a-zA-Z0-9]+$/', $field) && ($val == 0 || $val == 1))
+					$selfields[$field] = $val;
+			}
+		}
+
 		# filters
 		$h .= "<div dojoType=\"dijit.TitlePane\" title=\"Filters (click to expand)\" ";
 		$h .= "open=\"false\">\n";
@@ -270,7 +284,7 @@ class Resource {
 
 		$h .= "</span>\n"; # namefilter
 		$h .= "<strong>Displayed Fields</strong>:<br>\n";
-		$h .= $this->addDisplayCheckboxes($fields, $resdata[$testid]);
+		$h .= $this->addDisplayCheckboxes($fields, $resdata[$testid], $selfields);
 		if($this->deletetoggled) {
 			$h .= "<label for=\"showdeleted\"><strong>Include Deleted ";
 			$h .= "{$this->restypename}s:</strong>:</label>\n";
@@ -299,7 +313,10 @@ class Resource {
 		$h .= "<th field=\"id\" id=\"delcolth\" width=\"{$w[0]}\" formatter=\"resource.DeleteBtn\" styles=\"text-align: center;\">&nbsp;</th>\n";
 		$h .= "<th field=\"id\" width=\"{$w[1]}\" formatter=\"resource.EditBtn\" styles=\"text-align: center;\">&nbsp;</th>\n";
 		$h .= "<th field=\"name\" width=\"{$w[2]}\">Name</th>\n";
-		$h .= "<th field=\"owner\" width=\"{$w[3]}\">Owner</th>\n";
+		if(array_key_exists('owner', $selfields) && ! $selfields['owner'])
+			$h .= "<th field=\"owner\" width=\"{$w[3]}\" hidden=\"true\">Owner</th>\n";
+		else
+			$h .= "<th field=\"owner\" width=\"{$w[3]}\">Owner</th>\n";
 		foreach($fields as $field) {
 			if($field == $this->namefield ||
 			   $field == 'name' ||
@@ -308,7 +325,10 @@ class Resource {
 			   preg_match('/id$/', $field))
 				continue;
 			$w = $this->fieldWidth($field);
-			$h .= "<th field=\"$field\" $w hidden=\"true\" formatter=\"resource.colformatter\">";
+			if(array_key_exists($field, $selfields) && $selfields[$field])
+				$h .= "<th field=\"$field\" $w formatter=\"resource.colformatter\">";
+			else
+				$h .= "<th field=\"$field\" $w hidden=\"true\" formatter=\"resource.colformatter\">";
 			$h .= $this->fieldDisplayName($field);
 			$h .= "</th>\n";
 		}
@@ -334,11 +354,12 @@ class Resource {
 
 	/////////////////////////////////////////////////////////////////////////////
 	///
-	/// \fn addDisplayCheckboxes($allfields, $sample)
+	/// \fn addDisplayCheckboxes($allfields, $sample, $selfields)
 	///
 	/// \param $allfields - array of fields for which to generate checkboxes
 	/// \param $sample - sample data item that is used to determine what fields
 	/// to use for generating checkboxes
+	/// \param $selfields - array of fields that should be selected
 	///
 	/// \return html
 	///
@@ -346,7 +367,7 @@ class Resource {
 	/// page
 	///
 	/////////////////////////////////////////////////////////////////////////////
-	function addDisplayCheckboxes($allfields, $sample) {
+	function addDisplayCheckboxes($allfields, $sample, $selfields) {
 		$fields = array('owner');
 		foreach($allfields as $field) {
 			if($field == $this->namefield ||
@@ -364,7 +385,9 @@ class Resource {
 			$cols = 4;
 		if($fieldcnt < 6) {
 			foreach($fields as $field) {
-				if($field == 'name' || $field == 'owner')
+				if($field == 'owner' && (! array_key_exists('owner', $selfields) || $selfields['owner']))
+					$h .= "<input type=checkbox id=chk$field checked onClick=\"resource.toggleResFieldDisplay(this, '$field')\">";
+				elseif($field == 'name' || (array_key_exists($field, $selfields) && $selfields[$field]))
 					$h .= "<input type=checkbox id=chk$field checked onClick=\"resource.toggleResFieldDisplay(this, '$field')\">";
 				else
 					$h .= "<input type=checkbox id=chk$field onClick=\"resource.toggleResFieldDisplay(this, '$field')\">";
@@ -380,13 +403,15 @@ class Resource {
 				$mod = $cols;
 				if($cnt % $mod == 0)
 					$h .= "<tr>\n";
-				if($field == 'name' || $field == 'owner')
+				if($field == 'owner' && (! array_key_exists('owner', $selfields) || $selfields['owner']))
+					$h .= "  <td><input type=checkbox id=chk$field checked onClick=\"resource.toggleResFieldDisplay(this, '$field')\">";
+				elseif($field == 'name' || (array_key_exists($field, $selfields) && $selfields[$field]))
 					$h .= "  <td><input type=checkbox id=chk$field checked onClick=\"resource.toggleResFieldDisplay(this, '$field')\">";
 				else
 					$h .= "  <td><input type=checkbox id=chk$field onClick=\"resource.toggleResFieldDisplay(this, '$field')\">";
 				$h .= "<label for=chk$field>";
 				$h .= $this->fieldDisplayName($field);
-				$h .= "</label><br>\n";
+				$h .= "</label><br></td>\n";
 				$cnt++;
 				if($cnt % $mod == 0)
 					$h .= "</tr>\n";

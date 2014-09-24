@@ -15,7 +15,13 @@
 * limitations under the License.
 */
 
-var resource = new Resource();
+function Schedule() {
+	Resource.apply(this, Array.prototype.slice.call(arguments));
+	this.restype = 'schedule';
+}
+Schedule.prototype = new Resource();
+
+var resource = new Schedule();
 
 var scheduleTimeData = {
 	identifier: 'id',

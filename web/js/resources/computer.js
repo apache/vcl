@@ -19,6 +19,7 @@ function Computer() {
 	Resource.apply(this, Array.prototype.slice.call(arguments));
 	this.selids = [];
 	this.selectingall = false;
+	this.restype = 'computer';
 }
 Computer.prototype = new Resource();
 
@@ -117,6 +118,7 @@ Computer.prototype.toggleResFieldDisplay = function(obj, field) {
 			break;
 		}
 	}
+	this.updateFieldCookie(field, obj.checked);
 }
 
 Computer.prototype.GridFilter = function() {

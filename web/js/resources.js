@@ -15,7 +15,9 @@
 * limitations under the License.
 */
 
-function Resource() {}
+function Resource() {
+	this.restype = 'resource';
+}
 
 Resource.prototype.DeleteBtn = function(rscid, rowIndex) {
 	var rowdata = this.grid.getItem(rowIndex);
@@ -126,6 +128,38 @@ Resource.prototype.toggleResFieldDisplay = function(obj, field) {
 				resourcegrid.layout.setColumnVisibility(i, false);
 			break;
 		}
+	}
+	this.updateFieldCookie(field, obj.checked);
+}
+
+Resource.prototype.updateFieldCookie = function(field, selected) {
+	var data = dojo.cookie(this.restype + 'selfields');
+	if(typeof data === 'undefined') {
+		if(selected)
+			dojo.cookie(this.restype + 'selfields', field + ':1');
+		else
+			dojo.cookie(this.restype + 'selfields', field + ':0');
+	}
+	else {
+		var items = data.split('|');
+		for(var i = 0; i < items.length; i++) {
+			var pair = items[i].split(':');
+			if(pair[0] == field) {
+				if(selected)
+					items[i] = field + ':1';
+				else
+					items[i] = field + ':0';
+				break;
+			}
+		}
+		if(i == items.length) {
+			if(selected)
+				items.push(field + ':1');
+			else
+				items.push(field + ':0');
+		}
+		data = items.join('|');
+		dojo.cookie(this.restype + 'selfields', data);
 	}
 }
 
