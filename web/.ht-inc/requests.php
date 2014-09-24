@@ -2916,7 +2916,9 @@ function AJeditRequest() {
 	$requestid = getContinuationVar('requestid', 0);
 	$request = getRequestInfo($requestid, 1);
 	# check to see if reservation exists
-	if(is_null($request)) {
+	if(is_null($request) || $request['stateid'] == 11 || $request['stateid'] == 12 ||
+	   ($request['stateid'] == 14 && 
+	   ($request['laststateid'] == 11 || $request['laststateid'] == 12))) {
 		sendJSON(array('status' => 'resgone'));
 		return;
 	}
@@ -3654,7 +3656,17 @@ function AJconfirmDeleteRequest() {
 	$request = getRequestInfo($requestid, 1);
 	if(is_null($request)) {
 		$data = array('error' => 1,
+		              'refresh' => 1,
 		              'msg' => _("The specified reservation no longer exists."));
+		sendJSON($data);
+		return;
+	}
+	if($request['stateid'] == 11 || $request['stateid'] == 12 ||
+	   ($request['stateid'] == 14 && 
+	   ($request['laststateid'] == 11 || $request['laststateid'] == 12))) {
+		$data = array('error' => 1,
+		              'refresh' => 1,
+		              'msg' => _("This reservation has timed out due to lack of user activity and is no longer available."));
 		sendJSON($data);
 		return;
 	}
@@ -3867,7 +3879,9 @@ function AJsubmitRemoveRequest() {
 function AJrebootRequest() {
 	$requestid = getContinuationVar('requestid');
 	$reqdata = getRequestInfo($requestid, 1);
-	if(is_null($reqdata)) {
+	if(is_null($reqdata) || $reqdata['stateid'] == 11 || $reqdata['stateid'] == 12 ||
+	   ($reqdata['stateid'] == 14 && 
+	   ($reqdata['laststateid'] == 11 || $reqdata['laststateid'] == 12))) {
 		print "resGone('reboot'); ";
 		print "dijit.byId('editResDlg').show();";
 		print "setTimeout(resRefresh, 1500);";
@@ -3897,7 +3911,9 @@ function AJshowReinstallRequest() {
 	global $user;
 	$requestid = getContinuationVar('requestid');
 	$reqdata = getRequestInfo($requestid, 1);
-	if(is_null($reqdata)) {
+	if(is_null($reqdata) || $reqdata['stateid'] == 11 || $reqdata['stateid'] == 12 ||
+	   ($reqdata['stateid'] == 14 && 
+	   ($reqdata['laststateid'] == 11 || $reqdata['laststateid'] == 12))) {
 		sendJSON(array('status' => 'resgone'));
 		return;
 	}
@@ -4001,12 +4017,17 @@ function AJreinstallRequest() {
 function AJconnectRequest() {
 	global $remoteIP, $user;
 	$requestid = getContinuationVar('requestid');
-	$requestData = getRequestInfo($requestid);
+	$requestData = getRequestInfo($requestid, 1);
+	if(is_null($requestData)) {
+		$h = _("This reservation is no longer available.");
+		sendJSON(array('html' => $h, 'refresh' => 1));
+		return;
+	}
 	if($requestData['stateid'] == 11 || $requestData['stateid'] == 12 ||
 	   ($requestData['stateid'] == 14 && 
 	   ($requestData['laststateid'] == 11 || $requestData['laststateid'] == 12))) {
 		$h = _("This reservation has timed out due to lack of user activity and is no longer available.");
-		sendJSON($h);
+		sendJSON(array('html' => $h, 'refresh' => 1));
 		return;
 	}
 	$h = '';

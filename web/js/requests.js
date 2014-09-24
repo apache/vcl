@@ -1312,7 +1312,10 @@ function connectRequest(cont) {
 function connectRequestCB(data, ioArgs) {
 	dijit.byId('connectDlgContent').set('content', data.items.html);
 	dijit.byId('connectDlg').show();
-	setTimeout(checkConnectTimeout, 15000);
+	if('refresh' in data.items && data.items.refresh == 1)
+		resRefresh();
+	else
+		setTimeout(checkConnectTimeout, 15000);
 }
 
 function endReservation(cont) {
@@ -1322,6 +1325,8 @@ function endReservation(cont) {
 function endReservationCB(data, ioArgs) {
 	if(data.items.error) {
 		alert(data.items.msg);
+		if('refresh' in data.items && data.items.refresh)
+			setTimeout(resRefresh, 800);
 		return;
 	}
 	dojo.byId('endrescont').value = data.items.cont;

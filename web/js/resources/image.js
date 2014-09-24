@@ -564,6 +564,11 @@ function startImageCB(data, ioArgs) {
 		alert(data.items.errmsg);
 		return;
 	}
+	if(data.items.status == 'resgone') {
+		alert(data.items.errmsg);
+		resRefresh();
+		return;
+	}
 	// configure add image dialog, extra work, but saves an AJAX call after selection
 	resetEditResource();
 	var methodids = new Array();

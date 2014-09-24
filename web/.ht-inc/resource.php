@@ -1595,7 +1595,15 @@ function AJstartImage() {
 	$requestid = getContinuationVar("requestid");
 	$checkpoint = getContinuationVar("checkpoint", 0);
 
-	$data = getRequestInfo($requestid);
+	$data = getRequestInfo($requestid, 1);
+	if(is_null($data) || $data['stateid'] == 11 || $data['stateid'] == 12 ||
+	   ($data['stateid'] == 14 && 
+	   ($data['laststateid'] == 11 || $data['laststateid'] == 12))) {
+		$ret = array('status' => 'resgone',
+		             'errmsg' => _("The reservation you selected to image has expired."));
+		sendJSON($ret);
+		return;
+	}
 	$disableUpdate = 1;
 	$imageid = '';
 	if(count($data['reservations']) == 1) {
