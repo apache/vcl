@@ -597,7 +597,7 @@ CREATE TABLE IF NOT EXISTS `managementnode` (
   KEY `stateid` (`stateid`),
   KEY `ownerid` (`ownerid`),
   KEY `imagelibgroupid` (`imagelibgroupid`),
-  KEY `IPaddress` (`IPaddress`),
+  KEY `IPaddress` (`IPaddress`)
 ) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
@@ -2199,7 +2199,7 @@ ALTER TABLE `semaphore`
   ADD CONSTRAINT `semaphore_ibfk_1` FOREIGN KEY (`managementnodeid`) REFERENCES `managementnode` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
   ADD CONSTRAINT `semaphore_ibfk_2` FOREIGN KEY (`computerid`) REFERENCES `computer` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
   ADD CONSTRAINT `semaphore_ibfk_3` FOREIGN KEY (`imageid`) REFERENCES `image` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
-  ADD CONSTRAINT `semaphore_ibfk_4` FOREIGN KEY (`imagerevisionid`) REFERENCES `imagerevision` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
+  ADD CONSTRAINT `semaphore_ibfk_4` FOREIGN KEY (`imagerevisionid`) REFERENCES `imagerevision` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 --
 -- Constraints for table `serverprofile`
