@@ -1287,10 +1287,8 @@ sub get_next_image_dataStructure {
       @current_image = ();
 	}
 	
-	my $computer_predictive_module_id = $self->get_computer_predictive_module_id();
-
 	#collect predictive reload information from database.
-	my $management_predictive_info = get_management_predictive_info();
+	my $computer_predictive_module_id = $self->get_computer_predictive_module_id();
 	if (!$computer_predictive_module_id){
 		notify($ERRORS{'CRITICAL'}, 0, "unable to obtain management node info for this node, returning current reservation image information");
       return @current_image;

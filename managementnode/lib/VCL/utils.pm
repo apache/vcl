@@ -147,7 +147,6 @@ our @EXPORT = qw(
 	get_management_node_requests
 	get_management_node_vmhost_ids
 	get_management_node_vmhost_info
-	get_management_predictive_info
 	get_module_info
 	get_next_image_default
 	get_os_info
@@ -4412,80 +4411,6 @@ sub write_currentimage_txt {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 get_management_predictive_info
-
- Parameters  : Either a management node hostname or database ID
- Returns     : Hash containing data contained in the managementnode table
- Description :
-
-=cut
-
-sub get_management_predictive_info {
-	my ($management_node_identifier) = @_;
-
-	my ($package, $filename, $line, $sub) = caller(0);
-
-	# Check the passed parameter
-	if (!(defined($management_node_identifier))) {
-		# If nothing was passed, assume management node is this machine
-		# Try to get the hostname of this machine
-		unless ($management_node_identifier = (hostname())[0]) {
-			notify($ERRORS{'WARNING'}, 0, "management node hostname or ID was not specified and hostname could not be determined");
-			return ();
-		}
-	}
-
-	my $select_statement = "
-   SELECT
-   managementnode.*,
-   predictivemodule.name AS predictive_name,
-   predictivemodule.prettyname AS predictive_prettyname,
-   predictivemodule.description AS predictive_description,
-   predictivemodule.perlpackage  AS predictive_perlpackage,
-	state.name AS statename
-   FROM
-   managementnode,
-   module predictivemodule,
-	state
-   WHERE
-   managementnode.predictivemoduleid = predictivemodule.id
-	AND managementnode.stateid = state.id
-   AND
-   ";
-
-	# Figure out if the ID or hostname was passed as the identifier and complete the SQL statement
-	# Check if it only contains digits
-	chomp $management_node_identifier;
-	if ($management_node_identifier =~ /^\d+$/) {
-		$select_statement .= "managementnode.id = $management_node_identifier";
-	}
-	else {
-		$select_statement .= "managementnode.hostname like \'$management_node_identifier%\'";
-	}
-
-	# Call the database select subroutine
-	# This will return an array of one or more rows based on the select statement
-	my @selected_rows = database_select($select_statement);
-
-	# Check to make sure 1 row was returned
-	if (scalar @selected_rows == 0) {
-		notify($ERRORS{'WARNING'}, 0, "zero rows were returned from database select");
-		return ();
-	}
-	elsif (scalar @selected_rows > 1) {
-		notify($ERRORS{'WARNING'}, 0, "" . scalar @selected_rows . " rows were returned from database select");
-		return ();
-	}
-	# Get the single returned row
-	# It contains a hash
-	my $management_node_info = $selected_rows[0];
-
-	notify($ERRORS{'DEBUG'}, 0, "management node info retrieved from database ");
-	return $management_node_info;
-}
-
-#/////////////////////////////////////////////////////////////////////////////
-
 =head2 get_management_node_info
 
  Parameters  : Either a management node hostname or database ID
@@ -4533,20 +4458,14 @@ sub get_management_node_info {
 SELECT
 managementnode.*,
 resource.id AS resource_id,
-predictivemodule.name AS predictive_name,
-predictivemodule.prettyname AS predictive_prettyname,
-predictivemodule.description AS predictive_description,
-predictivemodule.perlpackage  AS predictive_perlpackage,
 state.name AS statename
 FROM
 managementnode,
-module predictivemodule,
 resource,
 resourcetype,
 state
 WHERE
-managementnode.predictivemoduleid = predictivemodule.id
-AND managementnode.stateid = state.id
+managementnode.stateid = state.id
 AND resource.resourcetypeid = resourcetype.id 
 AND resource.subid =  managementnode.id
 AND resourcetype.name = 'managementnode'
