@@ -95,7 +95,6 @@ class ManagementNode extends Resource {
 				break;
 			case 'imagelibgroup':
 			case 'imagelibkey':
-			case 'predictivemodule':
 			case 'federatedauth':
 				$w = 9.5;
 				break;
@@ -162,8 +161,6 @@ class ManagementNode extends Resource {
 				return 'Sysadmin Email Address';
 			case 'sharedmailbox':
 				return 'Shadow Email Address';
-			case 'predictivemodule':
-				return 'Predictive Loading Module';
 			case 'federatedauth':
 				return 'Federated Auth. Affiliations';
 			case 'timeservers':
@@ -266,11 +263,6 @@ class ManagementNode extends Resource {
 		$errmsg = "Invalid email address specified";
 		$h .= labeledFormItem('sharedmailbox', 'Address for Shadow Emails', 'text', $reg, 0, '',
 		                      $errmsg, '', '', '', helpIcon('sharedmailboxhelp')); 
-
-		# predictive loading module
-		$vals = getPredictiveModules();
-		$h .= labeledFormItem('premoduleid', 'Predictive Loading Module', 'select', $vals, -1, '',
-		                      '', '', '', '', helpIcon('predictivehelp'));
 
 		# checkininterval
 		$extra = array('smallDelta' => 1, 'largeDelta' => 2);
@@ -400,7 +392,6 @@ class ManagementNode extends Resource {
 		$h .= "<div id=\"tooltips\">\n";
 		$h .= helpTooltip('sysadminemailhelp', _("Comma delimited list of email addresses for sysadmins who should receive error emails from this management node. Leave empty to disable this feature."));
 		$h .= helpTooltip('sharedmailboxhelp', _("Single email address to which copies of all user emails should be sent. This is a high traffic set of emails. Leave empty to disable this feature."));
-		$h .= helpTooltip('predictivehelp', _("This is the method used to determine which image should be loaded on a computer at the end of a reservation."));
 		$h .= helpTooltip('checkinhelp', _("the number of seconds that this management node will wait before checking the database for tasks."));
 		$h .= helpTooltip('installpathhelp', _("path to parent directory of image repository directories (typically /install) - only needed with bare metal installs or VMWare with local disk"));
 		$h .= helpTooltip('timeservershelp', _("comma delimited list of time servers for this management node"));
@@ -487,9 +478,6 @@ class ManagementNode extends Resource {
 			# keys
 			if($data['keys'] != $olddata['keys'])
 				$updates[] = "keys = '{$data['keys']}'";
-			# predictivemoduleid
-			if($data['premoduleid'] != $olddata['predictivemoduleid'])
-				$updates[] = "predictivemoduleid = '{$data['premoduleid']}'";
 			# sshport
 			if($data['sshport'] != $olddata['sshport'])
 				$updates[] = "sshport = '{$data['sshport']}'";
@@ -589,7 +577,6 @@ class ManagementNode extends Resource {
 	/// \b publicnetmask - public netmask if doing static configuration\n
 	/// \b publicgateway - public gateway if doing static configuration\n
 	/// \b publicdnsserver - public DNS server if doing static configuration\n
-	/// \b premoduleid - id of module to use when preloading nodes\n
 	/// \b checkininterval - time in seconds between database checkins\n
 	/// \b availablenetworks - networks available to nodes managed by this
 	///    management node when requesting a fixed IP address\n
@@ -625,7 +612,6 @@ class ManagementNode extends Resource {
 		$return['publicnetmask'] = processInputVar('publicnetmask', ARG_STRING);
 		$return['publicgateway'] = processInputVar('publicgateway', ARG_STRING);
 		$return['publicdnsserver'] = processInputVar('publicdnsserver', ARG_STRING);
-		$return['premoduleid'] = processInputVar('premoduleid', ARG_NUMERIC);
 		$return['checkininterval'] = processInputVar('checkininterval', ARG_NUMERIC);
 		$return['availablenetworks'] = processInputVar('availablenetworks', ARG_STRING);
 		$return['federatedauth'] = processInputVar('federatedauth', ARG_STRING);
@@ -790,12 +776,6 @@ class ManagementNode extends Resource {
 			$return['error'] = 1;
 			$errormsg[] = "Invalid value submitted for State";
 		}
-		# premoduleid
-		$premodules = getPredictiveModules();
-		if(! array_key_exists($return['premoduleid'], $premodules)) {
-			$return['error'] = 1;
-			$errormsg[] = "Invalid value submitted for Predictive Loading Module";
-		}
 		# checkininterval
 		if($return['checkininterval'] < 5)
 			$return['checkininterval'] = 5;
@@ -873,22 +853,20 @@ class ManagementNode extends Resource {
 		$keys = array('IPaddress',            'hostname',
 		              'ownerid',              'stateid',
 		              'checkininterval',      'installpath',
-		              '`keys`',               'predictivemoduleid',
-		              'sshport',              'sysadminEmailAddress',
-		              'sharedMailBox',        'availablenetworks',
-		              'NOT_STANDALONE',       'imagelibenable',
-		              'publicIPconfiguration','imagelibgroupid',
-		              'imagelibuser',         'imagelibkey',
-		              'publicSubnetMask',     'publicDefaultGateway',
-		              'publicDNSserver');
-		$values = array("'{$data['ipaddress']}'",      "'{$data['name']}'",
-		                   $ownerid,                      $data['stateid'],
-		                   $data['checkininterval'],   "'{$data['installpath']}'",
-		                "'{$data['keys']}'",              $data['premoduleid'],
-		                   $data['sshport'],            "'{$esc['sysadminemail']}'",
-		                 "'{$esc['sharedmailbox']}'",  "'{$data['availablenetworks']}'",
-		                "'{$data['federatedauth']}'",     $data['imagelibenable'],
-		                "'{$data['publicIPconfig']}'");
+		              '`keys`',               'sshport',
+		              'sysadminEmailAddress', 'sharedMailBox',
+		              'availablenetworks',    'NOT_STANDALONE',
+		              'imagelibenable',       'publicIPconfiguration',
+		              'imagelibgroupid',      'imagelibuser',
+		              'imagelibkey',          'publicSubnetMask',
+		              'publicDefaultGateway', 'publicDNSserver');
+		$values = array("'{$data['ipaddress']}'",        "'{$data['name']}'",
+		                   $ownerid,                        $data['stateid'],
+		                   $data['checkininterval'],     "'{$data['installpath']}'",
+		                "'{$data['keys']}'",                $data['sshport'],
+		                 "'{$esc['sysadminemail']}'",     "'{$esc['sharedmailbox']}'",
+		                "'{$data['availablenetworks']}'","'{$data['federatedauth']}'",
+		                   $data['imagelibenable'],      "'{$data['publicIPconfig']}'");
 		if($data['imagelibenable'] == 1) {
 			$values[] = $data['imagelibgroupid'];
 			$values[] = "'{$data['imagelibuser']}'";

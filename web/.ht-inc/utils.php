@@ -6748,8 +6748,6 @@ function getManagementNodes($alive="neither", $includedeleted=0, $id=0) {
 	       .        "m.sysadminEmailAddress AS sysadminemail, "
 	       .        "m.sharedMailBox AS sharedmailbox, "
 	       .        "r.id as resourceid, "
-	       .        "m.predictivemoduleid, "
-	       .        "mo.prettyname AS predictivemodule, "
 	       .        "m.availablenetworks, "
 	       .        "m.NOT_STANDALONE AS federatedauth "
 	       . "FROM user u, "
@@ -6757,7 +6755,6 @@ function getManagementNodes($alive="neither", $includedeleted=0, $id=0) {
 	       .      "resource r, "
 	       .      "resourcetype rt, "
 	       .      "affiliation a, "
-	       .      "module mo, "
 	       .      "managementnode m "
 	       . "LEFT JOIN resourcegroup rg ON (m.imagelibgroupid = rg.id) "
 	       . "WHERE m.ownerid = u.id AND "
@@ -6765,8 +6762,7 @@ function getManagementNodes($alive="neither", $includedeleted=0, $id=0) {
 	       .       "m.id = r.subid AND "
 	       .       "r.resourcetypeid = rt.id AND "
 	       .       "rt.name = 'managementnode' AND "
-	       .       "u.affiliationid = a.id AND "
-	       .       "m.predictivemoduleid = mo.id";
+	       .       "u.affiliationid = a.id";
 	if($id != 0)
 		$query .= " AND m.id = $id";
 	if($includedeleted == 0)
@@ -8165,7 +8161,9 @@ function getComputers($sort=0, $includedeleted=0, $compid="") {
 	       .        "c.location, "
 	       .        "c.provisioningid, "
 	       .        "pr.prettyname AS provisioning, "
-	       .        "vh2.vmprofileid "
+	       .        "vh2.vmprofileid, "
+	       .        "c.predictivemoduleid, "
+	       .        "m.prettyname AS predictivemodule "
 	       . "FROM state st, "
 	       .      "platform p, "
 	       .      "schedule sc, "
@@ -8174,6 +8172,7 @@ function getComputers($sort=0, $includedeleted=0, $compid="") {
 	       .      "resourcetype t, "
 	       .      "user u, "
 	       .      "affiliation a, "
+	       .      "module m, "
 	       .      "computer c "
 	       . "LEFT JOIN vmhost vh ON (c.vmhostid = vh.id) "
 	       . "LEFT JOIN vmhost vh2 ON (c.id = vh2.computerid) "
@@ -8188,7 +8187,8 @@ function getComputers($sort=0, $includedeleted=0, $compid="") {
 	       .       "t.name = 'computer' AND "
 	       .       "r.subid = c.id AND "
 	       .       "c.ownerid = u.id AND "
-	       .       "u.affiliationid = a.id ";
+	       .       "u.affiliationid = a.id AND "
+	       .       "c.predictivemoduleid = m.id ";
 	if(! $includedeleted)
 		$query .= "AND c.deleted = 0 ";
 	if(! empty($compid))
@@ -9844,8 +9844,8 @@ function addChangeLogEntryOther($logid, $data) {
 function addSublogEntry($logid, $imageid, $imagerevisionid, $computerid,
                         $mgmtnodeid, $fromblock, $blockdata) {
 	$query = "SELECT predictivemoduleid "
-	       . "FROM managementnode "
-	       . "WHERE id = $mgmtnodeid";
+	       . "FROM computer "
+	       . "WHERE id = $computerid";
 	$qh = doQuery($query, 101);
 	$row = mysql_fetch_assoc($qh);
 	$predictiveid = $row['predictivemoduleid'];

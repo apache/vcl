@@ -103,7 +103,6 @@ function inlineEditResourceCB(data, ioArgs) {
 		dijit.byId('stateid').set('value', data.items.data.stateid);
 		dijit.byId('sysadminemail').set('value', data.items.data.sysadminemail);
 		dijit.byId('sharedmailbox').set('value', data.items.data.sharedmailbox);
-		dijit.byId('premoduleid').set('value', data.items.data.predictivemoduleid);
 		dijit.byId('checkininterval').set('value', data.items.data.checkininterval);
 		dijit.byId('installpath').set('value', data.items.data.installpath);
 		dijit.byId('timeservers').set('value', data.items.data.timeservers);
@@ -131,7 +130,7 @@ function inlineEditResourceCB(data, ioArgs) {
 }
 
 function resetEditResource() {
-	var fields = ['name', 'owner', 'ipaddress', 'stateid', 'sysadminemail', 'sharedmailbox', 'premoduleid', 'checkininterval', 'installpath', 'timeservers', 'keys', 'sshport', 'imagelibenable', 'imagelibgroupid', 'imagelibuser', 'imagelibkey', 'publicIPconfig', 'publicnetmask', 'publicgateway', 'publicdnsserver', 'availablenetworks', 'federatedauth'];
+	var fields = ['name', 'owner', 'ipaddress', 'stateid', 'sysadminemail', 'sharedmailbox', 'checkininterval', 'installpath', 'timeservers', 'keys', 'sshport', 'imagelibenable', 'imagelibgroupid', 'imagelibuser', 'imagelibkey', 'publicIPconfig', 'publicnetmask', 'publicgateway', 'publicdnsserver', 'availablenetworks', 'federatedauth'];
 	for(var i = 0; i < fields.length; i++) {
 		dijit.byId(fields[i]).reset();
 	}
@@ -196,7 +195,6 @@ function saveResource() {
 		data[fields[i]] = dijit.byId(fields[i]).get('value');
 	}
 	data['stateid'] = dijit.byId('stateid').get('value');
-	data['premoduleid'] = dijit.byId('premoduleid').get('value');
 	data['checkininterval'] = dijit.byId('checkininterval').get('value');
 	data['sshport'] = dijit.byId('sshport').get('value');
 	data['imagelibgroupid'] = dijit.byId('imagelibgroupid').get('value');
@@ -249,7 +247,6 @@ function saveResourceCB(data, ioArgs) {
 					resourcegrid.store.setValue(item, 'installpath', data.items.data.installpath);
 					resourcegrid.store.setValue(item, 'keys', data.items.data.keys);
 					resourcegrid.store.setValue(item, 'lastcheckin', data.items.data.lastcheckin);
-					resourcegrid.store.setValue(item, 'predictivemodule', data.items.data.predictivemodule);
 					resourcegrid.store.setValue(item, 'publicIPconfig', data.items.data.publicIPconfig);
 					resourcegrid.store.setValue(item, 'publicdnsserver', data.items.data.publicdnsserver);
 					resourcegrid.store.setValue(item, 'publicgateway', data.items.data.publicgateway);

@@ -197,6 +197,8 @@ $noHTMLwrappers = array('sendRDPfile',
                         'AJcompStateChange',
                         'AJcompProvisioningChange',
                         'AJsubmitCompProvisioningChange',
+                        'AJcompPredictiveModuleChange',
+                        'AJsubmitCompPredictiveModuleChange',
                         'AJsubmitCompStateChange',
                         'AJsubmitComputerStateLater',
                         'AJconnectRequest',
@@ -610,6 +612,8 @@ $actions['mode']['AJhostsData'] = "AJhostsData";
 $actions['mode']['AJcompStateChange'] = "AJcompStateChange";
 $actions['mode']['AJcompProvisioningChange'] = "AJcompProvisioningChange";
 $actions['mode']['AJsubmitCompProvisioningChange'] = "AJsubmitCompProvisioningChange";
+$actions['mode']['AJcompPredictiveModuleChange'] = "AJcompPredictiveModuleChange";
+$actions['mode']['AJsubmitCompPredictiveModuleChange'] = "AJsubmitCompPredictiveModuleChange";
 $actions['mode']['AJsubmitCompStateChange'] = "AJsubmitCompStateChange";
 $actions['mode']['AJsubmitComputerStateLater'] = "AJsubmitComputerStateLater";
 $actions['mode']['jsonImageConnectMethods'] = "jsonImageConnectMethods";
@@ -664,6 +668,8 @@ $actions['pages']['AJhostsData'] = "resource";
 $actions['pages']['AJcompStateChange'] = "resource";
 $actions['pages']['AJcompProvisioningChange'] = "resource";
 $actions['pages']['AJsubmitCompProvisioningChange'] = "resource";
+$actions['pages']['AJcompPredictiveModuleChange'] = "resource";
+$actions['pages']['AJsubmitCompPredictiveModuleChange'] = "resource";
 $actions['pages']['AJsubmitCompStateChange'] = "resource";
 $actions['pages']['AJsubmitComputerStateLater'] = "resource";
 $actions['pages']['jsonImageConnectMethods'] = "resource";

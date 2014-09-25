@@ -98,6 +98,9 @@ class Computer extends Resource {
 			case 'location':
 				$w = 9;
 				break;
+			case 'predictivemodule':
+				$w = 10;
+				break;
 			case 'provisioning':
 				$w = 11;
 				break;
@@ -149,6 +152,8 @@ class Computer extends Resource {
 				return 'VM Host';
 			case 'provisioning':
 				return 'Provisioning Engine';
+			case 'predictivemodule':
+				return 'Predictive Loading Module';
 		}
 		return ucfirst($field);
 	}
@@ -171,30 +176,51 @@ class Computer extends Resource {
 		$h .= "<span>" . _("Actions for selected computers") . "</span>\n";
 		$h .= "<div dojoType=\"dijit.Menu\" id=\"actionmenu\">\n";
 
-		# reload
-		$resources = getUserResources(array("imageAdmin", "imageCheckOut"));
-		if(count($resources['image'])) {
+		# change predictive loading module
+		$premodules = getPredictiveModules();
+		$h .= "  <div dojoType=\"dijit.PopupMenuItem\">\n";
+		$h .= "    <span>Change Predictive Loading Module</span>\n";
+		$h .= "    <div dojoType=\"dijit.layout.ContentPane\"\n";
+		$h .= "         style=\"background-color: white; padding: 5px; border: 1px solid black;\">\n";
+		$h .= "      Change Predictive Loading Module to:<br>\n";
+		$h .= selectInputAutoDijitHTML('', $premodules, 'newpredictivemoduleid');
+		$cdata = $this->basecdata;
+		$cont = addContinuationsEntry('AJcompPredictiveModuleChange', $cdata);
+		$h .= "      <input type=\"hidden\" id=\"predictivemodulechangecont\" value=\"$cont\"><br>\n";
+		$h .= dijitButton('', 'Confirm Predictive Loading Module Change', 'confirmPredictiveModuleChange();', 0);
+		$h .= "    </div>\n";
+		$h .= "  </div>\n";
+
+		# change provisioning engine
+		$provisioning = getProvisioning();
+		$h .= "  <div dojoType=\"dijit.PopupMenuItem\">\n";
+		$h .= "    <span>Change Provisioning Engine</span>\n";
+		$h .= "    <div dojoType=\"dijit.layout.ContentPane\"\n";
+		$h .= "         style=\"background-color: white; padding: 5px; border: 1px solid black;\">\n";
+		$h .= "      Change Provisioning Engine to:<br>\n";
+		$h .= selectInputAutoDijitHTML('', $provisioning, 'newprovisioningid');
+		$cdata = $this->basecdata;
+		$cont = addContinuationsEntry('AJcompProvisioningChange', $cdata);
+		$h .= "      <input type=\"hidden\" id=\"provisioningchangecont\" value=\"$cont\"><br>\n";
+		$h .= dijitButton('', 'Confirm Provisioning Engine Change', 'confirmProvisioningChange();', 0);
+		$h .= "    </div>\n";
+		$h .= "  </div>\n";
+
+		# change schedule
+		$resources = getUserResources(array("scheduleAdmin"), array("manageGroup"));
+		if(count($resources['schedule'])) {
 			$h .= "  <div dojoType=\"dijit.PopupMenuItem\">\n";
-			$h .= "    <span>Reload with an Image</span>\n";
+			$h .= "    <span>Change Schedule</span>\n";
 			$h .= "    <div dojoType=\"dijit.layout.ContentPane\"\n";
 			$h .= "         style=\"background-color: white; padding: 5px; border: 1px solid black;\">\n";
-			$h .= "      Reload computers with the following image:<br>\n";
-			$extra = 'autoComplete="false"';
-			$h .= selectInputAutoDijitHTML('', $resources['image'], 'reloadimageid', $extra);
-			$cont = addContinuationsEntry('AJreloadComputers', $this->basecdata);
-			$h .= "      <input type=\"hidden\" id=\"reloadcont\" value=\"$cont\"><br>\n";
-			$h .= dijitButton('', 'Confirm Reload Computers', 'confirmReload();', 0);
+			$h .= "      Change schedule to:<br>\n";
+			$h .= selectInputAutoDijitHTML('', $resources['schedule'], 'newscheduleid');
+			$cont = addContinuationsEntry('AJcompScheduleChange', $this->basecdata);
+			$h .= "      <input type=\"hidden\" id=\"schedulecont\" value=\"$cont\"><br>\n";
+			$h .= dijitButton('', 'Confirm Schedule Change', 'confirmScheduleChange();', 0);
 			$h .= "    </div>\n";
 			$h .= "  </div>\n";
 		}
-
-		# delete
-		$h .= "  <div dojoType=\"dijit.MenuItem\"\n";
-		$h .= "       onClick=\"confirmDelete\">\n";
-		$h .= "    Delete Computers\n";
-		$cont = addContinuationsEntry('AJdeleteComputers', $this->basecdata);
-		$h .= "      <input type=\"hidden\" id=\"deletecont\" value=\"$cont\"><br>\n";
-		$h .= "  </div>\n";
 
 		# change state
 		$states = array("2" => "available",
@@ -215,35 +241,20 @@ class Computer extends Resource {
 		$h .= "    </div>\n";
 		$h .= "  </div>\n";
 
-		# change schedule
-		$resources = getUserResources(array("scheduleAdmin"), array("manageGroup"));
-		if(count($resources['schedule'])) {
-			$h .= "  <div dojoType=\"dijit.PopupMenuItem\">\n";
-			$h .= "    <span>Change Schedule</span>\n";
-			$h .= "    <div dojoType=\"dijit.layout.ContentPane\"\n";
-			$h .= "         style=\"background-color: white; padding: 5px; border: 1px solid black;\">\n";
-			$h .= "      Change schedule to:<br>\n";
-			$h .= selectInputAutoDijitHTML('', $resources['schedule'], 'newscheduleid');
-			$cont = addContinuationsEntry('AJcompScheduleChange', $this->basecdata);
-			$h .= "      <input type=\"hidden\" id=\"schedulecont\" value=\"$cont\"><br>\n";
-			$h .= dijitButton('', 'Confirm Schedule Change', 'confirmScheduleChange();', 0);
-			$h .= "    </div>\n";
-			$h .= "  </div>\n";
-		}
+		# delete
+		$h .= "  <div dojoType=\"dijit.MenuItem\"\n";
+		$h .= "       onClick=\"confirmDelete\">\n";
+		$h .= "    Delete Computers\n";
+		$cont = addContinuationsEntry('AJdeleteComputers', $this->basecdata);
+		$h .= "      <input type=\"hidden\" id=\"deletecont\" value=\"$cont\"><br>\n";
+		$h .= "  </div>\n";
 
-		# change provisioning engine
-		$provisioning = getProvisioning();
-		$h .= "  <div dojoType=\"dijit.PopupMenuItem\">\n";
-		$h .= "    <span>Change Provisioning Engine</span>\n";
-		$h .= "    <div dojoType=\"dijit.layout.ContentPane\"\n";
-		$h .= "         style=\"background-color: white; padding: 5px; border: 1px solid black;\">\n";
-		$h .= "      Change Provisioning Engine to:<br>\n";
-		$h .= selectInputAutoDijitHTML('', $provisioning, 'newprovisioningid');
-		$cdata = $this->basecdata;
-		$cont = addContinuationsEntry('AJcompProvisioningChange', $cdata);
-		$h .= "      <input type=\"hidden\" id=\"provisioningchangecont\" value=\"$cont\"><br>\n";
-		$h .= dijitButton('', 'Confirm Provisioning Engine Change', 'confirmProvisioningChange();', 0);
-		$h .= "    </div>\n";
+		# generate /etc/hosts data
+		$h .= "  <div dojoType=\"dijit.MenuItem\"\n";
+		$h .= "       onClick=\"hostsData\">\n";
+		$h .= "    Generate /etc/hosts Data\n";
+		$cont = addContinuationsEntry('AJhostsData', $this->basecdata);
+		$h .= "      <input type=\"hidden\" id=\"hostsdatacont\" value=\"$cont\"><br>\n";
 		$h .= "  </div>\n";
 
 		# generate private dhcpd data
@@ -280,13 +291,22 @@ class Computer extends Resource {
 		$h .= "    </div>\n";
 		$h .= "  </div>\n";
 
-		# generate /etc/hosts data
-		$h .= "  <div dojoType=\"dijit.MenuItem\"\n";
-		$h .= "       onClick=\"hostsData\">\n";
-		$h .= "    Generate /etc/hosts Data\n";
-		$cont = addContinuationsEntry('AJhostsData', $this->basecdata);
-		$h .= "      <input type=\"hidden\" id=\"hostsdatacont\" value=\"$cont\"><br>\n";
-		$h .= "  </div>\n";
+		# reload
+		$resources = getUserResources(array("imageAdmin", "imageCheckOut"));
+		if(count($resources['image'])) {
+			$h .= "  <div dojoType=\"dijit.PopupMenuItem\">\n";
+			$h .= "    <span>Reload with an Image</span>\n";
+			$h .= "    <div dojoType=\"dijit.layout.ContentPane\"\n";
+			$h .= "         style=\"background-color: white; padding: 5px; border: 1px solid black;\">\n";
+			$h .= "      Reload computers with the following image:<br>\n";
+			$extra = 'autoComplete="false"';
+			$h .= selectInputAutoDijitHTML('', $resources['image'], 'reloadimageid', $extra);
+			$cont = addContinuationsEntry('AJreloadComputers', $this->basecdata);
+			$h .= "      <input type=\"hidden\" id=\"reloadcont\" value=\"$cont\"><br>\n";
+			$h .= dijitButton('', 'Confirm Reload Computers', 'confirmReload();', 0);
+			$h .= "    </div>\n";
+			$h .= "  </div>\n";
+		}
 
 		$h .= "</div>\n"; # close Menu
 		$h .= "</div>\n"; # close DropDownButton
@@ -610,6 +630,10 @@ class Computer extends Resource {
 		$tmpArr = array("10" => "10", "100" => "100", "1000" => "1000", "10000" => "10000", "100000" => "100000");
 		$h .= labeledFormItem('network', 'Network', 'select', $tmpArr);
 
+		# predictive loading module
+		$vals = getPredictiveModules();
+		$h .= labeledFormItem('predictivemoduleid', 'Predictive Loading Module', 'select', $vals);
+
 		# compid
 		$h .= "<div id=\"compidspan\">\n";
 		$h .= "<label for=\"compid\">Computer ID:</label>\n";
@@ -767,7 +791,7 @@ class Computer extends Resource {
 			# other fields
 			$fields = array('type', 'IPaddress', 'privateIPaddress',
 			                'provisioningid', 'platformid', 'scheduleid', 'ram',
-			                'procspeed', 'network', 'location');
+			                'procspeed', 'network', 'predictivemoduleid', 'location');
 			foreach($fields as $field) {
 				if($data[$field] != $olddata[$field])
 					$updates[] = "`$field` = '{$data[$field]}'";
@@ -1445,6 +1469,7 @@ class Computer extends Resource {
 	/// \b cores\n
 	/// \b procspeed\n
 	/// \b network\n
+	/// \b predictivemoduleid - id of module to use when preloading nodes\n
 	/// \b location - free string describing location\n
 	/// \b mode - 'edit' or 'add'\n
 	/// \b addmode - 'single' or 'multiple'\n
@@ -1493,6 +1518,7 @@ class Computer extends Resource {
 		$return['cores'] = processInputVar('cores', ARG_NUMERIC);
 		$return['procspeed'] = processInputVar('procspeed', ARG_NUMERIC);
 		$return['network'] = processInputVar('network', ARG_NUMERIC);
+		$return['predictivemoduleid'] = processInputVar('predictivemoduleid', ARG_NUMERIC);
 		$return['location'] = processInputVar('location', ARG_STRING);
 		$addmode = processInputVar('addmode', ARG_STRING);
 
@@ -1778,6 +1804,12 @@ class Computer extends Resource {
 			$return['error'] = 1;
 			$errormsg[] = "Invalid value submitted for Network";
 		}
+		# predictivemoduleid
+		$premodules = getPredictiveModules();
+		if(! array_key_exists($return['predictivemoduleid'], $premodules)) {
+			$return['error'] = 1;
+			$errormsg[] = "Invalid value submitted for Predictive Loading Module";
+		}
 		# location
 		if(! preg_match('/^([-a-zA-Z0-9_\. ,@#\(\)]{0,255})$/', $return['location'])) {
 			$return['error'] = 1;
@@ -1902,7 +1934,8 @@ class Computer extends Resource {
 		              'scheduleid',       'RAM',
 		              'procnumber',       'procspeed',
 		              'network',          'currentimageid',
-		              'imagerevisionid',  'location');
+		              'imagerevisionid',  'location',
+		              'predictivemoduleid');
 		if($data['addmode'] == 'single') {
 			$eth0 = "'{$data['eth0macaddress']}'";
 			if($data['eth0macaddress'] == '')
@@ -1918,7 +1951,8 @@ class Computer extends Resource {
 			                   $data['scheduleid'],          $data['ram'],
 			                   $data['cores'],               $data['procspeed'],
 			                   $data['network'],             $noimageid,
-			                   $norevid,                  "'{$data['location']}'");
+			                   $norevid,                  "'{$data['location']}'",
+			                   $data['predictivemoduleid']);
 	
 			$query = "INSERT INTO computer ("
 			       . implode(', ', $keys) . ") VALUES ("
@@ -3951,6 +3985,101 @@ class Computer extends Resource {
 		$ret = array('status' => 'success',
 		             'title' => "Change Provisioning Engine",
 		             'clearselection' => 1,
+		             'refreshcount' => 1,
+		             'msg' => $msg);
+		sendJSON($ret);
+	}
+
+	/////////////////////////////////////////////////////////////////////////////
+	///
+	/// \fn AJcompPredictiveModuleChange()
+	///
+	/// \brief confirms changing provisioning engine of submitted computers
+	///
+	/////////////////////////////////////////////////////////////////////////////
+	function AJcompPredictiveModuleChange() {
+		$predictivemoduleid = processInputVar('predictivemoduleid', ARG_NUMERIC);
+		$premodules = getPredictiveModules();
+		if(! array_key_exists($predictivemoduleid, $premodules)) {
+			$ret = array('status' => 'error',
+			             'errormsg' => 'Invalid Predictive Loading Module submitted.');
+			sendJSON($ret);
+			return;
+		}
+		$compids = $this->validateCompIDs();
+		if(array_key_exists('error', $compids)) {
+			$ret = array('status' => 'error', 'errormsg' => $compids['msg']);
+			sendJSON($ret);
+			return;
+		}
+		if(count($compids) == 0) {
+			$ret = array('status' => 'noaction');
+			sendJSON($ret);
+			return;
+		}
+
+		$tmp = getUserResources(array($this->restype . "Admin"), array("administer"), 0, 1);
+		$computers = $tmp['computer'];
+
+		$msg  = "Change the Predictive Loading Module of the following<br>computers to ";
+		$msg .= "<strong>{$premodules[$predictivemoduleid]['prettyname']}</strong>?<br><br>\n";
+		$complist = '';
+		foreach($compids as $compid)
+			$complist .= $computers[$compid] . "<br>\n";
+		$complist .= "<br>\n";
+
+		$cdata = $this->basecdata;
+		$cdata['compids'] = $compids;
+		$cdata['predictivemoduleid'] = $predictivemoduleid;
+		$cdata['predictivemodulename'] = $premodules[$predictivemoduleid]['prettyname'];
+		$cont = addContinuationsEntry('AJsubmitCompPredictiveModuleChange', $cdata, SECINDAY, 1, 0);
+		$ret = array('status' => 'success',
+		             'title' => "Predictive Loading Module Change",
+		             'btntxt' => 'Submit Predictive Loading Module Change',
+		             'cont' => $cont,
+		             'actionmsg' => $msg,
+		             'complist' => $complist);
+		sendJSON($ret);
+	}
+
+	/////////////////////////////////////////////////////////////////////////////
+	///
+	/// \fn AJsubmitCompPredictiveModuleChange
+	///
+	/// \brief changes provisioning engine of submitted computers
+	///
+	/////////////////////////////////////////////////////////////////////////////
+	function AJsubmitCompPredictiveModuleChange() {
+		$predictivemoduleid = getContinuationVar('predictivemoduleid');
+		$predictivename = getContinuationVar('predictivemodulename');
+		$compids = getContinuationVar('compids');
+
+		$startcheck = time() + 900;
+		$startcheckdt = unixToDatetime($startcheck);
+		$allids = implode(',', $compids);
+
+		$query = "UPDATE computer "
+		       . "SET predictivemoduleid = $predictivemoduleid "
+		       . "WHERE id in ($allids)";
+		doQuery($query);
+
+		$resources = getUserResources(array($this->restype . "Admin"), array("administer"));
+		$compdata = $resources[$this->restype];
+
+		$msg  = "The following computers had their Predictive Loading Module<br>set to $predictivename:<br><br>\n";
+		foreach($compids as $compid)
+			$msg .= "{$compdata[$compid]}<br>\n";
+		$msg .= "<br>";
+
+		# clear user resource cache for this type
+		$key = getKey(array(array($this->restype . "Admin"), array("administer"), 0, 1, 0));
+		unset($_SESSION['userresources'][$key]);
+		$key = getKey(array(array($this->restype . "Admin"), array("administer"), 0, 0, 0));
+		unset($_SESSION['userresources'][$key]);
+
+		$ret = array('status' => 'success',
+		             'title' => "Change Predictive Loading Module",
+		             'clearselection' => 0,
 		             'refreshcount' => 1,
 		             'msg' => $msg);
 		sendJSON($ret);

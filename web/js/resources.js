@@ -217,6 +217,7 @@ function initViewResources() {
 	   resourcestore.comparatorMap = {};
 	}
 	resourcestore.comparatorMap['name'] = resource.nocasesort;
+	setTimeout(function() {resourcegrid.sort();}, 100);
 }
 
 function toggleCmapFieldDisplay(obj, field) {

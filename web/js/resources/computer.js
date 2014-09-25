@@ -600,6 +600,7 @@ function inlineEditResourceCB(data, ioArgs) {
 		dijit.byId('cores').set('value', data.items.data.procnumber);
 		dijit.byId('procspeed').set('value', data.items.data.procspeed);
 		dijit.byId('network').set('value', data.items.data.network);
+		dijit.byId('predictivemoduleid').set('value', data.items.data.predictivemoduleid);
 		dojo.byId('compid').innerHTML = data.items.data.id;
 		dijit.byId('location').set('value', data.items.data.location);
 		dojo.byId('addeditdlgerrmsg').innerHTML = '';
@@ -695,7 +696,7 @@ function resetEditResource() {
 	              'vmprofileid', 'platformid', 'scheduleid', 'ram', 'cores',
 	              'procspeed', 'network', 'location', 'startnum', 'endnum',
 	              'startpubipaddress', 'endpubipaddress', 'startprivipaddress',
-	              'endprivipaddress', 'startmac', 'notes'];
+	              'endprivipaddress', 'startmac', 'notes', 'predictivemoduleid'];
 	for(var i = 0; i < fields.length; i++) {
 		dijit.byId(fields[i]).reset();
 	}
@@ -748,6 +749,7 @@ function saveResource() {
 	data['platformid'] = dijit.byId('platformid').get('value');
 	data['scheduleid'] = dijit.byId('scheduleid').get('value');
 	data['network'] = dijit.byId('network').get('value');
+	data['predictivemoduleid'] = dijit.byId('predictivemoduleid').get('value');
 	data['addmode'] = dijit.byId('mode').get('value');
 
 	dijit.byId('addeditbtn').set('disabled', true);
@@ -830,6 +832,7 @@ function saveResourceCB(data, ioArgs) {
 					resourcegrid.store.setValue(item, 'deleted', data.items.data.deleted);
 					resourcegrid.store.setValue(item, 'notes', data.items.data.notes);
 					resourcegrid.store.setValue(item, 'vmhost', data.items.data.vmhost);
+					resourcegrid.store.setValue(item, 'predictivemodule', data.items.data.predictivemodule);
 					resourcegrid.store.setValue(item, 'location', data.items.data.location);
 					resourcegrid.store.setValue(item, 'provisioning', data.items.data.provisioning);
 				},
@@ -906,6 +909,12 @@ function confirmScheduleChange() {
 function confirmProvisioningChange() {
 	var data = {continuation: dojo.byId('provisioningchangecont').value,
 	            provisioningid: dijit.byId('newprovisioningid').get('value')};
+	confirmAction(data);
+}
+
+function confirmPredictiveModuleChange() {
+	var data = {continuation: dojo.byId('predictivemodulechangecont').value,
+	            predictivemoduleid: dijit.byId('newpredictivemoduleid').get('value')};
 	confirmAction(data);
 }
 
