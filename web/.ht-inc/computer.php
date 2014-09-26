@@ -93,6 +93,7 @@ class Computer extends Resource {
 				$w = 8.5;
 				break;
 			case 'vmhost':
+			case 'nathost':
 				$w = 8;
 				break;
 			case 'location':
@@ -154,6 +155,10 @@ class Computer extends Resource {
 				return 'Provisioning Engine';
 			case 'predictivemodule':
 				return 'Predictive Loading Module';
+			case 'natenabled':
+				return 'Connect Using NAT';
+			case 'nathost':
+				return 'NAT Host';
 		}
 		return ucfirst($field);
 	}
@@ -175,6 +180,24 @@ class Computer extends Resource {
 		$h .= "<div dojoType=\"dijit.form.DropDownButton\">\n";
 		$h .= "<span>" . _("Actions for selected computers") . "</span>\n";
 		$h .= "<div dojoType=\"dijit.Menu\" id=\"actionmenu\">\n";
+
+		# change NAT
+		$h .= "  <div dojoType=\"dijit.PopupMenuItem\">\n";
+		$h .= "    <span>Change NAT</span>\n";
+		$h .= "    <div dojoType=\"dijit.layout.ContentPane\"\n";
+		$h .= "         style=\"background-color: white; padding: 5px; border: 1px solid black;\">\n";
+		$extra = array('onChange' => "toggleNAT('newnatenabled', 'newnathostid');");
+		$h .= labeledFormItem('newnatenabled', 'Connect Using NAT', 'check', '', '', '1', '', '', $extra);
+		$nathosts = getNAThosts(0, 1);
+		$disabled = array('disabled' => 'true');
+		$h .= labeledFormItem('newnathostid', 'NAT Host', 'select', $nathosts,
+		                      '', '', '', '', $disabled);
+		$cdata = $this->basecdata;
+		$cont = addContinuationsEntry('AJcompNATchange', $cdata);
+		$h .= "      <input type=\"hidden\" id=\"natchangecont\" value=\"$cont\"><br>\n";
+		$h .= dijitButton('', 'Confirm NAT Change', 'confirmNATchange();', 0);
+		$h .= "    </div>\n";
+		$h .= "  </div>\n";
 
 		# change predictive loading module
 		$premodules = getPredictiveModules();
@@ -634,6 +657,16 @@ class Computer extends Resource {
 		$vals = getPredictiveModules();
 		$h .= labeledFormItem('predictivemoduleid', 'Predictive Loading Module', 'select', $vals);
 
+		# NAT
+		$h .= "<div class=\"boxedoptions\">\n";
+		# use NAT
+		$extra = array('onChange' => "toggleNAT('natenabled', 'nathostid');");
+		$h .= labeledFormItem('natenabled', 'Connect Using NAT', 'check', '', '', '1', '', '', $extra);
+		# NAT host
+		$nathosts = getNAThosts(0, 1);
+		$h .= labeledFormItem('nathostid', 'NAT Host', 'select', $nathosts);
+		$h .= "</div>\n"; # NAT
+
 		# compid
 		$h .= "<div id=\"compidspan\">\n";
 		$h .= "<label for=\"compid\">Computer ID:</label>\n";
@@ -786,6 +819,30 @@ class Computer extends Resource {
 					$updates[] = "eth1macaddress = NULL";
 				else
 					$updates[] = "eth1macaddress = '{$data['eth1macaddress']}'";
+			}
+
+			# NAT
+			if($data['natenabled'] != $olddata['natenabled']) {
+				if($data['natenabled']) {
+					$query = "INSERT INTO natmap "
+					       .        "(computerid, "
+					       .        "nathostid) "
+					       . "VALUES ({$data['rscid']}, "
+					       .        "{$data['nathostid']})";
+					doQuery($query);
+				}
+				else {
+					$query = "DELETE FROM natmap "
+					       . "WHERE computerid = {$data['rscid']}";
+					doQuery($query);
+				}
+			}
+			elseif($data['natenabled'] &&
+			   $olddata['nathostid'] != $data['nathostid']) {
+				$query = "UPDATE natmap "
+				       . "SET nathostid = {$data['nathostid']} "
+				       . "WHERE computerid = {$data['rscid']}";
+				doQuery($query);
 			}
 
 			# other fields
@@ -1470,6 +1527,8 @@ class Computer extends Resource {
 	/// \b procspeed\n
 	/// \b network\n
 	/// \b predictivemoduleid - id of module to use when preloading nodes\n
+	/// \b natenabled - 1 to use NAT for this computer, 0 not to\n
+	/// \b nathostid - id of NAT host for this computer\n
 	/// \b location - free string describing location\n
 	/// \b mode - 'edit' or 'add'\n
 	/// \b addmode - 'single' or 'multiple'\n
@@ -1519,6 +1578,8 @@ class Computer extends Resource {
 		$return['procspeed'] = processInputVar('procspeed', ARG_NUMERIC);
 		$return['network'] = processInputVar('network', ARG_NUMERIC);
 		$return['predictivemoduleid'] = processInputVar('predictivemoduleid', ARG_NUMERIC);
+		$return['natenabled'] = processInputVar('natenabled', ARG_NUMERIC);
+		$return['nathostid'] = processInputVar('nathostid', ARG_NUMERIC);
 		$return['location'] = processInputVar('location', ARG_STRING);
 		$addmode = processInputVar('addmode', ARG_STRING);
 
@@ -1810,6 +1871,18 @@ class Computer extends Resource {
 			$return['error'] = 1;
 			$errormsg[] = "Invalid value submitted for Predictive Loading Module";
 		}
+		# natenabled
+		if($return['natenabled'] != 0 && $return['natenabled'] != 1) {
+			$return['error'] = 1;
+			$errormsg[] = "Invalid value for Connect Using NAT";
+		}
+		# nathostid
+		$nathosts = getNAThosts();
+		if(($return['natenabled'] && $return['nathostid'] == 0) ||
+		   ($return['nathostid'] != 0 && ! array_key_exists($return['nathostid'], $nathosts))) {
+			$return['error'] = 1;
+			$errormsg[] = "Invalid value submitted for NAT Host";
+		}
 		# location
 		if(! preg_match('/^([-a-zA-Z0-9_\. ,@#\(\)]{0,255})$/', $return['location'])) {
 			$return['error'] = 1;
@@ -1972,6 +2045,16 @@ class Computer extends Resource {
 				       .        "{$data['vmprofileid']})";
 				doQuery($query);
 			}
+
+			# NAT
+			if($data['natenabled']) {
+				$query = "INSERT INTO natmap "
+				       .        "(computerid, "
+				       .        "nathostid) "
+				       . "VALUES ($rscid, "
+				       .        "{$data['nathostid']})";
+				doQuery($query);
+			}
 		
 			// add entry in resource table
 			$query = "INSERT INTO resource "
@@ -2006,7 +2089,8 @@ class Computer extends Resource {
 				                   $data['scheduleid'], $data['ram'],
 				                   $data['cores'],      $data['procspeed'],
 				                   $data['network'],    $noimageid,
-				                   $norevid,         "'{$data['location']}'");
+				                   $norevid,         "'{$data['location']}'",
+				                   $data['predictivemoduleid']);
 		
 				$query = "INSERT INTO computer ("
 				       . implode(', ', $keys) . ") VALUES ("
@@ -2024,6 +2108,16 @@ class Computer extends Resource {
 					       . "VALUES ($rscid, "
 					       .        "5, "
 					       .        "{$data['vmprofileid']})";
+					doQuery($query);
+				}
+
+				# NAT
+				if($data['natenabled']) {
+					$query = "INSERT INTO natmap "
+					       .        "(computerid, "
+					       .        "nathostid) "
+					       . "VALUES ($rscid, "
+					       .        "{$data['nathostid']})";
 					doQuery($query);
 				}
 			
@@ -3976,12 +4070,6 @@ class Computer extends Resource {
 			$msg .= "</span>\n";
 		}
 
-		# clear user resource cache for this type
-		$key = getKey(array(array($this->restype . "Admin"), array("administer"), 0, 1, 0));
-		unset($_SESSION['userresources'][$key]);
-		$key = getKey(array(array($this->restype . "Admin"), array("administer"), 0, 0, 0));
-		unset($_SESSION['userresources'][$key]);
-
 		$ret = array('status' => 'success',
 		             'title' => "Change Provisioning Engine",
 		             'clearselection' => 1,
@@ -4054,10 +4142,7 @@ class Computer extends Resource {
 		$predictivename = getContinuationVar('predictivemodulename');
 		$compids = getContinuationVar('compids');
 
-		$startcheck = time() + 900;
-		$startcheckdt = unixToDatetime($startcheck);
 		$allids = implode(',', $compids);
-
 		$query = "UPDATE computer "
 		       . "SET predictivemoduleid = $predictivemoduleid "
 		       . "WHERE id in ($allids)";
@@ -4071,16 +4156,118 @@ class Computer extends Resource {
 			$msg .= "{$compdata[$compid]}<br>\n";
 		$msg .= "<br>";
 
-		# clear user resource cache for this type
-		$key = getKey(array(array($this->restype . "Admin"), array("administer"), 0, 1, 0));
-		unset($_SESSION['userresources'][$key]);
-		$key = getKey(array(array($this->restype . "Admin"), array("administer"), 0, 0, 0));
-		unset($_SESSION['userresources'][$key]);
-
 		$ret = array('status' => 'success',
 		             'title' => "Change Predictive Loading Module",
 		             'clearselection' => 0,
 		             'refreshcount' => 1,
+		             'msg' => $msg);
+		sendJSON($ret);
+	}
+
+	/////////////////////////////////////////////////////////////////////////////
+	///
+	/// \fn AJcompNATchange()
+	///
+	/// \brief confirms changing provisioning engine of submitted computers
+	///
+	/////////////////////////////////////////////////////////////////////////////
+	function AJcompNATchange() {
+		$natenabled = processInputVar('natenabled', ARG_NUMERIC);
+		$nathostid = processInputVar('nathostid', ARG_NUMERIC);
+		$nathosts = getNAThosts();
+		if(($natenabled != 0 && $natenabled != 1) ||
+		   ($nathostid != 0 && ! array_key_exists($nathostid, $nathosts))) {
+			$ret = array('status' => 'error',
+			             'errormsg' => 'Invalid value submitted.');
+			sendJSON($ret);
+			return;
+		}
+		$compids = $this->validateCompIDs();
+		if(array_key_exists('error', $compids)) {
+			$ret = array('status' => 'error', 'errormsg' => $compids['msg']);
+			sendJSON($ret);
+			return;
+		}
+		if(count($compids) == 0) {
+			$ret = array('status' => 'noaction');
+			sendJSON($ret);
+			return;
+		}
+
+		$tmp = getUserResources(array($this->restype . "Admin"), array("administer"), 0, 1);
+		$computers = $tmp['computer'];
+
+		if($natenabled) {
+			$msg  = "<strong>Enable</strong> Connect Using NAT and set the NAT ";
+			$msg .= "host<br>to <strong>{$nathosts[$nathostid]['hostname']}";
+			$msg .= "</strong> for the following computers?<br><br>";
+		}
+		else {
+			$msg  = "<strong>Disable</strong> Connect Using NAT for the following ";
+			$msg .= "computers?<br><br>";
+		}
+		$complist = '';
+		foreach($compids as $compid)
+			$complist .= $computers[$compid] . "<br>\n";
+		$complist .= "<br>\n";
+
+		$cdata = $this->basecdata;
+		$cdata['compids'] = $compids;
+		$cdata['natenabled'] = $natenabled;
+		$cdata['nathostid'] = $nathostid;
+		$cont = addContinuationsEntry('AJsubmitCompNATchange', $cdata, SECINDAY, 1, 0);
+		$ret = array('status' => 'success',
+		             'title' => "Connect Using NAT Change",
+		             'btntxt' => 'Submit Connect Using NAT Change',
+		             'cont' => $cont,
+		             'actionmsg' => $msg,
+		             'complist' => $complist);
+		sendJSON($ret);
+	}
+
+	/////////////////////////////////////////////////////////////////////////////
+	///
+	/// \fn AJsubmitCompNATchange
+	///
+	/// \brief changes provisioning engine of submitted computers
+	///
+	/////////////////////////////////////////////////////////////////////////////
+	function AJsubmitCompNATchange() {
+		$natenabled = getContinuationVar('natenabled');
+		$nathostid = getContinuationVar('nathostid');
+		$compids = getContinuationVar('compids');
+
+		$allids = implode(',', $compids);
+		$query = "DELETE FROM natmap "
+		       . "WHERE computerid IN ($allids)";
+		doQuery($query);
+		if($natenabled) {
+			$query = "INSERT INTO natmap "
+			       . "SELECT id, "
+			       .        "$nathostid "
+			       . "FROM computer "
+			       . "WHERE id IN ($allids)";
+			doQuery($query);
+		}
+
+		$resources = getUserResources(array($this->restype . "Admin"), array("administer"));
+		$compdata = $resources[$this->restype];
+
+		$msg = "Connect Using NAT was <strong>";
+		if($natenabled)
+			$msg .= "Enabled";
+		else
+			$msg .= "Disabled";
+		$msg .= "</strong> for the following computers:<br><br>\n";
+		foreach($compids as $compid)
+			$msg .= "{$compdata[$compid]}<br>\n";
+		$msg .= "<br>";
+
+		$ret = array('status' => 'success',
+		             'title' => "Change Connect Using NAT",
+		             'clearselection' => 0,
+		             'refreshcount' => 1,
+		             'nathostid' => $nathostid, # todo
 		             'msg' => $msg);
 		sendJSON($ret);
 	}

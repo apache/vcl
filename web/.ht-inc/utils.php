@@ -8121,12 +8121,16 @@ function sortAvailableTimesByStart($a, $b) {
 /// \b provisioningid - id of provisioning engine\n
 /// \b provisioning - pretty name of provisioning engine\n
 /// \b vmprofileid - if vmhost, id of vmprofile
-/// need to be used to manage computer
+/// need to be used to manage computer\n
+/// \b natenabled - 0 or 1; if NAT is enabled for this computer\n
+/// \b nathostid - id from nathost table if NAT is enabled or empty string if
+/// not
 ///
 /// \brief builds an array of computers
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function getComputers($sort=0, $includedeleted=0, $compid="") {
+	$nathosts = getNAThosts();
 	$return = array();
 	$query = "SELECT c.id AS id, "
 	       .        "st.name AS state, "
@@ -8163,7 +8167,8 @@ function getComputers($sort=0, $includedeleted=0, $compid="") {
 	       .        "pr.prettyname AS provisioning, "
 	       .        "vh2.vmprofileid, "
 	       .        "c.predictivemoduleid, "
-	       .        "m.prettyname AS predictivemodule "
+	       .        "m.prettyname AS predictivemodule, "
+	       .        "nh.id AS nathostid "
 	       . "FROM state st, "
 	       .      "platform p, "
 	       .      "schedule sc, "
@@ -8179,6 +8184,8 @@ function getComputers($sort=0, $includedeleted=0, $compid="") {
 	       . "LEFT JOIN computer c2 ON (c2.id = vh.computerid) "
 	       . "LEFT JOIN image next ON (c.nextimageid = next.id) "
 	       . "LEFT JOIN provisioning pr ON (c.provisioningid = pr.id) "
+	       . "LEFT JOIN natmap nm ON (nm.computerid = c.id) "
+	       . "LEFT JOIN nathost nh ON (nm.nathostid = nh.id) "
 	       . "WHERE c.stateid = st.id AND "
 	       .       "c.platformid = p.id AND "
 	       .       "c.scheduleid = sc.id AND "
@@ -8196,6 +8203,14 @@ function getComputers($sort=0, $includedeleted=0, $compid="") {
 	$query .= "ORDER BY c.hostname";
 	$qh = doQuery($query, 180);
 	while($row = mysql_fetch_assoc($qh)) {
+		if(is_null($row['nathostid'])) {
+			$row['natenabled'] = 0;
+			$row['nathost'] = '';
+		}
+		else {
+			$row['natenabled'] = 1;
+			$row['nathost'] = $nathosts[$row['nathostid']]['hostname'];
+		}
 		$return[$row['id']] = $row;
 	}
 	if($sort) {
@@ -8605,6 +8620,42 @@ function getUsedBlockComputerids($start, $end) {
 		array_push($compids, $row['computerid']);
 	}
 	return $compids;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn getNAThosts($id=0, $sort=0)
+///
+/// \param $id - (optional) only get info for this NAT host
+/// \param $sort - (optional) 1 to sort; 0 not to
+///
+/// \return an array with info about the NAT hosts; each element's index is the
+/// id from the table; each element has the following items\n
+/// \b hostname\n
+/// \b natIP - IP to which users will connect
+///
+/// \brief builds an array of NAT hosts
+///
+////////////////////////////////////////////////////////////////////////////////
+function getNAThosts($id=0, $sort=0) {
+	$nathosts = array();
+	$query = "SELECT n.id, "
+	       .        "n.natIP, "
+	       .        "COALESCE(c.hostname, m.hostname) AS hostname "
+	       . "FROM nathost n "
+	       . "LEFT JOIN resource r ON (n.resourceid = r.id) "
+	       . "LEFT JOIN resourcetype rt ON (r.resourcetypeid = rt.id) "
+	       . "LEFT JOIN computer c ON (c.id = r.subid AND rt.name = 'computer') "
+	       . "LEFT JOIN managementnode m ON (m.id = r.subid AND rt.name = 'managementnode')";
+	if($id)
+		$query .= " WHERE n.id = $id";
+	$qh = doQuery($query);
+	while($row = mysql_fetch_assoc($qh))
+		$nathosts[$row['id']] = $row;
+	if($sort)
+		uasort($nathosts, "sortKeepIndex");
+	return $nathosts;
 }
 
 ////////////////////////////////////////////////////////////////////////////////

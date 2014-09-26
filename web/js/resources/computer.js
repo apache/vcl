@@ -93,7 +93,8 @@ Computer.prototype.colformatter = function(value, rowIndex, obj) {
 	else if(obj.field == 'notes' && value) {
 		return value.replace('@', '<br>').replace(/\n/g, '<br>');
 	}
-	else if(obj.field == 'deleted') {
+	else if(obj.field == 'deleted' ||
+	        obj.field == 'natenabled') {
 		if(value == "0")
 			return '<span class="rederrormsg">false</span>';
 		if(value == "1")
@@ -515,6 +516,7 @@ function addNewResource(title) {
 	dojo.addClass('vmprofilespan', 'hidden');
 	dojo.addClass('curimgspan', 'hidden');
 	dojo.addClass('compidspan', 'hidden');
+	dijit.byId('nathostid').set('disabled', true);
 	dijit.byId('addeditdlg').show();
 }
 
@@ -543,6 +545,15 @@ function toggleAddMultiple() {
 	dijit.byId('name').set('regExp', '^([a-zA-Z0-9_%][-a-zA-Z0-9_\.%]{1,35})$');
 	dijit.byId('addeditbtn').setLabel('Add Computers');
 	recenterDijitDialog('addeditdlg');
+}
+
+function toggleNAT(chkid, selid) {
+	if(dijit.byId(chkid).checked) {
+		dijit.byId(selid).set('disabled', false);
+	}
+	else {
+		dijit.byId(selid).set('disabled', true);
+	}
 }
 
 function inlineEditResourceCB(data, ioArgs) {
@@ -603,6 +614,15 @@ function inlineEditResourceCB(data, ioArgs) {
 		dijit.byId('predictivemoduleid').set('value', data.items.data.predictivemoduleid);
 		dojo.byId('compid').innerHTML = data.items.data.id;
 		dijit.byId('location').set('value', data.items.data.location);
+		if(data.items.data.natenabled == 1) {
+			dijit.byId('natenabled').set('checked', true);
+			dijit.byId('nathostid').set('disabled', false);
+			dijit.byId('nathostid').set('value', data.items.data.nathostid);
+		}
+		else {
+			dijit.byId('natenabled').set('checked', false);
+			dijit.byId('nathostid').set('disabled', true);
+		}
 		dojo.byId('addeditdlgerrmsg').innerHTML = '';
 		dijit.byId('addeditdlg').show();
 	}
@@ -707,6 +727,8 @@ function resetEditResource() {
 	dojo.removeClass('vmprofilespan', 'hidden');
 	dojo.removeClass('curimgspan', 'hidden');
 	dojo.removeClass('compidspan', 'hidden');
+	dijit.byId('natenabled').set('checked', false);
+	dijit.byId('nathostid').set('disabled', true);
 }
 
 function saveResource() {
@@ -750,6 +772,13 @@ function saveResource() {
 	data['scheduleid'] = dijit.byId('scheduleid').get('value');
 	data['network'] = dijit.byId('network').get('value');
 	data['predictivemoduleid'] = dijit.byId('predictivemoduleid').get('value');
+	data['natenabled'] = dijit.byId('natenabled').get('value');
+	if(data['natenabled'] == 1)
+		data['nathostid'] = dijit.byId('nathostid').get('value');
+	else {
+		data['natenabled'] = 0;
+		data['nathostid'] = 0;
+	}
 	data['addmode'] = dijit.byId('mode').get('value');
 
 	dijit.byId('addeditbtn').set('disabled', true);
@@ -835,6 +864,8 @@ function saveResourceCB(data, ioArgs) {
 					resourcegrid.store.setValue(item, 'predictivemodule', data.items.data.predictivemodule);
 					resourcegrid.store.setValue(item, 'location', data.items.data.location);
 					resourcegrid.store.setValue(item, 'provisioning', data.items.data.provisioning);
+					resourcegrid.store.setValue(item, 'natenabled', data.items.data.natenabled);
+					resourcegrid.store.setValue(item, 'nathost', data.items.data.nathost);
 				},
 				onComplete: function(items, result) {
 					// when call resourcegrid.sort directly, the table contents disappear; not sure why
@@ -915,6 +946,19 @@ function confirmProvisioningChange() {
 function confirmPredictiveModuleChange() {
 	var data = {continuation: dojo.byId('predictivemodulechangecont').value,
 	            predictivemoduleid: dijit.byId('newpredictivemoduleid').get('value')};
+	confirmAction(data);
+}
+
+function confirmNATchange() {
+	var data = {continuation: dojo.byId('natchangecont').value};
+	if(dijit.byId('newnatenabled').get('value') == 1) {
+		data['natenabled'] = 1;
+		data['nathostid'] = dijit.byId('newnathostid').get('value');
+	}
+	else {
+		data['natenabled'] = 0;
+		data['nathostid'] = 0;
+	}
 	confirmAction(data);
 }
 
