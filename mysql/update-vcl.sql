@@ -1375,7 +1375,7 @@ INSERT IGNORE INTO `module` (`name`, `prettyname`, `description`, `perlpackage`)
 -- Inserts for table `nathost`
 -- 
 
-INSERT IGNORE INTO nathost (resourceid, natIP) SELECT resource.id, managementnode.IPaddress FROM resource, managementnode WHERE resource.resourcetypeid = 16 AND resource.subid = managementnode.id;
+INSERT IGNORE INTO nathost (resourceid, natIP) SELECT resource.id, managementnode.IPaddress FROM resource, managementnode WHERE resource.resourcetypeid = 16 AND resource.subid = managementnode.id AND managementnode.stateid != 1;
 
 -- --------------------------------------------------------
 
