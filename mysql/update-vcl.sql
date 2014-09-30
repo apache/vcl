@@ -137,8 +137,8 @@ CREATE PROCEDURE `DropExistingConstraints`(
 )
 BEGIN
   DECLARE done INT DEFAULT 0;
-  DECLARE existing_constraint_name CHAR(16);
-  DECLARE database_name CHAR(16);
+  DECLARE existing_constraint_name CHAR(40);
+  DECLARE database_name CHAR(25);
 
   DECLARE select_existing_constraint_names CURSOR FOR
     SELECT CONSTRAINT_NAME, TABLE_SCHEMA FROM information_schema.KEY_COLUMN_USAGE WHERE
@@ -177,8 +177,8 @@ CREATE PROCEDURE `DropExistingIndices`(
 )
 BEGIN
   DECLARE done INT DEFAULT 0;
-  DECLARE existing_index_name CHAR(16);
-  DECLARE database_name CHAR(16);
+  DECLARE existing_index_name CHAR(40);
+  DECLARE database_name CHAR(25);
   
   DECLARE select_existing_index_names CURSOR FOR
     SELECT INDEX_NAME, TABLE_SCHEMA FROM information_schema.STATISTICS WHERE
@@ -247,7 +247,7 @@ CREATE PROCEDURE `AddUniqueIndex`(
 )
 BEGIN
   DECLARE done INT DEFAULT 0;
-  DECLARE nonunique_index_name CHAR(16);
+  DECLARE nonunique_index_name CHAR(40);
   
   DECLARE select_nonunique_index_names CURSOR FOR
     SELECT INDEX_NAME FROM information_schema.STATISTICS WHERE
@@ -491,7 +491,7 @@ CREATE PROCEDURE `Add2ColUniqueIndexIfNotExist`(
 )
 BEGIN
   DECLARE done INT DEFAULT 0;
-  DECLARE nonunique_index_name CHAR(16);
+  DECLARE nonunique_index_name CHAR(40);
   
   DECLARE select_index_names CURSOR FOR
     SELECT i1.INDEX_NAME FROM information_schema.STATISTICS i1
@@ -562,7 +562,7 @@ CREATE PROCEDURE `Add3ColUniqueIndexIfNotExist`(
 )
 BEGIN
   DECLARE done INT DEFAULT 0;
-  DECLARE nonunique_index_name CHAR(16);
+  DECLARE nonunique_index_name CHAR(40);
   
   DECLARE select_index_names CURSOR FOR
     SELECT
@@ -645,6 +645,46 @@ BEGIN
   END IF;
 END$$
 
+-- --------------------------------------------------------
+
+/*
+Procedure   : populateConnectMethodPort
+Description : Populates connectmethodport table from connectmethod table if it is empty
+*/
+
+DROP PROCEDURE IF EXISTS `moveConnectMethodPortProtocol`$$
+CREATE PROCEDURE `moveConnectMethodPortProtocol`(
+)
+BEGIN
+  IF EXISTS (
+    SELECT id FROM connectmethod WHERE connecttext LIKE '#connectport#'
+  )
+  THEN
+    UPDATE connectmethod SET connecttext = REPLACE(connecttext , '#connectport#', CONCAT('#Port-', protocol, '-', port, '#'));
+  END IF;
+  IF NOT EXISTS (
+    SELECT id FROM connectmethodport
+  )
+  THEN
+    IF EXISTS (
+      SELECT * FROM information_schema.COLUMNS WHERE
+      TABLE_SCHEMA=Database()
+      AND COLUMN_NAME='port'
+      AND TABLE_NAME='connectmethod'
+    ) AND EXISTS (
+      SELECT * FROM information_schema.COLUMNS WHERE
+      TABLE_SCHEMA=Database()
+      AND COLUMN_NAME='protocol'
+      AND TABLE_NAME='connectmethod'
+    )
+    THEN
+      INSERT INTO connectmethodport (connectmethodid, port, protocol) SELECT id, port, protocol FROM connectmethod;
+      CALL DropColumnIfExists('connectmethod', 'port');
+      CALL DropColumnIfExists('connectmethod', 'protocol');
+    END IF;
+  END IF;
+END$$
+
 /* ============= End of Stored Procedures ===============*/
 
 -- --------------------------------------------------------
@@ -721,7 +761,7 @@ EXECUTE nextimageid_noimage;
 -- change RAM to mediumint
 ALTER TABLE `computer` CHANGE `RAM` `RAM` MEDIUMINT UNSIGNED NOT NULL DEFAULT '0';
 ALTER TABLE `computer` CHANGE `location` `location` VARCHAR(255) NULL DEFAULT NULL;
-ALTER TABLE `computer` ADD  `predictivemoduleid` SMALLINT(5) UNSIGNED NOT NULL DEFAULT  '8';
+CALL AddColumnIfNotExists('computer', 'predictivemoduleid', "SMALLINT(5) UNSIGNED NOT NULL DEFAULT '8'");
 
 -- set datedeleted for deleted computers
 UPDATE computer SET datedeleted = NOW() WHERE deleted = 1 AND datedeleted = '0000-00-00 00:00:00';
@@ -745,6 +785,7 @@ CREATE TABLE IF NOT EXISTS `connectmethod` (
   UNIQUE KEY `name` (`name`,`description`)
 ) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
 
+
 -- --------------------------------------------------------
 
 --
@@ -763,6 +804,23 @@ CREATE TABLE IF NOT EXISTS `connectmethodmap` (
   KEY `OSid` (`OSid`),
   KEY `imagerevisionid` (`imagerevisionid`)
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `connectmethodport`
+--
+
+CREATE TABLE IF NOT EXISTS `connectmethodport` (
+  `id` tinyint(3) unsigned NOT NULL auto_increment,
+  `connectmethodid` tinyint(3) unsigned NOT NULL,
+  `port` mediumint(8) unsigned NOT NULL,
+  `protocol` enum('TCP','UDP') NOT NULL,
+  PRIMARY KEY  (`id`),
+  KEY `connectmethodid` (`connectmethodid`)
+) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
+
+CALL moveConnectMethodPortProtocol;
 
 -- --------------------------------------------------------
 
@@ -795,6 +853,14 @@ CREATE TABLE IF NOT EXISTS connectlog (
 ALTER TABLE `image` CHANGE `minram` `minram` MEDIUMINT UNSIGNED NOT NULL DEFAULT '0';
 CALL AddColumnIfNotExists('image', 'imagetypeid', "smallint(5) unsigned NOT NULL default '1' AFTER ownerid");
 CALL AddIndexIfNotExists('image', 'imagetypeid');
+
+-- --------------------------------------------------------
+
+-- 
+--  Table structure for table `imagemeta`
+--
+
+CALL DropColumnIfExists('imagemeta', 'usergroupid');
 
 -- --------------------------------------------------------
 
@@ -851,6 +917,7 @@ CALL AddColumnIfNotExists('managementnode', 'sysadminEmailAddress', "varchar(128
 CALL AddColumnIfNotExists('managementnode', 'sharedMailBox', "varchar(128) default NULL");
 CALL AddColumnIfNotExists('managementnode', 'NOT_STANDALONE', "varchar(128) default NULL");
 CALL AddColumnIfNotExists('managementnode', 'availablenetworks', "text NOT NULL");
+CALL DropColumnIfExists('managementnode', 'predictivemoduleid');
 
 -- --------------------------------------------------------
 
@@ -859,6 +926,69 @@ CALL AddColumnIfNotExists('managementnode', 'availablenetworks', "text NOT NULL"
 --
 
 CALL AddUniqueIndex('module', 'name');
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `nathost`
+--
+
+CREATE TABLE IF NOT EXISTS `nathost` (
+  `id` smallint(5) unsigned NOT NULL auto_increment,
+  `resourceid` mediumint(8) unsigned NOT NULL,
+  `natIP` varchar(15) NOT NULL,
+  `deleted` tinyint(1) unsigned NOT NULL default '0',
+  `datedeleted` DATETIME DEFAULT NULL,
+  PRIMARY KEY  (`id`),
+  UNIQUE KEY `resourceid` (`resourceid`)
+) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
+
+-- --------------------------------------------------------
+
+-- 
+-- Table structure for table `natlog`
+-- 
+
+CREATE TABLE IF NOT EXISTS `natlog` (
+  `logid` int(11) NOT NULL,
+  `connectmethodportid` int(11) NOT NULL,
+  `nathostid` int(11) NOT NULL,
+  `natIP` int(11) NOT NULL,
+  `computerid` int(11) NOT NULL,
+  `publicport` int(11) NOT NULL,
+  `privateport` int(11) NOT NULL,
+  `protocol` int(11) NOT NULL,
+  KEY `logid` (`logid`),
+  KEY `connectmethodportid` (`connectmethodportid`),
+  KEY `nathostid` (`nathostid`),
+  KEY `computerid` (`computerid`)
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+
+-- --------------------------------------------------------
+
+-- 
+-- Table structure for table `natmap`
+-- 
+
+CREATE TABLE IF NOT EXISTS `natmap` (
+  `computerid` smallint(5) unsigned NOT NULL,
+  `nathostid` smallint(5) unsigned NOT NULL,
+  UNIQUE KEY `computerid` (`computerid`,`nathostid`)
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `natport`
+--
+
+CREATE TABLE IF NOT EXISTS `natport` (
+  `reservationid` mediumint(8) unsigned NOT NULL,
+  `publicport` smallint(5) unsigned NOT NULL,
+  `connectmethodportid` tinyint(3) unsigned NOT NULL,
+  KEY `reservationid` (`reservationid`),
+  KEY `connectmethodportid` (`connectmethodportid`)
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
 
@@ -1112,6 +1242,8 @@ CREATE TABLE IF NOT EXISTS `variable` (
 
 ALTER TABLE `vmhost` CHANGE `vmprofileid` `vmprofileid` SMALLINT(5) UNSIGNED NOT NULL DEFAULT '1';
 CALL AddIndexIfNotExists('vmhost', 'vmprofileid');
+CALL DropColumnIfExists('vmhost', 'vmkernalnic');
+CALL DropColumnIfExists('vmhost', 'vmwaredisk');
 
 -- --------------------------------------------------------
 
@@ -1132,6 +1264,7 @@ CALL AddColumnIfNotExists('vmprofile', 'virtualswitch3', "varchar(80) NULL defau
 CALL AddColumnIfNotExists('vmprofile', 'rsapub', "text NULL default NULL AFTER `virtualswitch3`");
 CALL AddColumnIfNotExists('vmprofile', 'rsakey', "varchar(256) NULL default NULL AFTER `rsapub`");
 CALL AddColumnIfNotExists('vmprofile', 'encryptedpasswd', "text NULL default NULL AFTER `rsakey`");
+CALL AddColumnIfNotExists('vmprofile', 'folderpath', "varchar(256) default NULL AFTER resourcepath");
 
 CALL AddOrRenameColumn('vmprofile', 'vmware_mac_eth0_generated', 'eth0generated', "tinyint(1) unsigned NOT NULL default '0'");
 CALL AddOrRenameColumn('vmprofile', 'vmware_mac_eth1_generated', 'eth1generated', "tinyint(1) unsigned NOT NULL default '0'");
@@ -1238,6 +1371,14 @@ INSERT IGNORE INTO `module` (`name`, `prettyname`, `description`, `perlpackage`)
 
 -- --------------------------------------------------------
 
+-- 
+-- Inserts for table `nathost`
+-- 
+
+INSERT IGNORE INTO nathost (resourceid, natIP) SELECT resource.id, managementnode.IPaddress FROM resource, managementnode WHERE resource.resourcetypeid = 16 AND resource.subid = managementnode.id;
+
+-- --------------------------------------------------------
+
 --
 -- Inserts for table `OStype`
 --
@@ -1307,12 +1448,23 @@ INSERT IGNORE provisioningOSinstalltype (provisioningid, OSinstalltypeid) SELECT
 -- Inserts for table `connectmethod`
 --
 
-INSERT IGNORE INTO `connectmethod` (`name`, `description`, `port`, `connecttext`, `servicename`, `startupscript`) VALUES
-('ssh', 'ssh on port 22', 22, 'You will need to have an X server running on your local computer and use an ssh client to connect to the system. If you did not click on the <b>Connect!</b> button from the computer you will be using to access the VCL system, you will need to return to the <strong>Current Reservations</strong> page and click the <strong>Connect!</strong> button from a web browser running on the same computer from which you will be connecting to the VCL system. Otherwise, you may be denied access to the remote computer.<br><br>\r\nUse the following information when you are ready to connect:<br>\r\n<UL>\r\n<LI><b>Remote Computer</b>: #connectIP#</LI>\r\n<LI><b>User ID</b>: #userid#</LI>\r\n<LI><b>Password</b>: #password#<br></LI>\r\n</UL>\r\n<b>NOTE</b>: The given password is for <i>this reservation only</i>. You will be given a different password for any other reservations.<br>\r\n<strong><big>NOTE:</big> You cannot use the Windows Remote Desktop Connection to connect to this computer. You must use an ssh client.</strong>', 'ext_sshd', '/etc/init.d/ext_sshd');
-INSERT IGNORE INTO `connectmethod` (`name`, `description`, `port`, `connecttext`, `servicename`, `startupscript`) VALUES
-('RDP', 'Remote Desktop', 3389, 'You will need to use a Remote Desktop program to connect to the system. If you did not click on the <b>Connect!</b> button from the computer you will be using to access the VCL system, you will need to return to the <strong>Current Reservations</strong> page and click the <strong>Connect!</strong> button from a web browser running on the same computer from which you will be connecting to the VCL system. Otherwise, you may be denied access to the remote computer.<br><br>\r\n\r\nUse the following information when you are ready to connect:<br>\r\n<UL>\r\n<LI><b>Remote Computer</b>: #connectIP#</LI>\r\n<LI><b>User ID</b>: #userid#</LI>\r\n<LI><b>Password</b>: #password#<br></LI>\r\n</UL>\r\n<b>NOTE</b>: The given password is for <i>this reservation only</i>. You will be given a different password for any other reservations.<br>\r\n<br>\r\nFor automatic connection, you can download an RDP file that can be opened by the Remote Desktop Connection program.<br><br>\r\n', 'TermService', NULL);
-INSERT IGNORE INTO `connectmethod` (`name`, `description`, `port`, `connecttext`, `servicename`, `startupscript`) VALUES
-('iRAPP RDP', 'Remote Desktop for OS X', 3389, 'You will need to use a Remote Desktop program to connect to the system. If you did not click on the <b>Connect!</b> button from the computer you will be using to access the VCL system, you will need to return to the <strong>Current Reservations</strong> page and click the <strong>Connect!</strong> button from a web browser running on the same computer from which you will be connecting to the VCL system. Otherwise, you may be denied access to the remote computer.<br><br>\r\n\r\nUse the following information when you are ready to connect:<br>\r\n<UL>\r\n<LI><b>Remote Computer</b>: #connectIP#</LI>\r\n<LI><b>User ID</b>: #userid#</LI>\r\n<LI><b>Password</b>: #password#<br></LI>\r\n</UL>\r\n<b>NOTE</b>: The given password is for <i>this reservation only</i>. You will be given a different password for any other reservations.<br>\r\n<br>\r\nFor automatic connection, you can download an RDP file that can be opened by the Remote Desktop Connection program.<br><br>\r\n', NULL, NULL);
+INSERT IGNORE INTO `connectmethod` (`name`, `description`, `connecttext`, `servicename`, `startupscript`) VALUES
+('ssh', 'ssh on port 22', 'You will need to have an X server running on your local computer and use an ssh client to connect to the system. If you did not click on the <b>Connect!</b> button from the computer you will be using to access the VCL system, you will need to return to the <strong>Current Reservations</strong> page and click the <strong>Connect!</strong> button from a web browser running on the same computer from which you will be connecting to the VCL system. Otherwise, you may be denied access to the remote computer.<br><br>\r\nUse the following information when you are ready to connect:<br>\r\n<UL>\r\n<LI><b>Remote Computer</b>: #connectIP#</LI>\r\n<LI><b>User ID</b>: #userid#</LI>\r\n<LI><b>Password</b>: #password#<br></LI>\r\n</UL>\r\n<b>NOTE</b>: The given password is for <i>this reservation only</i>. You will be given a different password for any other reservations.<br>\r\n<strong><big>NOTE:</big> You cannot use the Windows Remote Desktop Connection to connect to this computer. You must use an ssh client.</strong>', 'ext_sshd', '/etc/init.d/ext_sshd');
+INSERT IGNORE INTO `connectmethod` (`name`, `description`, `connecttext`, `servicename`, `startupscript`) VALUES
+('RDP', 'Remote Desktop', 'You will need to use a Remote Desktop program to connect to the system. If you did not click on the <b>Connect!</b> button from the computer you will be using to access the VCL system, you will need to return to the <strong>Current Reservations</strong> page and click the <strong>Connect!</strong> button from a web browser running on the same computer from which you will be connecting to the VCL system. Otherwise, you may be denied access to the remote computer.<br><br>\r\n\r\nUse the following information when you are ready to connect:<br>\r\n<UL>\r\n<LI><b>Remote Computer</b>: #connectIP#</LI>\r\n<LI><b>User ID</b>: #userid#</LI>\r\n<LI><b>Password</b>: #password#<br></LI>\r\n</UL>\r\n<b>NOTE</b>: The given password is for <i>this reservation only</i>. You will be given a different password for any other reservations.<br>\r\n<br>\r\nFor automatic connection, you can download an RDP file that can be opened by the Remote Desktop Connection program.<br><br>\r\n', 'TermService', NULL);
+INSERT IGNORE INTO `connectmethod` (`name`, `description`, `connecttext`, `servicename`, `startupscript`) VALUES
+('iRAPP RDP', 'Remote Desktop for OS X', 'You will need to use a Remote Desktop program to connect to the system. If you did not click on the <b>Connect!</b> button from the computer you will be using to access the VCL system, you will need to return to the <strong>Current Reservations</strong> page and click the <strong>Connect!</strong> button from a web browser running on the same computer from which you will be connecting to the VCL system. Otherwise, you may be denied access to the remote computer.<br><br>\r\n\r\nUse the following information when you are ready to connect:<br>\r\n<UL>\r\n<LI><b>Remote Computer</b>: #connectIP#</LI>\r\n<LI><b>User ID</b>: #userid#</LI>\r\n<LI><b>Password</b>: #password#<br></LI>\r\n</UL>\r\n<b>NOTE</b>: The given password is for <i>this reservation only</i>. You will be given a different password for any other reservations.<br>\r\n<br>\r\nFor automatic connection, you can download an RDP file that can be opened by the Remote Desktop Connection program.<br><br>\r\n', NULL, NULL);
+
+-- --------------------------------------------------------
+
+--
+-- Inserts for table `connectmethodport`
+--
+
+INSERT IGNORE INTO `connectmethodport` (`connectmethodid`, `port`, `protocol`) VALUES
+((SELECT id FROM connectmethod WHERE name = 'ssh'), 22, 'TCP'),
+((SELECT id FROM connectmethod WHERE name = 'RDP'), 3389, 'TCP'),
+((SELECT id FROM connectmethod WHERE name = 'iRAPP RDP'), 3389, 'TCP');
 
 -- --------------------------------------------------------
 
@@ -1412,7 +1564,10 @@ INSERT IGNORE INTO `usergroupprivtype` (`id`, `name`, `help`) VALUES
 (12, 'View Statistics by Affiliation', 'Grants the ability to see statistics for affiliations that do not match the affiliation of the logged in user.'),
 (13, 'Manage Block Allocations (affiliation only)', 'Grants the ability to create, accept, and reject block allocations owned by users matching your affiliation.'),
 (14, 'Manage Federated User Groups (global)', 'Grants the ability to control attributes of user groups that are created through federated systems such as LDAP and Shibboleth. Does not grant control of user group membership.'),
-(15, 'Manage Federated User Groups (affiliation only)', 'Grants the ability to control attributes of user groups that are created through federated systems such as LDAP and Shibboleth. Does not grant control of user group membership.');
+(15, 'Manage Federated User Groups (affiliation only)', 'Grants the ability to control attributes of user groups that are created through federated systems such as LDAP and Shibboleth. Does not grant control of user group membership.'),
+(16, 'Site Configuration (global)', 'Grants the ability to view the Site Configuration part of the site to manage site settings.'),
+(17, 'Site Configuration (affiliation only)', 'Grants the ability to view the Site Configuration part of the site to manage site settings specific to the user''s own affiliation.');
+
 
 UPDATE `usergroupprivtype` SET `name` = 'Manage Block Allocations (global)', `help` = 'Grants the ability to create, accept, and reject block allocations for any affiliation.' WHERE name = 'Manage Block Allocations';
 

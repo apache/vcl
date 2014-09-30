@@ -213,7 +213,6 @@ CREATE TABLE IF NOT EXISTS `computer` (
   `privateIPaddress` varchar(15) default NULL,
   `eth0macaddress` varchar(17) default NULL,
   `eth1macaddress` varchar(17) default NULL,
-  `predictivemoduleid` smallint(5) unsigned NOT NULL default '1',
   `type` enum('blade','lab','virtualmachine') NOT NULL default 'blade',
   `provisioningid` smallint(5) unsigned NOT NULL,
   `drivetype` varchar(4) NOT NULL default 'hda',
@@ -230,6 +229,7 @@ CREATE TABLE IF NOT EXISTS `computer` (
   `hostpub` mediumtext,
   `vmhostid` smallint(5) unsigned default NULL,
   `vmtypeid` tinyint(3) unsigned default NULL,
+  `predictivemoduleid` smallint(5) unsigned NOT NULL default '1',
   PRIMARY KEY  (`id`),
   UNIQUE KEY `hostname` (`hostname`, `datedeleted`),
   UNIQUE KEY `eth1macaddress` (`eth1macaddress`, `datedeleted`),
@@ -328,8 +328,6 @@ CREATE TABLE IF NOT EXISTS `connectmethod` (
   `id` tinyint(3) unsigned NOT NULL auto_increment,
   `name` varchar(80) NOT NULL,
   `description` varchar(255) NOT NULL,
-  `protocol` varchar(32) NOT NULL,
-  `port` smallint(5) unsigned NOT NULL,
   `connecttext` text NOT NULL,
   `servicename` varchar(32) NOT NULL,
   `startupscript` varchar(256) DEFAULT NULL,
@@ -355,6 +353,21 @@ CREATE TABLE IF NOT EXISTS `connectmethodmap` (
   KEY `OSid` (`OSid`),
   KEY `imagerevisionid` (`imagerevisionid`)
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `connectmethodport`
+--
+
+CREATE TABLE IF NOT EXISTS `connectmethodport` (
+  `id` tinyint(3) unsigned NOT NULL auto_increment,
+  `connectmethodid` tinyint(3) unsigned NOT NULL,
+  `port` mediumint(8) unsigned NOT NULL,
+  `protocol` enum('TCP','UDP') NOT NULL,
+  PRIMARY KEY  (`id`),
+  KEY `connectmethodid` (`connectmethodid`)
+) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
 
@@ -615,6 +628,69 @@ CREATE TABLE IF NOT EXISTS `module` (
   PRIMARY KEY  (`id`),
   UNIQUE KEY `name` (`name`)
 ) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `nathost`
+--
+
+CREATE TABLE IF NOT EXISTS `nathost` (
+  `id` smallint(5) unsigned NOT NULL auto_increment,
+  `resourceid` mediumint(8) unsigned NOT NULL,
+  `natIP` varchar(15) NOT NULL,
+  `deleted` tinyint(1) unsigned NOT NULL default '0',
+  `datedeleted` DATETIME DEFAULT NULL,
+  PRIMARY KEY  (`id`),
+  UNIQUE KEY `resourceid` (`resourceid`)
+) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
+
+-- --------------------------------------------------------
+
+-- 
+-- Table structure for table `natlog`
+-- 
+
+CREATE TABLE IF NOT EXISTS `natlog` (
+  `logid` int(11) NOT NULL,
+  `connectmethodportid` int(11) NOT NULL,
+  `nathostid` int(11) NOT NULL,
+  `natIP` int(11) NOT NULL,
+  `computerid` int(11) NOT NULL,
+  `publicport` int(11) NOT NULL,
+  `privateport` int(11) NOT NULL,
+  `protocol` int(11) NOT NULL,
+  KEY `logid` (`logid`),
+  KEY `connectmethodportid` (`connectmethodportid`),
+  KEY `nathostid` (`nathostid`),
+  KEY `computerid` (`computerid`)
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+
+-- --------------------------------------------------------
+
+-- 
+-- Table structure for table `natmap`
+-- 
+
+CREATE TABLE IF NOT EXISTS `natmap` (
+  `computerid` smallint(5) unsigned NOT NULL,
+  `nathostid` smallint(5) unsigned NOT NULL,
+  UNIQUE KEY `computerid` (`computerid`,`nathostid`)
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `natport`
+--
+
+CREATE TABLE IF NOT EXISTS `natport` (
+  `reservationid` mediumint(8) unsigned NOT NULL,
+  `publicport` smallint(5) unsigned NOT NULL,
+  `connectmethodportid` tinyint(3) unsigned NOT NULL,
+  KEY `reservationid` (`reservationid`),
+  KEY `connectmethodportid` (`connectmethodportid`)
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
 
@@ -1455,10 +1531,10 @@ INSERT INTO `computerloadstate` (`id`, `loadstatename`, `prettyname`, `est`) VAL
 -- Dumping data for table `connectmethod`
 --
 
-INSERT INTO `connectmethod` (`id`, `name`, `description`, `port`, `connecttext`, `servicename`, `startupscript`) VALUES
-(1, 'ssh', 'ssh on port 22', 22, 'You will need to have an X server running on your local computer and use an ssh client to connect to the system. If you did not click on the <b>Connect!</b> button from the computer you will be using to access the VCL system, you will need to return to the <strong>Current Reservations</strong> page and click the <strong>Connect!</strong> button from a web browser running on the same computer from which you will be connecting to the VCL system. Otherwise, you may be denied access to the remote computer.<br><br>\r\nUse the following information when you are ready to connect:<br>\r\n<UL>\r\n<LI><b>Remote Computer</b>: #connectIP#</LI>\r\n<LI><b>User ID</b>: #userid#</LI>\r\n<LI><b>Password</b>: #password#<br></LI>\r\n</UL>\r\n<b>NOTE</b>: The given password is for <i>this reservation only</i>. You will be given a different password for any other reservations.<br>\r\n<strong><big>NOTE:</big> You cannot use the Windows Remote Desktop Connection to connect to this computer. You must use an ssh client.</strong>', 'ext_sshd', '/etc/init.d/ext_sshd'),
-(2, 'RDP', 'Remote Desktop', 3389, 'You will need to use a Remote Desktop program to connect to the system. If you did not click on the <b>Connect!</b> button from the computer you will be using to access the VCL system, you will need to return to the <strong>Current Reservations</strong> page and click the <strong>Connect!</strong> button from a web browser running on the same computer from which you will be connecting to the VCL system. Otherwise, you may be denied access to the remote computer.<br><br>\r\n\r\nUse the following information when you are ready to connect:<br>\r\n<UL>\r\n<LI><b>Remote Computer</b>: #connectIP#</LI>\r\n<LI><b>User ID</b>: #userid#</LI>\r\n<LI><b>Password</b>: #password#<br></LI>\r\n</UL>\r\n<b>NOTE</b>: The given password is for <i>this reservation only</i>. You will be given a different password for any other reservations.<br>\r\n<br>\r\nFor automatic connection, you can download an RDP file that can be opened by the Remote Desktop Connection program.<br><br>\r\n', 'TermService', NULL),
-(3, 'iRAPP RDP', 'Remote Desktop for OS X', 3389, 'You will need to use a Remote Desktop program to connect to the system. If you did not click on the <b>Connect!</b> button from the computer you will be using to access the VCL system, you will need to return to the <strong>Current Reservations</strong> page and click the <strong>Connect!</strong> button from a web browser running on the same computer from which you will be connecting to the VCL system. Otherwise, you may be denied access to the remote computer.<br><br>\r\n\r\nUse the following information when you are ready to connect:<br>\r\n<UL>\r\n<LI><b>Remote Computer</b>: #connectIP#</LI>\r\n<LI><b>User ID</b>: #userid#</LI>\r\n<LI><b>Password</b>: #password#<br></LI>\r\n</UL>\r\n<b>NOTE</b>: The given password is for <i>this reservation only</i>. You will be given a different password for any other reservations.<br>\r\n<br>\r\nFor automatic connection, you can download an RDP file that can be opened by the Remote Desktop Connection program.<br><br>\r\n', NULL, NULL);
+INSERT INTO `connectmethod` (`id`, `name`, `description`, `connecttext`, `servicename`, `startupscript`) VALUES
+(1, 'ssh', 'ssh on port 22', 'You will need to have an X server running on your local computer and use an ssh client to connect to the system. If you did not click on the <b>Connect!</b> button from the computer you will be using to access the VCL system, you will need to return to the <strong>Current Reservations</strong> page and click the <strong>Connect!</strong> button from a web browser running on the same computer from which you will be connecting to the VCL system. Otherwise, you may be denied access to the remote computer.<br><br>\r\nUse the following information when you are ready to connect:<br>\r\n<UL>\r\n<LI><b>Remote Computer</b>: #connectIP#</LI>\r\n<LI><b>User ID</b>: #userid#</LI>\r\n<LI><b>Password</b>: #password#<br></LI>\r\n</UL>\r\n<b>NOTE</b>: The given password is for <i>this reservation only</i>. You will be given a different password for any other reservations.<br>\r\n<strong><big>NOTE:</big> You cannot use the Windows Remote Desktop Connection to connect to this computer. You must use an ssh client.</strong>', 'ext_sshd', '/etc/init.d/ext_sshd'),
+(2, 'RDP', 'Remote Desktop', 'You will need to use a Remote Desktop program to connect to the system. If you did not click on the <b>Connect!</b> button from the computer you will be using to access the VCL system, you will need to return to the <strong>Current Reservations</strong> page and click the <strong>Connect!</strong> button from a web browser running on the same computer from which you will be connecting to the VCL system. Otherwise, you may be denied access to the remote computer.<br><br>\r\n\r\nUse the following information when you are ready to connect:<br>\r\n<UL>\r\n<LI><b>Remote Computer</b>: #connectIP#</LI>\r\n<LI><b>User ID</b>: #userid#</LI>\r\n<LI><b>Password</b>: #password#<br></LI>\r\n</UL>\r\n<b>NOTE</b>: The given password is for <i>this reservation only</i>. You will be given a different password for any other reservations.<br>\r\n<br>\r\nFor automatic connection, you can download an RDP file that can be opened by the Remote Desktop Connection program.<br><br>\r\n', 'TermService', NULL),
+(3, 'iRAPP RDP', 'Remote Desktop for OS X', 'You will need to use a Remote Desktop program to connect to the system. If you did not click on the <b>Connect!</b> button from the computer you will be using to access the VCL system, you will need to return to the <strong>Current Reservations</strong> page and click the <strong>Connect!</strong> button from a web browser running on the same computer from which you will be connecting to the VCL system. Otherwise, you may be denied access to the remote computer.<br><br>\r\n\r\nUse the following information when you are ready to connect:<br>\r\n<UL>\r\n<LI><b>Remote Computer</b>: #connectIP#</LI>\r\n<LI><b>User ID</b>: #userid#</LI>\r\n<LI><b>Password</b>: #password#<br></LI>\r\n</UL>\r\n<b>NOTE</b>: The given password is for <i>this reservation only</i>. You will be given a different password for any other reservations.<br>\r\n<br>\r\nFor automatic connection, you can download an RDP file that can be opened by the Remote Desktop Connection program.<br><br>\r\n', NULL, NULL);
 
 
 --
@@ -1883,7 +1959,9 @@ INSERT INTO `usergroupprivtype` (`id`, `name`, `help`) VALUES
 (12, 'View Statistics by Affiliation', 'Grants the ability to see statistics for affiliations that do not match the affiliation of the logged in user.'),
 (13, 'Manage Block Allocations (affiliation only)', 'Grants the ability to create, accept, and reject block allocations owned by users matching your affiliation.'),
 (14, 'Manage Federated User Groups (global)', 'Grants the ability to control attributes of user groups that are created through federated systems such as LDAP and Shibboleth. Does not grant control of user group membership.'),
-(15, 'Manage Federated User Groups (affiliation only)', 'Grants the ability to control attributes of user groups that are created through federated systems such as LDAP and Shibboleth. Does not grant control of user group membership.');
+(15, 'Manage Federated User Groups (affiliation only)', 'Grants the ability to control attributes of user groups that are created through federated systems such as LDAP and Shibboleth. Does not grant control of user group membership.'),
+(16, 'Site Configuration (global)', 'Grants the ability to view the Site Configuration part of the site to manage site settings.'),
+(17, 'Site Configuration (affiliation only)', 'Grants the ability to view the Site Configuration part of the site to manage site settings specific to the user''s own affiliation.');
 
 -- 
 -- Dumping data for table `userpriv`
