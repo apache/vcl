@@ -1908,7 +1908,7 @@ class Image extends Resource {
 				return;
 			}
 		}
-		$query = "SELECT ir.revision "
+		$query = "SELECT DISTINCT ir.revision "
 		       . "FROM request rq, "
 		       .      "reservation rs, "
 		       .      "imagerevision ir "

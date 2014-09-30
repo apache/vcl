@@ -64,6 +64,7 @@ function inlineEditResourceCB(data, ioArgs) {
 		dijit.byId('connectmethodttd').set('href', data.items.data.connectmethodurl);
 		dijit.byId('subimagedlg').set('href', data.items.data.subimageurl);
 		dojo.byId('revisiondiv').innerHTML = data.items.data.revisionHTML;
+		dojo.byId('addeditdlgerrmsg').innerHTML = '';
 		AJdojoCreate('revisiondiv');
 		dijit.byId('addeditdlg').show();
 	}
@@ -100,6 +101,7 @@ function resetEditResource() {
 	if(dijit.byId('advancedoptions').open)
 		dijit.byId('advancedoptions').toggle();
 	dojo.byId('connectmethodlist').innerHTML = '';
+	dojo.byId('addeditdlgerrmsg').innerHTML = '';
 }
 
 function saveResource() {
@@ -535,7 +537,7 @@ function deleteRevisions(cont, idlist) {
 
 function deleteRevisionsCB(data, ioArgs) {
 	if('status' in data.items && data.items.status == 'error') {
-		dojo.byId('deletemsg').innerHTML = data.items.msg;
+		dojo.byId('addeditdlgerrmsg').innerHTML = data.items.msg;
 		return;
 	}
 	dijit.registry.filter(function(widget, index){return widget.id.match(/^comments/);}).forEach(function(widget) {widget.destroy();});
