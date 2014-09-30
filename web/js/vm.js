@@ -77,6 +77,7 @@ function VMHostDataCB(data, ioArgs) {
 	var ct = '<table>';
 	ct += '<tr><th align=right>Image:</th><td>' + profile.image + '</td></tr>';
 	ct += '<tr><th align=right>Resource Path:</th><td>' + profile.resourcepath + '</td></tr>';
+	ct += '<tr><th align=right>Folder Path:</th><td>' + profile.folderpath + '</td></tr>';
 	ct += '<tr><th align=right>Repository Path:</th><td>' + profile.repositorypath + '</td></tr>';
 	ct += '<tr><th align=right>Repository Image Type:</th><td>' + profile.repositoryimagetype + '</td></tr>';
 	ct += '<tr><th align=right>Virtual Disk Path:</th><td>' + profile.datastorepath + '</td></tr>';
@@ -593,6 +594,7 @@ function getVMprofileDataCB(data, ioArgs) {
 
 	dijit.byId('pname').noValueIndicator = '(empty)';
 	dijit.byId('presourcepath').noValueIndicator = '(empty)';
+	dijit.byId('pfolderpath').noValueIndicator = '(empty)';
 	dijit.byId('prepositorypath').noValueIndicator = '(empty)';
 	dijit.byId('pdspath').noValueIndicator = '(empty)';
 	dijit.byId('pvmpath').noValueIndicator = '(empty)';
@@ -606,6 +608,7 @@ function getVMprofileDataCB(data, ioArgs) {
 
 	dijit.byId('pname').setValue(curprofile.profilename);
 	dijit.byId('presourcepath').setValue(curprofile.resourcepath);
+	dijit.byId('pfolderpath').setValue(curprofile.folderpath);
 	dijit.byId('prepositorypath').setValue(curprofile.repositorypath);
 	dijit.byId('prepositoryimgtype').setValue(curprofile.repositoryimagetypeid);
 	dijit.byId('pdspath').setValue(curprofile.datastorepath);
@@ -687,6 +690,10 @@ function delProfile(cont) {
 	content += "<tr>";
 	content += "<th align=right>Resource Path:</th>";
 	content += "<td>" + curprofile.resourcepath + "</td>";
+	content += "</tr>";
+	content += "<tr>";
+	content += "<th align=right>Folder Path:</th>";
+	content += "<td>" + curprofile.folderpath + "</td>";
 	content += "</tr>";
 	content += "<tr>";
 	content += "<th align=right>Repository Path:</th>";

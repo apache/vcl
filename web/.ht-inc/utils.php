@@ -11111,6 +11111,8 @@ function generateString($length=8) {
 /// \b name - name of profile (so array can be passed to printSelectInput)\n
 /// \b image - name of image used for this profile\n
 /// \b imageid - id of image used for this profile\n
+/// \b resourcepath\n
+/// \b folderpath\n
 /// \b repositorypath - share exported by nas to the vmhost\n
 /// \b datastorepath - path to where vm data files are stored\n
 /// \b vmpath - path to where vm configuration files are stored\n
@@ -11135,6 +11137,7 @@ function getVMProfiles($id="") {
 	       .        "i.prettyname AS image, "
 	       .        "vp.imageid, "
 	       .        "vp.resourcepath, "
+	       .        "vp.folderpath, "
 	       .        "vp.repositorypath, "
 	       .        "vp.repositoryimagetypeid, "
 	       .        "t1.name AS repositoryimagetype, "

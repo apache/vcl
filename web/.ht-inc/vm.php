@@ -221,6 +221,10 @@ function editVMInfo() {
 	print "    <td><span id=presourcepath dojoType=\"dijit.InlineEditBox\" onChange=\"updateProfile('presourcepath', 'resourcepath');\"></span><img tabindex=0 src=\"images/helpicon.png\" id=\"resourcepathhelp\" /></td>\n";
 	print "  </tr>\n";
 	print "  <tr>\n";
+	print "    <th align=right>Folder Path:</th>\n";
+	print "    <td><span id=pfolderpath dojoType=\"dijit.InlineEditBox\" onChange=\"updateProfile('pfolderpath', 'folderpath');\"></span><img tabindex=0 src=\"images/helpicon.png\" id=\"folderpathhelp\" /></td>\n";
+	print "  </tr>\n";
+	print "  <tr>\n";
 	print "    <th align=right>Repository Path:</th>\n";
 	print "    <td><span id=prepositorypath dojoType=\"dijit.InlineEditBox\" onChange=\"updateProfile('prepositorypath', 'repositorypath');\"></span><img tabindex=0 src=\"images/helpicon.png\" id=\"repositorypathhelp\" /></td>\n";
 	print "  </tr>\n";
@@ -329,6 +333,8 @@ function editVMInfo() {
 
 	print "<div dojoType=\"dijit.Tooltip\" connectId=\"resourcepathhelp\">\n";
 	print _("Resource Path only needs to be configured if VMware vCenter is used. It defines the location where VMs will be created in the vCenter inventory tree. The inventory tree contains at least one Datacenter, and may also contain Folders, Clusters, and Resource Pools.<br>Example: /DatacenterA/Folder1/Cluster2/ResourcePool3");
+	print "<div dojoType=\"dijit.Tooltip\" connectId=\"folderpathhelp\">\n";
+	print _("Folder Path only needs to be configured if VMware vCenter is used. It defines the location where VMs will reside according to the vSphere Client's 'VMs and Templates' inventory view. This view will contain at least 1 Datacenter at the root level of the tree. Underneath each Datacenter, VMs may optionally be organized into VM Folders. Example: /DatacenterA/VCL_VMs");
 	print "</div>\n";
 	print "<div dojoType=\"dijit.Tooltip\" connectId=\"repositorypathhelp\">\n";
 	print _("(Optional) The path where master copies of images are stored which are used to transfer images to VM host datastores or to other repositories. This is required if multiple management nodes need to share images. VMs do not run directly off of the images stored in the repository. It can refer to and be mounted on either the management node or VM host.");
@@ -925,7 +931,7 @@ function AJupdateVMprofileItem() {
 	}
 	$profileid = processInputVar('profileid', ARG_NUMERIC);
 	$item = processInputVar('item', ARG_STRING);
-	if(! preg_match('/^(profilename|imageid|resourcepath|repositorypath|repositoryimagetypeid|datastorepath|datastoreimagetypeid|vmdisk|vmpath|virtualswitch[0-3]|username|password|eth0generated|eth1generated|rsakey|rsapub)$/', $item)) {
+	if(! preg_match('/^(profilename|imageid|resourcepath|folderpath|repositorypath|repositoryimagetypeid|datastorepath|datastoreimagetypeid|vmdisk|vmpath|virtualswitch[0-3]|username|password|eth0generated|eth1generated|rsakey|rsapub)$/', $item)) {
 		print "alert('Invalid data submitted.');";
 		return;
 	}
