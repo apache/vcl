@@ -629,7 +629,7 @@ class Computer extends Resource {
 		# schedule
 		$tmp = getUserResources(array("scheduleAdmin"), array("manageGroup"));
 		$schedules = $tmp["schedule"];
-		$h .= labeledFormItem('scheduleid', 'Schedule', 'select', $schedules);
+		$h .= labeledFormItem('scheduleid', 'Schedule', 'selectonly', $schedules);
 
 		# current image
 		$h .= "<div id=\"curimgspan\">\n";
