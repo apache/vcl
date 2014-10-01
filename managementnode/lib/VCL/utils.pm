@@ -127,6 +127,7 @@ our @EXPORT = qw(
 	get_current_package_name
 	get_current_reservation_lastcheck
 	get_current_subroutine_name
+	get_database_names
 	get_database_table_columns
 	get_file_size_info_string
 	get_group_name
@@ -2205,7 +2206,7 @@ sub getnewdbh {
 	#notify($ERRORS{'DEBUG'}, 0, "called from: $caller_trace");
 
 	my ($database) = @_;
-	$database = $DATABASE if !$database;
+	$database = $DATABASE if !defined($database);
 
 	my $dbh;
 
@@ -2228,7 +2229,7 @@ sub getnewdbh {
 	my $attempt      = 0;
 	my $max_attempts = 5;
 	my $retry_delay  = 2;
-
+	
 	# Assemble the data source string
 	my $data_source;
 	if ($MYSQL_SSL) {
@@ -7502,6 +7503,48 @@ sub get_management_node_id {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 get_database_names
+
+ Parameters  : $no_cache (optional)
+ Returns     : array
+ Description : Retrieves an array containing the database names the user defined
+               in vcld.conf has access to.
+
+=cut
+
+sub get_database_names {
+	my $no_cache = shift;
+	return @{$ENV{database_names}} if $ENV{database_names} && !$no_cache;
+	
+	my $database = 'information_schema';
+
+	my $select_statement = "
+SELECT DISTINCT
+SCHEMA_NAME
+FROM
+SCHEMATA
+	";
+
+	# Call the database select subroutine
+	my @rows = database_select($select_statement, $database);
+
+	# Check to make sure at least 1 row was returned
+	if (scalar @rows == 0) {
+		notify($ERRORS{'WARNING'}, 0, "unable to get database names, 0 rows were returned from database select statement:\n$select_statement");
+		return 0;
+	}
+
+	
+	my @database_names;
+	map({push @database_names, $_->{SCHEMA_NAME}} @rows);
+	
+	$ENV{database_names} = \@database_names;
+	
+	return @{$ENV{database_names}};
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 =head2 get_database_table_columns
 
  Parameters  : $no_cache (optional)
@@ -9064,11 +9107,18 @@ sub setup_get_choice {
 
 sub setup_get_input_string {
 	my ($message, $default_value) = @_;
+	
+	if ($message !~ /\n$/) {
+		$message =~ s/\s+$//g;
+		$message .= " ";
+	}
+	$message .= "('c' to cancel)";
+	
 	if ($default_value) {
-		print "$message [$default_value]: ";
+		setup_print_wrap("$message [$default_value]: ");
 	}
 	else {
-		print "$message ('c' to cancel): ";
+		setup_print_wrap("$message: ");
 	}
 	
 	my $input = <STDIN>;
@@ -9099,7 +9149,7 @@ sub setup_confirm {
 	my ($message) = @_;
 	
 	while (1) {
-		print "$message (Y/N)? ";
+		setup_print_wrap("$message (Y/N)? ");
 		my $input = <STDIN>;
 		if ($input =~ /^y(es)?$/i) {
 			return 1;
