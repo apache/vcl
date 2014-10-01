@@ -4072,7 +4072,6 @@ function AJconnectRequest() {
 		$h .= _("different environments in your cluster.<br><br>\n");
 	}
 	foreach($requestData["reservations"] as $key => $res) {
-		$serverIP = $res["reservedIP"];
 		$osname = $res["OS"];
 		if(array_key_exists($user['id'], $requestData['passwds'][$res['reservationid']]))
 			$passwd = $requestData['passwds'][$res['reservationid']][$user['id']];
@@ -4080,12 +4079,16 @@ function AJconnectRequest() {
 			$passwd = '';
 		$connectData = getImageConnectMethodTexts($res['imageid'],
 		                                          $res['imagerevisionid']);
+		$natports = getNATports($res['reservationid']);
+		$usenat = 0;
+		if(count($natports))
+			$usenat = 1;
 		$first = 1;
 		if($cluster) {
 			$h .= "<fieldset>\n";
 			$h .= "<legend><big><strong>{$res['prettyimage']}</strong></big></legend>\n";
 		}
-		foreach($connectData as $method) {
+		foreach($connectData as $cmid => $method) {
 			if($first)
 				$first = 0;
 			else
@@ -4104,15 +4107,17 @@ function AJconnectRequest() {
 				$h .= "<h3>" . _("Connect to reservation using") . " {$method['description']}</h3>\n";
 			$froms = array('/#userid#/',
 			               '/#password#/',
-			               '/#connectIP#/',
-			               '/#connectport#/');
-			if(empty($res['connectIP']))
-				$res['connectIP'] = $serverIP; #TODO delete this when vcld is populating connectIP
+			               '/#connectIP#/');
 			$tos = array($conuser,
 			             $passwd,
-			             $res['connectIP'], 
-			             $res['connectport']);
+			             $res['connectIP']);
 			$msg = preg_replace($froms, $tos, $method['connecttext']); 
+			foreach($method['ports'] as $port) {
+				if($usenat && array_key_exists($port['key'], $natports[$cmid]))
+					$msg = preg_replace("/{$port['key']}/", $natports[$cmid][$port['key']]['publicport'], $msg); 
+				else
+					$msg = preg_replace("/{$port['key']}/", $port['port'], $msg); 
+			}
 			#$h .= preg_replace("/(.{1,120}([ ]|$))/", '\1<br>', $msg);
 			$h .= $msg;
 			if(preg_match('/remote desktop/i', $method['description']) ||

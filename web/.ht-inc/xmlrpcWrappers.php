@@ -776,12 +776,11 @@ function XMLRPCgetRequestConnectData($requestid, $remoteIP) {
 		       . "WHERE requestid = $requestid";
 		$qh = doQuery($query, 101);
 		addChangeLogEntry($requestData["logid"], $remoteIP);
-		$serverIP = $requestData["reservations"][0]["reservedIP"];
+		$serverIP = $requestData["reservations"][0]["connectIP"];
 		$passwd = $requestData["reservations"][0]["password"];
-		$connectport = $requestData["reservations"][0]["connectport"];
 		$connectMethods = getImageConnectMethodTexts(
-		$requestData["reservations"][0]["imageid"],
-		$requestData["reservations"][0]["imagerevisionid"]);
+		                     $requestData["reservations"][0]["imageid"],
+		                     $requestData["reservations"][0]["imagerevisionid"]);
 		if($requestData["forimaging"])
 			$thisuser = 'Administrator';
 		else
@@ -789,13 +788,34 @@ function XMLRPCgetRequestConnectData($requestid, $remoteIP) {
 				$thisuser = $matches[1];
 			else
 				$thisuser = $user['unityid'];
+		$natports = getNATports($requestData['reservations'][0]['reservationid']);
+		$portdata = array();
 		foreach($connectMethods as $key => $cm) {
 			$connecttext = $cm["connecttext"];
 			$connecttext = preg_replace("/#userid#/", $thisuser, $connecttext); 
 			$connecttext = preg_replace("/#password#/", $passwd, $connecttext); 
 			$connecttext = preg_replace("/#connectIP#/", $serverIP, $connecttext); 
-			$connecttext = preg_replace("/#connectport#/", $connectport, $connecttext); 
+			foreach($cm['ports'] as $port) {
+				if(! empty($natports) && array_key_exists($port['key'], $natports[$key])) {
+					$connecttext = preg_replace("/{$port['key']}/", $natports[$key][$port['key']]['publicport'], $connecttext); 
+					$connectMethods[$key]['connectports'][] = "{$port['protocol']}:{$port['port']}:{$natports[$key][$port['key']]['publicport']}";
+				}
+				else {
+					$connecttext = preg_replace("/{$port['key']}/", $port['port'], $connecttext); 
+					$connectMethods[$key]['connectports'][] = "{$port['protocol']}:{$port['port']}:{$port['port']}";
+				}
+			}
 			$connectMethods[$key]["connecttext"] = $connecttext;
+			$portdata[$key] = $connectMethods[$key]['ports'];
+			unset($connectMethods[$key]['ports']);
+		}
+		$tmp = array_keys($portdata);
+		$cmid = $tmp[0];
+		if(empty($natports))
+			$connectport = $portdata[$cmid][0]['port'];
+		else {
+			$key = $portdata[$cmid][0]['key'];
+			$connectport = $natports[$cmid][$key]['publicport'];
 		}
 		return array('status' => 'ready',
 		             'serverIP' => $serverIP,

@@ -1667,6 +1667,17 @@ function getImageConnectMethodTexts($imageid, $revisionid=0) {
 				$textfield = "connecttext_$locale";
 		}
 	}
+	$cmports = array();
+	$query = "SELECT id, "
+	       .        "connectmethodid, "
+	       .        "port, "
+	       .        "protocol "
+	       . "FROM connectmethodport";
+	$qh = doQuery($query);
+	while($row = mysql_fetch_assoc($qh)) {
+		$row['key'] = "#Port-{$row['protocol']}-{$row['port']}#";
+		$cmports[$row['connectmethodid']][] = $row;
+	}
 	if($revisionid == 0)
 		$revisionid = getProductionRevisionid($imageid);
 	$query = "SELECT c.id, "
@@ -1695,7 +1706,8 @@ function getImageConnectMethodTexts($imageid, $revisionid=0) {
 		}
 		else
 			$methods[$row['id']] = array('description' => $row['description'],
-			                             'connecttext' => $row['connecttext']);
+			                             'connecttext' => $row['connecttext'],
+			                             'ports' => $cmports[$row['id']]);
 	}
 	return $methods;
 }
@@ -5369,7 +5381,6 @@ function findManagementNode($compid, $start, $nowfuture) {
 /// \b forcheckout - whether or not the image is intended for checkout\n
 /// \b password - password for this computer\n
 /// \b connectIP - IP to which user will connect\n
-/// \b connectport - port to which user will connect\n
 /// \b remoteIP - IP of remote user\n\n
 /// an array of arrays of passwords whose key is 'passwds', with the next key
 /// being the reservationid and the elements being the userid as a key and that
@@ -5426,14 +5437,15 @@ function getRequestInfo($id, $returnNULL=0) {
 	       .        "c.hostname, "
 	       .        "i.forcheckout, "
 	       .        "rs.pw AS password, "
-	       .        "rs.connectIP, "
-	       .        "rs.connectport, "
+	       .        "COALESCE(nh.natIP, c.IPaddress) AS connectIP, "
 	       .        "rs.remoteIP "
 	       . "FROM reservation rs, "
 	       .      "image i, "
 	       .      "imagerevision ir, "
 	       .      "OS o, "
 	       .      "computer c "
+	       . "LEFT JOIN natmap n ON (c.id = n.computerid) "
+	       . "LEFT JOIN nathost nh ON (n.nathostid = nh.id) "
 	       . "WHERE rs.requestid = $id AND "
 	       .       "rs.imageid = i.id AND "
 	       .       "rs.imagerevisionid = ir.id AND "
@@ -8622,7 +8634,6 @@ function getUsedBlockComputerids($start, $end) {
 	return $compids;
 }
 
-
 ////////////////////////////////////////////////////////////////////////////////
 ///
 /// \fn getNAThosts($id=0, $sort=0)
@@ -8656,6 +8667,42 @@ function getNAThosts($id=0, $sort=0) {
 	if($sort)
 		uasort($nathosts, "sortKeepIndex");
 	return $nathosts;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn getReservationNATports($resid)
+///
+/// \param $resid - id of a reservation
+///
+/// \return an array of arrays of NAT ports for $resid; the first level index
+/// is the connectmethod id; the second level index is the key used for
+/// substituting the port in the connectmethod text; each second level element
+/// has the following items\n
+/// \b publicport\n
+/// \b connectmethodportid\n
+/// \b privateport\n
+/// \b protocol\n
+/// \b connectmethodid
+///
+/// \brief builds an array of NAT port connection method data for a reservation
+///
+////////////////////////////////////////////////////////////////////////////////
+function getNATports($resid) {
+	$ports = array();
+	$query = "SELECT n.publicport, "
+	       .        "n.connectmethodportid, " 
+	       .        "c.port AS privateport, " 
+	       .        "c.protocol, "
+	       .        "c.connectmethodid "
+	       . "FROM natport n, "
+	       .      "connectmethodport c "
+	       . "WHERE n.connectmethodportid = c.id AND "
+	       .       "n.reservationid = $resid";
+	$qh = doQuery($query);
+	while($row = mysql_fetch_assoc($qh))
+		$ports[$row['connectmethodid']]["#Port-{$row['protocol']}-{$row['privateport']}#"] = $row;
+	return $ports;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -9613,13 +9660,29 @@ function sendRDPfile() {
 	}
 	foreach($request["reservations"] as $res) {
 		if($res['reservationid'] == $resid) {
-			$ipaddress = $res["reservedIP"];
+			$ipaddress = $res["connectIP"];
 			break;
 		}
 	}
 	if(empty($ipaddress))
 		return;
 	$passwd = $request['passwds'][$resid][$user['id']];
+
+	$connectData = getImageConnectMethodTexts($res['imageid'],
+	                                          $res['imagerevisionid']);
+	$natports = getNATports($resid);
+	$port = '';
+	foreach($connectData as $cmid => $method) {
+		if(preg_match('/remote desktop/i', $method['description']) ||
+		   preg_match('/RDP/i', $method['description'])) {
+			# assume index 0 of ports for nat
+			if(! empty($natports) && array_key_exists($method['ports'][0]['key'], $natports[$cmid]))
+				$port = ':' . $natports[$cmid][$method['ports'][0]['key']]['publicport'];
+			else
+				$port = ':' . $method['ports'][0]['port'];
+			break;
+		}
+	}
 
 	$width = $user["width"];
 	$height = $user["height"];
@@ -9653,7 +9716,7 @@ function sendRDPfile() {
 	print "desktopheight:i:$height\r\n";
 	print "session bpp:i:$bpp\r\n";
 	print "winposstr:s:0,1,382,71,1182,671\r\n";
-	print "full address:s:$ipaddress\r\n";
+	print "full address:s:$ipaddress$port\r\n";
 	print "compression:i:1\r\n";
 	print "keyboardhook:i:2\r\n";
 	print "audiomode:i:$audiomode\r\n";

@@ -1871,10 +1871,12 @@ class Computer extends Resource {
 			$return['error'] = 1;
 			$errormsg[] = "Invalid value submitted for Predictive Loading Module";
 		}
+		$naterror = 0;
 		# natenabled
 		if($return['natenabled'] != 0 && $return['natenabled'] != 1) {
 			$return['error'] = 1;
 			$errormsg[] = "Invalid value for Connect Using NAT";
+			$naterror = 1;
 		}
 		# nathostid
 		$nathosts = getNAThosts();
@@ -1882,6 +1884,24 @@ class Computer extends Resource {
 		   ($return['nathostid'] != 0 && ! array_key_exists($return['nathostid'], $nathosts))) {
 			$return['error'] = 1;
 			$errormsg[] = "Invalid value submitted for NAT Host";
+			$naterror = 1;
+		}
+		# nat change - check for active reservations
+		if(! $naterror && ($olddata['natenabled'] != $return['natenabled'] ||
+		   $olddata['nathostid'] != $return['nathostid'])) {
+			$query = "SELECT rq.id "
+			       . "FROM request rq, "
+			       .      "reservation rs "
+			       . "WHERE rs.requestid = rq.id AND "
+			       .       "rs.computerid = {$return['rscid']} AND "
+			       .       "rq.start <= NOW() AND "
+			       .       "rq.end > NOW() AND "
+			       .       "rq.stateid NOT IN (1,5,11,12)";
+			$qh = doQuery($query);
+			if(mysql_num_rows($qh)) {
+				$return['error'] = 1;
+				$errormsg[] = "This computer has an active reservation. NAT settings cannot be changed for computers having<br>active reservations.";
+			}
 		}
 		# location
 		if(! preg_match('/^([-a-zA-Z0-9_\. ,@#\(\)]{0,255})$/', $return['location'])) {
