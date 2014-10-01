@@ -89,6 +89,7 @@ sub get_next_image {
 	my $current_imagerevision_id = $self->data->get_imagerevision_id();
 	
 	my $notify_prefix = "predictive_reload_Level_0: ";
+	my @ret_array;
 	
 	notify($ERRORS{'OK'}, 0, "$notify_prefix for $computer_id");
 	
@@ -98,7 +99,8 @@ sub get_next_image {
 		my @block_ret_array = get_block_request_image_info($computer_id);
 		
 		if (defined($block_ret_array[0]) && $block_ret_array[0]) {
-			return @block_ret_array;
+			 push(@ret_array, "reload", @block_ret_array);
+		    return @ret_array;
 		}
 		else{
 			notify($ERRORS{'WARNING'}, 0, "computer $computer_id is part of blockComputers, failed to return image info"); 
@@ -129,7 +131,6 @@ sub get_next_image {
 	# Call the database select subroutine
 	# This will return an array of one or more rows based on the select statement
 	my @selected_rows = database_select($select_statement);
-	my @ret_array;
 	
 	# Check to make sure 1 or more rows were returned
 	if (scalar @selected_rows > 0) {
