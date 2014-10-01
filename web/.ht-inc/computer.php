@@ -4214,17 +4214,44 @@ class Computer extends Resource {
 			return;
 		}
 
+		$allids = implode(',', $compids);
+		$inusecompids = array();
+		$query = "SELECT rs.computerid "
+		       . "FROM request rq, "
+		       .      "reservation rs "
+		       . "WHERE rs.requestid = rq.id AND "
+		       .       "rs.computerid IN ($allids) AND "
+		       .       "rq.start <= NOW() AND "
+		       .       "rq.end > NOW() AND "
+		       .       "rq.stateid NOT IN (1,5,11,12)";
+		$qh = doQuery($query);
+		while($row = mysql_fetch_assoc($qh))
+			$inusecompids[] = $row['computerid'];
+
 		$tmp = getUserResources(array($this->restype . "Admin"), array("administer"), 0, 1);
 		$computers = $tmp['computer'];
 
-		if($natenabled) {
-			$msg  = "<strong>Enable</strong> Connect Using NAT and set the NAT ";
-			$msg .= "host<br>to <strong>{$nathosts[$nathostid]['hostname']}";
-			$msg .= "</strong> for the following computers?<br><br>";
+		$msg = '';
+		if(count($inusecompids)) {
+			$msg .= "The following computers are currently in use and cannot have<br>";
+			$msg .= "NAT settings changed at this time:<br><br>\n";
+			$complist = '';
+			foreach($inusecompids as $compid)
+				$complist .= $computers[$compid] . "<br>\n";
+			$msg .= "<div class=\"wait\">$complist<br></div>\n";
+			$compids = array_diff($compids, $inusecompids);
 		}
-		else {
-			$msg  = "<strong>Disable</strong> Connect Using NAT for the following ";
-			$msg .= "computers?<br><br>";
+
+		if(count($compids)) {
+			if($natenabled) {
+				$msg .= "<strong>Enable</strong> Connect Using NAT and set the NAT ";
+				$msg .= "host<br>to <strong>{$nathosts[$nathostid]['hostname']}";
+				$msg .= "</strong> for the following computers?<br><br>";
+			}
+			else {
+				$msg .= "<strong>Disable</strong> Connect Using NAT for the following ";
+				$msg .= "computers?<br><br>";
+			}
 		}
 		$complist = '';
 		foreach($compids as $compid)
@@ -4242,6 +4269,11 @@ class Computer extends Resource {
 		             'cont' => $cont,
 		             'actionmsg' => $msg,
 		             'complist' => $complist);
+		if(empty($compids)) {
+			$ret['status'] = 'error';
+			$ret['errormsg'] = $ret['actionmsg'];
+			unset($ret['actionmsg']);
+		}
 		sendJSON($ret);
 	}
 
