@@ -1086,11 +1086,13 @@ class Image extends Resource {
 		$rt .= "<h3>Revisions of this Image</h3>\n";
 		$rt .= "<table summary=\"\"><tr><td>\n";
 		if(count($revisions) > 1 && isImageBlockTimeActive($imageid)) {
-			$rt .= "<font color=\"red\">WARNING: This image is part of an active ";
-			$rt .= "block allocation. Changing the production revision of the image ";
-			$rt .= "at this time will result in new reservations under the block ";
-			$rt .= "allocation to have full reload times instead of a &lt; 1 minutes ";
-			$rt .= "wait.</font><br><br>\n";
+			$rt .= "<font color=\"red\">";
+			$warn  = "WARNING: This image is part of an active block allocation. ";
+			$warn .= "Changing the production revision of the image at this time ";
+			$warn .= "will result in new reservations under the block allocation ";
+			$warn .= "to have full reload times instead of a &lt; 1 minutes wait.";
+			$rt .= preg_replace("/(.{1,100}([ \n]|$))/", '\1<br>', $warn);
+			$rt .= "</font><br>\n";
 		}
 		$rt .= "<table summary=\"\" id=\"revisiontable\">\n";
 		$rt .= "  <tr>\n";
