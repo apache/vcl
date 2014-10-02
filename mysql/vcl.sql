@@ -1910,7 +1910,8 @@ INSERT INTO `usergroup` (`id`, `name`, `affiliationid`, `ownerid`, `editusergrou
 (1, 'global', 1, 1, 1, 1, 0, 240, 360, 30, 0),
 (3, 'adminUsers', 1, 1, 1, 1, 0, 480, 600, 180, 50),
 (4, 'manageNewImages', 1, 1, 3, 1, 0, 240, 360, 30, 0),
-(5, 'Specify End Time', 1, 1, 3, 1, 0, 240, 360, 30, 0);
+(5, 'Specify End Time', 1, 1, 3, 1, 0, 240, 360, 30, 0),
+(6, 'Allow No User Check', 1, 1, 3, 1, 0, 240, 360, 30, 0);
 
 -- 
 -- Dumping data for table `usergroupmembers`
@@ -1920,7 +1921,8 @@ INSERT INTO `usergroupmembers` (`userid`, `usergroupid`) VALUES
 (1, 1),
 (1, 3),
 (1, 4),
-(1, 5);
+(1, 5),
+(1, 6);
 
 -- 
 -- Dumping data for table `usergrouppriv`

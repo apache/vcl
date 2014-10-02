@@ -685,6 +685,35 @@ BEGIN
   END IF;
 END$$
 
+-- --------------------------------------------------------
+
+/*
+Procedure   : AddUserGroup
+Parameters  : name, grpaffiliation, ownername, owneraffiliation, editgroupname, editaffiliation
+Description : Adds user group named "Allow No User Check"
+*/
+
+DROP PROCEDURE IF EXISTS `AddUserGroup`$$
+CREATE PROCEDURE `AddUserGroup`(
+  IN name tinytext,
+  IN grpaffiliation tinytext,
+  IN ownername tinytext,
+  IN owneraffiliation tinytext,
+  IN editgroupname tinytext,
+  IN editaffiliation tinytext
+)
+BEGIN
+
+  SELECT `affiliation`.id INTO @affiliationid FROM `affiliation` WHERE `affiliation`.`name` = grpaffiliation;
+  SELECT `user`.id INTO @ownerid FROM `user`, `affiliation` WHERE `user`.unityid = ownername AND `user`.affiliationid = affiliation.id AND affiliation.name = owneraffiliation;
+  SELECT `usergroup`.id INTO @editusergroupid FROM `usergroup`, `affiliation` WHERE `usergroup`.name = editgroupname AND `usergroup`.affiliationid = affiliation.id AND affiliation.name = editaffiliation;
+
+  SET @insrt = CONCAT('INSERT IGNORE INTO `usergroup` (`name`, `affiliationid`, `ownerid`, `editusergroupid`, `custom`, `courseroll`, `overlapResCount`) VALUES (', QUOTE(name), ',', @affiliationid, ',', @ownerid, ',', @editusergroupid, ', 1, 0, 0)');
+  PREPARE insrt FROM @insrt;
+  EXECUTE insrt;
+
+END$$
+
 /* ============= End of Stored Procedures ===============*/
 
 -- --------------------------------------------------------
@@ -1531,6 +1560,7 @@ INSERT IGNORE INTO state (id, name) VALUES (24, 'checkpoint'), (25, 'serverinuse
 --
 
 UPDATE IGNORE `usergroup` SET `overlapResCount` = '50' WHERE `usergroup`.`name` = 'adminUsers' AND `usergroup`.`overlapResCount` = 0;
+CALL AddUserGroup('Allow No User Check', 'Local', 'admin', 'Local', 'adminUsers', 'Local');
 
 -- --------------------------------------------------------
 
@@ -1541,7 +1571,8 @@ UPDATE IGNORE `usergroup` SET `overlapResCount` = '50' WHERE `usergroup`.`name` 
 INSERT IGNORE INTO `usergroupmembers` (`userid`, `usergroupid`) VALUES
 ((SELECT `id` FROM `user` WHERE `unityid` = 'admin' AND `affiliationid` = (SELECT `id` FROM `affiliation` WHERE `name` = 'Local')), (SELECT `id` FROM `usergroup` WHERE `name` = 'adminUsers' AND `affiliationid` = (SELECT `id` FROM `affiliation` WHERE `name` = 'Local'))),
 ((SELECT `id` FROM `user` WHERE `unityid` = 'admin' AND `affiliationid` = (SELECT `id` FROM `affiliation` WHERE `name` = 'Local')), (SELECT `id` FROM `usergroup` WHERE `name` = 'manageNewImages' AND `affiliationid` = (SELECT `id` FROM `affiliation` WHERE `name` = 'Local'))),
-((SELECT `id` FROM `user` WHERE `unityid` = 'admin' AND `affiliationid` = (SELECT `id` FROM `affiliation` WHERE `name` = 'Local')), (SELECT `id` FROM `usergroup` WHERE `name` = 'Specify End Time' AND `affiliationid` = (SELECT `id` FROM `affiliation` WHERE `name` = 'Local')));
+((SELECT `id` FROM `user` WHERE `unityid` = 'admin' AND `affiliationid` = (SELECT `id` FROM `affiliation` WHERE `name` = 'Local')), (SELECT `id` FROM `usergroup` WHERE `name` = 'Specify End Time' AND `affiliationid` = (SELECT `id` FROM `affiliation` WHERE `name` = 'Local'))),
+((SELECT `id` FROM `user` WHERE `unityid` = 'admin' AND `affiliationid` = (SELECT `id` FROM `affiliation` WHERE `name` = 'Local')), (SELECT `id` FROM `usergroup` WHERE `name` = 'Allow No User Check' AND `affiliationid` = (SELECT `id` FROM `affiliation` WHERE `name` = 'Local')));
 
 -- --------------------------------------------------------
 
