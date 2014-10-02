@@ -5093,18 +5093,20 @@ function getMaxOverlap($userid) {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
-/// \fn addRequest($forimaging, $revisionid)
+/// \fn addRequest($forimaging, $revisionid, $nousercheck)
 ///
 /// \param $forimaging - (optional) 0 if a normal request, 1 if a request for
 /// creating a new image
 /// \param $revisionid - (optional) desired revision id of the image
+/// \param $checkuser - (optional, default=1) 0 or 1 - value to set for
+/// request.checkuser
 ///
 /// \return id from request table that corresponds to the added entry
 ///
 /// \brief adds an entry to the request and reservation tables
 ///
 ////////////////////////////////////////////////////////////////////////////////
-function addRequest($forimaging=0, $revisionid=array()) {
+function addRequest($forimaging=0, $revisionid=array(), $checkuser=1) {
 	global $requestInfo, $user, $uniqid, $mysql_link_vcl;
 	$startstamp = unixToDatetime($requestInfo["start"]);
 	$endstamp = unixToDatetime($requestInfo["end"]);
@@ -5136,7 +5138,8 @@ function addRequest($forimaging=0, $revisionid=array()) {
 	       .        "forimaging, "
 	       .        "start, "
 	       .        "end, "
-	       .        "daterequested) "
+	       .        "daterequested, "
+	       .        "checkuser) "
 	       . "VALUES "
 	       .       "(13, "
 	       .       "{$user['id']}, "
@@ -5145,7 +5148,8 @@ function addRequest($forimaging=0, $revisionid=array()) {
 	       .       "$forimaging, "
 	       .       "'$startstamp', "
 	       .       "'$endstamp', "
-	       .       "NOW())";
+	       .       "NOW(), "
+	       .       "$checkuser)";
 	$qh = doQuery($query, 136);
 
 	$qh = doQuery("SELECT LAST_INSERT_ID() FROM request", 134);
@@ -5359,6 +5363,7 @@ function findManagementNode($compid, $start, $nowfuture) {
 /// \b logid - id from log table\n
 /// \b test - test flag\n
 /// \b forimaging - 0 if request is normal, 1 if it is for imaging\n
+/// \b checkuser - 1 if connected user timeout checks are enabled, 0 if not\n
 /// \b serverrequest - 0 if request is normal, 1 if it is a server request\n
 /// \b servername - name of server if server request\n
 /// \b admingroupid - id of admin user group if server request\n
@@ -5402,7 +5407,8 @@ function getRequestInfo($id, $returnNULL=0) {
 	       .        "datemodified, "
 	       .        "logid, "
 	       .        "test, "
-	       .        "forimaging "
+	       .        "forimaging, "
+	       .        "checkuser "
 	       . "FROM request "
 	       . "WHERE id = $id";
 	$qh = doQuery($query, 165);

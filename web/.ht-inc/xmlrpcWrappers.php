@@ -134,7 +134,7 @@ function XMLRPCgetImages() {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
-/// \fn XMLRPCaddRequest($imageid, $start, $length, $foruser)
+/// \fn XMLRPCaddRequest($imageid, $start, $length, $foruser, $nousercheck)
 ///
 /// \param $imageid - id of an image
 /// \param $start - "now" or unix timestamp for start of reservation; will
@@ -144,6 +144,8 @@ function XMLRPCgetImages() {
 /// increments)
 /// \param $foruser - (optional) login to be used when setting up the account
 /// on the reserved machine - CURRENTLY, THIS IS UNSUPPORTED
+/// \param $nousercheck - (optional, default=0) set to 1 to disable timeout
+/// when user is disconnected for too long
 ///
 /// \return an array with at least one index named '\b status' which will have
 /// one of these values:\n
@@ -159,7 +161,8 @@ function XMLRPCgetImages() {
 /// \brief tries to make a request
 ///
 ////////////////////////////////////////////////////////////////////////////////
-function XMLRPCaddRequest($imageid, $start, $length, $foruser='') {
+function XMLRPCaddRequest($imageid, $start, $length, $foruser='',
+                          $nousercheck=0) {
 	global $user;
 	$imageid = processInputData($imageid, ARG_NUMERIC);
 	$start = processInputData($start, ARG_STRING, 1);
@@ -214,6 +217,8 @@ function XMLRPCaddRequest($imageid, $start, $length, $foruser='') {
 		                         . "have, and you are allowed $max "
 		                         . "overlapping reservations at a time");
 	}
+	if($nousercheck != 0 && $nousercheck != 1)
+		$nousercheck = 0;
 
 	$images = getImages();
 	$revisionid = getProductionRevisionid($imageid);
@@ -223,14 +228,15 @@ function XMLRPCaddRequest($imageid, $start, $length, $foruser='') {
 		            unixToDatetime($end), 0, $imageid);
 		return array('status' => 'notavailable');
 	}
-	$return['requestid']= addRequest();
+	$return['requestid']= addRequest(0, array(), (1 - $nousercheck));
 	$return['status'] = 'success';
 	return $return;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
-/// \fn XMLRPCaddRequestWithEnding($imageid, $start, $end, $foruser)
+/// \fn XMLRPCaddRequestWithEnding($imageid, $start, $end, $foruser,
+//                                 $nousercheck)
 ///
 /// \param $imageid - id of an image
 /// \param $start - "now" or unix timestamp for start of reservation; will
@@ -240,6 +246,8 @@ function XMLRPCaddRequest($imageid, $start, $length, $foruser='') {
 /// the nearest 15 minute increment
 /// \param $foruser - (optional) login to be used when setting up the account
 /// on the reserved machine - CURRENTLY, THIS IS UNSUPPORTED
+/// \param $nousercheck - (optional, default=0) set to 1 to disable timeout
+/// when user is disconnected for too long
 ///
 /// \return an array with at least one index named '\b status' which will have
 /// one of these values:\n
@@ -255,7 +263,8 @@ function XMLRPCaddRequest($imageid, $start, $length, $foruser='') {
 /// \brief tries to make a request with the specified ending time
 ///
 ////////////////////////////////////////////////////////////////////////////////
-function XMLRPCaddRequestWithEnding($imageid, $start, $end, $foruser='') {
+function XMLRPCaddRequestWithEnding($imageid, $start, $end, $foruser='',
+                                    $nousercheck=0) {
 	global $user;
 	$imageid = processInputData($imageid, ARG_NUMERIC);
 	$start = processInputData($start, ARG_STRING, 1);
@@ -322,6 +331,8 @@ function XMLRPCaddRequestWithEnding($imageid, $start, $end, $foruser='') {
 		                         . "have, and you are allowed $max "
 		                         . "overlapping reservations at a time");
 	}
+	if($nousercheck != 0 && $nousercheck != 1)
+		$nousercheck = 0;
 
 	$images = getImages();
 	$revisionid = getProductionRevisionid($imageid);
@@ -331,7 +342,7 @@ function XMLRPCaddRequestWithEnding($imageid, $start, $end, $foruser='') {
 		            unixToDatetime($end), 0, $imageid);
 		return array('status' => 'notavailable');
 	}
-	$return['requestid']= addRequest();
+	$return['requestid']= addRequest(0, array(), (1 - $nousercheck));
 	$return['status'] = 'success';
 	return $return;
 }

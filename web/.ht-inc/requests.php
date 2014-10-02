@@ -1241,6 +1241,7 @@ function newReservationHTML() {
 	}
 
 	uasort($images, "sortKeepIndex");
+
 	$groupid = getUserGroupID('Specify End Time', 1);
 	$members = getUserGroupMembers($groupid);
 	if(array_key_exists($user['id'], $members))
@@ -1248,10 +1249,18 @@ function newReservationHTML() {
 	else
 		$openend = 0;
 
+	$groupid = getUserGroupID('Allow No User Check', 1);
+	$members = getUserGroupMembers($groupid);
+	if(array_key_exists($user['id'], $members))
+		$nousercheck = 1;
+	else
+		$nousercheck = 0;
+
 	$cdata = array('baseaccess' => $baseaccess,
 	               'imagingaccess' => $imagingaccess,
 	               'serveraccess' => $serveraccess,
 	               'openend' => $openend,
+	               'nousercheck' => $nousercheck,
 	               'imaging' => $forimaging);
 	$debug = processInputVar('debug', ARG_NUMERIC, 0);
 	if($debug && checkUserHasPerm('View Debug Information'))
@@ -1515,10 +1524,18 @@ function newReservationHTML() {
 	$h .= "dojoType=\"dijit.form.ValidationTextBox\" ";
 	$h .= "regExp=\"($regip4)(,$regip4){0,2}\" disabled></span><br>\n";
 	$h .= "</div>\n"; # nrfixedipdiv
-	$h .= "<br>";
+	$h .= "<br><br>";
 	$h .= "</div>\n"; # nrfixedipdiv2
 
 	$h .= "</div>\n"; # newreslabelfields
+
+	$h .= "<span id=\"nousercheckspan\"";
+	if(! $nousercheck)
+		$h .= " class=\"hidden\"";
+	$h .= ">\n";
+	if($nousercheck)
+		$h .= labeledFormItem('nousercheck', 'Disable timeout for disconnected users', 'check', '', '', '1');
+	$h .= "<br></span>";
 
 	$h .= "<span id=\"whentitlebasic\">";
 	$h .= _("When would you like to use the environment?");
@@ -1906,7 +1923,7 @@ function printImageDescription($imageid) {
 		$desc = preg_replace("/(.{1,60}([ \n]|$))/", '\1<br>', $desc);
 		print "dojo.byId('imgdesc').innerHTML = '<strong>";
 		print _("Image Description") . "</strong>:<br>";
-		print "$desc<br><br>'; ";
+		print "$desc<br>'; ";
 	}
 }
 
@@ -2213,7 +2230,7 @@ function AJnewRequest() {
 		sendJSON($data);
 		return;
 	}
-	$requestid = addRequest($imaging, $data['revisionids']);
+	$requestid = addRequest($imaging, $data['revisionids'], (1 - $data['nousercheck']));
 	if($data['type'] == 'server') {
 		if($data['ipaddr'] != '') {
 			# save additional network info in variable table
@@ -2933,6 +2950,12 @@ function AJeditRequest() {
 		$openend = 1;
 	else
 		$openend = 0;
+	$groupid = getUserGroupID('Allow No User Check', 1);
+	$members = getUserGroupMembers($groupid);
+	if(array_key_exists($user['id'], $members))
+		$nousercheck = 1;
+	else
+		$nousercheck = 0;
 	$h = '';
 
 	# determine the current total length of the reservation
@@ -2942,8 +2965,10 @@ function AJeditRequest() {
 		$reslen -= 15;
 	$cdata = array('requestid' => $requestid,
 	               'openend' => $openend,
+	               'nousercheck' => $nousercheck,
 	               'modifystart' => 0,
 	               'allowindefiniteend' => 0);
+	# generate HTML
 	if($request['serverrequest']) {
 		if(empty($request['servername']))
 			$request['servername'] = $request['reservations'][0]['prettyimage'];
@@ -2999,6 +3024,13 @@ function AJeditRequest() {
 				$h .= "<option value=\"$id\">{$group['name']}</option>";
 		}
 		$h .= "</select><br><br>";
+	}
+	elseif($nousercheck) {
+		$extra = array();
+		if($request['checkuser'] == 0)
+			$extra['checked'] = 'checked';
+		$h .= labeledFormItem('newnousercheck', 'Disable timeout for disconnected users', 'check', '', '', '1', '', '', $extra);
+		$h .= "<br>\n";
 	}
 	// if future, allow start to be modified
 	if($unixstart > $now) {
@@ -3149,7 +3181,7 @@ function AJeditRequest() {
 	else
 		$maxcheck = $maxtimes['total'];
 	if(! $openend && ($reslen >= $maxcheck)) {
-		$h .= _("You are only allowed to extend your reservation such that it ");
+		$h  = _("You are only allowed to extend your reservation such that it ");
 		$h .= _("has a total length of ") . minToHourMin($maxcheck);
 		$h .= _(". This reservation<br>already meets that length. Therefore, ");
 		$h .= _("you are not allowed to extend your reservation any further.<br><br>");
@@ -3187,7 +3219,7 @@ function AJeditRequest() {
 		cleanSemaphore();
 		if(! $request['serverrequest'] && (! $movedall || ! $lockedall)) {
 			$msg = _("The computer you are using has another reservation immediately following yours. Therefore, you cannot extend your reservation because it would overlap with the next one.<br>");
-			$h .= preg_replace("/(.{1,60}( |$))/", '\1<br>', $msg);
+			$h  = preg_replace("/(.{1,60}( |$))/", '\1<br>', $msg);
 			sendJSON(array('status' => 'nomodify', 'html' => $h));
 			return;
 		}
@@ -3368,6 +3400,7 @@ function AJsubmitEditRequest() {
 	global $user;
 	$requestid = getContinuationVar('requestid');
 	$openend = getContinuationVar('openend');
+	$allownousercheck = getContinuationVar('nousercheck');
 	$modifystart = getContinuationVar('modifystart');
 	$startdays = getContinuationVar('startdays');
 	$lengths = getContinuationVar('lengths');
@@ -3605,27 +3638,43 @@ function AJsubmitEditRequest() {
 	}
 	elseif($rc > 0) {
 		updateRequest($requestid);
+		$serversets = array();
+		$reqsets = array();
 		if($updategroups && $request['laststateid'] != 24) {
 			if($admingroupid == 0)
 				$admingroupid = 'NULL';
 			if($logingroupid == 0)
 				$logingroupid = 'NULL';
-			$query = "UPDATE serverrequest "
-			       . "SET admingroupid = $admingroupid, "
-			       .     "logingroupid = $logingroupid "
-			       . "WHERE requestid = $requestid";
-			doQuery($query, 101);
+			$serversets[] = "admingroupid = $admingroupid";
+			$serversets[] = "logingroupid = $logingroupid";
 			addChangeLogEntryOther($request['logid'], "event:usergroups|admingroupid:$admingroupid|logingroupid:$logingroupid");
-			$query = "UPDATE request "
-			       . "SET stateid = 29 "
-			       . "WHERE id = $requestid";
-			doQuery($query, 101);
+			$reqsets[] = "stateid = 29";
 		}
-		if($updateservername) {
+
+		if($updateservername)
+			$reqsets = "name = '$servername'";
+
+		if($allownousercheck) {
+			$newnousercheck = processInputVar('newnousercheck', ARG_NUMERIC);
+			if(($newnousercheck == 1 || $newnousercheck == 0) &&
+				($newnousercheck == $request['checkuser'])) {
+				$reqsets[] = "checkuser = (1 - checkuser)";
+			}
+		}
+
+		if(count($serversets)) {
+			$sets = implode(',', $serversets);
 			$query = "UPDATE serverrequest "
-			       . "SET name = '$servername' "
+			       . "SET $sets "
 			       . "WHERE requestid = $requestid";
-			doQuery($query, 101);
+			doQuery($query);
+		}
+		if(count($reqsets)) {
+			$sets = implode(',', $reqsets);
+			$query = "UPDATE request "
+			       . "SET $sets "
+			       . "WHERE id = $requestid";
+			doQuery($query);
 		}
 		sendJSON(array('status' => 'success'));
 		cleanSemaphore();
@@ -3761,7 +3810,7 @@ function AJconfirmDeleteRequestProduction($request) {
 	$radios .= "&nbsp;&nbsp;&nbsp;<INPUT type=radio name=continuation ";
 	$radios .= "value=\"$cont\" id=\"radioend\"><label for=\"radioend\">";
 	$radios .= _("Just end the reservation</label><br><br>");
-	$text = preg_replace("/(.{1,60}([ \n]|$))/", '\1<br>', $text);
+	$text = preg_replace("/(.{1,48}([ \n]|$))/", '\1<br>', $text);
 	$data = array('content' => $title . $text . $radios,
 	              'cont' => $cont,
 	              'btntxt' => _('Submit'));
@@ -4270,6 +4319,7 @@ function processRequestInput() {
 	$imagingaccess = getContinuationVar('imagingaccess', 0);
 	$serveraccess = getContinuationVar('serveraccess', 0);
 	$openend = getContinuationVar('openend', 0);
+	$nousercheck = getContinuationVar('nousercheck', 0);
 	$return['imaging'] = getContinuationVar('imaging', 0);
 	$maxinitial = getContinuationVar('maxinitial', 0);
 
@@ -4320,6 +4370,11 @@ function processRequestInput() {
 		$return['errmsg'] = _('No access to submitted environment');
 		return $return;
 	}
+
+	# nousercheck
+	$return['nousercheck'] = processInputVar('nousercheck', ARG_NUMERIC);
+	if(! $nousercheck || $return['nousercheck'] != 1)
+		$return['nousercheck'] = 0;
 
 	# revisionid
 	$revids = processInputVar("revisionid", ARG_STRING);

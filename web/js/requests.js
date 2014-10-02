@@ -89,6 +89,8 @@ function resetNewResDlg() {
 	dojo.byId('basicrdo').checked = true;
 	selectResType();
 	dijit.byId('deployprofileid').reset();
+	if(dijit.byId('nousercheck'))
+		dijit.byId('nousercheck').reset();
 	dijit.byId('deployname').reset();
 	resetSelect('deployadmingroup');
 	resetSelect('deploylogingroup');
@@ -147,6 +149,8 @@ function selectResType() {
 		//dojo.addClass('nrmacaddrspan', 'hidden');
 		//dojo.addClass('nrmonitoredspan', 'hidden');
 		dojo.addClass('nrfixedipdiv2', 'hidden');
+		if(dijit.byId('nousercheck'))
+			dojo.removeClass('nousercheckspan', 'hidden');
 		dojo.addClass('anystart', 'hidden');
 		dojo.addClass('indefinteend', 'hidden');
 		//hideDijitButton('newResDlgShowConfigBtn'); // finishconfigs
@@ -191,6 +195,8 @@ function selectResType() {
 	if(dojo.byId('serverrdo').checked) {
 		dijit.byId('deployimage').set('query', {server: 1, checkout: 1});
 		checkSelectedInList();
+		if(dijit.byId('nousercheck'))
+			dojo.addClass('nousercheckspan', 'hidden');
 		dijit.byId('deploystarttime').set('required', true);
 		dijit.byId('deploystartdate').set('required', true);
 		dojo.addClass('waittime', 'hidden');
@@ -469,6 +475,10 @@ function getDeployData(waitonly) {
 	// finishconfigs
 	/*if(dojo.byId('serverrdo').checked)
 		data.configdata = getConfigData();*/
+	if(dijit.byId('nousercheck') && dijit.byId('nousercheck').get('value') == 1)
+		data.nousercheck = 1;
+	else
+		data.nousercheck = 0;
 	data.profileid = dojo.byId('appliedprofileid').value;
 	data.name = dijit.byId('deployname').get('value');
 	data.admingroupid = getSelectValue('deployadmingroup');
@@ -1436,6 +1446,8 @@ function hideEditResDlg() {
 		dijit.byId('admingrpsel').destroy();
 	if(dijit.byId('logingrpsel'))
 		dijit.byId('logingrpsel').destroy();
+	if(dijit.byId('newnousercheck'))
+		dijit.byId('newnousercheck').destroy();
 	dojo.byId('editResDlgErrMsg').innerHTML = '';
 	dojo.byId('editrescont').value = '';
 	dojo.byId('editresid').value = '';
@@ -1487,6 +1499,10 @@ function submitEditReservation() {
 		var tmp = dijit.byId('day').value.match(/([0-9]{4})([0-9]{2})([0-9]{2})/);
 		var teststart = new Date(tmp[1], tmp[2] - 1, tmp[3], t.getHours(), t.getMinutes(), 0, 0);
 	}
+	if(dijit.byId('newnousercheck') && dijit.byId('newnousercheck').get('value') == 1)
+		data.newnousercheck = 1;
+	else
+		data.newnousercheck = 0;
 	if(dijit.byId('servername'))
 		data.servername = dijit.byId('servername').get('value');
 	if(dijit.byId('admingrpsel')) {
