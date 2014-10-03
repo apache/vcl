@@ -1197,6 +1197,7 @@ CREATE TABLE IF NOT EXISTS `user` (
   `mapdrives` tinyint(1) unsigned NOT NULL default '1',
   `mapprinters` tinyint(1) unsigned NOT NULL default '1',
   `mapserial` tinyint(1) unsigned NOT NULL default '0',
+  `rdpport` smallint(5) unsigned default NULL,
   `showallgroups` tinyint(1) unsigned NOT NULL default '0',
   `lastupdated` datetime NOT NULL default '0000-00-00 00:00:00',
   `validated` tinyint(1) unsigned NOT NULL default '1',

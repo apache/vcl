@@ -1220,6 +1220,7 @@ CALL AddColumnIfNotExists('request', 'checkuser', "tinyint(1) unsigned NOT NULL 
 CALL AddColumnIfNotExists('user', 'validated', "tinyint(1) unsigned NOT NULL default '1'");
 CALL AddColumnIfNotExists('user', 'usepublickeys', "tinyint(1) unsigned NOT NULL default '0'");
 CALL AddColumnIfNotExists('user', 'sshPublicKeys', "text");
+CALL AddColumnIfNotExists('user', 'rdpport', "SMALLINT UNSIGNED NULL AFTER `mapserial`");
 
 --
 -- Table structure for table `usergrouppriv`
