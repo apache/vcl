@@ -28,6 +28,8 @@ define("WIDTHERR", 1 << 1);
 define("HEIGHTERR", 1 << 2);
 /// signifies an error with submitted new password
 define("LOCALPASSWORDERR", 1 << 3);
+/// signifies an error with submitted rdpport
+define("RDPPORTERR", 1 << 4);
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
@@ -70,7 +72,7 @@ function userpreferences() {
 		print "</li>\n";
 	}
 	print "      <li><a href=#rdpfile onclick=\"";
-	print _("show('rdpfile'); return false;\">RDP&nbsp;File&nbsp;Preferences</a>");
+	print _("show('rdpfile'); return false;\">RDP&nbsp;Preferences</a>");
 	print "</li>\n";
 	print "      <li><a href=#uiprefs onclick=\"javascript:show('uiprefs'); ";
 	print _("return false\">General&nbsp;Preferences</a></li>\n");
@@ -174,7 +176,7 @@ function userpreferences() {
 	print "      <FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
 	print "      <table summary=\"lists adjustable preferences for the RDP ";
 	print "file that is sent when you click the Get RDP File button on the ";
-	print "Connect! page\">\n";
+	print "Connect! page and the port on which RDP is listening\">\n";
 	print "        <TR>\n";
 	print _("          <TD colspan=3><small>Try decreasing <em>Resolution</em> or <em>");
 	print _("Color Depth</em> to<br>speed up your connection if things seem ");
@@ -238,6 +240,16 @@ function userpreferences() {
 	printSelectInput("mapserial", $yesno, $data["mapserial"]);
 	print "          </TD>\n";
 	print "          <TD></TD>\n";
+	print "        </TR>\n";
+	print "        <TR>\n";
+	print "          <TH align=right>" . _("RDP Port") . ":</TH>\n";
+	print "          <TD>\n";
+	print "            <INPUT type=text name=rdpport maxlength=5 ";
+	print "size=8 value=\"" . $data["rdpport"] . "\"></TD>\n";
+	print "          </TD>\n";
+	print "          <TD>\n";
+	printSubmitErr(RDPPORTERR);
+	print "          </TD>\n";
 	print "        </TR>\n";
 	print "      </table>\n";
 	$cont = addContinuationsEntry('confirmrdpprefs', array(), SECINDAY, 1, 1, 1);
@@ -393,7 +405,7 @@ function confirmUserPrefs($type) {
 		}
 	}
 	elseif($type == 1) {
-		print _("<H2>RDP File Preferences</H2>\n");
+		print _("<H2>RDP Preferences</H2>\n");
 		print _("<H3>Submit the following changes?</H3>\n");
 		print "<table>\n";
 		print "  <TR>\n";
@@ -420,6 +432,10 @@ function confirmUserPrefs($type) {
 		print "  <TR>\n";
 		print _("    <TH align=right>Map Local Serial Ports:</TH>\n");
 		print "    <TD>$serial</TD>\n";
+		print "  </TR>\n";
+		print "  <TR>\n";
+		print "    <TH align=right>" . _("RDP Port") . ":</TH>\n";
+		print "    <TD>{$data['rdpport']}</TD>\n";
 		print "  </TR>\n";
 		print "</table>\n";
 	}
@@ -465,10 +481,9 @@ function submitUserPrefs() {
 			$height = 0;
 		}
 	}
-	if(updateUserPrefs($user['id'], $data["preferredname"], $width, $height, 
-	                   $data["bpp"], $data["audiomode"], $data["mapdrives"],
-	                   $data["mapprinters"], $data["mapserial"])) {
-	}
+	updateUserPrefs($user['id'], $data["preferredname"], $width, $height, 
+	                $data["bpp"], $data["audiomode"], $data["mapdrives"],
+	                $data["mapprinters"], $data["mapserial"], $data['rdpport']);
 	if($user['affiliation'] == 'Local' &&
 	   ! empty($data['newpassword'])) {
 		$query = "SELECT l.salt "
@@ -590,6 +605,7 @@ function processUserPrefsInput($checks=1) {
 	$return["mapdrives"] = processInputVar("mapdrives" , ARG_NUMERIC, $user["mapdrives"]);
 	$return["mapprinters"] = processInputVar("mapprinters" , ARG_NUMERIC, $user["mapprinters"]);
 	$return["mapserial"] = processInputVar("mapserial" , ARG_NUMERIC, $user["mapserial"]);
+	$return["rdpport"] = processInputVar("rdpport" , ARG_NUMERIC, $user["rdpport"]);
 
 	if(! $checks) {
 		return $return;
@@ -624,6 +640,10 @@ function processUserPrefsInput($checks=1) {
 			$submitErrMsg[LOCALPASSWORDERR] = _("Passwords do not match");
 		}
 	}
+	if($return['rdpport'] < 1024 || $return['rdpport'] > 65535) {
+		$submitErr |= RDPPORTERR;
+		$submitErrMsg[RDPPORTERR] = _("RDP Port must be between 1024 and 65535");
+	}
 	return $return;
 }
 
@@ -635,6 +655,7 @@ function processUserPrefsInput($checks=1) {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function printUserprefJavascript() {
+	global $submitErr;
 	print <<<HTMLdone
 <script type="text/javascript">
 function show(id) {
@@ -664,7 +685,15 @@ function togglePubKeys(mode) {
 	else
 		dijit.byId('pubkeys').set('disabled', true);
 }
-show("personal");
+
+HTMLdone;
+	if(! ($submitErr & PREFNAMEERR) && 
+		! ($submitErr & LOCALPASSWORDERR) &&
+	   ($submitErr & RDPPORTERR))
+		print "show(\"rdpfile\");\n";
+	else
+		print "show(\"personal\");\n";
+	print <<<HTMLdone
 document.getElementById("preflinks").className = "shown";
 document.getElementById("status").className = "visible";
 </script>

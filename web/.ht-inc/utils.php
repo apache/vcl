@@ -3534,6 +3534,7 @@ function processInputData($data, $type, $addslashes=0, $defaultvalue=NULL) {
 /// \b mapdrives - 0 or 1 - map drives for rdp files; 1 means to map\n
 /// \b mapprinters - 0 or 1 - map printers for rdp files; 1 means to map\n
 /// \b mapserial - 0 or 1 - map serial ports for rdp files; 1 means to map\n
+/// \b rdpport - preferred port for RDP\n
 /// \b showallgroups - 0 or 1 - show only user groups matching user's
 /// affiliation or show all user groups\n
 /// \b lastupdated - datetime the information was last updated\n
@@ -3574,6 +3575,7 @@ function getUserInfo($id, $noupdate=0, $numeric=0) {
 	       .        "u.mapdrives AS mapdrives, "
 	       .        "u.mapprinters AS mapprinters, "
 	       .        "u.mapserial AS mapserial, "
+	       .        "COALESCE(u.rdpport, 3389) AS rdpport, "
 	       .        "u.showallgroups, "
 	       .        "u.lastupdated AS lastupdated, "
 	       .        "u.usepublickeys, "
@@ -3832,7 +3834,7 @@ function addUser($loginid) {
 ////////////////////////////////////////////////////////////////////////////////
 ///
 /// \fn updateUserPrefs($userid, $preferredname, $width, $height, $bpp, $audio,
-///                     $mapdrives, $mapprinters, $mapserial)
+///                     $mapdrives, $mapprinters, $mapserial, $rdpport)
 ///
 /// \param $userid - id from user table
 /// \param $preferredname - user's preferred name
@@ -3843,6 +3845,7 @@ function addUser($loginid) {
 /// \param $mapdrives - 0 or 1 - 1 to map local drives in rdp files
 /// \param $mapprinters - 0 or 1 - 1 to map printers in rdp files
 /// \param $mapserial - 0 or 1 - 1 to map serial ports in rdp files
+/// \param $rdpport - port for RDP to listen on
 ///
 /// \return number of rows affected by update (\b NOTE: this may be 0 if none
 /// of the values were actually changes
@@ -3851,10 +3854,12 @@ function addUser($loginid) {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function updateUserPrefs($userid, $preferredname, $width, $height, $bpp, $audio,
-                         $mapdrives, $mapprinters, $mapserial) {
+                         $mapdrives, $mapprinters, $mapserial, $rdpport) {
 	global $mysql_link_vcl;
 	$preferredname = mysql_real_escape_string($preferredname);
 	$audio = mysql_real_escape_string($audio);
+	if($rdpport == 3389)
+		$rdpport = 'NULL';
 	$query = "UPDATE user SET "
 	       .        "preferredname = '$preferredname', "
 	       .        "width = '$width', "
@@ -3863,7 +3868,8 @@ function updateUserPrefs($userid, $preferredname, $width, $height, $bpp, $audio,
 	       .        "audiomode = '$audio', "
 	       .        "mapdrives = $mapdrives, "
 	       .        "mapprinters = $mapprinters, "
-	       .        "mapserial = $mapserial "
+	       .        "mapserial = $mapserial, "
+	       .        "rdpport = $rdpport "
 	       . "WHERE id = $userid";
 	doQuery($query, 270);
 	return mysql_affected_rows($mysql_link_vcl);
