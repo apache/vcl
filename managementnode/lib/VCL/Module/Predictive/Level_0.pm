@@ -87,6 +87,8 @@ sub get_next_image {
 	my $current_image_id    = $self->data->get_image_id();
 	my $current_image_name  = $self->data->get_image_name();
 	my $current_imagerevision_id = $self->data->get_imagerevision_id();
+
+	my @current_image_ret_array = ('reload', $current_image_name, $current_image_id, $current_imagerevision_id );
 	
 	my $notify_prefix = "predictive_reload_Level_0: ";
 	my @ret_array;
@@ -152,7 +154,7 @@ sub get_next_image {
 			notify($ERRORS{'OK'}, 0, "$notify_prefix diff= $diff image= $reservation_row{imagename} imageid=$reservation_row{imageid}");
 			if ($diff < (50 * 60)) {
 				notify($ERRORS{'OK'}, 0, "$notify_prefix future reservation detected diff= $diff image= $reservation_row{imagename} imageid=$reservation_row{imageid}");
-				push(@ret_array, $reservation_row{imagename}, $reservation_row{imageid}, $reservation_row{imagerevisionid});
+				push(@ret_array, "reload", $reservation_row{imagename}, $reservation_row{imageid}, $reservation_row{imagerevisionid});
 				return @ret_array;
 			}
 		} ## end for (@selected_rows)
@@ -184,11 +186,11 @@ sub get_next_image {
 	# Check to make sure at least 1 row were returned
 	if (scalar @next_selected_rows == 0) {
 		notify($ERRORS{'OK'}, 0, "$notify_prefix next image for computerid $computer_id is not set");
-		return;
+		return @current_image_ret_array;
 	}
 	elsif (scalar @next_selected_rows > 1) {
 		notify($ERRORS{'OK'}, 0, "" . scalar @next_selected_rows . " rows were returned from database select");
-		return;
+		return @current_image_ret_array;
 	}
 	notify($ERRORS{'OK'}, 0, "$notify_prefix returning nextimage image=$next_selected_rows[0]{imagename} imageid=$next_selected_rows[0]{imageid}");
 	push (@ret_array, "reload", $next_selected_rows[0]{imagename}, $next_selected_rows[0]{imageid}, $next_selected_rows[0]{imagerevisionid});

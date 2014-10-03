@@ -1321,7 +1321,7 @@ sub get_next_image_dataStructure {
 			@nextimage = $predictor->get_next_image();
 			notify($ERRORS{'OK'}, 0, ref($predictor) . " predictive loading object successfully created");
 				notify($ERRORS{'OK'}, 0, "predictive loading module retreived image information: @nextimage");
-			if (scalar(@nextimage) >= 3) {
+			if (scalar(@nextimage) == 4) {
 				return @nextimage;
 			}
 			else {

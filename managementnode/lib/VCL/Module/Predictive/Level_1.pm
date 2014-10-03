@@ -135,7 +135,7 @@ sub get_next_image {
 		else {
 			notify($ERRORS{'OK'}, 0, "$notify_prefix returning nextimage image=$next_selected_rows[0]{imagename} imageid=$next_selected_rows[0]{imageid}");
 			my @next_image_ret_array;
-			push (@next_image_ret_array, $next_selected_rows[0]{imagename}, $next_selected_rows[0]{imageid}, $next_selected_rows[0]{imagerevisionid});
+			push (@next_image_ret_array, "reload", $next_selected_rows[0]{imagename}, $next_selected_rows[0]{imageid}, $next_selected_rows[0]{imagerevisionid});
 			
 			#Clear next_imageid
 			if(!clear_next_image_id($computer_id)){
