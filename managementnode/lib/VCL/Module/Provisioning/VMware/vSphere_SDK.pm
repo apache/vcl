@@ -200,9 +200,12 @@ sub get_registered_vms {
 	# Override the die handler
 	local $SIG{__DIE__} = sub{};
 	
-	my @vms;
-	eval { @vms = @{Vim::find_entity_views(view_type => 'VirtualMachine', begin_entity => $self->_get_resource_pool_view())}; };
-	
+	my @vms = $self->_find_entity_views('VirtualMachine',
+		{
+			begin_entity => $self->_get_resource_pool_view()
+		}
+	);
+
 	my @vmx_paths;
 	for my $vm (@vms) {
 		my $vmx_path = $vm->summary->config->vmPathName;
@@ -301,7 +304,7 @@ sub vm_unregister {
 	if (my $type = ref($argument)) {
 		if ($type eq 'ManagedObjectReference') {
 			notify($ERRORS{'DEBUG'}, 0, "argument is a ManagedObjectReference, retrieving VM view");
-			$vm_view = Vim::get_view(mo_ref => $argument)
+			$vm_view = $self->_get_view($argument);
 		}
 		elsif ($type eq 'VirtualMachine') {
 			$vm_view = $argument;
@@ -846,7 +849,7 @@ EOF
 		);
 		if ($source_vm) {
 			notify($ERRORS{'DEBUG'}, 0, "created temporary source VM which will be cloned: $source_vm_name");
-			$source_vm_view = Vim::get_view(mo_ref => $source_vm);
+			$source_vm_view = $self->_get_view($source_vm);
 		}
 		else {
 			notify($ERRORS{'WARNING'}, 0, "failed to create temporary source VM which will be cloned: $source_vm_name");
@@ -900,7 +903,7 @@ EOF
 	};
 	
 	if ($clone_vm) {
-		$clone_vm_view = Vim::get_view(mo_ref => $clone_vm);
+		$clone_vm_view = $self->_get_view($clone_vm);
 		notify($ERRORS{'DEBUG'}, 0, "cloned VM: $source_vm_name --> $clone_vm_name");
 	}
 	else {
@@ -1171,7 +1174,7 @@ sub create_nfs_datastore {
 	}
 	
 	# Get the datastore system object
-	my $datastore_system = Vim::get_view(mo_ref => $self->_get_datastore_view->configManager->datastoreSystem);
+	my $datastore_system = $self->_get_view($self->_get_datastore_view->configManager->datastoreSystem);
 	if (!$datastore_system) {
 		notify($ERRORS{'WARNING'}, 0, "failed to retrieve datastore system object");
 		return;
@@ -1381,7 +1384,7 @@ sub get_vmware_product_name {
 	
 	my $vmhost_hostname = $self->data->get_vmhost_hostname();
 	
-	my $service_content = Vim::get_service_content();
+	my $service_content = $self->_get_service_content();
 	my $product_name = $service_content->{about}->{fullName};
 	if ($product_name) {
 		notify($ERRORS{'DEBUG'}, 0, "VMware product being used on VM host $vmhost_hostname: '$product_name'");
@@ -1453,7 +1456,7 @@ sub is_restricted {
 	
 	my $service_content;
 	eval {
-		$service_content = Vim::get_service_content();
+		$service_content = $self->_get_service_content();
 	};
 	
 	if ($EVAL_ERROR) {
@@ -1473,7 +1476,7 @@ sub is_restricted {
 	}
 	
 	# Get a fileManager object
-	my $file_manager = Vim::get_view(mo_ref => $service_content->{fileManager}) || return;
+	my $file_manager = $self->_get_view($service_content->{fileManager}) || return;
 	if (!$file_manager) {
 		notify($ERRORS{'WARNING'}, 0, "unable to determine if access to the VM host via the vSphere SDK is restricted due to the license, failed to retrieve file manager object");
 		return 1;
@@ -2396,8 +2399,8 @@ sub get_license_info {
 	
 	return $self->{license_info} if $self->{license_info};
 	
-	my $service_content = Vim::get_service_content() || return;
-	my $licenses = Vim::get_view(mo_ref => $service_content->{licenseManager})->licenses;
+	my $service_content = $self->_get_service_content() || return;
+	my $licenses = $self->_get_view($service_content->{licenseManager})->licenses;
 	
 	my $license_info;
 	for my $license (@$licenses) {
@@ -2435,6 +2438,319 @@ sub get_license_info {
 =head1 PRIVATE OBJECT METHODS
 
 =cut
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 _get_service_content
+
+ Parameters  : none
+ Returns     : ServiceInstance object
+ Description : Calls Vim::get_service_content to retrieve the a ServiceInstance
+               object. All calls to Vim::get_service_content should be handled by
+               this subroutine. The call needs to be wrapped in an eval block to
+               prevent the process from dying abruptly.
+
+=cut
+
+sub _get_service_content {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Override the die handler
+	local $SIG{__DIE__} = sub{};
+	
+	my $service_content;
+	eval {
+		$service_content = Vim::get_service_content();
+	};
+	if ($EVAL_ERROR) {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve ServiceInstance object\nerror: $EVAL_ERROR");
+		return;
+	}
+	elsif (!$service_content) {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve ServiceInstance object");
+		return;
+	}
+	else {
+		return $service_content;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 _get_view
+
+ Parameters  : $managed_object_ref, $view_type (optional)
+ Returns     : view object
+ Description : Calls Vim::get_view to retrieve the properties of a single
+               managed object. All calls to Vim::get_view should be handled by
+               this subroutine. The call needs to be wrapped in an eval block to
+               prevent the process from dying abruptly.
+
+=cut
+
+sub _get_view {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Get the argument
+	my ($managed_object_ref, $view_type) = @_;
+	if (!$managed_object_ref) {
+		notify($ERRORS{'WARNING'}, 0, "managed object reference argument was not specified");
+		return;
+	}
+	
+	# Make sure the 1st argument is a ManagedObjectReference
+	my $type = ref($managed_object_ref);
+	if (!$type) {
+		notify($ERRORS{'WARNING'}, 0, "1st argument is not a reference, it must be a ManagedObjectReference");
+		return;
+	}
+	elsif ($type !~ /ManagedObjectReference/) {
+		notify($ERRORS{'WARNING'}, 0, "1st argument type is '$type', it must be a ManagedObjectReference");
+		return;
+	}
+	
+	my %parameters = (
+		mo_ref => $managed_object_ref,
+	);
+	if ($view_type) {
+		$parameters{view_type} = $view_type;
+	}
+	
+	# Override the die handler
+	local $SIG{__DIE__} = sub{};
+	
+	my $view;
+	eval {
+		$view = Vim::get_view(%parameters);
+	};
+	if ($EVAL_ERROR) {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve view object\nerror: $EVAL_ERROR\nparameters:\n" . format_data(\%parameters));
+		return;
+	}
+	elsif (!$view) {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve view object, parameters:\n" . format_data(\%parameters));
+		return;
+	}
+	else {
+		#my $view_type = ref($view);
+		#notify($ERRORS{'DEBUG'}, 0, "retrieved $view_type view object");
+		return $view;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 _find_entity_view
+
+ Parameters  : $view_type, $parameters_hash_ref
+ Returns     : view object
+ Description : Calls _find_entity_views to retrieve an array of managed
+               objects. This does not call Vim::find_entity_view. Instead, it
+               checks the array returned by _find_entity_views. If a single
+               object is returned, that object is returned by this subroutine.
+               If multiple objects are returned, a warning is generated and the
+               first object found is returned.
+               
+               All calls to Vim::find_entity_view should be handled by
+               this subroutine. The call needs to be wrapped in an eval block to
+               prevent the process from dying abruptly.
+               
+               The $parameters_hash_ref argument must contain the
+               following key:
+               * filter - The value must be a hash reference of name/value
+                 pairs. If multiple pairs are specified, all must match.
+               
+               The $parameters_hash_ref argument may contain the following keys:
+               * begin_entity - The value must be a managed object reference.
+                 This specifies the starting point to search in the inventory in
+                 order to narrow the scope to improve performance.
+               
+               * properties - The value must be an array reference. By default,
+                 all properties are retrieved. Using a filter may improve
+                 performance.
+               
+               Example:
+               my $vm = $self->_find_entity_view('VirtualMachine',
+                  {
+                     filter => {
+                        'name' => 'cent7vm'
+                     },
+                     begin_entity => $self->_get_resource_pool_view(),
+                     properties => [
+                        'name',
+                        'runtime.powerState',
+                        'config.guestId',
+                     ],
+                  }
+               );
+
+=cut
+
+sub _find_entity_view {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Get the argument
+	my ($view_type, $parameters_hash_ref) = @_;
+	if (!$view_type) {
+		notify($ERRORS{'WARNING'}, 0, "view type argument was not specified");
+		return;
+	}
+	
+	my %parameters = (
+		'view_type' => $view_type,
+	);
+	
+	if (!defined($parameters_hash_ref)) {
+		notify($ERRORS{'WARNING'}, 0, "parameters hash reference argument was not specified");
+		return;
+	}
+	
+	my $parameters_argument_type = ref($parameters_hash_ref);
+	if (!$parameters_argument_type) {
+		notify($ERRORS{'WARNING'}, 0, "parameters argument is not a reference, it must be a hash reference");
+		return;
+	}
+	elsif ($parameters_argument_type ne 'HASH') {
+		notify($ERRORS{'WARNING'}, 0, "parameters argument is '$parameters_argument_type' reference, it must be a hash reference");
+		return;
+	}
+	elsif (!defined($parameters_hash_ref->{filter})) {
+		notify($ERRORS{'WARNING'}, 0, "parameters hash reference argument must contain a 'filter' key");
+		return;
+	}
+	
+	my @views = $self->_find_entity_views($view_type, $parameters_hash_ref);
+	if (!@views) {
+		return;
+	}
+	elsif (scalar(@views) > 1) {
+		notify($ERRORS{'WARNING'}, 0, "returning the first object retrieved, multiple $view_type views match filter:\n" . format_data($parameters_hash_ref->{filter}));
+	}
+	return $views[0];
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 _find_entity_views
+
+ Parameters  : $view_type, $parameters_hash_ref (optional)
+ Returns     : array of view objects
+ Description : Calls Vim::find_entity_views to retrieve an array of managed
+               objects. All calls to Vim::find_entity_views should be handled by
+               this subroutine. The call needs to be wrapped in an eval block to
+               prevent the process from dying abruptly.
+               
+               The optional $parameters_hash_ref argument may contain the
+               following keys:
+               * begin_entity - The value must be a managed object reference.
+                 This specifies the starting point to search in the inventory in
+                 order to narrow the scope to improve performance.
+               * filter - The value must be a hash reference of name/value
+                 pairs. If multiple pairs are specified, all must match.
+               * properties - The value must be an array reference. By default,
+                 all properties are retrieved. Using a filter may improve
+                 performance.
+               
+               Example:
+               my @vms = $self->_find_entity_views('VirtualMachine',
+                  {
+                     begin_entity => $self->_get_resource_pool_view(),
+                     properties => [
+                        'name',
+                        'runtime.powerState',
+                        'config.guestId',
+                     ],
+                     filter => {
+                        'name' => 'cent7vm'
+                     },
+                  }
+               );
+
+=cut
+
+sub _find_entity_views {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Get the argument
+	my ($view_type, $parameters_hash_ref) = @_;
+	if (!$view_type) {
+		notify($ERRORS{'WARNING'}, 0, "view type argument was not specified");
+		return;
+	}
+	
+	my %parameters = (
+		'view_type' => $view_type,
+	);
+	
+	if ($parameters_hash_ref) {
+		my $parameters_argument_type = ref($parameters_hash_ref);
+		if (!$parameters_argument_type) {
+			notify($ERRORS{'WARNING'}, 0, "parameters argument is not a reference, it must be a hash reference");
+			return;
+		}
+		elsif ($parameters_argument_type ne 'HASH') {
+			notify($ERRORS{'WARNING'}, 0, "parameters argument is '$parameters_argument_type' reference, it must be a hash reference");
+			return;
+		}
+		else {
+			%parameters = (%parameters, %$parameters_hash_ref);
+		}
+	}
+	
+	# Override the die handler
+	local $SIG{__DIE__} = sub{};
+	
+	my $views;
+	eval {
+		$views = Vim::find_entity_views(%parameters);
+	};
+	if ($EVAL_ERROR) {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve view objects\nerror: $EVAL_ERROR\nparameters:\n" . format_data(\%parameters));
+		return;
+	}
+	elsif (!$views) {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve view objects, parameters:\n" . format_data(\%parameters));
+		return;
+	}
+	
+	my $views_type = ref($views);
+	if (!$views_type) {
+		notify($ERRORS{'WARNING'}, 0, "find_entity_views did not return a reference, it should be an array reference, value returned:\n$views");
+		return;
+	}
+	elsif ($views_type ne 'ARRAY') {
+		notify($ERRORS{'WARNING'}, 0, "find_entity_views did not return an array reference, type returned: $views_type");
+		return;
+	}
+	else {
+		my @views_array = @$views;
+		my $view_count = scalar(@views_array);
+		# For debugging:
+		#my $info_string;
+		#for my $view (@views_array) {
+		#	$info_string .= '.' x 50 . "\n" . $self->_mo_ref_to_string($view);
+		#}
+		#notify($ERRORS{'DEBUG'}, 0, "retrieved $view_count $view_type view" . ($view_count == 1 ? '' : 's') . "\n$info_string");
+		notify($ERRORS{'DEBUG'}, 0, "retrieved $view_count $view_type view" . ($view_count == 1 ? '' : 's'));
+		return @views_array;
+	}
+}
 
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -2489,7 +2805,7 @@ sub _get_file_info {
 	
 	# Get a datastore object and host datastore browser object
 	my $datastore = $self->_get_datastore_object($datastore_name) || return;
-	my $host_datastore_browser = Vim::get_view(mo_ref => $datastore->browser);
+	my $host_datastore_browser = $self->_get_view($datastore->browser);
 	
 	# Create HostDatastoreBrowserSearchSpec spec
    my $file_query_flags = FileQueryFlags->new(
@@ -2626,7 +2942,7 @@ sub _get_datacenter_view {
 		# Return datacenter view only if 1 datacenter was retrieved
 		notify($ERRORS{'WARNING'}, 0, "unable to retrieve parent datacenter for resource pool object");
 		
-		my @datacenters = @{Vim::find_entity_views(view_type => 'Datacenter')};
+		my @datacenters = $self->_find_entity_views('Datacenter');
 		if (!scalar(@datacenters)) {
 			notify($ERRORS{'WARNING'}, 0, "failed to retrieve Datacenter view from VM host $vmhost_name");
 			return;
@@ -2723,7 +3039,7 @@ sub _get_host_system_views {
 	}
 	
 	return @{$self->{host_system_views}} if $self->{host_system_views};
-	my @host_system_views = @{Vim::find_entity_views(view_type => 'HostSystem')};
+	my @host_system_views = $self->_find_entity_views('HostSystem');
 	$self->{host_system_views} = \@host_system_views;
 	return @host_system_views;
 }
@@ -2810,7 +3126,7 @@ sub _get_resource_pool_view {
 	my $vmhost_profile_resource_path = $self->data->get_vmhost_profile_resource_path(0);
 	
 	# Retrieve all of the ResourcePool views on the VM host
-	my @resource_pool_views = @{Vim::find_entity_views(view_type => 'ResourcePool')};
+	my @resource_pool_views = $self->_find_entity_views('ResourcePool');
 	if (!@resource_pool_views) {
 		notify($ERRORS{'WARNING'}, 0, "failed to retrieve any resource pool views from VM host $vmhost_name");
 		return;
@@ -2949,10 +3265,11 @@ sub _get_vm_folder_view {
 	my $datacenter_view = $self->_get_datacenter_view() || return;
 	
 	# Retrieve all of the Folder views on the VM host
-	my @folder_views = @{Vim::find_entity_views(
-		view_type => 'Folder',
-		begin_entity => $datacenter_view,
-	)};
+	my @folder_views = $self->_find_entity_views('Folder',
+		{
+			begin_entity => $datacenter_view,
+		}
+	);
 	if (!@folder_views) {
 		notify($ERRORS{'WARNING'}, 0, "failed to retrieve any folder views from VM host $vmhost_name");
 		return;
@@ -3050,7 +3367,7 @@ sub _get_managed_object_path {
 	my $type = $mo_ref_argument->{type};
 	my $value = $mo_ref_argument->{value};
 	
-	my $view = Vim::get_view('mo_ref' => $mo_ref_argument) || return;
+	my $view = $self->_get_view($mo_ref_argument) || return;
 	my $name = $view->{name} || return;
 
 	my $parent_mo_ref;
@@ -3126,7 +3443,7 @@ sub _get_parent_managed_object_view {
 	}
 	
 	# Retrieve a view for the mo_ref argument
-	my $view = Vim::get_view('mo_ref' => $mo_ref_argument);
+	my $view = $self->_get_view($mo_ref_argument);
 	if (!$view) {
 		notify($ERRORS{'WARNING'}, 0, "failed to retrieve view for managed object reference argument:\n" . format_data($mo_ref_argument));
 		return;
@@ -3142,7 +3459,7 @@ sub _get_parent_managed_object_view {
 		if ($parent_type eq $parent_type_argument) {
 			#notify($ERRORS{'DEBUG'}, 0, "found parent view matching type '$parent_type_argument': $parent_value");
 			
-			my $parent_view = Vim::get_view('mo_ref' => $parent_mo_ref);
+			my $parent_view = $self->_get_view($parent_mo_ref);
 			return $parent_view;
 		}
 		else {
@@ -3178,11 +3495,15 @@ sub _get_vm_view {
 	my $vmx_path = shift || $self->get_vmx_file_path();
 	$vmx_path = $self->_get_datastore_path($vmx_path);
 	
-	# Override the die handler
-	local $SIG{__DIE__} = sub{};
+	my $vm_view = $self->_find_entity_view('VirtualMachine',
+		{
+			begin_entity => $self->_get_datacenter_view(),
+			filter => {
+				'config.files.vmPathName' => $vmx_path
+			}
+		}
+	);
 	
-	my $vm_view;
-	eval { $vm_view = Vim::find_entity_view(view_type => 'VirtualMachine', begin_entity => $self->_get_datacenter_view(), filter => {'config.files.vmPathName' => $vmx_path}); };
 	if (!$vm_view) {
 		notify($ERRORS{'WARNING'}, 0, "failed to retrieve view object for VM: $vmx_path");
 		return;
@@ -3212,13 +3533,13 @@ sub _get_virtual_disk_manager_view {
 	return $self->{virtual_disk_manager_object} if $self->{virtual_disk_manager_object};
 	
 	# Get a virtual disk manager object
-	my $service_content = Vim::get_service_content() || return;
+	my $service_content = $self->_get_service_content() || return;
 	if (!$service_content->{virtualDiskManager}) {
 		notify($ERRORS{'WARNING'}, 0, "failed to retrieve virtual disk manager object, it is not available via the vSphere SDK");
 		return;
 	}
 	
-	my $virtual_disk_manager = Vim::get_view(mo_ref => $service_content->{virtualDiskManager});
+	my $virtual_disk_manager = $self->_get_view($service_content->{virtualDiskManager});
 	if ($virtual_disk_manager) {
 		#notify($ERRORS{'DEBUG'}, 0, "retrieved virtual disk manager object:\n" . format_data($virtual_disk_manager));
 	}
@@ -3250,8 +3571,8 @@ sub _get_file_manager_view {
 	
 	return $self->{file_manager_object} if $self->{file_manager_object};
 	
-	my $service_content = Vim::get_service_content() || return;
-	my $file_manager = Vim::get_view(mo_ref => $service_content->{fileManager});
+	my $service_content = $self->_get_service_content() || return;
+	my $file_manager = $self->_get_view($service_content->{fileManager});
 	if (!$file_manager) {
 		notify($ERRORS{'WARNING'}, 0, "failed to retrieve file manager object");
 		return;
@@ -3297,7 +3618,7 @@ sub _get_datastore_object {
 	# Get a datastore view, add the view's summary to the return hash
 	my @datastore_names_found;
 	for my $datastore_mo_ref (@datastore_mo_refs) {
-		my $datastore = Vim::get_view(mo_ref => $datastore_mo_ref);
+		my $datastore = $self->_get_view($datastore_mo_ref);
 		my $datastore_name = $datastore->summary->name;
 		$self->{datastore_objects}{$datastore_name} = $datastore;
 	}
@@ -3353,7 +3674,7 @@ sub _get_datastore_info {
 	# Get a datastore view, add the view's summary to the return hash
 	my $datastore_info;
 	for my $datastore_mo_ref (@datastore_mo_refs) {
-		my $datastore_view = Vim::get_view(mo_ref => $datastore_mo_ref);
+		my $datastore_view = $self->_get_view($datastore_mo_ref);
 		my $datastore_name = $datastore_view->summary->name;
 		
 		# Make sure the datastore is accessible
@@ -3479,7 +3800,7 @@ sub _is_vcenter {
 		return;
 	}
 	
-	my $service_content = Vim::get_service_content();
+	my $service_content = $self->_get_service_content();
 	my $api_type = $service_content->{about}->{apiType};
 	
 	# apiType should either be:
@@ -3502,15 +3823,20 @@ sub _is_vcenter {
 =cut
 
 sub _mo_ref_to_string {
-	my $mo_ref = shift;
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
 	
 	# Check the argument, either a mo_ref or view can be supplied
+	my $mo_ref = shift;
 	if (!ref($mo_ref)) {
 		notify($ERRORS{'WARNING'}, 0, "argument is not a reference: $mo_ref");
 		return;
 	}
 	elsif (ref($mo_ref) eq 'ManagedObjectReference') {
-		$mo_ref = Vim::get_view(mo_ref => $mo_ref)
+		$mo_ref = $self->_get_view($mo_ref)
 	}
 	
 	my $return_string = '';
@@ -3580,7 +3906,7 @@ sub get_host_network_info {
 	my $datacenter_view = $self->_get_datacenter_view();
 	
 	# Get the NetworkFolder view
-	my $network_folder_view = Vim::get_view(mo_ref => $datacenter_view->networkFolder);
+	my $network_folder_view = $self->_get_view($datacenter_view->networkFolder);
 	if (!$network_folder_view) {
 		notify($ERRORS{'WARNING'}, 0, "failed to retrieve networkFolder view from $vmhost_hostname");
 		return;
@@ -3588,7 +3914,7 @@ sub get_host_network_info {
 	
 	my $child_array = $network_folder_view->{childEntity};
 	if (!$child_array) {
-		notify($ERRORS{'WARNING'}, 0, "networkFolder does not contain a 'childEntity' key:\n" . _mo_ref_to_string($network_folder_view));
+		notify($ERRORS{'WARNING'}, 0, "networkFolder does not contain a 'childEntity' key:\n" . $self->_mo_ref_to_string($network_folder_view));
 		return;
 	}
 	
@@ -3598,7 +3924,7 @@ sub get_host_network_info {
 		my $value = $child->{value};
 		
 		# Get a view for the child entity
-		my $child_view = Vim::get_view(mo_ref => $child);
+		my $child_view = $self->_get_view($child);
 		if (!$child_view) {
 			notify($ERRORS{'WARNING'}, 0, "failed to retrieve view for networkFolder child:\n" . format_data($child));
 			next CHILD;
@@ -3623,7 +3949,7 @@ sub get_host_network_info {
 			# Each portgroup belongs to a distributed virtual switch
 			# The UUID of the switch is required when adding the portgroup to a VM
 			# Get the dvSwitch view
-			my $dv_switch_view = Vim::get_view(mo_ref => $child_view->config->distributedVirtualSwitch);
+			my $dv_switch_view = $self->_get_view($child_view->config->distributedVirtualSwitch);
 			if (!$dv_switch_view) {
 				notify($ERRORS{'WARNING'}, 0, "failed to retrieve DistributedVirtualSwitch view for portgroup $name");
 				next CHILD;
@@ -3833,7 +4159,7 @@ sub is_multiextent_disabled {
 	HOST: for my $host_system_view (@host_system_views) {
 		my $host_system_name = $host_system_view->{name};
 		
-		my $kernel_module_system = Vim::get_view(mo_ref => $host_system_view->configManager->kernelModuleSystem);
+		my $kernel_module_system = $self->_get_view($host_system_view->configManager->kernelModuleSystem);
 		if (!$kernel_module_system) {
 			notify($ERRORS{'WARNING'}, 0, "unable to determine if multiextent kernel module is enabled on $host_system_name, kernelModuleSystem could not be retrieved");
 			$multiextent_info->{$host_system_name} = 'unknown';
