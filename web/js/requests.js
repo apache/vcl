@@ -1416,8 +1416,10 @@ function editReservationCB(data, ioArgs) {
 		dijit.byId('editResCancelBtn').set('label', _('Cancel'));
 		dojo.byId('editrescont').value = data.items.cont;
 		dojo.byId('editresid').value = data.items.requestid;
-		dojo.addClass('indefinitelabel', 'disabledlabel');
-		dojo.byId('indefiniteradio').disabled = true;
+		if(dojo.byId('indefinitelabel'))
+			dojo.addClass('indefinitelabel', 'disabledlabel');
+		if(dojo.byId('indefiniteradio'))
+			dojo.byId('indefiniteradio').disabled = true;
 	}
 	else {
 		dijit.byId('editResDlgBtn').set('style', 'display: inline');
