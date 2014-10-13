@@ -9690,8 +9690,13 @@ function sendRDPfile() {
 			# assume index 0 of ports for nat
 			if(! empty($natports) && array_key_exists($method['ports'][0]['key'], $natports[$cmid]))
 				$port = ':' . $natports[$cmid][$method['ports'][0]['key']]['publicport'];
-			else
-				$port = ':' . $method['ports'][0]['port'];
+			else {
+				if($method['ports'][0]['key'] == '#Port-TCP-3389#' &&
+				   $user['rdpport'] != 3389)
+					$port = ':' . $user['rdpport'];
+				else
+					$port = ':' . $method['ports'][0]['port'];
+			}
 			break;
 		}
 	}

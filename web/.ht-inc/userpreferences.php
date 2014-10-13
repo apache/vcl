@@ -605,7 +605,7 @@ function processUserPrefsInput($checks=1) {
 	$return["mapdrives"] = processInputVar("mapdrives" , ARG_NUMERIC, $user["mapdrives"]);
 	$return["mapprinters"] = processInputVar("mapprinters" , ARG_NUMERIC, $user["mapprinters"]);
 	$return["mapserial"] = processInputVar("mapserial" , ARG_NUMERIC, $user["mapserial"]);
-	$return["rdpport"] = processInputVar("rdpport" , ARG_NUMERIC, $user["rdpport"]);
+	$return["rdpport"] = processInputVar("rdpport" , ARG_NUMERIC, 3389);
 
 	if(! $checks) {
 		return $return;
@@ -640,7 +640,24 @@ function processUserPrefsInput($checks=1) {
 			$submitErrMsg[LOCALPASSWORDERR] = _("Passwords do not match");
 		}
 	}
-	if($return['rdpport'] < 1024 || $return['rdpport'] > 65535) {
+	if($return['rdpport'] != $user['rdpport']) {
+		$requests = getUserRequests('all');
+		$nochange = 0;
+		foreach($requests as $req) {
+			if(preg_match('/^(3|8|24|25|26|27|28|29)$/', $req['currstateid']) ||
+			   ($req['currstateid'] == 14 &&
+				preg_match('/^(3|8|24|25|26|27|28|29)$/', $req['laststateid']))) {
+				$nochange = 1;
+				break;
+			}
+		}
+		if($nochange) {
+			$submitErr |= RDPPORTERR;
+			$submitErrMsg[RDPPORTERR] = _("RDP Port cannot be changed while you have active reservations");
+		}
+	}
+	if(! ($submitErr & RDPPORTERR) &&
+	   ($return['rdpport'] < 1024 || $return['rdpport'] > 65535)) {
 		$submitErr |= RDPPORTERR;
 		$submitErrMsg[RDPPORTERR] = _("RDP Port must be between 1024 and 65535");
 	}

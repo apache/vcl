@@ -4164,8 +4164,14 @@ function AJconnectRequest() {
 			foreach($method['ports'] as $port) {
 				if($usenat && array_key_exists($port['key'], $natports[$cmid]))
 					$msg = preg_replace("/{$port['key']}/", $natports[$cmid][$port['key']]['publicport'], $msg); 
-				else
-					$msg = preg_replace("/{$port['key']}/", $port['port'], $msg); 
+				else {
+					if((preg_match('/remote desktop/i', $method['description']) ||
+					   preg_match('/RDP/i', $method['description'])) && 
+					   $port['key'] == '#Port-TCP-3389#')
+						$msg = preg_replace("/{$port['key']}/", $user['rdpport'], $msg); 
+					else
+						$msg = preg_replace("/{$port['key']}/", $port['port'], $msg); 
+				}
 			}
 			#$h .= preg_replace("/(.{1,120}([ ]|$))/", '\1<br>', $msg);
 			$h .= $msg;

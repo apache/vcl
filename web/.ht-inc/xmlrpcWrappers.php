@@ -812,8 +812,16 @@ function XMLRPCgetRequestConnectData($requestid, $remoteIP) {
 					$connectMethods[$key]['connectports'][] = "{$port['protocol']}:{$port['port']}:{$natports[$key][$port['key']]['publicport']}";
 				}
 				else {
-					$connecttext = preg_replace("/{$port['key']}/", $port['port'], $connecttext); 
-					$connectMethods[$key]['connectports'][] = "{$port['protocol']}:{$port['port']}:{$port['port']}";
+					if((preg_match('/remote desktop/i', $cm['description']) ||
+					   preg_match('/RDP/i', $cm['description'])) && 
+					   $port['key'] == '#Port-TCP-3389#') {
+						$connecttext = preg_replace("/{$port['key']}/", $user['rdpport'], $connecttext); 
+						$connectMethods[$key]['connectports'][] = "{$port['protocol']}:{$port['port']}:{$user['rdpport']}";
+					}
+					else {
+						$connecttext = preg_replace("/{$port['key']}/", $port['port'], $connecttext); 
+						$connectMethods[$key]['connectports'][] = "{$port['protocol']}:{$port['port']}:{$port['port']}";
+					}
 				}
 			}
 			$connectMethods[$key]["connecttext"] = $connecttext;
@@ -823,7 +831,12 @@ function XMLRPCgetRequestConnectData($requestid, $remoteIP) {
 		$tmp = array_keys($portdata);
 		$cmid = $tmp[0];
 		if(empty($natports))
-			$connectport = $portdata[$cmid][0]['port'];
+			if((preg_match('/remote desktop/i', $connectMethods[$cmid]['description']) ||
+			   preg_match('/RDP/i', $connectMethods[$cmid]['description'])) && 
+				$portdata[$cmid][0]['port'] == 3389)
+				$connectport = $user['rdpport'];
+			else
+				$connectport = $portdata[$cmid][0]['port'];
 		else {
 			$key = $portdata[$cmid][0]['key'];
 			$connectport = $natports[$cmid][$key]['publicport'];
