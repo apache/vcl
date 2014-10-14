@@ -37,10 +37,10 @@ function getHeader($refresh) {
 	$usenls = 0;
 	$usenlsstr = "false";
 	if(! preg_match('/^en/', $locale)) {
-		$rt .= "<meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\">\n";
 		$usenls = 1;
 		$usenlsstr = "true";
 	}
+	$rt .= "<meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\">\n";
 	$rt .= "<title>VCL :: Virtual Computing Lab</title>\n";
 	$rt .= "<link rel=stylesheet type=\"text/css\" href=\"css/vcl.css\">\n";
 	$rt .= "<link rel=stylesheet type=\"text/css\" href=\"themes/default/css/vcl.css\">\n";
@@ -86,7 +86,7 @@ function getHeader($refresh) {
 
 	$rt .= "    <table class=\"themelayouttable\" summary=\"\">\n";
 	$rt .= "      <TR valign=top>\n";
-	if($authed)
+	if($authed || NOAUTH_HOMENAV)
 		$rt .= "        <TD class=\"thememenu\">\n";
 	else
 		$rt .= "        <TD class=\"thememenunoauth\">\n";
@@ -97,6 +97,11 @@ function getHeader($refresh) {
 		$rt .= getNavMenu(1, 1);
 		$rt .= "</ul>\n";
 		$rt .= "<img src=\"themes/default/images/menu_dividerblock.jpg\" border=0 width=\"158px\" height=\"83px\" alt=\"\"><br/>\n";
+	}
+	elseif(NOAUTH_HOMENAV) {
+		$rt .= "<ul>\n";
+		$rt .= getUsingVCL();
+		$rt .= "</ul>\n";
 	}
 	$rt .= "</div>\n";
 	$rt .= "        </TD>\n";

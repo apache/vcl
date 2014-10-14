@@ -12577,6 +12577,23 @@ function getExtraCSS() {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
+/// \fn getUsingVCL()
+///
+/// \return string of HTML
+///
+/// \brief generates HTML of list item links from $NOAUTH_HOMENAV in conf.php
+///
+////////////////////////////////////////////////////////////////////////////////
+function getUsingVCL() {
+	global $NOAUTH_HOMENAV;
+	$rt = '';
+	foreach($NOAUTH_HOMENAV as $name => $url)
+		$rt .= "<li><a href=\"$url\">" .  _($name) . "</a></li>\n";
+	return $rt;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
 /// \fn getDojoHTML($refresh)
 ///
 /// \param $refresh - 1 to set page to refresh, 0 not to

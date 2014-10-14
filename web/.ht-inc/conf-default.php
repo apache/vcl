@@ -80,7 +80,7 @@ define("MIN_BLOCK_MACHINES", 1);
 /// defines the max number of block request machines
 define("MAX_BLOCK_MACHINES", 70);
 /// defines the URL used for the Documentation link in the navigation list
-define("DOCUMENTATIONURL", "https://cwiki.apache.org/VCLDOCS/");
+define("DOCUMENTATIONURL", "https://cwiki.apache.org/confluence/display/VCL/Using+VCL");
 define("USEFILTERINGSELECT", 1); // set to 1 to use a dojo filteringselects for some of the select boxes
                                  // the filteringselect can be a little slow for a large number of items
 define("FILTERINGSELECTTHRESHOLD", 1000); // if USEFILTERINGSELECT = 1, only use them for selects up to this size
@@ -107,6 +107,19 @@ $ENABLE_ITECSAUTH = 0;     // use ITECS accounts (also called "Non-NCSU" account
 # xmlrpcBlockAPIUsers is an array of ids from user table for users that are
 # allowed to call XMLRPC functions designed specifically to be called by vcld
 $xmlrpcBlockAPIUsers = array(3, # 3 = vclsystem
+);
+
+# boolean value of 0 or 1 to enable documentation links on login page and page
+#   where authentication method is selected
+# 0 = disables; 1 = enabled
+define("NOAUTH_HOMENAV", 0);
+
+# documentation links to display on login page and page
+#   where authentication method is selected when NOAUTH_HOMENAV is set to 1
+$NOAUTH_HOMENAV = array (
+	"What is VCL" => "http://vcl.apache.org/",
+	"How to use VCL" => "https://cwiki.apache.org/confluence/display/VCL/Using+VCL",
+	"Report a Problem" => "mailto:" . HELPEMAIL,
 );
 
 @require_once(".ht-inc/secrets.php");
