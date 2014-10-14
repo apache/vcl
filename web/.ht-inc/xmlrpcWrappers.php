@@ -217,7 +217,14 @@ function XMLRPCaddRequest($imageid, $start, $length, $foruser='',
 		                         . "have, and you are allowed $max "
 		                         . "overlapping reservations at a time");
 	}
-	if($nousercheck != 0 && $nousercheck != 1)
+
+	if($nousercheck == 1) {
+		$groupid = getUserGroupID('Allow No User Check', 1);
+		$members = getUserGroupMembers($groupid);
+		if(! array_key_exists($user['id'], $members))
+			$nousercheck = 0;
+	}
+	else
 		$nousercheck = 0;
 
 	$images = getImages();
@@ -331,7 +338,14 @@ function XMLRPCaddRequestWithEnding($imageid, $start, $end, $foruser='',
 		                         . "have, and you are allowed $max "
 		                         . "overlapping reservations at a time");
 	}
-	if($nousercheck != 0 && $nousercheck != 1)
+
+	if($nousercheck == 1) {
+		$groupid = getUserGroupID('Allow No User Check', 1);
+		$members = getUserGroupMembers($groupid);
+		if(! array_key_exists($user['id'], $members))
+			$nousercheck = 0;
+	}
+	else
 		$nousercheck = 0;
 
 	$images = getImages();
