@@ -47,13 +47,14 @@ function dashboard() {
 	print addWidget('toplongimages', 'Top 5 Long Term Images in Use', '(Reservations &gt; 24 hours long)');
 	print addWidget('toppastimages', 'Top 5 Images From Past Day', '(Reservations with a start<br>time within past 24 hours)');
 	print addWidget('topfailedcomputers', 'Top Recent Computer Failures', '(Failed in the last 5 days)');
+	print addWidget('blockallocation', 'Block Allocation Status');
 	print "</td>\n";
 	# -------- end left column ---------
 
 	# ---------- right column ---------
 	print "<td valign=\"top\">\n";
+	print addWidget('managementnodes', 'Management Nodes', '[ ] denotes node in maintenance state');
 	print addWidget('topfailed', 'Top Recent Image Failures', '(Failed in the last 5 days)');
-	print addWidget('blockallocation', 'Block Allocation Status');
 	print addLineChart('reschart', 'Past 12 Hours of Active Reservations');
 	print "</td>\n";
 	# -------- end right column --------
@@ -87,6 +88,7 @@ function AJupdateDashboard() {
 	$data['blockallocation'] = getBlockAllocationData();
 	$data['newreservations'] = getNewReservationData();
 	$data['failedimaging'] = getFailedImagingData();
+	$data['managementnodes'] = getManagementNodeData();
 	sendJSON($data);
 }
 
@@ -660,13 +662,15 @@ function getBlockAllocationData() {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function getNewReservationData() {
+	$affilid = getDashboardAffilID();
 	$query = "SELECT c.hostname AS computer, "
 	       .        "i.prettyname AS image, "
 	       .        "rq.id, "
 	       .        "rq.start, "
 	       .        "CONCAT(s1.name, '|', s2.name) AS state, "
 	       .        "o.installtype, "
-	       .        "m.hostname AS managementnode "
+	       .        "m.hostname AS managementnode, "
+	       .        "CONCAT(u.unityid, '@', af.name) AS user "
 	       . "FROM request rq "
 	       . "LEFT JOIN reservation rs ON (rs.requestid = rq.id) "
 	       . "LEFT JOIN computer c ON (c.id = rs.computerid) "
@@ -675,10 +679,15 @@ function getNewReservationData() {
 	       . "LEFT JOIN state s1 ON (s1.id = rq.stateid) "
 	       . "LEFT JOIN state s2 ON (s2.id = rq.laststateid) "
 	       . "LEFT JOIN managementnode m ON (m.id = rs.managementnodeid) "
-	       . "WHERE (rq.stateid IN (6, 13, 19) AND rq.start < NOW()) OR "
+	       . "LEFT JOIN user u ON (u.id = rq.userid) "
+	       . "LEFT JOIN user u2 ON (u2.id = c.ownerid) "
+	       . "LEFT JOIN affiliation af ON (af.id = u.affiliationid) "
+	       . "WHERE ((rq.stateid IN (6, 13, 19) AND rq.start < NOW()) OR "
 	       .       "(rq.stateid = 14 AND rq.laststateid IN (6, 13, 16, 19) AND "
-	       .       "rq.start < DATE_ADD(NOW(), INTERVAL 1 HOUR)) "
-	       . "ORDER BY rq.start";
+			 .       "rq.start < DATE_ADD(NOW(), INTERVAL 1 HOUR))) ";
+	if($affilid)
+		$query .= "AND (u.affiliationid = $affilid OR u2.affiliationid = $affilid) ";
+	$query .= "ORDER BY rq.start";
 	$qh = doQuery($query, 101);
 	$data = array();
 	while($row = mysql_fetch_assoc($qh)) {
@@ -710,6 +719,7 @@ function getNewReservationData() {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function getFailedImagingData() {
+	$affilid = getDashboardAffilID();
 	$query = "SELECT c.hostname AS computer, "
 	       .        "i.prettyname AS image, "
 	       .        "rq.id, "
@@ -727,9 +737,12 @@ function getFailedImagingData() {
 	       . "LEFT JOIN vmhost vh ON (c.vmhostid = vh.id) "
 	       . "LEFT JOIN computer ch ON (vh.computerid = ch.id) "
 	       . "LEFT JOIN user u ON (rq.userid = u.id) "
+	       . "LEFT JOIN user u2 ON (u2.id = c.ownerid) "
 	       . "WHERE rq.stateid = 10 AND "
-	       .       "rq.laststateid = 16 "
-	       . "ORDER BY rq.start";
+	       .       "rq.laststateid = 16 ";
+	if($affilid)
+		$query .= "AND (u.affiliationid = $affilid OR u2.affiliationid = $affilid) ";
+	$query .= "ORDER BY rq.start";
 	$qh = doQuery($query, 101);
 	$data = array();
 	while($row = mysql_fetch_assoc($qh)) {
@@ -746,6 +759,61 @@ function getFailedImagingData() {
 		$row['contid'] = addContinuationsEntry('AJrestartImageCapture', array('requestid' => $row['id']), 120, 1, 0);
 		$data[] = $row;
 	}
+	return $data;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn getManagementNodeData()
+///
+/// \return array of data with these keys:\n
+/// \b computer - hostname of computer (without domain)\n
+/// \b image - image being loaded\n
+/// \b id - id of request\n
+/// \b start - start date\n
+/// \b state - current and last state\n
+/// \b installtype - install for reservation\n
+/// \b managementnode - hostname of mangementnode
+///
+/// \brief gets information about management nodes
+///
+////////////////////////////////////////////////////////////////////////////////
+function getManagementNodeData() {
+	$affilid = getDashboardAffilID();
+	$query = "SELECT m.hostname, "
+	       .        "UNIX_TIMESTAMP(NOW()) - UNIX_TIMESTAMP(m.lastcheckin) AS checkin, "
+	       .        "COUNT(rs2.id) as processing, "
+	       .        "m.stateid "
+	       . "FROM managementnode m "
+	       . "LEFT JOIN reservation rs ON (rs.managementnodeid = m.id) "
+	       . "LEFT JOIN request rq ON (rq.id = rs.requestid) "
+	       . "LEFT JOIN reservation rs2 ON (rs.id = rs2.id AND "
+	       .                               "rs2.requestid = rq.id AND "
+	       .                               "rq.start < NOW() AND "
+	       .                               "rq.end > NOW()) "
+	       . "LEFT JOIN user u ON (u.id = m.ownerid) "
+			 . "WHERE m.stateid IN (2, 10) ";
+	if($affilid)
+		$query .= "AND u.affiliationid = $affilid ";
+	$query .= "GROUP BY m.id "
+	       .  "ORDER BY m.stateid, m.hostname";
+	$qh = doQuery($query);
+	$current = array();
+	$old = array();
+	$never = array();
+	while($row = mysql_fetch_assoc($qh)) {
+		$tmp = explode('.', $row['hostname']);
+		$row['hostname'] = $tmp[0];
+		if($row['checkin'] < 0)
+			$row['checkin'] = 0;
+		if($row['checkin'] === null)
+			$never[] = $row;
+		elseif($row['checkin'] < 86400)
+			$current[] = $row;
+		else
+			$old[] = $row;
+	}
+	$data = array_merge($current, $old, $never);
 	return $data;
 }
 

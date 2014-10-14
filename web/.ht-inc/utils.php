@@ -12826,17 +12826,9 @@ function getDojoHTML($refresh) {
 			                      'dojox.charting.widget.Chart2D',
 			                      'dojox.charting.action2d.Tooltip',
 			                      'dojox.charting.action2d.Magnify',
-			                      'dojox.charting.themes.ThreeD');
+			                      'dojox.charting.themes.ThreeD',
+			                      'dojox.string.sprintf');
 			break;
-		# TODO clean up
-		/*case 'testDojoREST':
-			$filename = '';
-			$dojoRequires = array('dojo.parser',
-			                      'dijit.form.FilteringSelect',
-			                      'dijit.form.Button',
-			                      'dojo.data.ObjectStore',
-			                      'dojo.store.JsonRest');
-			break;*/
 		case 'siteconfig':
 			$filename = 'siteconfig.js';
 			$dojoRequires = array('dojo.parser',
@@ -12849,6 +12841,15 @@ function getDojoHTML($refresh) {
 			                      'dijit.layout.ContentPane',
 			                      'dijit.layout.TabContainer');
 			break;
+		# TODO clean up
+		/*case 'testDojoREST':
+			$filename = '';
+			$dojoRequires = array('dojo.parser',
+			                      'dijit.form.FilteringSelect',
+			                      'dijit.form.Button',
+			                      'dojo.data.ObjectStore',
+			                      'dojo.store.JsonRest');
+			break;*/
 	}
 	# END DOJO PARSING
 	if(empty($dojoRequires))

@@ -43,7 +43,9 @@ function updateDashboardCB(data, ioArgs) {
 		updateNewReservations(data.items.newreservations);
 	if(dojo.byId('failedimaging'))
 		updateFailedImaging(data.items.failedimaging);
+	clearTimeout(refreshtimer);
 	refreshtimer = setTimeout(updateDashboard, 15000);
+	updateManagementNodes(data.items.managementnodes);
 }
 
 function updateStatus(data) {
@@ -199,6 +201,7 @@ function updateNewReservations(data) {
 	txt += '<tr>'
 	    +  '<th>Start</th>'
 	    +  '<th>ReqID</th>'
+	    +  '<th>User</th>'
 	    +  '<th>Computer</th>'
 	    +  '<th>States</th>'
 	    +  '<th>Image</th>'
@@ -214,6 +217,8 @@ function updateNewReservations(data) {
 		    + data[i].start
 		    + '</td><td style=\"padding: 1px; border-right: 1px solid;\">'
 		    + data[i].id
+		    + '</td><td style=\"padding: 1px; border-right: 1px solid;\">'
+		    + data[i].user
 		    + '</td><td style=\"padding: 1px; border-right: 1px solid;\">'
 		    + data[i].computer
 		    + '</td><td style=\"padding: 1px; border-right: 1px solid;\">'
@@ -285,6 +290,50 @@ function updateFailedImaging(data) {
 	}
 }
 
+function updateManagementNodes(data) {
+	var obj = dojo.byId('managementnodes');
+	var txt = '<table>';
+	txt += '<tr>'
+	    +  '<td></td>'
+	    +  '<th>Time Since<br>Check-in</th>'
+	    +  '<th>Reservations<br>Processing</th>'
+	    +  '</tr>';
+	for(var i = 0; i < data.length; i++) {
+		txt += '<tr><th align="right">'
+		if(data[i].stateid == 10)
+			txt += '<span class=dashmnmaint>'
+			    +  '[ ' + data[i].hostname
+			    + ' ]</span></th><td>';
+		else
+			txt += data[i].hostname
+			    + '</th><td>';
+		if(data[i].checkin == null)
+			txt += '<span>never'
+		else if(data[i].checkin < 60)
+			txt += '<span class="ready">'
+			    + data[i].checkin
+			    + ' second(s)';
+		else if(data[i].checkin < 120)
+			txt += '<span class="wait">'
+			    + data[i].checkin
+			    + ' seconds';
+		else if(data[i].checkin < 86400) {
+			txt += '<span class="rederrormsg">';
+			if(data[i].checkin < 3600)
+				txt += secToMin(data[i].checkin);
+			else
+				txt += secToHour(data[i].checkin);
+		}
+		else
+			txt += '<span class="rederrormsg">&gt; 24 hours';
+		txt += '</span></td><td>'
+		    +  data[i].processing
+		    +  '</td></tr>';
+	}
+	txt += '</table>';
+	obj.innerHTML = txt;
+}
+
 function restartImagingCB(data, ioArgs) {
 	if(data.items.status == 'noaccess') {
 		alert('You do not have access to restart the imaging process for this reservation');
@@ -304,4 +353,16 @@ function timestampToTime(val) {
 	else
 		var data = dijit.byId('reschart').chart.labeldata;
 	return data[val]['text'];
+}
+
+function secToMin(time) {
+	var min = parseInt(time / 60);
+	var sec = time - (min * 60);
+	return dojox.string.sprintf('%d:%02d minute(s)', min, sec);
+}
+
+function secToHour(time) {
+	var hour = parseInt(time / 3600);
+	var min = parseInt((time - (hour * 3600)) / 60);
+	return dojox.string.sprintf('%d:%02d hour(s)', hour, min);
 }
