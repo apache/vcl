@@ -473,20 +473,6 @@ $actions['mode']['submitHelpForm'] = "submitHelpForm";
 $actions['pages']['helpform'] = "help";
 $actions['pages']['submitHelpForm'] = "help";
 
-# code documentation
-$actions['mode']['viewdocs'] = "viewDocs"; # entry
-$actions['mode']['editdoc'] = "editDoc";
-$actions['mode']['confirmeditdoc'] = "confirmEditDoc";
-$actions['mode']['submiteditdoc'] = "submitEditDoc";
-$actions['mode']['confirmdeletedoc'] = "confirmDeleteDoc";
-$actions['mode']['submitdeletedoc'] = "submitDeleteDoc";
-$actions['pages']['viewdocs'] = "codeDocumentation";
-$actions['pages']['editdoc'] = "codeDocumentation";
-$actions['pages']['confirmeditdoc'] = "codeDocumentation";
-$actions['pages']['submiteditdoc'] = "codeDocumentation";
-$actions['pages']['confirmdeletedoc'] = "codeDocumentation";
-$actions['pages']['submitdeletedoc'] = "codeDocumentation";
-
 # authentication
 $actions['mode']['selectauth'] = "selectAuth";
 $actions['mode']['submitLogin'] = "submitLogin";
