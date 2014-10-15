@@ -339,7 +339,7 @@ function submitLogin() {
 	if($authMechs[$authtype]['type'] == 'ldap')
 		ldapLogin($authtype, $userid, $passwd);
 	elseif($authMechs[$authtype]['type'] == 'local')
-		localLogin($userid, $passwd);
+		localLogin($userid, $passwd, $authtype);
 	else
 		selectAuth();
 }
@@ -460,19 +460,20 @@ function ldapLogin($authtype, $userid, $passwd) {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
-/// \fn localLogin($userid, $passwd)
+/// \fn localLogin($userid, $passwd, $authtype)
 ///
 /// \param $userid - userid without affiliation
 /// \param $passwd - submitted password
+/// \param $authtype - key from $authMechs array submitted to calling function
 ///
 /// \brief tries to authenticate user locally; calls printLoginPageWithSkin if
 /// authentication fails
 ///
 ////////////////////////////////////////////////////////////////////////////////
-function localLogin($userid, $passwd) {
+function localLogin($userid, $passwd, $authtype) {
 	global $HTMLheader, $phpVer, $authMechs;
 	if(validateLocalAccount($userid, $passwd)) {
-		addLoginLog($userid, 'Local', $authMechs['Local Account']['affiliationid'], 1);
+		addLoginLog($userid, $authtype, $authMechs[$authtype]['affiliationid'], 1);
 		//set cookie
 		$cookie = getAuthCookieData("$userid@local");
 		if(version_compare(PHP_VERSION, "5.2", ">=") == true)
@@ -486,8 +487,8 @@ function localLogin($userid, $passwd) {
 		exit;
 	}
 	else {
-		addLoginLog($userid, 'Local', $authMechs['Local Account']['affiliationid'], 0);
-		printLoginPageWithSkin('Local Account');
+		addLoginLog($userid, $authtype, $authMechs[$authtype]['affiliationid'], 0);
+		printLoginPageWithSkin($authtype);
 		printHTMLFooter();
 		dbDisconnect();
 		exit;
