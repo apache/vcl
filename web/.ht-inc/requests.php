@@ -3652,7 +3652,7 @@ function AJsubmitEditRequest() {
 		}
 
 		if($updateservername)
-			$reqsets[] = "name = '$servername'";
+			$serversets[] = "name = '$servername'";
 
 		if($allownousercheck) {
 			$newnousercheck = processInputVar('newnousercheck', ARG_NUMERIC);
