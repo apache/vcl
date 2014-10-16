@@ -703,16 +703,20 @@ class Image extends Resource {
 			return;
 		}
 
-		$newstateid = 16;
-		if($checkpoint)
-			$newstateid = 24;
+		$sets = array("rs.imageid = $imageid",
+		              "rs.imagerevisionid = {$this->imagerevisionid}");
 
+		if($checkpoint)
+			$sets[] = "rq.stateid = 24";
+		else {
+			$sets[] = "rq.stateid = 16";
+			$sets[] = "rq.forimaging = 1";
+		}
+
+		$allsets = implode(', ', $sets);
 		$query = "UPDATE request rq, "
 		       .        "reservation rs "
-		       . "SET rs.imageid = $imageid, "
-		       .     "rs.imagerevisionid = {$this->imagerevisionid}, "
-		       .     "rq.stateid = $newstateid,"
-		       .     "rq.forimaging = 1 "
+		       . "SET $allsets "
 		       . "WHERE rq.id = {$data['requestid']} AND "
 		       .       "rq.id = rs.requestid";
 		doQuery($query, 101);
@@ -871,16 +875,20 @@ class Image extends Resource {
 		       . "WHERE imagerevisionid = $oldrevisionid";
 		doQuery($query, 101);
 
-		$newstateid = 16;
+		$sets = array("rs.imagerevisionid = $imagerevisionid");
+
 		if($checkpoint)
-			$newstateid = 24;
+			$sets[] = "rq.stateid = 24";
+		else {
+			$sets[] = "rq.stateid = 16";
+			$sets[] = "rq.forimaging = 1";
+		}
 	
 		# update request and reservation
+		$allsets = implode(', ', $sets);
 		$query = "UPDATE request rq, "
 		       .        "reservation rs "
-		       . "SET rs.imagerevisionid = $imagerevisionid, "
-		       .     "rq.stateid = $newstateid,"
-		       .     "rq.forimaging = 1 "
+		       . "SET $allsets "
 		       . "WHERE rq.id = $requestid AND "
 		       .       "rq.id = rs.requestid AND "
 		       .       "rs.imageid = $imageid";
