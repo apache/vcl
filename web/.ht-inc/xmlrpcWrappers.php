@@ -364,7 +364,8 @@ function XMLRPCaddRequestWithEnding($imageid, $start, $end, $foruser='',
 ////////////////////////////////////////////////////////////////////////////////
 ///
 /// \fn XMLRPCdeployServer($imageid, $start, $end, $admingroup, $logingroup,
-///                        $ipaddr, $macaddr, $monitored, $foruser, $name)
+///                        $ipaddr, $macaddr, $monitored, $foruser, $name,
+///                        $userdata)
 ///
 /// \param $imageid - id of an image
 /// \param $start - "now" or unix timestamp for start of reservation; will
@@ -384,6 +385,8 @@ function XMLRPCaddRequestWithEnding($imageid, $start, $end, $foruser='',
 /// \param $foruser - (optional) login to be used when setting up the account
 /// on the reserved machine - CURRENTLY, THIS IS UNSUPPORTED
 /// \param $name - (optional) name for reservation
+/// \param $userdata - (optional) text that will be placed in 
+/// /root/.vclcontrol/post_reserve_userdata on the reserved node
 ///
 /// \return an array with at least one index named '\b status' which will have
 /// one of these values:\n
@@ -401,7 +404,8 @@ function XMLRPCaddRequestWithEnding($imageid, $start, $end, $foruser='',
 ////////////////////////////////////////////////////////////////////////////////
 function XMLRPCdeployServer($imageid, $start, $end, $admingroup='',
                             $logingroup='', $ipaddr='', $macaddr='',
-                            $monitored=0, $foruser='', $name='') {
+                            $monitored=0, $foruser='', $name='',
+                            $userdata='') {
 	global $user, $remoteIP;
 	if(! in_array("serverCheckOut", $user["privileges"])) {
 		return array('status' => 'error',
@@ -565,6 +569,25 @@ function XMLRPCdeployServer($imageid, $start, $end, $admingroup='',
 	       . "SET remoteIP = '$remoteIP' "
 	       . "WHERE requestid = {$return['requestid']}";
 	doQuery($query);
+	if($userdata != '') {
+		if(get_magic_quotes_gpc())
+			$userdata = stripslashes($userdata);
+		$esc_userdata = mysql_real_escape_string($userdata);
+		$query = "INSERT INTO variable "
+		       .        "(name, "
+		       .        "serialization, "
+		       .        "value, "
+		       .        "setby, "
+		       .        "timestamp) "
+		       . "SELECT CONCAT('userdata|', id), "
+		       .        "'none', "
+		       .        "'$esc_userdata', "
+		       .        "'webcode', "
+		       .        "NOW() "
+		       . "FROM reservation "
+		       . "WHERE requestid = {$return['requestid']}";
+		doQuery($query);
+	}
 	$fields = array('requestid');
 	$values = array($return['requestid']);
 	if($name != '') {
