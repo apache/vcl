@@ -657,7 +657,7 @@ sub _initialize : Init {
 	# Get the computer info if the computer_identifier argument was specified and add it to this object
 	if ($computer_identifier) {
 		notify($ERRORS{'DEBUG'}, 0, "computer identifier argument was specified, retrieving data for computer: $computer_identifier");
-		my $computer_info = get_computer_info($computer_identifier);
+		my $computer_info = get_computer_info($computer_identifier, 1);
 		if (!$computer_info) {
 			notify($ERRORS{'WARNING'}, 0, "DataStructure object could not be initialized, failed to retrieve data for computer: $computer_identifier");
 			
@@ -672,7 +672,7 @@ sub _initialize : Init {
 	# Get the VM host info if the vmhost_id argument was specified and add it to this object
 	if ($vmhost_id) {
 		notify($ERRORS{'DEBUG'}, 0, "VM host identifier argument was specified, retrieving data for VM host: $vmhost_id");
-		my $vmhost_info = get_vmhost_info($vmhost_id);
+		my $vmhost_info = get_vmhost_info($vmhost_id, 1);
 		if (!$vmhost_info) {
 			notify($ERRORS{'WARNING'}, 0, "DataStructure object could not be initialized, failed to retrieve data for VM host: $vmhost_id");
 			

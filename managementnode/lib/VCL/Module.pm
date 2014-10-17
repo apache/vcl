@@ -198,7 +198,16 @@ sub new {
 	# Create a management node OS object
 	# Check to make sure the object currently being created is not a MN OS object to avoid endless loop
 	if (!$self->isa('VCL::Module::OS::Linux::ManagementNode')) {
-		if (my $mn_os = $self->create_mn_os_object()) {
+		my $mn_os;
+		# Check if the mn_os argument was provided
+		if ($args->{mn_os}) {
+			$mn_os = $args->{mn_os};
+		}
+		else {
+			$mn_os = $self->create_mn_os_object()
+		}
+		
+		if ($mn_os) {
 			$self->set_mn_os($mn_os);
 			$self->data->set_mn_os($mn_os);
 		}
@@ -432,26 +441,6 @@ sub create_os_object {
 =cut
 
 sub create_mn_os_object {
-	my $self = shift;
-	unless (ref($self) && $self->isa('VCL::Module')) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return;
-	}
-	
-	# Check if an OS object has already been stored in the calling object
-	if (my $mn_os = $self->mn_os(0)) {
-		return $mn_os;
-	}
-	
-	# Make sure calling object isn't an OS module to avoid an infinite loop
-	if ($self->isa('VCL::Module::OS::Linux::ManagementNode')) {
-		notify($ERRORS{'WARNING'}, 0, "this subroutine cannot be called from an existing management node OS module: " . ref($self));
-		return;
-	}
-	
-	my $request_data = $self->data->get_request_data();
-	my $reservation_id = $self->data->get_reservation_id();
-	
 	# Create a DataStructure object containing computer data for the management node
 	my $mn_data;
 	eval {
@@ -627,7 +616,7 @@ sub create_provisioning_object {
 		return 0;
 	}
 	notify($ERRORS{'DEBUG'}, 0, "$provisioning_perl_package module loaded");
-
+	
 	# Attempt to provisioner the object, pass it the mn_os object if it has already been created
 	my $constructor_arguments = {};
 	$constructor_arguments->{data_structure} = $self->data();
@@ -1276,7 +1265,7 @@ sub get_semaphore {
 	}
 	
 	# Attempt to create a new semaphore object
-	my $semaphore = VCL::Module::Semaphore->new({'data_structure' => $self->data});
+	my $semaphore = VCL::Module::Semaphore->new({'data_structure' => $self->data, mn_os => $self->mn_os});
 	if (!$semaphore) {
 		notify($ERRORS{'WARNING'}, 0, "failed to create semaphore object");
 		return;
@@ -1293,6 +1282,40 @@ sub get_semaphore {
 		notify($ERRORS{'DEBUG'}, 0, "failed to create '$semaphore_id' Semaphore object");
 		return;
 	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 does_semaphore_exist
+
+ Parameters  : $semaphore_id
+ Returns     : boolean
+ Description : Determines if an open Semaphore exists on this management node
+               matching the $semaphore_id.
+
+=cut
+
+sub does_semaphore_exist {
+	my $self = shift;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my ($semaphore_id) = @_;
+	if (!$semaphore_id) {
+		notify($ERRORS{'WARNING'}, 0, "semaphore ID argument was not supplied");
+		return;
+	}
+	
+	# Attempt to create a new semaphore object
+	my $semaphore = VCL::Module::Semaphore->new({'data_structure' => $self->data, mn_os => $self->mn_os});
+	if (!$semaphore) {
+		notify($ERRORS{'WARNING'}, 0, "failed to create semaphore object");
+		return;
+	}
+	
+	return $semaphore->semaphore_exists($semaphore_id);
 }
 
 #/////////////////////////////////////////////////////////////////////////////

@@ -194,8 +194,61 @@ sub open_lockfile {
 		return;
 	}
 	
+	# Determine which process is locking the file
+	my @locking_pids = $self->get_lockfile_owning_pid($file_path);
+	if (@locking_pids) {
+		if (grep { $_ eq $PID } @locking_pids) {
+			# The current process already has an exclusive lock on the file
+			# This could happen if open_lockfile is called more than once for the same file in the same scope
+			notify($ERRORS{'WARNING'}, 0, "file is already locked by this process: @locking_pids");
+			return;
+		}
+		else {
+			# Attempt to retrieve the names of the locking process(es)
+			my ($ps_exit_status, $ps_output) = run_command("ps -o pid=,cmd= @locking_pids", 1);
+			if (defined($ps_output) && !grep(/(ps:)/, @$ps_output)) {
+				notify($ERRORS{'DEBUG'}, 0, "file is locked by another process: @locking_pids\n" . join("\n", @$ps_output));
+			}
+			else {
+				notify($ERRORS{'DEBUG'}, 0, "file is locked by another process: @locking_pids");
+			}
+			return;
+		}
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "unable to determine PIDs of processes which prevented an exclusive lock to be obtained on $file_path, lock may have been released before lsof command was executed");
+	}
+	
+	return;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_lockfile_owning_pid
+
+ Parameters  : $file_path
+ Returns     : integer
+ Description : Runs lsof to determine if a process has an exclusive lock on the
+               lockfile.
+
+=cut
+
+sub get_lockfile_owning_pid {
+	my $self = shift;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Get the file path argument
+	my ($file_path) = @_;
+	if (!$file_path) {
+		notify($ERRORS{'WARNING'}, 0, "file path argument was not supplied");
+		return;
+	}
+	
 	# Run lsof to determine which process is locking the file
-	my ($exit_status, $output) = run_command("/usr/sbin/lsof -Fp $file_path", 1);
+	my ($exit_status, $output) = $self->mn_os->execute("/usr/sbin/lsof -Fp $file_path", 0);
 	if (!defined($output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to run losf command to determine which process is locking the file: $file_path");
 		return;
@@ -207,31 +260,19 @@ sub open_lockfile {
 	
 	# Parse the lsof output to determine the PID
 	my @locking_pids = map { /^p(\d+)/ } @$output;
-	if (@locking_pids && grep { $_ eq $PID } @locking_pids) {
-		# The current process already has an exclusive lock on the file
-		# This could happen if open_lockfile is called more than once for the same file in the same scope
-		notify($ERRORS{'WARNING'}, 0, "file is already locked by this process: @locking_pids");
-		return;
-	}
-	elsif (@locking_pids) {
-		# Attempt to retrieve the names of the locking process(es)
-		my ($ps_exit_status, $ps_output) = run_command("ps -o pid=,cmd= @locking_pids", 1);
-		if (defined($ps_output) && !grep(/(ps:)/, @$ps_output)) {
-			notify($ERRORS{'DEBUG'}, 0, "file is locked by another process: @locking_pids\n" . join("\n", @$ps_output));
-		}
-		else {
-			notify($ERRORS{'DEBUG'}, 0, "file is locked by another process: @locking_pids");
-		}
-		return;
+	my $locking_pid_count = scalar(@locking_pids);
+	if (@locking_pids) {
+		notify($ERRORS{'DEBUG'}, 0, "$file_path is locked by process" . ($locking_pid_count == 1 ? '' : 'es') . ": @locking_pids");
+		return @locking_pids;
 	}
 	elsif (grep(/\w/, @$output)) {
-		notify($ERRORS{'WARNING'}, 0, "unable to determine PIDs from lsof output\n:" . join("\n", @$output));
+		notify($ERRORS{'WARNING'}, 0, "failed to determine owning PID of lockfile: $file_path, unable to determine PIDs from lsof output\n:" . join("\n", @$output));
+		return;
 	}
 	else {
-		notify($ERRORS{'DEBUG'}, 0, "lsof did not return any PIDs of processes which prevented an exclusive lock to be obtained, lock may have been released before lsof command was executed");
+		notify($ERRORS{'DEBUG'}, 0, "file is not locked of lockfile: $file_path");
+		return ();
 	}
-	
-	return 0;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -290,6 +331,83 @@ sub release_lockfile {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 get_lockfile_paths
+
+ Parameters  : none
+ Returns     : array
+ Description : Returns the paths to all lockfiles.
+
+=cut
+
+sub get_lockfile_paths {
+	my $self = shift;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my @lockfile_paths = $self->mn_os->find_files($LOCKFILE_DIRECTORY_PATH, "*.$LOCKFILE_EXTENSION");
+	
+	my $lockfile_path_count = scalar(@lockfile_paths);
+	notify($ERRORS{'DEBUG'}, 0, "retreived $lockfile_path_count lockfile path" . ($lockfile_path_count == 1 ? '' : 's') . ":\n" . join("\n", @lockfile_paths));
+	return @lockfile_paths;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 semaphore_exists
+
+ Parameters  : $semaphore_id
+ Returns     : boolean
+ Description : Determines if an open Semaphore exists on this management node
+               matching the $semaphore_id.
+
+=cut
+
+sub semaphore_exists {
+	my $self = shift;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my ($semaphore_id) = @_;
+	if (!$semaphore_id) {
+		notify($ERRORS{'WARNING'}, 0, "semaphore ID argument was not supplied");
+		return;
+	}
+	
+	my @lockfile_paths = $self->get_lockfile_paths();
+	if (!@lockfile_paths) {
+		notify($ERRORS{'DEBUG'}, 0, "did not find any lockfiles on this management node");
+		return ();
+	}
+	
+	for my $lockfile_path (@lockfile_paths) {
+		my ($lockfile_semaphore_id) = $lockfile_path =~ /([^\/]+)\.$LOCKFILE_EXTENSION/;
+		if ($lockfile_semaphore_id ne $semaphore_id) {
+			next;
+		}
+		
+		# Check if the lockfile is actually locked by another process
+		# It may have been released or deleted
+		my @lockfile_owning_pids = $self->get_lockfile_owning_pid($lockfile_path);
+		if (@lockfile_owning_pids) {
+			notify($ERRORS{'DEBUG'}, 0, "'$semaphore_id' semaphore exists, lockfile path: $lockfile_path, owning PID: @lockfile_owning_pids");
+			return 1;
+		}
+		else {
+			notify($ERRORS{'DEBUG'}, 0, "ignoring lockfile not locked by another process: $lockfile_path");
+			next;
+		}
+	}
+	
+	notify($ERRORS{'DEBUG'}, 0, "'$semaphore_id' semaphore does not exist");
+	return 0;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 =head2 get_reservation_semaphore_ids
 
  Parameters  : $reservation_id
@@ -313,14 +431,13 @@ sub get_reservation_semaphore_ids {
 		return;
 	}
 	
-	my @lockfile_paths = $self->mn_os->find_files($LOCKFILE_DIRECTORY_PATH, "*.$LOCKFILE_EXTENSION");
+	my @lockfile_paths = $self->get_lockfile_paths();
 	if (!@lockfile_paths) {
 		notify($ERRORS{'DEBUG'}, 0, "did not find any lockfiles on this management node");
 		return ();
 	}
 	
 	my @reservation_semaphore_ids;
-	
 	for my $lockfile_path (@lockfile_paths) {
 		my ($semaphore_id) = $lockfile_path =~ /([^\/]+)\.$LOCKFILE_EXTENSION/;
 		
@@ -377,7 +494,7 @@ sub get_process_semaphore_ids {
 		return;
 	}
 	
-	my @lockfile_paths = $self->mn_os->find_files($LOCKFILE_DIRECTORY_PATH, "*.$LOCKFILE_EXTENSION");
+	my @lockfile_paths = $self->get_lockfile_paths();
 	if (!@lockfile_paths) {
 		notify($ERRORS{'DEBUG'}, 0, "did not find any lockfiles on this management node");
 		return ();

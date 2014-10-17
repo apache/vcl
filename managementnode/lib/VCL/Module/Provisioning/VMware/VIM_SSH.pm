@@ -90,7 +90,7 @@ sub initialize {
 			notify($ERRORS{'WARNING'}, 0, "required 'vmhost_os' argument was not passed");
 			return;
 		}
-	
+		
 		# 
 		if (ref $args->{vmhost_os} !~ /VCL::Module::OS/) {
 			notify($ERRORS{'CRITICAL'}, 0, "'vmhost_os' argument passed is not a reference to a VCL::Module::OS object, type: " . ref($args->{vmhost_os}));
@@ -177,12 +177,21 @@ sub _run_vim_cmd {
 	my $wait_seconds = 2;
 	
 	my $connection_reset_errors = 0;
-	
-	while ($attempt++ < $attempt_limit) {
+	my $services_restart_detected = 0;
+	ATTEMPT: while ($attempt++ < $attempt_limit) {
 		if ($attempt > 1) {
 			# Wait before making next attempt
 			notify($ERRORS{'OK'}, 0, "sleeping $wait_seconds seconds before making attempt $attempt/$attempt_limit");
 			sleep $wait_seconds;
+			
+			my $semaphore_id = "$vmhost_computer_name-vmware_services_restart";
+			if ($self->does_semaphore_exist($semaphore_id)) {
+				$services_restart_detected = 1;
+				notify($ERRORS{'DEBUG'}, 0, "detected another process is restarting VMware services, sleeping for 10 seconds");
+				sleep_uninterrupted(10);
+				my $wait_message = "another process is restarting VMware services on $vmhost_computer_name";
+				$self->code_loop_timeout(sub{!$self->does_semaphore_exist(@_)}, [$semaphore_id], $wait_message, 140, 5);
+			}
 		}
 		
 		# The following error is somewhat common if several processes are adding/removing VMs at the same time:
@@ -212,11 +221,36 @@ sub _run_vim_cmd {
 			$connection_reset_errors++;
 			notify($ERRORS{'OK'}, 0, "attempt $attempt/$attempt_limit: connection reset while attempting to run command on VM host $vmhost_computer_name: $command, output:\n" . join("\n", @$output));
 			
-			# If 3 connection reset errors occured, attempt to run services.sh restart
-			if ($connection_reset_errors == 3) {
-				notify($ERRORS{'CRITICAL'}, 0, "calling 'services.sh restart', encountered $connection_reset_errors connection reset on VM host $vmhost_computer_name, output:\n" . join("\n", @$output));
-				$self->_services_restart();
+			# If 2 connection reset errors occured, attempt to run services.sh restart
+			if ($connection_reset_errors == 2) {
+				if ($services_restart_detected) {
+					notify($ERRORS{'WARNING'}, 0, "encountered $connection_reset_errors connection reset errors on VM host $vmhost_computer_name, not calling 'services.sh restart', another process already attempted it");
+				}
+				else {
+					notify($ERRORS{'OK'}, 0, "calling 'services.sh restart', encountered $connection_reset_errors connection reset errors on VM host $vmhost_computer_name");
+					$self->_services_restart();
+					next ATTEMPT;
+				}
 			}
+			elsif ($connection_reset_errors > 2) {
+				notify($ERRORS{'WARNING'}, 0, "encountered $connection_reset_errors connection reset errors on VM host $vmhost_computer_name");
+			}
+			else {
+				next ATTEMPT;
+			}
+			
+			# Problem probably won't correct itself
+			# If request state is 'inuse', set the reservation.lastcheck value to 20 minutes before request.end
+			# This avoids 'inuse' processes from being created over and over again which will fail
+			my $request_state_name = $self->data->get_request_state_name();
+			#if ($request_state_name eq 'inuse') {
+				my $reservation_id = $self->data->get_reservation_id();
+				my $request_end_time_epoch = convert_to_epoch_seconds($self->data->get_request_end_time());
+				my $current_time_epoch = time;
+				my $reservation_lastcheck_epoch = ($request_end_time_epoch-(20*60));
+				set_reservation_lastcheck($reservation_id, $reservation_lastcheck_epoch);
+			#}
+			return;
 		}
 		else {
 			# VIM command command was executed
@@ -279,9 +313,8 @@ sub _services_restart {
 	}
 	
 	my $services_command = "services.sh restart";
-	
 	notify($ERRORS{'DEBUG'}, 0, "restarting VMware services on $vmhost_computer_name");
-	my ($services_exit_status, $services_output) = $self->vmhost_os->execute($services_command, 1, 120);
+	my ($services_exit_status, $services_output) = $self->vmhost_os->execute($services_command, 0, 120);
 	if (!defined($services_output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to run command on VM host $vmhost_computer_name: $services_command");
 		return;
@@ -289,7 +322,6 @@ sub _services_restart {
 	else {
 		notify($ERRORS{'OK'}, 0, "executed command to restart VMware services on $vmhost_computer_name, command: '$services_command', output:\n" . join("\n", @$services_output));
 	}
-	
 	return 1;
 }
 
@@ -337,60 +369,73 @@ sub _check_service_pid {
 		($running_pid) = "@$ps_output" =~ /(\d+)/g;
 		if (!$running_pid) {
 			notify($ERRORS{'DEBUG'}, 0, "parent $process_name PID is not running");
-			return;
 		}
 		elsif ($running_pid > 1) {
 			notify($ERRORS{'DEBUG'}, 0, "retrieved parent $process_name PID: $running_pid");
 		}
 		else {
 			notify($ERRORS{'WARNING'}, 0, "parent $process_name PID not valid: $running_pid, command: '$ps_command', output:\n" . join("\n", @$ps_output));
-			return;
+			$running_pid = '';
 		}
 	}
 	
-	# Retrieve the PID stored in the PID file
-	my $file_pid;
-	my @pid_file_contents = $self->vmhost_os->get_file_contents($pid_file_path);
-	if (@pid_file_contents) {
-		($file_pid) = "@pid_file_contents" =~ /(\d+)/g;
-		if ($file_pid) {
-			notify($ERRORS{'DEBUG'}, 0, "retrieved PID stored in $pid_file_path: $file_pid");
-		}
-		else {
-			notify($ERRORS{'WARNING'}, 0, "unable to determine PID stored in $pid_file_path, contents:\n" . join("\n", @pid_file_contents));
-		}
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to retrieve contents of $pid_file_path");
-	}
-	
-	# Check if it is necessary to update the PID file
-	if ($file_pid) {
-		if ($file_pid eq $running_pid) {
-			notify($ERRORS{'OK'}, 0, "PID in $pid_file_path ($file_pid) matches PID of parent $process_name process ($running_pid), update not necessary");
+	# Check if the .pid file exists
+	my $pid_file_exists = $self->vmhost_os->file_exists($pid_file_path);
+	if (!$running_pid) {
+		if ($pid_file_exists) {
+			notify($ERRORS{'DEBUG'}, 0, "running $process_name process was not detected but PID file exists: $pid_file_path, deleting file");
+			if ($self->vmhost_os->delete_file($pid_file_path)) {
+				notify($ERRORS{'DEBUG'}, 0, "deleted file on $vmhost_computer_name: $pid_file_path");
+			}
+			else {
+				notify($ERRORS{'WARNING'}, 0, "failed to delete file on $vmhost_computer_name: $pid_file_path");
+			}
 			return 1;
 		}
 		else {
-			notify($ERRORS{'OK'}, 0, "PID in $pid_file_path ($file_pid) does not match PID of parent $process_name process ($running_pid), updating $pid_file_path to contain $running_pid");
+			notify($ERRORS{'DEBUG'}, 0, "running $process_name process was not detected and PID file does not exist: $pid_file_path");
+			return 1;
 		}
 	}
 	else {
-		notify($ERRORS{'OK'}, 0, "PID in $pid_file_path could not be determined, updating $pid_file_path to contain $running_pid");
-	}
-	
-	# Update the PID file with the correct PID
-	my $echo_command = "echo -n $running_pid > $pid_file_path";
-	my ($echo_exit_status, $echo_output) = $self->vmhost_os->execute($echo_command);
-	if (!defined($echo_output)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to run command to update $pid_file_path on $vmhost_computer_name");
-		return;
-	}
-	elsif (grep(/(ash:|echo:)/, @$echo_output)) {
-		notify($ERRORS{'WARNING'}, 0, "error occurred updating $pid_file_path on $vmhost_computer_name, command: '$echo_command', output:\n" . joini("\n", @$echo_output));
-		return;
-	}
-	else {
-		notify($ERRORS{'OK'}, 0, "updated $pid_file_path on $vmhost_computer_name to contain the correct PID: $running_pid");
+		if ($pid_file_exists) {
+			# Retrieve the PID stored in the PID file
+			my @pid_file_contents = $self->vmhost_os->get_file_contents($pid_file_path);
+			if (@pid_file_contents) {
+				my ($file_pid) = "@pid_file_contents" =~ /(\d+)/g;
+				if ($file_pid) {
+					notify($ERRORS{'DEBUG'}, 0, "retrieved PID stored in $pid_file_path: $file_pid");
+					if ($file_pid eq $running_pid) {
+						notify($ERRORS{'OK'}, 0, "PID in $pid_file_path ($file_pid) matches PID of parent $process_name process ($running_pid), update not necessary");
+						return 1;
+					}
+					else {
+						notify($ERRORS{'OK'}, 0, "PID in $pid_file_path ($file_pid) does not match PID of parent $process_name process ($running_pid), updating $pid_file_path to contain $running_pid");
+					}
+				}
+				else {
+					notify($ERRORS{'WARNING'}, 0, "unable to determine PID stored in $pid_file_path, contents:\n" . join("\n", @pid_file_contents));
+				}
+			}
+			else {
+				notify($ERRORS{'WARNING'}, 0, "failed to retrieve contents of $pid_file_path");
+			}
+		}
+		
+		# Update the PID file with the correct PID
+		my $echo_command = "echo -n $running_pid > $pid_file_path";
+		my ($echo_exit_status, $echo_output) = $self->vmhost_os->execute($echo_command);
+		if (!defined($echo_output)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to run command to update $pid_file_path on $vmhost_computer_name");
+			return;
+		}
+		elsif (grep(/(ash:|echo:)/, @$echo_output)) {
+			notify($ERRORS{'WARNING'}, 0, "error occurred updating $pid_file_path on $vmhost_computer_name, command: '$echo_command', output:\n" . joini("\n", @$echo_output));
+			return;
+		}
+		else {
+			notify($ERRORS{'OK'}, 0, "updated $pid_file_path on $vmhost_computer_name to contain the correct PID: $running_pid");
+		}
 	}
 	
 	return 1;

@@ -206,6 +206,7 @@ our @EXPORT = qw(
 	set_hash_process_id
 	set_logfile_path
 	set_managementnode_state
+	set_reservation_lastcheck
 	set_variable
 	setnextimage
 	setup_confirm
@@ -5265,6 +5266,7 @@ SET
 reservation.lastcheck = '$lastcheck'
 WHERE
 reservation.id IN ($reservation_id_string)
+AND reservation.lastcheck <= NOW()
 EOF
 
 	# Call the database execute subroutine
@@ -5277,6 +5279,63 @@ EOF
 		return;
 	}
 } ## end sub update_reservation_lastcheck
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 set_reservation_lastcheck
+
+ Parameters  : $reservation_id, $lastcheck
+ Returns     : string
+ Description : Updates reservation.lastcheck to the time specified.
+
+=cut
+
+sub set_reservation_lastcheck {
+	my ($reservation_id, $reservation_lastcheck) = @_;
+	
+	# Check the passed parameter
+	if (!$reservation_id || !$reservation_lastcheck) {
+		notify($ERRORS{'WARNING'}, 0, "reservation ID and last check datetime was not specified");
+		return;
+	}
+	
+	if ($reservation_lastcheck !~ /:/) {
+		$reservation_lastcheck = convert_to_datetime($reservation_lastcheck);
+	}
+	my $reservation_lastcheck_epoch = convert_to_epoch_seconds($reservation_lastcheck);
+	
+	# Only allow the lastcheck time to be set in the future
+	my $current_time_epoch = time;
+	my $duration_seconds = ($reservation_lastcheck_epoch-$current_time_epoch);
+	if ($duration_seconds < 0) {
+		notify($ERRORS{'WARNING'}, 0, "reservation.lastcheck not set to $reservation_lastcheck for reservation ID $reservation_id, time is in the past");
+		return;
+	}
+	elsif ($duration_seconds < (20*60)) {
+		notify($ERRORS{'WARNING'}, 0, "reservation.lastcheck not set to $reservation_lastcheck for reservation ID $reservation_id, time is too close to the current time");
+		return;
+	}
+	
+	# Construct the update statement
+	my $update_statement = <<EOF;
+UPDATE
+reservation
+SET
+reservation.lastcheck = '$reservation_lastcheck'
+WHERE
+reservation.id = '$reservation_id'
+EOF
+
+	# Call the database execute subroutine
+	if (database_execute($update_statement)) {
+		notify($ERRORS{'DEBUG'}, 0, "reservation.lastcheck set to '$reservation_lastcheck' for reservation ID $reservation_id");
+		return 1;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to set reservation.lastcheck to '$reservation_lastcheck' for reservation ID $reservation_id");
+		return;
+	}
+}
 
 #/////////////////////////////////////////////////////////////////////////////
 
