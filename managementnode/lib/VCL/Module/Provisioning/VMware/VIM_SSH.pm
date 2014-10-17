@@ -178,7 +178,6 @@ sub _run_vim_cmd {
 	my $wait_seconds = 2;
 	
 	my $connection_reset_errors = 0;
-	my $services_restart_detected = 0;
 	ATTEMPT: while ($attempt++ < $attempt_limit) {
 		if ($attempt > 1) {
 			# Wait before making next attempt
@@ -187,7 +186,7 @@ sub _run_vim_cmd {
 			
 			my $semaphore_id = "$vmhost_computer_name-vmware_services_restart";
 			if ($self->does_semaphore_exist($semaphore_id)) {
-				$services_restart_detected = 1;
+				$self->{services_restarted} = 1;
 				notify($ERRORS{'DEBUG'}, 0, "detected another process is restarting VMware services, sleeping for 10 seconds");
 				sleep_uninterrupted(10);
 				my $wait_message = "another process is restarting VMware services on $vmhost_computer_name";
@@ -224,12 +223,13 @@ sub _run_vim_cmd {
 			
 			# If 2 connection reset errors occured, attempt to run services.sh restart
 			if ($connection_reset_errors == 2) {
-				if ($services_restart_detected) {
-					notify($ERRORS{'WARNING'}, 0, "encountered $connection_reset_errors connection reset errors on VM host $vmhost_computer_name, not calling 'services.sh restart', another process already attempted it");
+				if ($self->{services_restarted}) {
+					notify($ERRORS{'WARNING'}, 0, "encountered $connection_reset_errors connection reset errors on VM host $vmhost_computer_name, not calling 'services.sh restart', it was already attempted");
 				}
 				else {
 					notify($ERRORS{'OK'}, 0, "calling 'services.sh restart', encountered $connection_reset_errors connection reset errors on VM host $vmhost_computer_name");
 					$self->_services_restart();
+					$self->{services_restarted} = 1;
 					next ATTEMPT;
 				}
 			}
@@ -367,15 +367,11 @@ sub _check_service_pid {
 	}
 	else {
 		($running_pid) = "@$ps_output" =~ /(\d+)/g;
-		if (!$running_pid) {
-			notify($ERRORS{'DEBUG'}, 0, "parent $process_name PID is not running");
-		}
-		elsif ($running_pid > 1) {
+		if ($running_pid && $running_pid > 1) {
 			notify($ERRORS{'DEBUG'}, 0, "retrieved parent $process_name PID: $running_pid");
 		}
 		else {
-			notify($ERRORS{'WARNING'}, 0, "parent $process_name PID not valid: $running_pid, command: '$ps_command', output:\n" . join("\n", @$ps_output));
-			$running_pid = '';
+			notify($ERRORS{'DEBUG'}, 0, "parent $process_name process is not running");
 		}
 	}
 	
