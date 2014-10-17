@@ -4203,6 +4203,29 @@ sub is_multiextent_disabled {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 DESTROY
+
+ Parameters  : none
+ Returns     : nothing
+ Description : Calls Util::disconnect to attempt to exit gracefully.
+
+=cut
+
+sub DESTROY {
+	local $SIG{__DIE__} = sub{};
+	eval {
+		Util::disconnect();
+	};
+	if ($EVAL_ERROR) {
+		notify($ERRORS{'WARNING'}, 0, "error generated calling Util::disconnect:\n$EVAL_ERROR");
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "called Util::disconnect");
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 1;
 __END__
 

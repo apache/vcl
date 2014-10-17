@@ -168,6 +168,7 @@ sub _run_vim_cmd {
 	
 	my $timeout_seconds = shift || 60;
 	
+	my $request_state_name = $self->data->get_request_state_name();
 	my $vmhost_computer_name = $self->vmhost_os->data->get_computer_short_name();
 	
 	my $command = "$self->{vim_cmd} $vim_arguments";
@@ -242,14 +243,13 @@ sub _run_vim_cmd {
 			# Problem probably won't correct itself
 			# If request state is 'inuse', set the reservation.lastcheck value to 20 minutes before request.end
 			# This avoids 'inuse' processes from being created over and over again which will fail
-			my $request_state_name = $self->data->get_request_state_name();
-			#if ($request_state_name eq 'inuse') {
+			if ($request_state_name eq 'inuse') {
 				my $reservation_id = $self->data->get_reservation_id();
 				my $request_end_time_epoch = convert_to_epoch_seconds($self->data->get_request_end_time());
 				my $current_time_epoch = time;
 				my $reservation_lastcheck_epoch = ($request_end_time_epoch-(20*60));
 				set_reservation_lastcheck($reservation_id, $reservation_lastcheck_epoch);
-			#}
+			}
 			return;
 		}
 		else {

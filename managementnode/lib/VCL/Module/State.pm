@@ -260,7 +260,9 @@ sub reservation_failed {
 	my $computer_state_name         = $self->data->get_computer_state_name();
 	
 	# Check if the request has been deleted
-	if (is_request_deleted($request_id)) {
+	# Ignore if this process's state is deleted
+	# If a 'deleted' request fails during initialization and before the request state was changed to 'pending', vcld will try to process over and over again
+	if ($request_state_name ne 'deleted' && is_request_deleted($request_id)) {
 		notify($ERRORS{'OK'}, 0, "request has been deleted, setting computer state to available and exiting");
 		
 		# Update the computer state to available
@@ -293,6 +295,10 @@ sub reservation_failed {
 	if ($request_state_name eq 'image') {
 		$new_request_state_name = 'maintenance';
 		$new_computer_state_name = 'maintenance';
+	}
+	elsif ($request_state_name eq 'deleted') {
+		$new_request_state_name = 'complete';
+		$new_computer_state_name = 'failed';
 	}
 	elsif ($computer_input_state) {
 	   $new_request_state_name = 'failed';
@@ -627,13 +633,13 @@ sub state_exit {
 		# If parent of a cluster request, wait for child processes to exit before switching the state
 		if ($reservation_count > 1) {
 			$self->wait_for_child_reservations_to_exit();
-		}
-		
-		# Check if any reservations failed
-		if (!$request_state_name_new || $request_state_name_new ne 'failed') {
-			if ($self->does_loadstate_exist_any_reservation('failed')) {
-				notify($ERRORS{'OK'}, 0, "another reservation failed, request state will be updated to 'failed'");
-				$request_state_name_new = 'failed';
+			
+			# Check if any reservations failed
+			if (!$request_state_name_new || $request_state_name_new ne 'failed') {
+				if ($self->does_loadstate_exist_any_reservation('failed')) {
+					notify($ERRORS{'OK'}, 0, "another reservation failed, request state will be updated to 'failed'");
+					$request_state_name_new = 'failed';
+				}
 			}
 		}
 		
