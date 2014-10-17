@@ -1858,20 +1858,22 @@ function XMLRPCgetUserGroupPrivs($name, $affiliation, $nodeid) {
 	if($rc['status'] == 'error')
 		return $rc;
 
+	$groupid = $rc['id'];
+
 	$privileges = array();
 	$nodePrivileges = getNodePrivileges($nodeid, 'usergroups');
 	$cascadedNodePrivileges = getNodeCascadePrivileges($nodeid, 'usergroups'); 
 	$cngp = $cascadedNodePrivileges['usergroups'];
 	$ngp = $nodePrivileges['usergroups'];
-	if(array_key_exists($name, $cngp)) {
-		foreach($cngp[$name]['privs'] as $p) {
-			if(! array_key_exists($name, $ngp) ||
-			   ! in_array("block", $ngp[$name]['privs']))
+	if(array_key_exists($groupid, $cngp)) {
+		foreach($cngp[$groupid]['privs'] as $p) {
+			if(! array_key_exists($groupid, $ngp) ||
+			   ! in_array("block", $ngp[$groupid]['privs']))
 				array_push($privileges, $p);
 		}
 	}
-	if(array_key_exists($name, $ngp)) {
-		foreach($ngp[$name]['privs'] as $p) {
+	if(array_key_exists($groupid, $ngp)) {
+		foreach($ngp[$groupid]['privs'] as $p) {
 			if($p != "block")
 				array_push($privileges, $p);
 		}
@@ -1925,7 +1927,6 @@ function XMLRPCaddUserGroupPriv($name, $affiliation, $nodeid, $permissions) {
 		return $rc;
 
 	$groupid = $rc['id'];
-	#$name = "$name@$affiliation";
 	$perms = explode(':', $permissions);
 	$usertypes = getTypes('users');
 	array_push($usertypes["users"], "block");
@@ -1942,8 +1943,8 @@ function XMLRPCaddUserGroupPriv($name, $affiliation, $nodeid, $permissions) {
 	$cnp = getNodeCascadePrivileges($nodeid, "usergroups");
 	$np = getNodePrivileges($nodeid, "usergroups", $cnp);
 
-	if(array_key_exists($name, $np['usergroups'])) {
-		$diff = array_diff($perms, $np['usergroups'][$name]['privs']);
+	if(array_key_exists($groupid, $np['usergroups'])) {
+		$diff = array_diff($perms, $np['usergroups'][$groupid]['privs']);
 		if(empty($diff))
 			return array('status' => 'success');
 	}
@@ -1999,7 +2000,6 @@ function XMLRPCremoveUserGroupPriv($name, $affiliation, $nodeid, $permissions) {
 		return $rc;
 
 	$groupid = $rc['id'];
-	#$name = "$name@$affiliation";
 	$perms = explode(':', $permissions);
 	$usertypes = getTypes('users');
 	array_push($usertypes["users"], "block");
@@ -2015,10 +2015,10 @@ function XMLRPCremoveUserGroupPriv($name, $affiliation, $nodeid, $permissions) {
 	$cnp = getNodeCascadePrivileges($nodeid, "usergroups");
 	$np = getNodePrivileges($nodeid, "usergroups");
 
-	if(array_key_exists($name, $cnp['usergroups']) &&
-	   (! array_key_exists($name, $np['usergroups']) ||
-	   ! in_array('block', $np['usergroups'][$name]))) {
-		$intersect = array_intersect($cnp['usergroups'][$name]['privs'], $perms);
+	if(array_key_exists($groupid, $cnp['usergroups']) &&
+	   (! array_key_exists($groupid, $np['usergroups']) ||
+	   ! in_array('block', $np['usergroups'][$groupid]['privs']))) {
+		$intersect = array_intersect($cnp['usergroups'][$groupid]['privs'], $perms);
 		if(count($intersect)) {
 			return array('status' => 'error',
 			             'errorcode' => 80,
@@ -2026,7 +2026,7 @@ function XMLRPCremoveUserGroupPriv($name, $affiliation, $nodeid, $permissions) {
 		}
 	}
 
-	$diff = array_diff($np['usergroups'][$name]['privs'], $perms);
+	$diff = array_diff($np['usergroups'][$groupid]['privs'], $perms);
 	if(count($diff) == 1 && in_array("cascade", $diff))
 		array_push($perms, "cascade");
 

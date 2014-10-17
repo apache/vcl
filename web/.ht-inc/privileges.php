@@ -212,11 +212,19 @@ function viewNodes() {
 			print "    <TH>$img</TH>\n";
 		}
 		print "  </TR>\n";
-		$groups = array_unique(array_merge(array_keys($privs["usergroups"]), 
-		                      array_keys($cascadePrivs["usergroups"])));
-		sort($groups);
-		foreach($groups as $group) {
-			printUserPrivRow($group, $i, $privs["usergroups"], $usertypes["users"],
+		$groupids = array_unique(array_merge(array_keys($privs["usergroups"]), 
+		                         array_keys($cascadePrivs["usergroups"])));
+		$allids = implode(',', $groupids);
+		$query = "SELECT id "
+		       . "FROM usergroup "
+		       . "WHERE id IN ($allids) "
+		       . "ORDER BY name";
+		$qh = doQuery($query);
+		$orderedgroups = array();
+		while($row = mysql_fetch_assoc($qh))
+			$orderedgroups[] = $row['id'];
+		foreach($orderedgroups as $id) {
+			printUserPrivRow($id, $i, $privs["usergroups"], $usertypes["users"],
 			                $cascadePrivs["usergroups"], 'group', ! $hasUserGrant);
 			$i++;
 		}
@@ -833,11 +841,19 @@ function selectNode() {
 			$text .= "    <TH>$img</TH>";
 		}
 		$text .= "  </TR>";
-		$groups = array_unique(array_merge(array_keys($privs["usergroups"]), 
-		                      array_keys($cascadePrivs["usergroups"])));
-		sort($groups);
-		foreach($groups as $group) {
-			$tmpArr = getUserPrivRowHTML($group, $i, $privs["usergroups"],
+		$groupids = array_unique(array_merge(array_keys($privs["usergroups"]), 
+		                         array_keys($cascadePrivs["usergroups"])));
+		$allids = implode(',', $groupids);
+		$query = "SELECT id "
+		       . "FROM usergroup "
+		       . "WHERE id IN ($allids) "
+		       . "ORDER BY name";
+		$qh = doQuery($query);
+		$orderedgroups = array();
+		while($row = mysql_fetch_assoc($qh))
+			$orderedgroups[] = $row['id'];
+		foreach($orderedgroups as $id) {
+			$tmpArr = getUserPrivRowHTML($id, $i, $privs["usergroups"],
 			                  $usertypes["users"], $cascadePrivs["usergroups"],
 			                  'group', ! $hasUserGrant);
 			$text .= $tmpArr['html'];
@@ -1432,7 +1448,8 @@ function userLookup() {
 		       .        "remoteIP, "
 		       .        "code "
 		       . "FROM loginlog "
-		       . "WHERE user = '{$userdata['unityid']}' AND "
+		       . "WHERE (user = '{$userdata['unityid']}' OR "
+		       .       "user = '{$userdata['unityid']}@{$userdata['affiliation']}') AND "
 		       .       "affiliationid = {$userdata['affiliationid']} "
 		       . "ORDER BY timestamp DESC "
 		       . "LIMIT 8";
@@ -1718,11 +1735,10 @@ function printUserPrivRow($privname, $rownum, $privs, $types,
 	$allprivs = $cascadeprivs + $privs;
 	print "  <TR>\n";
 	if($usergroup == 'group') {
-		$id = $allprivs[$privname]['id'];
-		print "    <TH><span id=\"usergrp$id\" onmouseover=getGroupMembers(";
-		print "\"$id\",\"usergrp$id\",\"ugmcont\"); onmouseout=";
-		print "getGroupMembersCancel(\"usergrp$id\");>$privname";
-		if($usergroup == 'group' && ! empty($allprivs[$privname]['affiliation']))
+		print "    <TH><span id=\"usergrp$privname\" onmouseover=getGroupMembers(";
+		print "\"$privname\",\"usergrp$privname\",\"ugmcont\"); onmouseout=";
+		print "getGroupMembersCancel(\"usergrp$privname\");>{$allprivs[$privname]['name']}";
+		if(! empty($allprivs[$privname]['affiliation']))
 			print "@{$allprivs[$privname]['affiliation']}";
 		print "</span></TH>\n";
 	}
@@ -1754,7 +1770,7 @@ function printUserPrivRow($privname, $rownum, $privs, $types,
 	}
 	elseif($usergroup == 'group') {
 		$usergroup = 2;
-		$name = "privrow[{$allprivs[$privname]['id']}:block]";
+		$name = "privrow[$privname:block]";
 	}
 	print "    <TD align=center bgcolor=gray>\n";
 	print "<INPUT type=checkbox dojoType=dijit.form.CheckBox id=ck$rownum:block ";
@@ -1773,7 +1789,7 @@ function printUserPrivRow($privname, $rownum, $privs, $types,
 	if($usergroup == 1)
 		$name = "privrow[$privname:cascade]";
 	else
-		$name = "privrow[{$allprivs[$privname]['id']}:cascade]";
+		$name = "privrow[$privname:cascade]";
 	print "    <TD align=center bgcolor=\"#008000\" id=cell$rownum:0>";
 	print "<INPUT type=checkbox dojoType=dijit.form.CheckBox id=ck$rownum:0 ";
 	print "name=\"$name\" onClick=\"privChange(this.checked, $rownum, 0, ";
@@ -1809,10 +1825,7 @@ function printUserPrivRow($privname, $rownum, $privs, $types,
 				$value = "value=single";
 			}
 		}
-		if($usergroup == 1)
-			$name = "privrow[$privname:$type]";
-		else
-			$name = "privrow[{$allprivs[$privname]['id']}:$type]";
+		$name = "privrow[$privname:$type]";
 		print "    <TD align=center id=cell$rownum:$j $bgcolor><INPUT ";
 		print "type=checkbox dojoType=dijit.form.CheckBox name=\"$name\" ";
 		print "id=ck$rownum:$j $checked $value $disabled ";
@@ -1856,11 +1869,10 @@ function getUserPrivRowHTML($privname, $rownum, $privs, $types,
 	$js = "";
 	$text .= "<TR>";
 	if($usergroup == 'group') {
-		$id = $allprivs[$privname]['id'];
-		$text .= "<TH><span id=\"usergrp$id\" onmouseover=getGroupMembers(";
-		$text .= "\"$id\",\"usergrp$id\",\"ugmcont\"); onmouseout=";
-		$text .= "getGroupMembersCancel(\"usergrp$id\");>$privname";
-		if($usergroup == 'group' && ! empty($allprivs[$privname]['affiliation']))
+		$text .= "<TH><span id=\"usergrp$privname\" onmouseover=getGroupMembers(";
+		$text .= "\"$privname\",\"usergrp$privname\",\"ugmcont\"); onmouseout=";
+		$text .= "getGroupMembersCancel(\"usergrp$privname\");>{$allprivs[$privname]['name']}";
+		if(! empty($allprivs[$privname]['affiliation']))
 			$text .= "@{$allprivs[$privname]['affiliation']}";
 		$text .= "</span></TH>";
 	}
@@ -1892,7 +1904,7 @@ function getUserPrivRowHTML($privname, $rownum, $privs, $types,
 	}
 	elseif($usergroup == 'group') {
 		$usergroup = 2;
-		$name = "privrow[{$allprivs[$privname]['id']}:block]";
+		$name = "privrow[$privname:block]";
 	}
 	$text .= "    <TD align=center bgcolor=gray><INPUT type=checkbox ";
 	$text .= "dojoType=dijit.form.CheckBox id=ck$rownum:block name=\"$name\" ";
@@ -1908,10 +1920,7 @@ function getUserPrivRowHTML($privname, $rownum, $privs, $types,
 		$checked = "checked";
 	else
 		$checked = "";
-	if($usergroup == 1)
-		$name = "privrow[$privname:cascade]";
-	else
-		$name = "privrow[{$allprivs[$privname]['id']}:cascade]";
+	$name = "privrow[$privname:cascade]";
 	$text .= "    <TD align=center bgcolor=\"#008000\" id=cell$rownum:0>";
 	$text .= "<INPUT type=checkbox dojoType=dijit.form.CheckBox id=ck$rownum:0 ";
 	$text .= "name=\"$name\" onClick=\"privChange(this.checked, $rownum, 0, ";
@@ -1947,10 +1956,7 @@ function getUserPrivRowHTML($privname, $rownum, $privs, $types,
 				$value = "value=single";
 			}
 		}
-		if($usergroup == 1)
-			$name = "privrow[$privname:$type]";
-		else
-			$name = "privrow[{$allprivs[$privname]['id']}:$type]";
+		$name = "privrow[$privname:$type]";
 		$text .= "    <TD align=center id=cell$rownum:$j $bgcolor><INPUT ";
 		$text .= "type=checkbox dojoType=dijit.form.CheckBox name=\"$name\" ";
 		$text .= "id=ck$rownum:$j $checked $value $disabled ";
@@ -2233,14 +2239,14 @@ function jsonGetResourceGroupMembers() {
 ///        )\n
 ///    [usergroups] => Array\n
 ///        (\n
-///            [group0] => Array\n
+///            [group0 id] => Array\n
 ///                (\n
 ///                    [0] => priv0\n
 ///                        ...\n
 ///                    [N] => privN\n
 ///                )\n
 ///                ...\n
-///            [groupN] => Array()\n
+///            [groupN id] => Array()\n
 ///        )\n
 ///)
 ///
@@ -2326,13 +2332,14 @@ function getNodePrivileges($node, $type="all", $privs=0) {
 		       . "ORDER BY g.name";
 		$qh = doQuery($query, 352);
 		while($row = mysql_fetch_assoc($qh)) {
-			if(array_key_exists($row["groupname"], $privs["usergroups"]))
-				array_push($privs["usergroups"][$row["groupname"]]['privs'], $row["priv"]);
+			if(array_key_exists($row["id"], $privs["usergroups"]))
+				array_push($privs["usergroups"][$row["id"]]['privs'], $row["priv"]);
 			else
-				$privs["usergroups"][$row["groupname"]] = array('id' => $row['id'],
-				                                                'affiliationid' => $row['affiliationid'],
-				                                                'affiliation' => $row['affiliation'],
-				                                                'privs' => array($row['priv']));
+				$privs["usergroups"][$row["id"]] = array('id' => $row['id'],
+				                                         'name' => $row['groupname'],
+				                                         'affiliationid' => $row['affiliationid'],
+				                                         'affiliation' => $row['affiliation'],
+				                                         'privs' => array($row['priv']));
 		}
 	}
 	$_SESSION['nodeprivileges'][$key] = $privs;
@@ -2367,14 +2374,14 @@ function getNodePrivileges($node, $type="all", $privs=0) {
 ///        )\n
 ///    [usergroups] => Array\n
 ///        (\n
-///            [group0] => Array\n
+///            [group0 id] => Array\n
 ///                (\n
 ///                    [0] => priv0\n
 ///                        ...\n
 ///                    [N] => privN\n
 ///                )\n
 ///                ...\n
-///            [groupN] => Array()\n
+///            [groupN id] => Array()\n
 ///        )\n
 ///)
 ///
@@ -2545,7 +2552,7 @@ function getNodeCascadePrivileges($node, $type="all", $privs=0) {
 		while(count($mynodelist)) {
 			$node = array_pop($mynodelist);
 			# get all groups with block set at this node and remove any cascaded privs
-			$query = "SELECT g.name AS groupname "
+			$query = "SELECT g.id "
 			       . "FROM usergroup g, "
 			       .      "userpriv up, "
 			       .      "userprivtype t "
@@ -2556,7 +2563,7 @@ function getNodeCascadePrivileges($node, $type="all", $privs=0) {
 			       .       "t.name = 'block'";
 			$qh = doQuery($query, 357);
 			while($row = mysql_fetch_assoc($qh)) {
-				unset($privs["usergroups"][$row["groupname"]]);
+				unset($privs["usergroups"][$row["id"]]);
 			}
 
 			# get all privs for groups with cascaded privs
@@ -2585,14 +2592,15 @@ function getNodeCascadePrivileges($node, $type="all", $privs=0) {
 			$qh = doQuery($query, 358);
 			while($row = mysql_fetch_assoc($qh)) {
 				// if we've already seen this group, add it to the user's privs
-				if(array_key_exists($row["groupname"], $privs["usergroups"]))
-					array_push($privs["usergroups"][$row["groupname"]]['privs'], $row["priv"]);
+				if(array_key_exists($row["id"], $privs["usergroups"]))
+					array_push($privs["usergroups"][$row["id"]]['privs'], $row["priv"]);
 				// if we haven't seen this group, create an array containing this priv
 				else 
-					$privs["usergroups"][$row["groupname"]] = array('id' => $row['id'],
-					                                                'affiliationid' => $row['affiliationid'],
-					                                                'affiliation' => $row['affiliation'],
-					                                                'privs' => array($row['priv']));
+					$privs["usergroups"][$row["id"]] = array('id' => $row['id'],
+					                                         'name' => $row['groupname'],
+					                                         'affiliationid' => $row['affiliationid'],
+					                                         'affiliation' => $row['affiliation'],
+					                                         'privs' => array($row['priv']));
 			}
 		}
 	}
@@ -2993,15 +3001,12 @@ function checkUserHasPriv($priv, $uid, $node, $privs=0, $cascadePrivs=0) {
 	foreach($_user["groups"] as $groupid => $groupname) {
 		// if group (has $priv at this node) ||
 		# (has cascaded $priv && ! have block at this node) return 1
-		if((array_key_exists($groupname, $privs["usergroups"]) &&
-		   $groupid == $privs['usergroups'][$groupname]['id'] &&
-		   in_array($priv, $privs["usergroups"][$groupname]['privs'])) ||
-		   ((array_key_exists($groupname, $cascadePrivs["usergroups"]) &&
-		   $groupid == $cascadePrivs['usergroups'][$groupname]['id'] &&
-		   in_array($priv, $cascadePrivs["usergroups"][$groupname]['privs'])) &&
-		   (! array_key_exists($groupname, $privs["usergroups"]) ||
-		   (! in_array("block", $privs["usergroups"][$groupname]['privs']) && 
-		   $groupid == $privs['usergroups'][$groupname]['id'])))) {
+		if((array_key_exists($groupid, $privs["usergroups"]) &&
+		   in_array($priv, $privs["usergroups"][$groupid]['privs'])) ||
+		   ((array_key_exists($groupid, $cascadePrivs["usergroups"]) &&
+		   in_array($priv, $cascadePrivs["usergroups"][$groupid]['privs'])) &&
+		   (! array_key_exists($groupid, $privs["usergroups"]) ||
+		   (! in_array("block", $privs["usergroups"][$groupid]['privs']))))) {
 			$_SESSION['userhaspriv'][$key] = 1;
 			return 1;
 		}
