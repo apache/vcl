@@ -259,6 +259,13 @@ sub reservation_failed {
 	my $request_laststate_name      = $self->data->get_request_laststate_name();
 	my $computer_state_name         = $self->data->get_computer_state_name();
 	
+	# Determine if the failure occurred during initialization
+	my $calling_subroutine = get_calling_subroutine();
+	my $initialize_failed = 0;
+	if ($calling_subroutine =~ /initialize/) {
+		$initialize_failed = 1;
+	}
+	
 	# Check if the request has been deleted
 	# Ignore if this process's state is deleted
 	# If a 'deleted' request fails during initialization and before the request state was changed to 'pending', vcld will try to process over and over again
@@ -282,31 +289,47 @@ sub reservation_failed {
 		exit 0;
 	} ## end if (is_request_deleted($request_id))
 	
-	# Never set inuse requests to failed, set the state back to inuse
-	if ($request_state_name eq 'inuse') {
-		$self->state_exit('inuse', 'inuse');
-	}
-	
-	# Display the message
-	notify($ERRORS{'CRITICAL'}, 0, "reservation failed on $computer_short_name: $message");
 	
 	my $new_request_state_name;
 	my $new_computer_state_name;
-	if ($request_state_name eq 'image') {
-		$new_request_state_name = 'maintenance';
-		$new_computer_state_name = 'maintenance';
-	}
-	elsif ($request_state_name eq 'deleted') {
-		$new_request_state_name = 'complete';
-		$new_computer_state_name = 'failed';
-	}
-	elsif ($computer_input_state) {
-	   $new_request_state_name = 'failed';
-	   $new_computer_state_name = $computer_input_state;
+
+	if ($request_state_name eq 'inuse') {
+		# Check if the request end time has not been reached
+		my $request_end_time_epoch = convert_to_epoch_seconds($self->data->get_request_end_time());
+		my $current_time_epoch = time;
+		if ($request_end_time_epoch <= $current_time_epoch) {
+			# If the end has been reached, set the request state to complete and the computer state to failed
+			# This was likely caused by this process failing to initialize all of its module objects
+			$new_request_state_name = 'complete';
+			$new_computer_state_name = 'failed';
+			notify($ERRORS{'CRITICAL'}, 0, ($initialize_failed ? 'process failed to initialize: ' : '') . "$message, request end time has been reached, setting request state to $new_request_state_name, computer state to $new_computer_state_name");
+		}
+		else {
+			# End time has not been reached, never set inuse requests to failed, set the state back to inuse
+			notify($ERRORS{'WARNING'}, 0, ($initialize_failed ? 'process failed to initialize: ' : '') . "$message, setting request and computer states back to 'inuse'");
+			$self->state_exit('inuse', 'inuse');
+		}
 	}
 	else {
-		$new_request_state_name = 'failed';
-		$new_computer_state_name = 'failed';
+		# Display the message
+		notify($ERRORS{'CRITICAL'}, 0, "reservation failed on $computer_short_name" . ($initialize_failed ? ', process failed to initialize' : '') . ": $message");
+		
+		if ($request_state_name eq 'image') {
+			$new_request_state_name = 'maintenance';
+			$new_computer_state_name = 'maintenance';
+		}
+		elsif ($request_state_name eq 'deleted') {
+			$new_request_state_name = 'complete';
+			$new_computer_state_name = 'failed';
+		}
+		elsif ($computer_input_state) {
+			$new_request_state_name = 'failed';
+			$new_computer_state_name = $computer_input_state;
+		}
+		else {
+			$new_request_state_name = 'failed';
+			$new_computer_state_name = 'failed';
+		}
 	}
 	
 	# Update the request state to failed
