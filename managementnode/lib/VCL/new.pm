@@ -794,6 +794,11 @@ sub computer_not_being_used {
 					# Try again in order to retrieve a current list of competing reservations
 					# The list of competing reservations may have changed while waiting
 					notify($ERRORS{'OK'}, 0, "making another attempt to retrieve the current list of competing reservations assigned to $computer_short_name");
+					
+					# It's possible for this condition to be reached on the last attempt, check one more time
+					if ($attempt == 5) {
+						$attempt_limit++;
+					}
 					next ATTEMPT;
 				}
 				else {
@@ -873,6 +878,9 @@ sub computer_not_being_used {
 		notify($ERRORS{'OK'}, 0, "$computer_short_name is available, did not find any conflicting reservations");
 		return 1;
 	}
+	
+	notify($ERRORS{'WARNING'}, 0, "computer $computer_short_name is NOT available, made $attempt_limit attempts");
+	return 0;
 }
 
 #/////////////////////////////////////////////////////////////////////////////

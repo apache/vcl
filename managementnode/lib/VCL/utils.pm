@@ -1304,7 +1304,7 @@ sub update_request_state {
 	
 	# Check the passed parameters
 	if (!defined($request_id)) {
-		notify($ERRORS{'WARNING'}, 0, "unable to update request state, request id is argument not supplied");
+		notify($ERRORS{'WARNING'}, 0, "unable to update request state, request id argument was not supplied");
 		return;
 	}
 	if (!defined($state_name)) {
@@ -1312,7 +1312,7 @@ sub update_request_state {
 		return;
 	}
 	if (!defined($laststate_name)) {
-		notify($ERRORS{'WARNING'}, 0, "unable to update request $request_id state, last state name argument not supplied");
+		notify($ERRORS{'WARNING'}, 0, "unable to update request $request_id state to $state_name, last state name argument not supplied");
 		return;
 	}
 	
@@ -1354,17 +1354,17 @@ EOF
 	if (defined($result)) {
 		my $rows_updated = (sprintf '%d', $result);
 		if ($rows_updated) {
-			notify($ERRORS{'OK'}, $LOGFILE, "request $request_id state updated to: $state_name, laststate to: $laststate_name");
+			notify($ERRORS{'OK'}, $LOGFILE, "request $request_id state updated to $state_name/$laststate_name");
 			return 1;
 		}
 		else {
 			my ($current_state_name, $current_laststate_name) = get_request_current_state_name($request_id);
 			if ($state_name eq $current_state_name && $laststate_name eq $current_laststate_name) {
-				notify($ERRORS{'OK'}, $LOGFILE, "request $request_id state already set to: $current_state_name/$current_laststate_name");
+				notify($ERRORS{'OK'}, $LOGFILE, "request $request_id state already set to $current_state_name/$current_laststate_name");
 				return 1;
 			}
 			elsif ($current_state_name eq 'deleted' || $current_laststate_name eq 'deleted') {
-				notify($ERRORS{'OK'}, $LOGFILE, "request $request_id has been deleted, state not set to: $state_name/$laststate_name, current state: $current_state_name/$current_laststate_name");
+				notify($ERRORS{'OK'}, $LOGFILE, "request $request_id has been deleted, state not set to $state_name/$laststate_name, current state: $current_state_name/$current_laststate_name");
 				return 1;
 			}
 			else {
@@ -1375,7 +1375,7 @@ EOF
 		return $rows_updated;
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "unable to update states for request $request_id");
+		notify($ERRORS{'WARNING'}, 0, "failed to update request $request_id state to $state_name/$laststate_name");
 		return;
 	}
 } ## end sub update_request_state
@@ -5107,14 +5107,14 @@ EOF
 
 	# Check to make sure 1 row was returned
 	if (!@selected_rows) {
-		notify($ERRORS{'WARNING'}, 0, "zero rows were returned from database select");
+		notify($ERRORS{'WARNING'}, 0, "unable to determine current state of request $request_id, zero rows were returned from database select");
 		return;
 	}
 	
 	my $row = $selected_rows[0];
 	my $state_name = $row->{state_name};
 	my $laststate_name = $row->{laststate_name};
-	notify($ERRORS{'DEBUG'}, 0, "retrieved current request state: $state_name/$laststate_name");
+	notify($ERRORS{'DEBUG'}, 0, "retrieved current state of request $request_id: $state_name/$laststate_name");
 	
 	if (wantarray) {
 		return ($state_name, $laststate_name);
@@ -7458,7 +7458,7 @@ sub format_hash_keys {
 
 sub get_caller_trace {
 	my ($level_limit, $brief_output) = @_;
-	$level_limit = 4 if !$level_limit;
+	$level_limit = 99 if !$level_limit;
 
 	# Add one to make the argument usage more intuitive
 	# One of the levels is the subroutine which called this
