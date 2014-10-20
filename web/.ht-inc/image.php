@@ -568,8 +568,11 @@ class Image extends Resource {
 		if($data['name'] != $olddata['prettyname'])
 			$updates[] = "prettyname = '{$data['name']}'";
 		# ownerid
-		if($ownerid != $olddata['ownerid'])
+		if($ownerid != $olddata['ownerid']) {
 			$updates[] = "ownerid = $ownerid";
+			# update newimages groups
+			$this->changeOwnerPermissions($olddata['ownerid'], $ownerid, $data['imageid']);
+		}
 		# minram
 		if($data['ram'] != $olddata['minram'])
 			$updates[] = "minram = {$data['ram']}";
@@ -1638,6 +1641,65 @@ class Image extends Resource {
 		       . "(resourceid, resourcegroupid) "
 		       . "VALUES ($resourceid, $resourcegroupid)";
 		doQuery($query, 101);
+	}
+
+	/////////////////////////////////////////////////////////////////////////////
+	///
+	/// \fn changeImagePermissions($ownerdata, $resourceid, $virtual)
+	///
+	/// \param $ownerdata - array of data returned from getUserInfo for the owner
+	/// of the image
+	/// \param $resourceid - id from resource table for the image
+	/// \param $virtual - (bool) 0 if bare metal image, 1 if virtual
+	///
+	/// \brief sets up permissions, grouping, and mapping for the owner of the
+	/// image to be able to make a reservation for it
+	///
+	/////////////////////////////////////////////////////////////////////////////
+	function changeOwnerPermissions($oldownerid, $newownerid, $imageid) {
+		# determine if currently in newimage group
+		$query = "SELECT id "
+		       . "FROM resource "
+		       . "WHERE resourcetypeid = 13 AND "
+		       .       "subid = $imageid";
+		$qh = doQuery($query);
+		if(! ($row = mysql_fetch_assoc($qh)))
+			return;
+		$resid = $row['id'];
+		$olduserdata = getUserInfo($oldownerid, 1, 1);
+		$oldgroups = "'newvmimages-{$olduserdata['login']}-$oldownerid',"
+		           . "'newimages-{$olduserdata['login']}-$oldownerid'";
+		$query = "SELECT rg.name, "
+		       .        "rg.id "
+		       . "FROM resourcegroup rg, "
+		       .      "resourcegroupmembers rgm "
+		       . "WHERE rgm.resourceid = $resid AND "
+		       .       "rgm.resourcegroupid = rg.id AND "
+		       .       "rg.name IN ($oldgroups)";
+		$qh = doQuery($query);
+		if(! ($row = mysql_fetch_assoc($qh)))
+			return;
+		$oldgroup = $row['name'];
+		$oldgroupid = $row['id'];
+		if(preg_match('/^newimages/', $oldgroup))
+			$virtual = 0;
+		else
+			$virtual = 1;
+		# call addImagePermissions for new owner
+		$newuserdata = getUserInfo($newownerid, 1, 1);
+		$this->addImagePermissions($newuserdata, $resid, $virtual);
+
+		# remove from old owner newimages group
+		$query = "DELETE FROM resourcegroupmembers "
+		       . "WHERE resourcegroupid = $oldgroupid AND "
+		       .       "resourceid = $resid";
+		doQuery($query);
+
+		# clear user resource cache for this type
+		$key = getKey(array(array($this->restype . 'Admin'), array('manageGroup'), 1, 0, 0));
+		unset($_SESSION['userresources'][$key]);
+		$key = getKey(array(array($this->restype . 'Admin'), array('manageGroup'), 1, 1, 0));
+		unset($_SESSION['userresources'][$key]);
 	}
 
 	/////////////////////////////////////////////////////////////////////////////
