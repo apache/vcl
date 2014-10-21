@@ -1140,44 +1140,168 @@ function addGroup($data) {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
-/// \fn checkForGroupUsage($groupid, $type)
+/// \fn checkForGroupUsage($groupid, $type, &$msg)
 ///
-/// \param $groupid - id of an group
+/// \param $groupid - id of a group
 /// \param $type - group type: "user" or "resource"
+/// \param $msg - (pass by ref, optional) reason why group is in use is placed
+/// in this variable
 ///
-/// \return 0 if group is not used, 1 if it is
+/// \return 0 if group is not used, 1 if it is used
 ///
-/// \brief checks for $groupid being in the priv table corresponding to $type
+/// \brief checks for $groupid being in the priv table corresponding to $type;
+/// if the group is in use, a reason why is placed in $msg
 ///
 ////////////////////////////////////////////////////////////////////////////////
-function checkForGroupUsage($groupid, $type) {
+function checkForGroupUsage($groupid, $type, &$msg='') {
+	global $user;
+	$msgs = array();
 	if($type == "user") {
-		$query = "SELECT id FROM resourcegroup WHERE ownerusergroupid = $groupid";
+		$name = getUserGroupName($groupid, 1);
+		if($name === 0)
+			return 0;
+		# resourcegroup.ownerusergroupid
+		$query = "SELECT CONCAT(rt.name, '/', rg.name) AS name "
+		       . "FROM resourcegroup rg, "
+		       .      "resourcetype rt "
+		       . "WHERE ownerusergroupid = $groupid AND "
+		       .       "rg.resourcetypeid = rt.id";
+		$usedby = array();
 		$qh = doQuery($query, 310);
-		if(mysql_num_rows($qh))
-			return 1;
-		$query = "SELECT id "
+		while($row = mysql_fetch_assoc($qh))
+			$usedby[] = $row['name'];
+		if(count($usedby)) {
+			$msgs[] = "<h3>Owning User Group for Resource Groups</h3>\n"
+			        . implode("<br>\n", $usedby) . "<br>\n";
+		}
+		# usergroup.editusergroupid
+		$query = "SELECT CONCAT(ug.name, '@', a.name) AS name "
+		       . "FROM usergroup ug, "
+		       .      "affiliation a "
+				 . "WHERE ug.editusergroupid = $groupid AND "
+				 .       "ug.id != $groupid AND "
+				 .       "ug.affiliationid = a.id";
+		$usedby = array();
+		$qh = doQuery($query, 313);
+		while($row = mysql_fetch_assoc($qh))
+			$usedby[] = $row['name'];
+		if(count($usedby)) {
+			$msgs[] = "<h3>'Editable by' Group for User Groups</h3>\n"
+			        . implode("<br>\n", $usedby) . "<br>\n";
+		}
+		# userpriv.usergroupid
+		$query = "SELECT DISTINCT privnodeid "
+		       . "FROM userpriv "
+		       . "WHERE usergroupid = $groupid";
+		$qh = doQuery($query);
+		$usedby = array();
+		while($row = mysql_fetch_assoc($qh))
+			$usedby[] = getNodePath($row['privnodeid']);
+		if(count($usedby)) {
+			$msgs[] = "<h3>Assigned at Privilege Nodes</h3>\n"
+			        . implode("<br>\n", $usedby) . "<br>\n";
+		}
+		# blockRequest.groupid
+		$query = "SELECT name "
 		       . "FROM blockRequest "
 		       . "WHERE (groupid = $groupid "
 		       .    "OR admingroupid = $groupid) "
 		       .   "AND status IN ('requested', 'accepted')";
 		$qh = doQuery($query, 311);
-		if(mysql_num_rows($qh))
+		$usedby = array();
+		while($row = mysql_fetch_assoc($qh))
+			$usedby[] = $row['name'];
+		if(count($usedby)) {
+			$msgs[] = "<h3>Assigned for Block Allocations</h3>\n"
+			        . implode("<br>\n", $usedby) . "<br>\n";
+		}
+		# serverprofile.admingroupid
+		$query = "SELECT name FROM serverprofile WHERE admingroupid = $groupid";
+		$qh = doQuery($query);
+		$usedby = array();
+		while($row = mysql_fetch_assoc($qh))
+			$usedby[] = $row['name'];
+		if(count($usedby)) {
+			$msgs[] = "<h3>Admin User Group for Server Profiles</h3>\n"
+			        . implode("<br>\n", $usedby) . "<br>\n";
+		}
+		# serverprofile.logingroupid
+		$query = "SELECT name FROM serverprofile WHERE logingroupid = $groupid";
+		$qh = doQuery($query);
+		$usedby = array();
+		while($row = mysql_fetch_assoc($qh))
+			$usedby[] = $row['name'];
+		if(count($usedby)) {
+			$msgs[] = "<h3>Access User Group for Server Profiles</h3>\n"
+			        . implode("<br>\n", $usedby) . "<br>\n";
+		}
+		# serverrequest.admingroupid
+		$query = "SELECT s.name "
+		       . "FROM serverrequest s, "
+		       .      "request rq "
+		       . "WHERE s.admingroupid = $groupid AND "
+		       .       "s.requestid = rq.id";
+		$qh = doQuery($query);
+		$usedby = array();
+		while($row = mysql_fetch_assoc($qh))
+			$usedby[] = $row['name'];
+		if(count($usedby)) {
+			$msgs[] = "<h3>Admin User Group for Server Requests</h3>\n"
+			        . implode("<br>\n", $usedby) . "<br>\n";
+		}
+		# serverrequest.logingroupid
+		$query = "SELECT s.name "
+		       . "FROM serverrequest s, "
+		       .      "request rq "
+		       . "WHERE s.logingroupid = $groupid AND "
+		       .       "s.requestid = rq.id";
+		$qh = doQuery($query);
+		$usedby = array();
+		while($row = mysql_fetch_assoc($qh))
+			$usedby[] = $row['name'];
+		if(count($usedby)) {
+			$msgs[] = "<h3>Access User Group for Server Requests</h3>\n"
+			        . implode("<br>\n", $usedby) . "<br>\n";
+		}
+		if(count($msgs)) {
+			$msg = "$name is currently in use in the following ways. It "
+			     . "cannot be deleted until it is no longer in use.<br><br>\n"
+			     . implode("<br>\n", $msgs);
 			return 1;
-		$query = "SELECT id "
-		       . "FROM usergroup "
-				 . "WHERE editusergroupid = $groupid "
-				 .   "AND id != $groupid";
-		$qh = doQuery($query, 313);
-		if(mysql_num_rows($qh))
-			return 1;
-		$query = "SELECT id FROM userpriv WHERE usergroupid = $groupid";
+		}
+		return 0;
 	}
-	else
-		$query = "SELECT id FROM resourcepriv WHERE resourcegroupid = $groupid";
-	$qh = doQuery($query, 314);
-	if(mysql_num_rows($qh))
+
+	$name = getResourceGroupName($groupid);
+	if(is_null($name))
+		return 0;
+
+	# managementnode.imagelibgroupid
+	$query = "SELECT hostname FROM managementnode WHERE imagelibgroupid = $groupid";
+	$qh = doQuery($query);
+	$usedby = array();
+	while($row = mysql_fetch_assoc($qh))
+		$usedby[] = $row['hostname'];
+	if(count($usedby)) {
+		$msgs[] = "<h3>Management Node Image Library Group</h3>\n"
+		        . implode("<br>\n", $usedby) . "<br>\n";
+	}
+	# resourcepriv.resourcegroupid
+	$query = "SELECT DISTINCT privnodeid FROM resourcepriv WHERE resourcegroupid = $groupid";
+	$qh = doQuery($query);
+	$usedby = array();
+	while($row = mysql_fetch_assoc($qh))
+		$usedby[] = getNodePath($row['privnodeid']);
+	if(count($usedby)) {
+		$msgs[] = "<h3>Assigned at Privilege Nodes</h3>\n"
+		        . implode("<br>\n", $usedby) . "<br>\n";
+	}
+	if(count($msgs)) {
+		$msg = "$name is currently in use in the following ways. It "
+		     . "cannot be deleted until it is no longer in use.<br><br>\n"
+		     . implode("<br>\n", $msgs);
 		return 1;
+	}
 	return 0;
 }
 
@@ -1442,7 +1566,7 @@ function confirmDeleteGroup() {
 		$target = "#resources";
 	}
 
-	if(checkForGroupUsage($groupid, $type)) {
+	if(checkForGroupUsage($groupid, $type, $usemsg)) {
 		print "<H2 align=center>$title</H2>\n";
 		print $usemsg;
 		return;

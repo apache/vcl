@@ -10844,6 +10844,33 @@ function getNodeInfo($nodeid) {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
+/// \fn getNodePath($nodeid)
+///
+/// \param $nodeid - an id from the privnode table
+///
+/// \return string containing node and all of its parents of the form:\n
+/// VCL > node1 > node2 > node3
+///
+/// \brief gets the full path of a node
+///
+////////////////////////////////////////////////////////////////////////////////
+function getNodePath($nodeid) {
+	global $cache;
+	getNodeInfo($nodeid);
+	$path = '';
+	do {
+		$parent = $cache['nodes'][$nodeid]['parent'];
+		if($path == '')
+			$path = $cache['nodes'][$nodeid]['name'];
+		else
+			$path = "{$cache['nodes'][$nodeid]['name']} &gt; $path";
+		$nodeid = $parent;
+	} while($parent != DEFAULT_PRIVNODE);
+	return $path;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
 /// \fn sortKeepIndex($a, $b)
 ///
 /// \param $a - first item
