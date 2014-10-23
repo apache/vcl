@@ -1575,52 +1575,44 @@ sub prepare_vmx {
 		"#image_id" => "$image_id",
 		"#imagerevision_id" => "$imagerevision_id",
 		"#computer_id" => "$computer_id",
-		
 		".encoding" => "UTF-8",
-		
+		#"bios.bootDelay" => "1000",
 		"config.version" => "8",
-		
+		"cpuid.1.ecx" => "--------------------------H-----",
 		"cpuid.coresPerSocket" => "$vm_cores_per_socket",
-		
 		"displayName" => "$display_name",
-		
+		"featMask.vm.hv.capable" => "Min:1",
 		"floppy0.present" => "FALSE",
-		
 		"guestOS" => "$guest_os",
-		
 		"gui.exitOnCLIHLT" => "TRUE",	# causes the virtual machine to power off automatically when you choose Start > Shut Down from the Windows guest
-		
+		"hypervisor.cpuid.v0" => "FALSE",
 		"memsize" => "$vm_ram",
-		
+		"monitor.virtual_mmu" => "hardware",
+		"monitor.virtual_exec" => "hardware",
+		"mem.hotadd" => "TRUE",
 		"msg.autoAnswer" => "TRUE",	# tries to automatically answer all questions that may occur at boot-time.
-		
+		"mks.enable3d" => "TRUE",
 		"numvcpus" => "$vm_cpu_count",
-		
 		"powerType.powerOff" => "soft",
 		"powerType.powerOn" => "hard",
 		"powerType.reset" => "soft",
 		"powerType.suspend" => "hard",
-		
 		"sched.swap.dir" => "$vmx_directory_path/",
-		
 		"snapshot.redoNotWithParent" => "TRUE",
-		
 		"svga.autodetect" => "TRUE",
-		
+		"svga.yes3d" => "TRUE",
 		"tools.remindInstall" => "FALSE",
 		"tools.syncTime" => "FALSE",
-		
 		"toolScripts.afterPowerOn" => "FALSE",
 		"toolScripts.afterResume" => "FALSE",
 		"toolScripts.beforeSuspend" => "FALSE",
 		"toolScripts.beforePowerOff" => "FALSE",
-		
+		"tools.upgrade.policy" => "upgradeAtPowerCycle",
 		"usb.present" => "TRUE",
-		
-		"uuid.action" => "keep",	# Keep the VM's uuid, keeps existing MAC								
-		
+		"uuid.action" => "keep",	# Keep the VM's uuid, keeps existing MAC
+		"vcpu.hotadd" => "TRUE",
+		"vhv.enable" => "TRUE",
 		"virtualHW.version" => "$vm_hardware_version",
-		
 		"workingDir" => "$vmx_directory_path",
 	);
 	
@@ -1647,6 +1639,12 @@ sub prepare_vmx {
 			"ide0:0.present" => "TRUE",
 			"ide0:0.writeThrough" => "$vm_disk_write_through",
 			"ide0:0.sharedBus" => "$vm_disk_shared_bus",
+			
+			"ide0:1.startConnected" => "FALSE",
+			"ide0:1.deviceType" => "cdrom-raw",
+			"ide0:1.clientDevice" => "TRUE",
+			"ide0:1.fileName" => "emptyBackingString",
+			"ide0:1.present" => "TRUE",
 		));
 	}
 	else {
@@ -1658,6 +1656,12 @@ sub prepare_vmx {
 			"scsi0:0.present" => "TRUE",
 			"scsi0:0.writeThrough" => "$vm_disk_write_through",
 			"scsi0:0.sharedBus" => "$vm_disk_shared_bus",
+			
+			"ide0:0.startConnected" => "FALSE",
+			"ide0:0.deviceType" => "cdrom-raw",
+			"ide0:0.clientDevice" => "TRUE",
+			"ide0:0.fileName" => "emptyBackingString",
+			"ide0:0.present" => "TRUE",
 		));
 	}
 	
@@ -1679,7 +1683,7 @@ sub prepare_vmx {
 			"vmci0.present" => "TRUE",
 		));
 	}
-	# JIM
+	
 	# ide needed for boot
 	# usb needed for mouse
 	# monitor, ich7m, smc for darwin
