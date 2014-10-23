@@ -4584,19 +4584,36 @@ sub get_vm_virtual_hardware_version {
 				notify($ERRORS{'DEBUG'}, 0, "retrieved VM virtual hardware version from reference vmx file: $hardware_version");
 			}
 		}
-		notify($ERRORS{'DEBUG'}, 0, "unable to retrieve VM virtual hardware version from reference vmx file, 'virtualHW.version' key does not exist");
+		if (!defined($hardware_version)) {
+			notify($ERRORS{'DEBUG'}, 0, "unable to retrieve VM virtual hardware version from reference vmx file, 'virtualHW.version' key does not exist");
+		}
 	}
 	
+	# If hardware version could not be retrieved from reference vmx file, try to retrieve it from the vmdk file via the API object
+	if (!$hardware_version) {
+		if ($self->api->can("get_virtual_disk_hardware_version")) {
+			if ($hardware_version = $self->api->get_virtual_disk_hardware_version($self->get_vmdk_file_path())) {
+				notify($ERRORS{'DEBUG'}, 0, "retrieved virtual disk hardware version from api object: $hardware_version");
+			}
+			else {
+				notify($ERRORS{'DEBUG'}, 0, "unable to retrieve virtual disk hardware version from api object");
+			}
+		}
+	}
 	
-	if (!$hardware_version && $self->api->can("get_virtual_disk_hardware_version") && ($hardware_version = $self->api->get_virtual_disk_hardware_version($self->get_vmdk_file_path()))) {
-		notify($ERRORS{'DEBUG'}, 0, "retrieved hardware version from api object: $hardware_version");
+	# Next, try to retrieve it directly from the vmdk file
+	if (!$hardware_version) {
+		if ($hardware_version = $self->get_vmdk_parameter_value('virtualHWVersion')) {
+			notify($ERRORS{'DEBUG'}, 0, "retrieved hardware version stored in the vmdk file: $hardware_version");
+		}
+		else {
+			notify($ERRORS{'DEBUG'}, 0, "unable to retrieve hardware version stored in the vmdk file");
+		}
 	}
-	elsif (!$hardware_version && ($hardware_version = $self->get_vmdk_parameter_value('virtualHWVersion'))) {
-		notify($ERRORS{'DEBUG'}, 0, "retrieved hardware version stored in the vmdk file: $hardware_version") if $hardware_version;
-	}
-	elsif (!$hardware_version) {
-		notify($ERRORS{'WARNING'}, 0, "unable to determine hardware version of vmdk file, returning 7");
-		return 7;
+	
+	if (!$hardware_version) {
+		notify($ERRORS{'DEBUG'}, 0, "unable to determine hardware version from the reference vmx file or vmdk file, assuming 7");
+		$hardware_version = 7;
 	}
 	
 	# Get the VMware product name
@@ -4609,29 +4626,44 @@ sub get_vm_virtual_hardware_version {
 	# Override the hardware version retrieved from the vmdk file if:
 	# -VMware product = ESX
 	# -Adapter type = IDE
-	# -Hardware version = 4
-	if ($hardware_version < 7) {
-		if ($vmware_product_name =~ /esx/i) {
-			my $adapter_type = $self->get_vm_disk_adapter_type();
-			if (!$adapter_type) {
-				notify($ERRORS{'WARNING'}, 0, "unable to determine disk adapter type in order to tell if hardware version should be overridden, returning $hardware_version");
-				return $hardware_version;
-			}
-			elsif ($adapter_type =~ /ide/i) {
-				notify($ERRORS{'OK'}, 0, "overriding hardware version $hardware_version --> 7, IDE adapters cannot be used on ESX unless the hardware version is 7 or higher, VMware product: '$vmware_product_name', vmdk adapter type: $adapter_type, vmdk hardware version: $hardware_version");
-				return 7;
-			}
+	# -Hardware version < 7
+	if ($hardware_version < 7 && $vmware_product_name =~ /esx/i) {
+		my $adapter_type = $self->get_vm_disk_adapter_type();
+		if (!$adapter_type) {
+			notify($ERRORS{'WARNING'}, 0, "unable to determine disk adapter type in order to tell if hardware version should be overridden");
 		}
-	}
-	else {
-		# Hardware version >= 7, check if VMware Server 1.x
-		if ($vmware_product_name =~ /VMware Server 1/i) {
-			notify($ERRORS{'OK'}, 0, "VMware product is '$vmware_product_name', overriding hardware version $hardware_version --> 4");
-				return 4;
+		elsif ($adapter_type =~ /ide/i) {
+			notify($ERRORS{'OK'}, 0, "overriding hardware version $hardware_version --> 7, IDE adapters cannot be used on ESX unless the hardware version is 7 or higher, VMware product: '$vmware_product_name', vmdk adapter type: $adapter_type, vmdk hardware version: $hardware_version");
+			return 7;
 		}
 	}
 	
-	notify($ERRORS{'DEBUG'}, 0, "returning hardware version: $hardware_version");
+	# Maximum hardware version by VMware version:
+	my $vmware_max_hardware_versions = {
+		'Server 1'  => 4,
+		'Server 2'  => 7,
+		'ESX 3'     => 4,
+		'ESXi? 4'   => 7,
+		'ESXi 5\.0' => 8,
+		'ESXi 5\.1' => 9,
+		'ESXi 5\.5' => 10,
+	};
+	
+	for my $vmware_version (keys %$vmware_max_hardware_versions) {
+		if ($vmware_product_name =~ /$vmware_version/i) {
+			my $vmware_max_hardware_version = $vmware_max_hardware_versions->{$vmware_version};
+			if ($hardware_version > $vmware_max_hardware_version) {
+				notify($ERRORS{'OK'}, 0, "$vmware_product_name does not support hardware version $hardware_version, returning $vmware_max_hardware_version");
+				return $vmware_max_hardware_version;
+			}
+			else {
+				notify($ERRORS{'DEBUG'}, 0, "$vmware_product_name supports hardware version $hardware_version");
+				return $hardware_version;
+			}
+		}
+	}
+	
+	notify($ERRORS{'OK'}, 0, "returning hardware version $hardware_version");
 	return $hardware_version;
 }
 
