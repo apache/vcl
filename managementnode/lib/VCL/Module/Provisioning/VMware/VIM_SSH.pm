@@ -855,7 +855,7 @@ sub _get_task_ids {
 =head2 _get_task_info
 
  Parameters  : $task_id
- Returns     : array
+ Returns     : hash reference
  Description : 
 
 =cut
@@ -871,12 +871,11 @@ sub _get_task_info {
 	my (@task_ids) = @_;
 	@task_ids = $self->_get_task_ids() if (!@task_ids);
 	
-	my %task_info;
+	my $task_info = {};
 	
 	for my $task_id (@task_ids) {
 		my $vim_cmd_arguments = "vimsvc/task_info $task_id";
 		my ($exit_status, $output) = $self->_run_vim_cmd($vim_cmd_arguments);
-		return if !$output;
 		
 		# Expected output:
 		# (vim.TaskInfo) {
@@ -918,9 +917,12 @@ sub _get_task_info {
 		#   obj = 'vim.Task:haTask-496-vim.VirtualMachine.powerOn-3072x',
 		#   msg = "The object has already been deleted or has not been completely created",
 		# }
-	
 		
-		if (grep(/ManagedObjectNotFound/i, @$output)) {
+		if (!defined($output)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to execute command to retrieve info for task ID: $task_id");
+			next;
+		}
+		elsif (grep(/ManagedObjectNotFound/i, @$output)) {
 			notify($ERRORS{'WARNING'}, 0, "task was not found, task ID: $task_id, output:\n" . join("\n", @$output));
 			next;
 		}
@@ -930,11 +932,11 @@ sub _get_task_info {
 		}
 		else {
 			#notify($ERRORS{'DEBUG'}, 0, "retrieved info for task $task_id");	
-			$task_info{$task_id} = join("\n", @$output);
+			$task_info->{$task_id} = join("\n", @$output);
 		}
 	}
 	
-	return \%task_info;
+	return $task_info;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -970,8 +972,9 @@ sub _wait_for_task {
 		notify($ERRORS{'DEBUG'}, 0, "checking status of task: $task_id");
 		
 		# Get the task info
-		my $task_info_output = $self->_get_task_info($task_id)->{$task_id};
-		if (!$task_info_output) {
+		my $task_info = $self->_get_task_info($task_id);
+		my $task_info_output = $task_info->{$task_id};
+		if (!$task_info || !$task_info_output) {
 			notify($ERRORS{'WARNING'}, 0, "unable to determine if task $task_id has completed, task info could not be retrieved");
 			return;
 		}
