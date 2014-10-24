@@ -1655,7 +1655,7 @@ function AJstartImage() {
 	$arr['connectmethodurl'] = BASEURL . SCRIPT . "?continuation=$cont";
 
 	if(! $disableUpdate) {
-		$revisions = getImageRevisions($imageid);
+		$revisions = getImageRevisions($imageid, 1);
 		if(array_key_exists($revid, $revisions))
 			$comments = $revisions[$revid]['comments'];
 		else {

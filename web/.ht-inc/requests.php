@@ -827,6 +827,9 @@ function viewRequests() {
 		$text .= "      id=\"clickthroughdlg\"\n";
 		$text .= "      duration=250\n";
 		$text .= "      draggable=true>\n";
+		$text .= "    <script type=\"dojo/connect\" event=onHide>\n";
+		$text .= "      hideClickThroughDlg();\n";
+		$text .= "    </script>\n";
 		$text .= "   <div id=\"clickthroughDlgContent\">\n";
 		$text .= "   </div>\n";
 		$text .= "   <div align=\"center\" id=\"imagebtns\">\n";
@@ -840,8 +843,6 @@ function viewRequests() {
 		$text .= "     " . _("I do not agree") . "\n";
 		$text .= "     <script type=\"dojo/method\" event=\"onClick\">\n";
 		$text .= "       dijit.byId('clickthroughdlg').hide();\n";
-		$text .= "       dijit.byId('addeditdlg').hide();\n";
-		$text .= "       dijit.byId('updateimagedlg').hide();\n";
 		$text .= "     </script>\n";
 		$text .= "   </button>\n";
 		$text .= "   </div>\n";

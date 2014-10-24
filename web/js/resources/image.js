@@ -557,6 +557,11 @@ function hideUpdateImageDlg() {
 	dijit.byId('newcomments').reset();
 }
 
+function hideClickThroughDlg() {
+	dijit.byId('addeditdlg').hide();
+	dijit.byId('updateimagedlg').hide();
+}
+
 function startImage(cont) {
 	RPCwrapper({continuation: cont}, startImageCB, 1);
 }
@@ -628,12 +633,14 @@ function submitCreateUpdateImage() {
 }
 
 function submitUpdateImage() {
+	dijit.byId('updateImageDlgBtn').set('disabled', true);
 	var data = {continuation: dojo.byId('updateimage').value,
 	            comments: dijit.byId('newcomments').value};
 	RPCwrapper(data, updateImageCB, 1);
 }
 
 function updateImageCB(data, ioArgs) {
+	dijit.byId('updateImageDlgBtn').set('disabled', false);
 	if(data.items.status == 'error') {
 		alert(data.items.errmsg);
 		dijit.byId('updateimagedlg').hide();
