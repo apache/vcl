@@ -1255,12 +1255,13 @@ function checkTimeouts() {
 	var tmp = new Date();
 	var now = (tmp.getTime() - tmp.getMilliseconds()) / 1000;
 	for(var i = 0; i < nodes.length; i++) {
-		if(nodes[i].value <= now) {
+		var testval = parseInt(nodes[i].value);
+		if(testval <= now) {
 			resRefresh();
 			break;
 		}
-		else if(nodes[i].value - now < nextcheck)
-			nextcheck = nodes[i].value - now;
+		else if(testval - now < nextcheck)
+			nextcheck = testval - now;
 	}
 	check_timeout_timer = setTimeout(checkTimeouts, nextcheck * 1000);
 }
@@ -1723,3 +1724,13 @@ function checkConnectTimeoutCB(data, ioArgs) {
 	}
 }
 
+function previewClickThrough() {
+	RPCwrapper({continuation: dojo.byId('previewclickthroughcont').value},
+	            previewClickThroughCB, 1);
+	return false;
+}
+
+function previewClickThroughCB(data, ioArgs) {
+	dojo.byId('clickthroughPreviewDlgContent').innerHTML = data.items.text;
+	dijit.byId('clickthroughpreviewdlg').show();
+}

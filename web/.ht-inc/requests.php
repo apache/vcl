@@ -459,6 +459,9 @@ function viewRequests() {
 	$cont = addContinuationsEntry('AJviewRequests', array(), SECINDAY);
 	$text .= "<INPUT type=hidden id=resRefreshCont value=\"$cont\">\n";
 
+	$cont = addContinuationsEntry('AJpreviewClickThrough', array());
+	$text .= "<INPUT type=hidden id=previewclickthroughcont value=\"$cont\">\n";
+
 	$text .= "</div>\n";
 	if($mode != 'AJviewRequests') {
 		$text .= newReservationHTML();
@@ -843,6 +846,21 @@ function viewRequests() {
 		$text .= "     " . _("I do not agree") . "\n";
 		$text .= "     <script type=\"dojo/method\" event=\"onClick\">\n";
 		$text .= "       dijit.byId('clickthroughdlg').hide();\n";
+		$text .= "     </script>\n";
+		$text .= "   </button>\n";
+		$text .= "   </div>\n";
+		$text .= "</div>\n";
+
+		$text .= "<div dojoType=dijit.Dialog\n";
+		$text .= "      id=\"clickthroughpreviewdlg\"\n";
+		$text .= "      duration=250\n";
+		$text .= "      draggable=true>\n";
+		$text .= "   <div id=\"clickthroughPreviewDlgContent\"></div>\n";
+		$text .= "   <div align=\"center\">\n";
+		$text .= "   <button dojoType=\"dijit.form.Button\">\n";
+		$text .= "     " . _("Close") . "\n";
+		$text .= "     <script type=\"dojo/method\" event=\"onClick\">\n";
+		$text .= "       dijit.byId('clickthroughpreviewdlg').hide();\n";
 		$text .= "     </script>\n";
 		$text .= "   </button>\n";
 		$text .= "   </div>\n";
@@ -4103,7 +4121,7 @@ function AJconnectRequest() {
 
 	if($requestData['forimaging']) {
 		$h .= _("<font color=red><big><strong>NOTICE:</strong> Later in this process, you must accept a ");
-		$h .= " <a href=\"" . BASEURL . SCRIPT . "?mode=imageClickThrough\">";
+		$h .= " <a href=\"" . BASEURL . SCRIPT . "?mode=viewRequests#\" onClick=\"previewClickThrough();\">";
 		$h .= _("click-through agreement</a> about software licensing.</big></font><br><br>\n");
 	}
 	$imagenotes = getImageNotes($requestData['reservations'][0]['imageid']);
@@ -4845,5 +4863,20 @@ function AJsubmitSetImageProduction() {
 	   . "dlg.show();"
 	   . "resRefresh();";
 	print $a;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn AJpreviewClickThrough()
+///
+/// \brief prompts user if really ready to set image to production
+///
+////////////////////////////////////////////////////////////////////////////////
+function AJpreviewClickThrough() {
+	global $clickThroughText;
+	$text = sprintf($clickThroughText, '');
+	$text = preg_replace("/(.{1,80}([ \n]|$))/", '\1<br>', $text);
+	$text = preg_replace("/<\/p>\n<br>/", '', $text);
+	sendJSON(array('text' => $text));
 }
 ?>
