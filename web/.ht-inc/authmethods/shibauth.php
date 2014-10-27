@@ -199,7 +199,7 @@ function updateShibGroups($usernid, $groups) {
 	$qh = doQuery($query, 101);
 	$row = mysql_fetch_assoc($qh);
 	$affilid = $row['id'];
-	$grp = mysql_real_escape_string("All {$row['name']} users");
+	$grp = mysql_real_escape_string("All {$row['name']} Users");
 	array_push($newusergroups, getUserGroupID($grp, $affilid));
 
 	$newusergroups = array_unique($newusergroups);
