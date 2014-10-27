@@ -161,6 +161,8 @@ function viewNodes() {
 		print "    <TH bgcolor=gray style=\"color: black;\">Block<br>Cascaded<br>Rights</TH>\n";
 		print "    <TH bgcolor=\"#008000\" style=\"color: black;\">Cascade<br>to Child<br>Nodes</TH>\n";
 		foreach($usertypes["users"] as $type) {
+			if($type == 'configAdmin')
+				continue;
 			$img = getImageText($type);
 			print "    <TD>$img</TD>\n";
 		}
@@ -208,6 +210,8 @@ function viewNodes() {
 		print "    <TH bgcolor=gray style=\"color: black;\">Block<br>Cascaded<br>Rights</TH>\n";
 		print "    <TH bgcolor=\"#008000\" style=\"color: black;\">Cascade<br>to Child<br>Nodes</TH>\n";
 		foreach($usertypes["users"] as $type) {
+			if($type == 'configAdmin')
+				continue;
 			$img = getImageText($type);
 			print "    <TH>$img</TH>\n";
 		}
@@ -1383,7 +1387,8 @@ function userLookup() {
 					}
 					print "  <TR>\n";
 					$privnodeid = $row['privnodeid'];
-					print "    <TH align=right>{$row['privnode']}</TH>\n";
+					$path = getNodePath($privnodeid);
+					print "    <TH align=right>$path</TH>\n";
 					print "    <TD>\n";
 				}
 				print "      {$row['userprivtype']}<br>\n";
@@ -1421,7 +1426,8 @@ function userLookup() {
 						}
 						print "  <TR>\n";
 						$privnodeid = $row['privnodeid'];
-						print "    <TH align=right>{$row['privnode']}</TH>\n";
+						$path = getNodePath($privnodeid);
+						print "    <TH align=right>$path</TH>\n";
 						print "    <TD>\n";
 					}
 					print "      {$row['userprivtype']}<br>\n";
@@ -1786,10 +1792,7 @@ function printUserPrivRow($privname, $rownum, $privs, $types,
 		$checked = "checked";
 	else
 		$checked = "";
-	if($usergroup == 1)
-		$name = "privrow[$privname:cascade]";
-	else
-		$name = "privrow[$privname:cascade]";
+	$name = "privrow[$privname:cascade]";
 	print "    <TD align=center bgcolor=\"#008000\" id=cell$rownum:0>";
 	print "<INPUT type=checkbox dojoType=dijit.form.CheckBox id=ck$rownum:0 ";
 	print "name=\"$name\" onClick=\"privChange(this.checked, $rownum, 0, ";
@@ -1798,6 +1801,8 @@ function printUserPrivRow($privname, $rownum, $privs, $types,
 	# normal rights
 	$j = 1;
 	foreach($types as $type) {
+		if($type == 'configAdmin')
+			continue;
 		$bgcolor = "";
 		$checked = "";
 		$value = "";
@@ -1898,14 +1903,11 @@ function getUserPrivRowHTML($privname, $rownum, $privs, $types,
 		$blocked = 0;
 	}
 	$count = count($types) + 1;
-	if($usergroup == 'user') {
+	if($usergroup == 'user')
 		$usergroup = 1;
-		$name = "privrow[$privname:block]";
-	}
-	elseif($usergroup == 'group') {
+	elseif($usergroup == 'group')
 		$usergroup = 2;
-		$name = "privrow[$privname:block]";
-	}
+	$name = "privrow[$privname:block]";
 	$text .= "    <TD align=center bgcolor=gray><INPUT type=checkbox ";
 	$text .= "dojoType=dijit.form.CheckBox id=ck$rownum:block name=\"$name\" ";
 	$text .= "$checked $disabled onClick=\"changeCascadedRights";
