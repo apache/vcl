@@ -538,6 +538,8 @@ function blockFormSubmitWeekly(mode) {
 	            enddate: enddate,
 	            times: alltimes,
 	            days: days2};
+	if(dojo.byId('submitcont2').value != '')
+		data.continuation = dojo.byId('submitcont2').value;
 	if(mode != 'request') {
 		data.name = dijit.byId('brname').value;
 		data.owner = dijit.byId('browner').value;
@@ -673,6 +675,8 @@ function blockFormSubmitMonthly(mode) {
 	            weeknum: weeknum,
 	            day: day,
 	            times: alltimes};
+	if(dojo.byId('submitcont2').value != '')
+		data.continuation = dojo.byId('submitcont2').value;
 	if(mode != 'request') {
 		data.name = dijit.byId('brname').value;
 		data.owner = dijit.byId('browner').value;
@@ -758,6 +762,8 @@ function blockFormSubmitList(mode) {
 	            groupid: groupid,
 	            type: 'list',
 	            slots: allslots};
+	if(dojo.byId('submitcont2').value != '')
+		data.continuation = dojo.byId('submitcont2').value;
 	if(mode != 'request') {
 		data.name = dijit.byId('brname').value;
 		data.owner = dijit.byId('browner').value;
@@ -1393,3 +1399,6 @@ function viewBlockUsageCB(data, ioArgs) {
 	}
 }
 
+function clearCont2() {
+	dojo.byId('submitcont2').value = '';
+}

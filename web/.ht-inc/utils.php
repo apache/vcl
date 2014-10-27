@@ -1834,18 +1834,22 @@ function removeNoCheckout($images) {
 ////////////////////////////////////////////////////////////////////////////////
 ///
 /// \fn getUserResources($userprivs, $resourceprivs, $onlygroups,
-///                               $includedeleted, $userid)
+///                               $includedeleted, $userid, $groupid)
 ///
 /// \param $userprivs - array of privileges to look for (such as
-/// imageAdmin, imageCheckOut, etc) - this is an OR list; don't include 'block' or 'cascade'
+/// imageAdmin, imageCheckOut, etc) - this is an OR list; don't include 'block'
+/// or 'cascade'
 /// \param $resourceprivs - array of privileges to look for (such as
-/// available, administer, manageGroup) - this is an OR list; don't include 'block' or 'cascade'
+/// available, administer, manageGroup) - this is an OR list; don't include
+/// 'block' or 'cascade'
 /// \param $onlygroups - (optional) if 1, return the resource groups instead
 /// of the resources
 /// \param $includedeleted - (optional) included deleted resources if 1,
 /// don't if 0
 /// \param $userid - (optional) id from the user table, if not given, use the
 /// id of the currently logged in user
+/// \param $groupid - (optional) id from the usergroup table, if not given, look
+/// up by $userid; $userid must be 0 to look up by $groupid
 ///
 /// \return an array of 2 arrays where the first indexes are resource types
 /// and each one's arrays are a list of resources available to the user where
@@ -1868,14 +1872,18 @@ function removeNoCheckout($images) {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function getUserResources($userprivs, $resourceprivs=array("available"),
-                          $onlygroups=0, $includedeleted=0, $userid=0) {
+                          $onlygroups=0, $includedeleted=0, $userid=0,
+                          $groupid=0) {
 	global $user;
 	if(in_array('managementnodeAdmin', $userprivs))
 		$userprivs[] = 'mgmtnodeAdmin';
-	$key = getKey(array($userprivs, $resourceprivs, $onlygroups, $includedeleted, $userid));
+	$key = getKey(array($userprivs, $resourceprivs, $onlygroups, $includedeleted, $userid, $groupid));
 	if(array_key_exists($key, $_SESSION['userresources']))
 		return $_SESSION['userresources'][$key];
 	#FIXME this whole function could be much more efficient
+	$bygroup = 0;
+	if($userid == 0 && $groupid != 0)
+		$bygroup = 1;
 	if(! $userid)
 		$userid = $user["id"];
 	$return = array();
@@ -1888,11 +1896,15 @@ function getUserResources($userprivs, $resourceprivs=array("available"),
 	       . "FROM userpriv u, "
 	       .      "userprivtype t "
 	       . "WHERE u.userprivtypeid = t.id AND "
-	       .       "t.name IN ($inlist) AND "
-	       .       "(u.userid = $userid OR "
-	       .       "u.usergroupid IN (SELECT usergroupid "
-	       .                         "FROM usergroupmembers "
-	       .                         "WHERE userid = $userid))";
+	       .       "t.name IN ($inlist) AND ";
+	if(! $bygroup) {
+		$query .=   "(u.userid = $userid OR "
+		       .    "u.usergroupid IN (SELECT usergroupid "
+		       .                      "FROM usergroupmembers "
+		       .                      "WHERE userid = $userid))";
+	}
+	else
+		$query .=   "u.usergroupid = $groupid";
 	$qh = doQuery($query, 101);
 	while($row = mysql_fetch_assoc($qh)) {
 		array_push($startnodes, $row["privnodeid"]);
@@ -1920,11 +1932,14 @@ function getUserResources($userprivs, $resourceprivs=array("available"),
 	       . "FROM userprivtype t, "
 	       .      "userpriv u "
 	       . "WHERE u.userprivtypeid = t.id AND "
-	       .       "u.usergroupid IS NOT NULL AND "
-	       .       "u.usergroupid IN (SELECT usergroupid "
-	       .                         "FROM usergroupmembers "
-	       .                         "WHERE userid = $userid) AND "
-	       .       "t.name IN ('block','cascade',$inlist) "
+			 .       "u.usergroupid IS NOT NULL AND ";
+	if($bygroup)
+		$query .=   "u.usergroupid = $groupid AND ";
+	else
+		$query .=   "u.usergroupid IN (SELECT usergroupid "
+		       .                      "FROM usergroupmembers "
+				 .                      "WHERE userid = $userid) AND ";
+	$query .=      "t.name IN ('block','cascade',$inlist) "
 	       . "ORDER BY u.privnodeid, "
 	       .          "u.usergroupid";
 	$qh = doQuery($query, 101);
@@ -1989,7 +2004,8 @@ function getUserResources($userprivs, $resourceprivs=array("available"),
 		}
 	}
 
-	addOwnedResourceGroups($resourcegroups, $userid);
+	if(! $bygroup)
+		addOwnedResourceGroups($resourcegroups, $userid);
 	if($onlygroups) {
 		foreach(array_keys($resourcegroups) as $type)
 			uasort($resourcegroups[$type], "sortKeepIndex");
@@ -2002,7 +2018,8 @@ function getUserResources($userprivs, $resourceprivs=array("available"),
 		$resources[$type] = 
 		   getResourcesFromGroups($resourcegroups[$type], $type, $includedeleted);
 	}
-	addOwnedResources($resources, $includedeleted, $userid);
+	if(! $bygroup)
+		addOwnedResources($resources, $includedeleted, $userid);
 	$noimageid = getImageId('noimage');
 	if(array_key_exists($noimageid, $resources['image']))
 		unset($resources['image'][$noimageid]);

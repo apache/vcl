@@ -143,10 +143,11 @@ function blockAllocationForm() {
 	print "    <td>\n";
 	if(USEFILTERINGSELECT && count($resources['image']) < FILTERINGSELECTTHRESHOLD) {
 		print "      <select dojoType=\"dijit.form.FilteringSelect\" id=imagesel style=\"width: 300px\" ";
-		print "queryExpr=\"*\${0}*\" highlightMatch=\"all\" autoComplete=\"false\">\n";
+		print "queryExpr=\"*\${0}*\" highlightMatch=\"all\" autoComplete=\"false\" ";
+		print "onChange=\"clearCont2();\">\n";
 	}
 	else
-		print "      <select id=imagesel>";
+		print "      <select id=imagesel onChange=\"clearCont2();\">";
 	foreach($resources['image'] as $id => $name) {
 		if($id == $data['imageid'])
 			print "        <option value=\"$id\" selected>$name</option>\n";
@@ -162,10 +163,11 @@ function blockAllocationForm() {
 	$groups = getUserGroups(0, $user['affiliationid']);
 	if(USEFILTERINGSELECT && count($groups) < FILTERINGSELECTTHRESHOLD) {
 		print "      <select dojoType=\"dijit.form.FilteringSelect\" id=groupsel style=\"width: 300px\" ";
-		print "queryExpr=\"*\${0}*\" highlightMatch=\"all\" autoComplete=\"false\">\n";
+		print "queryExpr=\"*\${0}*\" highlightMatch=\"all\" autoComplete=\"false\" ";
+		print "onChange=\"clearCont2();\">\n";
 	}
 	else
-		print "      <select id=groupsel>";
+		print "      <select id=groupsel onChange=\"clearCont2();\">";
 	$extragroups = array();
 	if($mode == 'requestBlockAllocation')
 		print "        <option value=\"0\">(" . _("group not listed") . ")</option>\n";
@@ -472,6 +474,7 @@ function blockAllocationForm() {
 		$data['method'] = 'request';
 	$cont = addContinuationsEntry('AJblockAllocationSubmit', $data, SECINWEEK, 1, 0);
 	print "<input type=\"hidden\" id=\"submitcont\" value=\"$cont\">\n";
+	print "<input type=\"hidden\" id=\"submitcont2\">\n";
 	print "<button dojoType=\"dijit.form.Button\" type=\"button\">\n";
 	print "  $btntxt\n";
 	print "  <script type=\"dojo/method\" event=\"onClick\">\n";
@@ -2998,6 +3001,7 @@ function processBlockAllocationInput() {
 	$return['imageid'] = processInputVar('imageid', ARG_NUMERIC);
 	$return['seats'] = processInputVar('seats', ARG_NUMERIC);
 	$return['groupid'] = processInputVar('groupid', ARG_NUMERIC);
+	$override = getContinuationVar('override', 0);
 	$type = processInputVar('type', ARG_STRING);
 	$err = 0;
 	if($method != 'request' && ! preg_match('/^([-a-zA-Z0-9\. \(\)]){3,80}$/', $return['name'])) {
@@ -3036,6 +3040,19 @@ function processBlockAllocationInput() {
 			$errmsg = "The selected image can only have $concur concurrent "
 			        . "reservations. Please reduce the number of requested "
 			        . "seats to $concur or less.";
+			$err = 1;
+		}
+	}
+	$dooverride = 0;
+	if(! $err && ! $override) {
+		$groupresources = getUserResources(array("imageAdmin", "imageCheckOut"),
+		                                   array("available"), 0, 0, 0,
+		                                   $return['groupid']);
+		if(! array_key_exists($return['imageid'], $groupresources['image'])) {
+			$dooverride = 1;
+			$errmsg = "WARNING - The selected user group does not currently have "
+			        . "access to the selected environment. You can submit the "
+			        . "Block Allocation again to ignore this warning.";
 			$err = 1;
 		}
 	}
@@ -3191,6 +3208,13 @@ function processBlockAllocationInput() {
 			$data['blockid'] = getContinuationVar('blockid');
 		$cont = addContinuationsEntry('AJblockAllocationSubmit', $data, SECINWEEK, 1, 0);
 		print "dojo.byId('submitcont').value = '$cont';";
+		if($dooverride) {
+			$data['override'] = 1;
+			$cont = addContinuationsEntry('AJblockAllocationSubmit', $data, SECINWEEK, 1, 0);
+			print "dojo.byId('submitcont2').value = '$cont';";
+		}
+		else
+			print "dojo.byId('submitcont2').value = '';";
 	}
 	$return['type'] = $type;
 	$return['err'] = $err;
