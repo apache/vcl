@@ -1887,6 +1887,8 @@ class Computer extends Resource {
 			$naterror = 1;
 		}
 		# nat change - check for active reservations
+		if($olddata['nathostid'] == '')
+			$olddata['nathostid'] = 0;
 		if(! $naterror && ($olddata['natenabled'] != $return['natenabled'] ||
 		   $olddata['nathostid'] != $return['nathostid'])) {
 			$query = "SELECT rq.id "
