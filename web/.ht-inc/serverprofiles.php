@@ -29,24 +29,37 @@
 ////////////////////////////////////////////////////////////////////////////////
 function serverProfiles() {
 	global $user;
-	if(! in_array("serverProfileAdmin", $user["privileges"])) {
+	/*if(! in_array("serverProfileAdmin", $user["privileges"])) {
 		print "No access to manage server profiles.<br>\n";
 		return;
-	}
+	}*/
 	print "<div dojoType=\"dojo.data.ItemFileWriteStore\" jsId=\"profilesstore\" ";
 	print "data=\"profilesstoredata\"></div>\n";
 	print "<div id=\"mainTabContainer\" dojoType=\"dijit.layout.TabContainer\"\n";
 	print "     style=\"width:630px;height:600px\">\n";
 
-	print "<div id=\"manageprofiles\" dojoType=\"dijit.layout.ContentPane\" title=\"Manage Profiles\">\n";
-	$data = manageProfilesHTML();
-	print $data['html'];
-	print "</div>\n"; # manageprofiles tab
+	print "<div id=\"deploytab\" dojoType=\"dijit.layout.ContentPane\" title=\"Deploy Server\">\n";
+	print "<h2>Deploy Server</h2>\n";
+	print "Server deployment has been incorporated into the <strong>Reservations</strong>";
+	print " part of the site. To deploy a server<br>\n";
+	print "<ol style=\"list-style: decimal;\">\n";
+	print "<li>Click <strong>Reservations</strong></li>\n";
+	print "<li>Click the <strong>New Reservation</strong> button</li>\n";
+	print "<li>Select the <strong>Server Reservation</strong> radio button at the top of the dialog box</li>\n";
+	print "</ol>\n";
+	print "</div>\n"; # deploytab
 
-	print "<div id=\"grouping\" dojoType=\"dijit.layout.ContentPane\" title=\"Manage Grouping\">\n";
-	$data = manageGroupingHTML();
-	print $data['html'];
-	print "</div>\n"; # grouping tab
+	if(in_array("serverProfileAdmin", $user["privileges"])) {
+		print "<div id=\"manageprofiles\" dojoType=\"dijit.layout.ContentPane\" title=\"Manage Profiles\">\n";
+		$data = manageProfilesHTML();
+		print $data['html'];
+		print "</div>\n"; # manageprofiles tab
+
+		print "<div id=\"grouping\" dojoType=\"dijit.layout.ContentPane\" title=\"Manage Grouping\">\n";
+		$data = manageGroupingHTML();
+		print $data['html'];
+		print "</div>\n"; # grouping tab
+	}
 
 	print "</div>\n"; # tab container
 }

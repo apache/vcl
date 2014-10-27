@@ -12518,7 +12518,8 @@ function getNavMenu($inclogout, $inchome, $homeurl=HOMEURL) {
 		$rt .= "<a href=\"" . BASEURL . SCRIPT . "?mode=managementnode\">";
 		$rt .= _("Management Nodes</a></li>\n");
 	}
-	if(in_array("serverProfileAdmin", $user["privileges"])) {
+	if(in_array("serverProfileAdmin", $user["privileges"]) ||
+	   in_array("serverCheckOut", $user["privileges"])) {
 		$rt .= menulistLI('serverProfiles');
 		$rt .= "<a href=\"" . BASEURL . SCRIPT;
 		$rt .= "?mode=serverProfiles\">" . _("Server Profiles") . "</a></li>\n";
