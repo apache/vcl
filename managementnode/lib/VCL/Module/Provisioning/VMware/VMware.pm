@@ -1607,7 +1607,7 @@ sub prepare_vmx {
 		"toolScripts.afterResume" => "FALSE",
 		"toolScripts.beforeSuspend" => "FALSE",
 		"toolScripts.beforePowerOff" => "FALSE",
-		"tools.upgrade.policy" => "upgradeAtPowerCycle",
+		#"tools.upgrade.policy" => "upgradeAtPowerCycle",
 		"usb.present" => "TRUE",
 		"uuid.action" => "keep",	# Keep the VM's uuid, keeps existing MAC
 		"vcpu.hotadd" => "TRUE",
