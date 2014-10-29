@@ -478,29 +478,32 @@ function editOrAddGroup($state) {
 		}
 	}
 
+	$allcustomgroups = getUserGroups(1);
 	if($user['showallgroups'])
-		$affilusergroups = getUserGroups(1);
+		$affilusergroups = $allcustomgroups;
 	else
 		$affilusergroups = getUserGroups(1, $user['affiliationid']);
 
 	if($type == 'resource') {
-		$dispUserGrpIds = array();
-		foreach(array_keys($affilusergroups) as $id) {
+		$dispUserGrpIDs = array();
+		$dispUserGrpIDsAllAffils = array();
+		foreach(array_keys($allcustomgroups) as $id) {
 			# figure out if user is owner or in editor group
 			$owner = 0;
 			$editor = 0;
-			if($affilusergroups[$id]["ownerid"] == $user["id"])
+			if($allcustomgroups[$id]["ownerid"] == $user["id"])
 				$owner = 1;
-			if(array_key_exists("editgroupid", $affilusergroups[$id]) &&
-				array_key_exists($affilusergroups[$id]["editgroupid"], $user["groups"]))
+			if(array_key_exists("editgroupid", $allcustomgroups[$id]) &&
+				array_key_exists($allcustomgroups[$id]["editgroupid"], $user["groups"]))
 				$editor = 1;
 			if(! $owner && ! $editor)
 				continue;
 			if($user['showallgroups'])
-				$dispUserGrpIDs[$id] = $affilusergroups[$id]['name'];
-			elseif($affilusergroups[$id]['groupaffiliation'] == $user['affiliation'] &&
-				array_key_exists($id, $affilusergroups))
-				$dispUserGrpIDs[$id] = $affilusergroups[$id]['name'];
+				$dispUserGrpIDs[$id] = $allcustomgroups[$id]['name'];
+			elseif(array_key_exists($id, $affilusergroups) &&
+			   $allcustomgroups[$id]['groupaffiliation'] == $user['affiliation'])
+				$dispUserGrpIDs[$id] = $allcustomgroups[$id]['name'];
+			$dispUserGrpIDsAllAffils[$id] = $allcustomgroups[$id]['name'];
 		}
 	}
 
@@ -659,8 +662,16 @@ function editOrAddGroup($state) {
 			print "    <TD></TD>\n";
 			print "  </TR>\n";
 		}
+		$editname = 1;
+		if($data['type'] == 'user' && $state == 0 &&
+		   $usergroups[$groupid]['groupaffiliationid'] == 1) {
+			$tmp = explode('@', $usergroups[$groupid]['name']);
+			if($tmp[0] == 'Specify End Time' ||
+				$tmp[0] == 'Allow No User Check')
+				$editname = 0;
+		}
 		if($data['type'] == 'resource' ||
-		   ($data['courseroll'] == 0 && $data['custom'] == 1)) {
+		   ($editname && $data['courseroll'] == 0 && $data['custom'] == 1)) {
 			print "  <TR>\n";
 			print "    <TH align=right>Name:</TH>\n";
 			print "    <TD><INPUT type=text name=name value=\"{$data['name']}\" ";
@@ -674,6 +685,11 @@ function editOrAddGroup($state) {
 			printSubmitErr(GRPNAMEERR);
 			print "</TD>\n";
 			print "  </TR>\n";
+		}
+		if($editname == 0) {
+			print "<TR><TD colspan=2 align=\"center\">\n";
+			print "(This is a system group whose name cannot be modified.)\n";
+			print "</TD></TR>\n";
 		}
 		if($data["type"] == "user") {
 		   if($data['courseroll'] == 0 && $data['custom'] == 1) {
@@ -777,11 +793,14 @@ function editOrAddGroup($state) {
 			print "  <TR>\n";
 			print "    <TH align=right>Owning User Group:</TH>\n";
 			print "    <TD>\n";
-			if(! array_key_exists($ownerid, $dispUserGrpIDs)) {
+			if($ownerid != '' && ! array_key_exists($ownerid, $dispUserGrpIDs)) {
 				$dispUserGrpIDs[$ownerid] = $usergroups[$ownerid]['name'];
 				uasort($dispUserGrpIDs, "sortKeepIndex");
 			}
-			printSelectInput("ownergroup", $dispUserGrpIDs, $ownerid);
+			if(! empty($dispUserGrpIDs))
+				printSelectInput("ownergroup", $dispUserGrpIDs, $ownerid);
+			else
+				printSelectInput("ownergroup", $dispUserGrpIDsAllAffils, $ownerid);
 			print "    </TD>\n";
 			print "    <TD></TD>\n";
 			print "  </TR>\n";
@@ -806,11 +825,12 @@ function editOrAddGroup($state) {
 		else {
 			$cdata = array('type' => $data['type'],
 			               'groupid' => $data['groupid'],
-			               'isowner' => $data['isowner']);
+			               'isowner' => $data['isowner'],
+			               'editname' => $editname);
 			if($data['type'] == 'resource')
 				$cdata['resourcetypeid'] = $resourcetypeid;
 			else {
-				if($data['courseroll'] == 1 || $data['custom'] == 0) {
+				if($data['courseroll'] == 1 || $data['custom'] == 0 || $editname == 0) {
 					$cdata['name'] = $data['name'];
 					$cdata['affiliationid'] = $data['affiliationid'];
 				}
@@ -929,6 +949,7 @@ function processGroupInput($checks=1) {
 	$return["maxextend"] = getContinuationVar('maxextend', processInputVar("maxextend", ARG_NUMERIC));
 	$return["overlap"] = getContinuationVar('overlap', processInputVar("overlap", ARG_NUMERIC, 0));
 	$groupwasnone = getContinuationVar('groupwasnone');
+	$editname = getContinuationVar('editname', 1);
 
 	$affils = getAffiliations();
 	if(! array_key_exists($return['affiliationid'], $affils))
@@ -938,7 +959,7 @@ function processGroupInput($checks=1) {
 		return $return;
 	}
 	
-	if($return['custom'] == 1 && $return['courseroll'] == 0) {
+	if($return['custom'] == 1 && $return['courseroll'] == 0 && $editname) {
 		if($return['type'] == 'user' &&
 		   ! preg_match('/^[-a-zA-Z0-9_\.: ]{3,30}$/', $return["name"])) {
 			$submitErr |= GRPNAMEERR;
@@ -1327,6 +1348,7 @@ function confirmEditOrAddGroup($state) {
 	$resourcetypes = getTypes("resources");
 	$usergroups = getUserGroups(1);
 	$affils = getAffiliations();
+	$editname = getContinuationVar('editname', 1);
 
 	if($state) {
 		if($data["type"] == "user") {
@@ -1358,7 +1380,7 @@ function confirmEditOrAddGroup($state) {
 	print "<DIV align=center>\n";
 	print "<H2>$title</H2>\n";
 	print "$question<br><br>\n";
-	if($data['courseroll'] == 1 || $data['custom'] == 0) {
+	if($data['courseroll'] == 1 || $data['custom'] == 0 || $editname == 0) {
 		if($user['showallgroups'])
 			print "{$data['name']}@{$affils[$data['affiliationid']]}<br><br>\n";
 		else
@@ -1372,7 +1394,7 @@ function confirmEditOrAddGroup($state) {
 		print "</TD>\n";
 		print "  </TR>\n";
 	}
-	if($data['courseroll'] == 0 && $data['custom'] == 1) {
+	if($data['courseroll'] == 0 && $data['custom'] == 1 && $editname == 1) {
 		print "  <TR>\n";
 		print "    <TH align=right>Name:</TH>\n";
 		if($data['type'] == 'user' && ($user['showallgroups'] ||
@@ -1526,6 +1548,15 @@ function confirmDeleteGroup() {
 				print "You do not have access to delete the selected user group.\n";
 				return;
 			}
+		}
+		$tmp = explode('@', $usergroups[$groupid]['name']);
+		$checkname = $tmp[0];
+		if($usergroups[$groupid]['groupaffiliationid'] == 1 &&
+		   ($checkname == 'Specify End Time' ||
+		   $checkname == 'Allow No User Check')) {
+			print "<h2>Delete User Group</h2>\n";
+			print "{$usergroups[$groupid]['name']} is a system group that cannot be deleted";
+			return;
 		}
 	}
 	else {
