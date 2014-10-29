@@ -165,6 +165,22 @@ class Computer extends Resource {
 
 	/////////////////////////////////////////////////////////////////////////////
 	///
+	/// \fn extraSelectAdminOptions()
+	///
+	/// \return html
+	///
+	/// \brief generates HTML for option to create/update an image
+	///
+	/////////////////////////////////////////////////////////////////////////////
+	function extraSelectAdminOptions() {
+		$h = '';
+		$h .= "<br>(Computer Utilities are now incorporated into Edit Computer ";
+		$h .= "Profiles)<br>\n";
+		return $h;
+	}
+
+	/////////////////////////////////////////////////////////////////////////////
+	///
 	/// \fn extraResourceFilters()
 	///
 	/// \return html
