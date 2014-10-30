@@ -18,6 +18,10 @@
 SET SQL_MODE="NO_AUTO_VALUE_ON_ZERO";
 
 -- 
+-- Version: 2.4
+-- 
+
+-- 
 -- Database: `vcl`
 -- 
 
@@ -201,6 +205,7 @@ CREATE TABLE IF NOT EXISTS `computer` (
   `ownerid` mediumint(8) unsigned default '1',
   `platformid` tinyint(3) unsigned NOT NULL default '1',
   `scheduleid` tinyint(3) unsigned default NULL,
+  `vmhostid` smallint(5) unsigned default NULL,
   `currentimageid` smallint(5) unsigned NOT NULL default '1',
   `nextimageid` smallint(5) unsigned NOT NULL default '1',
   `imagerevisionid` mediumint(8) unsigned NOT NULL default '1',
@@ -227,7 +232,6 @@ CREATE TABLE IF NOT EXISTS `computer` (
   `rsapub` mediumtext,
   `host` blob,
   `hostpub` mediumtext,
-  `vmhostid` smallint(5) unsigned default NULL,
   `vmtypeid` tinyint(3) unsigned default NULL,
   `predictivemoduleid` smallint(5) unsigned NOT NULL default '1',
   PRIMARY KEY  (`id`),
@@ -1122,7 +1126,7 @@ CREATE TABLE IF NOT EXISTS `state` (
 -- Table structure for table `statgraphcache`
 --
 
-CREATE TABLE `statgraphcache` (
+CREATE TABLE IF NOT EXISTS `statgraphcache` (
   `graphtype` enum('totalres','concurres','concurblade','concurvm') NOT NULL,
   `statdate` date NOT NULL,
   `affiliationid` mediumint(8) unsigned NOT NULL,
@@ -1435,7 +1439,7 @@ CREATE TABLE IF NOT EXISTS `xmlrpcLog` (
 -- Dumping data for table `adminlevel`
 -- 
 
-INSERT INTO `adminlevel` (`id`, `name`) VALUES 
+INSERT IGNORE INTO `adminlevel` (`id`, `name`) VALUES 
 (3, 'developer'),
 (2, 'full'),
 (1, 'none');
@@ -1444,14 +1448,14 @@ INSERT INTO `adminlevel` (`id`, `name`) VALUES
 -- Dumping data for table `affiliation`
 -- 
 
-INSERT INTO `affiliation` (`id`, `name`, `dataUpdateText`, `theme`) VALUES 
+INSERT IGNORE INTO `affiliation` (`id`, `name`, `dataUpdateText`, `theme`) VALUES 
 (1, 'Local', '', 'default'),
 (2, 'Global', '', 'default');
 
 -- 
 -- Dumping data for table `computerloadflow`
 -- 
-INSERT INTO `computerloadflow` (`computerloadstateid`, `nextstateid`, `type`) VALUES 
+INSERT IGNORE INTO `computerloadflow` (`computerloadstateid`, `nextstateid`, `type`) VALUES 
 (4, 22, 'blade'),
 (6, 15, 'blade'),
 (9, 43, 'blade'),
@@ -1476,7 +1480,7 @@ INSERT INTO `computerloadflow` (`computerloadstateid`, `nextstateid`, `type`) VA
 -- Dumping data for table `computerloadstate`
 -- 
 
-INSERT INTO `computerloadstate` (`id`, `loadstatename`, `prettyname`, `est`) VALUES 
+INSERT IGNORE INTO `computerloadstate` (`id`, `loadstatename`, `prettyname`, `est`) VALUES 
 (1, 'info', 'info', 2),
 (2, 'loadimageblade', 'must reload computer', 0),
 (3, 'loadimagevmware', 'loadimagevmware', 1),
@@ -1532,17 +1536,16 @@ INSERT INTO `computerloadstate` (`id`, `loadstatename`, `prettyname`, `est`) VAL
 -- Dumping data for table `connectmethod`
 --
 
-INSERT INTO `connectmethod` (`id`, `name`, `description`, `connecttext`, `servicename`, `startupscript`) VALUES
+INSERT IGNORE INTO `connectmethod` (`id`, `name`, `description`, `connecttext`, `servicename`, `startupscript`) VALUES
 (1, 'ssh', 'ssh on port 22', 'You will need to have an X server running on your local computer and use an ssh client to connect to the system. If you did not click on the <b>Connect!</b> button from the computer you will be using to access the VCL system, you will need to return to the <strong>Current Reservations</strong> page and click the <strong>Connect!</strong> button from a web browser running on the same computer from which you will be connecting to the VCL system. Otherwise, you may be denied access to the remote computer.<br><br>\r\nUse the following information when you are ready to connect:<br>\r\n<UL>\r\n<LI><b>Remote Computer</b>: #connectIP#</LI>\r\n<LI><b>User ID</b>: #userid#</LI>\r\n<LI><b>Password</b>: #password#<br></LI>\r\n</UL>\r\n<b>NOTE</b>: The given password is for <i>this reservation only</i>. You will be given a different password for any other reservations.<br>\r\n<strong><big>NOTE:</big> You cannot use the Windows Remote Desktop Connection to connect to this computer. You must use an ssh client.</strong>', 'ext_sshd', '/etc/init.d/ext_sshd'),
 (2, 'RDP', 'Remote Desktop', 'You will need to use a Remote Desktop program to connect to the system. If you did not click on the <b>Connect!</b> button from the computer you will be using to access the VCL system, you will need to return to the <strong>Current Reservations</strong> page and click the <strong>Connect!</strong> button from a web browser running on the same computer from which you will be connecting to the VCL system. Otherwise, you may be denied access to the remote computer.<br><br>\r\n\r\nUse the following information when you are ready to connect:<br>\r\n<UL>\r\n<LI><b>Remote Computer</b>: #connectIP#</LI>\r\n<LI><b>User ID</b>: #userid#</LI>\r\n<LI><b>Password</b>: #password#<br></LI>\r\n</UL>\r\n<b>NOTE</b>: The given password is for <i>this reservation only</i>. You will be given a different password for any other reservations.<br>\r\n<br>\r\nFor automatic connection, you can download an RDP file that can be opened by the Remote Desktop Connection program.<br><br>\r\n', 'TermService', NULL),
 (3, 'iRAPP RDP', 'Remote Desktop for OS X', 'You will need to use a Remote Desktop program to connect to the system. If you did not click on the <b>Connect!</b> button from the computer you will be using to access the VCL system, you will need to return to the <strong>Current Reservations</strong> page and click the <strong>Connect!</strong> button from a web browser running on the same computer from which you will be connecting to the VCL system. Otherwise, you may be denied access to the remote computer.<br><br>\r\n\r\nUse the following information when you are ready to connect:<br>\r\n<UL>\r\n<LI><b>Remote Computer</b>: #connectIP#</LI>\r\n<LI><b>User ID</b>: #userid#</LI>\r\n<LI><b>Password</b>: #password#<br></LI>\r\n</UL>\r\n<b>NOTE</b>: The given password is for <i>this reservation only</i>. You will be given a different password for any other reservations.<br>\r\n<br>\r\nFor automatic connection, you can download an RDP file that can be opened by the Remote Desktop Connection program.<br><br>\r\n', NULL, NULL);
-
 
 --
 -- Dumping data for table `connectmethodmap`
 --
 
-INSERT INTO `connectmethodmap` (`connectmethodid`, `OStypeid`, `OSid`, `imagerevisionid`, `disabled`, `autoprovisioned`) VALUES
+INSERT IGNORE INTO `connectmethodmap` (`connectmethodid`, `OStypeid`, `OSid`, `imagerevisionid`, `disabled`, `autoprovisioned`) VALUES
 (1, 2, NULL, NULL, 0, 1),
 (1, 3, NULL, NULL, 0, 1),
 (2, 1, NULL, NULL, 0, 1),
@@ -1556,7 +1559,7 @@ INSERT INTO `connectmethodmap` (`connectmethodid`, `OStypeid`, `OSid`, `imagerev
 -- Dumping data for table `documentation`
 -- 
 
-INSERT INTO `documentation` (`name`, `title`, `data`) VALUES 
+INSERT IGNORE INTO `documentation` (`name`, `title`, `data`) VALUES 
 ('GrantingAccesstoaNewImageEnvironment1', 'Granting Access to a New Image/Environment', '<div id="docbullets">\r\n<h2>Overview</h2>\r\n<p>Once you have created a new image, there are a few things you have to do to allow other people to use it.&nbsp; If you don''t have access to do any of the following steps, you will need to get a VCL administrator to do them for you.</p>\r\n<p>When you create a new image, it is only available to you, and it is only allowed to be run on a few computers that have been set aside for the testing of new images.</p>\r\n<h2>Step 1: Image Mapping</h2>\r\n<p>Images are mapped to be run on a set of computers. See the documentation on <a href="index.php?mode=viewdocs&amp;item=Resources"><span style="color: rgb(255, 0, 0);"><b>Resources</b></span></a> to learn more about why this is done. For your new image to be able to run on more computers than just those designated for testing, you need to map it to a set of computers. There are a few steps to this process:</p>\r\n<ol>\r\n    <li>You need to make your image a member of an image group\r\n    <ul>\r\n        <li>Select <span style="color: rgb(0, 0, 255);">Manage Images</span>-&gt;<span style="color: rgb(0, 0, 255);">Edit Image Grouping</span></li>\r\n        <li>Select your image from the drop down box and click <span style="color: rgb(0, 0, 255);">Get Groups</span></li>\r\n        <li>Choose one or more image groups to which you would like to add the image from the box on the right</li>\r\n        <li>Click <span style="color: rgb(0, 0, 255);">&lt;-Add</span> to make the image a member of the group(s)</li>\r\n    </ul>\r\n    </li>\r\n    <li>You need to map the image group(s) you selected in step 1 to one or more computer groups\r\n    <ul>\r\n        <li>Select <span style="color: rgb(0, 0, 255);">Manage Images</span>-&gt;<span style="color: rgb(0, 0, 255);">Edit Image Mapping</span></li>\r\n        <li>Do the following for each group from step 1:<br />\r\n        <ul>\r\n            <li>Select the image group from the drop down box and click <span style="color: rgb(0, 0, 255);">Get Computer Groups</span></li>\r\n            <li>Choose one or more computer groups to which you would like to map the image group from the box on the right</li>\r\n            <li>click <span style="color: rgb(0, 0, 255);">&lt;-Add</span> to make map the image group to the computer group(s)</li>\r\n        </ul>\r\n        </li>\r\n        <li>Note: there is an assumption here that the computer groups you selected already have computers that are in those groups</li>\r\n    </ul>\r\n    </li>\r\n</ol>\r\n<h2>Step 2: Privileges</h2>\r\n<p>Now, you need to grant access to use the image to a user or group of users under the Privileges section of the site.&nbsp; Here are the steps involved:</p>\r\n<ol>\r\n    <li>Select <span style="color: rgb(0, 0, 255);">Privileges</span></li>\r\n    <li>Choose an existing node or create a new node in the tree structure in the upper portion of the page where you would like to assign the user(s) access</li>\r\n    <li>Now, you need to grant the user <span style="color: rgb(0, 0, 255);">imageCheckOut</span> at the node.&nbsp; You can do this for an individual user or a group of users.\r\n    <ul>\r\n        <li>Individual User:\r\n        <ul>\r\n            <li>Click <span style="color: rgb(0, 0, 255);">Add User</span></li>\r\n            <li>Enter the user''s id in the text box and select the <span style="color: rgb(0, 0, 255);">imageCheckOut</span> checkbox</li>\r\n            <li>Click <span style="color: rgb(0, 0, 255);">Submit New User</span></li>\r\n        </ul>\r\n        </li>\r\n        <li>User Group:\r\n        <ul>\r\n            <li>Click <span style="color: rgb(0, 0, 255);">Add Group</span></li>\r\n            <li>Select the user group from the drop-down box and select the <span style="color: rgb(0, 0, 255);">imageCheckOut</span> checkbox</li>\r\n            <li>Click <span style="color: rgb(0, 0, 255);">Submit New User Group</span></li>\r\n        </ul>\r\n        </li>\r\n    </ul>\r\n    </li>\r\n    <li>Next, you need to make sure the image group in which you placed the image in step 1 of <b>Image Mapping</b> is available at this node. If it is, go on to the next step, if not:\r\n    <ul>\r\n        <li>Click <span style="color: rgb(0, 0, 255);">Add Resource Group</span></li>\r\n        <li>Select the image group from the drop-down box and select the <span style="color: rgb(0, 0, 255);">available</span> checkbox</li>\r\n        <li>Click <span style="color: rgb(0, 0, 255);">Submit New Resource Group</span></li>\r\n    </ul>\r\n    </li>\r\n    <li>Finally, you need to make sure the computer group(s) selected in step 2 of <b>Image Mapping</b> are also available here. If so, you are finished.&nbsp; If not:\r\n    <ul>\r\n        <li>Click <span style="color: rgb(0, 0, 255);">Add Resource Group</span></li>\r\n        <li>Select the computer group from the drop-down box and select the <span style="color: rgb(0, 0, 255);">available</span> checkbox</li>\r\n        <li>Click <span style="color: rgb(0, 0, 255);">Submit New Resource Group</span></li>\r\n    </ul>\r\n    </li>\r\n</ol>\r\n<p>Now, the user or user groups you have added to this node will be able to make reservations for the new image.</p>\r\n</div>'),
 ('OverviewofPrivileges-Whatpermissionsarerequiredtoaccesspartsofthesite', 'Overview of Privileges - What permissions are required to access parts of the site', '<p>These are the privileges a user needs to access various parts of the VCL site. Unless specifically specified, a user must have both the <span style="color: rgb(0, 0, 255);">user<span style="color: rgb(0, 0, 0);"> and the <span style="color: rgb(255, 102, 0);">resource</span> permissions granted at the same node in the privilege tree.</span></span> &quot;<span style="color: rgb(0, 0, 255);">user</span>&quot; refers to privileges granted on the Privileges page either specifically to a user or to a group of which a user is a member. &quot;<span style="color: rgb(255, 102, 0);">resource</span>&quot; refers to privileges granted on the Privileges page to a resource group. Privileges can only be granted to resource groups; there is no way to grant privileges to a specific resource (image, computer, etc).</p>\r\n<h2>New Reservation</h2>\r\n<p style="margin-left: 40px;">This shows up for everyone, but the following privileges must be granted to be able to actually make a reservation:</p>\r\n<p style="margin-left: 80px;"><span style="color: rgb(0, 0, 255);">user<span style="color: rgb(0, 0, 0);"> - imageCheckOut</span></span><br />\r\n<span style="color: rgb(255, 102, 0);">resource</span> - image group: available, computer group: available</p>\r\n<h2>Manage Groups</h2>\r\n<p style="margin-left: 40px;"><span style="color: rgb(0, 0, 255);">user <span style="color: rgb(0, 0, 0);">- groupAdmin is required to make this link show up</span></span></p>\r\n<h3 style="margin-left: 40px;">User Groups</h3>\r\n<p style="margin-left: 80px;">Groups a user owns and groups that are editable by groups a user is a member of show up in this section.</p>\r\n<h3 style="margin-left: 40px;">Resource Groups</h3>\r\n<p style="margin-left: 80px;">Groups owned by user groups a user is a member of show up here.&nbsp; More groups show up when the following attribute is granted for a resource group:</p>\r\n<p style="margin-left: 80px;"><span style="color: rgb(255, 102, 0);">resource<span style="color: rgb(0, 0, 0);"> - (any type) manageGroup</span></span></p>\r\n<h2>Manage Images</h2>\r\n<p style="margin-left: 40px;"><span style="color: rgb(0, 0, 255);">user</span> - imageAdmin is required to make this link show up</p>\r\n<h3 style="margin-left: 40px;">Edit Image Information</h3>\r\n<p style="margin-left: 80px;"><span style="color: rgb(0, 0, 255);">user</span> - imageAdmin<br />\r\n<span style="color: rgb(255, 102, 0);">resource</span> - image group: administer</p>\r\n<h3 style="margin-left: 40px;">View Image Grouping</h3>\r\n<p style="margin-left: 80px;"><span style="color: rgb(0, 0, 255);">user</span> - imageAdmin<br />\r\n<span style="color: rgb(255, 102, 0);">resource</span> - image group: manageGroup</p>\r\n<h3 style="margin-left: 40px;">View Image Mapping</h3>\r\n<p style="margin-left: 80px;"><span style="color: rgb(0, 0, 255);">user</span> - imageAdmin<br />\r\n<span style="color: rgb(255, 102, 0);">resource</span> - image group: manageGroup</p>\r\n<p style="margin-left: 80px;">at same or different node:</p>\r\n<p style="margin-left: 80px;"><span style="color: rgb(0, 0, 255);">user</span> - computerAdmin<br />\r\n<span style="color: rgb(255, 102, 0);">resource</span> - computer group: manageGroup</p>\r\n<h3 style="margin-left: 40px;">Create New Image</h3>\r\n<p style="margin-left: 80px;"><span style="color: rgb(0, 0, 255);">user</span> - imageAdmin<br />\r\n<span style="color: rgb(255, 102, 0);">resource</span> - image group: available, computer group: available</p>\r\n<h2>Manage Schedules</h2>\r\n<p style="margin-left: 40px;"><span style="color: rgb(0, 0, 255);">user</span> - scheduleAdmin is required to make this link show up</p>\r\n<p style="margin-left: 40px;">All schedules owned by a user will show up by default.</p>\r\n<p style="margin-left: 40px;">To edit schedule information for other schedules, these permissions are required:</p>\r\n<p style="margin-left: 80px;"><span style="color: rgb(0, 0, 255);">user</span> - scheduleAdmin<br />\r\n<span style="color: rgb(255, 102, 0);">resource</span> - schedule group: administer</p>\r\n<h3 style="margin-left: 40px;">Schedule Grouping</h3>\r\n<p style="margin-left: 80px;"><span style="color: rgb(0, 0, 255);">user</span> - scheduleAdmin<br />\r\n<span style="color: rgb(255, 102, 0);">resource</span> - schedule group: manageGroup</p>\r\n<h2>Manage Computers</h2>\r\n<p style="margin-left: 40px;"><span style="color: rgb(0, 0, 255);">user</span> - computerAdmin is required to make this link show up</p>\r\n<p style="margin-left: 40px;">Selection boxes for platforms and schedules only show up if a user has access to more than one platform or schedule.</p>\r\n<h3 style="margin-left: 40px;">Edit Computer Grouping</h3>\r\n<p style="margin-left: 80px;"><span style="color: rgb(0, 0, 255);">user</span> - computerAdmin<br />\r\n<span style="color: rgb(255, 102, 0);">resource</span> - computer group: manageGroup</p>\r\n<h3 style="margin-left: 40px;">Computer Utilities</h3>\r\n<h4 style="margin-left: 80px;">Reload computers with image</h4>\r\n<p style="margin-left: 120px;"><span style="color: rgb(0, 0, 255);">user</span> - computerAdmin<br />\r\n<span style="color: rgb(255, 102, 0);">resource</span> - computer group: administer</p>\r\n<p style="margin-left: 120px;">and at same or different node:</p>\r\n<p style="margin-left: 120px;"><span style="color: rgb(0, 0, 255);">user</span> - imageCheckOut or imageAdmin<br />\r\n<span style="color: rgb(255, 102, 0);">resource</span> - image group: available</p>\r\n<h4 style="margin-left: 80px;">Change state of computers</h4>\r\n<p style="margin-left: 120px;"><span style="color: rgb(0, 0, 255);">user</span> - computerAdmin<br />\r\n<span style="color: rgb(255, 102, 0);">resource</span> - computer group: administer</p>\r\n<h4 style="margin-left: 80px;">Change schedule of computers</h4>\r\n<p style="margin-left: 120px;"><span style="color: rgb(0, 0, 255);">user</span> - computerAdmin<br />\r\n<span style="color: rgb(255, 102, 0);">resource</span> - computer group: administer</p>\r\n<p style="margin-left: 120px;">and at same or different node:</p>\r\n<p style="margin-left: 120px;"><span style="color: rgb(0, 0, 255);">user</span> - scheduleAdmin<br />\r\n<span style="color: rgb(255, 102, 0);">resource</span> - schedule group: manageGroup</p>\r\n<h3 style="margin-left: 40px;">Edit Computer Information</h3>\r\n<p style="margin-left: 80px;"><span style="color: rgb(0, 0, 255);">user</span> - computerAdmin<br />\r\n<span style="color: rgb(255, 102, 0);">resource</span> - computer group: administer</p>\r\n<p style="margin-left: 80px;">and at same or different node:</p>\r\n<p style="margin-left: 80px;"><span style="color: rgb(0, 0, 255);">user</span> - scheduleAdmin<br />\r\n<span style="color: rgb(255, 102, 0);">resource</span> - schedule group: manageGroup</p>\r\n<p style="margin-left: 80px;">&nbsp;</p>\r\n<h2>Management Nodes</h2>\r\n<p style="margin-left: 40px;"><span style="color: rgb(0, 0, 255);">user</span> - mgmtNodeAdmin is required to make this link show up</p>\r\n<h3 style="margin-left: 40px;">Edit Management Node Information</h3>\r\n<p style="margin-left: 80px;"><span style="color: rgb(0, 0, 255);">user</span> - mgmtNodeAdmin<br />\r\n<span style="color: rgb(255, 102, 0);">resource</span> - management node group: administer</p>\r\n<h3 style="margin-left: 40px;">Edit Management Node Grouping</h3>\r\n<p style="margin-left: 80px;"><span style="color: rgb(0, 0, 255);">user</span> - mgmtNodeAdmin<br />\r\n<span style="color: rgb(255, 102, 0);">resource</span> - management node group: manageGroup</p>\r\n<h3 style="margin-left: 40px;">Edit Management Node Mapping</h3>\r\n<p style="margin-left: 80px;"><span style="color: rgb(0, 0, 255);">user</span> - mgmtNodeAdmin<br />\r\n<span style="color: rgb(255, 102, 0);">resource</span> - management node group: manageGroup</p>\r\n<p style="margin-left: 80px;">at same or different node:</p>\r\n<p style="margin-left: 80px;"><span style="color: rgb(0, 0, 255);">user</span> - computerAdmin<br />\r\n<span style="color: rgb(255, 102, 0);">resource</span> - computer group: manageGroup</p>\r\n<h2>Privileges</h2>\r\n<p style="margin-left: 40px;"><span style="color: rgb(0, 0, 255);">user</span> - nodeAdmin, userGrant, or resourceGrant is required to make this link show up</p>\r\n<h3 style="margin-left: 40px;">Add Child / Delete Node and Children</h3>\r\n<p style="margin-left: 80px;"><span style="color: rgb(0, 0, 255);">user</span> - nodeAdmin</p>\r\n<h3 style="margin-left: 40px;">Add User / modify user privileges</h3>\r\n<p style="margin-left: 80px;"><span style="color: rgb(0, 0, 255);">user</span> - userGrant</p>\r\n<h3 style="margin-left: 40px;">Add Group / modify user group privileges</h3>\r\n<p style="margin-left: 80px;"><span style="color: rgb(0, 0, 255);">user</span> - userGrant</p>\r\n<h3 style="margin-left: 40px;">Add Resource Group / modify resource group privileges</h3>\r\n<p style="margin-left: 80px;"><span style="color: rgb(0, 0, 255);">user</span> - resourceGrant</p>\r\n<p>&nbsp;</p>'),
 ('Resources', 'Resources', '<h2>Overview</h2>\r\n<p>Computers, images, management nodes, and schedules have some very similar characteristics in how they are handled within the VCL site. Therefore, there are times where it is easier to refer to them all together as <b><span style="color: rgb(255, 0, 0);">resources</span></b>. Here are some similarities between them:</p>\r\n<ul>\r\n    <li>They are all managed by adding them to <span style="color: rgb(255, 0, 0);"><b>resource groups</b></span>.&nbsp; All resource groups have a type associated with them such that only <span style="color: rgb(0, 0, 255);">images</span> can be part of an <span style="color: rgb(0, 0, 255);">image group</span>, only <span style="color: rgb(0, 0, 255);">computers</span> can be part of a <span style="color: rgb(0, 0, 255);">computer group</span>, etc.</li>\r\n    <li>Resources of one type can be related to resources of certain other types through <span style="color: rgb(255, 0, 0);"><b>resource mapping</b></span>. <span style="color: rgb(0, 0, 255);">Image groups</span> and <span style="color: rgb(0, 0, 255);">computer groups</span> can be mapped together, and <span style="color: rgb(0, 0, 255);">management node</span><span style="color: rgb(0, 0, 255);"> groups</span> and&nbsp;<span style="color: rgb(0, 0, 255);">computer</span><span style="color: rgb(0, 0, 255);"> groups</span> can be mapped together.</li>\r\n    <li>Privileges over resources are only granted through resource groups.&nbsp; Privileges cannot be granted directly to a resource.</li>\r\n    <li>There is an <span style="color: rgb(255, 0, 0);"><b>Admin</b></span> privilege that can be granted to users for each type of resource: computerAdmin, imageAdmin, mgmtNodeAdmin, and scheduleAdmin</li>\r\n</ul>\r\n<h2>Grouping</h2>\r\n<p>The amount of images and computers that become part of a VCL install can grow very rappidly. Because of this, it is much easier to deal with them in groups rather than individually. The amount of schedules and management nodes does not typically grow very large. However, due to other similarities as resources, they are handled in groups as well.</p>\r\n<h2>Mapping</h2>\r\n<p>Mapping allows for tight control over how resources can be used together. Through image to computer mapping, one has tight control over which computers an image could end up being run. This can be used to control things like platform dependencies, to ensure only vm images get run on the correct type of vm computer, and to ensure an image containing software purchased by a specific group only gets run on computers owned by the same group (this can be handled with resource privileges as well).</p>\r\n<p>Through management node to computer mapping, assignment of which management nodes control which computers is accomplished. One can quickly switch which management node is in control of a group of computers. Additionally, when management node redundancy is fully implemented, this is how management nodes will be able to control overlapping groups of computers.</p>\r\n<h2>Resource Privileges</h2>\r\n<p>There are three privileges that can be assigned to resource groups:</p>\r\n<ul>\r\n    <li>available</li>\r\n    <li>administer</li>\r\n    <li>manageGroup</li>\r\n</ul>\r\n<p><span style="color: rgb(0, 0, 255);">available</span> is only used for image and computer groups. If it is assigned to a schedule or management node group, it is simply ignored. This privilege correspondes to these user group privileges: imageCheckOut and imageAdmin. When a user has one of these two privileges at a node along with an image group or a computer group having the available privilege at the same node, then the user will have access to make a reservations for the images in the group (imageCheckOut) or make a new images based off of images in the group (imageAdmin). Note that both an image group and a computer group must have the available permission where a user has imageCheckOut for the user to make a reservation for an image in the image group. This is used to determine which computers are available at the node to go along with which images are also available at the node.</p>\r\n<p><span style="color: rgb(0, 0, 255);">administer</span> is used for all types of resources, and thus corresponds to all of the *Admin user privileges (computerAdmin, imageAdmin, mgmtNodeAdmin, and scheduleAdmin). Administer generally grants access to manage specific <i>characteristics</i> of resources in a group, but not to manage any grouping information. For example, if a user has the imageAdmin privilege at a node where an image group has the administer privilege, the user would then have access to modify <i>characteristics</i> of images in that group (name, owner, minimum specs required by the image, etc), but would <b>not</b> have access to edit which images are <i>in the group</i>.</p>\r\n<p><span style="color: rgb(0, 0, 255);">manageGroup</span> is also used for all types of resources. It grants access to a few different things. One is the ability to modify information about a group under <span style="color: rgb(0, 0, 255);">Manage Groups </span>(if a user also has the groupAdmin privilege). Another is the ability to manage membership of a group. Finally, it provides access for mapping one type of group to another (for this, manageGroup must be granted for both types of resources). Additionally, there is an extra way manageGroup is used specifically related to computer groups: a user must have scheduleAdmin and manageGroup over a schedule group to be able to change the schedule of a computer (both through Manage Computers-&gt;Edit Computer Information and Manage Computers-&gt;Computer Utilities-&gt;Change schedule of computers).</p>');
@@ -1565,21 +1568,21 @@ INSERT INTO `documentation` (`name`, `title`, `data`) VALUES
 -- Dumping data for table `image`
 -- 
 
-INSERT INTO `image` (`id`, `name`, `prettyname`, `ownerid`, `imagetypeid`, `platformid`, `OSid`, `imagemetaid`, `minram`, `minprocnumber`, `minprocspeed`, `minnetwork`, `maxconcurrent`, `reloadtime`, `deleted`, `test`, `lastupdate`, `forcheckout`, `maxinitialtime`, `project`, `size`) VALUES 
+INSERT IGNORE INTO `image` (`id`, `name`, `prettyname`, `ownerid`, `imagetypeid`, `platformid`, `OSid`, `imagemetaid`, `minram`, `minprocnumber`, `minprocspeed`, `minnetwork`, `maxconcurrent`, `reloadtime`, `deleted`, `test`, `lastupdate`, `forcheckout`, `maxinitialtime`, `project`, `size`) VALUES 
 (1, 'noimage', 'No Image', 1, 1, 1, 2, NULL, 0, 1, 0, 10, NULL, 0, 0, 0, NULL, 0, 0, 'vcl', 1450);
 
 -- 
 -- Dumping data for table `imagerevision`
 -- 
 
-INSERT INTO `imagerevision` (`id`, `imageid`, `revision`, `userid`, `datecreated`, `deleted`, `production`, `comments`, `imagename`) VALUES 
+INSERT IGNORE INTO `imagerevision` (`id`, `imageid`, `revision`, `userid`, `datecreated`, `deleted`, `production`, `comments`, `imagename`) VALUES 
 (1, 1, 0, 1, '1980-01-01 00:00:00', 0, 1, NULL, 'noimage');
 
 --
 -- Dumping data for table `imagetype`
 --
 
-INSERT INTO `imagetype` (`id`, `name`) VALUES
+INSERT IGNORE INTO `imagetype` (`id`, `name`) VALUES
 (1, 'none'),
 (2, 'partimage'),
 (3, 'partimage-ng'),
@@ -1593,23 +1596,15 @@ INSERT INTO `imagetype` (`id`, `name`) VALUES
 -- Dumping data for table `IMtype`
 -- 
 
-INSERT INTO `IMtype` (`id`, `name`) VALUES 
+INSERT IGNORE INTO `IMtype` (`id`, `name`) VALUES 
 (2, 'jabber'),
 (1, 'none');
-
--- 
--- Dumping data for table `localauth`
--- 
-
-INSERT INTO `localauth` (`userid`, `passhash`, `salt`, `lastupdated`, `lockedout`) VALUES 
-(1, 'd8c730cc269d3d6b6147a416fb49c2be1a70aefc', 'QwkCHLpY', '2007-05-17 09:56:01', 0),
-(3, 'da60188ee483aa16eeb82d4969a0f79d0d177d99', '8ht2Pa55', '2007-05-17 09:56:01', 0);
 
 -- 
 -- Dumping data for table `module`
 -- 
 
-INSERT INTO `module` (`id`, `name`, `prettyname`, `description`, `perlpackage`) VALUES 
+INSERT IGNORE INTO `module` (`id`, `name`, `prettyname`, `description`, `perlpackage`) VALUES 
 (1, 'provisioning_xcat_13', 'xCAT 1.3 Provisioning Module', '', 'VCL::Module::Provisioning::xCAT'),
 (3, 'provisioning_lab', 'Computing Lab Provisioning Module', '', 'VCL::Module::Provisioning::Lab'),
 (4, 'os_windows', 'Windows OS Module', '', 'VCL::Module::OS::Windows'),
@@ -1639,10 +1634,20 @@ INSERT INTO `module` (`id`, `name`, `prettyname`, `description`, `perlpackage`) 
 (31, 'predictive_level_2', 'Predictive Loading Module Level 2', 'Power off computer. If a virtual machine, it will be also destroyed.', 'VCL::Module::Predictive::Level_2');
 
 -- 
+-- Dumping data for table `OStype`
+-- 
+
+INSERT IGNORE INTO `OStype` (`id`, `name`) VALUES
+(2, 'linux'),
+(3, 'unix'),
+(1, 'windows'),
+(4, 'osx');
+
+-- 
 -- Dumping data for table `OS`
 -- 
 
-INSERT INTO `OS` (`id`, `name`, `prettyname`, `type`, `installtype`, `sourcepath`, `moduleid`) VALUES
+INSERT IGNORE INTO `OS` (`id`, `name`, `prettyname`, `type`, `installtype`, `sourcepath`, `moduleid`) VALUES
 (2, 'sun4x_58', 'Solaris 5.8 (Lab)', 'unix', 'none', NULL, 15),
 (3, 'win2k', 'Windows 2000 (Bare Metal)', 'windows', 'partimage', 'image', 4),
 (6, 'rhel3', 'Red Hat Enterprise Linux 3 (Kickstart)', 'linux', 'kickstart', 'rhas3', 5),
@@ -1693,7 +1698,7 @@ INSERT INTO `OS` (`id`, `name`, `prettyname`, `type`, `installtype`, `sourcepath
 -- Dumping data for table `OSinstalltype`
 -- 
 
-INSERT INTO `OSinstalltype` (`id`, `name`) VALUES
+INSERT IGNORE INTO `OSinstalltype` (`id`, `name`) VALUES
 (2, 'kickstart'),
 (3, 'none'),
 (1, 'partimage'),
@@ -1701,20 +1706,10 @@ INSERT INTO `OSinstalltype` (`id`, `name`) VALUES
 (5, 'vbox');
 
 -- 
--- Dumping data for table `OStype`
--- 
-
-INSERT INTO `OStype` (`id`, `name`) VALUES
-(2, 'linux'),
-(3, 'unix'),
-(1, 'windows'),
-(4, 'osx');
-
--- 
 -- Dumping data for table `platform`
 -- 
 
-INSERT INTO `platform` (`id`, `name`) VALUES 
+INSERT IGNORE INTO `platform` (`id`, `name`) VALUES 
 (1, 'i386'),
 (4, 'i386_lab'),
 (3, 'ultrasparc');
@@ -1723,7 +1718,7 @@ INSERT INTO `platform` (`id`, `name`) VALUES
 -- Dumping data for table `privnode`
 -- 
 
-INSERT INTO `privnode` (`id`, `parent`, `name`) VALUES 
+INSERT IGNORE INTO `privnode` (`id`, `parent`, `name`) VALUES 
 (2, 1, 'Developer'),
 (1, 1, 'Root'),
 (3, 2, 'VCL'),
@@ -1734,7 +1729,7 @@ INSERT INTO `privnode` (`id`, `parent`, `name`) VALUES
 -- Dumping data for table `privisioning`
 -- 
 
-INSERT INTO `provisioning` (`id`, `name`, `prettyname`, `moduleid`) VALUES
+INSERT IGNORE INTO `provisioning` (`id`, `name`, `prettyname`, `moduleid`) VALUES
 (1, 'xcat_13', 'xCAT 1.3', 1),
 (3, 'lab', 'Computing Lab', 3),
 (5, 'xcat_21', 'xCAT 2.1', 11),
@@ -1757,10 +1752,21 @@ INSERT IGNORE provisioningOSinstalltype (provisioningid, OSinstalltypeid) SELECT
 INSERT IGNORE provisioningOSinstalltype (provisioningid, OSinstalltypeid) SELECT provisioning.id, OSinstalltype.id FROM provisioning, OSinstalltype WHERE provisioning.name LIKE '%libvirt%' AND OSinstalltype.name = 'vmware';
 
 -- 
+-- Dumping data for table `resourcetype`
+-- 
+
+INSERT IGNORE INTO `resourcetype` (`id`, `name`) VALUES 
+(12, 'computer'),
+(13, 'image'),
+(16, 'managementnode'),
+(15, 'schedule'),
+(17, 'serverprofile');
+
+-- 
 -- Dumping data for table `resource`
 -- 
 
-INSERT INTO `resource` (`id`, `resourcetypeid`, `subid`) VALUES 
+INSERT IGNORE INTO `resource` (`id`, `resourcetypeid`, `subid`) VALUES 
 (4, 13, 1),
 (8, 15, 1);
 
@@ -1768,7 +1774,7 @@ INSERT INTO `resource` (`id`, `resourcetypeid`, `subid`) VALUES
 -- Dumping data for table `resourcegroup`
 -- 
 
-INSERT INTO `resourcegroup` (`id`, `name`, `ownerusergroupid`, `resourcetypeid`) VALUES 
+INSERT IGNORE INTO `resourcegroup` (`id`, `name`, `ownerusergroupid`, `resourcetypeid`) VALUES 
 (1, 'allComputers', 3, 12),
 (2, 'allImages', 3, 13),
 (3, 'allManagementNodes', 3, 16),
@@ -1783,14 +1789,14 @@ INSERT INTO `resourcegroup` (`id`, `name`, `ownerusergroupid`, `resourcetypeid`)
 -- Dumping data for table `resourcegroupmembers`
 -- 
 
-INSERT INTO `resourcegroupmembers` (`resourceid`, `resourcegroupid`) VALUES 
+INSERT IGNORE INTO `resourcegroupmembers` (`resourceid`, `resourcegroupid`) VALUES 
 (8, 4);
 
 -- 
 -- Dumping data for table `resourcemap`
 -- 
 
-INSERT INTO `resourcemap` (`resourcegroupid1`, `resourcetypeid1`, `resourcegroupid2`, `resourcetypeid2`) VALUES 
+INSERT IGNORE INTO `resourcemap` (`resourcegroupid1`, `resourcetypeid1`, `resourcegroupid2`, `resourcetypeid2`) VALUES 
 (2, 13, 1, 12),
 (3, 16, 1, 12),
 (10, 13, 5, 12),
@@ -1802,7 +1808,7 @@ INSERT INTO `resourcemap` (`resourcegroupid1`, `resourcetypeid1`, `resourcegroup
 -- Dumping data for table `resourcepriv`
 -- 
 
-INSERT INTO `resourcepriv` (`id`, `resourcegroupid`, `privnodeid`, `type`) VALUES 
+INSERT IGNORE INTO `resourcepriv` (`id`, `resourcegroupid`, `privnodeid`, `type`) VALUES 
 (1, 1, 4, 'available'),
 (2, 1, 4, 'administer'),
 (3, 1, 4, 'manageGroup'),
@@ -1835,35 +1841,24 @@ INSERT INTO `resourcepriv` (`id`, `resourcegroupid`, `privnodeid`, `type`) VALUE
 (32, 11, 4, 'manageMapping');
 
 -- 
--- Dumping data for table `resourcetype`
--- 
-
-INSERT INTO `resourcetype` (`id`, `name`) VALUES 
-(12, 'computer'),
-(13, 'image'),
-(16, 'managementnode'),
-(15, 'schedule'),
-(17, 'serverprofile');
-
--- 
 -- Dumping data for table `schedule`
 -- 
 
-INSERT INTO `schedule` (`id`, `name`, `ownerid`) VALUES 
+INSERT IGNORE INTO `schedule` (`id`, `name`, `ownerid`) VALUES 
 (1, 'VCL 24x7', 1);
 
 -- 
 -- Dumping data for table `scheduletimes`
 -- 
 
-INSERT INTO `scheduletimes` (`scheduleid`, `start`, `end`) VALUES 
+INSERT IGNORE INTO `scheduletimes` (`scheduleid`, `start`, `end`) VALUES 
 (1, 0, 10080);
 
 -- 
 -- Dumping data for table `state`
 -- 
 
-INSERT INTO `state` (`id`, `name`) VALUES 
+INSERT IGNORE INTO `state` (`id`, `name`) VALUES 
 (2, 'available'),
 (4, 'classreserved'),
 (9, 'cleaning'),
@@ -1898,16 +1893,24 @@ INSERT INTO `state` (`id`, `name`) VALUES
 -- Dumping data for table `user`
 -- 
 
-INSERT INTO `user` (`id`, `uid`, `unityid`, `affiliationid`, `firstname`, `lastname`, `preferredname`, `email`, `emailnotices`, `IMtypeid`, `IMid`, `adminlevelid`, `width`, `height`, `bpp`, `audiomode`, `mapdrives`, `mapprinters`, `mapserial`, `showallgroups`, `lastupdated`) VALUES 
+INSERT IGNORE INTO `user` (`id`, `uid`, `unityid`, `affiliationid`, `firstname`, `lastname`, `preferredname`, `email`, `emailnotices`, `IMtypeid`, `IMid`, `adminlevelid`, `width`, `height`, `bpp`, `audiomode`, `mapdrives`, `mapprinters`, `mapserial`, `showallgroups`, `lastupdated`) VALUES 
 (1, 101, 'admin', 1, 'vcl', 'admin', '', 'root@localhost', 0, 1, NULL, 3, 1024, 768, 16, 'local', 1, 1, 1, 1, '2007-05-17 09:58:39'),
 (2, NULL, 'vclreload', 1, 'vcl', 'reload', NULL, '', 0, 1, NULL, 1, 1024, 768, 16, 'local', 1, 1, 0, 0, '0000-00-00 00:00:00'),
 (3, NULL, 'vclsystem', 1, 'vcl', 'system', NULL, '', 0, 1, NULL, 1, 1024, 768, 16, 'local', 1, 1, 0, 0, '0000-00-00 00:00:00');
 
 -- 
+-- Dumping data for table `localauth`
+-- 
+
+INSERT IGNORE INTO `localauth` (`userid`, `passhash`, `salt`, `lastupdated`, `lockedout`) VALUES 
+(1, 'd8c730cc269d3d6b6147a416fb49c2be1a70aefc', 'QwkCHLpY', '2007-05-17 09:56:01', 0),
+(3, 'da60188ee483aa16eeb82d4969a0f79d0d177d99', '8ht2Pa55', '2007-05-17 09:56:01', 0);
+
+-- 
 -- Dumping data for table `usergroup`
 -- 
 
-INSERT INTO `usergroup` (`id`, `name`, `affiliationid`, `ownerid`, `editusergroupid`, `custom`, `courseroll`, `initialmaxtime`, `totalmaxtime`, `maxextendtime`, `overlapResCount`) VALUES 
+INSERT IGNORE INTO `usergroup` (`id`, `name`, `affiliationid`, `ownerid`, `editusergroupid`, `custom`, `courseroll`, `initialmaxtime`, `totalmaxtime`, `maxextendtime`, `overlapResCount`) VALUES 
 (1, 'global', 1, 1, 1, 1, 0, 240, 360, 30, 0),
 (3, 'adminUsers', 1, 1, 1, 1, 0, 480, 600, 180, 50),
 (4, 'manageNewImages', 1, 1, 3, 1, 0, 240, 360, 30, 0),
@@ -1918,7 +1921,7 @@ INSERT INTO `usergroup` (`id`, `name`, `affiliationid`, `ownerid`, `editusergrou
 -- Dumping data for table `usergroupmembers`
 -- 
 
-INSERT INTO `usergroupmembers` (`userid`, `usergroupid`) VALUES 
+INSERT IGNORE INTO `usergroupmembers` (`userid`, `usergroupid`) VALUES 
 (1, 1),
 (1, 3),
 (1, 4),
@@ -1926,28 +1929,10 @@ INSERT INTO `usergroupmembers` (`userid`, `usergroupid`) VALUES
 (1, 6);
 
 -- 
--- Dumping data for table `usergrouppriv`
--- 
-
-INSERT INTO `usergrouppriv` (`usergroupid`, `userprivtypeid`) VALUES
-(3, 1),
-(3, 2),
-(3, 3),
-(3, 4),
-(3, 5),
-(3, 6),
-(3, 7),
-(3, 8),
-(3, 9),
-(3, 10),
-(3, 11),
-(3, 12);
-
--- 
 -- Dumping data for table `usergroupprivtype`
 -- 
 
-INSERT INTO `usergroupprivtype` (`id`, `name`, `help`) VALUES
+INSERT IGNORE INTO `usergroupprivtype` (`id`, `name`, `help`) VALUES
 (1, 'Manage Additional User Group Permissions', 'This gives users in the group access to this portion of the site.'),
 (2, 'Manage Block Allocations (global)', 'Grants the ability to create, accept, and reject block allocations for any affiliation.'),
 (3, 'Set Overlapping Reservation Count', 'Grants the ability to control how many overlapping reservations users in a given user group can make.'),
@@ -1967,10 +1952,47 @@ INSERT INTO `usergroupprivtype` (`id`, `name`, `help`) VALUES
 (17, 'Site Configuration (affiliation only)', 'Grants the ability to view the Site Configuration part of the site to manage site settings specific to the user''s own affiliation.');
 
 -- 
+-- Dumping data for table `usergrouppriv`
+-- 
+
+INSERT IGNORE INTO `usergrouppriv` (`usergroupid`, `userprivtypeid`) VALUES
+(3, 1),
+(3, 2),
+(3, 3),
+(3, 4),
+(3, 5),
+(3, 6),
+(3, 7),
+(3, 8),
+(3, 9),
+(3, 10),
+(3, 11),
+(3, 12);
+
+-- 
+-- Dumping data for table `userprivtype`
+-- 
+
+INSERT IGNORE INTO `userprivtype` (`id`, `name`) VALUES 
+(1, 'block'),
+(2, 'cascade'),
+(4, 'computerAdmin'),
+(11, 'groupAdmin'),
+(5, 'imageAdmin'),
+(6, 'imageCheckOut'),
+(13, 'mgmtNodeAdmin'),
+(3, 'nodeAdmin'),
+(10, 'resourceGrant'),
+(12, 'scheduleAdmin'),
+(8, 'serverCheckOut'),
+(9, 'serverProfileAdmin'),
+(7, 'userGrant');
+
+-- 
 -- Dumping data for table `userpriv`
 -- 
 
-INSERT INTO `userpriv` (`id`, `userid`, `usergroupid`, `privnodeid`, `userprivtypeid`) VALUES 
+INSERT IGNORE INTO `userpriv` (`id`, `userid`, `usergroupid`, `privnodeid`, `userprivtypeid`) VALUES 
 (24, NULL, 3, 3, 2),
 (16, NULL, 3, 3, 3),
 (11, NULL, 3, 3, 4),
@@ -1997,29 +2019,10 @@ INSERT INTO `userpriv` (`id`, `userid`, `usergroupid`, `privnodeid`, `userprivty
 (10, 1, NULL, 3, 13);
 
 -- 
--- Dumping data for table `userprivtype`
--- 
-
-INSERT INTO `userprivtype` (`id`, `name`) VALUES 
-(1, 'block'),
-(2, 'cascade'),
-(4, 'computerAdmin'),
-(11, 'groupAdmin'),
-(5, 'imageAdmin'),
-(6, 'imageCheckOut'),
-(13, 'mgmtNodeAdmin'),
-(3, 'nodeAdmin'),
-(10, 'resourceGrant'),
-(12, 'scheduleAdmin'),
-(8, 'serverCheckOut'),
-(9, 'serverProfileAdmin'),
-(7, 'userGrant');
-
--- 
 -- Dumping data for table `variable`
 -- 
 
-INSERT INTO `variable` (`name`, `serialization`, `value`) VALUES
+INSERT IGNORE INTO `variable` (`name`, `serialization`, `value`) VALUES
 ('schema-version', 'none', '1'),
 ('timesource|global', 'none','time.nist.gov,time-a.nist.gov,time-b.nist.gov,time.windows.com'),
 ('acknowledgetimeout', 'none', '900'),
@@ -2037,7 +2040,7 @@ INSERT INTO `variable` (`name`, `serialization`, `value`) VALUES
 -- Dumping data for table `vmprofile`
 -- 
 
-INSERT INTO `vmprofile` (`profilename`, `imageid`, `resourcepath`, `repositorypath`, `repositoryimagetypeid`, `datastorepath`, `datastoreimagetypeid`, `vmpath`, `virtualswitch0`, `virtualswitch1`, `vmdisk`, `username`, `password`) VALUES
+INSERT IGNORE INTO `vmprofile` (`profilename`, `imageid`, `resourcepath`, `repositorypath`, `repositoryimagetypeid`, `datastorepath`, `datastoreimagetypeid`, `vmpath`, `virtualswitch0`, `virtualswitch1`, `vmdisk`, `username`, `password`) VALUES
 ('VMware ESXi - local storage', (SELECT `id` FROM `image` WHERE `name` = 'noimage'), NULL, NULL, (SELECT `id` FROM `imagetype` WHERE `name` = 'none'), 'datastore1', (SELECT `id` FROM `imagetype` WHERE `name` = 'vmdk'), 'datastore1', 'Private', 'Public', 'localdisk', NULL, NULL),
 ('VMware ESXi - network storage', (SELECT `id` FROM `image` WHERE `name` = 'noimage'), NULL, NULL, (SELECT `id` FROM `imagetype` WHERE `name` = 'none'), 'nfs-datastore', (SELECT `id` FROM `imagetype` WHERE `name` = 'vmdk'), 'nfs-datastore', 'Private', 'Public', 'networkdisk', NULL, NULL),
 ('VMware ESXi - local & network storage', (SELECT `id` FROM `image` WHERE `name` = 'noimage'), NULL, NULL, (SELECT `id` FROM `imagetype` WHERE `name` = 'none'), 'nfs-datastore', (SELECT `id` FROM `imagetype` WHERE `name` = 'vmdk'), 'datastore1', 'Private', 'Public', 'networkdisk', NULL, NULL),
@@ -2048,7 +2051,7 @@ INSERT INTO `vmprofile` (`profilename`, `imageid`, `resourcepath`, `repositorypa
 -- Dumping data for table `vmtype`
 -- 
 
-INSERT INTO `vmtype` (`id`, `name`) VALUES
+INSERT IGNORE INTO `vmtype` (`id`, `name`) VALUES
 (1, 'vmware'),
 (2, 'xen'),
 (3, 'vmwareGSX'),
@@ -2362,3 +2365,72 @@ ALTER TABLE `winKMS`
 --
 ALTER TABLE `winProductKey`
   ADD CONSTRAINT `winProductKey_ibfk_1` FOREIGN KEY (`affiliationid`) REFERENCES `affiliation` (`id`) ON UPDATE CASCADE;
+  
+--
+-- Legacy columns to drop
+--
+
+ALTER TABLE `computer` ADD `deptid` bit(1) NULL default NULL;
+ALTER TABLE `computer` DROP `deptid`;
+
+ALTER TABLE `computer` ADD `preferredimageid` bit(1) NULL default NULL;
+ALTER TABLE `computer` DROP `preferredimageid`;
+
+ALTER TABLE `connectmethod` ADD `protocol` bit(1) NULL default NULL;
+ALTER TABLE `connectmethod` DROP `protocol`;
+
+ALTER TABLE `connectmethod` ADD `port` bit(1) NULL default NULL;
+ALTER TABLE `connectmethod` DROP `port`;
+
+ALTER TABLE `image` ADD `deptid` bit(1) NULL default NULL;
+ALTER TABLE `image` DROP `deptid`;
+
+ALTER TABLE `imagemeta` ADD `usergroupid` bit(1) NULL default NULL;
+ALTER TABLE `imagemeta` DROP `usergroupid`;
+
+ALTER TABLE `managementnode` ADD `predictivemoduleid` bit(1) NULL default NULL;
+ALTER TABLE `managementnode` DROP `predictivemoduleid`;
+
+ALTER TABLE `request` ADD `reservationid` bit(1) NULL default NULL;
+ALTER TABLE `request` DROP `reservationid`;
+
+ALTER TABLE `request` ADD `imageid` bit(1) NULL default NULL;
+ALTER TABLE `request` DROP `imageid`;
+
+ALTER TABLE `reservation` ADD `daterequested` bit(1) NULL default NULL;
+ALTER TABLE `reservation` DROP `daterequested`;
+
+ALTER TABLE `reservation` ADD `datemodified` bit(1) NULL default NULL;
+ALTER TABLE `reservation` DROP `datemodified`;
+
+ALTER TABLE `reservation` ADD `end` bit(1) NULL default NULL;
+ALTER TABLE `reservation` DROP `end`;
+
+ALTER TABLE `reservation` ADD `start` bit(1) NULL default NULL;
+ALTER TABLE `reservation` DROP `start`;
+
+ALTER TABLE `user` ADD `curriculumid` bit(1) NULL default NULL;
+ALTER TABLE `user` DROP `curriculumid`;
+
+ALTER TABLE `user` ADD `middlename` bit(1) NULL default NULL;
+ALTER TABLE `user` DROP `middlename`;
+
+ALTER TABLE `vmhost` ADD `vmwaredisk` bit(1) NULL default NULL;
+ALTER TABLE `vmhost` DROP `vmwaredisk`;
+
+ALTER TABLE `vmhost` ADD `vmkernalnic` bit(1) NULL default NULL;
+ALTER TABLE `vmhost` DROP `vmkernalnic`;
+
+ALTER TABLE `vmprofile` ADD `vmtypeid` bit(1) NULL default NULL;
+ALTER TABLE `vmprofile` DROP `vmtypeid`;
+
+ALTER TABLE `vmprofile` ADD `nasshare` bit(1) NULL default NULL;
+ALTER TABLE `vmprofile` DROP `nasshare`;
+
+--
+-- Legacy tables to drop
+--
+
+DROP TABLE IF EXISTS `xmlrpcKey`;
+DROP TABLE IF EXISTS `curriculum`;
+DROP TABLE IF EXISTS `dept`;
