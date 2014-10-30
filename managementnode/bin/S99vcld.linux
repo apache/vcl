@@ -22,7 +22,7 @@
 # description: VCL management node daemon
 
 # DAEMON: Name of the daemon executable
-DAEMON=vcldp
+DAEMON=vcld
 
 # DAEMON_PATH: Path to the daemon, no trailing '/'
 DAEMON_PATH=/usr/local/vcl/bin
