@@ -2219,9 +2219,21 @@ function AJdeleteBlockAllocationConfirm() {
 function AJdeleteBlockAllocationSubmit() {
 	$blockid = getContinuationVar('blockid');
 	$query = "UPDATE blockRequest SET status = 'deleted' WHERE id = $blockid";
-	doQuery($query, 101);
+	doQuery($query);
+	$reloadid = getUserlistID('vclreload@Local');
+	$query = "DELETE FROM request "
+	       . "WHERE stateid = 19 AND "
+	       .       "laststateid = 19 AND "
+	       .       "userid = $reloadid AND "
+	       .       "id IN (SELECT bc.reloadrequestid "
+	       .              "FROM blockComputers bc, "
+	       .                   "blockTimes bt "
+	       .              "WHERE bt.blockRequestid = $blockid AND "
+	       .                    "bt.id = bc.blockTimeid AND "
+	       .                    "bc.reloadrequestid != 0)";
+	doQuery($query);
 	$query = "DELETE FROM blockTimes WHERE blockRequestid = $blockid";
-	doQuery($query, 101);
+	doQuery($query);
 	$html = getCurrentBlockHTML(1);
 	$html = str_replace("\n", '', $html);
 	$html = str_replace("'", "\'", $html);
@@ -2752,12 +2764,15 @@ function AJtoggleBlockTime() {
 		sendJSON($data);
 		return;
 	}
+	$reloadid = getUserlistID('vclreload@Local');
 	$query = "DELETE FROM request "
 	       . "WHERE id IN "
 	       .    "(SELECT DISTINCT reloadrequestid "
 	       .    "FROM blockComputers "
 	       .    "WHERE blockTimeid = $timeid) AND "
-	       .    "stateid = 19";
+	       .    "stateid = 19 AND "
+	       .    "laststateid = 19 AND "
+	       .    "userid = $reloadid";
 	doQuery($query, 101);
 	$query = "DELETE FROM blockComputers "
 	       . "WHERE blockTimeid = $timeid";
