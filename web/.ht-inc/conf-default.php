@@ -114,6 +114,12 @@ $xmlrpcBlockAPIUsers = array(3, # 3 = vclsystem
 # 0 = disables; 1 = enabled
 define("NOAUTH_HOMENAV", 0);
 
+# boolean value of 0 or 1 to control logging of non SELECT database queries for auditing or debugging purposes; queries are logged to the querylog table
+define("QUERYLOGGING", 1);
+
+# boolean value of 0 or 1 to control logging of XMLRPC calls for auditing or debugging purposes; queries are logged to the xmlrpcLog table
+define("XMLRPCLOGGING", 1);
+
 # documentation links to display on login page and page
 #   where authentication method is selected when NOAUTH_HOMENAV is set to 1
 $NOAUTH_HOMENAV = array (

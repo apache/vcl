@@ -1114,7 +1114,8 @@ function dbDisconnect() {
 function doQuery($query, $errcode=101, $db="vcl", $nolog=0) {
 	global $mysql_link_vcl, $mysql_link_acct, $user, $mode, $ENABLE_ITECSAUTH;
 	if($db == "vcl") {
-		if((! $nolog) && preg_match('/^(UPDATE|INSERT|DELETE)/', $query) &&
+		if((! defined('QUERYLOGGING') || QUERYLOGGING != 0) &&
+		   (! $nolog) && preg_match('/^(UPDATE|INSERT|DELETE)/', $query) &&
 		   strpos($query, 'UPDATE continuations SET expiretime = ') === FALSE) {
 			$logquery = str_replace("'", "\'", $query);
 			$logquery = str_replace('"', '\"', $logquery);
@@ -11916,22 +11917,24 @@ function xmlRPChandler($function, $args, $blah) {
 	else
 		$keyid = $user['id'];
 	if(function_exists($function)) {
-		$saveargs = mysql_real_escape_string(serialize($args));
-		$query = "INSERT INTO xmlrpcLog "
-		       .        "(xmlrpcKeyid, " 
-		       .        "timestamp, "
-		       .        "IPaddress, "
-		       .        "method, "
-		       .        "apiversion, "
-		       .        "comments) "
-		       . "VALUES " 
-		       .        "($keyid, "
-		       .        "NOW(), "
-		       .        "'$remoteIP', "
-		       .        "'$function', "
-		       .        "$apiversion, "
-		       .        "'$saveargs')";
-		doQuery($query, 101);
+		if(! defined('XMLRPCLOGGING') || XMLRPCLOGGING != 0) {
+			$saveargs = mysql_real_escape_string(serialize($args));
+			$query = "INSERT INTO xmlrpcLog "
+			       .        "(xmlrpcKeyid, " 
+			       .        "timestamp, "
+			       .        "IPaddress, "
+			       .        "method, "
+			       .        "apiversion, "
+			       .        "comments) "
+			       . "VALUES " 
+			       .        "($keyid, "
+			       .        "NOW(), "
+			       .        "'$remoteIP', "
+			       .        "'$function', "
+			       .        "$apiversion, "
+			       .        "'$saveargs')";
+			doQuery($query, 101);
+		}
 	}
 	else {
 		printXMLRPCerror(2);
