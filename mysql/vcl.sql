@@ -368,7 +368,7 @@ CREATE TABLE IF NOT EXISTS `connectmethodport` (
   `id` tinyint(3) unsigned NOT NULL auto_increment,
   `connectmethodid` tinyint(3) unsigned NOT NULL,
   `port` mediumint(8) unsigned NOT NULL,
-  `protocol` enum('TCP','UDP') NOT NULL,
+  `protocol` enum('TCP','UDP') NOT NULL default 'TCP',
   PRIMARY KEY  (`id`),
   KEY `connectmethodid` (`connectmethodid`)
 ) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
@@ -2127,6 +2127,11 @@ ALTER TABLE `connectmethodmap`
   ADD CONSTRAINT `connectmethodmap_ibfk_3` FOREIGN KEY (`OSid`) REFERENCES `OS` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
   ADD CONSTRAINT `connectmethodmap_ibfk_4` FOREIGN KEY (`imagerevisionid`) REFERENCES `imagerevision` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
+--
+-- Constraints for table `connectmethodport`
+--
+ALTER TABLE `connectmethodport`
+  ADD CONSTRAINT `connectmethodport_ibfk_1` FOREIGN KEY (`connectmethodid`) REFERENCES `connectmethod` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 --
 -- Constraints for table `connectlog`

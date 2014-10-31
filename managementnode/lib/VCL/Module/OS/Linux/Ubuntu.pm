@@ -390,9 +390,9 @@ sub get_network_configuration {
 
 =head2 enable_firewall_port
  
-  Parameters  : $protocol, $port, $scope (optional), $overwrite_existing (optional), $name (optional), $description (optional)
-  Returns     : boolean
-  Description : Updates iptables for given port for collect IPaddress range and mode
+  Parameters  : none
+  Returns     : 1
+  Description : Shell subroutine. Not currently implemented.
  
 =cut
 
@@ -402,30 +402,8 @@ sub enable_firewall_port {
       notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
       return;
    }
-
-	# Check to see if this distro has iptables
-   if (!$self->service_exists("iptables")) {
-      notify($ERRORS{'WARNING'}, 0, "iptables service does not exist on this OS");
-      return 1;
-   }
-
-   my ($protocol, $port, $scope_argument, $overwrite_existing, $name, $description) = @_;
-   if (!defined($protocol) || !defined($port)) {
-     notify($ERRORS{'WARNING'}, 0, "protocol and port arguments were not supplied");
-     return;
-   }
-
-   my $computer_node_name = $self->data->get_computer_node_name();
-   my $mn_private_ip = $self->mn_os->get_private_ip_address();
-
-   $protocol = lc($protocol);
-
-   $scope_argument = '' if (!defined($scope_argument));
-
-	my $scope;
 	
 	return 1;
-
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -433,8 +411,8 @@ sub enable_firewall_port {
 =head2 disable_firewall_port
  
   Parameters  : none
-  Returns     : 1 successful, 0 failed
-  Description : updates iptables for given port for collect IPaddress range and mode
+  Returns     : 1
+  Description : Shell subroutine. Not currently implemented.
  
 =cut
 
@@ -444,33 +422,8 @@ sub disable_firewall_port {
       notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
       return;
    }
-
-   # Check to see if this distro has iptables
-   if (!$self->service_exists("ufw")) {
-      notify($ERRORS{'WARNING'}, 0, "iptables service does not exist on this OS");
-      return 1;
-   }
-
-	   my ($protocol, $port, $scope_argument, $overwrite_existing, $name, $description) = @_;
-   if (!defined($protocol) || !defined($port)) {
-     notify($ERRORS{'WARNING'}, 0, "protocol and port arguments were not supplied");
-     return;
-   }
-
-   my $computer_node_name = $self->data->get_computer_node_name();
-   my $mn_private_ip = $self->mn_os->get_private_ip_address();
-
-   $protocol = lc($protocol);
-
-   $scope_argument = '' if (!defined($scope_argument));
-
-   $name = '' if !$name;
-   $description = '' if !$description;
-
-   my $scope;
-
+	
 	return 1;
-
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -868,98 +821,6 @@ sub restart_network_interface {
    }
   
    return 1;
-}
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 firewall_compare_update
-
- Parameters  : @scope_strings
- Returns     : 0 , 1
- Description : Compare iptables for listed remote IP address in reservation
-
-=cut
-
-sub firewall_compare_update {
-	my $self = shift;
-	if (ref($self) !~ /linux/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return;
-	}
-	
-	# Check to see if this distro has iptables
-	# If not return 1 so it does not fail
-	if (!($self->service_exists("ufw"))) {
-		notify($ERRORS{'WARNING'}, 0, "iptables does not exist on this OS");
-		return 1;
-	}
-	
-	my $computer_node_name = $self->data->get_computer_node_name();
-	my $imagerevision_id   = $self->data->get_imagerevision_id();
-	my $remote_ip          = $self->data->get_reservation_remote_ip();
-	
-	# collect connection_methods
-	# collect firewall_config
-	# For each port defined in connection_methods
-	# compare rule source address with remote_IP address
-	
-	# Retrieve the connect method info hash
-	my $connect_method_info = get_connect_method_info($imagerevision_id);
-	if (!$connect_method_info) {
-		notify($ERRORS{'WARNING'}, 0, "no connect methods are configured for image revision $imagerevision_id");
-		return;
-	}
-	
-	# Retrieve the firewall configuration
-	my $INPUT_CHAIN = "INPUT";
-	my $firewall_configuration = $self->get_firewall_configuration() || return;
-	
-	for my $connect_method_id (sort keys %{$connect_method_info}) {
-		
-		my $name        = $connect_method_info->{$connect_method_id}{name};
-		my $description = $connect_method_info->{$connect_method_id}{description};
-		my $protocol    = $connect_method_info->{$connect_method_id}{protocol} || 'TCP';
-		my $port        = $connect_method_info->{$connect_method_id}{port};
-		my $scope;
-		
-		$protocol = lc($protocol);
-		
-		for my $num (sort keys %{$firewall_configuration->{$INPUT_CHAIN}}) {
-			my $existing_scope = $firewall_configuration->{$INPUT_CHAIN}{$num}{$protocol}{$port}{scope} || '';
-			if (!$existing_scope) {
-			
-			}
-			else {
-				my $parsed_existing_scope = $self->parse_firewall_scope($existing_scope);
-				if (!$parsed_existing_scope) {
-					notify($ERRORS{'WARNING'}, 0, "failed to parse existing firewall scope: '$existing_scope'");
-					return;
-				}
-				$scope = $self->parse_firewall_scope("$remote_ip,$existing_scope");
-				if (!$scope) {
-					notify($ERRORS{'WARNING'}, 0, "failed to parse firewall scope argument appended with existing scope: '$remote_ip,$existing_scope'");
-					return;
-				}
-			
-				if ($scope eq $parsed_existing_scope) {
-					notify($ERRORS{'DEBUG'}, 0, "firewall is already open on $computer_node_name, existing scope matches scope argument:\n" .
-						"name: '$name'\n" .
-						"protocol: $protocol\n" .
-						"port/type: $port\n" .
-						"scope: $scope\n"
-					);
-					return 1;
-				}
-				else {
-					if ($self->enable_firewall_port($protocol, $port, "$remote_ip/24", 0)) {
-						notify($ERRORS{'OK'}, 0, "opened firewall port $port on $computer_node_name for $remote_ip $name connect method");
-					}
-				}
-			}
-		}
-	}
-	
-	return 1;
 }
 
 #/////////////////////////////////////////////////////////////////////////////

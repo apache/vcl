@@ -6913,6 +6913,9 @@ Windows Registry Editor Version 5.00
 [HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\explorer\\VolumeCaches\\Content Indexer Cleaner]
 "StateFlags0001"=dword:00000002
 
+[HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\VolumeCaches\\Device Driver Packages]
+"StateFlags0001"=dword:00000002
+
 [HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\explorer\\VolumeCaches\\Downloaded Program Files]
 "StateFlags0001"=dword:00000002
 
@@ -6937,6 +6940,9 @@ Windows Registry Editor Version 5.00
 [HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\explorer\\VolumeCaches\\Recycle Bin]
 "StateFlags0001"=dword:00000002
 
+[HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\VolumeCaches\\Service Pack Cleanup]
+"StateFlags0001"=dword:00000000
+
 [HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\explorer\\VolumeCaches\\Setup Log Files]
 "StateFlags0001"=dword:00000000
 
@@ -6958,6 +6964,9 @@ Windows Registry Editor Version 5.00
 [HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\explorer\\VolumeCaches\\Thumbnail Cache]
 "StateFlags0001"=dword:00000002
 
+[HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\VolumeCaches\\Update Cleanup]
+"StateFlags0001"=dword:00000002
+
 [HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\explorer\\VolumeCaches\\Upgrade Discarded Files]
 "StateFlags0001"=dword:00000002
 
@@ -6973,6 +6982,11 @@ Windows Registry Editor Version 5.00
 [HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\explorer\\VolumeCaches\\Windows Error Reporting System Queue Files]
 "StateFlags0001"=dword:00000002
 
+[HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\VolumeCaches\\Windows ESD installation files]
+"StateFlags0001"=dword:00000002
+
+[HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\VolumeCaches\\Windows Upgrade Log Files]
+"StateFlags0001"=dword:00000002
 EOF
 
 	# Import the string into the registry
@@ -6995,9 +7009,9 @@ EOF
 		notify($ERRORS{'OK'}, 0, "cleanmgr.exe is not present on $computer_node_name, this is usually because the Desktop Experience feature is not installed");
 	}
 	else {
-		# Wait for cleanmgr.exe to finish
+		# Wait for cleanmgr.exe to finish - may take a long time
 		my $message = 'waiting for cleanmgr.exe to finish';
-		my $total_wait_seconds = 120;
+		my $total_wait_seconds = 900;
 		notify($ERRORS{'OK'}, 0, "started cleanmgr.exe, waiting up to $total_wait_seconds seconds for it to finish");
 		
 		if ($self->code_loop_timeout(sub{!$self->is_process_running(@_)}, ['cleanmgr.exe'], $message, $total_wait_seconds, 15)) {
@@ -11693,27 +11707,43 @@ sub check_rdp_port_configuration {
 		return;
 	}
 	
-	my $imagerevision_id = $self->data->get_imagerevision_id();
 	my $computer_name = $self->data->get_computer_short_name();
 	
-	my $connect_method_info = get_connect_method_info($imagerevision_id);
+	my $connect_method_info = $self->data->get_connect_methods();
 	if (!$connect_method_info) {
-		notify($ERRORS{'WARNING'}, 0, "unable to check RDP port, connect method info could not be retrieved for image ID $imagerevision_id");
+		notify($ERRORS{'WARNING'}, 0, "unable to check RDP port, connect method info could not be retrieved");
 		return;
 	}
 	
 	# Find the RDP method, retrieve the port
-	my $connect_method_rdp_port;
+	my $connect_method;
 	for my $connect_method_id (keys %$connect_method_info) {
 		my $connect_method_name = $connect_method_info->{$connect_method_id}{name};
 		if ($connect_method_name =~ /^rdp$/i) {
-			$connect_method_rdp_port = $connect_method_info->{$connect_method_id}{port};
+			$connect_method = $connect_method_info->{$connect_method_id};
 			last;
 		}
 	}
-	if (!defined($connect_method_rdp_port)) {
+	if (!defined($connect_method)) {
 		notify($ERRORS{'DEBUG'}, 0, "no connect method exists named 'rdp':\n" . format_data($connect_method_info));
 		return 1;
+	}
+	
+	# Get the port information
+	my $connect_method_port_info = $connect_method->{connectmethodport};
+	if (!defined($connect_method_port_info) || scalar keys %$connect_method_port_info == 0) {
+		notify($ERRORS{'WARNING'}, 0, "no ports are defined for connect method:\n" . format_data($connect_method_info));
+		return;
+	}
+	
+	# Make sure only 1 port is defined
+	my @protocols = keys %{$connect_method_port_info};
+	my $protocol = $connect_method_port_info->{$protocols[0]};
+	my @ports = keys %$protocol;
+	my $connect_method_rdp_port = $ports[0];
+	if (scalar(@protocols) > 1 || scalar(@ports) > 1) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine which port is supposed to be used for RDP, multiple ports are defined for connect method:\n" . format_data($connect_method_port_info));
+		return;
 	}
 	
 	my $rdp_port_key = 'HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp';

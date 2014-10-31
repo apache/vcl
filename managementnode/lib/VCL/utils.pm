@@ -9663,20 +9663,15 @@ sub get_connect_method_info {
 		}
 	}
 	
-	my $imagerevision_info = get_imagerevision_info($imagerevision_id);
-	
-	notify($ERRORS{'DEBUG'}, 0, "attempting to retrieve connect method info:\n" .
-		"imagerevision: $imagerevision_id - " . $imagerevision_info->{imagename} . "\n" .
-		"OS: " . $imagerevision_info->{image}{OS}{id} . " - " . $imagerevision_info->{image}{OS}{name} . "\n" .
-		"OS type: " . $imagerevision_info->{image}{OS}{OStype}{id} . " - " . $imagerevision_info->{image}{OS}{OStype}{name}
-	);
+	notify($ERRORS{'DEBUG'}, 0, "attempting to retrieve connect method info for image revision $imagerevision_id");
 	
 	# Get a hash ref containing the database column names
 	my $database_table_columns = get_database_table_columns();
 	
 	my @tables = (
 		'connectmethod',
-		'connectmethodmap'
+		'connectmethodport',
+		'connectmethodmap',
 	);
 	
 	# Construct the select statement
@@ -9697,6 +9692,7 @@ sub get_connect_method_info {
 	$select_statement .= <<EOF;
 FROM
 connectmethod,
+connectmethodport,
 connectmethodmap,
 imagerevision
 
@@ -9705,7 +9701,8 @@ LEFT JOIN OS ON (OS.id = image.OSid)
 LEFT JOIN OStype ON (OStype.name = OS.type)
 
 WHERE
-connectmethodmap.connectmethodid = connectmethod.id
+connectmethodport.connectmethodid = connectmethod.id
+AND connectmethodmap.connectmethodid = connectmethod.id
 AND imagerevision.id = $imagerevision_id
 AND connectmethodmap.autoprovisioned IS NULL
 AND (
@@ -9730,13 +9727,6 @@ EOF
 	
 	my $timestamp = time;
 	for my $row (@selected_rows) {	
-		notify($ERRORS{'DEBUG'}, 0, $row->{"connectmethod-name"} . ": " .
-		"connectmethodid=" . $row->{"connectmethod-id"} . ", " .
-		"OStypeid=" . ($row->{"connectmethodmap-OStypeid"} || 'NULL') . ", " .
-		"OSid=" . ($row->{"connectmethodmap-OSid"} || 'NULL') . ", " .
-		"imagerevisionid=" . ($row->{"connectmethodmap-imagerevisionid"} || 'NULL') . ", " .
-		"disabled=" . $row->{"connectmethodmap-disabled"});
-		
 		my $connectmethod_id = $row->{'connectmethod-id'};
 		
 		# Loop through all the columns returned
@@ -9750,8 +9740,13 @@ EOF
 			
 			# Add the values for the primary table to the hash
 			# Add values for other tables under separate keys
-			if ($table eq $tables[0]) {
+			if ($table eq 'connectmethod') {
 				$connect_method_info->{$connectmethod_id}{$column} = $value;
+			}
+			elsif ($table eq 'connectmethodport') {
+				my $protocol = $row->{"connectmethodport-protocol"};
+				my $port = $row->{"connectmethodport-port"};
+				$connect_method_info->{$connectmethod_id}{$table}{$protocol}{$port} = 1;
 			}
 			else {
 				$connect_method_info->{$connectmethod_id}{$table}{$column} = $value;
@@ -9760,7 +9755,7 @@ EOF
 		$connect_method_info->{$connectmethod_id}{RETRIEVAL_TIME} = $timestamp;
 	}
 
-	#notify($ERRORS{'DEBUG'}, 0, "retrieved connect method info:\n" . format_data($connect_method_info));
+	notify($ERRORS{'DEBUG'}, 0, "retrieved connect method info:\n" . format_data($connect_method_info));
 	$ENV{connect_method_info}{$imagerevision_id} = $connect_method_info;
 	return $ENV{connect_method_info}{$imagerevision_id};
 }

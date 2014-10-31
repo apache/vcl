@@ -2038,7 +2038,13 @@ sub get_file_contents {
 		notify($ERRORS{'DEBUG'}, 0, "retrieved " . scalar(@$output) . " lines from file on $computer_short_name: '$path'");
 		
 		map { s/[\r\n]+$//g; } (@$output);
-		return @$output;
+		
+		if (wantarray) {
+			return @$output;
+		}
+		else {
+			return join("\n", @$output);
+		}
 	}
 }
 
@@ -2647,12 +2653,11 @@ sub process_connect_methods {
 	}
 	
 	my $computer_node_name = $self->data->get_computer_node_name();
-	my $imagerevision_id = $self->data->get_imagerevision_id();
 	
 	# Retrieve the connect method info hash
-	my $connect_method_info = get_connect_method_info($imagerevision_id);
+	my $connect_method_info = $self->data->get_connect_methods();
 	if (!$connect_method_info) {
-		notify($ERRORS{'WARNING'}, 0, "failed to retrieve connect method info for image revision $imagerevision_id");
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve connect method info");
 		return;
 	}
 
@@ -2675,48 +2680,37 @@ sub process_connect_methods {
 		$overwrite = 0;
 	}
 	
-	my $state = $self->data->get_request_state_name();
-	notify($ERRORS{'DEBUG'}, 0, "state = $state");
-	
+	my $request_state = $self->data->get_request_state_name();
 	
 	CONNECT_METHOD: for my $connect_method_id (sort keys %{$connect_method_info} ) {
+		my $connect_method = $connect_method_info->{$connect_method_id};
 		#notify($ERRORS{'DEBUG'}, 0, "processing connect method:\n" . format_data($connect_method_info->{$connect_method_id}));
 		
-		my $name            = $connect_method_info->{$connect_method_id}{name};
-		my $description     = $connect_method_info->{$connect_method_id}{description};
-		my $protocol        = $connect_method_info->{$connect_method_id}{protocol} || 'TCP';
-		my $port            = $connect_method_info->{$connect_method_id}{port};
-		my $service_name    = $connect_method_info->{$connect_method_id}{servicename};
-		my $startup_script  = $connect_method_info->{$connect_method_id}{startupscript};
-		my $install_script  = $connect_method_info->{$connect_method_id}{installscript};
-		my $disabled        = $connect_method_info->{$connect_method_id}{connectmethodmap}{disabled};
+		my $name            = $connect_method->{name};
+		my $description     = $connect_method->{description};
+		my $service_name    = $connect_method->{servicename};
+		my $startup_script  = $connect_method->{startupscript};
+		my $install_script  = $connect_method->{installscript};
+		my $disabled        = $connect_method->{connectmethodmap}{disabled};
 
-		if( $state =~ /deleted|timeout/) {
-			$disabled = 1;
-		}
 		
-		if ($disabled) {
+		if ($disabled || $request_state =~ /deleted|timeout/) {
 			if ($self->service_exists($service_name)) {
-               notify($ERRORS{'DEBUG'}, 0, "attempting to stop '$service_name' service for '$name' connect method on $computer_node_name");
-               if ($self->stop_service($service_name)) {
-                  notify($ERRORS{'OK'}, 0, "'$service_name' stop on $computer_node_name");
-               }
-               else {
-                  notify($ERRORS{'WARNING'}, 0, "failed to stop '$service_name' service for '$name' connect method on $computer_node_name");
-               }
+				if (!$self->stop_service($service_name)) {
+					notify($ERRORS{'WARNING'}, 0, "failed to stop '$service_name' service for '$name' connect method on $computer_node_name");
+				}
          }
 			
-			#Disable firewall port
-			if (defined($port)) {
-            notify($ERRORS{'DEBUG'}, 0, "attempting to close firewall port $port on $computer_node_name for '$name' connect method");
-            if ($self->disable_firewall_port($protocol, $port, $remote_ip, 1)) {
-               notify($ERRORS{'OK'}, 0, "closing firewall port $port on $computer_node_name for $remote_ip $name connect method");
-            }
-            else {
-               notify($ERRORS{'WARNING'}, 0, "failed to close firewall port $port on $computer_node_name for $remote_ip $name connect method");
-            }
-         }
-			
+			# Close the firewall ports
+			if ($self->can('disable_firewall_port')) {
+				for my $protocol (keys %{$connect_method->{connectmethodport}}) {
+					for my $port (keys %{$connect_method->{connectmethodport}{$protocol}}) {
+						if (!$self->disable_firewall_port($protocol, $port, $remote_ip, 1)) {
+							notify($ERRORS{'WARNING'}, 0, "failed to close firewall port $port on $computer_node_name for $remote_ip $name connect method");
+						}
+					}
+				}
+			}
 		}
 		else {
 			# Attempt to start and configure the connect method
@@ -2724,12 +2718,8 @@ sub process_connect_methods {
 			
 			# Attempt to start the service if the service name has been defined for the connect method
 			if ($service_name) {
-				# Check if service exists
-				notify($ERRORS{'DEBUG'}, 0, "checking if '$service_name' service exists for '$name' connect method on $computer_node_name");
 				if ($self->service_exists($service_name)) {
-					notify($ERRORS{'DEBUG'}, 0, "attempting to start '$service_name' service for '$name' connect method on $computer_node_name");
 					if ($self->start_service($service_name)) {
-						notify($ERRORS{'OK'}, 0, "'$service_name' started on $computer_node_name");
 						$service_started = 1;
 					}
 					else {
@@ -2740,29 +2730,35 @@ sub process_connect_methods {
 					notify($ERRORS{'WARNING'}, 0, "'$service_name' service for '$name' connect method does NOT exist on $computer_node_name, connect method install script is not defined");
 				}
 			}
+			
 			# Run the startup script if the service is not started
 			if (!$service_started && defined($startup_script)) {
-				notify($ERRORS{'DEBUG'}, 0, "attempting to run startup script '$startup_script' for '$name' connect method on $computer_node_name");
-				my ($startup_exit_status, $startup_output) = $self->execute($startup_script, 1);
-				if (!defined($startup_output)) {
-					notify($ERRORS{'WARNING'}, 0, "failed to run command to execute startup script '$startup_script' for '$name' connect method on $computer_node_name, command: '$startup_script'");
-				}
-				elsif ($startup_exit_status == 0){
-					notify($ERRORS{'OK'}, 0, "executed startup script '$startup_script' for '$name' connect method on $computer_node_name, command: '$startup_script', exit status: $startup_exit_status, output:\n" . join("\n", @$startup_output));	
+				if (!$self->file_exists($startup_script)) {
+					notify($ERRORS{'WARNING'}, 0, "'$service_name' service startup script for '$name' connect method does not exist on $computer_node_name: $startup_script");
 				}
 				else {
-					notify($ERRORS{'WARNING'}, 0, "failed to execute startup script '$startup_script' for '$name' connect method on $computer_node_name, command: '$startup_script', exit status: $startup_exit_status, output:\n" . join("\n", @$startup_output));
+					notify($ERRORS{'DEBUG'}, 0, "attempting to run startup script '$startup_script' for '$name' connect method on $computer_node_name");
+					my ($startup_exit_status, $startup_output) = $self->execute($startup_script, 1);
+					if (!defined($startup_output)) {
+						notify($ERRORS{'WARNING'}, 0, "failed to run command to execute startup script '$startup_script' for '$name' connect method on $computer_node_name, command: '$startup_script'");
+					}
+					elsif ($startup_exit_status == 0){
+						notify($ERRORS{'OK'}, 0, "executed startup script '$startup_script' for '$name' connect method on $computer_node_name, command: '$startup_script', exit status: $startup_exit_status, output:\n" . join("\n", @$startup_output));	
+					}
+					else {
+						notify($ERRORS{'WARNING'}, 0, "failed to execute startup script '$startup_script' for '$name' connect method on $computer_node_name, command: '$startup_script', exit status: $startup_exit_status, output:\n" . join("\n", @$startup_output));
+					}
 				}
 			}
 			
-			# Open the firewall port
-			if (defined($port)) {
-				notify($ERRORS{'DEBUG'}, 0, "attempting to open firewall port $port on $computer_node_name for '$name' connect method");
-				if ($self->enable_firewall_port($protocol, $port, $remote_ip, 1)) {
-					notify($ERRORS{'OK'}, 0, "opened firewall port $port on $computer_node_name for $remote_ip $name connect method");
-				}
-				else {
-					notify($ERRORS{'WARNING'}, 0, "failed to open firewall port $port on $computer_node_name for $remote_ip $name connect method");
+			# Open the firewall ports
+			if ($self->can('enable_firewall_port')) {
+				for my $protocol (keys %{$connect_method->{connectmethodport}}) {
+					for my $port (keys %{$connect_method->{connectmethodport}{$protocol}}) {
+						if (!$self->enable_firewall_port($protocol, $port, $remote_ip, 1)) {
+							notify($ERRORS{'WARNING'}, 0, "failed to open firewall port $port on $computer_node_name for $remote_ip $name connect method");
+						}
+					}
 				}
 			}
 		}
@@ -2793,24 +2789,26 @@ sub is_user_connected {
 	my $user_login_id      = $self->data->get_user_login_id();
 	my $connect_methods    = $self->data->get_connect_methods();
 	
+	if (!$self->can("check_connection_on_port")) {
+		notify($ERRORS{'CRITICAL'}, 0, ref($self) . " OS module does not implement check_connection_on_port subroutine");
+		return;
+	}
+	
 	notify($ERRORS{'OK'}, 0, "checking for connection by $user_login_id on $computer_node_name");
 	
 	foreach my $connect_method_id (keys %$connect_methods) {
-		my $name = $connect_methods->{$connect_method_id}{name};
-		my $port = $connect_methods->{$connect_method_id}{port};
-		my $protocol = $connect_methods->{$connect_method_id}{protocol} || 'TCP';
-		
-		notify($ERRORS{'DEBUG'}, 0, "checking '$name' connect method, protocol: $protocol, port: $port");
-		
-		if (!$self->can("check_connection_on_port")) {
-			notify($ERRORS{'CRITICAL'}, 0, ref($self) . " OS module does not implement check_connection_on_port subroutine");
-			return;
-		}
-		
-		my $result = $self->check_connection_on_port($port);
-		if ($result && $result !~ /no/i) {
-			notify($ERRORS{'OK'}, 0, "$user_login_id is connected to $computer_node_name using $name connect method, result: $result");
-			return 1;
+		my $connect_method = $connect_methods->{$connect_method_id};
+		my $name = $connect_method->{name};
+		for my $protocol (keys %{$connect_method->{connectmethodport}}) {
+			for my $port (keys %{$connect_method->{connectmethodport}{$protocol}}) {
+				notify($ERRORS{'DEBUG'}, 0, "checking '$name' connect method, protocol: $protocol, port: $port");
+				
+				my $result = $self->check_connection_on_port($port);
+				if ($result && $result !~ /no/i) {
+					notify($ERRORS{'OK'}, 0, "$user_login_id is connected to $computer_node_name using $name connect method, result: $result");
+					return 1;
+				}
+			}
 		}
 	}
 	
@@ -3044,7 +3042,7 @@ sub find_files {
 			$command .= " -maxdepth 1";
 		}
 		
-		notify($ERRORS{'DEBUG'}, 0, "attempting to find files on $computer_node_name, base directory path: '$base_directory_path', pattern: $file_pattern, command: $command");
+		#notify($ERRORS{'DEBUG'}, 0, "attempting to find files on $computer_node_name, base directory path: '$base_directory_path', pattern: $file_pattern, command: $command");
 		
 		my ($exit_status, $output) = $self->execute($command, 0);
 		if (!defined($output)) {
@@ -3072,7 +3070,7 @@ sub find_files {
 		
 		my $file_count = scalar(@files);
 		
-		notify($ERRORS{'DEBUG'}, 0, "files found: $file_count, base directory: '$base_directory_path', pattern: '$file_pattern'\ncommand: '$command'");
+		notify($ERRORS{'DEBUG'}, 0, "files found under $base_directory_path matching '$file_pattern': $file_count");
 		#notify($ERRORS{'DEBUG'}, 0, "files found: $file_count, base directory: '$base_directory_path', pattern: '$file_pattern'\ncommand: '$command', output:\n" . join("\n", @$output));
 		return @files;
 	}
@@ -3526,7 +3524,6 @@ sub get_connect_method_remote_ip_addresses {
 	}
 	
 	my $computer_node_name = $self->data->get_computer_node_name();
-	my $imagerevision_id = $self->data->get_imagerevision_id();
 	
 	# Get the management node's IP addresses - these will be ignored
 	my $mn_private_ip_address = $self->mn_os->get_private_ip_address();
@@ -3545,53 +3542,56 @@ sub get_connect_method_remote_ip_addresses {
 	
 	my @remote_ip_addresses = ();
 	
-	my $connect_method_info = get_connect_method_info($imagerevision_id);
+	my $connect_method_info = $self->data->get_connect_methods();
 	foreach my $connect_method_id (keys %$connect_method_info) {
-		my $connect_method_name = $connect_method_info->{$connect_method_id}{name};
-		my $connect_method_protocol = $connect_method_info->{$connect_method_id}{protocol} || 'any';
-		my $connect_method_port = $connect_method_info->{$connect_method_id}{port};
+		my $connect_method = $connect_method_info->{$connect_method_id};
+		my $connect_method_name = $connect_method->{name};
 		
-		notify($ERRORS{'DEBUG'}, 0, "checking connect method: '$connect_method_name', protocol: $connect_method_protocol, port: $connect_method_port");
-		
-		CONNECTION_PROTOCOL: for my $connection_protocol (keys %$connection_info) {
-			# Check if the protocol defined for the connect method matches the established connection
-			if (!$connect_method_protocol || $connect_method_protocol =~ /(\*|any|all)/i) {
-				#notify($ERRORS{'DEBUG'}, 0, "skipping validation of connect method protocol: $connect_method_protocol");
-			}
-			else {
-				if ($connect_method_protocol =~ /$connection_protocol/i || $connection_protocol =~ /$connect_method_protocol/i) {
-					notify($ERRORS{'DEBUG'}, 0, "connect method protocol matches established connection protocol: $connection_protocol");
-				}
-				else {
-					notify($ERRORS{'DEBUG'}, 0, "connect method protocol $connect_method_protocol does NOT match established connection protocol $connection_protocol");
-					next CONNECTION_PROTOCOL;
-				}
-			}
-			
-			CONNECTION_PORT: for my $connection_port (keys %{$connection_info->{$connection_protocol}}) {
-				# Check if the port defined for the connect method matches the established connection
-				if ($connect_method_port eq $connection_port) {
-					notify($ERRORS{'DEBUG'}, 0, "connect method port matches established connection port: $connection_port");
-					
-					for my $connection (@{$connection_info->{$connection_protocol}{$connection_port}}) {
-						my $remote_ip_address = $connection->{remote_ip};
-						if (!$remote_ip_address) {
-							notify($ERRORS{'WARNING'}, 0, "connection does NOT contain remote IP address (remote_ip) key:\n" . format_data($connection));
-						}
-						elsif ($remote_ip_address eq $mn_private_ip_address || $remote_ip_address eq $mn_public_ip_address) {
-							notify($ERRORS{'DEBUG'}, 0, "ignoring connection to port $connection_port from management node: $remote_ip_address");
-						}
-						elsif (my ($ignored_remote_ip_address) = grep { $remote_ip_address =~ /($_)/ } @ignored_remote_ip_addresses) {
-							notify($ERRORS{'DEBUG'}, 0, "ignoring connection to port $connection_port from ignored remote IP address ($ignored_remote_ip_address): $remote_ip_address");
+		for my $connect_method_protocol (keys %{$connect_method->{connectmethodport}}) {
+			for my $connect_method_port (keys %{$connect_method->{connectmethodport}{$connect_method_protocol}}) {
+				notify($ERRORS{'DEBUG'}, 0, "checking connect method: '$connect_method_name', protocol: $connect_method_protocol, port: $connect_method_port");
+				
+				CONNECTION_PROTOCOL: for my $connection_protocol (keys %$connection_info) {
+					# Check if the protocol defined for the connect method matches the established connection
+					if (!$connect_method_protocol || $connect_method_protocol =~ /(\*|any|all)/i) {
+						#notify($ERRORS{'DEBUG'}, 0, "skipping validation of connect method protocol: $connect_method_protocol");
+					}
+					else {
+						if ($connect_method_protocol =~ /$connection_protocol/i || $connection_protocol =~ /$connect_method_protocol/i) {
+							notify($ERRORS{'DEBUG'}, 0, "connect method protocol matches established connection protocol: $connection_protocol");
 						}
 						else {
-							push @remote_ip_addresses, $remote_ip_address;
+							notify($ERRORS{'DEBUG'}, 0, "connect method protocol $connect_method_protocol does NOT match established connection protocol $connection_protocol");
+							next CONNECTION_PROTOCOL;
 						}
 					}
-				}
-				else {
-					notify($ERRORS{'DEBUG'}, 0, "connect method port $connect_method_port does NOT match established connection port $connection_port");
-					next CONNECTION_PORT;
+					
+					CONNECTION_PORT: for my $connection_port (keys %{$connection_info->{$connection_protocol}}) {
+						# Check if the port defined for the connect method matches the established connection
+						if ($connect_method_port eq $connection_port) {
+							notify($ERRORS{'DEBUG'}, 0, "connect method port matches established connection port: $connection_port");
+							
+							for my $connection (@{$connection_info->{$connection_protocol}{$connection_port}}) {
+								my $remote_ip_address = $connection->{remote_ip};
+								if (!$remote_ip_address) {
+									notify($ERRORS{'WARNING'}, 0, "connection does NOT contain remote IP address (remote_ip) key:\n" . format_data($connection));
+								}
+								elsif ($remote_ip_address eq $mn_private_ip_address || $remote_ip_address eq $mn_public_ip_address) {
+									notify($ERRORS{'DEBUG'}, 0, "ignoring connection to port $connection_port from management node: $remote_ip_address");
+								}
+								elsif (my ($ignored_remote_ip_address) = grep { $remote_ip_address =~ /($_)/ } @ignored_remote_ip_addresses) {
+									notify($ERRORS{'DEBUG'}, 0, "ignoring connection to port $connection_port from ignored remote IP address ($ignored_remote_ip_address): $remote_ip_address");
+								}
+								else {
+									push @remote_ip_addresses, $remote_ip_address;
+								}
+							}
+						}
+						else {
+							notify($ERRORS{'DEBUG'}, 0, "connect method port $connect_method_port does NOT match established connection port $connection_port");
+							next CONNECTION_PORT;
+						}
+					}
 				}
 			}
 		}
@@ -3606,6 +3606,61 @@ sub get_connect_method_remote_ip_addresses {
 		notify($ERRORS{'OK'}, 0, "connection NOT established to $computer_node_name using the ports and protocols configured for the connect methods");
 		return ();
 	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 firewall_compare_update
+
+ Parameters  : none
+ Returns     : boolean
+ Description : Opens the firewall port for the remote IP address for each
+               connect method.
+
+=cut
+
+sub firewall_compare_update {
+   my $self = shift;
+   if (ref($self) !~ /VCL::Module/i) {
+      notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+      return;
+   }
+	
+	# Make sure the OS module implements an enable_firewall_port subroutine
+	return 1 unless $self->can('enable_firewall_port');
+	
+   my $computer_node_name = $self->data->get_computer_node_name();
+   my $remote_ip = $self->data->get_reservation_remote_ip();
+	if (!$remote_ip) {
+		notify($ERRORS{'WARNING'}, 0, "unable to update firewall on $computer_node_name, remote IP could not be retrieved for reservation");
+      return;
+	}
+	
+   # Retrieve the connect method info
+   my $connect_method_info = $self->data->get_connect_methods();
+   if (!$connect_method_info) {
+      notify($ERRORS{'WARNING'}, 0, "failed to retrieve connect method information");
+      return;
+   }
+	
+   # Loop through the connect methods, check to make sure firewall is open for remote IP
+	my $error_encountered = 0;
+   for my $connect_method_id (sort keys %{$connect_method_info}) {
+      my $connect_method_name = $connect_method_info->{$connect_method_id}{name};
+		for my $protocol (keys %{$connect_method_info->{$connect_method_id}{connectmethodport}}) {
+			for my $port (keys %{$connect_method_info->{$connect_method_id}{connectmethodport}{$protocol}}) {
+				if ($self->enable_firewall_port($protocol, $port, $remote_ip, 0)) {
+					notify($ERRORS{'DEBUG'}, 0, "$connect_method_name: processed firewall port $protocol $port on $computer_node_name for remote IP address: $remote_ip");
+				}
+				else {
+					$error_encountered = 1;
+					notify($ERRORS{'WARNING'}, 0, "$connect_method_name: failed to process firewall port $protocol $port on $computer_node_name for remote IP address: $remote_ip");
+				}
+			}
+		}
+	}
+	
+	return !$error_encountered;
 }
 
 #///////////////////////////////////////////////////////////////////////////
