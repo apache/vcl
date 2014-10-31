@@ -449,6 +449,31 @@ else
 	fail("dojo directory does not exist. Download and install Dojo Toolkit 1.5.0");
 print "</ul>\n";
 
+
+# check for spyc
+title("Testing for existance of spyc 0.5.1 and Spyc.php");
+print "<ul>\n";
+if(is_dir('./.ht-inc/spyc-0.5.1')) {
+	pass("spyc directory exists");
+	if(is_readable('./.ht-inc/spyc-0.5.1')) {
+		pass("spyc directory is readable");
+		if(is_file('./.ht-inc/spyc-0.5.1/Spyc.php')) {
+			pass(".ht-inc/spyc-0.5.1/Spyc.php file exists");
+			if(is_readable('.ht-inc/spyc-0.5.1/Spyc.php'))
+				pass(".ht-inc/spyc-0.5.1/Spyc.php is readable");
+			else
+				fail(".ht-inc/spyc-0.5.1/Spyc.php is not readable. Check permissions on the file.");
+		}
+		else
+			fail(".ht-inc/spyc-0.5.1/Spyc.php file does not exist.  Reinstall Spyc 0.5.1");
+	}
+	else
+		fail("spyc-0.5.1 directory is not readable. Check permissions on this directory");
+}
+else
+	fail(".ht-inc/spyc-0.5.1 directory does not exist. Download and install Spyc 0.5.1");
+print "</ul>\n";
+
 # php display errors
 title("Checking value of PHP display_errors");
 $a = ini_get('display_errors');
