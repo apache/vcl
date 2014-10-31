@@ -64,6 +64,7 @@ use Fcntl qw(:DEFAULT :flock);
 use FindBin;
 use Getopt::Long;
 use Carp;
+use Term::ANSIColor;
 use Text::Wrap;
 use English;
 use List::Util qw(min max);
@@ -78,6 +79,12 @@ use Time::HiRes qw(gettimeofday tv_interval);
 use Crypt::OpenSSL::RSA;
 use B qw(svref_2object);
 use Socket qw(inet_ntoa);
+
+BEGIN {
+	$ENV{PERL_RL} = 'Perl';
+};
+
+use Term::ReadLine;
 
 require Exporter;
 our @ISA = qw(Exporter);
@@ -110,6 +117,9 @@ our @EXPORT = qw(
 	get_calling_subroutine
 	get_changelog_info
 	get_changelog_remote_ip_address_info
+	get_database_names
+	get_database_table_columns
+	get_database_table_names
 	get_code_ref_package_name
 	get_code_ref_subroutine_name
 	get_computer_current_state_name
@@ -127,8 +137,6 @@ our @EXPORT = qw(
 	get_current_package_name
 	get_current_reservation_lastcheck
 	get_current_subroutine_name
-	get_database_names
-	get_database_table_columns
 	get_file_size_info_string
 	get_group_name
 	get_image_info
@@ -212,9 +220,13 @@ our @EXPORT = qw(
 	setup_confirm
 	setup_get_array_choice
 	setup_get_hash_choice
+	setup_get_input_file_path
 	setup_get_input_string
 	setup_get_menu_choice
 	setup_print_break
+	setup_print_error
+	setup_print_ok
+	setup_print_warning
 	setup_print_wrap
 	sleep_uninterrupted
 	sort_by_file_name
@@ -355,7 +367,7 @@ INIT {
 				  'setup!' => \$SETUP_MODE,
 				  'verbose!' => \$VERBOSE,
 	);
-
+	
 	my %parameters = (
 		'log'							=> \$LOGFILE,
 		'pidfile'					=> \$PIDFILE,
@@ -7520,7 +7532,8 @@ sub get_caller_trace {
 
 sub get_calling_subroutine {
 	my @caller = caller(2);
-	return $caller[3];
+	my $calling_subroutine = $caller[3] || '';
+	return $calling_subroutine;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -7575,8 +7588,6 @@ sub get_database_names {
 	my $no_cache = shift;
 	return @{$ENV{database_names}} if $ENV{database_names} && !$no_cache;
 	
-	my $database = 'information_schema';
-
 	my $select_statement = "
 SELECT DISTINCT
 SCHEMA_NAME
@@ -7585,7 +7596,7 @@ SCHEMATA
 	";
 
 	# Call the database select subroutine
-	my @rows = database_select($select_statement, $database);
+	my @rows = database_select($select_statement, 'information_schema');
 
 	# Check to make sure at least 1 row was returned
 	if (scalar @rows == 0) {
@@ -7600,6 +7611,42 @@ SCHEMATA
 	$ENV{database_names} = \@database_names;
 	
 	return @{$ENV{database_names}};
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_database_table_names
+
+ Parameters  : $database_name (optional)
+ Returns     : array
+ Description : Retrieves the names of all tables in the database sorted
+               alphabetically. The VCL database configured in vcld.conf is used
+               if no $database_name argument is specified.
+
+=cut
+
+sub get_database_table_names {
+	my $database_name = shift || $DATABASE;
+	
+	my $select_statement = <<EOF;
+SELECT DISTINCT
+TABLES.TABLE_NAME
+FROM
+TABLES
+WHERE
+TABLES.TABLE_SCHEMA = '$database_name'
+EOF
+
+	# Call the database select subroutine
+	my @rows = database_select($select_statement, 'information_schema');
+
+	if (!@rows) {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve database table columns");
+		return;
+	}
+	
+	my @database_columns = map { $_->{TABLE_NAME} } @rows;
+	return sort { lc($a) cmp lc($b) } @database_columns;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -9045,7 +9092,10 @@ sub setup_get_hash_choice {
 				$display_name .= " (" . $hash_ref->{$key}{$1}{$2} . ")";
 			}
 			else {
-				$display_name .= " (" . $hash_ref->{$key}{$display_key2} . ")";
+				my $display_key2_value = $hash_ref->{$key}{$display_key2};
+				if (defined($display_key2_value) && length($display_key2_value) > 0) {
+					$display_name .= " (" . $hash_ref->{$key}{$display_key2} . ")";
+				}
 			}
 		}
 		
@@ -9099,10 +9149,10 @@ sub setup_get_array_choice {
 			}
 		}
 		
-		print "\n[" . join("/", @{$ENV{setup_path}}) . "]\n";
+		print "\n[" . join("/", @{$ENV{setup_path}}) . "]\n" if defined($ENV{setup_path});
 		print "Make a selection (1";
 		print "-$choice_count" if ($choice_count > 1);
-		print ", 'c' to cancel): ";
+		print ", 'c' to cancel or when done): ";
 		
 		my $choice = <STDIN>;
 		chomp $choice;
@@ -9133,7 +9183,7 @@ sub setup_get_array_choice {
 sub setup_get_choice {
 	my ($choice_count) = @_;
 	
-	print "\n[" . join("/", @{$ENV{setup_path}}) . "]\n";
+	print "\n[" . join("/", @{$ENV{setup_path}}) . "]\n" if defined($ENV{setup_path});
 	while (1) {
 		print "Make a selection (1";
 		print "-$choice_count" if ($choice_count > 1);
@@ -9195,9 +9245,107 @@ sub setup_get_input_string {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 setup_get_input_file_path
+
+ Parameters  : $message, $default_value (optional)
+ Returns     : string
+ Description : Prompts the user to enter a file path.
+
+=cut
+
+sub setup_get_input_file_path {
+	my ($message, $default_value) = @_;
+	
+	# Check if a Term::ReadLine object has already been created
+	my $term;
+	if (defined($ENV{term_readline})) {
+		$term = $ENV{term_readline};
+	}
+	else {
+		$term = Term::ReadLine->new('ReadLine');
+		if (!$term) {
+			notify($ERRORS{'WARNING'}, 0, "failed to create Term::ReadLine object");
+			return setup_get_input_string($message, $default_value);
+		}
+		$term->ornaments(0);
+		
+		my $attribs = $term->Attribs;
+		if ($term->ReadLine =~ /Perl/) {
+			$attribs->{completion_function} = \&_term_readline_complete_file_path;
+		}
+		
+		$ENV{term_readline} = $term;
+	}
+	
+	$message = '' unless $message;
+	
+	my $trailing_newline = 0;
+	if ($message =~ /\n$/) {
+		$trailing_newline = 1;
+	}
+	$message =~ s/[\s\n]*$//g;
+	
+	if ($message) {
+		$message .= " ";
+	}
+	$message .= "('c' to cancel)";
+	
+	if ($trailing_newline) {
+		$message .= "\n";
+	}
+	if ($default_value) {
+		$message .=  "[$default_value]";
+	}
+	print "$message";
+	
+	my $input = $term->readline(": ");
+	chomp $input;
+	if ($input =~ /^c$/i) {
+		return;
+	}
+	elsif ($default_value && !length($input)) {
+		return $default_value;
+	}
+	else {
+		return $input;
+	}
+}
+
+#//////////////////////////////////////////////////////////////////////////////
+
+=head2 _term_readline_complete_file_path
+
+ Parameters  : $text
+ Returns     : @files
+ Description : 
+
+=cut
+
+sub _term_readline_complete_file_path {
+	my ($text) = @_;
+	my @files = glob "$text*";
+	
+	my @return_files;
+	for my $file (@files) {
+		if (-d $file) {
+			$file .= '/';
+		}
+		
+		push @return_files, $file;
+	}
+	
+	# Do this twice to avoid "used only once" warning
+	$readline::rl_completer_terminator_character = '';
+	$readline::rl_completer_terminator_character = '';
+	
+	return @return_files;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 =head2 setup_confirm
 
- Parameters  : $message
+ Parameters  : $message, $default_value (optional)
  Returns     : boolean
  Description : Displays the message to the user and loops until they enter Y or
                N.
@@ -9205,15 +9353,41 @@ sub setup_get_input_string {
 =cut
 
 sub setup_confirm {
-	my ($message) = @_;
+	my ($message, $default_value) = @_;
+	if (defined($message)) {
+		$message =~ s/\s*$//g;
+		$message .= ' ';
+	}
+	else {
+		$message = '';
+	}
+	$message .= '(y/n)';
+	
+	my $default_yes = 0;
+	my $default_no = 0;
+	if (defined($default_value)) {
+		if ($default_value =~ /^y$/i) {
+			$message .= '[y]';
+			$default_yes = 1;
+		}
+		elsif ($default_value =~ /^n$/i) {
+			$message .= '[n]';
+			$default_no = 1;
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "default value is not valid: '$default_value', it must be either 'y' or 'n'");
+		}
+	}
 	
 	while (1) {
-		setup_print_wrap("$message (Y/N)? ");
+		setup_print_wrap("$message? ");
 		my $input = <STDIN>;
-		if ($input =~ /^y(es)?$/i) {
+		$input =~ s/[\s\r\n]+$//g;
+		
+		if ((length($input) == 0 && $default_yes) || $input =~ /^y(es)?$/i) {
 			return 1;
 		}
-		elsif ($input =~ /^n(o)?$/i) {
+		elsif ((length($input) == 0 && $default_no) || $input =~ /^n(o)?$/i) {
 			return 0;
 		}
 	}
@@ -9260,12 +9434,87 @@ sub setup_print_wrap {
 	my ($trailing_newlines) = $message =~ /(\n+)$/;
 	$message =~ s/\n+$//g;
 	
+	$| = 1;
+	
 	# Wrap text for lines
 	local($Text::Wrap::columns) = $columns;
 	print $leading_newlines if $leading_newlines;
 	print wrap('', '', $message);
-	print $trailing_newlines if $trailing_newlines;
+	if ($trailing_newlines) {
+		print $trailing_newlines;
+	}
+	else {
+		print "\n";
+	}
 	
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 setup_print_ok
+
+ Parameters  : $message
+ Returns     : true
+ Description : 
+
+=cut
+
+sub setup_print_ok {
+	my ($message) = @_;
+	return unless defined($message);
+	$message =~ s/[\s\n]+$//g;
+	
+	my $prefix = 'OK';
+	print colored("$prefix:", "BLACK ON_GREEN");
+	print " ";
+	setup_print_wrap($message, (100-length($prefix)-2));
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 setup_print_error
+
+ Parameters  : $message
+ Returns     : true
+ Description : 
+
+=cut
+
+sub setup_print_error {
+	my ($message) = @_;
+	return unless defined($message);
+	$message =~ s/[\s\n]+$//g;
+	
+	print get_caller_trace() . "\n\n";
+	
+	my $prefix = 'ERROR';
+	print colored("$prefix:", "BOLD WHITE ON_RED");
+	print " ";
+	setup_print_wrap($message, (100-length($prefix)-2));
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 setup_print_warning
+
+ Parameters  : $message
+ Returns     : true
+ Description : 
+
+=cut
+
+sub setup_print_warning {
+	my ($message) = @_;
+	return unless defined($message);
+	$message =~ s/[\s\n]+$//g;
+	
+	my $prefix = 'WARNING';
+	print colored("$prefix:", "BLACK ON_YELLOW");
+	print " ";
+	setup_print_wrap($message, (100-length($prefix)-2));
 	return 1;
 }
 
