@@ -924,6 +924,10 @@ function abort($errcode, $query="") {
 		print HELPEMAIL . "</a> " . _("for further assistance.  Please include the ");
 		print _("steps you took that led up to this problem in your email message.");
 	}
+
+	// call clearPrivCache in case that helps clear up what caused the error
+	clearPrivCache();
+
 	// release semaphore lock
 	cleanSemaphore();
 	dbDisconnect();

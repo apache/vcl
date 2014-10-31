@@ -2768,7 +2768,8 @@ function AJchangeResourcePrivs() {
 	# checked, and the user is not in the resource owner group, don't allow
 	# the change
 	if($newpriv != "block" && $newpriv != "cascade" && $newpriv != "available" &&
-	   ! array_key_exists($groupdata[$groupid]["ownerid"], $user["groups"])) {
+	   ! array_key_exists($groupdata[$groupid]["ownerid"], $user["groups"]) &&
+	   $newprivval == 'true') {
 		$text = "You do not have rights to modify the submitted privilege for the submitted group.";
 		print "alert('$text');";
 		return;
