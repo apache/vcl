@@ -99,6 +99,7 @@ class ManagementNode extends Resource {
 				$w = 9.5;
 				break;
 			case 'keys':
+			case 'owner':
 			case 'sharedmailbox':
 				$w = 12;
 				break;

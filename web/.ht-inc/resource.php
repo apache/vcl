@@ -298,7 +298,6 @@ class Resource {
 		$h .= "<div id=\"gridcontainer\">\n";
 		$h .= "<table dojoType=\"dojox.grid.DataGrid\" jsId=\"resourcegrid\" ";
 		$h .= "sortInfo=3 store=\"resourcestore\" autoWidth=\"true\" style=\"";
-		#$h .= "height: 580px;\" query=\"{type: new RegExp('normal|federated|courseroll')}\">\n";
 		if($this->deletetoggled)
 			$h .= "height: 580px;\" query=\"{deleted: '0'}\">\n";
 		else
@@ -307,20 +306,21 @@ class Resource {
 		$h .= "<tr>\n";
 		if(preg_match('/MSIE/i', $_SERVER['HTTP_USER_AGENT']) ||
 		   preg_match('/Trident/i', $_SERVER['HTTP_USER_AGENT']))
-			$w = array('64px', '38px', '200px', '142px');
+			$w = array('64px', '38px', '200px');
 		else
-			$w = array('5em', '3em', '17em', '12em');
+			$w = array('5em', '3em', '17em');
 		$h .= "<th field=\"id\" id=\"delcolth\" width=\"{$w[0]}\" formatter=\"resource.DeleteBtn\" styles=\"text-align: center;\">&nbsp;</th>\n";
 		$h .= "<th field=\"id\" width=\"{$w[1]}\" formatter=\"resource.EditBtn\" styles=\"text-align: center;\">&nbsp;</th>\n";
 		$h .= "<th field=\"name\" width=\"{$w[2]}\">Name</th>\n";
-		if(array_key_exists('owner', $selfields) && ! $selfields['owner'])
-			$h .= "<th field=\"owner\" width=\"{$w[3]}\" hidden=\"true\">Owner</th>\n";
-		else
-			$h .= "<th field=\"owner\" width=\"{$w[3]}\">Owner</th>\n";
-		foreach($fields as $field) {
+		if(! array_key_exists('owner', $selfields))
+			$selfields['owner'] = 1;
+		foreach($fields as $field)
+			$names[$field] = $this->fieldDisplayName($field);
+		uasort($names, 'sortKeepIndex');
+		foreach($names as $field => $name) {
 			if($field == $this->namefield ||
 			   $field == 'name' ||
-			   $field == 'owner' ||
+			   #$field == 'owner' ||
 			   is_array($resdata[$testid][$field]) ||
 			   preg_match('/id$/', $field))
 				continue;
@@ -329,8 +329,7 @@ class Resource {
 				$h .= "<th field=\"$field\" $w formatter=\"resource.colformatter\">";
 			else
 				$h .= "<th field=\"$field\" $w hidden=\"true\" formatter=\"resource.colformatter\">";
-			$h .= $this->fieldDisplayName($field);
-			$h .= "</th>\n";
+			$h .= "$name</th>\n";
 		}
 		$h .= "</tr>\n";
 		$h .= "</thead>\n";
@@ -369,6 +368,7 @@ class Resource {
 	/////////////////////////////////////////////////////////////////////////////
 	function addDisplayCheckboxes($allfields, $sample, $selfields) {
 		$fields = array('owner');
+		$names = array('owner' => $this->fieldDisplayName('owner'));
 		foreach($allfields as $field) {
 			if($field == $this->namefield ||
 			   $field == 'name' ||
@@ -377,29 +377,29 @@ class Resource {
 			   preg_match('/id$/', $field))
 				continue;
 			$fields[] = $field;
+			$names[$field] = $this->fieldDisplayName($field);
 		}
+		uasort($names, 'sortKeepIndex');
 		$h = '';
 		$fieldcnt = count($fields);
 		$cols = $fieldcnt / 4;
 		if($cols > 4)
 			$cols = 4;
 		if($fieldcnt < 6) {
-			foreach($fields as $field) {
+			foreach($names as $field => $name) {
 				if($field == 'owner' && (! array_key_exists('owner', $selfields) || $selfields['owner']))
 					$h .= "<input type=checkbox id=chk$field checked onClick=\"resource.toggleResFieldDisplay(this, '$field')\">";
 				elseif($field == 'name' || (array_key_exists($field, $selfields) && $selfields[$field]))
 					$h .= "<input type=checkbox id=chk$field checked onClick=\"resource.toggleResFieldDisplay(this, '$field')\">";
 				else
 					$h .= "<input type=checkbox id=chk$field onClick=\"resource.toggleResFieldDisplay(this, '$field')\">";
-				$h .= "<label for=chk$field>";
-				$h .= $this->fieldDisplayName($field);
-				$h .= "</label><br>\n";
+				$h .= "<label for=chk$field>$name</label><br>\n";
 			}
 		}
 		else {
 			$h .= "<table>\n";
 			$cnt = 0;
-			foreach($fields as $field) {
+			foreach($names as $field => $name) {
 				$mod = $cols;
 				if($cnt % $mod == 0)
 					$h .= "<tr>\n";
@@ -409,9 +409,7 @@ class Resource {
 					$h .= "  <td><input type=checkbox id=chk$field checked onClick=\"resource.toggleResFieldDisplay(this, '$field')\">";
 				else
 					$h .= "  <td><input type=checkbox id=chk$field onClick=\"resource.toggleResFieldDisplay(this, '$field')\">";
-				$h .= "<label for=chk$field>";
-				$h .= $this->fieldDisplayName($field);
-				$h .= "</label><br></td>\n";
+				$h .= "<label for=chk$field>$name</label><br></td>\n";
 				$cnt++;
 				if($cnt % $mod == 0)
 					$h .= "</tr>\n";
@@ -436,7 +434,19 @@ class Resource {
 	///
 	/////////////////////////////////////////////////////////////////////////////
 	function fieldWidth($field) {
-		return '';
+		switch($field) {
+			case 'owner':
+				$w = 12;
+				break;
+			default:
+				return '';
+		}
+		if(preg_match('/MSIE/i', $_SERVER['HTTP_USER_AGENT']) ||
+		   preg_match('/Trident/i', $_SERVER['HTTP_USER_AGENT']))
+			$w = round($w * 11.5) . 'px';
+		else
+			$w = "{$w}em";
+		return "width=\"$w\"";
 	}
 
 	/////////////////////////////////////////////////////////////////////////////

@@ -105,6 +105,9 @@ class Computer extends Resource {
 			case 'provisioning':
 				$w = 11;
 				break;
+			case 'owner':
+				$w = 12;
+				break;
 			default:
 				return '';
 		}
