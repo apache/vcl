@@ -2007,6 +2007,9 @@ function getPendingBlockHTML($listonly=0) {
 	$rt .= "    <th align=\"right\">User Group:</th>\n";
 	$rt .= "    <td><span id=\"acceptgroup\"></span></td>\n";
 	$rt .= "  </tr>\n";
+	$rt .= "  <tr id=\"warnmsgtr\" class=\"hidden\">\n";
+	$rt .= "    <td colspan=2><span id=\"warnmsg\" class=\"rederrormsg\"></span></td>\n";
+	$rt .= "  </tr>\n";
 	$rt .= "  <tr>\n";
 	$rt .= "    <td colspan=2><hr></td>\n";
 	$rt .= "  </tr>\n";
@@ -2015,10 +2018,11 @@ function getPendingBlockHTML($listonly=0) {
 	$rt .= "    <td>\n";
 	if(USEFILTERINGSELECT && count($groups) < FILTERINGSELECTTHRESHOLD) {
 		$rt .= "      <select dojoType=\"dijit.form.FilteringSelect\" id=groupsel ";
-		$rt .= "queryExpr=\"*\${0}*\" highlightMatch=\"all\" autoComplete=\"false\">\n";
+		$rt .= "queryExpr=\"*\${0}*\" highlightMatch=\"all\" autoComplete=\"false\" ";
+		$rt .= "onChange=\"clearCont2();\">\n";
 	}
 	else
-		$rt .= "      <select id=groupsel>\n";
+		$rt .= "      <select id=groupsel onChange=\"clearCont2();\">\n";
 	foreach($groups as $id => $group) {
 		if($group['name'] == ' None@')
 			continue;
@@ -2060,6 +2064,7 @@ function getPendingBlockHTML($listonly=0) {
 	$rt .= "  </script>\n";
 	$rt .= "</button>\n";
 	$rt .= "<input type=hidden id=submitacceptcont>\n";
+	$rt .= "<input type=hidden id=submitacceptcont2>\n";
 	$rt .= "</div>\n"; # accept dialog
 
 	$rt .= "<div id=\"rejectDialog\" dojoType=\"dijit.Dialog\" title=\"Reject Block Allocation\">\n";
@@ -2392,7 +2397,15 @@ function AJacceptBlockAllocationConfirm() {
 		$rt['emailuser'] = "{$data['email']}";
 	else
 		$rt['validemail'] = 0;
-	$cdata = array('blockid' => $data['id']);
+	if(! is_null($rt['usergroup'])) {
+		$groupresources = getUserResources(array("imageAdmin", "imageCheckOut"),
+		                                   array("available"), 0, 0, 0,
+		                                   $data['usergroupid']);
+		if(! array_key_exists($data['imageid'], $groupresources['image']))
+			$rt['warnmsg'] = "Warning: The requested user group does not currently have access to the requested image.";
+	}
+	$cdata = array('blockid' => $data['id'],
+	               'imageid' => $data['imageid']);
 	if(empty($data['group']))
 		$cdata['setusergroup'] = 1;
 	else
@@ -2436,11 +2449,13 @@ function AJacceptBlockAllocationSubmit() {
 	$comments = getContinuationVar('comments');
 	$validemail = getContinuationVar('validemail');
 	$emailuser = getContinuationVar('emailuser');
+	$imageid = getContinuationVar('imageid');
 	$setusergroup = getContinuationVar('setusergroup');
 	if($setusergroup)
 		$usergroupid = processInputVar('groupid', ARG_NUMERIC);
 	$name = processInputVar('brname', ARG_STRING);
 	$emailtext = processInputVar('emailtext', ARG_STRING);
+	$override = getContinuationVar('override', 0);
 
 	$err = 0;
 	if(! preg_match('/^([-a-zA-Z0-9\. ]){3,80}$/', $name)) {
@@ -2465,11 +2480,22 @@ function AJacceptBlockAllocationSubmit() {
 		$err = 1;
 	}
 	$managementnodes = getManagementNodes('future');
-	if(empty($managementnodes)) {
+	if(! $err && empty($managementnodes)) {
 		$errmsg  = "Error encountered while trying to create block allocation:\\n\\n";
 		$errmsg .= "No active management nodes were found. Please try\\n";
 		$errmsg .= "accepting the block allocation at a later time.";
 		$err = 1;
+	}
+	$dooverride = 0;
+	if(! $err && ! $override && $setusergroup) {
+		$groupresources = getUserResources(array("imageAdmin", "imageCheckOut"),
+		                                   array("available"), 0, 0, 0,
+		                                   $usergroupid);
+		if(! array_key_exists($imageid, $groupresources['image'])) {
+			$errmsg  = "Warning: The selected user group does not currently have access to the requested image. You can accept the Block Allocation again to ignore this warning.";
+			$err = 1;
+			$dooverride = 1;
+		}
 	}
 	$mnid = array_rand($managementnodes);
 	if(! $err) {
@@ -2519,6 +2545,13 @@ function AJacceptBlockAllocationSubmit() {
 		$cdata = getContinuationVar();
 		$cont = addContinuationsEntry('AJacceptBlockAllocationSubmit', $cdata, SECINDAY, 1, 0);
 		print "dojo.byId('submitacceptcont').value = '$cont';";
+		if($dooverride) {
+			$cdata['override'] = 1;
+			$cont = addContinuationsEntry('AJacceptBlockAllocationSubmit', $cdata, SECINDAY, 1, 0);
+			print "dojo.byId('submitacceptcont2').value = '$cont';";
+		}
+		else
+			print "dojo.byId('submitacceptcont2').value = '';";
 		print "document.body.style.cursor = 'default';";
 		return;
 	}
@@ -3059,7 +3092,8 @@ function processBlockAllocationInput() {
 		}
 	}
 	$dooverride = 0;
-	if(! $err && ! $override) {
+	# check user group access to image
+	if(($method == 'new' || $method == 'edit') && ! $err && ! $override) {
 		$groupresources = getUserResources(array("imageAdmin", "imageCheckOut"),
 		                                   array("available"), 0, 0, 0,
 		                                   $return['groupid']);

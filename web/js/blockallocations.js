@@ -1007,6 +1007,14 @@ function acceptBlockConfirmCB(data, ioArgs) {
 		dojo.removeClass('staticusergroup', 'hidden');
 		dojo.byId('acceptgroup').innerHTML = data.items.usergroup;
 	}
+	if('warnmsg' in data.items && data.items.warnmsg != '') {
+		dojo.removeClass('warnmsgtr', 'hidden');
+		dojo.byId('warnmsg').innerHTML = data.items.warnmsg;
+	}
+	else {
+		dojo.addClass('warnmsgtr', 'hidden');
+		dojo.byId('warnmsg').innerHTML = '';
+	}
 	if(data.items.validemail) {
 		dojo.removeClass('acceptemailblock', 'hidden');
 		dojo.addClass('acceptemailwarning', 'hidden');
@@ -1061,6 +1069,8 @@ function acceptBlockSubmit() {
 	            groupid: getSelectValue('groupsel'),
 	            brname: dijit.byId('brname').value,
 	            emailtext: dijit.byId('acceptemailtext').attr('value')};
+	if(dojo.byId('submitacceptcont2').value != '')
+		data.continuation = dojo.byId('submitacceptcont2').value;
    document.body.style.cursor = 'wait';
 	RPCwrapper(data, generalReqCB);
 }
@@ -1400,5 +1410,8 @@ function viewBlockUsageCB(data, ioArgs) {
 }
 
 function clearCont2() {
-	dojo.byId('submitcont2').value = '';
+	if(dojo.byId('submitcont2'))
+		dojo.byId('submitcont2').value = '';
+	if(dojo.byId('submitacceptcont2'))
+		dojo.byId('submitacceptcont2').value = '';
 }
