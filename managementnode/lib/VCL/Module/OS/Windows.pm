@@ -3894,7 +3894,9 @@ sub get_service_configuration {
 	
 	my $services_key = 'HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Services';
 	
-	my $node_reg_file_path = "C:/cygwin/tmp/services_$computer_node_name.reg";
+	my $cygwin_path			 = $self->get_cygwin_path();
+
+	my $node_reg_file_path = $cygwin_path . "/tmp/services_$computer_node_name.reg";
 	my $mn_reg_file_path = "/tmp/vcl/services_$computer_node_name.reg";
 	
 	# Export the registry key to the temp directory on the computer
@@ -6829,6 +6831,7 @@ sub clean_hard_drive {
 
 	my $computer_node_name   = $self->data->get_computer_node_name();
 	my $system32_path        = $self->get_system32_path() || return;
+	my $cygwin_path			 = $self->get_cygwin_path();
 	
 	# Run dism.exe
 	# The dism.exe file may not be present
@@ -6861,7 +6864,7 @@ sub clean_hard_drive {
 		'$SYSTEMDRIVE/RECYCLER,.*',
 		'$TEMP,.*',
 		'$TMP,.*',
-		'$SYSTEMDRIVE/cygwin/tmp,.*',
+		'$cygwin_path/tmp,.*',
 		'$SYSTEMDRIVE/Temp,.*',
 		'$SYSTEMROOT/Temp,.*',
 		'$SYSTEMROOT/ie7updates,.*',
@@ -6881,7 +6884,7 @@ sub clean_hard_drive {
 		'$SYSTEMDRIVE/Documents and Settings,.*Temp\\/.*,10',
 		'$SYSTEMDRIVE/Documents and Settings,.*Temporary Internet Files\\/Content.*\\/.*,10',
 		'$SYSTEMDRIVE,.*pagefile\\.sys,1',
-		'$SYSTEMDRIVE/cygwin/home/root,.*%USERPROFILE%,1',
+		'$cygwin_path/home/root,.*%USERPROFILE%,1',
 		"$system32_path/GroupPolicy/User/Scripts,.*VCL.*cmd"
 	);
 	
@@ -8656,7 +8659,13 @@ sub get_system32_path {
 	}
 	elsif ($is_64_bit) {
 		$self->{SYSTEM32_PATH} = 'C:/Windows/Sysnative';
-		notify($ERRORS{'DEBUG'}, 0, "64-bit Windows OS installed on $computer_name, using $self->{SYSTEM32_PATH}");
+		if (!$self->file_exists($self->{SYSTEM32_PATH})) {
+			$self->{SYSTEM32_PATH} = 'C:/Windows/System32';
+			notify($ERRORS{'DEBUG'}, 0, "64-bit Windows OS installed on $computer_name, C: Windows Sysnative not found, using $self->{SYSTEM32_PATH}");
+		}
+		else {
+			notify($ERRORS{'DEBUG'}, 0, "64-bit Windows OS installed on $computer_name, using $self->{SYSTEM32_PATH}");
+		}
 	}
 	else {
 		$self->{SYSTEM32_PATH} = 'C:/Windows/System32';
@@ -11952,6 +11961,50 @@ sub notify_user_console {
 		notify($ERRORS{'DEBUG'}, 0, "executed command to determine if the '$cmd' shell command exists on $computer_node_name");
 		return 1;
 	}
+}
+
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_cygwin_path
+
+ Parameters  : 
+ Returns     : sets $self->{CYGWIN_PATH}
+ Description :	sets CYGWIN_PATH, x86 and x86_64 use different paths, need to detect which path to use. 
+
+=cut
+
+sub get_cygwin_path {
+	my $self = shift;
+	if (ref($self) !~ /Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+
+	return $self->{CYGWIN_PATH} if $self->{CYGWIN_PATH};
+
+	my $computer_node_name = $self->data->get_computer_node_name();
+	my $command = "cygpath -d /";
+
+	my ($exit_status, $output) = $self->execute($command, 1);
+	
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to run SSH command to delete files under command: $command");
+		#return default path
+		$self->{CYGWIN_PATH} = "C:/cygwin";
+		return $self->{CYGWIN_PATH};
+	}
+	elsif (@$output) {
+		$self->{CYGWIN_PATH} = @$output[0];
+		#fix path
+		$self->{CYGWIN_PATH} =~ tr/\\/\//;
+		notify($ERRORS{'DEBUG'}, 0, "command: $command cygwin_path: $self->{CYGWIN_PATH}");
+		if ($self->file_exists($self->{CYGWIN_PATH})) {
+			notify($ERRORS{'DEBUG'}, 0, " $self->{CYGWIN_PATH} exists");
+		}
+		return $self->{CYGWIN_PATH};
+	}
+
 }
 #/////////////////////////////////////////////////////////////////////////////
 

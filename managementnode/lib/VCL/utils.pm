@@ -3974,6 +3974,9 @@ sub run_ssh_command {
 	elsif (-f 'D:/cygwin/bin/ssh.exe') {
 		$ssh_path = 'D:/cygwin/bin/ssh.exe';
 	}
+	elsif (-f 'C:/cygwin64/bin/ssh.exe') {
+		$ssh_path = 'C:/cygwin64/bin/ssh.exe';
+	}
 	else {
 		notify($ERRORS{'WARNING'}, 0, "unable to locate the SSH executable in the usual places");
 		return 0;
