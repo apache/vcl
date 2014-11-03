@@ -1632,7 +1632,7 @@ function newReservationHTML() {
 	$h .= "<br></span>\n";
 
 	# ending is indefinite
-	$h .= "<span id=\"indefinteend\" class=\"hidden\">\n";
+	$h .= "<span id=\"indefiniteend\" class=\"hidden\">\n";
 	if($serveraccess) {
 		$h .= "&nbsp;&nbsp;&nbsp;";
 		$h .= "<input type=\"radio\" id=\"endindef\" name=\"deployend\" ";

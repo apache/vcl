@@ -916,6 +916,8 @@ function abort($errcode, $query="") {
 			}
 		}
 		$message .= getBacktraceString(FALSE);
+		if($errcode == 8)
+			$message = preg_replace("/Argument#: 3 => .*\n/", "Argument#: 3 => *********\n", $message);
 		$mailParams = "-f" . ENVELOPESENDER;
 		error_log($message);
 		mail(ERROREMAIL, "Error with VCL pages ($errcode)", $message, '', $mailParams);
@@ -12924,11 +12926,11 @@ function getDojoHTML($refresh) {
 	if(empty($dojoRequires))
 		return '';
 	$customfile = '';
+	$v = $VCLversion;
 	if(! empty($filename))
-		$customfile = sprintf("<script type=\"text/javascript\" src=\"dojo/dojo/%s\"></script>\n", $filename);
+		$customfile = sprintf("<script type=\"text/javascript\" src=\"dojo/dojo/%s?v=$v\"></script>\n", $filename);
 	$rt = '';
 	$jslocale = strtolower(str_replace('_', '-', $locale));
-	$v = $VCLversion;
 	switch($mode) {
 
 		case "viewRequests":

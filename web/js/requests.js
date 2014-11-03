@@ -152,7 +152,7 @@ function selectResType() {
 		if(dijit.byId('nousercheck'))
 			dojo.removeClass('nousercheckspan', 'hidden');
 		dojo.addClass('anystart', 'hidden');
-		dojo.addClass('indefinteend', 'hidden');
+		dojo.addClass('indefiniteend', 'hidden');
 		//hideDijitButton('newResDlgShowConfigBtn'); // finishconfigs
 		if(dojo.byId('openend').value == 1) {
 			dojo.removeClass('endlbl', 'hidden');
@@ -221,7 +221,7 @@ function selectResType() {
 		//dojo.removeClass('nrmonitoredspan', 'hidden');
 		dojo.removeClass('nrfixedipdiv2', 'hidden');
 		dojo.removeClass('anystart', 'hidden');
-		dojo.removeClass('indefinteend', 'hidden');
+		dojo.removeClass('indefiniteend', 'hidden');
 		dojo.removeClass('endlbl', 'hidden');
 		dojo.removeClass('specifyend', 'hidden');
 		//showDijitButton('newResDlgShowConfigBtn'); // finishconfigs
