@@ -244,7 +244,17 @@ function toggleDeleteResourceCB(data, ioArgs) {
 		dojo.byId('toggleDeleteHeading').innerHTML = data.items.title;
 		dojo.byId('toggleDeleteQuestion').innerHTML = data.items.question;
 		dojo.byId('toggleDeleteBtn').innerHTML = data.items.btntxt;
-		dojo.byId('confdelrescontent').innerHTML = data.items.html;
+		var txt = '<table>';
+		for(var i = 0; i < data.items.fields.length; i++) {
+			var item = data.items.fields[i];
+			txt += '<tr><th align="right">'
+			txt += item.name
+			    + ':</th><td>'
+			    + resource.colformatter(item.value, '', item) 
+			    + '</td></tr>';
+		}
+		txt += '</table>';
+		dojo.byId('confdelrescontent').innerHTML = txt + data.items.html;
 		dojo.byId('submitdeletecont').value = data.items.cont;
 		dijit.byId('toggleDeleteDialog').show();
 	}

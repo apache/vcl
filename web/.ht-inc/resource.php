@@ -320,7 +320,6 @@ class Resource {
 		foreach($names as $field => $name) {
 			if($field == $this->namefield ||
 			   $field == 'name' ||
-			   #$field == 'owner' ||
 			   is_array($resdata[$testid][$field]) ||
 			   preg_match('/id$/', $field))
 				continue;
@@ -624,8 +623,7 @@ class Resource {
 			sendJSON($rt);
 			return;
 		}
-		$rt = array('html' => '',
-		            'title' => "Confirm Delete {$this->restypename}",
+		$rt = array('title' => "Confirm Delete {$this->restypename}",
 		            'question' => "Delete the following {$this->restype}?",
 		            'btntxt' => "Delete {$this->restypename}",
 		            'status' => 'success');
@@ -640,9 +638,13 @@ class Resource {
 			$rt['btntxt'] = "Undelete {$this->restypename}";
 		}
 		$fields = array_keys($resdata[$rscid]);
-		$rt['html'] .= "<table>";
-		$rt['html'] .= "<tr><th>Name:</th><td>{$resdata[$rscid][$this->namefield]}</td></tr>";
-		$rt['html'] .= "<tr><th>Owner:</th><td>{$resdata[$rscid]['owner']}</td></tr>";
+		$rt['fields'] = array();
+		$rt['fields'][] = array('field' => 'name',
+		                        'name' => 'Name',
+		                        'value' => $resdata[$rscid][$this->namefield]);
+		$rt['fields'][] = array('field' => 'owner',
+		                        'name' => 'Owner',
+		                        'value' => $resdata[$rscid]['owner']);
 		foreach($fields as $field) {
 			if($field == $this->namefield ||
 			   $field == 'name' ||
@@ -650,12 +652,11 @@ class Resource {
 			   is_array($resdata[$rscid][$field]) ||
 			   preg_match('/id$/', $field))
 				continue;
-			$rt['html'] .= "<tr><th>";
-			$rt['html'] .= ucfirst($field);
-			$rt['html'] .= ":</th><td>{$resdata[$rscid][$field]}</td></tr>";
+			$rt['fields'][] = array('field' => $field,
+			                        'name' => $this->fieldDisplayName($field),
+			                        'value' => $resdata[$rscid][$field]);
 		}
-		$rt['html'] .= "</table>";
-		$rt['html'] .= $this->toggleDeleteResourceExtra();
+		$rt['html'] = $this->toggleDeleteResourceExtra();
 
 		$cdata = getContinuationVar();
 		$cdata['rscid'] = $rscid;

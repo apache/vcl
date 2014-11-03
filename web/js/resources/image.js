@@ -34,6 +34,8 @@ Image.prototype.colformatter = function(value, rowIndex, obj) {
 		if(value == "1")
 			return '<span class="ready">true</span>';
 	}
+	if(obj.field == 'maxinitialtime' && value == 0)
+		return '(unset)';
 	return value;
 }
 
