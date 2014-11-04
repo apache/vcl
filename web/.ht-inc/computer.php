@@ -3200,8 +3200,19 @@ class Computer extends Resource {
 		$tmp = array_keys($resources['image']);
 		$semimageid = $tmp[0];
 		$semrevid = getProductionRevisionid($semimageid);
-		$tmp = array_keys($resources['managementnode']);
-		$semmnid = $tmp[0];
+		if(! empty($resources['managementnode'])) {
+			$tmp = array_keys($resources['managementnode']);
+			$semmnid = $tmp[0];
+		}
+		else {
+			$allmns = array_keys(getManagementNodes('future'));
+			if(empty($allmns)) {
+				$ret = array('status' => 'error', 'errormsg' => 'No management nodes are available for controlling the submitted computers.');
+				sendJSON($ret);
+				return;
+			}
+			$semmnid = $allmns[0];
+		}
 
 		if($newstateid == 2) {
 			$fails = array('provnone' => array(),
