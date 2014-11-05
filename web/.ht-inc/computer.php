@@ -96,6 +96,9 @@ class Computer extends Resource {
 			case 'nathost':
 				$w = 8;
 				break;
+			case 'type':
+				$w = 7;
+				break;
 			case 'location':
 				$w = 9;
 				break;
@@ -976,13 +979,33 @@ class Computer extends Resource {
 					}
 					$data['stateid'] = $olddata['stateid']; # prevent state from being updated directly
 				}
-				elseif(count($vmids)) {
-					$query = "UPDATE computer "
-					       . "SET stateid = 2, "
-					       .     "notes = '' "
-							 . "WHERE id in ($allids)";
-					doQuery($query);
-					$multirefresh = 1;
+				else {
+					if(count($vmids)) {
+						$query = "UPDATE computer "
+						       . "SET stateid = 2, "
+						       .     "notes = '' "
+								 . "WHERE id in ($allids)";
+						doQuery($query);
+						$multirefresh = 1;
+					}
+					if(! array_key_exists('vmprofileid', $olddata) ||
+						$olddata['vmprofileid'] == '') {
+						$query = "INSERT INTO vmhost "
+						       .        "(computerid, "
+						       .        "vmlimit, "
+						       .        "vmprofileid) "
+						       . "VALUES ({$data['rscid']}, "
+						       .        "5, "
+						       .        "{$data['vmprofileid']})";
+						doQuery($query);
+					}
+					elseif($olddata['vmprofileid'] != $data['vmprofileid']) {
+						$query = "UPDATE vmhost "
+						       . "SET vmprofileid = {$data['vmprofileid']} "
+						       . "WHERE computerid = {$data['rscid']} AND "
+						       .       "vmprofileid = {$olddata['vmprofileid']}";
+						doQuery($query);
+					}
 				}
 			}
 			elseif($olddata['stateid'] != 20 && $data['stateid'] == 20) {
