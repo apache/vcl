@@ -474,6 +474,18 @@ else
 	fail(".ht-inc/spyc-0.5.1 directory does not exist. Download and install Spyc 0.5.1");
 print "</ul>\n";
 
+# check themes directories for dojo content having been copied in
+title("Checking themes for dojo css");
+$themes = scandir('themes');
+foreach($themes as $theme) {
+	if($theme == '.' || $theme == '..' || $theme == 'copydojocss.sh')
+		continue;
+	if(is_dir("themes/$theme/css/dojo") && is_file("themes/$theme/css/dojo/{$theme}.css"))
+		pass("themes/$theme has had dojo css copied to it");
+	else
+		fail("themes/$theme is missing dojo css. Run themes/copydojocss.sh from the themes directory to correct this if you want to use this theme.");
+}
+
 # php display errors
 title("Checking value of PHP display_errors");
 $a = ini_get('display_errors');
