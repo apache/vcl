@@ -81,7 +81,6 @@ function initGlobals() {
 	$contuserid = '';
 	$continuation = processInputVar('continuation', ARG_STRING);
 	if(! empty($continuation)) {
-		# TODO handle AJ errors
 		$tmp = getContinuationsData($continuation);
 		if(empty($tmp))
 			abort(11);
@@ -11528,6 +11527,7 @@ function continuationsError() {
 		}
 	}
 	if(array_key_exists('error', $contdata)) {
+		print "<!-- continuationserror -->\n";
 		switch($contdata['error']) {
 		case 'invalid input':
 			print _("<h2>Error: Invalid Input</h2><br>\n");

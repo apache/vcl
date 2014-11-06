@@ -78,7 +78,8 @@ function returnCheck(CB, data, ioArgs) {
 		var json = dojo.fromJson(data);
 	}
 	catch(error) {
-		if(data.match(/<html/) || ! error.message.match(/syntax error/)) {
+		if((! data.match(/-- continuationserror --/)) &&
+		   (data.match(/<html/) || ! error.message.match(/syntax error/))) {
 			alert(_('Error encountered:') + " " + _('Please try again later'));
 			return;
 		}
