@@ -3289,7 +3289,7 @@ class Computer extends Resource {
 					continue;
 				}
 				# in reload, reloading, reserved, inuse, or failed with no active reservation
-				if(preg_match('/^(reload|reloading|reserved|inuse|failed)$/',
+				if(preg_match('/^(reload|reloading|reserved|inuse|failed|timeout)$/',
 				              $computers[$compid]['state'])) {
 					$availablenow[] = $compid;
 					continue;
