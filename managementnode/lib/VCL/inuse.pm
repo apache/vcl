@@ -250,6 +250,8 @@ sub process {
 				notify($ERRORS{'CRITICAL'}, 0, "failed to initiate image auto-capture process, changing request and computer state to maintenance");
 				$self->state_exit('maintenance', 'maintenance');
 			}
+			#Successful, cleanly exit with no state change
+			$self->state_exit()
 		}
 		
 		$self->state_exit('timeout', 'timeout', 'EOR');
