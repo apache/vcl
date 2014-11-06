@@ -102,21 +102,29 @@ PASSWORD=$1
 
 print_hr
 
+# Detect Cygwin path
+CYGWINDOSPATH=`cygpath -d /`
+
+CYGPATH="$(echo $CYGWINDOSPATH | tr '\\' '/')"
+
+echo $CYGPATH
+
 # Configure Cygwin mount points
 # ssh-host-config will fail if the mount points are configured as user instead of system
 echo Configuring mount points
-C:/cygwin/bin/umount.exe -u /usr/bin 2>/dev/null
-C:/cygwin/bin/mount.exe -f -s -b C:/cygwin/bin /usr/bin
+
+$CYGPATH/bin/umount.exe -u /usr/bin 2>/dev/null
+$CYGPATH/bin/mount.exe -f $CYGPATH/bin /usr/bin
 ls /usr/bin >/dev/null
 if [ $? -ne 0 ]; then die "failed to configure /usr/bin mount point"; fi;
 
-C:/cygwin/bin/umount.exe -u /usr/lib 2>/dev/null
-C:/cygwin/bin/mount.exe -f -s -b C:/cygwin/lib /usr/lib
+$CYGPATH/bin/umount.exe -u /usr/lib 2>/dev/null
+$CYGPATH/bin/mount.exe -f $CYGPATH/lib /usr/lib
 ls /usr/lib >/dev/null
 if [ $? -ne 0 ]; then die "failed to configure /usr/lib mount point"; fi;
 
-C:/cygwin/bin/umount.exe -u / 2>/dev/null
-C:/cygwin/bin/mount.exe -f -s -b C:/cygwin /
+$CYGPATH/bin/umount.exe -u / 2>/dev/null
+$CYGPATH/bin/mount.exe -f $CYGPATH /
 ls / >/dev/null
 if [ $? -ne 0 ]; then die "failed to configure / mount point"; fi;
 
@@ -218,7 +226,7 @@ print_hr
 
 # Run ssh-host-config, this is the main sshd service configuration utility
 echo Running ssh-host-config
-ssh-host-config -y -c ntsec -w "$PASSWORD"
+ssh-host-config -y -c "nodosfilewarning ntsec" -w "$PASSWORD"
 if [ $? -ne 0 ]; then die "failed to run ssh-host-config"; fi;
 print_hr
 
@@ -332,12 +340,12 @@ print_hr
 # All Cygwin processes must be killed in order to run rebaseall
 # The batch file causes the Cygwin bash process running this script to die
 REBASEALL_PATH_CYGWIN=/home/root/cygwin-rebaseall.cmd
-REBASEALL_PATH_DOS=C:\\cygwin\\home\\root\\cygwin-rebaseall.cmd
+REBASEALL_PATH_DOS=$CYGWINDOSPATH\\home\\root\\cygwin-rebaseall.cmd
 
 echo Generating $REBASEALL_PATH_CYGWIN
 rm -f $REBASEALL_PATH_CYGWIN
 
-(cat -v <<'EOF'
+(cat -v <<EOF
 @echo off
 
 set SCRIPT_NAME=%~n0
@@ -362,8 +370,8 @@ echo Waiting 3 seconds for processes to die
 ping localhost -n 1 -w 30000 >NUL
 echo.
 
-echo Running /usr/bin/rebaseall in the ash shell
-C:\cygwin\bin\ash.exe -c '/usr/bin/rebaseall'
+echo Running /usr/bin/rebaseall in the ash shell ${CYGWINDOSPATH}\bin\ash.exe
+${CYGWINDOSPATH}\bin\ash.exe -c '/usr/bin/rebaseall'
 echo rebaseall exit status: %ERRORLEVEL%
 IF ERRORLEVEL 1 exit /b %ERRORLEVEL%
 echo.
@@ -373,7 +381,7 @@ net start sshd
 IF ERRORLEVEL 1 exit /b %ERRORLEVEL%
 
 echo /var/log/sshd.log ending:
-C:\cygwin\bin\tail.exe -n 10 /var/log/sshd.log
+${CYGWINDOSPATH}\bin\tail.exe -n 10 /var/log/sshd.log
 
 echo ======================================================================
 echo SUCCESS: %SCRIPT_FILENAME% done.
@@ -386,4 +394,4 @@ EOF
 echo Calling $REBASEALL_PATH_DOS
 /cygdrive/C/Windows/System32/cmd.exe /k start "$REBASEALL_PATH_DOS"
 
-exit 0
+#exit 0
