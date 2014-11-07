@@ -131,16 +131,36 @@ function saveResource() {
 	}
 	if(! checkValidatedObj('owner', errobj))
 		return;
-	if(! checkValidatedObj('ram', errobj))
+	if(! checkValidatedObj('ram', errobj)) {
+		if(! dijit.byId('advancedoptions').open)
+			dijit.byId('advancedoptions').toggle();
+		setTimeout(function() {dijit.byId('ram').focus();}, 300);
 		return;
-	if(! checkValidatedObj('cores', errobj))
+	}
+	if(! checkValidatedObj('cores', errobj)) {
+		if(! dijit.byId('advancedoptions').open)
+			dijit.byId('advancedoptions').toggle();
+		setTimeout(function() {dijit.byId('cores').focus();}, 300);
 		return;
-	if(! checkValidatedObj('cpuspeed', errobj))
+	}
+	if(! checkValidatedObj('cpuspeed', errobj)) {
+		if(! dijit.byId('advancedoptions').open)
+			dijit.byId('advancedoptions').toggle();
+		setTimeout(function() {dijit.byId('cpuspeed').focus();}, 300);
 		return;
-	if(! checkValidatedObj('concurrent', errobj))
+	}
+	if(! checkValidatedObj('concurrent', errobj)) {
+		if(! dijit.byId('advancedoptions').open)
+			dijit.byId('advancedoptions').toggle();
+		setTimeout(function() {dijit.byId('concurrent').focus();}, 300);
 		return;
-	if(! checkValidatedObj('reload', errobj))
+	}
+	if(! checkValidatedObj('reload', errobj)) {
+		if(! dijit.byId('advancedoptions').open)
+			dijit.byId('advancedoptions').toggle();
+		setTimeout(function() {dijit.byId('reload').focus();}, 300);
 		return;
+	}
 
 	if(dojo.byId('editresid').value == 0)
 		var data = {continuation: dojo.byId('addresourcecont').value};
