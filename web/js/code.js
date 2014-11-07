@@ -83,6 +83,12 @@ function returnCheck(CB, data, ioArgs) {
 			alert(_('Error encountered:') + " " + _('Please try again later'));
 			return;
 		}
+		else if(data.match(/-- continuationserror --/)) {
+			var i = data.indexOf('<div id="continuationserrormessage');
+			i = data.indexOf('>', i) + 2;
+			var j = data.indexOf('</div>', i);
+			data = data.slice(i, j);
+		}
 		var div = document.createElement('div');
 		div.innerHTML = data;
 		var msg = div.textContent || div.innerText || "";

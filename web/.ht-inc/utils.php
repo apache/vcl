@@ -5449,10 +5449,9 @@ function getRequestInfo($id, $returnNULL=0) {
 			print $HTMLheader;
 		print _("<h1>OOPS! - Reservation Has Expired</h1>\n");
 		print _("The selected reservation is no longer available.  Go to ");
-		print "<a href=" . BASEURL . SCRIPT . "?mode=newRequest>";
-		print _("New Reservations</a><br>to request a new reservation or to ");
-		print "<a href=" . BASEURL . SCRIPT . "?mode=viewRequests>";
-		print _("Current Reservations</a> to select<br>another one that is available.");
+		print "<a href=\"" . BASEURL . SCRIPT . "?mode=viewRequests\">";
+		print _("Reservations</a><br>to request a new reservation or ");
+		print _("select another one that is available.");
 		printHTMLFooter();
 		dbDisconnect();
 		exit;
@@ -7496,7 +7495,7 @@ function showTimeTable($links) {
 			elseif($timeslots[$id][$stamp]["available"]) {
 				if($links) {
 					print "          <TD bgcolor=\"#00ff00\"><a href=\"" . BASEURL . SCRIPT;
-					print "?mode=newRequest&stamp=$stamp&imageid=$imageid&length=$length&imaging=$imaging\"><img ";
+					print "?mode=viewRequests&stamp=$stamp&imageid=$imageid&length=$length&imaging=$imaging\"><img ";
 					print "src=images/green.jpg alt=free border=0></a></TD>\n";
 				}
 				else {
@@ -11528,6 +11527,7 @@ function continuationsError() {
 	}
 	if(array_key_exists('error', $contdata)) {
 		print "<!-- continuationserror -->\n";
+		print "<div id=\"continuationserrormessage\">\n";
 		switch($contdata['error']) {
 		case 'invalid input':
 			print _("<h2>Error: Invalid Input</h2><br>\n");
@@ -11551,6 +11551,7 @@ function continuationsError() {
 			print HELPEMAIL . "</a> " . _("for further assistance.  Please include the ");
 			print _("steps you took that led up to this problem in your email message.");
 		}
+		print "</div>\n";
 	}
 	if(! array_key_exists('noHTMLwrappers', $contdata) ||
 		$contdata['noHTMLwrappers'] == 0)

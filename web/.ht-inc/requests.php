@@ -2564,8 +2564,8 @@ function detailStatusHTML($reqid) {
 	}
 	if(! $found) {
 		$text  = _("The selected reservation is no longer available.  Go to ");
-		$text .= "<a href=" . BASEURL . SCRIPT . "?mode=newRequest>";
-		$text .= _("New Reservations</a> to request a new reservation or ");
+		$text .= "<a href=" . BASEURL . SCRIPT . "?mode=viewRequests>";
+		$text .= _("Reservations</a> to request a new reservation or ");
 		$text .= _("select another one that is available.");
 		return $text;
 	}
