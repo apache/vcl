@@ -1322,14 +1322,15 @@ function XMLRPCautoCapture($requestid) {
 		              'desc' => $desc,
 		              'usage' => '',
 		              'owner' => "{$ownerdata['unityid']}@{$ownerdata['affiliation']}",
-		              'prettyname' => "Autocaptured ({$ownerdata['unityid']} - $requestid)",
-		              'minram' => 64,
-		              'minprocnumber' => 1,
-		              'minprocspeed' => 500,
-		              'minnetwork' => 10,
-		              'maxconcurrent' => '',
+		              'name' => "Autocaptured ({$ownerdata['unityid']} - $requestid)",
+		              'ram' => 64,
+		              'cores' => 1,
+		              'cpuspeed' => 500,
+		              'networkspeed' => 10,
+		              'concurrent' => '',
 		              'checkuser' => 1,
 		              'rootaccess' => 1,
+		              'checkout' => 1,
 		              'sysprep' => 1,
 		              'basedoffrevisionid' => $reqData['reservations'][0]['imagerevisionid'],
 		              'platformid' => $imageData[$imageid]['platformid'],
@@ -1339,12 +1340,21 @@ function XMLRPCautoCapture($requestid) {
 		              'connectmethodids' => implode(',', array_keys($connectmethods)),
 		              'autocaptured' => 1);
 		$obj = new Image();
-		$rc = $obj->addResource($data);
-		if($rc == 0) {
+		$imageid = $obj->addResource($data);
+		if($imageid == 0) {
 			return array('status' => 'error',
 			             'errorcode' => 50,
 			             'errormsg' => 'error encountered while attempting to create image');
 		}
+
+		$query = "UPDATE request rq, "
+		       .        "reservation rs "
+		       . "SET rs.imageid = $imageid, "
+		       .     "rs.imagerevisionid = {$obj->imagerevisionid}, "
+		       .     "rq.stateid = 16  "
+		       . "WHERE rq.id = $requestid AND "
+		       .       "rq.id = rs.requestid";
+		doQuery($query);
 	}
 	return array('status' => 'success');
 }
@@ -3706,8 +3716,10 @@ function XMLRPCfinishBaseImageCapture($ownerid, $resourceid, $virtual=1) {
 		             'errorcode' => 91,
 		             'errormsg' => 'Invalid resourceid submitted');
 	}
-	require_once(".ht-inc/images.php");
-	addImagePermissions($ownerdata, $resourceid, $virtual);
+	require_once(".ht-inc/resource.php");
+	require_once(".ht-inc/image.php");
+	$obj = new Image();
+	$obj->addImagePermissions($ownerdata, $resourceid, $virtual);
 	return array('status' => 'success');
 }
 ?>
