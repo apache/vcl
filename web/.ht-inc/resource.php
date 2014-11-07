@@ -1648,7 +1648,7 @@ function AJstartImage() {
 	$cdata = array('obj' => $obj,
 	               'requestid' => $requestid,
 	               'imageid' => $imageid,
-	               'baserevisionid' => $data['reservations'][0]['imagerevisionid'],
+	               'baserevisionid' => $revid,
 	               'checkpoint' => $checkpoint,
 	               'add' => 1);
 	$cont = addContinuationsEntry('AJsaveResource', $cdata, SECINDAY, 0);

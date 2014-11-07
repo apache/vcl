@@ -712,7 +712,7 @@ class Image extends Resource {
 			               'add' => 1,
 			               'checkpoint' => $checkpoint,
 			               'fromclickthrough' => 1);
-			$cont = addContinuationsEntry('AJsaveResource', $cdata);
+			$cont = addContinuationsEntry('AJsaveResource', $cdata, SECINDAY, 0, 0);
 			$ret = array('status' => 'success',
 			             'action' => 'clickthrough',
 			             'agree' => $agree,
@@ -722,11 +722,10 @@ class Image extends Resource {
 		}
 
 		// get extra data from base image
-		$requestdata = getRequestInfo($data['requestid']);
-		$imagedata = getImages(0, $requestdata["reservations"][0]["imageid"]);
-		$data["platformid"] = $imagedata[$requestdata["reservations"][0]["imageid"]]["platformid"];
-		$data["osid"] = $imagedata[$requestdata["reservations"][0]["imageid"]]["osid"];
-		$data["basedoffrevisionid"] = $requestdata["reservations"][0]["imagerevisionid"];
+		$imagedata = getImages(0, $data["imageid"]);
+		$data["platformid"] = $imagedata[$data["imageid"]]["platformid"];
+		$data["osid"] = $imagedata[$data["imageid"]]["osid"];
+		$data["basedoffrevisionid"] = $data["baserevisionid"];
 		$data["reload"] = 10;
 		$data["autocaptured"] = 0;
 
@@ -1391,6 +1390,7 @@ class Image extends Resource {
 
 		$return['requestid'] = getContinuationVar('requestid'); # only in add
 		$return["imageid"] = getContinuationVar('imageid');
+		$return['baserevisionid'] = getContinuationVar('baserevisionid');
 
 		$return["desc"] = processInputVar("desc", ARG_STRING);
 		if(get_magic_quotes_gpc())

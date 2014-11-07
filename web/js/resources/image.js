@@ -218,17 +218,20 @@ function saveResourceCB(data, ioArgs) {
 	else if(data.items.status == 'adderror') {
 		alert(data.items.errormsg);
 		dijit.byId('clickthroughdlg').hide();
+		dijit.byId('clickthroughDlgBtn').set('disabled', false);
 	}
 	else if(data.items.status == 'success') {
 		if(data.items.action == 'clickthrough') {
 			dojo.byId('addresourcecont').value = data.items.cont;
 			dojo.byId('clickthroughDlgContent').innerHTML = data.items.agree;
 			dijit.byId('addeditbtn').set('disabled', false);
+			dijit.byId('clickthroughDlgBtn').set('disabled', false);
 			dijit.byId('clickthroughdlg').show();
 			return;
 		}
 		else if(data.items.action == 'add') {
 			dijit.byId('clickthroughdlg').hide();
+			dijit.byId('clickthroughDlgBtn').set('disabled', false);
 			resRefresh();
 		}
 		else {
@@ -560,8 +563,10 @@ function hideUpdateImageDlg() {
 }
 
 function hideClickThroughDlg() {
-	dijit.byId('addeditdlg').hide();
-	dijit.byId('updateimagedlg').hide();
+	if(dijit.byId('addeditdlg').open)
+		dijit.byId('addeditdlg').hide();
+	if(dijit.byId('updateimagedlg').open)
+		dijit.byId('updateimagedlg').hide();
 }
 
 function startImage(cont) {
@@ -651,6 +656,7 @@ function updateImageCB(data, ioArgs) {
 		if(data.items.action == 'clickthrough') {
 			dojo.byId('updateimage').value = data.items.cont;
 			dojo.byId('clickthroughDlgContent').innerHTML = data.items.agree;
+			dijit.byId('clickthroughDlgBtn').set('disabled', false);
 			dijit.byId('clickthroughdlg').show();
 			return;
 		}
@@ -663,6 +669,7 @@ function updateImageCB(data, ioArgs) {
 }
 
 function clickThroughAgree() {
+	dijit.byId('clickthroughDlgBtn').set('disabled', true);
 	if(dijit.byId('addeditdlg').open)
 		saveResource();
 	else if(dijit.byId('updateimagedlg').open)
@@ -679,15 +686,18 @@ function submitUpdateImageClickthroughCB(data, ioArgs) {
 		alert('You must be the owner of the image to update it.');
 		dijit.byId('updateimagedlg').hide();
 		dijit.byId('clickthroughdlg').hide();
+		dijit.byId('clickthroughDlgBtn').set('disabled', false);
 		return;
 	}
 	else if(data.items.status == 'error') {
 		alert(data.items.errmsg);
 		dijit.byId('updateimagedlg').hide();
 		dijit.byId('clickthroughdlg').hide();
+		dijit.byId('clickthroughDlgBtn').set('disabled', false);
 		return;
 	}
 	dijit.byId('updateimagedlg').hide();
 	dijit.byId('clickthroughdlg').hide();
+	dijit.byId('clickthroughDlgBtn').set('disabled', false);
 	resRefresh();
 }
