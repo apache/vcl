@@ -1276,8 +1276,10 @@ function resRefresh() {
 		var incdetails = 1;
 	var data = {continuation: contid,
 	            incdetails: incdetails};
-	if(dojo.byId('detailreqid'))
+	if(dojo.byId('detailreqid') && dojo.byId('detailreqid').value != 0)
 		data.reqid = dojo.byId('detailreqid').value;
+	else
+		data.incdetails = 0;
 	RPCwrapper(data, generalReqCB, 0, 30000);
 }
 
