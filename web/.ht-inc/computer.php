@@ -876,30 +876,6 @@ class Computer extends Resource {
 					$updates[] = "`$field` = '{$data[$field]}'";
 			}
 
-			# notes
-			# staying in maintenance
-			if($olddata['stateid'] == 10 && $data['stateid'] == 10) {
-				$testnotes = $olddata['notes'];
-				# check for notes being changed
-				if(strpos($testnotes, '@') === true) {
-					$tmp = explode('@', $olddata['notes']);
-					$testnotes = $tmp[1];
-				}
-				if($testnotes != $data['notes']) {
-					$ts = unixToDatetime(time());
-					$updates[] = "notes = '{$user['unityid']} $ts@{$data['notes']}'";
-				}
-			}
-			# changing to maintenance
-			elseif($data['stateid'] == 10) {
-				$ts = unixToDatetime(time());
-				$updates[] = "notes = '{$user['unityid']} $ts@{$data['notes']}'";
-			}
-			# removing from maintenance
-			elseif($olddata['stateid'] == 10 && $data['stateid'] != 10) {
-				$updates[] = "notes = ''";
-			}
-
 			# stateid - if moving from vmhostinuse or reloading with a new image,
 			#           make sure no reservations for VMs
 			if($olddata['stateid'] == 10 && $data['stateid'] == 20) {
@@ -1221,31 +1197,47 @@ class Computer extends Resource {
 				}
 				elseif($reloadstart > 0) {
 					cleanSemaphore();
-					$end = date('n/j/y g:i a', $reloadstart);
-					$msg = '';
-					if(count($updates))
-						$msg .= "Computer information changes saved.<br>\nHowever, this ";
-					else
-					$msg .= "This ";
-					$msg .= "computer currently has VMs with reservations on them until ";
-					$msg .= "$end and cannot be moved to the maintenance state until then. ";
-					$msg .= "You can:\n";
-					$msg .= "<ul><li>Cancel and do nothing</li>\n";
-					$msg .= "<li>Schedule the computer and VMs to be moved into the ";
-					$msg .= "maintenance state at $end</li></ul>\n";
-					$msg = preg_replace("/(.{1,76}([ \n]|$))/", '\1<br>', $msg);
-					$msg = preg_replace("|$end|", "<strong>$end</strong>", $msg, 1);
-					$promptuser = 1;
-					$cdata = $this->basecdata;
-					$cdata['reloadstart'] = $reloadstart;
-					$cdata['imageid'] = getImageId('noimage');
-					$cdata['compid'] = $data['rscid'];
-					$cdata['newstateid'] = $data['stateid'];
-					$cdata['oldstateid'] = $olddata['stateid'];
-					$promptcont = addContinuationsEntry('AJsubmitComputerStateLater', $cdata, SECINDAY, 1, 0);
-					$btntxt = 'Schedule State Change';
-					$title = 'Delayed State Change';
-					$data['stateid'] = $olddata['stateid']; # prevent state from being updated yet
+					if(unixToDatetime($reloadstart) == '2038-01-01 00:00:00') {
+						$msg = '';
+						if(count($updates))
+							$msg .= "Computer information changes saved.<br>\nHowever, this ";
+						else
+							$msg .= "This ";
+						$msg .= "computer currently has VMs assigned to it that have server ";
+						$msg .= "reservations with indefinite endings. The computer cannot ";
+						$msg .= "be moved to the maintenance state while these reservations exist.";
+						$msg = preg_replace("/(.{1,76}([ \n]|$))/", '\1<br>', $msg);
+						$promptuserfail = 1;
+						$title = 'Change to Maintenance Failed';
+						$data['stateid'] = $olddata['stateid']; # prevent state from being updated
+					}
+					else {
+						$end = date('n/j/y g:i a', $reloadstart);
+						$msg = '';
+						if(count($updates))
+							$msg .= "Computer information changes saved.<br>\nHowever, this ";
+						else
+							$msg .= "This ";
+						$msg .= "computer currently has VMs with reservations on them until ";
+						$msg .= "$end and cannot be moved to the maintenance state until then. ";
+						$msg .= "You can:\n";
+						$msg .= "<ul><li>Cancel and do nothing</li>\n";
+						$msg .= "<li>Schedule the computer and VMs to be moved into the ";
+						$msg .= "maintenance state at $end</li></ul>\n";
+						$msg = preg_replace("/(.{1,76}([ \n]|$))/", '\1<br>', $msg);
+						$msg = preg_replace("|$end|", "<strong>$end</strong>", $msg, 1);
+						$promptuser = 1;
+						$cdata = $this->basecdata;
+						$cdata['reloadstart'] = $reloadstart;
+						$cdata['imageid'] = getImageId('noimage');
+						$cdata['compid'] = $data['rscid'];
+						$cdata['newstateid'] = $data['stateid'];
+						$cdata['oldstateid'] = $olddata['stateid'];
+						$promptcont = addContinuationsEntry('AJsubmitComputerStateLater', $cdata, SECINDAY, 1, 0);
+						$btntxt = 'Schedule State Change';
+						$title = 'Delayed State Change';
+						$data['stateid'] = $olddata['stateid']; # prevent state from being updated yet
+					}
 				}
 				else {
 					$query = "UPDATE computer c "
@@ -1457,6 +1449,31 @@ class Computer extends Resource {
 					$title = 'Delayed Maintenance';
 				}
 				# else let UPDATE move it to maintenance
+			}
+
+			# notes (do these at the end because we don't want to update notes if
+			#    state prevented from being changed)
+			# staying in maintenance
+			if($olddata['stateid'] == 10 && $data['stateid'] == 10) {
+				$testnotes = $olddata['notes'];
+				# check for notes being changed
+				if(strpos($testnotes, '@') === true) {
+					$tmp = explode('@', $olddata['notes']);
+					$testnotes = $tmp[1];
+				}
+				if($testnotes != $data['notes']) {
+					$ts = unixToDatetime(time());
+					$updates[] = "notes = '{$user['unityid']} $ts@{$data['notes']}'";
+				}
+			}
+			# changing to maintenance
+			elseif($data['stateid'] == 10) {
+				$ts = unixToDatetime(time());
+				$updates[] = "notes = '{$user['unityid']} $ts@{$data['notes']}'";
+			}
+			# removing from maintenance
+			elseif($olddata['stateid'] == 10 && $data['stateid'] != 10) {
+				$updates[] = "notes = ''";
 			}
 
 			# stateid
@@ -3449,6 +3466,11 @@ class Computer extends Resource {
 						continue;
 					}
 					elseif($reloadstart > 0) {
+						if(unixToDatetime($reloadstart) == '2038-01-01 00:00:00') {
+							# host has a VM reserved indefintely
+							$fails[] = $compid;
+							continue;
+						}
 						# schedule tomaintenance/tohpc reservations for VMs and host
 						$noimageid = getImageId('noimage');
 						$revid = getProductionRevisionid($noimageid);
@@ -3531,6 +3553,11 @@ class Computer extends Resource {
 					}
 				}
 				elseif($reloadstart) {
+					if(unixToDatetime($reloadstart) == '2038-01-01 00:00:00') {
+						# node is reserved indefintely
+						$fails[] = $compid;
+						continue;
+					}
 					# computer has reservations, schedule tomaintenance
 					$noimageid = getImageId('noimage');
 					$revid = getProductionRevisionid($noimageid);
