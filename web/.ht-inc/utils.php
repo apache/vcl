@@ -12909,6 +12909,7 @@ function getDojoHTML($refresh) {
 			                      'dijit.form.FilteringSelect',
 			                      'dijit.form.Select',
 			                      'dijit.form.NumberSpinner',
+			                      'dijit.form.CheckBox',
 			                      'dijit.form.ValidationTextBox',
 			                      'dijit.layout.ContentPane',
 			                      'dijit.layout.TabContainer');

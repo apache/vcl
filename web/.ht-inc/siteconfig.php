@@ -75,6 +75,12 @@ function generalOptions($globalopts) {
 	$h .= $obj->getHTML($globalopts);
 	$obj = new reconnect();
 	$h .= $obj->getHTML($globalopts);
+	if($globalopts) {
+		$obj = new userPasswordLength();
+		$h .= $obj->getHTML();
+		$obj = new userPasswordSpecialChar();
+		$h .= $obj->getHTML();
+	}
 	$h .= "</td>\n";
 	# -------- end left column ---------
 
@@ -780,6 +786,203 @@ class generalEndNotice2 extends TimeVariable {
 		$this->addmsg = _("End notice time for %s added");
 		$this->updatemsg = _("End notice time values saved");
 		$this->delmsg = _("End notice time for %s deleted");
+	}
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \class GlobalSingleVariable
+///
+/// \brief base class for global number variables
+///
+////////////////////////////////////////////////////////////////////////////////
+class GlobalSingleVariable {
+	var $name;
+	var $key;
+	var $label;
+	var $desc;
+	var $domidbase;
+	var $basecdata;
+	var $jsname;
+	var $defaultval;
+	var $updatemsg;
+	var $type;
+
+	/////////////////////////////////////////////////////////////////////////////
+	///
+	/// \fn __construct()
+	///
+	/// \brief class construstor
+	///
+	/////////////////////////////////////////////////////////////////////////////
+	function __construct() {
+		$this->basecdata = array('obj' => $this);
+		$this->updatemsg = _("New value saved");
+		$this->label = $this->name;
+		$type = 'text';
+	}
+
+	////////////////////////////////////////////////////////////////////////////////
+	///
+	/// \fn getHTML()
+	///
+	/// \return string of HTML
+	///
+	/// \brief generates HTML for setting numeric variables
+	///
+	////////////////////////////////////////////////////////////////////////////////
+	function getHTML() {
+		global $user;
+		$val = getVariable($this->key, $this->defaultval);
+		$h  = "<div class=\"configwidget\" style=\"width: 100%;\">\n";
+		$h .= "<h3>{$this->name}</h3>\n";
+		$h .= "<span class=\"siteconfigdesc\">\n";
+		$h .= $this->desc;
+		$h .= "<br><br></span>\n";
+		switch($this->type) {
+			case 'numeric':
+				$extra = array('smallDelta' => 1, 'largeDelta' => 10);
+				$h .= labeledFormItem($this->domidbase, $this->label, 'spinner', "{min:{$this->minval}, max:{$this->maxval}}", 1, $val, '', '', $extra);
+				break;
+			case 'boolean':
+				$extra = array();
+				if($val == 1)
+					$extra = array('checked' => 'checked');
+				$h .= labeledFormItem($this->domidbase, $this->label, 'check', '', 1, 1, '', '', $extra);
+				break;
+			default:
+				$h .= labeledFormItem($this->domidbase, $this->label, 'text', '', 1, $val);
+				break;
+		}
+		$h .= "<div id=\"{$this->domidbase}msg\"></div>\n";
+		$h .= dijitButton("{$this->domidbase}btn", _('Submit Changes'), "{$this->jsname}.saveSettings();", 1);
+		$cdata = $this->basecdata;
+		$cont = addContinuationsEntry('AJupdateAllSettings', $cdata);
+		$h .= "<input type=\"hidden\" id=\"{$this->domidbase}cont\" value=\"$cont\">\n";
+		$h .= "</div>\n";
+		return $h;
+	}
+
+	////////////////////////////////////////////////////////////////////////////////
+	///
+	/// \fn AJupdateAllSettings()
+	///
+	/// \brief updates all values for implemented type of timevariable
+	///
+	////////////////////////////////////////////////////////////////////////////////
+	function AJupdateAllSettings() {
+		if(! checkUserHasPerm('Site Configuration (global)')) {
+			$arr = array('status' => 'noaccess',
+			             'msg' => _('You do not have access to modify the submitted settings.'));
+			sendJSON($arr);
+			return;
+		}
+		switch($this->type) {
+			case 'numeric':
+				$newval = processInputVar('newval', ARG_NUMERIC); 
+				if($newval < $this->minval || $newval > $this->maxval) {
+					$arr = array('status' => 'failed',
+					             'msgid' => "{$this->domidbase}msg",
+					             'btn' => "{$this->domidbase}btn",
+					             'errmsg' => _("Invalid value submitted"));
+					sendJSON($arr);
+					return;
+				}
+				break;
+			case 'boolean':
+				$newval = processInputVar('newval', ARG_NUMERIC); 
+				if($newval !== '0' && $newval !== '1') {
+					$arr = array('status' => 'failed',
+					             'msgid' => "{$this->domidbase}msg",
+					             'btn' => "{$this->domidbase}btn",
+					             'errmsg' => _("Invalid value submitted"));
+					sendJSON($arr);
+					return;
+				}
+				break;
+			case 'text':
+				# TODO
+				$newval = processInputVar('newval', ARG_STRING); 
+				$arr = array('status' => 'failed',
+				             'msgid' => "{$this->domidbase}msg",
+				             'btn' => "{$this->domidbase}btn",
+				             'errmsg' => _("unsupported type"));
+				sendJSON($arr);
+				return;
+			default:
+				$arr = array('status' => 'failed',
+				             'msgid' => "{$this->domidbase}msg",
+				             'btn' => "{$this->domidbase}btn",
+				             'errmsg' => _("Invalid value submitted"));
+				sendJSON($arr);
+				return;
+		}
+		setVariable($this->key, $newval, 'none');
+		$arr = array('status' => 'success',
+		             'msgid' => "{$this->domidbase}msg",
+		             'btn' => "{$this->domidbase}btn",
+		             'msg' => $this->updatemsg);
+		sendJSON($arr);
+	}
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \class userPasswordLength
+///
+/// \brief extends TimeVariable class to implement general_end_notice_second
+///
+////////////////////////////////////////////////////////////////////////////////
+class userPasswordLength extends GlobalSingleVariable {
+	/////////////////////////////////////////////////////////////////////////////
+	///
+	/// \fn __construct()
+	///
+	/// \brief class construstor
+	///
+	/////////////////////////////////////////////////////////////////////////////
+	function __construct() {
+		parent::__construct();
+		$this->name = _('User Reservation Password Length');
+		$this->key = 'user_password_length';
+		$this->label = _("Password Length");
+		$this->desc = _("For reservations not using federated authentication, VCL generates random user passwords. This specifies how many characters should be in the password.");
+		$this->domidbase = 'userpasswordlength';
+		$this->basecdata['obj'] = $this;
+		$this->jsname = 'userPasswordLength';
+		$this->defaultval = 6;
+		$this->minval = 6;
+		$this->maxval = 40;
+		$this->type = 'numeric';
+	}
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \class userPasswordSpecialChar
+///
+/// \brief extends TimeVariable class to implement general_end_notice_second
+///
+////////////////////////////////////////////////////////////////////////////////
+class userPasswordSpecialChar extends GlobalSingleVariable {
+	/////////////////////////////////////////////////////////////////////////////
+	///
+	/// \fn __construct()
+	///
+	/// \brief class construstor
+	///
+	/////////////////////////////////////////////////////////////////////////////
+	function __construct() {
+		parent::__construct();
+		$this->name = _('User Reservation Password Special Characters');
+		$this->key = 'user_password_spchar';
+		$this->label = _("Include Special Characters");
+		$this->desc = _("For reservations not using federated authentication, VCL generates random user passwords. This specifies if characters other than letters and numbers should be included in the passwords.");
+		$this->domidbase = 'userpasswordspchar';
+		$this->basecdata['obj'] = $this;
+		$this->jsname = 'userPasswordSpecialChar';
+		$this->defaultval = 1;
+		$this->type = 'boolean';
 	}
 }
 

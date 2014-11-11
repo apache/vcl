@@ -552,6 +552,8 @@ $actions['classmapping']['serverinuse'] = 'siteconfig';
 $actions['classmapping']['clusterinuse'] = 'siteconfig';
 $actions['classmapping']['generalendnotice1'] = 'siteconfig';
 $actions['classmapping']['generalendnotice2'] = 'siteconfig';
+$actions['classmapping']['userpasswordlength'] = 'siteconfig';
+$actions['classmapping']['userpasswordspecialchar'] = 'siteconfig';
 
 # resource
 $actions['mode']['resource'] = "resource";

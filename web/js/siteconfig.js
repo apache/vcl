@@ -210,3 +210,33 @@ function generalEndNotice2() {
 }
 generalEndNotice2.prototype = new TimeVariable();
 var generalEndNotice2 = new generalEndNotice2();
+
+function GlobalSingleVariable() {}
+
+GlobalSingleVariable.prototype.saveSettings = function() {
+	var data = {continuation: dojo.byId(this.domidbase + 'cont').value};
+	if('checked' in dijit.byId(this.domidbase)) {
+		if(dijit.byId(this.domidbase).checked)
+			data.newval = dijit.byId(this.domidbase).value;
+		else
+			data.newval = 0;
+	}
+	else
+		data.newval = dijit.byId(this.domidbase).value;
+	dijit.byId(this.domidbase + 'btn').set('disabled', true);
+	RPCwrapper(data, generalSiteConfigCB, 1);
+}
+
+function userPasswordLength() {
+	GlobalSingleVariable.apply(this, Array.prototype.slice.call(arguments));
+	this.domidbase = 'userpasswordlength';
+}
+userPasswordLength.prototype = new GlobalSingleVariable();
+var userPasswordLength = new userPasswordLength();
+
+function userPasswordSpecialChar() {
+	GlobalSingleVariable.apply(this, Array.prototype.slice.call(arguments));
+	this.domidbase = 'userpasswordspchar';
+}
+userPasswordSpecialChar.prototype = new GlobalSingleVariable();
+var userPasswordSpecialChar = new userPasswordSpecialChar();
