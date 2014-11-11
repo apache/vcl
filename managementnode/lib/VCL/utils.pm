@@ -2371,12 +2371,28 @@ sub notify_via_oascript {
 sub getpw {
 
 	my $length = $_[0];
+	
+	if (!(defined($length))) {
+		$length = $ENV{management_node_info}{USER_PASSWORD_LENGTH};
+	}
+
+	#If for some reason the global USER_PASSWORD_LENGTH did not get set, then force it here
 	$length = 6 if (!(defined($length)));
-	my @a = ("A" .. "H", "J" .. "N", "P" .. "Z", "a" .. "k", "m" .. "z", "2" .. "9");
+
+	#Skip certain confusing chars like: iI1lL,0Oo Zz2
+	my @chars = ("A" .. "H", "J" .. "N", "P" .. "Y", "a" .. "h", "j" .."n","p" .. "y", "3" .. "9");
+	my @spchars = ("A" .. "H", "J" .. "N", "P" .. "Y", "a" .. "h", "j" .."n","p" .. "y", "3" .. "9","-","_","!","%","#","\$","@","+","=","{","}","<",">","?","&");
+	my @a = @chars;;
+
+	my $include_special_chars = $ENV{management_node_info}{INCLUDE_SPECIAL_CHARS};
+	if($include_special_chars) {
+		@a = @spchars;
+	}
+
 	my $b;
 	srand;
 	for (1 .. $length) {
-		$b .= $a[rand(57)];
+		$b .= $a[rand @a ];
 	}
 	return $b;
 
@@ -4589,6 +4605,14 @@ AND managementnode.id != $management_node_id
 	my $cluster_inuse_check = get_variable('cluster_inuse_check') || 300;
 	$management_node_info->{CLUSTER_INUSE_CHECK} = round($cluster_inuse_check / 60);
 	$ENV{management_node_info}{CLUSTER_INUSE_CHECK} = $management_node_info->{CLUSTER_INUSE_CHECK};
+
+	my $user_password_length = get_variable('user_password_length') || 6;
+	$management_node_info->{USER_PASSWORD_LENGTH} = $user_password_length;
+	$ENV{management_node_info}{USER_PASSWORD_LENGTH} = $management_node_info->{USER_PASSWORD_LENGTH};
+
+	my $user_password_include_spchar = get_variable('user_password_spchar') || 0;
+	$management_node_info->{INCLUDE_SPECIAL_CHARS} = $user_password_include_spchar;
+	$ENV{management_node_info}{INCLUDE_SPECIAL_CHARS} =  $management_node_info->{INCLUDE_SPECIAL_CHARS};
 
 	# Get the OS name
 	my $os_name = lc($^O);
