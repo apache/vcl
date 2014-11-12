@@ -1728,10 +1728,8 @@ INSERT IGNORE INTO `privnode` (`id`, `parent`, `name`) VALUES
 -- 
 
 INSERT IGNORE INTO `provisioning` (`id`, `name`, `prettyname`, `moduleid`) VALUES
-(1, 'xcat_13', 'xCAT 1.3', 1),
+(1, 'xcat', 'xCAT', 1),
 (3, 'lab', 'Computing Lab', 3),
-(5, 'xcat_21', 'xCAT 2.1', 11),
-(6, 'xcat_2x', 'xCAT 2.x', 20),
 (7, 'vmware', 'VMware', 21),
 (8, 'vbox', 'Virtual Box', 24),
 (9, 'libvirt', 'Libvirt Virtualization API', 27),
