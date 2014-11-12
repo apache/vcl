@@ -1605,7 +1605,7 @@ INSERT IGNORE INTO `IMtype` (`id`, `name`) VALUES
 -- 
 
 INSERT IGNORE INTO `module` (`id`, `name`, `prettyname`, `description`, `perlpackage`) VALUES 
-(1, 'provisioning_xcat_13', 'xCAT 1.3 Provisioning Module', '', 'VCL::Module::Provisioning::xCAT'),
+(1, 'provisioning_xcat', 'xCAT Provisioning Module', '', 'VCL::Module::Provisioning::xCAT'),
 (3, 'provisioning_lab', 'Computing Lab Provisioning Module', '', 'VCL::Module::Provisioning::Lab'),
 (4, 'os_windows', 'Windows OS Module', '', 'VCL::Module::OS::Windows'),
 (5, 'os_linux', 'Linux OS Module', '', 'VCL::Module::OS::Linux'),
@@ -1613,14 +1613,12 @@ INSERT IGNORE INTO `module` (`id`, `name`, `prettyname`, `description`, `perlpac
 (7, 'os_winvista', 'Windows Vista OS Module', '', 'VCL::Module::OS::Windows::Version_6::Vista'),
 (8, 'predictive_level_0', 'Predictive Loading Module Level 0', 'Selects an image to load based on upcoming reservations.', 'VCL::Module::Predictive::Level_0'),
 (9, 'predictive_level_1', 'Predictive Loading Module Level 1', 'Selects an image to load based on historical data. Loads the most popular image that can be run on the machine that is not currently loaded and available on another node.', 'VCL::Module::Predictive::Level_1'),
-(11, 'provisioning_xcat_21', 'xCAT 2.1 Provisioning Module', '', 'VCL::Module::Provisioning::xCAT21'),
 (12, 'os_winxp', 'Windows XP OS Module', '', 'VCL::Module::OS::Windows::Version_5::XP'),
 (13, 'os_win2003', 'Windows Server 2003 OS Module', '', 'VCL::Module::OS::Windows::Version_5::2003'),
 (14, 'os_linux_ubuntu', 'Ubuntu Linux OS Module', '', 'VCL::Module::OS::Linux::Ubuntu'),
 (15, 'os_unix_lab', 'Unix Lab OS Module', 'Unix Lab OS support module', 'VCL::Module::OS::Linux::UnixLab'),
 (16, 'os_win2008', 'Windows Server 2008 OS Module', '', 'VCL::Module::OS::Windows::Version_6::2008'),
 (17, 'os_win7', 'Windows 7 OS Module', '', 'VCL::Module::OS::Windows::Version_6::7'),
-(20, 'provisioning_xCAT_2x', 'xCAT 2.x Provisioning Module', '', 'VCL::Module::Provisioning::xCAT2'),
 (21, 'provisioning_vmware', 'VMware Provisioning Module', '', 'VCL::Module::Provisioning::VMware::VMware'),
 (22, 'state_image', 'VCL Image State Module', '', 'VCL::image'),
 (23, 'base_module', 'VCL Base Module', '', 'VCL::Module'),
