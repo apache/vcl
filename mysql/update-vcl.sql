@@ -1055,6 +1055,7 @@ CREATE TABLE IF NOT EXISTS `provisioningOSinstalltype` (
 
 CALL AddColumnIfNotExists('reservation', 'connectIP', "varchar(15) default NULL");
 CALL AddColumnIfNotExists('reservation', 'connectport', "smallint(5) unsigned default NULL");
+ALTER TABLE `reservation` CHANGE `pw` `pw` VARCHAR(40) NULL DEFAULT NULL;
 
 -- --------------------------------------------------------
 

@@ -858,7 +858,7 @@ CREATE TABLE IF NOT EXISTS `reservation` (
   `managementnodeid` smallint(5) unsigned NOT NULL default '1',
   `remoteIP` varchar(15) default NULL,
   `lastcheck` datetime default '0000-00-00 00:00:00',
-  `pw` varchar(10) default NULL,
+  `pw` varchar(40) default NULL,
   `connectIP` varchar(15) default NULL,
   `connectport` smallint(5) unsigned default NULL,
   PRIMARY KEY  (`id`),
