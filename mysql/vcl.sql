@@ -656,14 +656,14 @@ CREATE TABLE IF NOT EXISTS `nathost` (
 -- 
 
 CREATE TABLE IF NOT EXISTS `natlog` (
-  `logid` int(11) NOT NULL,
-  `connectmethodportid` int(11) NOT NULL,
-  `nathostid` int(11) NOT NULL,
-  `natIP` int(11) NOT NULL,
-  `computerid` int(11) NOT NULL,
-  `publicport` int(11) NOT NULL,
-  `privateport` int(11) NOT NULL,
-  `protocol` int(11) NOT NULL,
+  `logid` int(10) unsigned NOT NULL,
+  `connectmethodportid` tinyint(3) unsigned default NULL,
+  `nathostid` smallint(5) unsigned default NULL,
+  `natIP` varchar(15) NOT NULL,
+  `computerid` smallint(5) unsigned NOT NULL,
+  `publicport` smallint(5) unsigned NOT NULL,
+  `privateport` smallint(5) unsigned NOT NULL,
+  `protocol` enum('TCP','UDP') NOT NULL,
   KEY `logid` (`logid`),
   KEY `connectmethodportid` (`connectmethodportid`),
   KEY `nathostid` (`nathostid`),
@@ -1555,6 +1555,15 @@ INSERT IGNORE INTO `connectmethodmap` (`connectmethodid`, `OStypeid`, `OSid`, `i
 (2, 1, NULL, NULL, 0, NULL),
 (3, 4, NULL, NULL, 0, NULL);
 
+--
+-- Dumping data for table `connectmethodport`
+--
+
+INSERT INTO `connectmethodport` (`id`, `connectmethodid`, `port`, `protocol`) VALUES
+(1, 1, 22, 'TCP'),
+(2, 2, 3389, 'TCP'),
+(3, 3, 3389, 'TCP');
+
 -- 
 -- Dumping data for table `documentation`
 -- 
@@ -1911,7 +1920,8 @@ INSERT IGNORE INTO `usergroup` (`id`, `name`, `affiliationid`, `ownerid`, `editu
 (3, 'adminUsers', 1, 1, 1, 1, 0, 480, 600, 180, 50),
 (4, 'manageNewImages', 1, 1, 3, 1, 0, 240, 360, 30, 0),
 (5, 'Specify End Time', 1, 1, 3, 1, 0, 240, 360, 30, 0),
-(6, 'Allow No User Check', 1, 1, 3, 1, 0, 240, 360, 30, 0);
+(6, 'Allow No User Check', 1, 1, 3, 1, 0, 240, 360, 30, 0),
+(7, 'Default for Editable by', 1, 1, 3, 1, 0, 240, 360, 30, 0);
 
 -- 
 -- Dumping data for table `usergroupmembers`
@@ -1922,7 +1932,8 @@ INSERT IGNORE INTO `usergroupmembers` (`userid`, `usergroupid`) VALUES
 (1, 3),
 (1, 4),
 (1, 5),
-(1, 6);
+(1, 6),
+(1, 7);
 
 -- 
 -- Dumping data for table `usergroupprivtype`
@@ -2099,7 +2110,7 @@ ALTER TABLE `blockWebTime`
 -- 
 ALTER TABLE `computer`
   ADD CONSTRAINT `computer_ibfk_40` FOREIGN KEY (vmhostid) REFERENCES vmhost (`id`) ON UPDATE CASCADE,
-	ADD CONSTRAINT `computer_ibfk_12` FOREIGN KEY (`ownerid`) REFERENCES `user` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
+  ADD CONSTRAINT `computer_ibfk_12` FOREIGN KEY (`ownerid`) REFERENCES `user` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
   ADD CONSTRAINT `computer_ibfk_30` FOREIGN KEY (`scheduleid`) REFERENCES `schedule` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
   ADD CONSTRAINT `computer_ibfk_33` FOREIGN KEY (`stateid`) REFERENCES `state` (`id`) ON UPDATE CASCADE,
   ADD CONSTRAINT `computer_ibfk_35` FOREIGN KEY (`platformid`) REFERENCES `platform` (`id`) ON UPDATE CASCADE,
@@ -2178,6 +2189,35 @@ ALTER TABLE `managementnode`
   ADD CONSTRAINT `managementnode_ibfk_6` FOREIGN KEY (`imagelibgroupid`) REFERENCES `resourcegroup` (`id`) ON UPDATE CASCADE,
   ADD CONSTRAINT `managementnode_ibfk_4` FOREIGN KEY (`ownerid`) REFERENCES `user` (`id`) ON UPDATE CASCADE,
   ADD CONSTRAINT `managementnode_ibfk_5` FOREIGN KEY (`stateid`) REFERENCES `state` (`id`) ON UPDATE CASCADE;
+
+-- 
+-- Constraints for table `nathost`
+-- 
+ALTER TABLE `nathost`
+  ADD CONSTRAINT `nathost_ibfk_1` FOREIGN KEY (`resourceid`) REFERENCES `resource` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- 
+-- Constraints for table `natlog`
+-- 
+ALTER TABLE `natlog`
+  ADD CONSTRAINT `natlog_ibfk_4` FOREIGN KEY (`computerid`) REFERENCES `computer` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  ADD CONSTRAINT `natlog_ibfk_1` FOREIGN KEY (`logid`) REFERENCES `log` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  ADD CONSTRAINT `natlog_ibfk_2` FOREIGN KEY (`connectmethodportid`) REFERENCES `connectmethodport` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
+  ADD CONSTRAINT `natlog_ibfk_3` FOREIGN KEY (`nathostid`) REFERENCES `nathost` (`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- 
+-- Constraints for table `natmap`
+-- 
+ALTER TABLE `natmap`
+  ADD CONSTRAINT `natmap_ibfk_2` FOREIGN KEY (`nathostid`) REFERENCES `nathost` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  ADD CONSTRAINT `natmap_ibfk_1` FOREIGN KEY (`computerid`) REFERENCES `computer` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- 
+-- Constraints for table `natport`
+-- 
+ALTER TABLE `natport`
+  ADD CONSTRAINT `natport_ibfk_2` FOREIGN KEY (`connectmethodportid`) REFERENCES `connectmethodport` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  ADD CONSTRAINT `natport_ibfk_1` FOREIGN KEY (`reservationid`) REFERENCES `reservation` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- 
 -- Constraints for table `OS`
