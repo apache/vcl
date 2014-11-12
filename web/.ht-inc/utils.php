@@ -12429,6 +12429,28 @@ function sendHeaders() {
 	}
 	else
 		header("Cache-Control: no-cache, must-revalidate");
+	if($mode == 'submitAddGroup' || $mode == 'submitEditGroup') {
+		$data = getContinuationVar();
+		if($data['type'] == 'resource') {
+			if(! array_key_exists('ownergroup', $data))
+				$data['ownergroup'] = processInputVar('ownergroup', ARG_NUMERIC, 0);
+			$ownergroupids = explode(',', $data['ownergroupids']);
+		   if(in_array($data['ownergroup'], $ownergroupids) &&
+		      array_key_exists($data['ownergroup'], $user['groups'])) {
+				$expire = time() + 31536000; //expire in 1 year
+				setcookie("VCLOWNERGROUPID", $data['ownergroup'], $expire, "/", COOKIEDOMAIN);
+			}
+		}
+		elseif($data['type'] == 'user') {
+			if(! array_key_exists('editgroupid', $data))
+				$data['editgroupid'] = processInputVar('editgroupid', ARG_NUMERIC, 0);
+			$editgroupids = explode(',', $data['editgroupids']);
+			if(in_array($data['editgroupid'], $editgroupids)) {
+				$expire = time() + 31536000; //expire in 1 year
+				setcookie("VCLEDITGROUPID", $data['editgroupid'], $expire, "/", COOKIEDOMAIN);
+			}
+		}
+	}
 	header("Expires: Sat, 1 Jan 2000 00:00:00 GMT");
 }
 

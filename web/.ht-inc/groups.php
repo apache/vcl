@@ -483,6 +483,7 @@ function editOrAddGroup($state) {
 		$affilusergroups = $allcustomgroups;
 	else
 		$affilusergroups = getUserGroups(1, $user['affiliationid']);
+	$defaultusergroupid = getUserGroupID('Default for Editable by', 1);
 
 	if($type == 'resource') {
 		$dispUserGrpIDs = array();
@@ -551,20 +552,21 @@ function editOrAddGroup($state) {
 				$data["name"] = '';
 				$data["affiliationid"] = $user['affiliationid'];
 				$data["owner"] = $user['unityid'];
-				$data["editgroupid"] = '';
-				if(count($affilusergroups)) {
-					$tmp = array_keys($affilusergroups);
-					if(preg_match('/^\s*None/', $affilusergroups[$tmp[0]]['name'])) {
-						if(array_key_exists(1, $tmp))
-							$data['editgroupid'] = $tmp[1];
-						else
-							$data['editgroupid'] = 0;
+				if(array_key_exists('VCLEDITGROUPID', $_COOKIE) &&
+				   (array_key_exists($_COOKIE['VCLEDITGROUPID'], $affilusergroups) ||
+				   $_COOKIE['VCLEDITGROUPID'] == $defaultusergroupid))
+					$data["editgroupid"] = $_COOKIE['VCLEDITGROUPID'];
+				else
+					$data["editgroupid"] = $defaultusergroupid;
+				if(! array_key_exists($data['editgroupid'], $affilusergroups)) {
+					if($user['showallgroups']) {
+						$affil = getAffiliationName(1);
+						$affilusergroups[$data['editgroupid']]['name'] = "Default for Editable by@$affil";
 					}
 					else
-						$data['editgroupid'] = $tmp[0];
+						$affilusergroups[$data['editgroupid']]['name'] = 'Default for Editable by';
 				}
-				else
-					$data['editgroupid'] = 0;
+
 				$data["initialmax"] = 240;
 				$data["totalmax"] = 360;
 				$data["maxextend"] = 30;
@@ -599,14 +601,20 @@ function editOrAddGroup($state) {
 			}
 		}
 		else {
+			unset($affilusergroups[$defaultusergroupid]);
 			if($state) {
 				$grouptype = 'computer';
 				$data['name'] = '';
-				$ownerid = "";
-				foreach(array_keys($user["groups"]) as $grpid) {
-					if(array_key_exists($grpid, $dispUserGrpIDs)) {
-						$ownerid = $grpid;
-						break;
+				if(array_key_exists('VCLOWNERGROUPID', $_COOKIE) &&
+				   array_key_exists($_COOKIE['VCLOWNERGROUPID'], $user['groups']))
+					$ownerid = $_COOKIE['VCLOWNERGROUPID'];
+				else {
+					$ownerid = "";
+					foreach(array_keys($user["groups"]) as $grpid) {
+						if(array_key_exists($grpid, $dispUserGrpIDs)) {
+							$ownerid = $grpid;
+							break;
+						}
 					}
 				}
 			}
@@ -667,7 +675,8 @@ function editOrAddGroup($state) {
 		   $usergroups[$groupid]['groupaffiliationid'] == 1) {
 			$tmp = explode('@', $usergroups[$groupid]['name']);
 			if($tmp[0] == 'Specify End Time' ||
-				$tmp[0] == 'Allow No User Check')
+				$tmp[0] == 'Allow No User Check' ||
+				$tmp[0] == 'Default for Editable by')
 				$editname = 0;
 		}
 		if($data['type'] == 'resource' ||
@@ -793,7 +802,10 @@ function editOrAddGroup($state) {
 			print "  <TR>\n";
 			print "    <TH align=right>Owning User Group:</TH>\n";
 			print "    <TD>\n";
-			if($ownerid != '' && ! array_key_exists($ownerid, $dispUserGrpIDs)) {
+			if($submitErr & EDITGROUPERR)
+				$ownerid = $resourcegroups[$groupid]['ownerid'];
+			if($state == 0 && $ownerid != '' &&
+			   ! array_key_exists($usergroups[$groupid]['editgroupid'], $dispUserGrpIDs)) {
 				$dispUserGrpIDs[$ownerid] = $usergroups[$ownerid]['name'];
 				uasort($dispUserGrpIDs, "sortKeepIndex");
 			}
@@ -802,7 +814,10 @@ function editOrAddGroup($state) {
 			else
 				printSelectInput("ownergroup", $dispUserGrpIDsAllAffils, $ownerid);
 			print "    </TD>\n";
-			print "    <TD></TD>\n";
+			print "    <TD>\n";
+			if($submitErr & EDITGROUPERR)
+				printSubmitErr(EDITGROUPERR);
+			print "    </TD>\n";
 			print "  </TR>\n";
 		}
 		print "</TABLE>\n";
@@ -817,6 +832,13 @@ function editOrAddGroup($state) {
 					$cdata['editgroupid'] = 0;
 					$cdata['groupwasnone'] = 1;
 				}
+				$cdata['editgroupids'] = implode(',', array_keys($affilusergroups));
+			}
+			else {
+				if(! empty($dispUserGrpIDs))
+					$cdata['ownergroupids'] = implode(',', array_keys($dispUserGrpIDs));
+				else
+					$cdata['ownergroupids'] = implode(',', array_keys($dispUserGrpIDsAllAffils));
 			}
 			$cont = addContinuationsEntry('submitAddGroup', $cdata);
 			print "      <INPUT type=hidden name=continuation value=\"$cont\">\n";
@@ -827,8 +849,13 @@ function editOrAddGroup($state) {
 			               'groupid' => $data['groupid'],
 			               'isowner' => $data['isowner'],
 			               'editname' => $editname);
-			if($data['type'] == 'resource')
+			if($data['type'] == 'resource') {
 				$cdata['resourcetypeid'] = $resourcetypeid;
+				if(! empty($dispUserGrpIDs))
+					$cdata['ownergroupids'] = implode(',', array_keys($dispUserGrpIDs));
+				else
+					$cdata['ownergroupids'] = implode(',', array_keys($dispUserGrpIDsAllAffils));
+			}
 			else {
 				if($data['courseroll'] == 1 || $data['custom'] == 0 || $editname == 0) {
 					$cdata['name'] = $data['name'];
@@ -838,6 +865,7 @@ function editOrAddGroup($state) {
 				$cdata['groupwasnone'] = $groupwasnone;
 				$cdata['custom'] = $data['custom'];
 				$cdata['courseroll'] = $data['courseroll'];
+				$cdata['editgroupids'] = implode(',', array_keys($affilusergroups));
 			}
 			$cont = addContinuationsEntry('confirmEditGroup', $cdata);
 			print "      <INPUT type=hidden name=continuation value=\"$cont\">\n";
@@ -948,6 +976,10 @@ function processGroupInput($checks=1) {
 	$return["totalmax"] = getContinuationVar('totalmax', processInputVar("totalmax", ARG_NUMERIC));
 	$return["maxextend"] = getContinuationVar('maxextend', processInputVar("maxextend", ARG_NUMERIC));
 	$return["overlap"] = getContinuationVar('overlap', processInputVar("overlap", ARG_NUMERIC, 0));
+	$return['editgroupids'] = getContinuationVar('editgroupids');
+	$editgroupids = explode(',', $return['editgroupids']);
+	$return['ownergroupids'] = getContinuationVar('ownergroupids');
+	$ownergroupids = explode(',', $return['ownergroupids']);
 	$groupwasnone = getContinuationVar('groupwasnone');
 	$editname = getContinuationVar('editname', 1);
 
@@ -991,7 +1023,10 @@ function processGroupInput($checks=1) {
 		$submitErr |= GRPOWNER;
 	   $submitErrMsg[GRPOWNER] = "Submitted ID is not valid";
 	}
-	if($return["type"] == "user" && $return['editgroupid'] == 0 && ! $groupwasnone) {
+	if(($return["type"] == "user" &&
+		(($return['editgroupid'] == 0 && ! $groupwasnone) ||
+	   (! in_array($return['editgroupid'], $editgroupids)))) ||
+	   ($return['type'] == 'resource' && ! in_array($return['ownergroup'], $ownergroupids))) {
 		$submitErr |= EDITGROUPERR;
 		$submitErrMsg[EDITGROUPERR] = "Invalid group was selected";
 	}
@@ -1553,7 +1588,8 @@ function confirmDeleteGroup() {
 		$checkname = $tmp[0];
 		if($usergroups[$groupid]['groupaffiliationid'] == 1 &&
 		   ($checkname == 'Specify End Time' ||
-		   $checkname == 'Allow No User Check')) {
+		   $checkname == 'Allow No User Check' ||
+		   $checkname == 'Default for Editable by')) {
 			print "<h2>Delete User Group</h2>\n";
 			print "{$usergroups[$groupid]['name']} is a system group that cannot be deleted";
 			return;
