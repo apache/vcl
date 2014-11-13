@@ -1386,6 +1386,7 @@ UPDATE image SET image.imagetypeid = (SELECT `id` FROM `imagetype` WHERE `name` 
 -- 
 
 UPDATE IGNORE `module` SET `name` = 'provisioning_vmware_1x', `prettyname` = 'VMware Server 1.x Provisioning Module' WHERE `name` = 'provisioning_vmware_gsx';
+UPDATE IGNORE `module` SET `name` = 'provisioning_xCAT', `prettyname` = 'xCAT' WHERE `name` = 'provisioning_xcat_13';
 INSERT IGNORE INTO `module` (`name`, `prettyname`, `description`, `perlpackage`) VALUES ('os_win7', 'Windows 7 OS Module', '', 'VCL::Module::OS::Windows::Version_6::7');
 INSERT IGNORE INTO `module` (`name`, `prettyname`, `description`, `perlpackage`) VALUES ('provisioning_vmware', 'VMware Provisioning Module', '', 'VCL::Module::Provisioning::VMware::VMware');
 INSERT IGNORE INTO `module` (`name`, `prettyname`, `description`, `perlpackage`) VALUES ('state_image', 'VCL Image State Module', '', 'VCL::image');
@@ -1457,6 +1458,8 @@ INSERT IGNORE INTO `provisioning` (`name`, `prettyname`, `moduleid`) VALUES ('vb
 INSERT IGNORE INTO `provisioning` (`name`, `prettyname`, `moduleid`) VALUES ('libvirt','Libvirt Virtualization API', (SELECT `id` FROM `module` WHERE `name` LIKE 'provisioning_libvirt'));
 INSERT IGNORE INTO `provisioning` (`name`, `prettyname`, `moduleid`) VALUES ('none','None', (SELECT `id` FROM `module` WHERE `name` = 'base_module'));
 
+UPDATE IGNORE `provisioning` SET `name` = 'xcat', `prettyname` = 'xCAT' WHERE `name` = 'xcat_13'; 
+
 -- --------------------------------------------------------
 
 -- 
@@ -1470,6 +1473,8 @@ INSERT IGNORE provisioningOSinstalltype (provisioningid, OSinstalltypeid) SELECT
 INSERT IGNORE provisioningOSinstalltype (provisioningid, OSinstalltypeid) SELECT provisioning.id, OSinstalltype.id FROM provisioning, OSinstalltype WHERE provisioning.name LIKE '%vbox%' AND OSinstalltype.name = 'vbox';
 INSERT IGNORE provisioningOSinstalltype (provisioningid, OSinstalltypeid) SELECT provisioning.id, OSinstalltype.id FROM provisioning, OSinstalltype WHERE provisioning.name LIKE '%lab%' AND OSinstalltype.name = 'none';
 INSERT IGNORE provisioningOSinstalltype (provisioningid, OSinstalltypeid) SELECT provisioning.id, OSinstalltype.id FROM provisioning, OSinstalltype WHERE provisioning.name LIKE '%libvirt%' AND OSinstalltype.name = 'vmware';
+
+DELETE FROM provisioningOSinstalltype WHERE provisioningOSinstalltype.provisioningid IN (SELECT provisioning.id FROM provisioning WHERE provisioning.name LIKE '%xcat_2%');
 
 -- --------------------------------------------------------
 
@@ -1828,6 +1833,69 @@ WHERE provisioning.moduleid IN (SELECT module.id FROM module WHERE module.perlpa
 DELETE FROM provisioning WHERE provisioning.moduleid IN (SELECT module.id FROM module WHERE module.perlpackage = 'VCL::Module::Provisioning::vmware');
 
 DELETE FROM module WHERE module.perlpackage = 'VCL::Module::Provisioning::vmware';
+
+--
+-- Remove references to legacy xCAT2 provisioning module
+--
+
+UPDATE IGNORE computer, provisioning SET
+computer.provisioningid = (
+  SELECT DISTINCT
+  MIN(provisioning.id)
+  FROM
+  provisioning,
+  module
+  WHERE
+  provisioning.moduleid = (SELECT MIN(module.id) FROM module WHERE module.perlpackage = 'VCL::Module::Provisioning::xCAT')
+)
+WHERE provisioning.moduleid IN (SELECT module.id FROM module WHERE module.perlpackage = 'VCL::Module::Provisioning::xCAT2');
+UPDATE IGNORE statgraphcache, provisioning SET
+statgraphcache.provisioningid = (
+  SELECT DISTINCT
+  MIN(provisioning.id)
+  FROM
+  provisioning,
+  module
+  WHERE
+  provisioning.moduleid = (SELECT MIN(module.id) FROM module WHERE module.perlpackage = 'VCL::Module::Provisioning::xCAT')
+)
+WHERE provisioning.moduleid IN (SELECT module.id FROM module WHERE module.perlpackage = 'VCL::Module::Provisioning::xCAT2');
+
+DELETE FROM provisioning WHERE provisioning.moduleid IN (SELECT module.id FROM module WHERE module.perlpackage = 'VCL::Module::Provisioning::xCAT2');
+
+DELETE FROM module WHERE module.perlpackage = 'VCL::Module::Provisioning::xCAT2';
+
+--
+-- Remove references to legacy xCAT21 provisioning module
+--
+
+UPDATE IGNORE computer, provisioning SET
+computer.provisioningid = (
+  SELECT DISTINCT
+  MIN(provisioning.id)
+  FROM
+  provisioning,
+  module
+  WHERE
+  provisioning.moduleid = (SELECT MIN(module.id) FROM module WHERE module.perlpackage = 'VCL::Module::Provisioning::xCAT')
+)
+WHERE provisioning.moduleid IN (SELECT module.id FROM module WHERE module.perlpackage = 'VCL::Module::Provisioning::xCAT21');
+UPDATE IGNORE statgraphcache, provisioning SET
+statgraphcache.provisioningid = (
+  SELECT DISTINCT
+  MIN(provisioning.id)
+  FROM
+  provisioning,
+  module
+  WHERE
+  provisioning.moduleid = (SELECT MIN(module.id) FROM module WHERE module.perlpackage = 'VCL::Module::Provisioning::xCAT')
+)
+WHERE provisioning.moduleid IN (SELECT module.id FROM module WHERE module.perlpackage = 'VCL::Module::Provisioning::xCAT21');
+
+DELETE FROM provisioning WHERE provisioning.moduleid IN (SELECT module.id FROM module WHERE module.perlpackage = 'VCL::Module::Provisioning::xCAT21');
+
+DELETE FROM module WHERE module.perlpackage = 'VCL::Module::Provisioning::xCAT21';
+
 
 --
 -- Remove Procedures
