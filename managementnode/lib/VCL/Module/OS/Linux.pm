@@ -1248,7 +1248,9 @@ sub changepasswd {
 		$password = getpw(15);
 	}
 	
-	my $command = "echo $password \| /usr/bin/passwd -f $username --stdin";
+	my $command = "echo -e '";
+	$command .= qq[$password];
+	$command .= "' \| /usr/bin/passwd -f $username --stdin";
 	my ($exit_status, $output) = $self->execute($command);
 	if (!defined($output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to run SSH command to set password for $username");

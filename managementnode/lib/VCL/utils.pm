@@ -2380,20 +2380,21 @@ sub getpw {
 	$length = 6 if (!(defined($length)));
 
 	#Skip certain confusing chars like: iI1lL,0Oo Zz2
-	my @chars = ("A" .. "H", "J" .. "N", "P" .. "Y", "a" .. "h", "j" .."n","p" .. "y", "3" .. "9");
-	my @spchars = ("A" .. "H", "J" .. "N", "P" .. "Y", "a" .. "h", "j" .."n","p" .. "y", "3" .. "9","-","_","!","%","#","\$","@","+","=","{","}","<",">","?","&");
-	my @a = @chars;;
+	my @a = ("A" .. "H", "J" .. "N", "P" .. "Y", "a" .. "h", "j" .."n","p" .. "y", "3" .. "9");
+	my @spchars = ("-","_","\!","\%","\#","\$","\@","+","=","{","}","\?");
 
 	my $include_special_chars = $ENV{management_node_info}{INCLUDE_SPECIAL_CHARS};
-	if($include_special_chars) {
-		@a = @spchars;
-	}
 
 	my $b;
 	srand;
 	for (1 .. $length) {
 		$b .= $a[rand @a ];
 	}
+
+	if($include_special_chars) {
+		$b .= $spchars[rand @spchars];
+	}
+
 	return $b;
 
 } ## end sub getpw
