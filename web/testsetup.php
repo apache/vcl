@@ -446,7 +446,7 @@ if(is_dir('./dojo')) {
 		fail("dojo directory is not readable. Check permissions on this directory");
 }
 else
-	fail("dojo directory does not exist. Download and install Dojo Toolkit 1.5.0");
+	fail("dojo directory does not exist. Download and install Dojo Toolkit 1.6.2");
 print "</ul>\n";
 
 
