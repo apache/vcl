@@ -446,7 +446,7 @@ class Image extends Resource {
 		$h .= "<INPUT type=hidden id=remcmcont value=\"$cont\">";
 		if(! $newimage) {
 			$h .= "NOTE: Connection Method changes take effect immediately; you<br>do ";
-			$h .= "<strong>not</strong> need to click \"Confirm Changes\" to submit them.";
+			$h .= "<strong>not</strong> need to click \"Submit Changes\" to submit them.";
 		}
 		print $h;
 	}
@@ -515,7 +515,7 @@ class Image extends Resource {
 		$cont = addContinuationsEntry('AJremSubimage', $cdata, SECINDAY, 1, 0);
 		$h .= "<INPUT type=\"hidden\" id=\"remsubimagecont\" value=\"$cont\">";
 		$h .= "NOTE: Subimage changes take effect immediately; you do<br>";
-		$h .= "<strong>not</strong> need to click \"Confirm Changes\" to submit them.";
+		$h .= "<strong>not</strong> need to click \"Submit Changes\" to submit them.";
 		print $h;
 	}
 
@@ -642,7 +642,7 @@ class Image extends Resource {
 			       . " WHERE id = {$data['imageid']}";
 			doQuery($query);
 		}
-		if(empty($olddata[$data['imageid']]['imagemetaid']) &&
+		if(empty($olddata['imagemetaid']) &&
 		   ($data['checkuser'] == 0 || $data['rootaccess'] == 0)) {
 			$query = "INSERT INTO imagemeta "
 					 .        "(checkuser, "
@@ -659,16 +659,16 @@ class Image extends Resource {
 					 . "WHERE id = {$data['imageid']}";
 			doQuery($query, 101);
 		}
-		elseif(! empty($olddata[$data['imageid']]['imagemetaid'])) {
-			if($data['checkuser'] != $olddata[$data['imageid']]['checkuser'] ||
-			   $data['rootaccess'] != $olddata[$data['imageid']]['rootaccess']) {
+		elseif(! empty($olddata['imagemetaid'])) {
+			if($data['checkuser'] != $olddata['checkuser'] ||
+			   $data['rootaccess'] != $olddata['rootaccess']) {
 				$query = "UPDATE imagemeta "
 						 . "SET checkuser = {$data['checkuser']}, "
 						 .     "rootaccess = {$data['rootaccess']} "
-						 . "WHERE id = {$olddata[$data['imageid']]['imagemetaid']}";
+						 . "WHERE id = {$olddata['imagemetaid']}";
 				doQuery($query, 101);
 			}
-		  checkClearImageMeta($olddata[$data['imageid']]['imagemetaid'], $data['imageid']);
+		  checkClearImageMeta($olddata['imagemetaid'], $data['imageid']);
 		}
 		$args = $this->defaultGetDataArgs;
 		$args['rscid'] = $data['imageid'];
