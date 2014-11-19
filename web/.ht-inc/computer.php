@@ -1842,19 +1842,19 @@ class Computer extends Resource {
 			$return['provisioning'] = $provisioning[$return['provisioningid']]['name'];
 		# stateid  2 - available, 10 - maintenance, 20 - vmhostinuse
 		if(! preg_match('/^(2|10|20)$/', $return['stateid']) &&
-		   $return['stateid'] != $olddata['stateid']) {
+		   ($return['mode'] == 'add' || $return['stateid'] != $olddata['stateid'])) {
 			$return['error'] = 1;
 			$errormsg[] = "Invalid value submitted for State";
 		}
 		# validate type/provisioning combinations
 		$provtypes = getProvisioningTypes();
-		if($olddata['provisioningid'] != $return['provisioningid'] &&
+		if(($return['mode'] == 'add' || $olddata['provisioningid'] != $return['provisioningid']) &&
 		   ! array_key_exists($return['provisioningid'], $provtypes[$return['type']])) {
 			$return['error'] = 1;
 			$errormsg[] = "Invalid Provisioning Engine selected for computer type";
 		}
 		# validate type/provisioning/state combinations
-		if($olddata['stateid'] != $return['stateid']) {
+		if($return['mode'] == 'add' || $olddata['stateid'] != $return['stateid']) {
 			if($return['type'] == 'lab') {
 				if($return['stateid'] != 2 && $return['stateid'] != 10) {
 					$return['error'] = 1;
@@ -1863,7 +1863,7 @@ class Computer extends Resource {
 			}
 			elseif($return['type'] == 'virtualmachine') {
 				if($return['stateid'] != 10 &&
-				   (! is_numeric($olddata['vmhostid']) || $return['stateid'] != 2)) {
+				   ($return['mode'] == 'add' || ! is_numeric($olddata['vmhostid']) || $return['stateid'] != 2)) {
 					$return['error'] = 1;
 					$errormsg[] = "Invalid state submitted for computer type Virtual Machine";
 				}
@@ -1946,22 +1946,24 @@ class Computer extends Resource {
 			$naterror = 1;
 		}
 		# nat change - check for active reservations
-		if($olddata['nathostid'] == '')
-			$olddata['nathostid'] = 0;
-		if(! $naterror && ($olddata['natenabled'] != $return['natenabled'] ||
-		   $olddata['nathostid'] != $return['nathostid'])) {
-			$query = "SELECT rq.id "
-			       . "FROM request rq, "
-			       .      "reservation rs "
-			       . "WHERE rs.requestid = rq.id AND "
-			       .       "rs.computerid = {$return['rscid']} AND "
-			       .       "rq.start <= NOW() AND "
-			       .       "rq.end > NOW() AND "
-			       .       "rq.stateid NOT IN (1,5,11,12)";
-			$qh = doQuery($query);
-			if(mysql_num_rows($qh)) {
-				$return['error'] = 1;
-				$errormsg[] = "This computer has an active reservation. NAT settings cannot be changed for computers having<br>active reservations.";
+		if($return['mode'] == 'edit') {
+			if($olddata['nathostid'] == '')
+				$olddata['nathostid'] = 0;
+			if(! $naterror && ($olddata['natenabled'] != $return['natenabled'] ||
+			   $olddata['nathostid'] != $return['nathostid'])) {
+				$query = "SELECT rq.id "
+				       . "FROM request rq, "
+				       .      "reservation rs "
+				       . "WHERE rs.requestid = rq.id AND "
+				       .       "rs.computerid = {$return['rscid']} AND "
+				       .       "rq.start <= NOW() AND "
+				       .       "rq.end > NOW() AND "
+				       .       "rq.stateid NOT IN (1,5,11,12)";
+				$qh = doQuery($query);
+				if(mysql_num_rows($qh)) {
+					$return['error'] = 1;
+					$errormsg[] = "This computer has an active reservation. NAT settings cannot be changed for computers having<br>active reservations.";
+				}
 			}
 		}
 		# location
