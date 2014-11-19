@@ -3666,15 +3666,16 @@ sub firewall_compare_update {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 update_cluster_info
+=head2 update_cluster
 
  Parameters  :data hash 
  Returns     : 0 or 1
- Description :
+ Description : creates or updates the cluster_info file
+ 					updates firewall so each node can communicate
 
 =cut
 
-sub update_cluster_info {
+sub update_cluster {
 
 	my $self = shift;
 	if (ref($self) !~ /VCL::Module/i) {
@@ -3710,6 +3711,14 @@ sub update_cluster_info {
 		else {
 			push(@cluster_string, "child= $request_data->{reservation}{$rid}{computer}{IPaddress}" . "\n");
 			notify($ERRORS{'DEBUG'}, 0, "writing child=  $request_data->{reservation}{$rid}{computer}{IPaddress}");
+		}
+
+		#Create iptables rule for each node in cluster on the node being processed
+		# Could slow things down for large clusters, but they can communicate with each other
+		if ($self->can('enable_firewall_port')) {
+			if (!$self->enable_firewall_port("tcp", "any", $request_data->{reservation}{$rid}{computer}{IPaddress}, 0)) {
+				notify($ERRORS{'DEBUG'}, 0, "adding $request_data->{reservation}{$rid}{computer}{IPaddress} to iptables");
+			}
 		}
 	}
 
