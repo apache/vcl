@@ -238,7 +238,6 @@ our @EXPORT = qw(
 	update_changelog_request_user_remote_ip
 	update_changelog_reservation_remote_ip
 	update_changelog_reservation_user_remote_ip
-	update_cluster_info
 	update_computer_imagename
 	update_computer_lastcheck
 	update_computer_private_ip_address
@@ -7281,88 +7280,6 @@ sub insert_reload_request {
 
 	return 1;
 } ## end sub insert_reload_request
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 update_cluster_info
-
- Parameters  :data hash 
- Returns     : 0 or 1
- Description :
-
-=cut
-
-sub update_cluster_info {
-
-	my ($request_data) = @_;
-	my ($package,         $filename,         $line,         $sub)         = caller(0);
-	my ($calling_package, $calling_filename, $calling_line, $calling_sub) = caller(0);
-
-	my $reservation_id      = $request_data->{RESERVATIONID};
-	my $computer_short_name = $request_data->{reservation}{$reservation_id}{computer}{SHORTNAME};
-	my $image_OS_type       = $request_data->{reservation}{$reservation_id}{image}{OS}{type};
-   my $is_cluster_parent	= $request_data->{PARENTIMAGE};
-	my $is_cluster_child		= $request_data->{SUBIMAGE};
-
-	my $cluster_info   = "/tmp/$computer_short_name.cluster_info";
-	my @cluster_string = "";
-
-
-
-	my @reservation_ids = sort keys %{$request_data->{reservation}};
-
-	# parent reservation id lowest
-	my $parent_reservation_id = min @reservation_ids;
-	notify($ERRORS{'DEBUG'}, 0, "$computer_short_name is_cluster_parent = $is_cluster_parent ");
-	notify($ERRORS{'DEBUG'}, 0, "$computer_short_name is_cluster_child = $is_cluster_child ");
-	notify($ERRORS{'DEBUG'}, 0, "parent_reservation_id = $parent_reservation_id ");
-
-	foreach my $rid (keys %{$request_data->{reservation}}) {
-		if ($rid == $parent_reservation_id) {
-			push(@cluster_string, "parent= $request_data->{reservation}{$rid}{computer}{IPaddress}" . "\n");
-			notify($ERRORS{'DEBUG'}, 0, "writing parent=  $request_data->{reservation}{$rid}{computer}{IPaddress}");
-		}
-		else {
-			push(@cluster_string, "child= $request_data->{reservation}{$rid}{computer}{IPaddress}" . "\n");
-			notify($ERRORS{'DEBUG'}, 0, "writing child=  $request_data->{reservation}{$rid}{computer}{IPaddress}");
-		}
-	}
-
-
-	if (open(CLUSTERFILE, ">$cluster_info")) {
-		print CLUSTERFILE @cluster_string;
-		close(CLUSTERFILE);
-	}
-	else {
-		notify($ERRORS{'OK'}, 0, "could not write to $cluster_info");
-	}
-
-	my $identity;
-	#scp cluster file to each node
-	my $targetpath;
-	foreach my $rid (keys %{$request_data->{reservation}}) {
-		$identity = $request_data->{reservation}{$rid}{image}{IDENTITY};
-		my $node_name = $request_data->{reservation}{$rid}{computer}{SHORTNAME};
-		if ($image_OS_type =~ /linux/i) {
-			$targetpath = "$node_name:/etc/cluster_info";
-		}
-		elsif ($image_OS_type =~ /windows/i) {
-			$targetpath = "$node_name:C:\/cluster_info";
-		}
-		else {
-			$targetpath = "$node_name:/etc/cluster_info";
-		}
-
-		if (run_scp_command($cluster_info, $targetpath, $identity)) {
-			notify($ERRORS{'OK'}, 0, " successfully copied cluster_info file to $node_name");
-		}
-	} ## end foreach my $rid (keys %{$request_data->{reservation...
-
-	unlink $cluster_info;
-
-	return 1;
-
-} ## end sub update_cluster_info
 
 #/////////////////////////////////////////////////////////////////////////////
 

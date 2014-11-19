@@ -115,21 +115,21 @@ sub process {
 		$self->_notify_user_timeout($request_data);
 		switch_state($request_data, 'timeout', 'timeout', 'noack', 1);
 	}
-	
-	# User acknowledged request
-	# Add the cluster information to the loaded computers if this is a cluster reservation
-	if ($reservation_count > 1 && !update_cluster_info($request_data)) {
-		$self->reservation_failed("update_cluster_info failed");
-	}
-	
+
 	# Call OS module's grant_access() subroutine which adds user accounts to computer
 	if ($self->os->can("grant_access") && !$self->os->grant_access()) {
 		$self->reservation_failed("OS module grant_access failed");
 	}
-	
+
 	# Add additional user accounts, perform other configuration tasks if this is a server request
 	if ($server_request_id && !$self->os->manage_server_access()) {
 		$self->reservation_failed("OS module manage_server_access failed");
+	}
+	
+	# User acknowledged request
+	# Add the cluster information to the loaded computers if this is a cluster reservation
+	if ($reservation_count > 1 && !$self->os->update_cluster_info()) {
+		$self->reservation_failed("update_cluster_info failed");
 	}
 	
 	# Check if OS module's post_reserve() subroutine exists

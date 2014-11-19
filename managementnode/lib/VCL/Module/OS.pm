@@ -53,6 +53,7 @@ use warnings;
 use diagnostics;
 use English '-no_match_vars';
 use Net::SSH::Expect;
+use List::Util qw(min max);
 
 use VCL::utils;
 
@@ -3662,6 +3663,90 @@ sub firewall_compare_update {
 	
 	return !$error_encountered;
 }
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 update_cluster_info
+
+ Parameters  :data hash 
+ Returns     : 0 or 1
+ Description :
+
+=cut
+
+sub update_cluster_info {
+
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+
+	my $reservation_id      = $self->data->get_reservation_id();
+	my $computer_short_name = $self->data->get_computer_short_name();
+	my $image_OS_type       = $self->data->get_image_os_type();
+	my $is_cluster_parent	= $self->data->get_request_is_cluster_parent();
+	my $is_cluster_child		= $self->data->get_request_is_cluster_child();
+
+	my $cluster_info   = "/tmp/$computer_short_name.cluster_info";
+	my @cluster_string = "";
+
+	#Get all the request data
+	my $request_data      = $self->data->get_request_data();
+
+	my @reservation_ids = sort keys %{$request_data->{reservation}};
+
+	# parent reservation id lowest
+	my $parent_reservation_id = min @reservation_ids;
+	notify($ERRORS{'DEBUG'}, 0, "$computer_short_name is_cluster_parent = $is_cluster_parent ");
+	notify($ERRORS{'DEBUG'}, 0, "$computer_short_name is_cluster_child = $is_cluster_child ");
+	notify($ERRORS{'DEBUG'}, 0, "parent_reservation_id = $parent_reservation_id ");
+
+	foreach my $rid (keys %{$request_data->{reservation}}) {
+		if ($rid == $parent_reservation_id) {
+			push(@cluster_string, "parent= $request_data->{reservation}{$rid}{computer}{IPaddress}" . "\n");
+			notify($ERRORS{'DEBUG'}, 0, "writing parent=  $request_data->{reservation}{$rid}{computer}{IPaddress}");
+		}
+		else {
+			push(@cluster_string, "child= $request_data->{reservation}{$rid}{computer}{IPaddress}" . "\n");
+			notify($ERRORS{'DEBUG'}, 0, "writing child=  $request_data->{reservation}{$rid}{computer}{IPaddress}");
+		}
+	}
+
+	if (open(CLUSTERFILE, ">$cluster_info")) {
+		print CLUSTERFILE @cluster_string;
+		close(CLUSTERFILE);
+	}
+	else {
+		notify($ERRORS{'OK'}, 0, "could not write to $cluster_info");
+	}
+
+	my $identity;
+	#scp cluster file to each node
+	my $targetpath;
+	foreach my $resid (keys %{$request_data->{reservation}}) {
+		$identity = $request_data->{reservation}{$resid}{image}{IDENTITY};
+		my $node_name = $request_data->{reservation}{$resid}{computer}{SHORTNAME};
+		if ($image_OS_type =~ /linux/i) {
+			$targetpath = "$node_name:/etc/cluster_info";
+		}
+		elsif ($image_OS_type =~ /windows/i) {
+			$targetpath = "$node_name:C:\/cluster_info";
+		}
+		else {
+			$targetpath = "$node_name:/etc/cluster_info";
+		}
+
+		if (run_scp_command($cluster_info, $targetpath, $identity)) {
+			notify($ERRORS{'OK'}, 0, " successfully copied cluster_info file to $node_name");
+		}
+	} ## end foreach my $resid (keys %{$request_data->{reservation...
+
+	unlink $cluster_info;
+
+	return 1;
+
+} ## end sub update_cluster_info
 
 #///////////////////////////////////////////////////////////////////////////
 
