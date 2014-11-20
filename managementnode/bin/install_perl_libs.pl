@@ -41,16 +41,56 @@ Run this script from the command line:
 
 ##############################################################################
 use strict;
-use warnings;
-use diagnostics;
 
 use English;
 use Getopt::Long;
-use Data::Dumper;
-use POSIX;
 
 #/////////////////////////////////////////////////////////////////////////////
 
+my @LINUX_PACKAGES = (
+	'expat-devel',
+	'gcc',
+	'krb5-devel',
+	'krb5-libs',
+	'libxml2-devel',
+	'make',
+	'nmap',
+	'openssl-devel',
+	'perl-Archive-Tar',
+	'perl-CPAN',
+	'perl-Crypt-OpenSSL-RSA',
+	'perl-DBD-MySQL',
+	'perl-DBI',
+	'perl-Digest-SHA1',
+	'perl-IO-String',
+	'perl-MailTools',
+	'perl-Net-Jabber',
+	'perl-Net-Netmask',
+	'perl-Net-SSH-Expect',
+	'perl-RPC-XML',
+	'perl-Text-CSV_XS',
+	'perl-Time-HiRes',
+	'perl-XML-Simple',
+	'perl-YAML',
+	'xmlsec1-openssl',
+);
+
+my @PERL_MODULES = (
+	'CPAN',
+	'DBI',
+	'Digest::SHA1',
+	'LWP::Protocol::https',
+	'Mail::Mailer',
+	'Mo::builder',
+	'Net::SSH::Expect',
+	'Object::InsideOut',
+	'RPC::XML',
+	'Scalar::Util',
+	'Time::HiRes',
+	'URI',
+	'YAML',
+);
+	
 # Store the command line options in hash
 my $AGREE;
 my $INSTALL_LINUX_PACKAGES;
@@ -81,7 +121,17 @@ elsif (defined($INSTALL_LINUX_PACKAGES) && !defined($INSTALL_PERL_MODULES)) {
 
 if ($INSTALL_LINUX_PACKAGES) {
 	print_break('=');
-	install_linux_packages();
+	# Check if yum is available
+	my ($which_exit_status, $which_output) = run_command("which yum");
+	if ($which_exit_status ne '0') {
+		print "WARNING: yum is not available on this OS, skipping Linux package installation\n";
+		return 0;
+	}
+	else {
+		install_epel();
+		print_break('=');
+		install_linux_packages();
+	}
 }
 
 if ($INSTALL_PERL_MODULES) {
@@ -107,6 +157,54 @@ exit;
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 install_epel
+
+ Parameters  : none
+ Returns     : boolean
+ Description : Creates a temporary /etc/yum.repos.d/epel-install.repo file and
+               installs the epel-release package.
+
+=cut
+
+sub install_epel {
+	my $epel_install_repo_path = '/etc/yum.repos.d/epel-install.repo';
+	
+	my $epel_install_repo_contents = <<EOF;
+[epel-install]
+name=EPEL Repository
+mirrorlist=http://mirrors.fedoraproject.org/mirrorlist?repo=epel-\$releasever&arch=\$basearch
+failovermethod=priority
+enabled=1
+gpgcheck=0
+EOF
+	
+	unlink $epel_install_repo_path;
+	
+	print "Creating file: $epel_install_repo_path\n";
+	if (!open FILE, ">", $epel_install_repo_path) {
+		print "ERROR: failed to create file: $epel_install_repo_path\n";
+		exit;
+	}
+	if (!print FILE $epel_install_repo_contents) {
+		print "ERROR: failed to write to file: $epel_install_repo_path\n";
+		exit;
+	}
+	close FILE;
+	
+	my $result = yum_install_linux_package('epel-release');
+	
+	if (unlink $epel_install_repo_path) {
+		print "Removed file: $epel_install_repo_path\n";
+	}
+	else {
+		print "WARNING: failed to remove file: $epel_install_repo_path\n";
+	}
+	
+	return $result;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 =head2 install_linux_packages
 
  Parameters  : none
@@ -117,130 +215,62 @@ exit;
 =cut
 
 sub install_linux_packages {
-	# Check if yum is available
-	my ($which_exit_status, $which_output) = run_command("which yum");
-	if ($which_exit_status ne '0') {
-		print "WARNING: yum is not available on this OS, skipping Linux package installation\n";
-		return 0;
+	for my $linux_package (@LINUX_PACKAGES) {
+		print_break('*');
+		if (!yum_install_linux_package($linux_package)) {
+			$ERRORS->{'Linux package'}{$linux_package} = 1;
+		}
 	}
-	
-	my @uname = POSIX::uname();
-	my $arch = $uname[4];
-	my $version = $uname[2];
-	
-	if (!$arch || !$version) {
-		print "WARNING: unable to determine OS architecture and version, skipping Linux package installation\n";
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 yum_install_linux_package
+
+ Parameters  : $linux_package
+ Returns     : boolean
+ Description : Attempts to install a single Linux package using yum.
+
+=cut
+
+sub yum_install_linux_package {
+	my ($linux_package) = @_;
+	if (!$linux_package) {
+		print "ERROR: package name argument was not provided\n";
 		return;
 	}
 	
-	if ($arch =~ /i686/) {
-		$arch = 'i386';
+	print "Attempting to install Linux package using yum: $linux_package\n";
+	
+	my $yum_command = "yum install $linux_package -y --nogpgcheck";
+	#print "Yum command: $yum_command\n";
+	
+	my $yum_output = `$yum_command 2>&1 | grep -v '^\\(Load\\|Setting\\|Nothing\\| \\*\\)'`;
+	my $yum_exit_status = $? >> 8;
+	
+	chomp $yum_output;
+	print "$yum_output\n\n";
+	
+	if ($yum_exit_status ne '0') {
+		print "WARNING: failed to install Linux package: '$linux_package', exit status: $yum_exit_status\n";
+		return 0;
 	}
-	
-	my $rhel_version;
-	if ($version =~ /el(\d+)/) {
-		$rhel_version = $1;
+	elsif ($yum_output =~ /$linux_package[^\n]*already installed/i) {
+		print "SUCCESS: Linux package is already installed: $linux_package\n";
 	}
-	
-	
-	if ($rhel_version) {
-		print "Attempting to install 'Extra Packages for Enterprise Linux (EPEL)'\n";
-		my $epel_url = "http://dl.fedoraproject.org/pub/epel/$rhel_version/$arch";
-		
-		# Run wget to retrieve the list of files available in the repository
-		# Do this to determine the EPEL RPM file name
-		my $wget_command = "wget  --output-document=- $epel_url";
-		my ($wget_exit_status, $wget_output) = run_command($wget_command);
-		if ($wget_exit_status eq '0' && $wget_output =~ /(epel-release-[\d-]+\.noarch\.rpm)/) {
-			my $rpm_file_name = $1;
-			$epel_url .= "/$rpm_file_name";
-			print "Constructed EPEL URL: '$epel_url'\n\n";
-			
-			# Download the EPEL RPM file
-			my $rpm_command = "rpm -Uvh $epel_url";
-			my ($rpm_exit_status, $rpm_output) = run_command($rpm_command);
-			if ($rpm_exit_status ne '0' && $rpm_output !~ /already installed/i) {
-				print "WARNING: failed to install EPEL, some Perl modules may not install correctly\nrpm command: $rpm_command\nrpm exit status: $rpm_exit_status\nrpm output:\n$rpm_output\n";
-				$ERRORS->{'Linux package'}{'EPEL'} = 1;
-			}
-			elsif ($rpm_output =~ /already installed/i) {
-				print "SUCCESS: EPEL is already installed\n";
-			}
-			else {
-				print "SUCCESS: installed EPEL\n";
-			}
-		}
-		else {
-			print "WARNING: failed to determine name of EPEL RPM, did not locate 'epel-relase' line in wget output, some Perl modules may not install correctly\nwget command: '$wget_command'\nexit status: $wget_exit_status\noutput:\n$wget_output\n";
-			$ERRORS->{'Linux package'}{'EPEL'} = 1;
-		}
-		
-		
+	elsif ($yum_output =~ /Complete\!/i) {
+		print "SUCCESS: installed Linux package: $linux_package\n";
+	}
+	elsif ($yum_output =~ /No package.*available/i) {
+		print "WARNING: Linux package is not available via yum: $linux_package\n";
+		return 0;
 	}
 	else {
-		print "OS version does not appear to be RHEL: $version, skipping EPEL installation\n";
+		print "WARNING: unexpected output returned while installing Linux package: $linux_package\n";
+		return 0;
 	}
 	
-	my @linux_packages = (
-		'expat-devel',
-		'gcc',
-		'krb5-libs',
-		'krb5-devel',
-		'libxml2-devel',
-		'make',
-		'nmap',
-		'openssl-devel',
-		'perl-Archive-Tar',
-		'perl-CPAN',
-		'perl-Crypt-OpenSSL-RSA',
-		'perl-DBD-MySQL',
-		'perl-DBI',
-		'perl-Digest-SHA1',
-		'perl-IO-String',
-		'perl-MailTools',
-		'perl-Net-Jabber',
-		'perl-Net-Netmask',
-		'perl-Net-SSH-Expect',
-		'perl-RPC-XML',
-		'perl-Text-CSV_XS',
-		'perl-Time-HiRes',
-		'perl-XML-Simple',
-		'perl-YAML',
-		'xmlsec1-openssl',
-	);
-	
-	for my $linux_package (@linux_packages) {
-		print_break('*');
-		print "Attempting to install Linux package using yum: $linux_package\n";
-		
-		my $yum_command = "yum install $linux_package -y --nogpgcheck";
-		#print "Yum command: $yum_command\n";
-		
-		my $yum_output = `$yum_command 2>&1 | grep -v '^\\(Load\\|Setting\\|Nothing\\| \\*\\)'`;
-		my $yum_exit_status = $? >> 8;
-		
-		chomp $yum_output;
-		print "$yum_output\n\n";
-		
-		if ($yum_exit_status ne '0') {
-			print "WARNING: failed to install Linux package: '$linux_package', exit status: $yum_exit_status\n";
-			$ERRORS->{'Linux package'}{$linux_package} = 1;
-		}
-		elsif ($yum_output =~ /$linux_package[^\n]*already installed/i) {
-			print "SUCCESS: Linux package is already installed: $linux_package\n";
-		}
-		elsif ($yum_output =~ /Complete\!/i) {
-			print "SUCCESS: installed Linux package: $linux_package\n";
-		}
-		elsif ($yum_output =~ /No package.*available/i) {
-			print "WARNING: Linux package is not available via yum: $linux_package\n";
-			$ERRORS->{'Linux package'}{$linux_package} = 1;
-		}
-		else {
-			print "WARNING: unexpected output returned while installing Linux package: $linux_package\n";
-			$ERRORS->{'Linux package'}{$linux_package} = 1;
-		}
-	}
 	return 1;
 }
 
@@ -333,11 +363,12 @@ sub configure_cpan {
 		"yaml_load_code" => "0",
 	};
 	
+	# Use $CPAN::Config once to avoid warning
+	if ($CPAN::Config) {};
+	
 	eval { CPAN::Config->commit($config_file_path) };
 	if ($EVAL_ERROR) {
-		print format_data($CPAN::Config) . "\n";
-		
-		print "\nERROR: failed to create CPAN configuration file: $config_file_path\n";
+		print "\nERROR: failed to create CPAN configuration file: $config_file_path\n$EVAL_ERROR\n";
 		exit 1;
 	}
 	else {
@@ -363,24 +394,11 @@ sub install_perl_modules {
 		$ERRORS->{'Perl module'}{'ALL'} = 1;
 		return;
 	}
-	
+	print "Running CPAN version: $CPAN::VERSION\n";
+
 	configure_cpan();
 
-	my @perl_modules = (
-		'CPAN',
-		'DBI',
-		'Scalar::Util',
-		'Digest::SHA1',
-		'LWP::Protocol::https',
-		'Mail::Mailer',
-		'Mo::builder',
-		'Object::InsideOut',
-		'RPC::XML',
-		'URI',
-		'YAML',
-	);
-	
-	PERL_MODULE: for my $perl_module (@perl_modules) {
+	PERL_MODULE: for my $perl_module (@PERL_MODULES) {
 		print_break('*');
 		
 		my $cpan_version = get_perl_module_cpan_version($perl_module);
@@ -592,40 +610,6 @@ sub print_break {
 	my $character = shift;
 	$character = '-' if !defined($character);
 	print $character x 100 . "\n";
-}
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 format_data
-
- Parameters  : @data
- Returns     :
- Description :
-
-=cut
-
-sub format_data {
-	my @data = @_;
-	
-	if (!(@data)) {
-		return '<undefined>';
-	}
-	
-	$Data::Dumper::Indent    = 1;
-	$Data::Dumper::Purity    = 1;
-	$Data::Dumper::Useqq     = 1;      # Use double quotes for representing string values
-	$Data::Dumper::Terse     = 1;
-	$Data::Dumper::Quotekeys = 1;      # Quote hash keys
-	$Data::Dumper::Pair      = ' => '; # Specifies the separator between hash keys and values
-	$Data::Dumper::Sortkeys  = 1;      # Hash keys are dumped in sorted order
-	
-	my $formatted_string = Dumper(@data);
-	
-	my @formatted_lines = split("\n", $formatted_string);
-	
-	map { $_ = ": $_" } @formatted_lines;
-	
-	return join("\n", @formatted_lines);
 }
 
 #/////////////////////////////////////////////////////////////////////////////
