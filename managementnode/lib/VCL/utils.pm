@@ -6067,8 +6067,8 @@ sub switch_state {
 	my $request_id                 = $request_data->{id};
 	my $request_logid              = $request_data->{logid};
 	my $reservation_id             = $request_data->{RESERVATIONID};
-	my $request_state_name_old     = $request_data->{state}{name};
-	my $request_laststate_name_old = $request_data->{laststate}{name};
+	my $request_state_name_old     = $request_data->{state}{name} || '';
+	my $request_laststate_name_old = $request_data->{laststate}{name} || '';
 	my $computer_id                = $request_data->{reservation}{$reservation_id}{computer}{id};
 	my $computer_type              = $request_data->{reservation}{$reservation_id}{computer}{type};
 	my $computer_state_name_old    = $request_data->{reservation}{$reservation_id}{computer}{state}{name};
@@ -6094,7 +6094,7 @@ sub switch_state {
 	
 	# Don't set request state to failed if previous state is image or inuse
 	if ($request_state_name_new && $request_state_name_new eq 'failed') {
-		if ($request_state_name_old eq 'image') {
+		if ($request_state_name_old =~ /(image|checkpoint)/) {
 			notify($ERRORS{'DEBUG'}, 0, "previous request state is $request_state_name_old, not setting request state to $request_state_name_new, setting request state to maintenance");
 			$request_state_name_new = 'maintenance';
 			$computer_state_name_new = 'maintenance';
@@ -6103,6 +6103,15 @@ sub switch_state {
 			notify($ERRORS{'DEBUG'}, 0, "previous request state is $request_state_name_old, not setting request state to $request_state_name_new, setting request state back to $request_state_name_old");
 			$request_state_name_new = 'inuse';
 			$computer_state_name_new = 'inuse';
+		}
+	}
+	
+	# Don't set log.ending to failed for inuse - this throws off the counts on the dashboard page
+	# Don't set log.ending to failed for image or checkpoint
+	if ($request_log_ending && $request_log_ending =~ /(failed)/) {
+		if ($request_state_name_old =~ /(image|checkpoint|inuse)/) {
+			notify($ERRORS{'DEBUG'}, 0, "request state is $request_state_name_old, not setting log.ending to $request_log_ending");
+			$request_log_ending = 0;
 		}
 	}
 	

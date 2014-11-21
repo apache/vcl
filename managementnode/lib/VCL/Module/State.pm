@@ -342,7 +342,7 @@ sub reservation_failed {
 		notify($ERRORS{'WARNING'}, 0, "unable to set request to $new_request_state_name/$request_state_name");
 	}
 	
-	if ($request_state_name =~ /^(new|reserved|inuse|image)/){
+	if ($request_state_name =~ /^(new|reserved)/){
 		# Update log table ending column to failed for this request
 		if (update_log_ending($request_logid, "failed")) {
 			notify($ERRORS{'OK'}, 0, "updated log ending value to 'failed', logid=$request_logid");
