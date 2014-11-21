@@ -1352,6 +1352,16 @@ UPDATE `computer` SET `imagerevisionid` = (SELECT `id` FROM `imagerevision` WHER
 -- --------------------------------------------------------
 
 -- 
+-- Inserts for table `computerloadstate`
+-- 
+
+INSERT IGNORE INTO `computerloadstate` (`loadstatename`,`prettyname`) VALUES ('connecttimeout','Start Connect Timeout');
+INSERT IGNORE INTO `computerloadstate` (`loadstatename`,`prettyname`) VALUES ('beginacknowledgetimeout','Start Acknowledge Timeout');
+INSERT IGNORE INTO `computerloadstate` (`loadstatename`,`prettyname`,`est`) VALUES ('copyfrompartnerMN','Copy Image from Partner Management node','20');
+
+-- --------------------------------------------------------
+
+-- 
 -- Inserts for table `imagetype`
 -- 
 
