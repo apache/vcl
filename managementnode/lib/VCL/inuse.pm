@@ -122,10 +122,6 @@ sub process {
 	# It has to be a bit longer than the ~5 minute period between inuse checks due to cluster reservations
 	# If too short, a user may be connected to one computer in a cluster and another inuse process times out before the connected computer is checked
 	my $connect_timeout_minutes = ceil($connect_timeout_seconds / 60);
-	if ($connect_timeout_minutes < 10) {
-		notify($ERRORS{'WARNING'}, 0, "connect timeout is set to $connect_timeout_minutes minutes, it must be 10 minutes or more");
-		$connect_timeout_minutes = 10;
-	}
 	
 	# Connect timeout must be in whole minutes
 	$connect_timeout_seconds = ($connect_timeout_minutes * 60);
@@ -154,7 +150,7 @@ sub process {
 	}
 	
 	# Remove rows from computerloadlog for this reservation, don't remove the loadstate=begin row
-	delete_computerloadlog_reservation($reservation_id, '!begin');
+	delete_computerloadlog_reservation($reservation_id, '!beginacknowledgetimeout');
 	
 	my $now_epoch_seconds = time;
 	

@@ -705,7 +705,7 @@ sub state_exit {
 		}
 		
 		# Delete all computerloadlog rows with loadstatename = 'begin' for all reservations in this request
-		delete_computerloadlog_reservation(\@reservation_ids, 'begin');
+		delete_computerloadlog_reservation(\@reservation_ids, '!beginacknowledgetimeout');
 		
 		# Update log.ending if this is the parent reservation and argument was supplied
 		if ($request_log_ending) {

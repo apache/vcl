@@ -272,6 +272,9 @@ sub retrieve_image {
 		return;	
 	}
 
+	my $reservation_id 	= $self->data->get_reservation_id();
+	my $computer_id		= $self->data->get_computer_id();
+
 	# Make sure image library functions are enabled
 	my $image_lib_enable = $self->data->get_management_node_image_lib_enable();
 	if (!$image_lib_enable) {
@@ -472,6 +475,7 @@ sub retrieve_image {
 	}
 	
 	notify($ERRORS{'OK'}, 0, "found $image_name on partner management nodes:\n" . join("\n", map { $partner_info{$_}{hostname} } (sort @partners_with_image)));
+	insertloadlog($reservation_id, $computer_id, "copyfrompartnerMN", "copying image files from partner management node");
 	
 	# Choose a random partner so that the same management node isn't used for most transfers
 	my $random_index = int(rand(scalar(@partners_with_image)));

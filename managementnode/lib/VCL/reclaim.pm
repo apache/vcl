@@ -99,6 +99,10 @@ sub process {
 	my $computer_currentimage_name          = $self->data->get_computer_currentimage_name(0);
 	my $server_request_id     					 = $self->data->get_server_request_id();
 	my $public_ip_configuration			    = $self->data->get_management_node_public_ip_configuration() || return;
+	my @reservation_ids							 = $self->data->get_reservation_ids();
+
+	# Delete all computerloadlog rows with loadstatename = 'beginacknowledgetimeout' for all reservations in this request
+	delete_computerloadlog_reservation(\@reservation_ids, 'beginacknowledgetimeout');
 
 	# Remove related fixedIPsr variable, if it exists
 	if ($server_request_id) {

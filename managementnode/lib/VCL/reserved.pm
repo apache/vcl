@@ -102,6 +102,8 @@ sub process {
 	my $is_parent_reservation       = $self->data->is_parent_reservation();
 	my $server_request_id           = $self->data->get_server_request_id();
 	my $acknowledge_timeout_seconds = $self->os->get_timings('acknowledgetimeout');
+
+	insertloadlog($reservation_id, $computer_id, "beginacknowledgetimeout", "begin connect timeout");
 	
 	# Update the log loaded time to now for this request
 	update_log_loaded_time($request_logid);
@@ -128,8 +130,8 @@ sub process {
 	
 	# User acknowledged request
 	# Add the cluster information to the loaded computers if this is a cluster reservation
-	if ($reservation_count > 1 && !$self->os->update_cluster_info()) {
-		$self->reservation_failed("update_cluster_info failed");
+	if ($reservation_count > 1 && !$self->os->update_cluster()) {
+		$self->reservation_failed("update_cluster failed");
 	}
 	
 	# Check if OS module's post_reserve() subroutine exists
