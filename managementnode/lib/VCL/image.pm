@@ -620,28 +620,24 @@ sub setup_capture_base_image {
 	
 	my $computer_hostname = $computer_info{$computer_id}{hostname};
 	my $computer_state_name = $computer_info{$computer_id}{state}{name};
+	my $computer_provisioning_id = $computer_info{$computer_id}{provisioning}{id};
 	my $computer_provisioning_module_name = $computer_info{$computer_id}{provisioning}{module}{name};
 	my $computer_provisioning_module_pretty_name = $computer_info{$computer_id}{provisioning}{module}{prettyname};
 	my $computer_provisioning_pretty_name = $computer_info{$computer_id}{provisioning}{prettyname};
 	my $computer_provisioning_name = $computer_info{$computer_id}{provisioning}{name};
 	my $computer_node_name = $computer_info{$computer_id}{SHORTNAME};
 	
-	my $install_type;
-	if ($computer_provisioning_module_name =~ /xcat/i) {
-		$install_type = 'partimage';
-	}
-	else {
-		$install_type = $computer_provisioning_name;
-	}
+	my $osinstalltype_info = get_provisioning_osinstalltype_info($computer_provisioning_id);
+	my @provisioning_osinstalltype_names = map { $osinstalltype_info->{$_}{name} } keys %$osinstalltype_info;
 	
 	print "\nComputer to be captured: $computer_hostname (ID: $computer_id)\n";
 	print "Computer shortname: $computer_node_name\n";
 	print "Computer State: $computer_state_name\n";
 	print "Provisioning module: $computer_provisioning_module_pretty_name\n";
-	print "Install type: $install_type\n";
+	print "OS install types: " . join(", ", sort @provisioning_osinstalltype_names) . "\n";
 	
 	my $vmhost_name;
-	if ($install_type ne "partimage") {
+	if ($computer_provisioning_module_name !~ /xcat/i) {
 		$image_is_virtual = 1;
 		#should have a vmhost assigned
 		if ($computer_info{$computer_id}{vmhostid}){
@@ -696,7 +692,7 @@ sub setup_capture_base_image {
 	my $computer_requests = get_request_by_computerid($computer_id);
 	my %existing_requests_array_choices;
 	if (keys(%$computer_requests)) {
-		$existing_requests_array_choices{0}{"prettyname"} = "None : delete all previous reservations for $computer_node_name";
+		$existing_requests_array_choices{0}{"prettyname"} = "Delete all existing reservations for $computer_node_name";
 		for my $competing_request_id (sort keys %$computer_requests) {
 		    my $competing_reservation_id    = $computer_requests->{$competing_request_id}{data}->get_reservation_id();
 		    my $competing_imagerevision_id  = $computer_requests->{$competing_request_id}{data}->get_imagerevision_id();
@@ -714,8 +710,8 @@ sub setup_capture_base_image {
 		}
 
 		my $num_computer_requests = keys(%$computer_requests);
-		print "WARNING: Image capture reservation exists for $computer_node_name.\n\n"; 
-		print "Make Selection, Choose none to start over or choose the image to restart image capture for that request:\n"; 
+		print "WARNING: Image capture reservation exists for $computer_node_name.\n"; 
+		print "Either choose the image name to restart image capture for that request or choose none to delete the previous reservations:\n"; 
 
 		my $chosen_request_id = setup_get_hash_choice(\%existing_requests_array_choices, 'prettyname');
 		return if (!defined($chosen_request_id));
@@ -814,15 +810,26 @@ sub setup_capture_base_image {
 	}
 
 	# Loop through the OS table info
-	for my $os_id (keys %$os_info) {
-		# Remove keys which don't match the selected computer type
+	OS_ID: for my $os_id (keys %$os_info) {
+		my $osinstalltype_name = $os_info->{$os_id}{installtype};
+		
 		# Remove keys where the name begins with esx - deprecated OS type
-		if ($os_info->{$os_id}{installtype} ne $install_type || $os_info->{$os_id}{name} =~ /^vmwareesx/i) {
+		if ($osinstalltype_name =~ /^vmwareesx/i) {
 			delete $os_info->{$os_id};
+			next;
 		}
+		
+		# Remove keys which don't match the selected computer type
+		for my $provisioning_osinstalltype_name (@provisioning_osinstalltype_names) {
+			if ($provisioning_osinstalltype_name eq $osinstalltype_name) {
+				next OS_ID;
+			}
+		}
+		
+		delete $os_info->{$os_id};
 	}
 
-	print "Select the OS to be captured (install type: $install_type):\n";
+	print "Select the OS to be captured (install type: " . join(', ', sort @provisioning_osinstalltype_names) . "):\n";
 	my $os_id = setup_get_hash_choice($os_info, 'prettyname');
 	return if (!defined($os_id));
 	my $os_prettyname = $os_info->{$os_id}{prettyname};

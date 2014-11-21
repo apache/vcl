@@ -160,6 +160,7 @@ our @EXPORT = qw(
 	get_next_image_default
 	get_os_info
 	get_production_imagerevision_info
+	get_provisioning_osinstalltype_info
 	get_random_mac_address
 	get_request_by_computerid
 	get_request_current_state_name
@@ -6880,6 +6881,7 @@ sub get_computer_info {
 		'module',
 		'schedule',
 		'platform',
+		'nathost',
 	);
 	
 	# Construct the select statement
@@ -6919,6 +6921,10 @@ ON (
 )
 LEFT JOIN (schedule) ON (schedule.id = computer.scheduleid)
 LEFT JOIN (module AS predictivemodule) ON (predictivemodule.id = computer.predictivemoduleid)
+LEFT JOIN (nathost, nathostcomputermap) ON (
+	nathostcomputermap.computerid = computer.id
+	AND nathostcomputermap.nathostid = nathost.id
+)
 
 WHERE
 computer.deleted != '1'
@@ -11881,6 +11887,105 @@ EOF
 		notify($ERRORS{'WARNING'}, 0, "failed to update request.checkuser to $checkuser for request $request_id");
 		return;
 	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_provisioning_osinstalltype_info
+
+ Parameters  : $provisioning_id
+ Returns     : hash reference
+ Description : Retrieves information for all of the OSinstalltypes mapped to a
+               provisioning ID. A hash is returned:
+               }
+                  10 => {
+                    "id" => 10,
+                    "name" => "hyperv",
+                    "provisioningOSinstalltype" => {
+                      "OSinstalltypeid" => 10,
+                      "provisioningid" => 8
+                    }
+                  },
+                  4 => {
+                    "id" => 4,
+                    "name" => "vmware",
+                    "provisioningOSinstalltype" => {
+                      "OSinstalltypeid" => 4,
+                      "provisioningid" => 8
+                    }
+                  }
+               }
+
+=cut
+
+
+sub get_provisioning_osinstalltype_info {
+	my ($provisioning_id) = @_;
+	if (!defined($provisioning_id)) {
+		notify($ERRORS{'WARNING'}, 0, "provisioning ID argument was not specified");
+		return;
+	}
+	
+	
+	# Get a hash ref containing the database column names
+	my $database_table_columns = get_database_table_columns();
+	
+	my @tables = (
+		'provisioningOSinstalltype',
+		'OSinstalltype',
+	);
+	
+	# Construct the select statement
+	my $select_statement = "SELECT DISTINCT\n";
+	
+	# Get the column names for each table and add them to the select statement
+	for my $table (@tables) {
+		my @columns = @{$database_table_columns->{$table}};
+		for my $column (@columns) {
+			$select_statement .= "$table.$column AS '$table-$column',\n";
+		}
+	}
+	
+	# Remove the comma after the last column line
+	$select_statement =~ s/,$//;
+	
+	# Complete the select statement
+	$select_statement .= <<EOF;
+FROM
+provisioningOSinstalltype,
+OSinstalltype
+WHERE
+provisioningOSinstalltype.provisioningid = $provisioning_id
+AND provisioningOSinstalltype.OSinstalltypeid = OSinstalltype.id
+EOF
+
+	# Call the database select subroutine
+	my @selected_rows = database_select($select_statement);
+	
+	my $info = {};
+	for my $row (@selected_rows) {
+		my $osinstalltype_id = $row->{'OSinstalltype-id'};
+		
+		# Loop through all the columns returned
+		for my $key (keys %$row) {
+			my $value = $row->{$key};
+			
+			# Split the table-column names
+			my ($table, $column) = $key =~ /^([^-]+)-(.+)/;
+			
+			# Add the values for the primary table to the hash
+			# Add values for other tables under separate keys
+			if ($table eq 'OSinstalltype') {
+				$info->{$osinstalltype_id}{$column} = $value;
+			}
+			else {
+				$info->{$osinstalltype_id}{$table}{$column} = $value;
+			}
+		}
+	}
+	
+	notify($ERRORS{'DEBUG'}, 0, "retrieved info for OSinstalltypes mapped to provisioning ID $provisioning_id: " . format_data($info));
+	return $info;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
