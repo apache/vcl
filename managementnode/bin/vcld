@@ -579,7 +579,7 @@ sub make_new_child {
 				$state_object = ($state_module)->new({%{$request_data}, data_structure => $data_structure});
 			};
 			
-			if (!$state_object) {
+			if ($state_object) {
 				notify($ERRORS{'OK'}, $LOGFILE, "$state_module object created and initialized");
 				
 				# Call the state object's process() subroutine
