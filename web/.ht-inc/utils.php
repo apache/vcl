@@ -4517,7 +4517,7 @@ function isAvailable($images, $imageid, $imagerevisionid, $start, $end,
 function debugIsAvailable($rc, $loc, $start, $end, $imagerevisionid,
 	                       $compids=array(), $currentids=array(),
 	                       $blockids=array(), $failedids=array(), $virtual='') {
-	global $user, $mode;
+	global $user, $mode, $requestInfo;
 	$debug = getContinuationVar('debug', 0);
 	if(! $debug ||
 	   $mode != 'AJupdateWaitTime' ||
@@ -4585,7 +4585,7 @@ function debugIsAvailable($rc, $loc, $start, $end, $imagerevisionid,
 			$msg = "unable to get either a management node or semaphore for available computer";
 			break;
 		case "12":
-			$msg = "successfully found a computer";
+			$msg = "successfully found a computer (id: {$requestInfo['computers'][0]})";
 			break;
 	}
 	print "console.log('$msg');";
@@ -9885,7 +9885,7 @@ function addChangeLogEntry($logid, $remoteIP, $end=NULL, $start=NULL,
 	if($start != NULL && $start != $log["start"]) {
 		$query1 .= "'$start', ";
 		# only update start time in log table if it is in the future
-		if(datetimeToUnix($log['start']) > time())
+		if($wasavailable != 0 && datetimeToUnix($log['start']) > time())
 			array_push($query2Arr, "start = '$start'");
 		$changed = 1;
 	}
@@ -9896,10 +9896,11 @@ function addChangeLogEntry($logid, $remoteIP, $end=NULL, $start=NULL,
 	# end
 	if($end != NULL && $end != $log["initialend"]) {
 		$query1 .= "'$end', ";
-		if(datetimeToUnix($log["start"]) > time()) {
-			array_push($query2Arr, "initialend = '$end'");
+		if($wasavailable != 0) {
+			if(datetimeToUnix($log["start"]) > time())
+				array_push($query2Arr, "initialend = '$end'");
+			array_push($query2Arr, "finalend = '$end'");
 		}
-		array_push($query2Arr, "finalend = '$end'");
 		$changed = 1;
 	}
 	else {
@@ -11613,9 +11614,7 @@ function getShibauthData($id) {
 /// \b value - variable value\n
 /// \b serialization - encoding used to store variable\n
 /// \b setby - what last set the variable\n
-/// \b timestamp - when variable was last set\n
-/// \b description (can be NULL)\n
-/// \b regexp - regular expression used to validate variable (can be NULL)
+/// \b timestamp - when variable was last set
 ///
 /// \brief gets data from the variable table for $key
 ///
@@ -11627,8 +11626,6 @@ function getVariable($key, $default=NULL, $incparams=0) {
 	if($incparams)
 		$query .=    "setby, "
 	       .        "timestamp, "
-	       .        "description, "
-	       .        "`regexp`, ";
 	$query .=       "value ";
 	$query .= "FROM variable "
 	       .  "WHERE name = '$key'";
@@ -11661,9 +11658,7 @@ function getVariable($key, $default=NULL, $incparams=0) {
 	return array('value' => $default,
 	             'serialization' => 'none',
 	             'setby' => 'none',
-	             'timestamp' => NULL,
-	             'description' => NULL,
-	             'regexp' => NULL);
+	             'timestamp' => NULL);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -11681,9 +11676,7 @@ function getVariable($key, $default=NULL, $incparams=0) {
 function getVariablesRegex($pattern) {
 	$query = "SELECT name, "
 	       .        "serialization, "
-	       .        "value, "
-	       .        "description, "
-	       .        "`regexp` "
+	       .        "value "
 	       . "FROM variable "
 	       . "WHERE name REGEXP '$pattern'";
 	$qh = doQuery($query);
