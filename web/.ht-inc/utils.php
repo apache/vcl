@@ -11625,7 +11625,7 @@ function getVariable($key, $default=NULL, $incparams=0) {
 	$query = "SELECT serialization, ";
 	if($incparams)
 		$query .=    "setby, "
-	       .        "timestamp, "
+	       .        "timestamp, ";
 	$query .=       "value ";
 	$query .= "FROM variable "
 	       .  "WHERE name = '$key'";
