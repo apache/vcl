@@ -590,6 +590,7 @@ sub reload_image {
 				# Try to retrieve the image files from another management node
 				if ($self->provisioner->can("retrieve_image")) {
 					notify($ERRORS{'DEBUG'}, 0, "calling " . ref($self->provisioner) . "->retrieve_image()");
+					insertloadlog($reservation_id, $computer_id, "copyfrompartnerMN", "Retrieving image");
 					
 					if ($self->provisioner->retrieve_image($image_name)) {
 						notify($ERRORS{'OK'}, 0, "$image_name was retrieved from another management node");
