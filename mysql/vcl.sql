@@ -1533,7 +1533,8 @@ INSERT IGNORE INTO `computerloadstate` (`id`, `loadstatename`, `prettyname`, `es
 (55, 'exited', 'vcld process exited', 0),
 (56, 'connecttimeout', 'Start Connect Timeout', 0),
 (57, 'beginacknowledgetimeout', 'Start Acknowledge Timeout', 0),
-(58, 'copyfrompartnerMN', 'Copy Image from Partner Management node', 0);
+(58, 'copyfrompartnerMN', 'Copy Image from Partner Management node', 0),
+(59, 'postreserve', 'Post reserve completed', 0);
 
 --
 -- Dumping data for table `connectmethod`
