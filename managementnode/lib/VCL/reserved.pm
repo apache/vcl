@@ -111,6 +111,7 @@ sub process {
 	# Update the computer state to reserved
 	# This causes pending to change to the Connect button on the Current Reservations page
 	update_computer_state($computer_id, 'reserved');
+	insertloadlog($reservation_id, $computer_id, "reserved", "$computer_short_name successfully reserved");
 	
 	# Wait for the user to acknowledge the request by clicking Connect button or from API
 	if (!$self->code_loop_timeout(sub{$self->user_acknowledged()}, [], 'waiting for user acknowledgement', $acknowledge_timeout_seconds, 1, 10)) {
@@ -142,7 +143,7 @@ sub process {
 	# Add a 'reserved' computerloadlog entry
 	# Do this last - important for cluster reservation timing
 	# Parent's reserved process will loop until this exists for all child reservations
-	insertloadlog($reservation_id, $computer_id, "reserved", "$computer_short_name successfully reserved");
+	insertloadlog($reservation_id, $computer_id, "postreserve", "$computer_short_name post reserve successfully");
 	
 	# For cluster reservations, the parent must wait until all child reserved processes have exited
 	# Otherwise, the state will change to inuse while the child processes are still finishing up the reserved state
@@ -190,7 +191,7 @@ sub wait_for_child_reservations {
 	my @failed;
 	for my $reservation_id (keys %$request_loadstate_names) {
 		my @loadstate_names = @{$request_loadstate_names->{$reservation_id}};
-		if (grep { $_ eq 'reserved' } @loadstate_names) {
+		if (grep { $_ eq 'postreserve' } @loadstate_names) {
 			push @reserved_exists, $reservation_id;
 		}
 		else {
@@ -209,14 +210,14 @@ sub wait_for_child_reservations {
 	}
 	
 	if (@reserved_does_not_exist) {
-		notify($ERRORS{'DEBUG'}, 0, "computerloadlog 'reserved' entry does NOT exist for all reservations:\n" .
+		notify($ERRORS{'DEBUG'}, 0, "computerloadlog 'postreserve' entry does NOT exist for all reservations:\n" .
 			"exists for reservation IDs: " . join(', ', @reserved_exists) . "\n" .
 			"does not exist for reservation IDs: " . join(', ', @reserved_does_not_exist)
 		);
 		return 0;
 	}
 	else {
-		notify($ERRORS{'DEBUG'}, 0, "computerloadlog 'reserved' entry exists for all reservations");
+		notify($ERRORS{'DEBUG'}, 0, "computerloadlog 'postreserve' entry exists for all reservations");
 	}
 	
 	notify($ERRORS{'DEBUG'}, 0, "all child reservation reserved processes have completed");

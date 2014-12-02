@@ -703,6 +703,11 @@ sub state_exit {
 				}
 			}
 		}
+
+		if($request_state_name_new eq 'complete') {
+			
+			delete_computerloadlog_reservation(\@reservation_ids,0,1);
+		}
 		
 		# Delete all computerloadlog rows with loadstatename = 'begin' for all reservations in this request
 		delete_computerloadlog_reservation(\@reservation_ids, '!beginacknowledgetimeout');

@@ -5529,23 +5529,27 @@ EOF
 
 =head2 delete_computerloadlog_reservation
 
- Parameters  : $reservation_id, $loadstatename (optional)
+ Parameters  : $reservation_id, $loadstatename (optional), $immediate (optional)
  Returns     : boolean
  Description : Deletes rows from the computerloadlog table. A loadstatename
                argument can be specified to limit the rows removed to a
                certain loadstatename value. To delete all rows except those
                matching a certain loadstatename, begin the loadstatename
                with a !. The $reservation_id argument may either be a single
-               integer or an array reference.
+               integer or an array reference. A immediate option can be specified 
+					to clear all entries
 
 =cut
 
 sub delete_computerloadlog_reservation {
-	my ($reservation_id_argument, $loadstatename) = @_;
-	
+	my $reservation_id_argument = shift;
+	my $loadstatename = shift;
+	my $immediate = shift;
+
+
 	# Check the passed parameter
-	if (!(defined($reservation_id_argument))) {
-		notify($ERRORS{'WARNING'}, 0, "reservation ID was not specified");
+	unless (defined($reservation_id_argument) ) {
+		notify($ERRORS{'WARNING'}, 0, "reservation_id_argument argument were not specified");
 		return;
 	}
 	
@@ -5556,6 +5560,11 @@ sub delete_computerloadlog_reservation {
 	else {
 		$reservation_id_string = $reservation_id_argument;
 	}
+
+	if(!defined($immediate)){
+		$immediate =0;
+	}
+
 	
 	# Construct the SQL statement
 	my $sql_statement = <<EOF;
@@ -5584,6 +5593,11 @@ EOF
 	}
 	else {
 		notify($ERRORS{'DEBUG'}, 0, "removing all computerloadlog entries for reservation");
+	}
+
+	#Only remove entries older than 2 minutes	unless the immediate flag
+	unless ($immediate) {
+		$sql_statement .= " AND timestamp <= (NOW() - INTERVAL 2 Minute);";
 	}
 	
 	# Call the database execute subroutine

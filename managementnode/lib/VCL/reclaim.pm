@@ -102,7 +102,7 @@ sub process {
 	my @reservation_ids							 = $self->data->get_reservation_ids();
 
 	# Delete all computerloadlog rows with loadstatename = 'beginacknowledgetimeout' for all reservations in this request
-	delete_computerloadlog_reservation(\@reservation_ids, 'beginacknowledgetimeout');
+	delete_computerloadlog_reservation(\@reservation_ids,0,1);
 
 	# Remove related fixedIPsr variable, if it exists
 	if ($server_request_id) {
