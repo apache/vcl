@@ -1452,30 +1452,7 @@ INSERT IGNORE INTO `affiliation` (`id`, `name`, `dataUpdateText`, `theme`) VALUE
 (1, 'Local', '', 'default'),
 (2, 'Global', '', 'default');
 
--- 
--- Dumping data for table `computerloadflow`
--- 
-INSERT IGNORE INTO `computerloadflow` (`computerloadstateid`, `nextstateid`, `type`) VALUES 
-(4, 22, 'blade'),
-(6, 15, 'blade'),
-(9, 43, 'blade'),
-(12, 9, 'blade'),
-(18, NULL, 'blade'),
-(15, 21, 'blade'),
-(21, 12, 'blade'),
-(22, 6, 'blade'),
-(22, 40, 'virtualmachine'),
-(40, 27, 'virtualmachine'),
-(27, 28, 'virtualmachine'),
-(28, 48, 'virtualmachine'),
-(48, 46, 'virtualmachine'),
-(46, 9, 'virtualmachine'),
-(41, 18, 'virtualmachine'),
-(18, NULL, 'virtualmachine'),
-(41, 18, 'blade'),
-(9, 43, 'virtualmachine'),
-(43, 41, 'blade'),
-(43, 41, 'virtualmachine');
+
 -- 
 -- Dumping data for table `computerloadstate`
 -- 
@@ -1533,8 +1510,37 @@ INSERT IGNORE INTO `computerloadstate` (`id`, `loadstatename`, `prettyname`, `es
 (55, 'exited', 'vcld process exited', 0),
 (56, 'connecttimeout', 'Start Connect Timeout', 0),
 (57, 'beginacknowledgetimeout', 'Start Acknowledge Timeout', 0),
-(58, 'copyfrompartnerMN', 'Copy Image from Partner Management node', 0),
-(59, 'postreserve', 'Post reserve completed', 0);
+(59, 'copyfrompartnerMN', 'Copy Image from Partner Management node', 0),
+(60, 'postreserve', 'Post reserve completed', 0);
+
+-- 
+-- Dumping data for table `computerloadflow`
+-- 
+
+INSERT IGNORE INTO `computerloadflow` (`computerloadstateid`, `nextstateid`, `type`) VALUES ((SELECT `id` FROM `computerloadstate` WHERE `loadstatename` LIKE 'statuscheck'),(SELECT `id` FROM `computerloadstate` WHERE `loadstatename` LIKE 'doesimageexists'),"blade");
+INSERT IGNORE INTO `computerloadflow` (`computerloadstateid`, `nextstateid`, `type`) VALUES ((SELECT `id` FROM `computerloadstate` WHERE `loadstatename` LIKE 'doesimageexists'),(SELECT `id` FROM `computerloadstate` WHERE `loadstatename` LIKE 'copyfrompartnerMN'),"blade");
+INSERT IGNORE INTO `computerloadflow` (`computerloadstateid`, `nextstateid`, `type`) VALUES ((SELECT `id` FROM `computerloadstate` WHERE `loadstatename` LIKE 'copyfrompartnerMN'),(SELECT `id` FROM `computerloadstate` WHERE `loadstatename` LIKE 'rinstall'),"blade");
+INSERT IGNORE INTO `computerloadflow` (`computerloadstateid`, `nextstateid`, `type`) VALUES ((SELECT `id` FROM `computerloadstate` WHERE `loadstatename` LIKE 'rinstall'),(SELECT `id` FROM `computerloadstate` WHERE `loadstatename` LIKE 'xcatstage2'),"blade");
+INSERT IGNORE INTO `computerloadflow` (`computerloadstateid`, `nextstateid`, `type`) VALUES ((SELECT `id` FROM `computerloadstate` WHERE `loadstatename` LIKE 'xcatstage2'),(SELECT `id` FROM `computerloadstate` WHERE `loadstatename` LIKE 'xcatstage5'),"blade");
+INSERT IGNORE INTO `computerloadflow` (`computerloadstateid`, `nextstateid`, `type`) VALUES ((SELECT `id` FROM `computerloadstate` WHERE `loadstatename` LIKE 'xcatstage5'),(SELECT `id` FROM `computerloadstate` WHERE `loadstatename` LIKE 'bootstate'),"blade");
+INSERT IGNORE INTO `computerloadflow` (`computerloadstateid`, `nextstateid`, `type`) VALUES ((SELECT `id` FROM `computerloadstate` WHERE `loadstatename` LIKE 'bootstate'),(SELECT `id` FROM `computerloadstate` WHERE `loadstatename` LIKE 'loadimagecomplete'),"blade");
+INSERT IGNORE INTO `computerloadflow` (`computerloadstateid`, `nextstateid`, `type`) VALUES ((SELECT `id` FROM `computerloadstate` WHERE `loadstatename` LIKE 'loadimagecomplete'),(SELECT `id` FROM `computerloadstate` WHERE `loadstatename` LIKE 'nodeready'),"blade");
+INSERT IGNORE INTO `computerloadflow` (`computerloadstateid`, `nextstateid`, `type`) VALUES ((SELECT `id` FROM `computerloadstate` WHERE `loadstatename` LIKE 'nodeready'),(SELECT `id` FROM `computerloadstate` WHERE `loadstatename` LIKE 'addinguser'),"blade");
+INSERT IGNORE INTO `computerloadflow` (`computerloadstateid`, `nextstateid`, `type`) VALUES ((SELECT `id` FROM `computerloadstate` WHERE `loadstatename` LIKE 'addinguser'),(SELECT `id` FROM `computerloadstate` WHERE `loadstatename` LIKE 'reserved'),"blade");
+INSERT IGNORE INTO `computerloadflow` (`computerloadstateid`, `nextstateid`, `type`) VALUES ((SELECT `id` FROM `computerloadstate` WHERE `loadstatename` LIKE 'reserved'),NULL,"blade");
+
+INSERT IGNORE INTO `computerloadflow` (`computerloadstateid`, `nextstateid`, `type`) VALUES ((SELECT `id` FROM `computerloadstate` WHERE `loadstatename` LIKE 'statuscheck'),(SELECT `id` FROM `computerloadstate` WHERE `loadstatename` LIKE 'doesimageexists'),"virtualmachine");
+INSERT IGNORE INTO `computerloadflow` (`computerloadstateid`, `nextstateid`, `type`) VALUES ((SELECT `id` FROM `computerloadstate` WHERE `loadstatename` LIKE 'doesimageexists'),(SELECT `id` FROM `computerloadstate` WHERE `loadstatename` LIKE 'copyfrompartnerMN'),"virtualmachine");
+INSERT IGNORE INTO `computerloadflow` (`computerloadstateid`, `nextstateid`, `type`) VALUES ((SELECT `id` FROM `computerloadstate` WHERE `loadstatename` LIKE 'copyfrompartnerMN'),(SELECT `id` FROM `computerloadstate` WHERE `loadstatename` LIKE 'startload'),"virtualmachine");
+INSERT IGNORE INTO `computerloadflow` (`computerloadstateid`, `nextstateid`, `type`) VALUES ((SELECT `id` FROM `computerloadstate` WHERE `loadstatename` LIKE 'startload'),(SELECT `id` FROM `computerloadstate` WHERE `loadstatename` LIKE 'transfervm'),"virtualmachine");
+INSERT IGNORE INTO `computerloadflow` (`computerloadstateid`, `nextstateid`, `type`) VALUES ((SELECT `id` FROM `computerloadstate` WHERE `loadstatename` LIKE 'transfervm'),(SELECT `id` FROM `computerloadstate` WHERE `loadstatename` LIKE 'vmsetupconfig'),"virtualmachine");
+INSERT IGNORE INTO `computerloadflow` (`computerloadstateid`, `nextstateid`, `type`) VALUES ((SELECT `id` FROM `computerloadstate` WHERE `loadstatename` LIKE 'vmsetupconfig'),(SELECT `id` FROM `computerloadstate` WHERE `loadstatename` LIKE 'startvm'),"virtualmachine");
+INSERT IGNORE INTO `computerloadflow` (`computerloadstateid`, `nextstateid`, `type`) VALUES ((SELECT `id` FROM `computerloadstate` WHERE `loadstatename` LIKE 'startvm'),(SELECT `id` FROM `computerloadstate` WHERE `loadstatename` LIKE 'vmstage4'),"virtualmachine");
+INSERT IGNORE INTO `computerloadflow` (`computerloadstateid`, `nextstateid`, `type`) VALUES ((SELECT `id` FROM `computerloadstate` WHERE `loadstatename` LIKE 'vmstage4'),(SELECT `id` FROM `computerloadstate` WHERE `loadstatename` LIKE 'loadimagecomplete'),"virtualmachine");
+INSERT IGNORE INTO `computerloadflow` (`computerloadstateid`, `nextstateid`, `type`) VALUES ((SELECT `id` FROM `computerloadstate` WHERE `loadstatename` LIKE 'loadimagecomplete'),(SELECT `id` FROM `computerloadstate` WHERE `loadstatename` LIKE 'nodeready'),"virtualmachine");
+INSERT IGNORE INTO `computerloadflow` (`computerloadstateid`, `nextstateid`, `type`) VALUES ((SELECT `id` FROM `computerloadstate` WHERE `loadstatename` LIKE 'nodeready'),(SELECT `id` FROM `computerloadstate` WHERE `loadstatename` LIKE 'addinguser'),"virtualmachine");
+INSERT IGNORE INTO `computerloadflow` (`computerloadstateid`, `nextstateid`, `type`) VALUES ((SELECT `id` FROM `computerloadstate` WHERE `loadstatename` LIKE 'addinguser'),(SELECT `id` FROM `computerloadstate` WHERE `loadstatename` LIKE 'reserved'),"virtualmachine");
+INSERT IGNORE INTO `computerloadflow` (`computerloadstateid`, `nextstateid`, `type`) VALUES ((SELECT `id` FROM `computerloadstate` WHERE `loadstatename` LIKE 'reserved'),NULL,"virtualmachine");
 
 --
 -- Dumping data for table `connectmethod`
