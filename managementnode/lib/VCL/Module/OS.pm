@@ -789,7 +789,7 @@ sub wait_for_response {
 	my $end_time = time();
 	my $duration = ($end_time - $start_time);
 	
-	# insertloadlog($reservation_id, $computer_id, "osrespond", "$computer_node_name is responding to SSH after $duration seconds");
+	insertloadlog($reservation_id, $computer_id, "machinebooted", "$computer_node_name is responding to SSH after $duration seconds");
 	notify($ERRORS{'OK'}, 0, "$computer_node_name is responding to SSH after $duration seconds");
 	return 1;
 }
