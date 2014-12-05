@@ -196,7 +196,6 @@ sub load {
 	my $driver_name = $self->get_driver_name();
 	my $domain_xml_file_path = $self->get_domain_xml_file_path();
 	
-	insertloadlog($reservation_id, $computer_id, "doesimageexists", "image exists $image_name");
 	insertloadlog($reservation_id, $computer_id, "startload", "$computer_name $image_name");
 
 =item *
@@ -294,7 +293,7 @@ Call the domain guest OS module's 'post_load' subroutine if implemented.
 
 	if ($self->os->can("post_load")) {
 		if ($self->os->post_load()) {
-			insertloadlog($reservation_id, $computer_id, "loadimagecomplete", "performed OS post-load tasks '$domain_name' domain on $node_name");
+			notify($ERRORS{'OK'}, 0, "performed OS post-load tasks '$domain_name' domain on $node_name");
 		}
 		else {
 			notify($ERRORS{'WARNING'}, 0, "failed to perform OS post-load tasks on '$domain_name' domain on node $node_name");
@@ -302,7 +301,7 @@ Call the domain guest OS module's 'post_load' subroutine if implemented.
 		}
 	}
 	else {
-		insertloadlog($reservation_id, $computer_id, "loadimagecomplete", "OS post-load tasks not necessary '$domain_name' domain on $node_name");
+		notify($ERRORS{'OK'}, 0, "OS post-load tasks not necessary '$domain_name' domain on $node_name");
 	}
 
 =back

@@ -150,7 +150,6 @@ sub load {
 	my $image_name = $self->data->get_image_name() || return;
 	my $vmhost_name = $self->data->get_vmhost_short_name() || return;
 
-	insertloadlog($reservation_id, $computer_id, "doesimageexists", "image exists $image_name");
 	insertloadlog($reservation_id, $computer_id, "startload", "$computer_name $image_name");
 
 	# Remove existing VMs which were created for the reservation computer

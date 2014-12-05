@@ -427,7 +427,7 @@ sub load {
 	insertloadlog($reservation_id, $computer_id, "xcatround3", "initiating OS post-load configuration");
 	if ($self->os->can("post_load")) {
 		if ($self->os->post_load()) {
-			insertloadlog($reservation_id, $computer_id, "loadimagecomplete", "performed OS post-load tasks on $computer_node_name");
+			notify($ERRORS{'OK'}, 0,  "performed OS post-load tasks on $computer_node_name");
 		}
 		else {
 			notify($ERRORS{'WARNING'}, 0, "failed to perform OS post-load tasks on VM $computer_node_name");
@@ -435,7 +435,7 @@ sub load {
 		}
 	}
 	else {
-		insertloadlog($reservation_id, $computer_id, "loadimagecomplete", "OS post-load tasks not necessary on $computer_node_name");
+		notify($ERRORS{'OK'}, 0, "OS post-load tasks not necessary on $computer_node_name");
 	}
 	
 	return 1;

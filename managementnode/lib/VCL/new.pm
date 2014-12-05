@@ -332,6 +332,7 @@ sub process {
 	
 	# Parent only checks and waits for any other images to complete and checkin
 	if ($reservation_is_parent && $reservation_count > 1) {
+		# Needed for computerloadflow	
 		insertloadlog($reservation_id, $computer_id, "nodeready", "$computer_short_name is loaded with $image_name (cluster parent)");
 		
 		# Wait on child reservations
@@ -433,6 +434,7 @@ sub process {
 	}
 	
 	# Add nodeready last before process exits, this is used by the cluster parent to determine when child reservations are ready
+	# Needed for computerloadflow	
 	insertloadlog($reservation_id, $computer_id, "nodeready", "$computer_short_name is loaded with $image_name");
 	
 	notify($ERRORS{'OK'}, 0, "exiting");
@@ -582,6 +584,7 @@ sub reload_image {
 			
 			if ($self->provisioner->does_image_exist($image_name)) {
 				notify($ERRORS{'OK'}, 0, "$image_name exists on this management node");
+				# Needed for computerloadflow	
 				insertloadlog($reservation_id, $computer_id, "doesimageexists", "confirmed image exists");
 			}
 			else {
@@ -590,6 +593,7 @@ sub reload_image {
 				# Try to retrieve the image files from another management node
 				if ($self->provisioner->can("retrieve_image")) {
 					notify($ERRORS{'DEBUG'}, 0, "calling " . ref($self->provisioner) . "->retrieve_image()");
+					# Needed for computerloadflow	
 					insertloadlog($reservation_id, $computer_id, "copyfrompartnerMN", "Retrieving image");
 					
 					if ($self->provisioner->retrieve_image($image_name)) {
@@ -901,6 +905,8 @@ sub reserve_computer {
 	my $request_state_name              = $self->data->get_request_state_name();
 	my $request_logid                   = $self->data->get_request_log_id();
 	my $reservation_is_parent           = $self->data->is_parent_reservation;
+	my $reservation_id                  = $self->data->get_reservation_id();
+	my $computer_id                     = $self->data->get_computer_id();
 	my $computer_short_name             = $self->data->get_computer_short_name();
 	my $image_prettyname                = $self->data->get_image_prettyname();
 	my $user_affiliation_sitewwwaddress = $self->data->get_user_affiliation_sitewwwaddress();
@@ -909,6 +915,9 @@ sub reserve_computer {
 	my $user_emailnotices               = $self->data->get_user_emailnotices();
 	my $user_imtype_name                = $self->data->get_user_imtype_name();
 	my $user_im_id                      = $self->data->get_user_im_id();
+
+	# Needed for computerloadflow	
+	insertloadlog($reservation_id, $computer_id, "addinguser", "Adding user to $computer_short_name");
 
 	# Call OS module's reserve subroutine
 	if (!$self->os->reserve()) {

@@ -520,7 +520,6 @@ sub load {
 	my $image_name = $self->data->get_image_name() || return;
 	my $vmhost_name = $self->data->get_vmhost_short_name() || return;
 
-	insertloadlog($reservation_id, $computer_id, "doesimageexists", "image exists $image_name");
 	
 	insertloadlog($reservation_id, $computer_id, "startload", "$computer_name $image_name");
 	
@@ -597,7 +596,7 @@ sub load {
 	# Call the OS module's post_load() subroutine if implemented
 	if ($self->os->can("post_load")) {
 		if ($self->os->post_load()) {
-			insertloadlog($reservation_id, $computer_id, "loadimagecomplete", "performed OS post-load tasks on $computer_name");
+			notify($ERRORS{'OK'}, 0, "performed OS post-load tasks on $computer_name");
 		}
 		else {
 			notify($ERRORS{'WARNING'}, 0, "failed to perform OS post-load tasks on VM $computer_name on VM host: $vmhost_name");
@@ -605,7 +604,7 @@ sub load {
 		}
 	}
 	else {
-		insertloadlog($reservation_id, $computer_id, "loadimagecomplete", "OS post-load tasks not necessary on $computer_name");
+		notify($ERRORS{'OK'}, 0, "OS post-load tasks not necessary on $computer_name");
 	}
 	
 	# Check if the VM has the expected number of CPUs
