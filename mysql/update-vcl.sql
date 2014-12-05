@@ -1360,6 +1360,8 @@ INSERT IGNORE INTO `computerloadstate` (`loadstatename`,`prettyname`) VALUES ('b
 INSERT IGNORE INTO `computerloadstate` (`loadstatename`,`prettyname`,`est`) VALUES ('copyfrompartnerMN','Copy Image from Partner Management node','20');
 INSERT IGNORE INTO `computerloadstate` (`loadstatename`,`prettyname`) VALUES ('postreserve','Post reserve completed');
 
+UPDATE `computerloadstate` SET loadstatename = 'machinebooted' WHERE loadstatename = 'vmstage4';
+
 -- --------------------------------------------------------
 
 --
@@ -1374,7 +1376,8 @@ INSERT IGNORE INTO `computerloadflow` (`computerloadstateid`, `nextstateid`, `ty
 INSERT IGNORE INTO `computerloadflow` (`computerloadstateid`, `nextstateid`, `type`) VALUES ((SELECT `id` FROM `computerloadstate` WHERE `loadstatename` LIKE 'rinstall'),(SELECT `id` FROM `computerloadstate` WHERE `loadstatename` LIKE 'xcatstage2'),"blade");
 INSERT IGNORE INTO `computerloadflow` (`computerloadstateid`, `nextstateid`, `type`) VALUES ((SELECT `id` FROM `computerloadstate` WHERE `loadstatename` LIKE 'xcatstage2'),(SELECT `id` FROM `computerloadstate` WHERE `loadstatename` LIKE 'xcatstage5'),"blade");
 INSERT IGNORE INTO `computerloadflow` (`computerloadstateid`, `nextstateid`, `type`) VALUES ((SELECT `id` FROM `computerloadstate` WHERE `loadstatename` LIKE 'xcatstage5'),(SELECT `id` FROM `computerloadstate` WHERE `loadstatename` LIKE 'bootstate'),"blade");
-INSERT IGNORE INTO `computerloadflow` (`computerloadstateid`, `nextstateid`, `type`) VALUES ((SELECT `id` FROM `computerloadstate` WHERE `loadstatename` LIKE 'bootstate'),(SELECT `id` FROM `computerloadstate` WHERE `loadstatename` LIKE 'loadimagecomplete'),"blade");
+INSERT IGNORE INTO `computerloadflow` (`computerloadstateid`, `nextstateid`, `type`) VALUES ((SELECT `id` FROM `computerloadstate` WHERE `loadstatename` LIKE 'bootstate'),(SELECT `id` FROM `computerloadstate` WHERE `loadstatename` LIKE 'machinebooted'),"blade");
+INSERT IGNORE INTO `computerloadflow` (`computerloadstateid`, `nextstateid`, `type`) VALUES ((SELECT `id` FROM `computerloadstate` WHERE `loadstatename` LIKE 'machinebooted'),(SELECT `id` FROM `computerloadstate` WHERE `loadstatename` LIKE 'loadimagecomplete'),"blade");
 INSERT IGNORE INTO `computerloadflow` (`computerloadstateid`, `nextstateid`, `type`) VALUES ((SELECT `id` FROM `computerloadstate` WHERE `loadstatename` LIKE 'loadimagecomplete'),(SELECT `id` FROM `computerloadstate` WHERE `loadstatename` LIKE 'nodeready'),"blade");
 INSERT IGNORE INTO `computerloadflow` (`computerloadstateid`, `nextstateid`, `type`) VALUES ((SELECT `id` FROM `computerloadstate` WHERE `loadstatename` LIKE 'nodeready'),(SELECT `id` FROM `computerloadstate` WHERE `loadstatename` LIKE 'addinguser'),"blade");
 INSERT IGNORE INTO `computerloadflow` (`computerloadstateid`, `nextstateid`, `type`) VALUES ((SELECT `id` FROM `computerloadstate` WHERE `loadstatename` LIKE 'addinguser'),(SELECT `id` FROM `computerloadstate` WHERE `loadstatename` LIKE 'reserved'),"blade");
@@ -1387,8 +1390,8 @@ INSERT IGNORE INTO `computerloadflow` (`computerloadstateid`, `nextstateid`, `ty
 INSERT IGNORE INTO `computerloadflow` (`computerloadstateid`, `nextstateid`, `type`) VALUES ((SELECT `id` FROM `computerloadstate` WHERE `loadstatename` LIKE 'startload'),(SELECT `id` FROM `computerloadstate` WHERE `loadstatename` LIKE 'transfervm'),"virtualmachine");
 INSERT IGNORE INTO `computerloadflow` (`computerloadstateid`, `nextstateid`, `type`) VALUES ((SELECT `id` FROM `computerloadstate` WHERE `loadstatename` LIKE 'transfervm'),(SELECT `id` FROM `computerloadstate` WHERE `loadstatename` LIKE 'vmsetupconfig'),"virtualmachine");
 INSERT IGNORE INTO `computerloadflow` (`computerloadstateid`, `nextstateid`, `type`) VALUES ((SELECT `id` FROM `computerloadstate` WHERE `loadstatename` LIKE 'vmsetupconfig'),(SELECT `id` FROM `computerloadstate` WHERE `loadstatename` LIKE 'startvm'),"virtualmachine");
-INSERT IGNORE INTO `computerloadflow` (`computerloadstateid`, `nextstateid`, `type`) VALUES ((SELECT `id` FROM `computerloadstate` WHERE `loadstatename` LIKE 'startvm'),(SELECT `id` FROM `computerloadstate` WHERE `loadstatename` LIKE 'vmstage4'),"virtualmachine");
-INSERT IGNORE INTO `computerloadflow` (`computerloadstateid`, `nextstateid`, `type`) VALUES ((SELECT `id` FROM `computerloadstate` WHERE `loadstatename` LIKE 'vmstage4'),(SELECT `id` FROM `computerloadstate` WHERE `loadstatename` LIKE 'loadimagecomplete'),"virtualmachine");
+INSERT IGNORE INTO `computerloadflow` (`computerloadstateid`, `nextstateid`, `type`) VALUES ((SELECT `id` FROM `computerloadstate` WHERE `loadstatename` LIKE 'startvm'),(SELECT `id` FROM `computerloadstate` WHERE `loadstatename` LIKE 'machinebooted'),"virtualmachine");
+INSERT IGNORE INTO `computerloadflow` (`computerloadstateid`, `nextstateid`, `type`) VALUES ((SELECT `id` FROM `computerloadstate` WHERE `loadstatename` LIKE 'machinebooted'),(SELECT `id` FROM `computerloadstate` WHERE `loadstatename` LIKE 'loadimagecomplete'),"virtualmachine");
 INSERT IGNORE INTO `computerloadflow` (`computerloadstateid`, `nextstateid`, `type`) VALUES ((SELECT `id` FROM `computerloadstate` WHERE `loadstatename` LIKE 'loadimagecomplete'),(SELECT `id` FROM `computerloadstate` WHERE `loadstatename` LIKE 'nodeready'),"virtualmachine");
 INSERT IGNORE INTO `computerloadflow` (`computerloadstateid`, `nextstateid`, `type`) VALUES ((SELECT `id` FROM `computerloadstate` WHERE `loadstatename` LIKE 'nodeready'),(SELECT `id` FROM `computerloadstate` WHERE `loadstatename` LIKE 'addinguser'),"virtualmachine");
 INSERT IGNORE INTO `computerloadflow` (`computerloadstateid`, `nextstateid`, `type`) VALUES ((SELECT `id` FROM `computerloadstate` WHERE `loadstatename` LIKE 'addinguser'),(SELECT `id` FROM `computerloadstate` WHERE `loadstatename` LIKE 'reserved'),"virtualmachine");
