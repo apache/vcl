@@ -370,6 +370,7 @@ CREATE TABLE IF NOT EXISTS `connectmethodport` (
   `port` mediumint(8) unsigned NOT NULL,
   `protocol` enum('TCP','UDP') NOT NULL default 'TCP',
   PRIMARY KEY  (`id`),
+  UNIQUE KEY `connectmethodid_port_protocol` (`connectmethodid`,`port`,`protocol`),
   KEY `connectmethodid` (`connectmethodid`)
 ) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
 
@@ -673,12 +674,12 @@ CREATE TABLE IF NOT EXISTS `natlog` (
 -- --------------------------------------------------------
 
 -- 
--- Table structure for table `natmap`
+-- Table structure for table `nathostcomputermap`
 -- 
 
-CREATE TABLE IF NOT EXISTS `natmap` (
-  `computerid` smallint(5) unsigned NOT NULL,
+CREATE TABLE IF NOT EXISTS `nathostcomputermap` (
   `nathostid` smallint(5) unsigned NOT NULL,
+  `computerid` smallint(5) unsigned NOT NULL,
   UNIQUE KEY `computerid` (`computerid`,`nathostid`)
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
@@ -690,10 +691,14 @@ CREATE TABLE IF NOT EXISTS `natmap` (
 
 CREATE TABLE IF NOT EXISTS `natport` (
   `reservationid` mediumint(8) unsigned NOT NULL,
+  `nathostid` smallint(5) unsigned NOT NULL,
   `publicport` smallint(5) unsigned NOT NULL,
   `connectmethodportid` tinyint(3) unsigned NOT NULL,
+  UNIQUE KEY `reservationid_connectmethodportid` (`reservationid`,`connectmethodportid`),
+  UNIQUE KEY `nathostid_publicport` (`nathostid`,`publicport`),
   KEY `reservationid` (`reservationid`),
-  KEY `connectmethodportid` (`connectmethodportid`)
+  KEY `connectmethodportid` (`connectmethodportid`),
+  KEY `nathostid` (`nathostid`)
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
@@ -2052,7 +2057,8 @@ INSERT IGNORE INTO `variable` (`name`, `serialization`, `value`) VALUES
 ('ignore_connections_gte', 'none', '1440'),
 ('xcat|timeout_error_limit', 'none', '5'),
 ('xcat|rpower_error_limit', 'none', '3'),
-('ignored_remote_ip_addresses', 'none', '');
+('ignored_remote_ip_addresses', 'none', ''),
+('natport_ranges', 'none', '5700-6500,9696-9701,49152-65535');
 
 -- 
 -- Dumping data for table `vmprofile`
@@ -2217,18 +2223,19 @@ ALTER TABLE `natlog`
   ADD CONSTRAINT `natlog_ibfk_3` FOREIGN KEY (`nathostid`) REFERENCES `nathost` (`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- 
--- Constraints for table `natmap`
+-- Constraints for table `nathostcomputermap`
 -- 
-ALTER TABLE `natmap`
-  ADD CONSTRAINT `natmap_ibfk_2` FOREIGN KEY (`nathostid`) REFERENCES `nathost` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
-  ADD CONSTRAINT `natmap_ibfk_1` FOREIGN KEY (`computerid`) REFERENCES `computer` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `nathostcomputermap`
+  ADD CONSTRAINT `nathostcomputermap_ibfk_2` FOREIGN KEY (`nathostid`) REFERENCES `nathost` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  ADD CONSTRAINT `nathostcomputermap_ibfk_1` FOREIGN KEY (`computerid`) REFERENCES `computer` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- 
 -- Constraints for table `natport`
 -- 
 ALTER TABLE `natport`
   ADD CONSTRAINT `natport_ibfk_2` FOREIGN KEY (`connectmethodportid`) REFERENCES `connectmethodport` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
-  ADD CONSTRAINT `natport_ibfk_1` FOREIGN KEY (`reservationid`) REFERENCES `reservation` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+  ADD CONSTRAINT `natport_ibfk_1` FOREIGN KEY (`reservationid`) REFERENCES `reservation` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  ADD CONSTRAINT `natport_ibfk_3` FOREIGN KEY (`nathostid`) REFERENCES `nathost` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- 
 -- Constraints for table `OS`
