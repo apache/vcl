@@ -589,6 +589,7 @@ sub reload_image {
 			}
 			else {
 				notify($ERRORS{'OK'}, 0, "$image_name does not exist on this management node");
+				insertloadlog($reservation_id, $computer_id, "doesimageexists", "confirmed image exists");
 				
 				# Try to retrieve the image files from another management node
 				if ($self->provisioner->can("retrieve_image")) {
