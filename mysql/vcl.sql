@@ -1479,7 +1479,7 @@ INSERT IGNORE INTO `computerloadstate` (`id`, `loadstatename`, `prettyname`, `es
 (19, 'xcatstage3', 'node starting to received install instructions', 93),
 (20, 'xcatstage4', 'node received install instructions', 0),
 (21, 'xcatstage5', 'starting reload process', 27),
-(22, 'doesimageexists', 'confirming image exists', 4),
+(22, 'doesimageexists', 'confirming image exists locally', 4),
 (23, 'vmround1', 'vmround1', 1),
 (26, 'vmround2', 'vmround2', 186),
 (27, 'transfervm', 'transferring image files to host server', 255),

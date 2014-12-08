@@ -1361,6 +1361,7 @@ INSERT IGNORE INTO `computerloadstate` (`loadstatename`,`prettyname`,`est`) VALU
 INSERT IGNORE INTO `computerloadstate` (`loadstatename`,`prettyname`) VALUES ('postreserve','Post reserve completed');
 
 UPDATE `computerloadstate` SET loadstatename = 'machinebooted' WHERE loadstatename = 'vmstage4';
+UPDATE `computerloadstate` SET prettyname = 'confirming image exists locally' WHERE loadstatename = 'doesimageexists';
 
 -- --------------------------------------------------------
 
