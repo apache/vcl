@@ -478,7 +478,7 @@ class ManagementNode extends Resource {
 				$updates[] = "imagelibkey = '{$data['imagelibkey']}'";
 			# keys
 			if($data['keys'] != $olddata['keys'])
-				$updates[] = "keys = '{$data['keys']}'";
+				$updates[] = "`keys` = '{$data['keys']}'";
 			# sshport
 			if($data['sshport'] != $olddata['sshport'])
 				$updates[] = "sshport = '{$data['sshport']}'";
