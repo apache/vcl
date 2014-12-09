@@ -2544,11 +2544,6 @@ sub reg_query {
 				
 				$data = $self->reg_query_convert_data($type, $data);
 				
-				#notify($ERRORS{'DEBUG'}, 0, "line: " . string_to_ascii($line) . "\n" .
-						 #"value: " . string_to_ascii($value) . "\n" .
-						 #"data: " . string_to_ascii($data)
-						 #);
-				
 				if (!defined($key) || !defined($value) || !defined($data) || !defined($type)) {
 					my $message = "some registry data is undefined:\n";
 					$message .= "line: '$line'\n";
@@ -4466,10 +4461,10 @@ sub get_firewall_configuration {
 				}
 			}
 			elsif (!defined($previous_protocol) ||
-					 !defined($previous_port) ||
-					 !defined($firewall_configuration->{$previous_protocol}) ||
-					 !defined($firewall_configuration->{$previous_protocol}{$previous_port})
-					 ) {
+					!defined($previous_port) ||
+					!defined($firewall_configuration->{$previous_protocol}) ||
+					!defined($firewall_configuration->{$previous_protocol}{$previous_port})
+			) {
 				next;
 			}
 			elsif (my ($scope) = $line =~ /Scope:\s+(.+)/ig) {
@@ -4890,10 +4885,10 @@ sub _enable_firewall_port_helper {
 	}
 	elsif (@$netsh_output[-1] =~ /(Ok|The object already exists)/i) {
 		notify($ERRORS{'OK'}, 0, "opened firewall on $computer_node_name:\n" .
-				 "name: '$name'\n" .
-				 "protocol: $protocol\n" .
-				 "port/type: $port\n" .
-				 "scope: $scope"
+				"name: '$name'\n" .
+				"protocol: $protocol\n" .
+				"port/type: $port\n" .
+				"scope: $scope"
 		);
 		return 1;
 	}
@@ -6732,7 +6727,7 @@ sub search_and_replace_in_files {
  Returns     :
  Description : Copies all required configuration files to the computer,
                including scripts, utilities, drivers needed to capture an
-				   image.
+               image.
 
 =cut
 
@@ -8233,15 +8228,15 @@ sub set_static_public_address {
 	
 	my $computer_name = $self->data->get_computer_short_name();
 
-   my $server_request_id            = $self->data->get_server_request_id();
-   my $server_request_fixedIP       = $self->data->get_server_request_fixedIP();
+	my $server_request_id            = $self->data->get_server_request_id();
+	my $server_request_fixed_ip      = $self->data->get_server_request_fixed_ip();
 	
 	# Make sure public IP configuration is static or this is a server request
 	my $ip_configuration = $self->data->get_management_node_public_ip_configuration();
 	if ($ip_configuration !~ /static/i) {
-		  if ( !$server_request_fixedIP ) {
-				notify($ERRORS{'WARNING'}, 0, "static public address can only be set if IP configuration is static, current value: $ip_configuration \nserver_request_fixedIP=$server_request_fixedIP");
-		return;
+		if ( !$server_request_fixed_ip ) {
+			notify($ERRORS{'WARNING'}, 0, "static public address can only be set if IP configuration is static, current value: $ip_configuration \nserver_request_fixed_ip=$server_request_fixed_ip");
+			return;
 		}
 	}
 
@@ -8252,11 +8247,11 @@ sub set_static_public_address {
 	my $default_gateway = $self->data->get_management_node_public_default_gateway() || '<undefined>';
 	my @dns_servers = $self->data->get_management_node_public_dns_servers();
 
-   if ($server_request_fixedIP) {
-      $computer_public_ip_address = $server_request_fixedIP;
+   if ($server_request_fixed_ip) {
+      $computer_public_ip_address = $server_request_fixed_ip;
       $subnet_mask = $self->data->get_server_request_netmask();
       $default_gateway = $self->data->get_server_request_router();
-      @dns_servers = $self->data->get_server_request_DNSservers();
+      @dns_servers = $self->data->get_server_request_dns_servers();
    }
 	
 	# Assemble a string containing the static IP configuration
@@ -10651,8 +10646,7 @@ sub disable_login_screensaver {
 	}
 	
 	my $registry_key = 'HKEY_USERS\\.DEFAULT\\Control Panel\\Desktop';
-	if ($self->reg_add($registry_key, 'ScreenSaveActive', 'REG_SZ', 0) &&
-		 $self->reg_add($registry_key, 'ScreenSaveTimeOut', 'REG_SZ', 0)) {
+	if ($self->reg_add($registry_key, 'ScreenSaveActive', 'REG_SZ', 0) && $self->reg_add($registry_key, 'ScreenSaveTimeOut', 'REG_SZ', 0)) {
 		notify($ERRORS{'DEBUG'}, 0, "set registry keys to disable the login screensaver");
 	}
 	else {
@@ -11454,10 +11448,10 @@ sub check_image {
 	my $disable_user_names_regex = join("|", @disable_user_names);
 	
 	notify($ERRORS{'DEBUG'}, 0, "image users:\n" .
-			 "users on $image_name: " . join(", ", @image_user_names) . "\n" .
-			 "reservation users: " . join(", ", @reservation_user_names) . "\n" .
-			 "users which should be disabled for all images: " . join(", ", @disable_user_names) . "\n" .
-			 "users which can be ignored for all images: " . join(", ", @ignore_user_names) . "\n"
+		"users on $image_name: " . join(", ", @image_user_names) . "\n" .
+		"reservation users: " . join(", ", @reservation_user_names) . "\n" .
+		"users which should be disabled for all images: " . join(", ", @disable_user_names) . "\n" .
+		"users which can be ignored for all images: " . join(", ", @ignore_user_names) . "\n"
 	);
 	
 	my @image_user_names_reservation = ();
@@ -11499,10 +11493,10 @@ sub check_image {
 	
 	if (scalar(@image_user_names_report) > 0 || !$firewall_state || $firewall_state !~ /(1|yes|on|enabled)/i) {
 		notify($ERRORS{'DEBUG'}, 0, "reporting $image_name image to imagerevisioninfo table (imagerevision ID: $imagerevision_id):\n" .
-				 "firewall state: $firewall_state\n" .
-				 "reservation users found on image: " . join(", ", @image_user_names_reservation) . "\n" .
-				 "ignored users found on image: " . join(", ", @image_user_names_ignore) . "\n" .
-				 "users which might not belong on image: " . join(", ", @image_user_names_report)
+			"firewall state: $firewall_state\n" .
+			"reservation users found on image: " . join(", ", @image_user_names_reservation) . "\n" .
+			"ignored users found on image: " . join(", ", @image_user_names_ignore) . "\n" .
+			"users which might not belong on image: " . join(", ", @image_user_names_report)
 		);
 		
 		$self->update_imagerevision_info($imagerevision_id, join(",", @image_user_names_report), $firewall_state);
@@ -11887,7 +11881,7 @@ sub notify_user_console {
 
 	my $username = shift;
 	if (!$username) {
-	   $username = $self->data->get_user_login_id();
+		$username = $self->data->get_user_login_id();
 	}
 	my $request_forimaging = $self->data->get_request_forimaging();
 	if ($request_forimaging) {

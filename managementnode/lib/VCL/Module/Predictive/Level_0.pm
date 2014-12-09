@@ -101,10 +101,10 @@ sub get_next_image {
 		my @block_ret_array = get_block_request_image_info($computer_id);
 		
 		if (defined($block_ret_array[0]) && $block_ret_array[0]) {
-			 push(@ret_array, "reload", @block_ret_array);
-		    return @ret_array;
+			push(@ret_array, "reload", @block_ret_array);
+			return @ret_array;
 		}
-		else{
+		else {
 			notify($ERRORS{'WARNING'}, 0, "computer $computer_id is part of blockComputers, failed to return image info"); 
 		}
 	}

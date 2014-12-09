@@ -64,6 +64,8 @@ use Fcntl qw(:DEFAULT :flock);
 
 use VCL::utils;
 
+no warnings 'redefine';
+
 ##############################################################################
 
 =head1 CLASS VARIABLES
@@ -178,7 +180,7 @@ sub open_lockfile {
 			$file_handle->truncate(0);
 			print $file_handle "$$ $0\n";
 			$file_handle->setpos($file_handle->getpos());
-			 
+			
 			notify($ERRORS{'DEBUG'}, 0, "wrote to file: $file_path, contents:\n '$$ $0'");
 			
 			$self->{file_handles}{$file_path} = $file_handle;

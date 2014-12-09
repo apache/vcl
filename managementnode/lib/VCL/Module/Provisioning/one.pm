@@ -374,7 +374,7 @@ sub capture {
 
 	# Call the OS module's pre_capture() subroutine (don't shutdown at the end)
 	if ($self->os->can("pre_capture")) {
-	 	if (!$self->os->pre_capture({end_state => 'on'})) {
+		if (!$self->os->pre_capture({end_state => 'on'})) {
 			notify($ERRORS{'CRITICAL'}, 0, "failed to complete OS module's pre_capture tasks");
 			return;
 		} else {
@@ -884,11 +884,11 @@ sub _one_get_object_id {
 					if ($_->{NAME} =~ /$o_name/) {
 						return $_->{ID};
 					}
-			  	}
+				}
 			} else { #HASH, found only one entry
 				if ($data->{VM}{NAME} =~ /$o_name/) {
 					return $data->{VM}{ID};
-			    }
+				}
 			}
 		} else {
 			notify($ERRORS{'CRITICAL'}, 0, $reply[0][1]);
@@ -902,7 +902,7 @@ sub _one_get_object_id {
 				if ( (ref($rs_data->{IMAGE})) eq "ARRAY" ) {
 					foreach (@{$rs_data->{IMAGE}}) {
 						if ($_->{NAME} eq $o_name) {
- 							return $_->{ID};
+							return $_->{ID};
 						}
 					}
 					} else { #HASH, only one entry

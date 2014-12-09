@@ -812,16 +812,16 @@ sub set_static_public_address {
 		return 0;
 	}
 	
-	my $computer_name          = $self->data->get_computer_short_name();
-	my $server_request_id      = $self->data->get_server_request_id();
-	my $server_request_fixedIP = $self->data->get_server_request_fixedIP();
+	my $computer_name           = $self->data->get_computer_short_name();
+	my $server_request_id       = $self->data->get_server_request_id();
+	my $server_request_fixed_ip = $self->data->get_server_request_fixed_ip();
 	
 	# Make sure public IP configuration is static or this is a server request
 	
 	my $ip_configuration = $self->data->get_management_node_public_ip_configuration();
 	if ($ip_configuration !~ /static/i) {
-		if (!$server_request_fixedIP) {
-			notify($ERRORS{'WARNING'}, 0, "static public address can only be set if IP configuration is static or is a server request, current value: $ip_configuration \nserver_request_fixedIP=$server_request_fixedIP");
+		if (!$server_request_fixed_ip) {
+			notify($ERRORS{'WARNING'}, 0, "static public address can only be set if IP configuration is static or is a server request, current value: $ip_configuration \nserver_request_fixed_ip=$server_request_fixed_ip");
 			return;
 		}
 	}
@@ -838,11 +838,11 @@ sub set_static_public_address {
 	my $default_gateway             = $self->data->get_management_node_public_default_gateway() || '<undefined>';
 	my @dns_servers                 = $self->data->get_management_node_public_dns_servers();
 	
-	if ($server_request_fixedIP) {
-		$computer_public_ip_address  = $server_request_fixedIP;
+	if ($server_request_fixed_ip) {
+		$computer_public_ip_address  = $server_request_fixed_ip;
 		$subnet_mask                 = $self->data->get_server_request_netmask();
 		$default_gateway             = $self->data->get_server_request_router();
-		@dns_servers                 = $self->data->get_server_request_DNSservers();
+		@dns_servers                 = $self->data->get_server_request_dns_servers();
 	}
 	
 	# Assemble a string containing the static IP configuration
@@ -2077,9 +2077,9 @@ sub get_file_size {
 	
 	if ($calling_sub !~ /get_file_size/) {
 		notify($ERRORS{'DEBUG'}, 0, "size of " . join(", ", @file_paths) . " on $computer_node_name:\n" .
-				 "file count: $file_count\n" .
-				 "reserved: " . get_file_size_info_string($total_bytes_reserved) . "\n" .
-				 "used: " . get_file_size_info_string($total_bytes_used));
+		"file count: $file_count\n" .
+		"reserved: " . get_file_size_info_string($total_bytes_reserved) . "\n" .
+		"used: " . get_file_size_info_string($total_bytes_used));
 	}
 	
 	if (wantarray) {
@@ -2621,7 +2621,7 @@ sub create_user {
 		$uid = $self->data->get_user_uid() unless defined $uid;
 		$root_access = $self->data->get_imagemeta_rootaccess() unless defined $root_access;
 		$user_standalone = $self->data->get_user_standalone() unless defined $user_standalone;
-		$user_ssh_public_keys = $self->data->get_user_sshPublicKeys(0) unless defined $user_ssh_public_keys;
+		$user_ssh_public_keys = $self->data->get_user_ssh_public_keys(0) unless defined $user_ssh_public_keys;
 	}
 	
 	$root_access = 1 unless defined $root_access;
@@ -3374,10 +3374,11 @@ sub get_cpu_core_count {
 	my $hyperthreading_enabled = ($siblings > $cpu_cores) ? 'yes' : 'no';
 	
 	notify($ERRORS{'DEBUG'}, 0, "retrieved $computer_node_name CPU core count: $cpu_core_count
-			 cpuinfo 'processor' line count: $processor_count
-			 cpuinfo 'cpu cores': $cpu_cores
-			 cpuinfo 'siblings': $siblings
-			 hyperthreading enabled: $hyperthreading_enabled");
+		cpuinfo 'processor' line count: $processor_count
+		cpuinfo 'cpu cores': $cpu_cores
+		cpuinfo 'siblings': $siblings
+		hyperthreading enabled: $hyperthreading_enabled"
+	);
 	
 	return $cpu_core_count;
 }
@@ -4957,7 +4958,7 @@ sub notify_user_console {
 
 	my $username = shift;
 	if (!$username) {
-	   $username = $self->data->get_user_login_id();
+		$username = $self->data->get_user_login_id();
 	}
 
 	my $computer_node_name = $self->data->get_computer_node_name();

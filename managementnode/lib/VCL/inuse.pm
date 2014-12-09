@@ -960,8 +960,8 @@ sub _start_imaging_request {
 	}
 	elsif ($xml_ret->value->{status} !~ /success/) {
 		notify($ERRORS{'WARNING'}, 0, "failed to start imaging request, XML::RPC '$method' status: $xml_ret->value->{status}\n" .
-				 "error code $xml_ret->value->{errorcode}\n" .
-				 "error message: $xml_ret->value->{errormsg}"
+			"error code $xml_ret->value->{errorcode}\n" .
+			"error message: $xml_ret->value->{errormsg}"
 		);
 		return;
 	}

@@ -116,14 +116,14 @@ sub revoke_access {
 		if (run_scp_command($clientdata, $target, $identity, "24")) {
 			notify($ERRORS{'OK'}, 0, "Success copied $clientdata to $target");
 			unlink($clientdata);
-
+			
 			# send flag to activate changes
 			my @sshcmd = run_ssh_command($computer_public_ip_address, $identity, "echo 1 > /home/vclstaff/flag", "vclstaff", "24");
 			notify($ERRORS{'OK'}, 0, "setting flag to 1 on $computer_public_ip_address");
-
+			
 			my $nmapchecks = 0;
 			# return nmap check
-
+			
 			NMAPPORT:
 			if (!(nmap_port($computer_public_ip_address, 22))) {
 				return 1;
@@ -152,7 +152,6 @@ sub revoke_access {
 	}
 
 	return 1;
-
 } ## end sub revoke_access
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -171,7 +170,7 @@ sub reserve {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return 0;
 	}
-
+	
 	return 1;
 }
 
@@ -191,7 +190,7 @@ sub grant_access {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return 0;
 	}
-
+	
 	my $user                       = $self->data->get_user_login_id();
 	my $computer_node_name         = $self->data->get_computer_node_name();
 	my $computer_public_ip_address = $self->data->get_computer_public_ip_address;
@@ -211,19 +210,19 @@ sub grant_access {
 		print CLIENTDATA "$user\n";
 		print CLIENTDATA "$remoteIP\n";
 		close CLIENTDATA;
-
+		
 		# scp to hostname
 		my $target = "vclstaff\@$computer_public_ip_address:/home/vclstaff/clientdata";
 		if (run_scp_command($clientdata, $target, $identity, "24")) {
 			notify($ERRORS{'OK'}, 0, "Success copied $clientdata to $target");
 			unlink($clientdata);
-
+			
 			# send flag to activate changes
 			my @sshcmd = run_ssh_command($computer_public_ip_address, $identity, "echo 1 > /home/vclstaff/flag", "vclstaff", "24");
 			notify($ERRORS{'OK'}, 0, "setting flag to 1 on $computer_public_ip_address");
-
+			
 			my $nmapchecks = 0;
-
+			
 			NMAPPORT:
 			if (nmap_port($computer_public_ip_address, 22)) {
 				notify($ERRORS{'OK'}, 0, "sshd opened");
@@ -253,9 +252,7 @@ sub grant_access {
 	}
 
 	return 1;
-
 } ## end sub grant_access
-
 
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -287,9 +284,9 @@ sub sanitize {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return;
 	}
-
+	
 	my $computer_node_name = $self->data->get_computer_node_name();
-
+	
 	# Delete all user associated with the reservation
 	if ($self->revoke_access()) {
 		notify($ERRORS{'OK'}, 0, "access has been disabled for $computer_node_name");
@@ -298,7 +295,7 @@ sub sanitize {
 		notify($ERRORS{'WARNING'}, 0, "failed to delete users from $computer_node_name");
 		return 0;
 	}
-
+	
 	notify($ERRORS{'OK'}, 0, "$computer_node_name has been sanitized");
 	return 1;
 } ## end sub sanitize
@@ -345,77 +342,75 @@ sub get_current_image_name {
 =cut
 
 sub check_connection_on_port {
-        my $self = shift;
-        if (ref($self) !~ /VCL::Module/i) {
-                notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-                return;
-        }
-
-        my $management_node_keys        = $self->data->get_management_node_keys();
-        my $computer_node_name          = $self->data->get_computer_node_name();
-        my $remote_ip                   = $self->data->get_reservation_remote_ip();
-        my $computer_public_ip_address  = $self->data->get_computer_public_ip_address();
-        my $request_state_name          = $self->data->get_request_state_name();
-
-        my $port = shift;
-        if (!$port) {
-                notify($ERRORS{'WARNING'}, 0, "port variable was not passed as an argument");
-                return "failed";
-        }
-
-        my $ret_val = "no";
-        my $command = "netstat -an";
-        my ($status, $output) = run_ssh_command($computer_node_name, $management_node_keys, $command, 'vclstaff', 24, 1);
-        notify($ERRORS{'DEBUG'}, 0, "checking connections on node $computer_node_name on port $port");
-        foreach my $line (@{$output}) {
-                if ($line =~ /Connection refused|Permission denied/) {
-                    chomp($line);
-                    notify($ERRORS{'WARNING'}, 0, "$line");
-                    if ($request_state_name =~ /reserved/) {
-                        $ret_val = "failed";
-                    }
-                    else {
-                         $ret_val = "timeout";
-                    }
-                    return $ret_val;
-                 } ## end if ($line =~ /Connection refused|Permission denied/)
-                 if ($line =~ /tcp\s+([0-9]*)\s+([0-9]*)\s($computer_public_ip_address:$port)\s+([.0-9]*):([0-9]*)(.*)(ESTABLISHED)/) {
-                     if ($4 eq $remote_ip) {
-                         $ret_val = "connected";
-                         return $ret_val;
-                     }
-                     else {
-                          #this isn't the remoteIP
-                          $ret_val = "conn_wrong_ip";
-                          return $ret_val;
-                     }
-                 }    # Linux
-		 if ($line =~ /tcp\s+([0-9]*)\s+([0-9]*)\s::ffff:($computer_public_ip_address:$port)\s+::ffff:([.0-9]*):([0-9]*)(.*)(ESTABLISHED) /) {
-                     if ($4 eq $remote_ip) {
-                         $ret_val = "connected";
-                         return $ret_val;
-                     }
-                     else {
-                       #this isn't the remoteIP
-                          $ret_val = "conn_wrong_ip";
-                          return $ret_val;
-                     }
-                } ##
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $management_node_keys        = $self->data->get_management_node_keys();
+	my $computer_node_name          = $self->data->get_computer_node_name();
+	my $remote_ip                   = $self->data->get_reservation_remote_ip();
+	my $computer_public_ip_address  = $self->data->get_computer_public_ip_address();
+	my $request_state_name          = $self->data->get_request_state_name();
+	
+	my $port = shift;
+	if (!$port) {
+		notify($ERRORS{'WARNING'}, 0, "port variable was not passed as an argument");
+		return "failed";
+	}
+	
+	my $ret_val = "no";
+	my $command = "netstat -an";
+	my ($status, $output) = run_ssh_command($computer_node_name, $management_node_keys, $command, 'vclstaff', 24, 1);
+	notify($ERRORS{'DEBUG'}, 0, "checking connections on node $computer_node_name on port $port");
+	foreach my $line (@{$output}) {
+		if ($line =~ /Connection refused|Permission denied/) {
+			chomp($line);
+			notify($ERRORS{'WARNING'}, 0, "$line");
+			if ($request_state_name =~ /reserved/) {
+				$ret_val = "failed";
+			}
+			else {
+				$ret_val = "timeout";
+			}
+			return $ret_val;
+		} ## end if ($line =~ /Connection refused|Permission denied/)
+		if ($line =~ /tcp\s+([0-9]*)\s+([0-9]*)\s($computer_public_ip_address:$port)\s+([.0-9]*):([0-9]*)(.*)(ESTABLISHED)/) {
+			if ($4 eq $remote_ip) {
+				$ret_val = "connected";
+				return $ret_val;
+			}
+			else {
+				#this isn't the remoteIP
+				$ret_val = "conn_wrong_ip";
+				return $ret_val;
+			}
+		}    # Linux
+		if ($line =~ /tcp\s+([0-9]*)\s+([0-9]*)\s::ffff:($computer_public_ip_address:$port)\s+::ffff:([.0-9]*):([0-9]*)(.*)(ESTABLISHED) /) {
+			if ($4 eq $remote_ip) {
+				$ret_val = "connected";
+				return $ret_val;
+			}
+			else {
+				#this isn't the remoteIP
+				$ret_val = "conn_wrong_ip";
+				return $ret_val;
+			}
+		} ##
 		if ($line =~ /\s*($computer_public_ip_address\.$port)\s+([.0-9]*)\.([0-9]*)(.*)(ESTABLISHED)/) {
-                     if ($4 eq $remote_ip) {
-                         $ret_val = "connected";
-                         return $ret_val;                       
-                     }
-                     else {
-                       #this isn't the remoteIP
-                          $ret_val = "conn_wrong_ip";
-                          return $ret_val;
-                     }
-                } ##	
-		
-		
-        }
-        return $ret_val;
+			if ($4 eq $remote_ip) {
+				$ret_val = "connected";
+				return $ret_val;                       
+			}
+			else {
+				#this isn't the remoteIP
+				$ret_val = "conn_wrong_ip";
+				return $ret_val;
+			}
+		} ##	
+	}
+	return $ret_val;
 }
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -424,31 +419,31 @@ sub check_connection_on_port {
  Parameters  : $computer_name (optional), $max_attempts (optional)
  Returns     : If computer responds to SSH: 1
                If computer never responds to SSH: 0
-				   Description : Checks if the computer is responding to SSH. Ports 22 and 24 are
+               Description : Checks if the computer is responding to SSH. Ports 22 and 24 are
                first checked to see if either is open. If neither is open, 0 is
                returned. If either of the ports is open a test SSH command which
               simply echo's a string is attempted. The default is to only
                attempt to run this command once. This can be changed by
                supplying the $max_attempts argument. If the $max_attempts is
-					supplied but set to 0, only the port checks are done.
+               supplied but set to 0, only the port checks are done.
 
 =cut
 
 sub is_ssh_responding {
 	my $self = shift;
 	if (ref($self) !~ /VCL::Module/i) {
-		 notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-       return;
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
 	}
 
 	my $computer_node_name;
 	my $max_attempts = 1;
-	 
+	
 	my $argument_1 = shift;
 	my $argument_2 = shift;
-
+	
 	if ($argument_1) {
- 		# Check if the argument is an integer
+		# Check if the argument is an integer
 		if ($argument_1 =~ /^\d+$/) {
 			$max_attempts = $argument_1;
 		}
@@ -503,13 +498,12 @@ sub is_ssh_responding {
 =head2 firewall_compare_update
 
  Parameters  : $computer_name (optional), $max_attempts (optional)
- Returns     :	returns true.
- 					Since the vclstaff user doesn't have root on the lab machines, there is not much this routine can do.
+ Returns     : returns true.
+               Since the vclstaff user doesn't have root on the lab machines, there is not much this routine can do.
 
 =cut 
 
 sub firewall_compare_update {
-	
 	return 1;
 }
 
@@ -530,30 +524,30 @@ sub notify_user_console {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return;
 	}
-
+	
 	my $message = shift;
 	if (!$message) {
 		notify($ERRORS{'WARNING'}, 0, "message argument was not supplied");
 		return;
 	}
-
+	
 	my $username = shift;
 	if (!$username) {
-	   $username = $self->data->get_user_login_id();
+		$username = $self->data->get_user_login_id();
 	}
-
+	
 	my $computer_node_name = $self->data->get_computer_node_name();
-
+	
 	my $cmd = "echo \"$message\" \| write $username";
 	my ($exit_status, $output) = $self->execute({
-		 node => $computer_node_name,
-		 command => $cmd,
-		 display_output => 0,
-		 timeout => 30,
-		 max_attempts => 2,
-		 port => 24,
-		 user => "vclstaff",
-		});
+		node => $computer_node_name,
+		command => $cmd,
+		display_output => 0,
+		timeout => 30,
+		max_attempts => 2,
+		port => 24,
+		user => "vclstaff",
+	});
 	if (!defined($output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to execute command to determine if the '$cmd' shell command exists on $computer_node_name");
 		return;
@@ -563,7 +557,6 @@ sub notify_user_console {
 		return 1;
 	}
 }
-
 
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -586,24 +579,24 @@ sub get_current_image_info {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return;
 	}
-
+	
 	my $input = shift;
-
+	
 	if (!defined $input) {
 		$input = "imagerevision_id";
 	}
-
+	
 	my $computer_node_name = $self->data->get_computer_node_name();
 	my $imagerevision_id = $self->data->get_imagerevision_id();
-
+	
 	#The Lab machine image does have a currentimage.txt file.
 	#Predefine matching variables so it doesn't fail.
-
+	
 	my %current_image_txt_contents;
 	$current_image_txt_contents{"imagerevision_id"} = $imagerevision_id;
 	my $time = localtime;
 	$current_image_txt_contents{"vcld_post_load"} = "vcld_post_load=success ($time)";
-
+	
 	# Make sure an empty hash wasn't returned
 	if (defined $current_image_txt_contents{imagerevision_id}) {
 		notify($ERRORS{'DEBUG'}, 0, "user selected content of image currently loaded on $computer_node_name: $current_image_txt_contents{current_image_name}");

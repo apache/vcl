@@ -1689,10 +1689,10 @@ sub _enable_firewall_port_helper {
 	}
 	elsif (@$netsh_output[-1] =~ /(Ok|The object already exists)/i) {
 		notify($ERRORS{'OK'}, 0, "opened firewall on $computer_node_name:\n" .
-				 "name: '$name'\n" .
-				 "protocol: $protocol\n" .
-				 "port/type: $port\n" .
-				 "scope: $scope"
+			"name: '$name'\n" .
+			"protocol: $protocol\n" .
+			"port/type: $port\n" .
+			"scope: $scope"
 		);
 		return 1;
 	}
@@ -2339,36 +2339,36 @@ sub query_event_log_helper {
  Parameters  : $past_minutes (optional)
  Returns     : array
  Description : Queries the event log for logon events in either the Security log
-					or Microsoft-Windows-TerminalServices-LocalSessionManager.
-					Anonymous logon and service logons are ignored. An array is
-					returned sorted by time from oldest to newest. Example:
-					[	
-						{
-						  "datetime" => "2014-03-18 19:15:25",
-						  "description" => "An account was successfully logged on",
-						  "epoch" => "1395184525",
-						  "event_id" => 4624,
-						  "event_record_id" => 2370,
-						  "logon_type" => "Interactive",
-						  "logon_type_id" => 2,
-						  "pid" => 4624,
-						  "provider" => "Microsoft-Windows-Security-Auditing",
-						  "remote_ip" => "127.0.0.1",
-						  "user" => "root"
-						},
-						{
-						  "datetime" => "2014-03-19 17:06:37",
-						  "description" => "An account was successfully logged on",
-						  "epoch" => "1395263197",
-						  "event_id" => 4624,
-						  "event_record_id" => 2665,
-						  "logon_type" => "Network",
-						  "logon_type_id" => 3,
-						  "pid" => 4624,
-						  "provider" => "Microsoft-Windows-Security-Auditing",
-						  "user" => "Administrator"
-						},
-					]	
+               or Microsoft-Windows-TerminalServices-LocalSessionManager.
+               Anonymous logon and service logons are ignored. An array is
+               returned sorted by time from oldest to newest. Example:
+               [  
+                  {
+                    "datetime" => "2014-03-18 19:15:25",
+                    "description" => "An account was successfully logged on",
+                    "epoch" => "1395184525",
+                    "event_id" => 4624,
+                    "event_record_id" => 2370,
+                    "logon_type" => "Interactive",
+                    "logon_type_id" => 2,
+                    "pid" => 4624,
+                    "provider" => "Microsoft-Windows-Security-Auditing",
+                    "remote_ip" => "127.0.0.1",
+                    "user" => "root"
+                  },
+                  {
+                    "datetime" => "2014-03-19 17:06:37",
+                    "description" => "An account was successfully logged on",
+                    "epoch" => "1395263197",
+                    "event_id" => 4624,
+                    "event_record_id" => 2665,
+                    "logon_type" => "Network",
+                    "logon_type_id" => 3,
+                    "pid" => 4624,
+                    "provider" => "Microsoft-Windows-Security-Auditing",
+                    "user" => "Administrator"
+                  },
+               ]  
 
 =cut
 

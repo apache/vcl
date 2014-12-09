@@ -663,13 +663,13 @@ sub netapp_rename_dir
 	my $s = $_[0];
 	my $from_path = $_[1];
 	my $to_path = $_[2];
-
+	
 	my $in = NaElement->new("file-rename-directory");
 	$in->child_add_string("from-path",$from_path);
 	$in->child_add_string("to-path",$to_path);
-
+	
 	my $out = $s->invoke_elem($in);
- 	
+	
 	if ($out->results_status() eq "failed") {
 		notify($ERRORS{'CRITICAL'}, 0, $out->results_reason() ."\n");
 		return 0;
@@ -703,7 +703,7 @@ sub netapp_create_dir
 	$in->child_add_string("perm",$dir_perm);
 
 	my $out = $s->invoke_elem($in);
- 	
+	
 	if ($out->results_status() eq "failed") {
 		notify($ERRORS{'CRITICAL'}, 0, $out->results_reason() ."\n");
 		return 0;
@@ -731,7 +731,7 @@ sub netapp_read_file
 
 	#my $hex_data = ascii_to_hex($ascii_data);
 	my $out = $s->invoke( "file-read-file","length",1048576,"offset",0,"path",$path );
- 	
+	
 	if ($out->results_status() eq "failed") {
 		notify($ERRORS{'CRITICAL'}, 0, $out->results_reason() ."\n");
 		return 0;
@@ -759,7 +759,7 @@ sub netapp_write_file
 
 	my $hex_data = ascii_to_hex($ascii_data);
 	my $out = $s->invoke( "file-write-file","data",$hex_data,"offset",0,"overwrite",0,"path",$path );
- 	
+	
 	if ($out->results_status() eq "failed") {
 		notify($ERRORS{'CRITICAL'}, 0, $out->results_reason() ."\n");
 		return 0;
@@ -802,7 +802,6 @@ sub netapp_delete_dir
 			return 1;
 		}
 	}
-
 
 	# Start a directory iteration
 	my $in = NaElement->new("file-list-directory-iter-start");
@@ -997,7 +996,7 @@ sub netapp_delete_empty_dir
 	$in->child_add_string("path",$dir_path);
 
 	my $out = $s->invoke_elem($in);
- 	
+	
 	if ($out->results_status() eq "failed") {
 		notify($ERRORS{'CRITICAL'}, 0, $out->results_reason() ."\n");
 		return 0;
@@ -1027,7 +1026,7 @@ sub netapp_delete_file
 	$in->child_add_string("path",$file_path);
 
 	my $out = $s->invoke_elem($in);
- 	
+	
 	if ($out->results_status() eq "failed") {
 		notify($ERRORS{'CRITICAL'}, 0, $out->results_reason() ."\n");
 		return 0;

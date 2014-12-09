@@ -76,10 +76,10 @@ use DBI;
 
 sub initialize {
 	my $self = shift;
-
+	
 	# Initialize the database handle count
 	$ENV{dbh_count} = 0;
-
+	
 	# Attempt to get a database handle
 	if ($ENV{dbh} = getnewdbh()) {
 		notify($ERRORS{'OK'}, 0, "obtained a database handle for this state process, stored as \$ENV{dbh}");
@@ -87,13 +87,12 @@ sub initialize {
 	else {
 		notify($ERRORS{'WARNING'}, 0, "unable to obtain a database handle for this state process");
 	}
-
+	
 	# Rename this process to include some request info
 	rename_vcld_process($self->data);
-
+	
 	notify($ERRORS{'OK'}, 0, "returning 1");
 	return 1;
-
 } ## end sub initialize
 
 =pod
@@ -120,7 +119,7 @@ sub initialize {
 sub process {
 	my $self = shift;
 	my ($package, $filename, $line) = caller;
-
+	
 	# Retrieve data from the data structure
 	my $blockrequest_id              = $self->data->get_blockrequest_id();
 	my $blockrequest_mode            = $self->data->get_blockrequest_mode();
@@ -135,28 +134,28 @@ sub process {
 	my $blockrequest_owner_id	 = $self->data->get_blockrequest_owner_id();
 	my $block_group_id		 = $self->data->get_blockrequest_group_id();
 	my $block_group_name		 = $self->data->get_blockrequest_group_name();
-
+	
 	# Get user info	
 	my $user_info;
 	my $image_info;
-   my $image_prettyname;
+	my $image_prettyname;
 	my $owner_affiliation_helpaddress;
 	my $owner_email;
-
+	
 	if ($user_info = get_user_info($blockrequest_owner_id)) {
 		$owner_email = $user_info->{email};
 		$owner_affiliation_helpaddress = $user_info->{affiliation}{helpaddress};
 	}
-
+	
 	#Get image info
 	if ($image_info = get_image_info($blockrequest_image_id)) {
 		$image_prettyname = $image_info->{prettyname};
-
+	
 	}
 	
 	#Set local timer
 	my $localtimer = convert_to_epoch_seconds();
-
+	
 	notify($ERRORS{'DEBUG'}, 0, "blockrequest id: $blockrequest_id");
 	notify($ERRORS{'DEBUG'}, 0, "blockrequest mode: $blockrequest_mode");
 	notify($ERRORS{'DEBUG'}, 0, "blockrequest image id: $blockrequest_image_id");
@@ -167,14 +166,13 @@ sub process {
 	notify($ERRORS{'DEBUG'}, 0, "blocktime start: $blocktime_start");
 	notify($ERRORS{'DEBUG'}, 0, "owner email: $owner_email");
 	notify($ERRORS{'DEBUG'}, 0, "help address: $owner_affiliation_helpaddress");
-
+	
 	if ($blockrequest_mode eq "start") {
-
 		#update processed flag for request
 		if (update_block_times_processing($blocktime_id, 1)) {
 			notify($ERRORS{'OK'}, 0, "updated process flag on blocktime_id= $blocktime_id");
 		}
-
+		
 		my $completed = 0;
 		my $loop_control = 0;
 		my $xmlcall;
@@ -185,30 +183,30 @@ sub process {
 		if ($urla =~ /(.*)(=xmlrpccall)/) {
 			$blockAlloc_URL = $1 . "=blockallocations";
 		}
-
+		
 		my($allocated,$unallocated) = 0;
-
+		
 		while (!($completed)) {
 			if ($loop_control < 6) {
 				$loop_control++;
 				notify($ERRORS{'DEBUG'}, 0, "processing blocktime_id= $blocktime_id  pass $loop_control");
 				$xmlcall = process_block_time($blocktime_id);
 			}
-			else{
+			else {
 				$completed=1;
 				notify($ERRORS{'DEBUG'}, 0, "attempted $loop_control passes to complete block_request $blockrequest_id\n allocated= $allocated \nblockrequest_number_machines= $blockrequest_number_machines");
 				last;
 			}
-
+			
 			$allocated   = $xmlcall->{allocated}   if (defined($xmlcall->{allocated}));
 			$unallocated = $xmlcall->{unallocated} if (defined($xmlcall->{unallocated}));
-
+			
 			if ($allocated >= $blockrequest_number_machines) {
 				$completed=1;
 				notify($ERRORS{'OK'}, 0, "success blockTimes id $blocktime_id processed and allocated $xmlcall->{allocated} nodes \nstatus= $xmlcall->{status}");
 				last;
 			}
-
+			
 			if ($xmlcall->{status} =~ /warning|fault/) {
 				$warningmsg  = $xmlcall->{warningmsg}  if (defined($xmlcall->{warningmsg}));
 				notify($ERRORS{'DEBUG'}, 0, "xmlrpc warning: $warningmsg allocated= $allocated unallocated= $unallocated");
@@ -221,14 +219,14 @@ sub process {
 				$completed=1;
 				notify($ERRORS{'OK'}, 0, "success blockTimes id $blocktime_id already processed");
 			}
-
+			
 			sleep 5 if(!$completed);
 		}
 		
 		my $body;
 		my $subject = "VCL Block allocation results for $blockrequest_name";
 		my $mailstring;
-	
+		
 		if (defined($warningmsg) || defined($errormsg) || ($allocated < $blockrequest_number_machines)) {
 			$body .= "Problem processing block allocation \n\n";
 			$body .= "Block id		= $blockrequest_id\n";
@@ -241,13 +239,13 @@ sub process {
 			$body .= "xmlrpc warn msg	= $warningmsg\n" if(defined($warningmsg));
 			$body .= "xmlrpc error msg	= $errormsg\n" if(defined($errormsg));
 			$body .= "\n";
-
+			
 			notify($ERRORS{'CRITICAL'}, 0, "$body");
-
+			
 			if ($allocated < $blockrequest_number_machines) {
-			$subject = "VCL Block allocation warning for $blockrequest_name";
-	
-			$mailstring .= << "EOF";
+				$subject = "VCL Block allocation warning for $blockrequest_name";
+			
+				$mailstring .= << "EOF";
 WARNING - The block allocation for $blockrequest_name was not successfully processed for the following session.
 
 REASON: machines allocated were less than requested
@@ -267,16 +265,14 @@ If you wish to cancel this session or make changes to future sessions. Please vi
 the VCL site: $blockAlloc_URL
 
 EOF
-                        	if (defined($owner_email)) {
-                                	mail($owner_email, $subject, $mailstring, $owner_affiliation_helpaddress);
-                        	}
+
+				if (defined($owner_email)) {
+					mail($owner_email, $subject, $mailstring, $owner_affiliation_helpaddress);
+				}
 			}
-			
-		
 		}
 		elsif ($completed) {
-		# Notify block request owner for given time slot has been processed.
-			
+			# Notify block request owner for given time slot has been processed.
 			my $mailstring .= <<"EOF";
 The block allocation for $blockrequest_name was processed successfully with the following results:
 
@@ -302,12 +298,10 @@ EOF
 			if (defined($owner_email)) {
 				mail($owner_email, $subject, $mailstring, $owner_affiliation_helpaddress);
 			}	
-		
 		}
-	
+		
 		sleep 10;
-
-
+		
 	} ## end if ($blockrequest_mode eq "start")
 	elsif ($blockrequest_mode eq "end") {
 		# remove blockTime entry for this request
@@ -317,7 +311,7 @@ EOF
 		if (clear_block_times($blocktime_id)) {
 			notify($ERRORS{'OK'}, 0, "Removed blocktime_id=$blocktime_id from blockTimes table");
 		}
-
+		
 		#check expire time, if this was the last blockTimes entry then this is likely the expiration time as well
 		my $status = check_blockrequest_time($blocktime_start, $blocktime_end, $blockrequest_expire);
 		if ($status eq "expire") {
@@ -327,8 +321,6 @@ EOF
 				notify($ERRORS{'OK'}, 0, "Updated status of blockRequest id $blockrequest_id to completed");
 			}
 		}
-
-
 	} ## end elsif ($blockrequest_mode eq "end")  [ if ($blockrequest_mode eq "start")
 	elsif ($blockrequest_mode eq "expire") {
 		notify($ERRORS{'OK'}, 0, "Block Request $blockrequest_id has expired");
@@ -376,24 +368,24 @@ sub process_block_time {
 
 	my %info;
 	if ( ref($xml_ret) =~ /STRUCT/i) {
-       $info{status} = $xml_ret->value->{status};
-		 $info{allocated} = $xml_ret->value->{allocated} if(defined($xml_ret->value->{allocated})) ;
-       $info{unallocated} = $xml_ret->value->{unallocated} if(defined($xml_ret->value->{unallocated}));
-		 #error
-		 $info{errorcode} = $xml_ret->value->{errorcode} if(defined($xml_ret->value->{errorcode}));
-		 $info{errormsg} = $xml_ret->value->{errormsg} if(defined($xml_ret->value->{errormsg}));
-		 #warning
-		 $info{warningcode} = $xml_ret->value->{warningcode} if(defined($xml_ret->value->{warningcode}));
-		 $info{warningmsg} = $xml_ret->value->{warningmsg} if(defined($xml_ret->value->{warningmsg}));
-		 #$info{reqidlists} = $xml_ret->value->{requestids};
-	}
+		$info{status} = $xml_ret->value->{status};
+		$info{allocated} = $xml_ret->value->{allocated} if(defined($xml_ret->value->{allocated})) ;
+		$info{unallocated} = $xml_ret->value->{unallocated} if(defined($xml_ret->value->{unallocated}));
+		#error
+		$info{errorcode} = $xml_ret->value->{errorcode} if(defined($xml_ret->value->{errorcode}));
+		$info{errormsg} = $xml_ret->value->{errormsg} if(defined($xml_ret->value->{errormsg}));
+		#warning
+		$info{warningcode} = $xml_ret->value->{warningcode} if(defined($xml_ret->value->{warningcode}));
+		$info{warningmsg} = $xml_ret->value->{warningmsg} if(defined($xml_ret->value->{warningmsg}));
+		#$info{reqidlists} = $xml_ret->value->{requestids};
+		}
 	else {
 		notify($ERRORS{'WARNING'}, 0, "return argument XMLRPCprocessBlockTime was not a STRUCT as expected" . ref($xml_ret) );
 		if (ref($xml_ret) =~ /fault/) {
 			$info{status} = "fault";
 		}
 		else {
-		 $info{status} = ref($xml_ret);
+			$info{status} = ref($xml_ret);
 		}
 	}
 
@@ -494,36 +486,35 @@ sub delete_block_request {
 =cut
 
 sub udpate_block_request_status {
-        my ($blockrequest_id,$status) = @_;
-
-        # Check the arguments
-        if (!defined($blockrequest_id)) {
-                notify($ERRORS{'WARNING'}, 0, "blockrequest ID was not specified");
-                return 0;
-        }
-        if (!defined($status)) {
-                notify($ERRORS{'WARNING'}, 0, "status was not specified for blockrequest_id $blockrequest_id ");
-                return 0;
-        }
-
-        # Construct the update statement
-        my $update_statement = "
-      UPDATE
-      blockRequest
-      SET blockRequest.status = '$status'
-      WHERE
-      blockRequest.id = $blockrequest_id
-   ";
-
-        # Call the database execute subroutine
-        if (database_execute($update_statement)) {
-                return 1;
-        }
-        else {
-                notify($ERRORS{'WARNING'}, 0, "unable to updated blockrequest $blockrequest_id blockRequest table ");
-                return 0;
-        }
-
+	my ($blockrequest_id,$status) = @_;
+	
+	# Check the arguments
+	if (!defined($blockrequest_id)) {
+		notify($ERRORS{'WARNING'}, 0, "blockrequest ID was not specified");
+		return 0;
+	}
+	if (!defined($status)) {
+		notify($ERRORS{'WARNING'}, 0, "status was not specified for blockrequest_id $blockrequest_id ");
+		return 0;
+	}
+	
+	# Construct the update statement
+	my $update_statement = "
+		UPDATE
+		blockRequest
+		SET blockRequest.status = '$status'
+		WHERE
+		blockRequest.id = $blockrequest_id
+	";
+	
+	# Call the database execute subroutine
+	if (database_execute($update_statement)) {
+		return 1;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "unable to updated blockrequest $blockrequest_id blockRequest table ");
+		return 0;
+	}
 }
 
 #/////////////////////////////////////////////////////////////////////////////

@@ -464,7 +464,7 @@ sub reload_image {
 	my $image_os_install_type           = $self->data->get_image_os_install_type();
 	my $imagerevision_id                = $self->data->get_imagerevision_id();
 	my $server_request_id	            = $self->data->get_server_request_id();
-	my $server_request_fixedIP		      = $self->data->get_server_request_fixedIP();
+	my $server_request_fixed_ip		    = $self->data->get_server_request_fixed_ip();
 	
 	# Try to get the node status if the provisioning engine has implemented a node_status() subroutine
 	my $node_status;
@@ -652,8 +652,8 @@ sub reload_image {
 	
 	if ($server_request_id) {
 		notify($ERRORS{'DEBUG'}, 0, "  SERVER_REQUEST_ID detected");
-		if ($server_request_fixedIP) {
-			notify($ERRORS{'DEBUG'}, 0, "server_request_fixedIP is set calling update_public_ip_address");
+		if ($server_request_fixed_ip) {
+			notify($ERRORS{'DEBUG'}, 0, "server_request_fixed_ip is set calling update_public_ip_address");
 			if (!$self->os->server_request_set_fixed_ip()) {
 				notify($ERRORS{'WARNING'}, 0, "failed to update IP address for $computer_short_name");
 				insertloadlog($reservation_id, $computer_id, "failed", "unable to set public IP address on $computer_short_name possibly IP address is inuse");
@@ -816,8 +816,8 @@ sub computer_not_being_used {
 			# -or-
 			# Reload reservation -- either for a different image or the previous check loop monitoring the reload process for the same image timed out
 			if ($competing_request_end_epoch <= $now_epoch ||
-				 ($competing_request_state =~ /(timeout|deleted|reload)/) ||
-				 ($competing_request_state eq 'pending' && $competing_request_laststate =~ /(timeout|deleted|reload)/)) {
+				($competing_request_state =~ /(timeout|deleted|reload)/) ||
+				($competing_request_state eq 'pending' && $competing_request_laststate =~ /(timeout|deleted|reload)/)) {
 				
 				# Update the competing request state to complete
 				# If this fails, check if the competing request has already been deleted

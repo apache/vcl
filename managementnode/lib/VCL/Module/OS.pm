@@ -501,9 +501,10 @@ sub wait_for_reboot {
 		my $ssh_actual_seconds = ($ssh_elapsed_seconds - $ping_elapsed_seconds);
 		
 		notify($ERRORS{'OK'}, 0, "$computer_node_name responded to SSH:
-				 unresponsive: $no_ping_elapsed_seconds seconds
-				 respond to ping: $ping_elapsed_seconds seconds ($ping_actual_seconds seconds after unresponsive)
-				 respond to SSH $ssh_elapsed_seconds seconds ($ssh_actual_seconds seconds after ping)");
+			unresponsive: $no_ping_elapsed_seconds seconds
+			respond to ping: $ping_elapsed_seconds seconds ($ping_actual_seconds seconds after unresponsive)
+			respond to SSH $ssh_elapsed_seconds seconds ($ssh_actual_seconds seconds after ping)"
+		);
 		return 1;
 	}
 	
@@ -907,60 +908,60 @@ sub server_request_set_fixed_ip {
 	my $computer_public_ip_address = $self->data->get_computer_public_ip_address();   
 	my $public_ip_configuration    = $self->data->get_management_node_public_ip_configuration() || return;
 	my $server_request_id          = $self->data->get_server_request_id();
-	my $server_request_fixedIP     = $self->data->get_server_request_fixedIP(); 
+	my $server_request_fixed_ip    = $self->data->get_server_request_fixed_ip(); 
 
-   if ($server_request_id) {
-      if ($server_request_fixedIP) {
-         #Update the info related to fixedIP
-         if (!$self->update_fixed_ip_info()) {
-            notify($ERRORS{'WARNING'}, 0, "Unable to update information related fixedIP for server_request $server_request_id");
-         }    
-
+	if ($server_request_id) {
+		if ($server_request_fixed_ip) {
+			#Update the info related to fixedIP
+			if (!$self->update_fixed_ip_info()) {
+				notify($ERRORS{'WARNING'}, 0, "Unable to update information related fixedIP for server_request $server_request_id");
+			}    
+			
 			#Confirm requested IP is not being used
 			if (!$self->confirm_fixed_ip_is_available()) {
 				#failed, insert into loadlog, fail reservation	
-				insertloadlog($reservation_id, $computer_id, "failed","$server_request_fixedIP is NOT available");
+				insertloadlog($reservation_id, $computer_id, "failed","$server_request_fixed_ip is NOT available");
 				return 0;
 			}
-
+			
 			#if set for static IPs, save the old address to restore
 			if ($public_ip_configuration =~ /static/i) {
 				notify($ERRORS{'DEBUG'}, 0, "saving original IP for restore on post reseration");
 				my $original_IPvalue = "originalIPaddr_" . $server_request_id;
 				set_variable($original_IPvalue, $computer_public_ip_address);
 			}
-
-         # Try to set the static public IP address using the OS module
-           if ($self->can("set_static_public_address")) {
-              if ($self->set_static_public_address()) {
-                 notify($ERRORS{'DEBUG'}, 0, "set static public IP address on $computer_node_name using OS module's set_static_public_address() method");                
-						$self->data->set_computer_public_ip_address($server_request_fixedIP);
-
-                # Delete cached network configuration information so it is retrieved next time it is needed
-                delete $self->{network_configuration};
-
-                if (update_computer_public_ip_address($computer_id, $server_request_fixedIP)) {
-                 notify($ERRORS{'OK'}, 0, "updated public IP address in computer table for $computer_node_name, $server_request_fixedIP");
-                }
-
-                #Update Hostname to match Public assigned name
-               if ($self->can("update_public_hostname")) {
-                  if ($self->update_public_hostname()) {
-                     notify($ERRORS{'OK'}, 0, "Updated hostname based on fixedIP $server_request_fixedIP");
-                  }
-               }
-           }
-           else {
-              notify($ERRORS{'WARNING'}, 0, "failed to set static public IP address on $computer_node_name");
-				  insertloadlog($reservation_id, $computer_id, "failed"," Not able to assigne IPaddress $server_request_fixedIP");
-              return 0;
-           }
-        }
-        else {
-           notify($ERRORS{'WARNING'}, 0, "unable to set static public IP address on $computer_node_name, " . ref($self) . " module does not implement a set_static_public_address subroutine");
-        }
-      }
-   }
+			
+			# Try to set the static public IP address using the OS module
+			if ($self->can("set_static_public_address")) {
+				if ($self->set_static_public_address()) {
+					notify($ERRORS{'DEBUG'}, 0, "set static public IP address on $computer_node_name using OS module's set_static_public_address() method");                
+					$self->data->set_computer_public_ip_address($server_request_fixed_ip);
+					
+					# Delete cached network configuration information so it is retrieved next time it is needed
+					delete $self->{network_configuration};
+					
+					if (update_computer_public_ip_address($computer_id, $server_request_fixed_ip)) {
+						notify($ERRORS{'OK'}, 0, "updated public IP address in computer table for $computer_node_name, $server_request_fixed_ip");
+					}
+					
+					#Update Hostname to match Public assigned name
+					if ($self->can("update_public_hostname")) {
+						if ($self->update_public_hostname()) {
+							notify($ERRORS{'OK'}, 0, "Updated hostname based on fixedIP $server_request_fixed_ip");
+						}
+					}
+				}
+				else {
+					notify($ERRORS{'WARNING'}, 0, "failed to set static public IP address on $computer_node_name");
+					insertloadlog($reservation_id, $computer_id, "failed"," Not able to assigne IPaddress $server_request_fixed_ip");
+					return 0;
+				}
+			}
+			else {
+			notify($ERRORS{'WARNING'}, 0, "unable to set static public IP address on $computer_node_name, " . ref($self) . " module does not implement a set_static_public_address subroutine");
+			}
+		}
+	}
 
 	return 1;
 
@@ -991,20 +992,20 @@ sub confirm_fixed_ip_is_available {
 	my $reservation_id = $self->data->get_reservation_id() || return;
 	my $computer_id = $self->data->get_computer_id() || return;
 	my $computer_node_name = $self->data->get_computer_node_name() || return;   
-	my $server_request_id            = $self->data->get_server_request_id();
-	my $server_request_fixedIP       = $self->data->get_server_request_fixedIP(); 
+	my $server_request_id = $self->data->get_server_request_id();
+	my $server_request_fixed_ip = $self->data->get_server_request_fixed_ip(); 
 	
 	#check VCL computer table
-	if (is_ip_assigned_query($server_request_fixedIP)) {
-		notify($ERRORS{'WARNING'}, 0, "$server_request_fixedIP is already assigned");
-		insertloadlog($reservation_id, $computer_id, "failed","$server_request_fixedIP is already assigned");
+	if (is_ip_assigned_query($server_request_fixed_ip)) {
+		notify($ERRORS{'WARNING'}, 0, "$server_request_fixed_ip is already assigned");
+		insertloadlog($reservation_id, $computer_id, "failed","$server_request_fixed_ip is already assigned");
 		return 0;
 	}
 
 	#Is IP pingable	
-	if (_pingnode($server_request_fixedIP)) {
-		notify($ERRORS{'WARNING'}, 0, "$server_request_fixedIP is answering ping test");
-		insertloadlog($reservation_id, $computer_id, "failed","$server_request_fixedIP is answering ping test, but is not assigned in VCL database");
+	if (_pingnode($server_request_fixed_ip)) {
+		notify($ERRORS{'WARNING'}, 0, "$server_request_fixed_ip is answering ping test");
+		insertloadlog($reservation_id, $computer_id, "failed","$server_request_fixed_ip is answering ping test, but is not assigned in VCL database");
 		return 0;	
 	}
 
@@ -2532,11 +2533,11 @@ sub manage_server_access {
 	my $server_request_admingroupid = $self->data->get_server_request_admingroupid();
 	my $server_request_logingroupid = $self->data->get_server_request_logingroupid();
 	my $user_login_id_owner         = $self->data->get_user_login_id();
-	my $user_sshPublicKeys 			  = $self->data->get_user_sshPublicKeys(0);
-	my $user_id_owner		           = $self->data->get_user_id();
-	my $image_os_type 				  = $self->data->get_image_os_type();
+	my $user_ssh_public_keys        = $self->data->get_user_ssh_public_keys(0);
+	my $user_id_owner		        = $self->data->get_user_id();
+	my $image_os_type 				= $self->data->get_image_os_type();
 	my $request_laststate_name      = $self->data->get_request_laststate_name();
-	my $reservation_users			  = $self->data->get_reservation_users();
+	my $reservation_users			= $self->data->get_reservation_users();
 
 	# Build list of users.
 	# If in admin group set admin flag
@@ -2567,13 +2568,13 @@ sub manage_server_access {
 		
 		if (!exists($res_accounts{$userid}) || $request_laststate_name eq "reinstall" ) {
 			if($request_laststate_name ne "reinstall" ){	
-
+				
 				$user_hash{$userid}{"passwd"} = 0;
 				# Generate password if linux and standalone affiliation
 				unless ($image_os_type =~ /linux/ && !$standalone) {
 					$user_hash{$userid}{"passwd"} = getpw();
 				}
-			
+				
 				if (update_reservation_accounts($reservation_id,$userid,$user_hash{$userid}{passwd},"add")) {
 					notify($ERRORS{'OK'}, 0, "Inserted $reservation_id,$userid into reservationsaccounts table");
 				}
@@ -2589,7 +2590,7 @@ sub manage_server_access {
 					unless ($image_os_type =~ /linux/ && !$standalone) {
 						$user_hash{$userid}{"passwd"} = getpw();
 					}
-
+					
 					if (update_reservation_accounts($reservation_id,$userid,0,"delete")) {
 					}
 					if (update_reservation_accounts($reservation_id,$userid,$user_hash{$userid}{passwd},"add")) {
@@ -2599,7 +2600,14 @@ sub manage_server_access {
 			}
 	
 			# Create user on the OS
-			if ($self->create_user($user_hash{$userid}{unityid},$user_hash{$userid}{passwd},$user_hash{$userid}{uid},$user_hash{$userid}{ROOTACCESS},$standalone,$user_hash{$userid}{user_info}{user_sshPublicKeys})) {
+			if ($self->create_user(
+					$user_hash{$userid}{unityid},
+					$user_hash{$userid}{passwd},
+					$user_hash{$userid}{uid},
+					$user_hash{$userid}{ROOTACCESS},
+					$standalone,
+					$user_hash{$userid}{user_info}{sshpublickeys}
+			)) {
 				notify($ERRORS{'OK'}, 0, "Successfully created user $user_hash{$userid}{unityid} on $computer_node_name");
 			}
 			else {
@@ -2620,16 +2628,16 @@ sub manage_server_access {
 			next;
 		}
 		if (!exists($user_hash{$res_userid})) {
-				 notify($ERRORS{'OK'}, 0, "username= $res_accounts{$res_userid}{username} is not listed in reservationsaccounts, attempting to delete");
-				  #Delete from reservationaccounts
-				  if (update_reservation_accounts($reservation_id,$res_accounts{$res_userid}{userid},0,"delete")) {
-						  notify($ERRORS{'OK'}, 0, "Deleted $reservation_id,$res_accounts{$res_userid}{userid} from reservationsaccounts table");
-				  }
-				  #Delete from OS
-				  if ($self->delete_user($res_accounts{$res_userid}{username},0,0)) {
-					  notify($ERRORS{'OK'}, 0, "Successfully removed user= $res_accounts{$res_userid}{username}");	
-				  }	
-				next;
+			notify($ERRORS{'OK'}, 0, "username= $res_accounts{$res_userid}{username} is not listed in reservationsaccounts, attempting to delete");
+			#Delete from reservationaccounts
+			if (update_reservation_accounts($reservation_id,$res_accounts{$res_userid}{userid},0,"delete")) {
+				notify($ERRORS{'OK'}, 0, "Deleted $reservation_id,$res_accounts{$res_userid}{userid} from reservationsaccounts table");
+			}
+			#Delete from OS
+			if ($self->delete_user($res_accounts{$res_userid}{username},0,0)) {
+				notify($ERRORS{'OK'}, 0, "Successfully removed user= $res_accounts{$res_userid}{username}");	
+			}	
+			next;
 		}
 	}
 	
@@ -3327,26 +3335,25 @@ sub update_fixed_ip_info {
    my $server_variable_data;
 
 	if (is_variable_set($variable_name)) {
-		  #fetch variable
-		  $server_variable_data  = get_variable($variable_name);
-
-		  notify($ERRORS{'DEBUG'}, 0, "data is set for $variable_name" . format_data($server_variable_data));
-			
-			my $router = $server_variable_data->{router};
-			my $netmask = $server_variable_data->{netmask};
-			my @dns = @{$server_variable_data->{dns}};
+		#fetch variable
+		$server_variable_data  = get_variable($variable_name);
 		
-			notify($ERRORS{'OK'}, 0, "updated data server request router info") if ($self->data->set_server_request_router($server_variable_data->{router}));
-			notify($ERRORS{'OK'}, 0, "updated data server request netmask info") if ($self->data->set_server_request_netmask($server_variable_data->{netmask}));
-			notify($ERRORS{'OK'}, 0, "updated data server request dns info") if ($self->data->set_server_request_DNSservers(@{$server_variable_data->{dns}}));
-			notify($ERRORS{'DEBUG'}, 0, "router= $router, netmask= $netmask, dns= @dns");
-
+		notify($ERRORS{'DEBUG'}, 0, "data is set for $variable_name" . format_data($server_variable_data));
+		
+		my $router = $server_variable_data->{router};
+		my $netmask = $server_variable_data->{netmask};
+		my @dns = @{$server_variable_data->{dns}};
+		
+		notify($ERRORS{'OK'}, 0, "updated data server request router info") if ($self->data->set_server_request_router($server_variable_data->{router}));
+		notify($ERRORS{'OK'}, 0, "updated data server request netmask info") if ($self->data->set_server_request_netmask($server_variable_data->{netmask}));
+		notify($ERRORS{'OK'}, 0, "updated data server request dns info") if ($self->data->set_server_request_dns_servers(@{$server_variable_data->{dns}}));
+		notify($ERRORS{'DEBUG'}, 0, "router= $router, netmask= $netmask, dns= @dns");
+		
 	}
-   else{
-        notify($ERRORS{'DEBUG'}, 0, "data is not set for $variable_name");
-        return 0;
-   }
-
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "data is not set for $variable_name");
+		return 0;
+	}
 }
 
 #/////////////////////////////////////////////////////////////////////////////

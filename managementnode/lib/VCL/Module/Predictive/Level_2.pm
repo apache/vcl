@@ -100,7 +100,7 @@ sub get_next_image {
 			push(@ret_array, "reload", @block_ret_array);	
 			return @ret_array;
 		}
-		else{
+		else {
 			notify($ERRORS{'WARNING'}, 0, "computer $computer_id is part of blockComputers, failed to return image info"); 
 		}
 	}
@@ -152,25 +152,25 @@ sub get_next_image {
 	#Look for any upcoming reservations
 
 	my $select_statement = "
-		  SELECT DISTINCT
-		  req.start AS starttime,
-		  ir.imagename AS imagename,
-        res.imagerevisionid AS imagerevisionid,
-        res.imageid AS imageid
-        FROM
-        reservation res,
-        request req,
-        image i,
-        state s,
-        imagerevision ir
-   WHERE
-        res.requestid = req.id
-        AND req.stateid = s.id
-        AND i.id = res.imageid
-        AND ir.id = res.imagerevisionid
-        AND res.computerid = $computer_id
-        AND (s.name = \'new\' OR s.name = \'reload\' OR s.name = \'imageprep\')
-   ";
+		SELECT DISTINCT
+		req.start AS starttime,
+		ir.imagename AS imagename,
+		res.imagerevisionid AS imagerevisionid,
+		res.imageid AS imageid
+		FROM
+		reservation res,
+		request req,
+		image i,
+		state s,
+		imagerevision ir
+		WHERE
+		res.requestid = req.id
+		AND req.stateid = s.id
+		AND i.id = res.imageid
+		AND ir.id = res.imagerevisionid
+		AND res.computerid = $computer_id
+		AND (s.name = \'new\' OR s.name = \'reload\' OR s.name = \'imageprep\')
+	";
 
 	# Call the database select subroutine
 	# This will return an array of one or more rows based on the select statement

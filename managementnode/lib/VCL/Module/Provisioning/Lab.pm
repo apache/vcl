@@ -134,19 +134,19 @@ sub load {
                [1]: log file path (optional)
  Returns     : Depends on the context which node_status was called:
                default: string containing "READY" or "FAIL"
-					boolean: true if ping, SSH, and VCL client checks are successful
-					         false if any checks fail
+               boolean: true if ping, SSH, and VCL client checks are successful
+                        false if any checks fail
                list: array, values are 1 for SUCCESS, 0 for FAIL
-					         [0]: Node status ("READY" or "FAIL")
-							   [1]: Ping status (0 or 1)
-							   [2]: SSH status (0 or 1)
-						   	[3]: VCL client daemon status (0 ir 1)
-					arrayref: reference to array described above
+                        [0]: Node status ("READY" or "FAIL")
+                        [1]: Ping status (0 or 1)
+                        [2]: SSH status (0 or 1)
+                        [3]: VCL client daemon status (0 ir 1)
+               arrayref: reference to array described above
                hashref: reference to hash with keys/values:
-					         {status} => <"READY","FAIL">
-						   	{ping} => <0,1>
-						   	{ssh} => <0,1>
-							   {vcl_client} => <0,1>
+                        {status} => <"READY","FAIL">
+                        {ping} => <0,1>
+                        {ssh} => <0,1>
+                        {vcl_client} => <0,1>
  Description : Checks the status of a lab machine.  Checks if the machine is
                pingable, can be accessed via SSH, and the VCL client is running.
 

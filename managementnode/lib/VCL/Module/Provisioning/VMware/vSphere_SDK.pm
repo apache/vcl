@@ -253,10 +253,11 @@ sub vm_register {
 	local $SIG{__DIE__} = sub{};
 	
 	my $vm_mo_ref;
-	eval { $vm_mo_ref = $vm_folder->RegisterVM(path => $vmx_path,
-											  asTemplate => 'false',
-											  pool => $resource_pool
-											);
+	eval {
+		$vm_mo_ref = $vm_folder->RegisterVM(path => $vmx_path,
+			asTemplate => 'false',
+			pool => $resource_pool
+		);
 	};
 	
 	if ($@) {
@@ -1044,12 +1045,13 @@ sub move_virtual_disk {
 	
 	# Attempt to move the virtual disk using MoveVirtualDisk
 	notify($ERRORS{'DEBUG'}, 0, "attempting to move virtual disk on VM host $vmhost_name: '$source_path' --> '$destination_path'");
-	eval { $virtual_disk_manager->MoveVirtualDisk(sourceName => $source_path,
-																 sourceDatacenter => $datacenter,
-																 destName => $destination_path,
-																 destDatacenter => $datacenter,
-																 force => 0);
-	};
+	eval { $virtual_disk_manager->MoveVirtualDisk(
+		sourceName => $source_path,
+		sourceDatacenter => $datacenter,
+		destName => $destination_path,
+		destDatacenter => $datacenter,
+		force => 0
+	);};
 	
 	# Check if an error occurred
 	if (my $fault = $@) {
@@ -1153,8 +1155,9 @@ sub create_nfs_datastore {
 			}
 			else {
 				notify($ERRORS{'WARNING'}, 0, "$check_datastore_type datastore '$datastore_name' already exists on VM host but it is pointing to a different remote path:
-						 requested remote path: $datastore_device
-						 existing remote path: $check_datastore_device");
+					requested remote path: $datastore_device
+					existing remote path: $check_datastore_device"
+				);
 				return;
 			}
 		}
@@ -1162,8 +1165,9 @@ sub create_nfs_datastore {
 			# Datastore names don't match, make sure an existing datastore with a different name isn't pointing to the requested device path
 			if ($check_datastore_device eq $datastore_device) {
 				notify($ERRORS{'WARNING'}, 0, "$check_datastore_type datastore with a different name already exists on VM host pointing to '$check_datastore_device':
-						 requested datastore name: $datastore_name
-						 existing datastore name: $check_datastore_name");
+					requested datastore name: $datastore_name
+					existing datastore name: $check_datastore_name"
+				);
 				return;
 			}
 			else {
@@ -1181,11 +1185,12 @@ sub create_nfs_datastore {
 	}
 	
 	# Create a HostNasVolumeSpec object to store the datastore configuration
-	my $host_nas_volume_spec = HostNasVolumeSpec->new(accessMode => 'readWrite',
-																	  localPath => $datastore_name,
-																	  remoteHost => $remote_host,
-																	  remotePath => $remote_path,
-																	  );
+	my $host_nas_volume_spec = HostNasVolumeSpec->new(
+		accessMode => 'readWrite',
+		localPath => $datastore_name,
+		remoteHost => $remote_host,
+		remotePath => $remote_path,
+	);
 	
 	# Override the die handler
 	local $SIG{__DIE__} = sub{};
@@ -1669,12 +1674,13 @@ sub copy_file {
 	
 	# Attempt to copy the file
 	notify($ERRORS{'DEBUG'}, 0, "attempting to copy file on VM host $vmhost_hostname: '$source_file_path' --> '$destination_file_path'");
-	eval { $file_manager->CopyDatastoreFile(sourceName => $source_file_path,
-														 sourceDatacenter => $datacenter,
-														 destinationName => $destination_file_path,
-														 destinationDatacenter => $datacenter,
-														 force => 0);
-	};
+	eval { $file_manager->CopyDatastoreFile(
+		sourceName => $source_file_path,
+		sourceDatacenter => $datacenter,
+		destinationName => $destination_file_path,
+		destinationDatacenter => $datacenter,
+		force => 0
+	);};
 	
 	# Check if an error occurred
 	if ($@) {
@@ -1936,12 +1942,12 @@ sub move_file {
 
 	# Attempt to copy the file
 	notify($ERRORS{'DEBUG'}, 0, "attempting to move file on VM host $vmhost_hostname: '$source_file_path' --> '$destination_file_path'");
-	eval { $file_manager->MoveDatastoreFile(sourceName => $source_file_path,
-														 sourceDatacenter => $datacenter,
-														 destinationName => $destination_file_path,
-														 destinationDatacenter => $datacenter
-														 );
-	};
+	eval { $file_manager->MoveDatastoreFile(
+		sourceName => $source_file_path,
+		sourceDatacenter => $datacenter,
+		destinationName => $destination_file_path,
+		destinationDatacenter => $datacenter
+	);};
 	
 	if ($@) {
 		if ($@->isa('SoapFault') && ref($@->detail) eq 'FileNotFound') {
@@ -3175,8 +3181,8 @@ sub _get_resource_pool_view {
 		# Check if the retrieved resource pool matches the profile resource path
 		if ($vmhost_profile_resource_path =~ /^$resource_pool_path$/i) {
 			notify($ERRORS{'DEBUG'}, 0, "found matching resource pool on VM host $vmhost_name\n" .
-					 "VM host profile resource path: $vmhost_profile_resource_path\n" .
-					 "resource pool path on host: $resource_pool_path"
+				"VM host profile resource path: $vmhost_profile_resource_path\n" .
+				"resource pool path on host: $resource_pool_path"
 			);
 			$self->{resource_pool_view_object} = $resource_pool;
 			return $resource_pool;
@@ -3185,8 +3191,8 @@ sub _get_resource_pool_view {
 		# Check if the fixed retrieved resource pool path matches the profile resource path
 		if ($vmhost_profile_resource_path =~ /^$resource_pool_path$/i) {
 			notify($ERRORS{'DEBUG'}, 0, "found resource pool on VM host $vmhost_name matching VM host profile resource path with default hidden levels removed:\n" .
-					 "path on VM host: '$resource_pool_path'\n" .
-					 "VM profile path: '$vmhost_profile_resource_path'"
+				"path on VM host: '$resource_pool_path'\n" .
+				"VM profile path: '$vmhost_profile_resource_path'"
 			);
 			$self->{resource_pool_view_object} = $resource_pool;
 			return $resource_pool;

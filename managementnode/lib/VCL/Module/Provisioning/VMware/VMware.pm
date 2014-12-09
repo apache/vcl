@@ -350,8 +350,8 @@ sub initialize {
 	$self->{api} = $vmware_api;
 	
 	notify($ERRORS{'DEBUG'}, 0, "VMware OS and API objects created for VM host $vmhost_computer_name:\n" .
-			 "VM host OS object type: " . ref($self->vmhost_os) . "\n" .
-			 "VMware API object type: " . ref($self->api) . "\n"
+		"VM host OS object type: " . ref($self->vmhost_os) . "\n" .
+		"VMware API object type: " . ref($self->api) . "\n"
 	);
 	
 	# Make sure the VMware product name can be retrieved
@@ -1214,9 +1214,9 @@ sub get_vmhost_datastructure {
 	my $vmhost_data;
 	eval {
 		$vmhost_data= new VCL::DataStructure({request_data => $request_data,
-																		 reservation_id => $reservation_id,
-																		 computer_identifier => $vmhost_computer_id,
-																		 image_identifier => $vmhost_profile_image_id});
+			reservation_id => $reservation_id,
+			computer_identifier => $vmhost_computer_id,
+			image_identifier => $vmhost_profile_image_id});
 	};
 	
 	if ($EVAL_ERROR) {
@@ -1349,10 +1349,11 @@ sub get_vmhost_api_object {
 
 	# Create an API object to control the VM host and VMs
 	my $api;
-	eval { $api = ($api_perl_package)->new({data_structure => $self->data,
-														 vmhost_data => $vmhost_datastructure,
-														 vmhost_os => $self->vmhost_os
-														 })};
+	eval { $api = ($api_perl_package)->new({
+		data_structure => $self->data,
+		vmhost_data => $vmhost_datastructure,
+		vmhost_os => $self->vmhost_os
+	})};
 	if (!$api) {
 		if ($EVAL_ERROR) {
 			notify($ERRORS{'WARNING'}, 0, "API object could not be created: $api_perl_package, error:\n$EVAL_ERROR");
@@ -1686,25 +1687,25 @@ sub prepare_vmx {
 	# ide needed for boot
 	# usb needed for mouse
 	# monitor, ich7m, smc for darwin
-  	if ($image_os_type =~ /osx/i) {
-		  %vmx_parameters = (%vmx_parameters, (
-		  "ide1:0.clientDevice" => "TRUE",
-        "ide1:0.deviceType" => "atapi-cdrom",
-        "ide1:0.fileName" => "",           
-        "ide1:0.present" => "TRUE", 
-        "ide1:0.startConnected" => "FALSE",
-        "usb.present" => "TRUE",                              
-        "usb:1.deviceType" => "hub",      
-        "usb:1.present" => "TRUE",    
-        "usb:2.deviceType" => "mouse",    
-        "usb:2.present" => "TRUE", 
-        "monitor.virtual_exec" => "hardware",
-        "monitor.virtual_mmu" => "software",
-        "ich7m.present" => "TRUE",
-        "smc.present" => "FALSE",
-        "keyboard.vusb.enable" => "TRUE",
-        "mouse.vusb.enable" => "TRUE",
-	  ));
+	if ($image_os_type =~ /osx/i) {
+		%vmx_parameters = (%vmx_parameters, (
+			"ide1:0.clientDevice" => "TRUE",
+			"ide1:0.deviceType" => "atapi-cdrom",
+			"ide1:0.fileName" => "",           
+			"ide1:0.present" => "TRUE", 
+			"ide1:0.startConnected" => "FALSE",
+			"usb.present" => "TRUE",                              
+			"usb:1.deviceType" => "hub",      
+			"usb:1.present" => "TRUE",    
+			"usb:2.deviceType" => "mouse",    
+			"usb:2.present" => "TRUE", 
+			"monitor.virtual_exec" => "hardware",
+			"monitor.virtual_mmu" => "software",
+			"ich7m.present" => "TRUE",
+			"smc.present" => "FALSE",
+			"keyboard.vusb.enable" => "TRUE",
+			"mouse.vusb.enable" => "TRUE",
+		));
 	}
 
 	# Check if the API implements 'add_ethernet_adapter'
@@ -2122,12 +2123,13 @@ sub is_vmx_vmdk_volume_shared {
 	}
 	
 	notify($ERRORS{'DEBUG'}, 0, "checking if vmx and vmdk base directory paths appear to be on the same volume:\n" .
-				 "vmx base directory path: '$vmx_base_directory_path'\n" .
-				 "vmdk base directory path: '$vmdk_base_directory_path'\n" .
-				 "vmx volume total space: " . get_file_size_info_string($vmx_volume_total_space) . "\n" .
-				 "vmdk volume total space: " . get_file_size_info_string($vmdk_volume_total_space) . "\n" .
-				 "vmx volume available space: " . get_file_size_info_string($vmx_volume_available_space) . "\n" .
-				 "vmdk volume available space: " . get_file_size_info_string($vmdk_volume_available_space));
+		"vmx base directory path: '$vmx_base_directory_path'\n" .
+		"vmdk base directory path: '$vmdk_base_directory_path'\n" .
+		"vmx volume total space: " . get_file_size_info_string($vmx_volume_total_space) . "\n" .
+		"vmdk volume total space: " . get_file_size_info_string($vmdk_volume_total_space) . "\n" .
+		"vmx volume available space: " . get_file_size_info_string($vmx_volume_available_space) . "\n" .
+		"vmdk volume available space: " . get_file_size_info_string($vmdk_volume_available_space)
+	);
 	
 	if ($vmx_base_directory_path eq $vmdk_base_directory_path || ($vmx_volume_total_space == $vmdk_volume_total_space && abs($vmx_volume_available_space - $vmdk_volume_available_space) < ($vmdk_volume_total_space * .01))) {
 		notify($ERRORS{'DEBUG'}, 0, "vmx and vmdk base directory paths appear to be on the same volume based on the total and available space");
@@ -2603,24 +2605,27 @@ sub reclaim_vmhost_disk_space {
 		
 		if ($available_space >= $additional_space_required) {
 			notify($ERRORS{'DEBUG'}, 0, "enough space is already available to accomodate the VM:\n" .
-						 "currently available space: " . get_file_size_info_string($available_space) . "\n" .
-						 "space required for the VM: " . get_file_size_info_string($additional_space_required));
+				"currently available space: " . get_file_size_info_string($available_space) . "\n" .
+				"space required for the VM: " . get_file_size_info_string($additional_space_required)
+			);
 			return 1;
 		}
 		elsif ($potential_available_space < $additional_space_required) {
 			notify($ERRORS{'WARNING'}, 0, "not enough space can be reclaimed to accomodate the VM:\n" .
-					 "deletable space: " . get_file_size_info_string($deletable_space) . "\n" .
-					 "currently available space: " . get_file_size_info_string($available_space) . "\n" .
-					 "potential available space: " . get_file_size_info_string($potential_available_space) . "\n" .
-					 "space required for the VM: " . get_file_size_info_string($additional_space_required));
+				"deletable space: " . get_file_size_info_string($deletable_space) . "\n" .
+				"currently available space: " . get_file_size_info_string($available_space) . "\n" .
+				"potential available space: " . get_file_size_info_string($potential_available_space) . "\n" .
+				"space required for the VM: " . get_file_size_info_string($additional_space_required)
+			);
 			return 0;
 		}
 		else {
 			notify($ERRORS{'DEBUG'}, 0, "enough space can be reclaimed to accomodate the VM:\n" .
-						 "deletable space: " . get_file_size_info_string($deletable_space) . "\n" .
-						 "currently available space: " . get_file_size_info_string($available_space) . "\n" .
-						 "potential available space: " . get_file_size_info_string($potential_available_space) . "\n" .
-						 "space required for the VM: " . get_file_size_info_string($additional_space_required));
+				"deletable space: " . get_file_size_info_string($deletable_space) . "\n" .
+				"currently available space: " . get_file_size_info_string($available_space) . "\n" .
+				"potential available space: " . get_file_size_info_string($potential_available_space) . "\n" .
+				"space required for the VM: " . get_file_size_info_string($additional_space_required)
+			);
 		}
 	}
 	else {
@@ -2632,43 +2637,47 @@ sub reclaim_vmhost_disk_space {
 		
 		if ($vmx_available_space >= $vmx_additional_bytes_required && $vmdk_available_space >= $vmdk_additional_bytes_required) {
 			notify($ERRORS{'DEBUG'}, 0, "enough space is already available to accomodate the VM:\n" .
-					 "space required for the vmx directory: " . get_file_size_info_string($vmx_additional_bytes_required) . "\n" .
-					 "vmx volume available space: " . get_file_size_info_string($vmx_available_space) . "\n" .
-					 "space required for the vmdk directory: " . get_file_size_info_string($vmdk_additional_bytes_required) . "\n" .
-					 "vmdk volume available space: " . get_file_size_info_string($vmdk_available_space));
+				"space required for the vmx directory: " . get_file_size_info_string($vmx_additional_bytes_required) . "\n" .
+				"vmx volume available space: " . get_file_size_info_string($vmx_available_space) . "\n" .
+				"space required for the vmdk directory: " . get_file_size_info_string($vmdk_additional_bytes_required) . "\n" .
+				"vmdk volume available space: " . get_file_size_info_string($vmdk_available_space)
+			);
 			return 1;
 		}
 		
 		my $deficit = 0;
 		if ($vmx_potential_available_space < $vmx_additional_bytes_required) {
 			notify($ERRORS{'WARNING'}, 0, "not enough space can be reclaimed to accomodate the vmx directory:\n" .
-					 "space required for the vmx directory: " . get_file_size_info_string($vmx_additional_bytes_required) . "\n" .
-					 "vmx volume available space: " . get_file_size_info_string($vmx_available_space) . "\n" .
-					 "vmx volume deletable space: " . get_file_size_info_string($total_deletable_vmx_size) . "\n" .
-					 "vmx volume potentially available space: " . get_file_size_info_string($vmx_potential_available_space));
-					 
+				"space required for the vmx directory: " . get_file_size_info_string($vmx_additional_bytes_required) . "\n" .
+				"vmx volume available space: " . get_file_size_info_string($vmx_available_space) . "\n" .
+				"vmx volume deletable space: " . get_file_size_info_string($total_deletable_vmx_size) . "\n" .
+				"vmx volume potentially available space: " . get_file_size_info_string($vmx_potential_available_space)
+			);
+			
 			$deficit = 1;
 		}
 		if ($vmdk_potential_available_space < $vmdk_additional_bytes_required) {
 			notify($ERRORS{'WARNING'}, 0, "not enough space can be reclaimed to accomodate the vmdk directory:\n" .
-					 "space required for the vmdk directory: " . get_file_size_info_string($vmdk_additional_bytes_required) . "\n" .
-					 "vmdk volume available space: " . get_file_size_info_string($vmdk_available_space) . "\n" .
-					 "vmdk volume deletable space: " . get_file_size_info_string($total_deletable_vmdk_size) . "\n" .
-					 "vmdk volume potentially available space: " . get_file_size_info_string($vmdk_potential_available_space));
+				"space required for the vmdk directory: " . get_file_size_info_string($vmdk_additional_bytes_required) . "\n" .
+				"vmdk volume available space: " . get_file_size_info_string($vmdk_available_space) . "\n" .
+				"vmdk volume deletable space: " . get_file_size_info_string($total_deletable_vmdk_size) . "\n" .
+				"vmdk volume potentially available space: " . get_file_size_info_string($vmdk_potential_available_space)
+			);
 			$deficit = 1;
 		}
 		return 0 if $deficit;
 		
 		notify($ERRORS{'DEBUG'}, 0, "enough space can be reclaimed to accomodate the VM:\n" .
-					 "space required for the vmx directory: " . get_file_size_info_string($vmx_additional_bytes_required) . "\n" .
-					 "vmx volume available space: " . get_file_size_info_string($vmx_available_space) . "\n" .
-					 "vmx volume deletable space: " . get_file_size_info_string($total_deletable_vmx_size) . "\n" .
-					 "vmx volume potentially available space: " . get_file_size_info_string($vmx_potential_available_space) . "\n" .
-					 "---\n" .
-			       "space required for the vmdk directory: " . get_file_size_info_string($vmdk_additional_bytes_required) . "\n" .
-					 "vmdk volume available space: " . get_file_size_info_string($vmdk_available_space) . "\n" .
-					 "vmdk volume deletable space: " . get_file_size_info_string($total_deletable_vmdk_size) . "\n" .
-					 "vmdk volume potentially available space: " . get_file_size_info_string($vmdk_potential_available_space));
+			"space required for the vmx directory: " . get_file_size_info_string($vmx_additional_bytes_required) . "\n" .
+			"vmx volume available space: " . get_file_size_info_string($vmx_available_space) . "\n" .
+			"vmx volume deletable space: " . get_file_size_info_string($total_deletable_vmx_size) . "\n" .
+			"vmx volume potentially available space: " . get_file_size_info_string($vmx_potential_available_space) . "\n" .
+			"---\n" .
+			"space required for the vmdk directory: " . get_file_size_info_string($vmdk_additional_bytes_required) . "\n" .
+			"vmdk volume available space: " . get_file_size_info_string($vmdk_available_space) . "\n" .
+			"vmdk volume deletable space: " . get_file_size_info_string($total_deletable_vmdk_size) . "\n" .
+			"vmdk volume potentially available space: " . get_file_size_info_string($vmdk_potential_available_space)
+		);
 	}
 	
 	my @delete_stage_order = (
@@ -4302,8 +4311,9 @@ sub get_image_size_bytes {
 	}
 	elsif (defined($image_size_bytes_repository) && defined($image_size_bytes_datastore)) {
 		notify($ERRORS{'DEBUG'}, 0, "image size retrieved from both the image repository and VM host datastore:\n" .
-				 "image repository: " . format_number($image_size_bytes_repository) . "\n" .
-				 "VM host datastore: " . format_number($image_size_bytes_datastore));
+			"image repository: " . format_number($image_size_bytes_repository) . "\n" .
+			"VM host datastore: " . format_number($image_size_bytes_datastore)
+		);
 		
 		if ($image_size_bytes_repository > $image_size_bytes_datastore) {
 			$image_size_bytes = $image_size_bytes_repository;
@@ -4322,9 +4332,10 @@ sub get_image_size_bytes {
 	my $image_size_mb = format_number(($image_size_bytes / 1024 / 1024));
 	my $image_size_gb = format_number(($image_size_bytes / 1024 / 1024 / 1024), 2);
 	notify($ERRORS{'DEBUG'}, 0, "size of $image_name image:\n" .
-			 format_number($image_size_bytes) . " bytes\n" .
-			 "$image_size_mb MB\n" .
-			 "$image_size_gb GB");
+		format_number($image_size_bytes) . " bytes\n" .
+		"$image_size_mb MB\n" .
+		"$image_size_gb GB"
+	);
 	return $image_size_bytes;
 }
 
@@ -5570,9 +5581,10 @@ sub get_vm_additional_vmx_bytes_required {
 	}
 	
 	notify($ERRORS{'DEBUG'}, 0, "estimate of additional space required for the vmx directory:\n" .
-			 "vmem/vswp file: " . get_file_size_info_string($vm_ram_bytes) . "\n" .
-			 "redo files: " . get_file_size_info_string($redo_size) . "\n" .
-			 "total: " . get_file_size_info_string($additional_bytes_required));
+		"vmem/vswp file: " . get_file_size_info_string($vm_ram_bytes) . "\n" .
+		"redo files: " . get_file_size_info_string($redo_size) . "\n" .
+		"total: " . get_file_size_info_string($additional_bytes_required)
+	);
 	
 	# Store the value in this object so it doesn't have to be retrieved again
 	$self->{additional_vmx_bytes_required} = $additional_bytes_required;

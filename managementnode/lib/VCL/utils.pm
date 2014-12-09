@@ -363,12 +363,12 @@ INIT {
 	# Store the command line options in hash
 	our %OPTIONS;
 	GetOptions(\%OPTIONS,
-				  'config=s' => \$CONF_FILE_PATH,
-				  'daemon!' => \$DAEMON_MODE,
-				  'logfile=s' => \$LOGFILE,
-				  'help' => \&help,
-				  'setup!' => \$SETUP_MODE,
-				  'verbose!' => \$VERBOSE,
+		'config=s' => \$CONF_FILE_PATH,
+		'daemon!' => \$DAEMON_MODE,
+		'logfile=s' => \$LOGFILE,
+		'help' => \&help,
+		'setup!' => \$SETUP_MODE,
+		'verbose!' => \$VERBOSE,
 	);
 	
 	my %parameters = (
@@ -1229,11 +1229,7 @@ sub mail {
 
 	if ($shared_mail_box) {
 		my $bcc = $shared_mail_box;
-		if ($mailer->open({From    => $from,
-								 To      => $to,
-								 Bcc     => $bcc,
-								 Subject => $subject,}))
-		{
+		if ($mailer->open({From => $from, To => $to, Bcc => $bcc, Subject => $subject})) {
 			print $mailer $mailstring;
 			$mailer->close();
 			notify($ERRORS{'OK'}, 0, "SUCCESS -- Sending mail To: $to, $subject");
@@ -1243,9 +1239,7 @@ sub mail {
 		}
 	} ## end if ($shared_mail_box)
 	else {
-		if ($mailer->open({From    => $from,
-								 To      => $to,
-								 Subject => $subject,}))
+		if ($mailer->open({From => $from, To => $to, Subject => $subject,}))
 		{
 			print $mailer $mailstring;
 			$mailer->close();
@@ -2125,7 +2119,7 @@ sub check_ssh {
 		notify($ERRORS{'OK'}, $log, " $node ssh port $port open");
 		return 1;
 	}
-	else{
+	else {
 		notify($ERRORS{'OK'}, $log, " $node ssh port $port closed");
 		return 0;
 	}
@@ -3226,7 +3220,7 @@ sub set_managementnode_state {
 
 	# Construct the update statement
 	my $update_statement = "
-	   UPDATE
+		UPDATE
 		managementnode,
 		state
 		SET
@@ -3234,7 +3228,7 @@ sub set_managementnode_state {
 		WHERE
 		state.name = '$state' AND 
 		managementnode.id = '$mn_ID'
-	 ";
+	";
 
 
 	# Call the database execute subroutine
@@ -3552,7 +3546,7 @@ EOF
 	if ($imagerevision_identifier =~ /^\d/) {
 		$select_statement .= "imagerevision.id = '$imagerevision_identifier'";
 	}
-	else{
+	else {
 		$select_statement .= "imagerevision.imagename = \'$imagerevision_identifier\'";
 	}
 
@@ -4696,7 +4690,7 @@ sub update_computer_imagename {
 	if ( $imagerevision_info = get_imagerevision_info($imagename)) {
 		notify($ERRORS{'DEBUG'}, 0, "successfully retreived image info for $imagename");
 	}
-	else{
+	else {
 		notify($ERRORS{'WARNING'}, 0, "failed to get_imagerevision_info for $imagename");
 		return 0;
 	}
@@ -4708,7 +4702,7 @@ sub update_computer_imagename {
 		notify($ERRORS{'DEBUG'}, 0, "successfully updated computerid= $computerid image_id= $image_id imagerevision_id= $imagerevision_id");
 		return 1;
 	}
-	else{
+	else {
 		notify($ERRORS{'WARNING'}, 0, "failed to update_currentimage imagename= $imagename computerid= $computerid");
 		return 0;
 	}
@@ -4750,14 +4744,14 @@ sub update_currentimage {
 	# Construct the update statement
 	# If $nextimageid defined and set build slightly different statement
 	my $update_statement = "
-	    UPDATE
+		UPDATE
 		computer c, image i
 		SET
 		c.currentimageid = $imageid,
-	    c.imagerevisionid= $imagerevisionid
+		c.imagerevisionid= $imagerevisionid
 		WHERE
 		c.id = $computerid
-	 ";
+	";
 
 	if (defined($nextimagid) && ($nextimagid)) {
 		notify($ERRORS{'WARNING'}, 0, "*******NEXTIMAGE updating computer $computerid: image=$imageid, imagerevision=$imagerevisionid nextimageid = $imageid");
@@ -4808,12 +4802,12 @@ sub is_inblockrequest {
 	}
 	# Construct the select statement
 	my $select_statement = "
-	    SELECT
-	    b.blockRequestid,c.blockTimeid
-	    FROM blockTimes b, blockComputers c
-	    WHERE
-	    c.blockTimeid=b.id AND c.computerid = $computerid
-	 ";
+		SELECT
+		b.blockRequestid,c.blockTimeid
+		FROM blockTimes b, blockComputers c
+		WHERE
+		c.blockTimeid=b.id AND c.computerid = $computerid
+	";
 
 	# Call the database select subroutine
 	# This will return an array of one or more rows based on the select statement
@@ -6409,7 +6403,7 @@ sub get_computers_controlled_by_mn {
 				if ($info{"manageable_computer_grps"}{$id}{"members"} = get_computer_grp_members($computer_group_id) ) {
 					notify($ERRORS{'DEBUG'}, $LOGFILE, "retrieved computers from computer groupname= $info{manageable_resoucegroups}{$grp_id}{$id}{groupname}");
 				}
-				else{
+				else {
 					notify($ERRORS{'DEBUG'}, $LOGFILE, "no computers in computer groupid= $computer_group_id}");
 					delete $info{manageable_resoucegroups}{$grp_id}{$id};
 				}
@@ -6426,11 +6420,11 @@ sub get_computers_controlled_by_mn {
 
 	foreach my $computergroup (keys %{ $info{manageable_computer_grps}}) {
 		foreach my $computerid (keys %{ $info{manageable_computer_grps}{$computergroup}{members} }) {
-			  if ( !(exists $computer_list{$computerid}) ) {
-				  # add to return list
-				  $computer_list{$computerid}{"computer_id"}=$computerid;
-			  }
+			if ( !(exists $computer_list{$computerid}) ) {
+				# add to return list
+				$computer_list{$computerid}{"computer_id"}=$computerid;
 			}
+		}
 	}
 
 	return \%computer_list;
@@ -6709,7 +6703,7 @@ EOF
 		(my $original_key = $key) =~ s/^.+_//;
 		
 		if ($key =~ /^(.+)_/) {
-			 $user_info->{$1}{$original_key} = $value;
+			$user_info->{$1}{$original_key} = $value;
 		}
 		else {
 			$user_info->{$original_key} = $value;
@@ -6766,7 +6760,7 @@ EOF
 
 	# If usepublickeys =0 && sshpublickeys is defined, disable public keys by setting sshpublickeys=0
 	if (!$user_info->{usepublickeys} && defined($user_info->{sshpublickeys})) {
-			$user_info->{sshpublickeys} = 0;
+		$user_info->{sshpublickeys} = 0;
 	}
 	
 	# For test account only
@@ -7007,7 +7001,7 @@ EOF
 			$computer_info->{provisioning}{$table}{$column} = $value;
 		}
 		elsif ($table eq 'predictivemodule' ) {
-		   $computer_info->{predictive}{module}{$column} = $value;
+			$computer_info->{predictive}{module}{$column} = $value;
 		}
 		else {
 			$computer_info->{$table}{$column} = $value;
@@ -7093,27 +7087,27 @@ EOF
  Returns     : hash reference
  Description : Retrieves nathost info if a nathost is mapped to the computer via
                the nathostcomputermap table. Example:
-					{
-					  "HOSTNAME" => "nat1.vcl.org",
-					  "datedeleted" => undef,
-					  "deleted" => 0,
-					  "id" => 2,
-					  "natIP" => "x.x.x.x",
-					  "nathostcomputermap" => {
-						 "computerid" => 3591,
-						 "nathostid" => 2
-					  },
-					  "resource" => {
-						 "id" => 6185,
-						 "resourcetype" => {
-							"id" => 16,
-							"name" => "managementnode"
-						 },
-						 "resourcetypeid" => 16,
-						 "subid" => 8
-					  },
-					  "resourceid" => 6185
-					}
+               {
+                 "HOSTNAME" => "nat1.vcl.org",
+                 "datedeleted" => undef,
+                 "deleted" => 0,
+                 "id" => 2,
+                 "natIP" => "x.x.x.x",
+                 "nathostcomputermap" => {
+                   "computerid" => 3591,
+                   "nathostid" => 2
+                 },
+                 "resource" => {
+                   "id" => 6185,
+                   "resourcetype" => {
+                     "id" => 16,
+                     "name" => "managementnode"
+                   },
+                   "resourcetypeid" => 16,
+                   "subid" => 8
+                 },
+                 "resourceid" => 6185
+               }
 
 =cut
 
@@ -8533,7 +8527,7 @@ sub add_imageid_to_newimages {
        return 0;
 	}
    else {
-	 return 1;
+		return 1;
 	}
 
 }
@@ -8578,8 +8572,8 @@ sub xmlrpc_call {
 	
 	if (defined($client)) {
 		notify($ERRORS{'DEBUG'}, 0, "created RPC::XML client object:\n" .
-				 "URL: $XMLRPC_URL\n" .
-				 "username: $XMLRPC_USER"
+			"URL: $XMLRPC_URL\n" .
+			"username: $XMLRPC_USER"
 		);
 	}
 	else {
@@ -8889,8 +8883,8 @@ sub is_public_ip_address {
 	# 172.16.0.0 - 172.16.31.255.255
 	# 192.168.0.0 - 192.168.255.255
 	if (($octets[0] == 10) ||
-		 ($octets[0] == 172 && ($octets[1] >= 16 && $octets[1] <= 31)) ||
-		 ($octets[0] == 192 && $octets[1] == 168)
+		($octets[0] == 172 && ($octets[1] >= 16 && $octets[1] <= 31)) ||
+		($octets[0] == 192 && $octets[1] == 168)
 		) {
 		notify($ERRORS{'DEBUG'}, 0, "private IP address: $ip_address, returning 0");
 		return 0;
@@ -8908,11 +8902,11 @@ sub is_public_ip_address {
 	# 223.255.255.0
 	# 240.0.0.0 - 255.255.255.254
 	elsif (($ip_address eq '0.0.0.0') ||
-			 ($ip_address =~ /^169\.254/) ||
-			 ($ip_address eq '191.255.0.0') ||
-			 ($ip_address eq '223.255.255.0') ||
-			 ($octets[0] >= 240 && $octets[0] <= 255)
-			 ) {
+				($ip_address =~ /^169\.254/) ||
+				($ip_address eq '191.255.0.0') ||
+				($ip_address eq '223.255.255.0') ||
+				($octets[0] >= 240 && $octets[0] <= 255)
+	) {
 		notify($ERRORS{'DEBUG'}, 0, "reserved IP address: $ip_address, returning 0");
 		return 0;
 	}
@@ -10011,7 +10005,7 @@ EOF
 			(my $original_key = $key) =~ s/^.+_//;
 	
 			if ($key =~ /module_/) {
-				 $info{$os_id}{module}{$original_key} = $value;
+				$info{$os_id}{module}{$original_key} = $value;
 			}
 			else {
 				$info{$os_id}{$original_key} = $value;
@@ -10091,51 +10085,50 @@ sub kill_child_processes {
  Returns     : hash reference
  Description : Returns the connect methods for the image revision specified as
                the argument. Example:
-					{
-					 4 => {
-						"RETRIEVAL_TIME" => "1417709281",
-						"connectmethodmap" => {
-						  "OSid" => 36,
-						  "OStypeid" => undef,
-						  "autoprovisioned" => undef,
-						  "connectmethodid" => 4,
-						  "disabled" => 0,
-						  "imagerevisionid" => undef
-						},
-						"connectmethodport" => {
-						  35 => {
-							 "connectmethodid" => 4,
-							 "id" => 35,
-							 "natport" => {
-								"connectmethodportid" => 35,
-								"nathostid" => 2,
-								"publicport" => 56305,
-								"reservationid" => 3115
-							 },
-							 "port" => 3389,
-							 "protocol" => "TCP"
-						  },
-						  37 => {
-							 "connectmethodid" => 4,
-							 "id" => 37,
-							 "natport" => {
-								"connectmethodportid" => 37,
-								"nathostid" => 2,
-								"publicport" => 63058,
-								"reservationid" => 3115
-							 },
-							 "port" => 3389,
-							 "protocol" => "UDP"
-						  }
-						},
-						"description" => "Linux xRDP (Remote Desktop Protocol)",
-						"id" => 4,
-						"name" => "xRDP",
-						"servicename" => "xrdp",
-						"startupscript" => undef
-					 }
-				  }
-
+               {
+                4 => {
+                  "RETRIEVAL_TIME" => "1417709281",
+                  "connectmethodmap" => {
+                    "OSid" => 36,
+                    "OStypeid" => undef,
+                    "autoprovisioned" => undef,
+                    "connectmethodid" => 4,
+                    "disabled" => 0,
+                    "imagerevisionid" => undef
+                  },
+                  "connectmethodport" => {
+                    35 => {
+                      "connectmethodid" => 4,
+                      "id" => 35,
+                      "natport" => {
+                        "connectmethodportid" => 35,
+                        "nathostid" => 2,
+                        "publicport" => 56305,
+                        "reservationid" => 3115
+                      },
+                      "port" => 3389,
+                      "protocol" => "TCP"
+                    },
+                    37 => {
+                      "connectmethodid" => 4,
+                      "id" => 37,
+                      "natport" => {
+                        "connectmethodportid" => 37,
+                        "nathostid" => 2,
+                        "publicport" => 63058,
+                        "reservationid" => 3115
+                      },
+                      "port" => 3389,
+                      "protocol" => "UDP"
+                    }
+                  },
+                  "description" => "Linux xRDP (Remote Desktop Protocol)",
+                  "id" => 4,
+                  "name" => "xRDP",
+                  "servicename" => "xrdp",
+                  "startupscript" => undef
+                }
+              }
 
 =cut
 

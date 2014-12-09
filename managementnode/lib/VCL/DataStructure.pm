@@ -163,14 +163,14 @@ $SUBROUTINE_MAPPINGS{log_wasavailable} = '$self->request_data->{log}{wasavailabl
 $SUBROUTINE_MAPPINGS{log_ending} = '$self->request_data->{log}{ending}';
 $SUBROUTINE_MAPPINGS{log_requestid} = '$self->request_data->{log}{requestid}';
 $SUBROUTINE_MAPPINGS{log_computerid} = '$self->request_data->{log}{computerid}';
-$SUBROUTINE_MAPPINGS{log_remoteIP} = '$self->request_data->{log}{remoteIP}';
+$SUBROUTINE_MAPPINGS{log_remote_ip} = '$self->request_data->{log}{remoteIP}';
 $SUBROUTINE_MAPPINGS{log_imageid} = '$self->request_data->{log}{imageid}';
 $SUBROUTINE_MAPPINGS{log_size} = '$self->request_data->{log}{size}';
 
 $SUBROUTINE_MAPPINGS{sublog_imageid} = '$self->request_data->{log}{imageid}';
 $SUBROUTINE_MAPPINGS{sublog_imagerevisionid} = '$self->request_data->{log}{imagerevisionid}';
 $SUBROUTINE_MAPPINGS{sublog_computerid} = '$self->request_data->{log}{computerid}';
-$SUBROUTINE_MAPPINGS{sublog_IPaddress} = '$self->request_data->{log}{IPaddress}';
+$SUBROUTINE_MAPPINGS{sublog_ip_address} = '$self->request_data->{log}{IPaddress}';
 $SUBROUTINE_MAPPINGS{sublog_managementnodeid} = '$self->request_data->{log}{managementnodeid}';
 $SUBROUTINE_MAPPINGS{sublog_predictivemoduleid} = '$self->request_data->{log}{predictivemoduleid}';
 
@@ -417,11 +417,11 @@ $SUBROUTINE_MAPPINGS{image_platform_name} = '$self->request_data->{reservation}{
 $SUBROUTINE_MAPPINGS{imagetype_name} = '$self->request_data->{reservation}{RESERVATION_ID}{image}{imagetype}{name}';
 
 $SUBROUTINE_MAPPINGS{server_request_id} = '$self->request_data->{reservation}{RESERVATION_ID}{serverrequest}{id}';
-$SUBROUTINE_MAPPINGS{server_request_fixedIP} = '$self->request_data->{reservation}{RESERVATION_ID}{serverrequest}{fixedIP}';
+$SUBROUTINE_MAPPINGS{server_request_fixed_ip} = '$self->request_data->{reservation}{RESERVATION_ID}{serverrequest}{fixedIP}';
 $SUBROUTINE_MAPPINGS{server_request_router} = '$self->request_data->{reservation}{RESERVATION_ID}{serverrequest}{router}';
 $SUBROUTINE_MAPPINGS{server_request_netmask} = '$self->request_data->{reservation}{RESERVATION_ID}{serverrequest}{netmask}';
-$SUBROUTINE_MAPPINGS{server_request_DNSservers} = '$self->request_data->{reservation}{RESERVATION_ID}{serverrequest}{DNSservers}';
-$SUBROUTINE_MAPPINGS{server_request_fixedMAC} = '$self->request_data->{reservation}{RESERVATION_ID}{serverrequest}{fixedMAC}';
+$SUBROUTINE_MAPPINGS{server_request_dns_servers} = '$self->request_data->{reservation}{RESERVATION_ID}{serverrequest}{DNSservers}';
+$SUBROUTINE_MAPPINGS{server_request_fixed_mac} = '$self->request_data->{reservation}{RESERVATION_ID}{serverrequest}{fixedMAC}';
 $SUBROUTINE_MAPPINGS{server_request_admingroupid} = '$self->request_data->{reservation}{RESERVATION_ID}{serverrequest}{admingroupid}';
 $SUBROUTINE_MAPPINGS{server_request_logingroupid} = '$self->request_data->{reservation}{RESERVATION_ID}{serverrequest}{logingroupid}';
 $SUBROUTINE_MAPPINGS{server_request_monitored} = '$self->request_data->{reservation}{RESERVATION_ID}{serverrequest}{monitored}';
@@ -469,8 +469,8 @@ $SUBROUTINE_MAPPINGS{user_affiliation_helpaddress} = '$self->request_data->{user
 $SUBROUTINE_MAPPINGS{user_affiliation_name} = '$self->request_data->{user}{affiliation}{name}';
 $SUBROUTINE_MAPPINGS{user_affiliation_sitewwwaddress} = '$self->request_data->{user}{affiliation}{sitewwwaddress}';
 $SUBROUTINE_MAPPINGS{user_imtype_name} = '$self->request_data->{user}{IMtype}{name}';
-$SUBROUTINE_MAPPINGS{user_usePublicKeys} = '$self->request_data->{user}{usepublickeys}';
-$SUBROUTINE_MAPPINGS{user_sshPublicKeys} = '$self->request_data->{user}{sshpublickeys}';
+$SUBROUTINE_MAPPINGS{user_use_public_keys} = '$self->request_data->{user}{usepublickeys}';
+$SUBROUTINE_MAPPINGS{user_ssh_public_keys} = '$self->request_data->{user}{sshpublickeys}';
 
 $SUBROUTINE_MAPPINGS{management_node_id} = '$ENV{management_node_info}{id}';
 $SUBROUTINE_MAPPINGS{management_node_ipaddress} = '$ENV{management_node_info}{IPaddress}';

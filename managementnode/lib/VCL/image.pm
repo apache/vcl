@@ -775,7 +775,7 @@ sub setup_capture_base_image {
 				}
 			}
 			if (update_computer_state($computer_id, "available")) {
-				 print "Set $computer_node_name to available state\n";
+				print "Set $computer_node_name to available state\n";
 			}
 			$chosen_prettyname = $existing_requests_array_choices{$chosen_request_id}{prettyname};
 			print "Restarting image capture for: \nRequest id= $chosen_request_id \nImage Name: $chosen_prettyname \nNode Name: $computer_node_name\n";
@@ -987,11 +987,11 @@ EOF
 	if (open(COMMAND, "tail -f $LOGFILE 2>&1 |")) {
 		# Capture the output of the command
 		while (my $output = <COMMAND>) {
-			 if ($output =~ /$reservation_id/) {
+			if ($output =~ /$reservation_id/) {
 				print $output;
 				if ($output =~ /complete/i ) {
 					last;
-			 	}
+				}
 			}
 		}
 	}

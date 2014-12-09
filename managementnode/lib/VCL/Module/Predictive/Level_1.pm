@@ -98,7 +98,7 @@ sub get_next_image {
 			push(@ret_array, "reload", @block_ret_array);
 			return @ret_array;
 		}
-		else{
+		else {
 			notify($ERRORS{'WARNING'}, 0, "computer $computer_id is part of blockComputers, failed to return image info"); 
 		}
 	}

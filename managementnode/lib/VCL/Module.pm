@@ -539,7 +539,7 @@ sub create_vmhost_os_object {
 															computer_identifier => $vmhost_computer_id,
 															image_identifier => $vmhost_profile_image_id
 															}
-														  );
+														);
 	};
 	
 	if ($EVAL_ERROR) {
