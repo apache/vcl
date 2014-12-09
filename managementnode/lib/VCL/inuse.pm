@@ -149,8 +149,6 @@ sub process {
 		$self->state_exit('inuse', 'inuse');
 	}
 	
-	# Remove rows from computerloadlog for this reservation, don't remove the loadstate=begin row
-	delete_computerloadlog_reservation($reservation_id, '!beginacknowledgetimeout');
 	
 	my $now_epoch_seconds = time;
 	
@@ -302,6 +300,10 @@ sub process {
 	
 	# Check to see if user is connected. user_connected will true(1) for servers and requests > 24 hours
 	if (!$self->code_loop_timeout(sub{$self->user_connected()}, [], "waiting for user to connect to $computer_short_name", ($connect_timeout_minutes*60), 15)) {
+		
+		# Remove rows from computerloadlog for this reservation if connected, don't remove the loadstate=begin row
+		delete_computerloadlog_reservation($reservation_id, '!beginacknowledgetimeout');
+
 		if (!$imagemeta_checkuser || !$request_checkuser) {
 			notify($ERRORS{'OK'}, 0, "never detected user connection, skipping timeout, imagemeta checkuser: $imagemeta_checkuser, request checkuser: $request_checkuser");
 		}
