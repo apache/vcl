@@ -454,13 +454,21 @@ class TimeVariable {
 				$newval = $newval * 60;
 			if($newval != $arr['val'])
 				$newvals[$arr['key']] = $newval;
+			$origvals[$id]['val'] = $newval;
 		}
 		foreach($newvals as $key => $val)
 			setVariable($key, $val, 'none');
+
+		$cdata = $this->basecdata;
+		$cdata['origvals'] = $origvals;
+		$savecont = addContinuationsEntry('AJupdateAllSettings', $cdata);
+
 		$arr = array('status' => 'success',
 		             'msgid' => "{$this->domidbase}msg",
 		             'btn' => "{$this->domidbase}btn",
-		             'msg' => $this->updatemsg);
+		             'msg' => $this->updatemsg,
+		             'contid' => "{$this->domidbase}cont",
+		             'savecont' => $savecont);
 		sendJSON($arr);
 	}
 
