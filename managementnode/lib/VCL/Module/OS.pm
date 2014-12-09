@@ -138,7 +138,7 @@ sub pre_capture {
 =cut
 
 sub reserve {
- 	my $self = shift;
+	my $self = shift;
 	if (ref($self) !~ /VCL::Module/) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return;
@@ -883,7 +883,7 @@ sub update_ssh_known_hosts {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 server_request_set_fixedIP
+=head2 server_request_set_fixed_ip
 
  Parameters  : none
  Returns     : If successful: true
@@ -892,7 +892,7 @@ sub update_ssh_known_hosts {
 
 =cut
 
-sub server_request_set_fixedIP {
+sub server_request_set_fixed_ip {
    my $self = shift;
    if (ref($self) !~ /VCL::Module/i) {
       notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
@@ -912,12 +912,12 @@ sub server_request_set_fixedIP {
    if ($server_request_id) {
       if ($server_request_fixedIP) {
          #Update the info related to fixedIP
-         if (!$self->update_fixedIP_info()) {
+         if (!$self->update_fixed_ip_info()) {
             notify($ERRORS{'WARNING'}, 0, "Unable to update information related fixedIP for server_request $server_request_id");
          }    
 
 			#Confirm requested IP is not being used
-			if (!$self->confirm_fixedIP_is_available()) {
+			if (!$self->confirm_fixed_ip_is_available()) {
 				#failed, insert into loadlog, fail reservation	
 				insertloadlog($reservation_id, $computer_id, "failed","$server_request_fixedIP is NOT available");
 				return 0;
@@ -969,7 +969,7 @@ sub server_request_set_fixedIP {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 confirm_fixedIP_is_available
+=head2 confirm_fixed_ip_is_available
 
  Parameters  : none
  Returns     : If successful: true
@@ -981,7 +981,7 @@ sub server_request_set_fixedIP {
 
 =cut
 
-sub confirm_fixedIP_is_available {
+sub confirm_fixed_ip_is_available {
 	my $self = shift;
 	if (ref($self) !~ /VCL::Module/i) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
@@ -3301,7 +3301,7 @@ sub get_tools_file_paths {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 update_fixedIP_info
+=head2 update_fixed_ip_info
 
  Parameters  : 
  Returns     : 1, 0 
@@ -3309,7 +3309,7 @@ sub get_tools_file_paths {
 
 =cut
 
-sub update_fixedIP_info {
+sub update_fixed_ip_info {
 
 	my $self = shift;
    unless (ref($self) && $self->isa('VCL::Module')) {
@@ -3716,7 +3716,7 @@ sub firewall_compare_update {
  Parameters  :data hash 
  Returns     : 0 or 1
  Description : creates or updates the cluster_info file
- 					updates firewall so each node can communicate
+               updates firewall so each node can communicate
 
 =cut
 

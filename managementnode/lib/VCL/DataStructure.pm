@@ -1269,7 +1269,7 @@ sub get_state_name {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 get_next_image_dataStructure
+=head2 get_next_image_data_structure
 
  Parameters  : none
  Returns     : array 
@@ -1278,7 +1278,7 @@ sub get_state_name {
 
 =cut
 
-sub get_next_image_dataStructure {
+sub get_next_image_data_structure {
 	my $self = shift;
 	
 	# Get the current image data in case something goes wrong

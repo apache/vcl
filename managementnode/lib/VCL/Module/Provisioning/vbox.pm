@@ -143,7 +143,7 @@ sub load {
 	my ($myimagename, $myvmx, $myvmdir, $mybasedirname, $requestedimagenamebase);
 
 	# preform cleanup
-	if ($self->control_VM("remove")) {
+	if ($self->control_vm("remove")) {
 		notify($ERRORS{'OK'}, 0, "removed node $shortname from vmhost $vmhost_hostname");
 	}
 
@@ -582,7 +582,7 @@ sub capture { ## This is going to need to be implemented before the module is co
 		}
 		else {
 			# Image has been captured, remove the VM
-			$self->control_VM("remove");
+			$self->control_vm("remove");
 		}
 	} elsif ($vmprofile_vmdisk =~ /shared/) { ## end if ($vmprofile_vmdisk =~ /(local|dedicated)/)
 		
@@ -685,7 +685,7 @@ sub remove_snapshots {
 
 ### This section will be next.
 
-sub control_VM {
+sub control_vm {
 	my $self = shift;
 	my $ret = 0;
 
@@ -772,7 +772,7 @@ sub control_VM {
 	my $dirstructure = 0;
 	my $vmison       = 0;
 	return $ret;
-} ## end sub control_VM
+} ## end sub control_vm
 
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -1098,7 +1098,7 @@ sub post_maintenance_action {
 	my $computer_id = $self->data->get_computer_id();
 	my $vmhost_hostname = $self->data->get_vmhost_hostname;
 
-	if ($self->control_VM("remove")) {
+	if ($self->control_vm("remove")) {
 		notify($ERRORS{'OK'}, 0, "removed node $computer_short_name from vmhost $vmhost_hostname");
 	}
 

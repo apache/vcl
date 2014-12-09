@@ -723,8 +723,8 @@ sub update_public_hostname {
  Parameters  : hostname
  Returns     : boolean
  Description : updates the static hostname file on node, so hostname persists across reboots
- 					seperated from update_public_hostname as the file location and format can differ
-					accross Linux distributions
+               seperated from update_public_hostname as the file location and format can differ
+               accross Linux distributions
 
 =cut
 
@@ -2374,9 +2374,9 @@ sub get_network_configuration {
 			$network_configuration->{$interface_name}{ip_address}{$1} = $3;
 			$network_configuration->{$interface_name}{broadcast_address} = $2;
 		}
-       		
+      
 		# inet 10.25.14.3  netmask 255.255.240.0  broadcast 10.25.15.255
-      		if ($ifconfig_line =~ /inet\s+([\d\.]+)\s+netmask\s+([\d\.]+)\s+broadcast\s+([\d\.]+)/) {
+      if ($ifconfig_line =~ /inet\s+([\d\.]+)\s+netmask\s+([\d\.]+)\s+broadcast\s+([\d\.]+)/) {
 			$network_configuration->{$interface_name}{ip_address}{$1} = $2;
 			$network_configuration->{$interface_name}{broadcast_address} = $3;
 		}

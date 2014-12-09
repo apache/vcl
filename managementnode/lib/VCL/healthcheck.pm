@@ -291,7 +291,7 @@ sub process {
 					$node_status{status} = "ready";
 					next;
 				}
-				my @currentimage_txt_contents 	 = get_current_image_contents_noDS($computer_short_name);
+				my @currentimage_txt_contents 	 = get_current_image_contents_no_data_structure($computer_short_name);
 					foreach my $l (@currentimage_txt_contents) {
 						#notify($ERRORS{'OK'}, 0, "NODE l=$l");
 						if ( $l =~ /imagerevision_id/i ) {

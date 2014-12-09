@@ -774,7 +774,7 @@ sub daemonize {
 	#Create EX lock on lockfile
 	my $subsys_lock = "/var/lock/subsys/$PROCESSNAME";
 	sysopen(LOCKFILE, $subsys_lock, O_RDONLY | O_CREAT ) or die "unable to open lock file: $PIDFILE \n";   
-	unless(flock(LOCKFILE, LOCK_EX|LOCK_NB)){ 
+	unless(flock(LOCKFILE, LOCK_EX|LOCK_NB)) {
 		notify($ERRORS{'WARNING'}, $LOGFILE, " An process instance of $PROCESSNAME is already running ");
 		print STDOUT "\nFailed to start.\n\nAn instance of $PROCESSNAME is already running\n\n";
 		print STDERR "\nFailed to start.\n\nAn instance of $PROCESSNAME is already running\n\n";

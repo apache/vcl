@@ -320,7 +320,7 @@ EOF
 		notify($ERRORS{'OK'}, 0, "sent reservation timeout e-mail to $user_email");
 	}
 	if ($user_im_name ne "none") {
-		notify_via_IM($user_im_name, $user_im_id, $message);
+		notify_via_im($user_im_name, $user_im_id, $message);
 		notify($ERRORS{'OK'}, 0, "sent reservation timeout IM to $user_im_name");
 	}
 	return 1;

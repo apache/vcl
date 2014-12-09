@@ -77,16 +77,16 @@ our $HELP = 0;
 #$HELP = $OPTIONS{help} if (defined($OPTIONS{help} && $OPTIONS{help}));
 #$STAGE = $OPTIONS{powerdown} if (defined($OPTIONS{powerdown} && $OPTIONS{powerdown}));
 
-if($STAGE){
+if ($STAGE) {
 
-	unless($STAGE =~ /available|all/){ 
+	unless($STAGE =~ /available|all/) {
 		print "\nInvalid powerdown option\n\n";
 		help;
 		exit;
 	}
 
 }
-if($HELP){
+if ($HELP) {
 	help_healthcheck();
 	exit;
 }

@@ -532,7 +532,7 @@ EOF
 	# Send IM
 	if ($user_imtype_name ne "none") {
 		notify($ERRORS{'DEBUG'}, 0, "user $user_login_id IM type: $user_imtype_name - notifying user of endtime");
-		notify_via_IM($user_imtype_name, $user_im_id, $message);
+		notify_via_im($user_imtype_name, $user_im_id, $message);
 	}
 	else {
 		notify($ERRORS{'DEBUG'}, 0, "user $user_login_id IM type: $user_imtype_name - not notifying user of endtime");
@@ -670,7 +670,7 @@ EOF
 	
 	# Send IM
 	if ($is_parent_reservation && $user_imtype_name ne "none") {
-		notify_via_IM($user_imtype_name, $user_im_id, $message);
+		notify_via_im($user_imtype_name, $user_im_id, $message);
 	}
 	
 	return 1;
@@ -738,7 +738,7 @@ EOF
 	
 	# Send IM
 	if ($is_parent_reservation && $user_imtype_name ne "none") {
-		notify_via_IM($user_imtype_name, $user_im_id, $message);
+		notify_via_im($user_imtype_name, $user_im_id, $message);
 	}
 	
 	return 1;
@@ -842,7 +842,7 @@ EOF
 	
 	# Send IM
 	if ($is_parent_reservation && $user_imtype_name ne "none") {
-		notify_via_IM($user_imtype_name, $user_im_id, $message);
+		notify_via_im($user_imtype_name, $user_im_id, $message);
 	}
 	
 	return 1;
@@ -905,7 +905,7 @@ EOF
 		notify($ERRORS{'OK'}, 0, "sent reservation timeout e-mail to $user_email");
 	}
 	if ($user_im_name ne "none") {
-		notify_via_IM($user_im_name, $user_im_id, $message);
+		notify_via_im($user_im_name, $user_im_id, $message);
 		notify($ERRORS{'OK'}, 0, "sent reservation timeout IM to $user_im_name");
 	}
 	return 1;

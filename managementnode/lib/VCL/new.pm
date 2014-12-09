@@ -654,7 +654,7 @@ sub reload_image {
 		notify($ERRORS{'DEBUG'}, 0, "  SERVER_REQUEST_ID detected");
 		if ($server_request_fixedIP) {
 			notify($ERRORS{'DEBUG'}, 0, "server_request_fixedIP is set calling update_public_ip_address");
-			if (!$self->os->server_request_set_fixedIP()) {
+			if (!$self->os->server_request_set_fixed_ip()) {
 				notify($ERRORS{'WARNING'}, 0, "failed to update IP address for $computer_short_name");
 				insertloadlog($reservation_id, $computer_id, "failed", "unable to set public IP address on $computer_short_name possibly IP address is inuse");
 				return;
@@ -1003,7 +1003,7 @@ EOF
 	}
 	
 	if ($user_imtype_name ne "none") {
-		notify_via_IM($user_imtype_name, $user_im_id, $mailstring, $user_affiliation_helpaddress);
+		notify_via_im($user_imtype_name, $user_im_id, $mailstring, $user_affiliation_helpaddress);
 	}
 	
 	return 1;

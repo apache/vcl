@@ -171,7 +171,7 @@ sub process {
 	if ($blockrequest_mode eq "start") {
 
 		#update processed flag for request
-		if (update_blockTimes_processing($blocktime_id, 1)) {
+		if (update_block_times_processing($blocktime_id, 1)) {
 			notify($ERRORS{'OK'}, 0, "updated process flag on blocktime_id= $blocktime_id");
 		}
 
@@ -311,10 +311,10 @@ EOF
 	} ## end if ($blockrequest_mode eq "start")
 	elsif ($blockrequest_mode eq "end") {
 		# remove blockTime entry for this request
-		if (clear_blockComputers($blocktime_id)) {
+		if (clear_block_computers($blocktime_id)) {
 			notify($ERRORS{'OK'}, 0, "Removed computers from blockComputers table for blocktime_id=$blocktime_id");
 		}
-		if (clear_blockTimes($blocktime_id)) {
+		if (clear_block_times($blocktime_id)) {
 			notify($ERRORS{'OK'}, 0, "Removed blocktime_id=$blocktime_id from blockTimes table");
 		}
 
@@ -402,7 +402,7 @@ sub process_block_time {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 update_blockTimes_processing
+=head2 update_block_times_processing
 
  Parameters  : $blockTimes_id, $processing
  Returns     : 0 or 1
@@ -410,7 +410,7 @@ sub process_block_time {
 
 =cut
 
-sub update_blockTimes_processing {
+sub update_block_times_processing {
 	my ($blockTimes_id, $processing) = @_;
 
 	my ($package, $filename, $line, $sub) = caller(0);
@@ -443,7 +443,7 @@ sub update_blockTimes_processing {
 		notify($ERRORS{'WARNING'}, 0, "unable to update blockTimes table, id=$blockTimes_id, processing=$processing");
 		return 0;
 	}
-} ## end sub update_blockTimes_processing
+} ## end sub update_block_times_processing
 
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -528,7 +528,7 @@ sub udpate_block_request_status {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 clear_blockTimes
+=head2 clear_block_times
 
  Parameters  : $blockTimes_id
  Returns     : 0 or 1
@@ -536,7 +536,7 @@ sub udpate_block_request_status {
 
 =cut
 
-sub clear_blockTimes {
+sub clear_block_times {
 	my ($blockTimes_id) = @_;
 
 	my ($package, $filename, $line, $sub) = caller(0);
@@ -564,11 +564,11 @@ sub clear_blockTimes {
 		notify($ERRORS{'WARNING'}, 0, "unable to deleted blockTimes_id $blockTimes_id blockTimes table ");
 		return 0;
 	}
-} ## end sub clear_blockTimes
+} ## end sub clear_block_times
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 clear_blockComputers
+=head2 clear_block_computers
 
  Parameters  : $blockTimes_id, $processing
  Returns     : 0 or 1
@@ -576,7 +576,7 @@ sub clear_blockTimes {
 
 =cut
 
-sub clear_blockComputers {
+sub clear_block_computers {
 	my ($blockTimes_id) = @_;
 
 	my ($package, $filename, $line, $sub) = caller(0);
@@ -604,7 +604,7 @@ sub clear_blockComputers {
 		notify($ERRORS{'WARNING'}, 0, "unable to delete blockComputers for id=$blockTimes_id, ");
 		return 0;
 	}
-} ## end sub clear_blockComputers
+} ## end sub clear_block_computers
 
 =pod
 ////////////////////////////////////////////////////////////////////////////////

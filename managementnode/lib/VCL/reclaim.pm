@@ -248,7 +248,7 @@ sub insert_reload_and_exit {
 	}
 	
 	# Retrieve next image
-	my ($action, $next_image_name, $next_image_id, $next_imagerevision_id) = $self->data->get_next_image_dataStructure();
+	my ($action, $next_image_name, $next_image_id, $next_imagerevision_id) = $self->data->get_next_image_data_structure();
 
 	if ($action =~ /unload/i) {
 		if ($self->provisioner->can("unload")) {

@@ -134,7 +134,7 @@ our @EXPORT = qw(
 	get_connectlog_remote_ip_address_info
 	get_copy_speed_info_string
 	get_current_file_name
-	get_current_image_contents_noDS
+	get_current_image_contents_no_data_structure
 	get_current_package_name
 	get_current_reservation_lastcheck
 	get_current_subroutine_name
@@ -202,7 +202,7 @@ our @EXPORT = qw(
 	nmap_port
 	normalize_file_path
 	notify
-	notify_via_IM
+	notify_via_im
 	notify_via_oascript
 	parent_directory_path
 	populate_reservation_natport
@@ -2600,7 +2600,7 @@ EOF
 
 =cut
 
-sub notify_via_IM {
+sub notify_via_im {
 	my ($im_type, $im_id, $im_message) = @_;
 	
 	notify($ERRORS{'WARNING'}, 0, "IM type is not defined") if (!(defined($im_type)));
@@ -2680,7 +2680,7 @@ sub notify_via_IM {
 	}
 	
 	return 1;
-} ## end sub notify_via_IM
+} ## end sub notify_via_im
 
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -10475,7 +10475,7 @@ sub sort_by_file_name {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 get_current_image_contents_noDS
+=head2 get_current_image_contents_no_data_structure
 
  Parameters  : node name
  Returns     : array
@@ -10483,7 +10483,7 @@ sub sort_by_file_name {
 
 =cut
 
-sub get_current_image_contents_noDS {
+sub get_current_image_contents_no_data_structure {
 
    my ($computer_node_name) = @_;
 
