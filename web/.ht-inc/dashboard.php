@@ -178,7 +178,7 @@ function getStatusData() {
 		$query = "SELECT COUNT(id) "
 		       . "FROM request "
 		       . "WHERE userid != $reloadid AND "
-		       .       "stateid NOT IN (1, 5, 12) AND "
+		       .       "stateid NOT IN (1, 5, 10, 12) AND "
 		       .       "start < NOW() AND "
 				 .       "end > NOW()";
 	}
@@ -189,7 +189,7 @@ function getStatusData() {
 		       . "WHERE rq.userid != $reloadid AND "
 		       .       "rq.userid = u.id AND "
 		       .       "u.affiliationid = $affilid AND "
-		       .       "rq.stateid NOT IN (1, 5, 12) AND "
+		       .       "rq.stateid NOT IN (1, 5, 10, 12) AND "
 		       .       "rq.start < NOW() AND "
 				 .       "rq.end > NOW()";
 	}
@@ -492,22 +492,28 @@ function getActiveResChartData() {
 	$reloadid = getUserlistID('vclreload@Local');
 	$affilid = getDashboardAffilID();
 	if($affilid == 0) {
-		$query = "SELECT id, "
-		       .        "UNIX_TIMESTAMP(start) AS start, "
-		       .        "UNIX_TIMESTAMP(finalend) AS end "
-		       . "FROM log "
-		       . "WHERE start < NOW() AND "
-		       .       "finalend > DATE_SUB(NOW(), INTERVAL 12 HOUR) AND "
-		       .       "ending NOT IN ('failed', 'failedtest') AND "
-		       .       "wasavailable = 1 AND "
-		       .       "userid != $reloadid";
+		$query = "SELECT l.id, "
+		       .        "UNIX_TIMESTAMP(l.start) AS start, "
+		       .        "UNIX_TIMESTAMP(l.finalend) AS end, "
+		       .        "rq.stateid, "
+		       .        "rq.laststateid "
+		       . "FROM log l "
+		       . "LEFT JOIN request rq ON (l.requestid = rq.id) "
+		       . "WHERE l.start < NOW() AND "
+		       .       "l.finalend > DATE_SUB(NOW(), INTERVAL 12 HOUR) AND "
+		       .       "l.ending NOT IN ('failed', 'failedtest') AND "
+		       .       "l.wasavailable = 1 AND "
+		       .       "l.userid != $reloadid";
 	}
 	else {
 		$query = "SELECT l.id, "
 		       .        "UNIX_TIMESTAMP(l.start) AS start, "
-		       .        "UNIX_TIMESTAMP(l.finalend) AS end "
-		       . "FROM log l, "
-		       .      "user u "
+		       .        "UNIX_TIMESTAMP(l.finalend) AS end, "
+		       .        "rq.stateid, "
+		       .        "rq.laststateid "
+		       . "FROM user u, "
+		       .      "log l "
+		       . "LEFT JOIN request rq ON (l.requestid = rq.id) "
 		       . "WHERE l.userid = u.id AND "
 		       .       "u.affiliationid = $affilid AND "
 		       .       "l.start < NOW() AND "
@@ -518,6 +524,11 @@ function getActiveResChartData() {
 	}
 	$qh = doQuery($query, 101);
 	while($row = mysql_fetch_assoc($qh)) {
+		if($row['stateid'] == 14)
+			$row['stateid'] = $row['laststateid'];
+		if($row['end'] > time() &&
+			(is_null($row['stateid']) || preg_match('/^(1|5|10|11|12|16|17|18|19|21|22)$/', $row['stateid'])))
+			continue;
 		for($binstart = $chartstart, $binend = $chartstart + 900, $binindex = 0; 
 		   $binend <= $chartend;
 		   $binstart += 900, $binend += 900, $binindex++) {
