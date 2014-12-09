@@ -846,7 +846,7 @@ class Computer extends Resource {
 			# NAT
 			if($data['natenabled'] != $olddata['natenabled']) {
 				if($data['natenabled']) {
-					$query = "INSERT INTO natmap "
+					$query = "INSERT INTO nathostcomputermap "
 					       .        "(computerid, "
 					       .        "nathostid) "
 					       . "VALUES ({$data['rscid']}, "
@@ -854,14 +854,14 @@ class Computer extends Resource {
 					doQuery($query);
 				}
 				else {
-					$query = "DELETE FROM natmap "
+					$query = "DELETE FROM nathostcomputermap "
 					       . "WHERE computerid = {$data['rscid']}";
 					doQuery($query);
 				}
 			}
 			elseif($data['natenabled'] &&
 			   $olddata['nathostid'] != $data['nathostid']) {
-				$query = "UPDATE natmap "
+				$query = "UPDATE nathostcomputermap "
 				       . "SET nathostid = {$data['nathostid']} "
 				       . "WHERE computerid = {$data['rscid']}";
 				doQuery($query);
@@ -2131,7 +2131,7 @@ class Computer extends Resource {
 
 			# NAT
 			if($data['natenabled']) {
-				$query = "INSERT INTO natmap "
+				$query = "INSERT INTO nathostcomputermap "
 				       .        "(computerid, "
 				       .        "nathostid) "
 				       . "VALUES ($rscid, "
@@ -2196,7 +2196,7 @@ class Computer extends Resource {
 
 				# NAT
 				if($data['natenabled']) {
-					$query = "INSERT INTO natmap "
+					$query = "INSERT INTO nathostcomputermap "
 					       .        "(computerid, "
 					       .        "nathostid) "
 					       . "VALUES ($rscid, "
@@ -4374,11 +4374,11 @@ class Computer extends Resource {
 		$compids = getContinuationVar('compids');
 
 		$allids = implode(',', $compids);
-		$query = "DELETE FROM natmap "
+		$query = "DELETE FROM nathostcomputermap "
 		       . "WHERE computerid IN ($allids)";
 		doQuery($query);
 		if($natenabled) {
-			$query = "INSERT INTO natmap "
+			$query = "INSERT INTO nathostcomputermap "
 			       . "SELECT id, "
 			       .        "$nathostid "
 			       . "FROM computer "
