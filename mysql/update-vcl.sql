@@ -1487,6 +1487,14 @@ INSERT IGNORE INTO `OS` (`name`, `prettyname`, `type`, `installtype`, `sourcepat
 INSERT IGNORE INTO `OS` (`name`, `prettyname`, `type`, `installtype`, `sourcepath`, `moduleid`) VALUES ('vmwarewin2012', 'Windows Server 2012 (VMware)', 'windows', 'vmware', 'vmware_images', (SELECT `id` FROM `module` WHERE `name` LIKE 'os_win2012'));
 INSERT IGNORE INTO `OS` (`name`, `prettyname`, `type`, `installtype`, `sourcepath`, `moduleid`) VALUES ('win2012', 'Windows Server 2012 (Bare Metal)', 'windows', 'partimage', 'image', (SELECT `id` FROM `module` WHERE `name` LIKE 'os_win2012'));
 
+INSERT IGNORE INTO `OS` (`name`, `prettyname`, `type`, `installtype`, `sourcepath`, `moduleid`) VALUES ('centos6', 'CentOS 6 (Kickstart)', 'linux', 'kickstart', 'centos6', (SELECT `id` FROM `module` WHERE `name` LIKE 'os_linux'));
+INSERT IGNORE INTO `OS` (`name`, `prettyname`, `type`, `installtype`, `sourcepath`, `moduleid`) VALUES ('centos7', 'CentOS 7 (Kickstart)', 'linux', 'kickstart', 'centos7', (SELECT `id` FROM `module` WHERE `name` LIKE 'os_linux'));
+INSERT IGNORE INTO `OS` (`name`, `prettyname`, `type`, `installtype`, `sourcepath`, `moduleid`) VALUES ('rhel7', 'Red Hat Enterprise 7 (Kickstart)', 'linux', 'kickstart', 'rhel7', (SELECT `id` FROM `module` WHERE `name` LIKE 'os_linux'));
+INSERT IGNORE INTO `OS` (`name`, `prettyname`, `type`, `installtype`, `sourcepath`, `moduleid`) VALUES ('rhel7image', 'CentOS 7 Image', 'linux', 'partimage', 'image', (SELECT `id` FROM `module` WHERE `name` LIKE 'os_linux'));
+INSERT IGNORE INTO `OS` (`name`, `prettyname`, `type`, `installtype`, `sourcepath`, `moduleid`) VALUES ('centos6image', 'CentOS 6 Image', 'linux', 'partimage', 'image', (SELECT `id` FROM `module` WHERE `name` LIKE 'os_linux'));
+INSERT IGNORE INTO `OS` (`name`, `prettyname`, `type`, `installtype`, `sourcepath`, `moduleid`) VALUES ('centos7image', 'CentOS 7 Image', 'linux', 'partimage', 'image', (SELECT `id` FROM `module` WHERE `name` LIKE 'os_linux'));
+INSERT IGNORE INTO `OS` (`name`, `prettyname`, `type`, `installtype`, `sourcepath`, `moduleid`) VALUES ('rhelimage', 'General Red Hat Based Image', 'linux', 'partimage', 'image', (SELECT `id` FROM `module` WHERE `name` LIKE 'os_linux'));
+
 -- --------------------------------------------------------
 
 --

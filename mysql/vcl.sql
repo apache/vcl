@@ -1715,7 +1715,13 @@ INSERT IGNORE INTO `OS` (`id`, `name`, `prettyname`, `type`, `installtype`, `sou
 (45, 'vmwarewin8', 'Windows 8.x (VMware)', 'windows', 'vmware', 'vmware_images', 29),
 (46, 'win8', 'Windows 8.x (Bare Metal)', 'windows', 'partimage', 'image', 29),
 (47, 'vmwarewin2012', 'Windows Server 2012 (VMware)', 'windows', 'vmware', 'vmware_images', 30),
-(48, 'win2012', 'Windows Server 2012 (Bare Metal)', 'windows', 'partimage', 'image', 30);
+(48, 'win2012', 'Windows Server 2012 (Bare Metal)', 'windows', 'partimage', 'image', 30),
+(49, 'centos6', 'CentOS 6 (Kickstart)', 'linux', 'kickstart', 'centos6', 5),
+(50, 'centos7', 'CentOS 7 (Kickstart)', 'linux', 'kickstart', 'centos7', 5),
+(51, 'rhel7', 'Red Hat Enterprise 7 (Kickstart)', 'linux', 'kickstart', 'rhel7', 5),
+(52, 'centos6image', 'CentOS 6 (Bare Metal) Image', 'linux', 'partimage', 'image', 5),
+(53, 'centos7image', 'CentOS 7 (Bare Metal) Image', 'linux', 'partimage', 'image', 5),
+(54, 'rhelimage', 'Red Hat Based Image', 'linux', 'partimage', 'image', 5);
 
 -- 
 -- Dumping data for table `OSinstalltype`
