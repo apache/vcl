@@ -183,7 +183,7 @@ sub new {
 		my $request_state_name = $self->data->get_request_state_name(0) || '<not set>';
 		notify($ERRORS{'DEBUG'}, 0, ref($self) . " object created for state $request_state_name, address: $address");
 	}
-	elsif ($self->isa('VCL::Module::OS')) {
+	elsif ($self->isa('VCL::Module::OS') && !$self->isa('VCL::Module::OS::Linux::ManagementNode')) {
 		my $image_name = $self->data->get_image_name(0) || '<not set>';
 		notify($ERRORS{'DEBUG'}, 0, ref($self) . " object created for image $image_name, address: $address");
 	}
@@ -203,8 +203,11 @@ sub new {
 		if ($args->{mn_os}) {
 			$mn_os = $args->{mn_os};
 		}
+		elsif ($self->mn_os(0)) {
+			$mn_os = $self->mn_os();
+		}
 		else {
-			$mn_os = $self->create_mn_os_object()
+			$mn_os = $self->create_mn_os_object();
 		}
 		
 		if ($mn_os) {
@@ -316,10 +319,17 @@ sub create_object {
 	my $perl_package = $argument;
 	
 	my $data;
-	if (my $data_structure_arguments = shift || !$self) {
+	my $data_structure_arguments = shift;
+	if ($data_structure_arguments) {
+		notify($ERRORS{'DEBUG'}, 0, "new DataStructure object will be created for the $perl_package object, data structure arguments passed:\n" . format_data($data_structure_arguments));
 		$data = create_datastructure_object($data_structure_arguments);
 	}
+	elsif (!$self) {
+		notify($ERRORS{'DEBUG'}, 0, "new DataStructure object will be created for the $perl_package object, data structure arguments not passed and not called as an object reference");
+		$data = create_datastructure_object();
+	}
 	elsif ($self) {
+		notify($ERRORS{'DEBUG'}, 0, "existing DataStructure object will be passed to the new $perl_package object");
 		$data = $self->data;
 	}
 
@@ -441,10 +451,24 @@ sub create_os_object {
 =cut
 
 sub create_mn_os_object {
+	my $self = shift;
+	
+	my $datastructure_arguments = {
+		'image_identifier' => 'noimage'
+	};
+	
+	# Check if called as an object reference
+	if ($self && ref($self) =~ /VCL/) {
+		# Add the reservation ID to the DataStructure arguments
+		# Otherwise, get_reservation_id won't be available
+		my $reservation_id = $self->data->get_reservation_id();
+		$datastructure_arguments->{reservation_id} = $reservation_id;
+	}
+	
 	# Create a DataStructure object containing computer data for the management node
 	my $mn_data;
 	eval {
-		$mn_data = new VCL::DataStructure('image_identifier' => 'noimage');
+		$mn_data = new VCL::DataStructure($datastructure_arguments);
 	};
 	
 	# Attempt to load the OS module
@@ -566,6 +590,83 @@ sub create_vmhost_os_object {
 	}
 	else {
 		notify($ERRORS{'WARNING'}, 0, "failed to create VM host OS object");
+		return;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 create_nathost_os_object
+
+ Parameters  : none
+ Returns     : VCL::Module::OS object reference
+ Description : Creates an OS module object to control the reservation computer's
+               NAT host.
+
+=cut
+
+sub create_nathost_os_object {
+my $self = shift;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Check if an OS object has already been stored in the calling object
+	if (my $nathost_os = $self->nathost_os(0)) {
+		return $nathost_os;
+	}
+	
+	notify($ERRORS{'DEBUG'}, 0, "attempting to create NAT host OS object");
+	
+	# Make sure calling object isn't an OS module to avoid an infinite loop
+	if ($self->isa('VCL::Module::OS')) {
+		notify($ERRORS{'WARNING'}, 0, "this subroutine cannot be called from an existing OS module: " . ref($self));
+		return;
+	}
+	
+	# Make sure computer is mapped to a NAT host
+	my $nathost_id = $self->data->get_nathost_id();
+	if (!$nathost_id) {
+		notify($ERRORS{'WARNING'}, 0, "NAT host OS object not created, computer is not mapped to a NAT host");
+		return;
+	}
+	
+	my $request_data = $self->data->get_request_data();
+	my $reservation_id = $self->data->get_reservation_id();
+	
+	my $nathost_hostname = $self->data->get_nathost_hostname();
+	my $nathost_resource_subid = $self->data->get_nathost_resource_subid();
+	my $nathost_resource_type = $self->data->get_nathost_resource_type();
+	if ($nathost_resource_type eq 'managementnode') {
+		notify($ERRORS{'DEBUG'}, 0, "NAT host resource type is $nathost_resource_type, returning management node OS object to control $nathost_hostname");
+		return $self->mn_os();
+	}
+	elsif ($nathost_resource_type eq 'computer') {
+		# Get the computer info in order to determine the OS module to use
+		my $computer_info = get_computer_info($nathost_resource_subid);
+		if (!$computer_info) {
+			notify($ERRORS{'WARNING'}, 0, "failed to create NAT host OS object, failed to retrieve info for computer ID: $nathost_resource_subid, NAT host info:\n" . format_data($self->data->get_nathost_info()));
+		}
+		my $computer_os_package = $computer_info->{currentimagerevision}{image}{OS}{module}{perlpackage};
+		
+		notify($ERRORS{'DEBUG'}, 0, "NAT host resource type is $nathost_resource_type, creating $computer_os_package OS object to control $nathost_hostname");
+		
+		my $nathost_os = $self->create_object($computer_os_package, {
+			#request_data => $request_data,
+			reservation_id => $reservation_id,
+			computer_identifier => $nathost_resource_subid
+		});
+		if ($nathost_os) {
+			return $nathost_os;
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "failed to create NAT host OS object to control $nathost_hostname");
+			return;
+		}
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "unable to create NAT host OS object to control $nathost_hostname, NAT host resource type is not supported: $nathost_resource_type, NAT host info:\n" . format_data($self->data->get_nathost_info()));
 		return;
 	}
 }
@@ -807,6 +908,39 @@ sub vmhost_os {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 nathost_os
+
+ Parameters  : $display_warning (optional)
+ Returns     : NAT hosts's OS object
+ Description : Allows modules to access the NAT host's OS object.
+
+=cut
+
+sub nathost_os {
+	my $self = shift;
+	if (!ref($self) || !$self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was not called as a VCL::Module or VCL::DataStructure class method");
+		return;
+	}
+	
+	my $display_warning = shift;
+	if (!defined($display_warning)) {
+		$display_warning = 1;
+	}
+	
+	if (!$self->{nathost_os}) {
+		if ($display_warning) {
+			notify($ERRORS{'WARNING'}, 0, "unable to return NAT host OS object, \$self->{nathost_os} is not set");
+		}
+		return;
+	}
+	else {
+		return $self->{nathost_os};
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 =head2 set_data
 
  Parameters  : $data
@@ -932,6 +1066,41 @@ sub set_vmhost_os {
 	my $vmhost_os_address = sprintf('%x', $vmhost_os);
 	notify($ERRORS{'DEBUG'}, 0, "storing reference to VM host OS object (address: $vmhost_os_address) in this $type object (address: $address)");
 	$self->{vmhost_os} = $vmhost_os;
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 set_nathost_os
+
+ Parameters  : $nathost_os
+ Returns     : boolean
+ Description : Sets the NAT host OS object for the module to access.
+
+=cut
+
+sub set_nathost_os {
+	my $self = shift;
+	if (!ref($self) || !$self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was not called as a VCL::Module class method");
+		return;
+	}
+	
+	my $nathost_os = shift;
+	if (!defined($nathost_os)) {
+		notify($ERRORS{'WARNING'}, 0, "OS object reference argument not supplied");
+		return;
+	}
+	elsif (!ref($nathost_os) || !$nathost_os->isa('VCL::Module')) {
+		notify($ERRORS{'WARNING'}, 0, "supplied argument is not a VCL::Module object reference:\n" . format_data($nathost_os));
+		return;
+	}
+	
+	my $address = sprintf('%x', $self);
+	my $type = ref($self);
+	my $nathost_os_address = sprintf('%x', $nathost_os);
+	notify($ERRORS{'DEBUG'}, 0, "storing reference to NAT host OS object (address: $nathost_os_address) in this $type object (address: $address)");
+	$self->{nathost_os} = $nathost_os;
 	return 1;
 }
 

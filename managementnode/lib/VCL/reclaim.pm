@@ -106,30 +106,42 @@ sub process {
 
 	# Remove related fixedIPsr variable, if it exists
 	if ($server_request_id) {
- 		my $variable_name = "fixedIPsr" . $server_request_id;
- 		if(is_variable_set($variable_name)){
-               #Delete from variable table.
-               my $delete_sql_statement = "DELETE variable FROM variable WHERE name = '$variable_name' ";
-               if (database_execute($delete_sql_statement)) {
-         				notify($ERRORS{'DEBUG'}, 0, "Deleted server reservation entry for $variable_name from variable table");
-               }   
-         }   
+		my $variable_name = "fixedIPsr" . $server_request_id;
+		if (is_variable_set($variable_name)){
+			#Delete from variable table.
+			my $delete_sql_statement = "DELETE variable FROM variable WHERE name = '$variable_name' ";
+			if (database_execute($delete_sql_statement)) {
+			notify($ERRORS{'DEBUG'}, 0, "Deleted server reservation entry for $variable_name from variable table");
+			}   
+		}   
 		
-		if($public_ip_configuration =~ /static/i) {
+		if ($public_ip_configuration =~ /static/i) {
 			my $original_IPvalue = "originalIPaddr_" . $server_request_id;
-			if(is_variable_set($original_IPvalue)) {
+			if (is_variable_set($original_IPvalue)) {
 				my $original_Public_IP = get_variable($original_IPvalue);
-				if(update_computer_public_ip_address($computer_id, $original_Public_IP)) {
+				if (update_computer_public_ip_address($computer_id, $original_Public_IP)) {
 					notify($ERRORS{'DEBUG'}, 0, "restored original IP address: $original_Public_IP for $computer_state_name ");
 				}
-            my $delete_sql_statement = "DELETE variable FROM variable WHERE name = '$original_IPvalue' ";
-            if (database_execute($delete_sql_statement)) {
-         		notify($ERRORS{'DEBUG'}, 0, "Deleted server reservation entry for $original_IPvalue from variable table");
-            }   
+				my $delete_sql_statement = "DELETE variable FROM variable WHERE name = '$original_IPvalue' ";
+				if (database_execute($delete_sql_statement)) {
+					notify($ERRORS{'DEBUG'}, 0, "Deleted server reservation entry for $original_IPvalue from variable table");
+				}   
 			}
 		}
 	}
-
+	
+	# Clean up rules on the NAT host if NAT is used
+	if ($self->nathost_os(0)) {
+		my $nathost_hostname = $self->data->get_nathost_hostname();
+		if ($self->nathost_os->firewall()) {
+			if (!$self->nathost_os->firewall->delete_chain('nat', $reservation_id)) {
+				notify($ERRORS{'CRITICAL'}, 0, "failed to delete '$reservation_id' chain from the nat table on NAT host $nathost_hostname");
+			}
+		}
+		else {
+			notify($ERRORS{'CRITICAL'}, 0, "failed to delete '$reservation_id' chain from the nat table on NAT host $nathost_hostname, NAT host OS object is not available");
+		}
+	}
 	
 	# Insert into computerloadlog if request state = timeout
 	if ($request_state_name =~ /timeout|deleted/) {

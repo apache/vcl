@@ -38,7 +38,7 @@ use FindBin;
 use lib "$FindBin::Bin/../../../../..";
 
 # Configure inheritance
-use base qw(VCL::Module::OS::Linux);
+use base qw(VCL::Module::OS::Linux::init);
 
 # Specify the version of this module
 our $VERSION = '2.3';

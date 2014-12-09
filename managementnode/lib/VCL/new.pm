@@ -698,14 +698,14 @@ sub computer_not_being_used {
 			notify($ERRORS{'WARNING'}, 0, "$computer_short_name is NOT available, its state is $computer_state_name");
 			return 0;
 		}
-
+		
 		# Return 0 if computer state is maintenance and request state name is not vmhostinuse
 		# Allow computers to go from maintenance directly to a vmhost
 		if ($computer_state_name =~ /^(maintenance)$/ && $request_state_name !~ /tovmhostinuse/) {
 			notify($ERRORS{'WARNING'}, 0, "$computer_short_name is NOT available, its state is $computer_state_name");
 			return 0;
 		}
-
+		
 		# Warn if computer state isn't available or reload - except for reinstall requests
 		if ($request_state_name !~ /^(reinstall)$/ && $computer_state_name !~ /^(available|reload)$/) {
 			notify($ERRORS{'WARNING'}, 0, "$computer_short_name state is $computer_state_name, checking if any conflicting reservations are active");
@@ -916,10 +916,10 @@ sub reserve_computer {
 	my $user_emailnotices               = $self->data->get_user_emailnotices();
 	my $user_imtype_name                = $self->data->get_user_imtype_name();
 	my $user_im_id                      = $self->data->get_user_im_id();
-
+	
 	# Needed for computerloadflow	
 	insertloadlog($reservation_id, $computer_id, "addinguser", "Adding user to $computer_short_name");
-
+	
 	# Call OS module's reserve subroutine
 	if (!$self->os->reserve()) {
 		$self->reservation_failed("OS module failed to reserve resources for this reservation");

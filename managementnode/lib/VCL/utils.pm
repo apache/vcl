@@ -126,6 +126,7 @@ our @EXPORT = qw(
 	get_computer_grp_members
 	get_computer_ids
 	get_computer_info
+	get_computer_nathost_info
 	get_computer_private_ip_address_info
 	get_computers_controlled_by_mn
 	get_connect_method_info
@@ -157,6 +158,7 @@ our @EXPORT = qw(
 	get_management_node_vmhost_ids
 	get_management_node_vmhost_info
 	get_module_info
+	get_nathost_assigned_public_ports
 	get_next_image_default
 	get_os_info
 	get_production_imagerevision_info
@@ -203,6 +205,7 @@ our @EXPORT = qw(
 	notify_via_IM
 	notify_via_oascript
 	parent_directory_path
+	populate_reservation_natport
 	preplogfile
 	read_file_to_array
 	remove_array_duplicates
@@ -2974,7 +2977,7 @@ sub database_execute {
 
 =head2  get_request_info
 
- Parameters  : $request_id
+ Parameters  : $request_id, $no_cache (optional)
  Returns     : hash
  Description : Retrieves all request/reservation information.
 
@@ -2982,10 +2985,15 @@ sub database_execute {
 
 
 sub get_request_info {
-	my ($request_id) = @_;
+	my ($request_id, $no_cache) = @_;
 	if (!(defined($request_id))) {
 		notify($ERRORS{'WARNING'}, 0, "request ID argument was not specified");
 		return;
+	}
+	
+	# Don't use cached info by default
+	if (!defined($no_cache)) {
+		$no_cache = 1;
 	}
 	
 	# Get a hash ref containing the database column names
@@ -3083,31 +3091,43 @@ EOF
 		
 		# Add the image info to the hash
 		my $image_id = $request_info->{reservation}{$reservation_id}{imageid};
-		my $image_info = get_image_info($image_id, 1);
+		my $image_info = get_image_info($image_id, $no_cache);
 		$request_info->{reservation}{$reservation_id}{image} = $image_info;
 		
 		# Add the imagerevision info to the hash
 		my $imagerevision_id = $request_info->{reservation}{$reservation_id}{imagerevisionid};
-		my $imagerevision_info = get_imagerevision_info($imagerevision_id, 1);
+		my $imagerevision_info = get_imagerevision_info($imagerevision_id, $no_cache);
 		$request_info->{reservation}{$reservation_id}{imagerevision} = $imagerevision_info;
 		
 		# Add the computer info to the hash
 		my $computer_id = $request_info->{reservation}{$reservation_id}{computerid};
-		my $computer_info = get_computer_info($computer_id, 1);
+		my $computer_info = get_computer_info($computer_id, $no_cache);
 		$request_info->{reservation}{$reservation_id}{computer} = $computer_info;
 		
+		# Populate natport table for reservation
+		# Make sure this wasn't called from populate_reservation_natport or else recursive loop will occur
+		my $caller_trace = get_caller_trace(5);
+		if ($caller_trace !~ /populate_reservation_natport/) {
+			my $request_state_name = $request_info->{state}{name};
+			if ($request_state_name =~ /(new|reserved|modified|test)/) {
+				if (!populate_reservation_natport($reservation_id)) {
+					notify($ERRORS{'CRITICAL'}, 0, "failed to populate natport table for reservation");
+				}
+			}
+		}
+		
 		# Add the connect method info to the hash
-		my $connect_method_info = get_connect_method_info($imagerevision_id);
+		my $connect_method_info = get_connect_method_info($imagerevision_id, $no_cache);
 		$request_info->{reservation}{$reservation_id}{connect_methods} = $connect_method_info;
-	
+		
 		# Add the managementnode info to the hash
 		my $management_node_id = $request_info->{reservation}{$reservation_id}{managementnodeid};
-		my $management_node_info = get_management_node_info($management_node_id);
+		my $management_node_info = get_management_node_info($management_node_id, $no_cache);
 		$request_info->{reservation}{$reservation_id}{managementnode} = $management_node_info;
 		
 		# Retrieve the user info and add to the hash
 		my $user_id = $request_info->{userid};
-		my $user_info = get_user_info($user_id, 0, 1);
+		my $user_info = get_user_info($user_id, 0, $no_cache);
 		$request_info->{user} = $user_info;
 		
 		my $imagemeta_root_access = $request_info->{reservation}{$reservation_id}{image}{imagemeta}{rootaccess};
@@ -3899,7 +3919,7 @@ EOF
 	
 	$vmhost_info->{vmprofile}{vmpath} = $vmhost_info->{vmprofile}{datastorepath} if !$vmhost_info->{vmprofile}{vmpath};
 	$vmhost_info->{vmprofile}{virtualdiskpath} = $vmhost_info->{vmprofile}{vmpath} if !$vmhost_info->{vmprofile}{virtualdiskpath};
-	
+
 	notify($ERRORS{'DEBUG'}, 0, "retrieved VM host $vmhost_id info, computer: $vmhost_info->{computer}{hostname}");
 	$ENV{vmhost_info}{$vmhost_id} = $vmhost_info;
 	return $ENV{vmhost_info}{$vmhost_id};
@@ -6882,8 +6902,11 @@ sub get_computer_info {
 		notify($ERRORS{'WARNING'}, 0, "computer identifier argument was not supplied");
 		return;
 	}
-	
-	return $ENV{computer_info}{$computer_identifier} if (!$no_cache && $ENV{computer_info}{$computer_identifier});
+
+	if (!$no_cache && defined($ENV{computer_info}{$computer_identifier})) {
+		return $ENV{computer_info}{$computer_identifier};
+	}
+	notify($ERRORS{'DEBUG'}, 0, "retrieving info for computer $computer_identifier");
 	
 	# Get a hash ref containing the database column names
 	my $database_table_columns = get_database_table_columns();
@@ -6895,7 +6918,6 @@ sub get_computer_info {
 		'module',
 		'schedule',
 		'platform',
-		'nathost',
 	);
 	
 	# Construct the select statement
@@ -6935,10 +6957,6 @@ ON (
 )
 LEFT JOIN (schedule) ON (schedule.id = computer.scheduleid)
 LEFT JOIN (module AS predictivemodule) ON (predictivemodule.id = computer.predictivemoduleid)
-LEFT JOIN (nathost, nathostcomputermap) ON (
-	nathostcomputermap.computerid = computer.id
-	AND nathostcomputermap.nathostid = nathost.id
-)
 
 WHERE
 computer.deleted != '1'
@@ -6995,6 +7013,8 @@ EOF
 			$computer_info->{$table}{$column} = $value;
 		}
 	}
+	
+	my $computer_id = $computer_info->{id};
 	
 	# Set the short name of the computer based on the hostname
 	my $computer_hostname = $computer_info->{hostname};
@@ -7054,10 +7074,465 @@ EOF
 		}
 	}
 	
-	#notify($ERRORS{'DEBUG'}, 0, "retrieved info for computer '$computer_identifier':\n" . format_data($computer_info));
+	my $nathost_info = get_computer_nathost_info($computer_id, $no_cache);
+	if ($nathost_info) {
+		$computer_info->{nathost} = $nathost_info;
+	}
+	
+	notify($ERRORS{'DEBUG'}, 0, "retrieved info for computer: $computer_identifier");
 	$ENV{computer_info}{$computer_identifier} = $computer_info;
 	$ENV{computer_info}{$computer_identifier}{RETRIEVAL_TIME} = time;
 	return $ENV{computer_info}{$computer_identifier};
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_computer_nathost_info
+
+ Parameters  : $computer_identifier
+ Returns     : hash reference
+ Description : Retrieves nathost info if a nathost is mapped to the computer via
+               the nathostcomputermap table. Example:
+					{
+					  "HOSTNAME" => "nat1.vcl.org",
+					  "datedeleted" => undef,
+					  "deleted" => 0,
+					  "id" => 2,
+					  "natIP" => "x.x.x.x",
+					  "nathostcomputermap" => {
+						 "computerid" => 3591,
+						 "nathostid" => 2
+					  },
+					  "resource" => {
+						 "id" => 6185,
+						 "resourcetype" => {
+							"id" => 16,
+							"name" => "managementnode"
+						 },
+						 "resourcetypeid" => 16,
+						 "subid" => 8
+					  },
+					  "resourceid" => 6185
+					}
+
+=cut
+
+sub get_computer_nathost_info {
+	my ($computer_identifier, $no_cache) = @_;
+	if (!defined($computer_identifier)){
+		notify($ERRORS{'WARNING'}, 0, "computer identifier argument was not supplied");
+		return;
+	}
+	
+	return $ENV{nathost_info}{$computer_identifier} if (!$no_cache && $ENV{nathost_info}{$computer_identifier});
+	
+	# Get a hash ref containing the database column names
+	my $database_table_columns = get_database_table_columns();
+	
+	my @tables = (
+		'nathost',
+		'nathostcomputermap',
+		'resource',
+		'resourcetype',
+	);
+	
+	# Construct the select statement
+	my $select_statement = "SELECT DISTINCT\n";
+	
+	# Get the column names for each table and add them to the select statement
+	for my $table (@tables) {
+		my @columns = @{$database_table_columns->{$table}};
+		for my $column (@columns) {
+			$select_statement .= "$table.$column AS '$table-$column',\n";
+		}
+	}
+	
+	# Remove the comma after the last column line
+	$select_statement =~ s/,$//;
+	
+	# Complete the select statement
+	$select_statement .= <<EOF;
+FROM
+computer,
+nathostcomputermap,
+nathost,
+resource,
+resourcetype
+
+WHERE
+nathostcomputermap.computerid = computer.id
+AND nathostcomputermap.nathostid = nathost.id
+AND nathost.resourceid = resource.id
+AND resource.resourcetypeid = resourcetype.id
+AND
+EOF
+
+	# If the computer identifier is all digits match it to computer.id
+	# Otherwise, match computer.hostname
+	if ($computer_identifier =~ /^\d+$/) {
+		$select_statement .= "computer.id = \'$computer_identifier\'";
+	}
+	else {
+		$select_statement .= "computer.hostname REGEXP '$computer_identifier(\\\\.|\$)'";
+	}
+	
+	# Call the database select subroutine
+	my @selected_rows = database_select($select_statement);
+
+	if (!@selected_rows) {
+		notify($ERRORS{'DEBUG'}, 0, "NAT host is not mapped to computer $computer_identifier");
+		return {};
+	}
+	elsif (scalar @selected_rows > 1) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine NAT host mapped to computer $computer_identifier, " . scalar @selected_rows . " rows were returned from database select statement:\n$select_statement");
+		return;
+	}
+	
+	# Get the single row returned from the select statement
+	my $row = $selected_rows[0];
+	
+	# Construct a hash with all of the computer info
+	my $nathost_info;
+	
+	# Loop through all the columns returned
+	for my $key (keys %$row) {
+		my $value = $row->{$key};
+		
+		# Split the table-column names
+		my ($table, $column) = $key =~ /^([^-]+)-(.+)/;
+		
+		# Add the values for the primary table to the hash
+		# Add values for other tables under separate keys
+		if ($table eq $tables[0]) {
+			$nathost_info->{$column} = $value;
+		}
+		elsif ($table eq 'resourcetype') {
+			$nathost_info->{resource}{resourcetype}{$column} = $value;
+		}
+		else {
+			$nathost_info->{$table}{$column} = $value;
+		}
+	}
+	
+	$nathost_info->{HOSTNAME} = '<unknown>';
+	
+	my $resource_id = $nathost_info->{resource}{id};
+	my $resource_type = $nathost_info->{resource}{resourcetype}{name};
+	my $resource_subid = $nathost_info->{resource}{subid};
+	if ($resource_type eq 'managementnode') {
+		my $management_node_info = get_management_node_info($resource_subid) || {};
+		$nathost_info->{HOSTNAME} = $management_node_info->{hostname};
+	}
+	elsif ($resource_type eq 'computer') {
+		my $computer_info = get_computer_info($resource_subid) || {};
+		$nathost_info->{HOSTNAME} = $computer_info->{hostname};
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "NAT host resource type is not supported: $resource_type, resource ID: $resource_id");
+	}
+	
+	notify($ERRORS{'DEBUG'}, 0, "retrieved info for NAT host mapped to computer computer $computer_identifier:\n" . format_data($nathost_info));
+	$ENV{nathost_info}{$computer_identifier} = $nathost_info;
+	return $ENV{nathost_info}{$computer_identifier};
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_nathost_assigned_public_ports
+
+ Parameters  : $nathost_id
+ Returns     : array
+ Description : Retrieves a list of natport.publicport values for the nathost
+               specified by the argument.
+
+=cut
+
+sub get_nathost_assigned_public_ports {
+	my ($nathost_id) = @_;
+	if (!defined($nathost_id)) {
+		notify($ERRORS{'WARNING'}, 0, "nathost ID argument was not supplied");
+		return;
+	}
+	
+	my $select_statement = "SELECT publicport FROM natport WHERE nathostid = $nathost_id ORDER BY publicport ASC";
+	my @selected_rows = database_select($select_statement);
+	my @ports;
+	for my $row (@selected_rows) {
+		push @ports, $row->{publicport};
+	}
+	
+	if (@ports) {
+		notify($ERRORS{'DEBUG'}, 0, "retrieved assigned public ports for nathost $nathost_id: " . join(", ", @ports));
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "no public ports are assigned for nathost $nathost_id");
+	}
+	return @ports;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 populate_reservation_natport
+
+ Parameters  : $reservation_id
+ Returns     : boolean
+ Description : Populates the natport table for a reservation if the computer is
+               mapped to a nathost. The natport table is checked for each
+               connect method port assigned to each connect method for the
+               reservation.
+
+=cut
+
+sub populate_reservation_natport {
+	my ($reservation_id) = @_;
+	if (!defined($reservation_id)) {
+		notify($ERRORS{'WARNING'}, 0, "reservation ID argument was not supplied");
+		return;
+	}
+	
+	my $request_info = {get_reservation_request_info($reservation_id, 0)};
+	my $computer_id = $request_info->{reservation}{$reservation_id}{computerid};
+	my $computer_name = $request_info->{reservation}{$reservation_id}{computer}{SHORTNAME};
+	my $imagerevision_id = $request_info->{reservation}{$reservation_id}{imagerevision}{id};
+	
+	my $nathost_info = $request_info->{reservation}{$reservation_id}{computer}{nathost};
+	my $nathost_id = $nathost_info->{id};
+	my $nathost_hostname = $nathost_info->{HOSTNAME};
+	my $nathost_public_ip_address = $nathost_info->{natIP};
+	
+	# Make sure the nathost info is defined
+	if (!defined($nathost_id)) {
+		notify($ERRORS{'DEBUG'}, 0, "natport table does not need to be populated, computer $computer_id is not mapped to a NAT host");
+		return 1;
+	}
+	notify($ERRORS{'DEBUG'}, 0, "computer $computer_id is mapped to NAT host $nathost_hostname ($nathost_hostname)");
+	
+	# Retrieve the connect method info - do not use cached info
+	my $connect_method_info = get_connect_method_info($imagerevision_id, 1);
+	
+	# Retrieve the ports already assigned to the nathost
+	my @assigned_ports = get_nathost_assigned_public_ports($nathost_id);
+	
+	# Put the assigned ports into a hash for easy checking
+	my %assigned_port_hash = map { $_ => 1 } @assigned_ports;
+	
+	my %available_port_hash;
+	
+	# Retrieve and parse the natport_ranges variable
+	my $natport_ranges_variable = get_variable('natport_ranges') || '49152-65535';
+	my @natport_ranges = split(/[,;]+/, $natport_ranges_variable);
+	for my $natport_range (@natport_ranges) {
+		my ($start_port, $end_port) = $natport_range =~ /(\d+)-(\d+)/g;
+		if (!defined($start_port)) {
+			notify($ERRORS{'WARNING'}, 0, "unable to parse NAT port range: '$natport_range'");
+			next;
+		}
+		
+		# Make sure port range isn't backwards
+		if ($end_port < $start_port) {
+			my $start_port_temp = $start_port;
+			$start_port = $end_port;
+			$end_port = $start_port_temp;
+		}
+		
+		# Loop through all of the ports in the range, check if already assigned
+		for (my $port = $start_port; $port<=$end_port; $port++) {
+			if (!defined($assigned_port_hash{$port})) {
+				$available_port_hash{$port} = 1;
+			}
+		}
+	}
+	
+	# Loop through the connect methods
+	# Check if a public port has been assigned for each
+	for my $connect_method_id (sort keys %$connect_method_info) {
+		my $connect_method_port_info = $connect_method_info->{$connect_method_id}{connectmethodport};
+		
+		CONNECT_METHOD_PORT_ID: for my $connect_method_port_id (sort keys %$connect_method_port_info) {
+			my $connect_method_port = $connect_method_port_info->{$connect_method_port_id};
+			
+			if (defined($connect_method_port->{natport})) {
+				notify($ERRORS{'DEBUG'}, 0, "NAT public port is already assigned for connect method ID: $connect_method_id, port ID: $connect_method_port_id\n" . format_data($connect_method_port->{natport}));
+				next CONNECT_METHOD_PORT_ID;
+			}
+			
+			# Select a random port from the list of available ports
+			my @available_ports = sort keys %available_port_hash;
+			my $available_port_count = scalar(@available_ports);
+			if (!$available_port_count) {
+				notify($ERRORS{'CRITICAL'}, 0, "no NAT public ports are available for NAT host $nathost_hostname ($nathost_id)");
+				return;
+			}
+			my $random_index =  int(rand($available_port_count));
+			my $public_port = $available_ports[$random_index];
+			
+			# Remove the selected port from the available port hash
+			delete $available_port_hash{$public_port};
+			
+			# Make multiple attempts, it's possible 2 reservations will attempt to assign the same public port at the same time
+			# Using random ports helps avoid collisions
+			# TODO: add semaphore
+			my $attempt_limit = 5;
+			for (my $attempt = 1; $attempt <= $attempt_limit; $attempt++) {
+				sleep_uninterrupted(1);
+				if (insert_natport($reservation_id, $nathost_id, $connect_method_port_id, $public_port)) {
+					next CONNECT_METHOD_PORT_ID;
+				}
+			}
+			notify($ERRORS{'CRITICAL'}, 0, "failed to insert natport entry after making $attempt_limit attempts:\n" .
+				"connectmethod ID: $connect_method_id\n" .
+				"connectmethodport ID: $connect_method_port_id\n" .
+				"reservation ID: $reservation_id\n" .
+				"nathost ID: $nathost_id\n" .
+				"public port: $public_port"
+			);
+			return;
+		}
+	}
+	
+	# Get the connect method info again to verify all ports are assigned a NAT public port
+	my $info_string = "";
+	$connect_method_info = get_connect_method_info($imagerevision_id, 1);
+	for my $connect_method_id (sort keys %$connect_method_info) {
+		my $connect_method = $connect_method_info->{$connect_method_id};
+		my $connect_method_name = $connect_method->{name};
+		
+		for my $connect_method_port_id (sort keys %{$connect_method->{connectmethodport}}) {
+			my $connect_method_port = $connect_method->{connectmethodport}{$connect_method_port_id};
+			my $protocol = $connect_method_port->{protocol};
+			my $port = $connect_method_port->{port};
+			
+			my $nat_port = $connect_method_port->{natport};
+			my $public_port = $nat_port->{publicport};
+			if (!defined($nat_port)) {
+				notify($ERRORS{'WARNING'}, 0, "NAT public port is not assigned for connect method ID: $connect_method_id, port ID: $connect_method_port_id");
+				return;
+			}
+			$info_string .= "$connect_method_name: $nathost_public_ip_address:$public_port --> $computer_name:$port ($protocol)\n";
+		}
+	}
+	notify($ERRORS{'DEBUG'}, 0, "NAT port forwarding information:\n$info_string");
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 insert_natport
+
+ Parameters  : $reservation_id, $nathost_id, $connect_method_port_id, $public_port
+ Returns     : boolean
+ Description : Inserts an entry into the natport table.
+
+=cut
+
+sub insert_natport {
+	my ($reservation_id, $nathost_id, $connect_method_port_id, $public_port) = @_;
+	if (!defined($reservation_id)) {
+		notify($ERRORS{'WARNING'}, 0, "reservation ID argument was not supplied");
+		return;
+	}
+	elsif (!defined($nathost_id)) {
+		notify($ERRORS{'WARNING'}, 0, "nathost ID argument was not supplied");
+		return;
+	}
+	elsif (!defined($connect_method_port_id)) {
+		notify($ERRORS{'WARNING'}, 0, "connect method port ID argument was not supplied");
+		return;
+	}
+	elsif (!defined($public_port)) {
+		notify($ERRORS{'WARNING'}, 0, "public port argument was not supplied");
+		return;
+	}
+	
+	my $insert_statement = <<EOF;
+INSERT INTO
+natport
+(
+   reservationid,
+   nathostid,
+   connectmethodportid,
+   publicport
+)
+VALUES
+(
+   $reservation_id,
+   $nathost_id,
+   $connect_method_port_id,
+   $public_port
+)
+EOF
+
+	my $result = database_execute($insert_statement);
+	if ($result) {
+		notify($ERRORS{'DEBUG'}, 0, "inserted entry into natport table:\nreservation: $reservation_id\nnathost ID: $nathost_id\nconnectmethodport ID: $connect_method_port_id\npublic port: $public_port");
+		return 1;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to insert entry into natport table\nreservation: $reservation_id\nnathost ID: $nathost_id\nconnectmethodport ID: $connect_method_port_id\npublic port: $public_port");
+		return 0;
+	}
+}
+	
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_reservation_request_id
+
+ Parameters  : $reservation_id, $no_cache (optional)
+ Returns     : integer
+ Description : Retrieves the request ID assigned of a reservation.
+
+=cut
+
+sub get_reservation_request_id {
+	my ($reservation_id, $no_cache) = @_;
+	if (!defined($reservation_id)) {
+		notify($ERRORS{'WARNING'}, 0, "reservation ID argument was not supplied");
+		return;
+	}
+	
+	if (!$no_cache && defined($ENV{reservation_request_id}{$reservation_id})) {
+		return $ENV{reservation_request_id}{$reservation_id};
+	}
+	
+	my $select_statement = "SELECT requestid FROM reservation WHERE id = '$reservation_id'";
+	my @selected_rows = database_select($select_statement);
+	if (!@selected_rows) {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve request ID for reservation $reservation_id");
+		return;
+	}
+	
+	my $row = $selected_rows[0];
+	my $request_id = $row->{requestid};
+	notify($ERRORS{'DEBUG'}, 0, "retrieved reservation $reservation_id request ID: $request_id");
+	$ENV{reservation_request_id}{$reservation_id} = $request_id;
+	return $request_id;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_reservation_request_info
+
+ Parameters  : $reservation_id, $no_cache (optional)
+ Returns     : hash reference
+ Description : Retrieves the request info for a reservation.
+
+=cut
+
+sub get_reservation_request_info {
+	my ($reservation_id, $no_cache) = @_;
+	if (!defined($reservation_id)) {
+		notify($ERRORS{'WARNING'}, 0, "reservation ID argument was not supplied");
+		return;
+	}
+	
+	my $request_id = get_reservation_request_id($reservation_id, $no_cache);
+	if (!$request_id) {
+		notify($ERRORS{'WARNING'}, 0, "unable to retrieve request info for reservation $reservation_id, failed to determine request ID for reservation");
+		return;
+	}
+	
+	return get_request_info($request_id, $no_cache);
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -7897,11 +8372,15 @@ sub reservation_being_processed {
 sub run_command {
 	my ($command, $no_output) = @_;
 	
-	my $output_string = `$command 2>&1`;
+	my $output_string;
+	$output_string = `$command 2>&1`;
+	$output_string = '' unless $output_string;
+	
 	my $exit_status = $?;
 	if ($exit_status >= 0) {
 		$exit_status = $exit_status >> 8;
 	}
+
 	
 	# Remove any trailing newlines from the output
 	chomp $output_string;
@@ -9611,7 +10090,52 @@ sub kill_child_processes {
  Parameters  : $imagerevision_id, $no_cache (optional)
  Returns     : hash reference
  Description : Returns the connect methods for the image revision specified as
-               the argument.
+               the argument. Example:
+					{
+					 4 => {
+						"RETRIEVAL_TIME" => "1417709281",
+						"connectmethodmap" => {
+						  "OSid" => 36,
+						  "OStypeid" => undef,
+						  "autoprovisioned" => undef,
+						  "connectmethodid" => 4,
+						  "disabled" => 0,
+						  "imagerevisionid" => undef
+						},
+						"connectmethodport" => {
+						  35 => {
+							 "connectmethodid" => 4,
+							 "id" => 35,
+							 "natport" => {
+								"connectmethodportid" => 35,
+								"nathostid" => 2,
+								"publicport" => 56305,
+								"reservationid" => 3115
+							 },
+							 "port" => 3389,
+							 "protocol" => "TCP"
+						  },
+						  37 => {
+							 "connectmethodid" => 4,
+							 "id" => 37,
+							 "natport" => {
+								"connectmethodportid" => 37,
+								"nathostid" => 2,
+								"publicport" => 63058,
+								"reservationid" => 3115
+							 },
+							 "port" => 3389,
+							 "protocol" => "UDP"
+						  }
+						},
+						"description" => "Linux xRDP (Remote Desktop Protocol)",
+						"id" => 4,
+						"name" => "xRDP",
+						"servicename" => "xrdp",
+						"startupscript" => undef
+					 }
+				  }
+
 
 =cut
 
@@ -9646,6 +10170,7 @@ sub get_connect_method_info {
 		'connectmethod',
 		'connectmethodport',
 		'connectmethodmap',
+		'natport',
 	);
 	
 	# Construct the select statement
@@ -9666,10 +10191,13 @@ sub get_connect_method_info {
 	$select_statement .= <<EOF;
 FROM
 connectmethod,
-connectmethodport,
-connectmethodmap,
-imagerevision
 
+connectmethodport
+LEFT JOIN natport ON (natport.connectmethodportid = connectmethodport.id),
+
+connectmethodmap,
+
+imagerevision
 LEFT JOIN image ON (image.id = imagerevision.imageid)
 LEFT JOIN OS ON (OS.id = image.OSid)
 LEFT JOIN OStype ON (OStype.name = OS.type)
@@ -9712,15 +10240,18 @@ EOF
 			# Split the table-column names
 			my ($table, $column) = $key =~ /^([^-]+)-(.+)/;
 			
-			# Add the values for the primary table to the hash
-			# Add values for other tables under separate keys
 			if ($table eq 'connectmethod') {
 				$connect_method_info->{$connectmethod_id}{$column} = $value;
 			}
 			elsif ($table eq 'connectmethodport') {
-				my $protocol = $row->{"connectmethodport-protocol"};
-				my $port = $row->{"connectmethodport-port"};
-				$connect_method_info->{$connectmethod_id}{$table}{$protocol}{$port} = 1;
+				my $connectmethodport_id = $row->{"connectmethodport-id"};
+				$connect_method_info->{$connectmethod_id}{'connectmethodport'}{$connectmethodport_id}{$column} = $value;
+			}
+			elsif ($table eq 'natport') {
+				if (defined($value)) {
+					my $connectmethodport_id = $row->{"connectmethodport-id"};
+					$connect_method_info->{$connectmethod_id}{'connectmethodport'}{$connectmethodport_id}{'natport'}{$column} = $value;
+				}
 			}
 			else {
 				$connect_method_info->{$connectmethod_id}{$table}{$column} = $value;
@@ -11931,7 +12462,6 @@ EOF
                }
 
 =cut
-
 
 sub get_provisioning_osinstalltype_info {
 	my ($provisioning_id) = @_;

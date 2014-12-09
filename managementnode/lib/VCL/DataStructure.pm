@@ -246,6 +246,17 @@ $SUBROUTINE_MAPPINGS{computer_predictive_module_pretty_name} = '$self->request_d
 $SUBROUTINE_MAPPINGS{computer_predictive_module_description} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{predictive}{module}{description}';
 $SUBROUTINE_MAPPINGS{computer_predictive_module_perl_package} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{predictive}{module}{perlpackage}';
 
+$SUBROUTINE_MAPPINGS{nathost_info} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{nathost}';
+$SUBROUTINE_MAPPINGS{nathost_hostname} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{nathost}{HOSTNAME}';
+$SUBROUTINE_MAPPINGS{nathost_date_deleted} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{nathost}{datedeleted}';
+$SUBROUTINE_MAPPINGS{nathost_deleted} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{nathost}{deleted}';
+$SUBROUTINE_MAPPINGS{nathost_id} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{nathost}{id}';
+$SUBROUTINE_MAPPINGS{nathost_nat_ip} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{nathost}{natIP}';
+$SUBROUTINE_MAPPINGS{nathost_resource_id} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{nathost}{resource}{id}';
+$SUBROUTINE_MAPPINGS{nathost_resource_subid} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{nathost}{resource}{subid}';
+$SUBROUTINE_MAPPINGS{nathost_resourcetype_id} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{nathost}{resource}{resourcetype}{id}';
+$SUBROUTINE_MAPPINGS{nathost_resource_type} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{nathost}{resource}{resourcetype}{name}';
+
 $SUBROUTINE_MAPPINGS{vmhost_computer_id} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhost}{computerid}';
 $SUBROUTINE_MAPPINGS{vmhost_hostname} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhost}{computer}{hostname}';
 $SUBROUTINE_MAPPINGS{vmhost_short_name} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhost}{computer}{SHORTNAME}';
@@ -682,7 +693,7 @@ sub _initialize : Init {
 		}
 		$self->request_data->{reservation}{$self->reservation_id}{computer}{vmhost} = $vmhost_info;
 	}
-	
+
 	# If either the computer, image, or imagerevision identifier arguments are specified, retrieve appropriate image and imagerevision data
 	if (defined($imagerevision_identifier) || defined($image_identifier) || defined($computer_identifier)) {
 		my $imagerevision_info;
@@ -1126,46 +1137,45 @@ sub get_reservation_data {
 
 =head2 set_reservation_remote_ip
 
- Parameters  : None
- Returns     : string
- Description : 
+ Parameters  : $remote_ip
+ Returns     : boolean
+ Description : Updates the reservation.remoteIP value in the database.
 
 =cut
 
 sub set_reservation_remote_ip {
-   my $self = shift;
-   my $reservation_id  = $self->get_reservation_id();
+	my $self = shift;
+	my $reservation_id = $self->get_reservation_id();
 	
-	my $new_remote_ip = shift;
+	my $remote_ip = shift;
 	
 	# Check to make sure reservation ID was passed
-   if (!$new_remote_ip) {
-        notify($ERRORS{'WARNING'}, 0, "new_remote_ip was not specified, returning self");
-        return 0;;
-   }
-
+	if (!$remote_ip) {
+		notify($ERRORS{'WARNING'}, 0, "remote IP address argument was not specified");
+		return 0;
+	}
 	
-	my $update_statement = "
-		  UPDATE
-		  reservation
-		  SET
-		  remoteIP = \'$new_remote_ip\'
-		  WHERE
-		  id = \'$reservation_id\'
-			  ";
-
-        # Call the database execute subroutine
-        if (database_execute($update_statement)) {
-                # Update successful
-                notify($ERRORS{'OK'}, 0, "new remoteIP $new_remote_ip for reservation id $reservation_id updated");
-                return 1;
-        }
-        else {
-                notify($ERRORS{'CRITICAL'}, 0, "unable to update new remote ip for reservation id $reservation_id");
-                return 0;
-        }
-
-
+	# Set the current value in the request data hash
+	$self->request_data->{reservation}{$reservation_id}{remoteIP} = $remote_ip;
+	
+	my $update_statement = <<EOF;
+UPDATE
+reservation
+SET
+remoteIP = '$remote_ip'
+WHERE
+id = '$reservation_id'
+EOF
+	
+	# Call the database execute subroutine
+	if (database_execute($update_statement)) {
+		notify($ERRORS{'OK'}, 0, "remote IP updated to $remote_ip for reservation $reservation_id");
+		return 1;
+	}
+	else {
+		notify($ERRORS{'CRITICAL'}, 0, "failed to update remote IP to $remote_ip for reservation $reservation_id");
+		return 0;
+	}
 } ## end sub set_reservation_remote_ip
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -1180,7 +1190,7 @@ sub set_reservation_remote_ip {
 
 sub get_reservation_remote_ip {
 	my $self = shift;
-	my $reservation_id  = $self->get_reservation_id();
+	my $reservation_id = $self->get_reservation_id();
 
 	# Create the select statement
 	my $select_statement = "

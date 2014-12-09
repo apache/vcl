@@ -164,7 +164,7 @@ sub get_init_modules {
 		# initialize will check the computer to determine if it contains the corresponding Linux init daemon installed
 		# If not installed, the constructor will return false
 		my $init;
-		eval { $init = ($init_perl_package)->new({data_structure => $self->data, os => $self, mn_os => $self->mn_os}) };
+		eval { $init = ($init_perl_package)->new({data_structure => $self->data, os => $self, mn_os => $self->mn_os, base_package => ref($self)}) };
 		if ($init) {
 			my @required_commands = eval "@" . $init_perl_package . "::REQUIRED_COMMANDS";
 			if ($EVAL_ERROR) {
@@ -219,6 +219,75 @@ sub get_init_modules {
 	}
 	notify($ERRORS{'DEBUG'}, 0, "constructed array containing init module objects which may be used to control $computer_node_name:\n$init_module_order_string");
 	return @{$self->{init_modules}};
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 firewall
+
+ Parameters  : none
+ Returns     : Linux firewall module reference
+ Description : Determines the Linux firewall module to use and creates an
+               object.
+
+=cut
+
+sub firewall {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+
+	return $self->{firewall} if $self->{firewall};
+	
+	notify($ERRORS{'DEBUG'}, 0, "beginning Linux firewall daemon module initialization");
+	
+	my $computer_node_name = $self->data->get_computer_node_name();
+	
+	# Get the absolute path of the init module directory
+	my $firewall_directory_path = "$FindBin::Bin/../lib/VCL/Module/OS/Linux/firewall";
+	notify($ERRORS{'DEBUG'}, 0, "Linux firewall module directory path: $firewall_directory_path");
+	
+	# Get a list of all *.pm files in the firewall module directory
+	my @firewall_module_paths = $self->mn_os->find_files($firewall_directory_path, '*.pm');
+	
+	# Attempt to create an initialize an object for each firewall module
+	my %firewall_module_hash;
+	FIREWALL_MODULE: for my $firewall_module_path (@firewall_module_paths) {
+		my $firewall_name = fileparse($firewall_module_path, qr/\.pm$/i);
+		my $firewall_perl_package = "VCL::Module::OS::Linux::firewall::$firewall_name";
+		
+		# Attempt to load the module
+		eval "use $firewall_perl_package";
+		if ($EVAL_ERROR) {
+			notify($ERRORS{'WARNING'}, 0, "$firewall_perl_package module could not be loaded, error:\n" . $EVAL_ERROR);
+			return;
+		}
+		notify($ERRORS{'DEBUG'}, 0, "$firewall_perl_package module loaded");
+		
+		# Attempt to create the object
+		my $firewall_object;
+		eval {
+			$firewall_object = ($firewall_perl_package)->new({data_structure => $self->data, base_package => ref($self)})
+		};
+		
+		if ($EVAL_ERROR) {
+			notify($ERRORS{'WARNING'}, 0, "failed to create $firewall_perl_package object, error: $EVAL_ERROR");
+		}
+		elsif (!$firewall_object) {
+			notify($ERRORS{'DEBUG'}, 0, "$firewall_perl_package object could not be initialized");
+		}
+		else {
+			my $address = sprintf('%x', $firewall_object);
+			notify($ERRORS{'DEBUG'}, 0, "$firewall_perl_package object created, address: $address");
+			$self->{firewall} = $firewall_object;
+			return $firewall_object;
+		}
+	}
+	
+	notify($ERRORS{'WARNING'}, 0, "failed to create firewall object to control $computer_node_name");
+	return;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -3023,14 +3092,19 @@ sub service_exists {
 		}
 		
 		if (grep(/^$service_name$/, @service_names)) {
-			notify($ERRORS{'DEBUG'}, 0, "'$service_name' service exists on $computer_node_name, controlled by $init_module_name init module ($init_module_index)");
-			
 			$self->{service_init_module}{$service_name} = {
 				init_module_index => $init_module_index,
 				init_module_name => $init_module_name,
 			};
 			
-			return (wantarray) ? ($init_module_index) : 1;
+			if (wantarray) {
+				notify($ERRORS{'DEBUG'}, 0, "'$service_name' service exists on $computer_node_name, controlled by $init_module_name init module ($init_module_index), returning array: ($init_module_index)");
+				return $init_module_index;
+			}
+			else {
+				notify($ERRORS{'DEBUG'}, 0, "'$service_name' service exists on $computer_node_name, controlled by $init_module_name init module ($init_module_index), returning scalar: 1");
+				return 1;
+			}
 		}
 		else {
 			notify($ERRORS{'DEBUG'}, 0, "'$service_name' service is not controlled by $init_module_name init module ($init_module_index)");
@@ -3208,12 +3282,10 @@ sub check_connection_on_port {
 		return;
 	}
 	
-	my $management_node_keys        = $self->data->get_management_node_keys();
 	my $computer_node_name          = $self->data->get_computer_node_name();
 	my $remote_ip                   = $self->data->get_reservation_remote_ip();
-	my $computer_public_ip_address  = $self->data->get_computer_public_ip_address();
+	my $computer_public_ip_address  = $self->get_public_ip_address();
 	my $request_state_name          = $self->data->get_request_state_name();
-	my $username                    = $self->data->get_user_login_id();
 	
 	my $port = shift;
 	if (!$port) {
@@ -3221,47 +3293,38 @@ sub check_connection_on_port {
 		return "failed";
 	}
 	
-	my $ret_val = "no";
-	my $command = "netstat -an";
-	my ($status, $output) = $self->execute($command, 0);
-	notify($ERRORS{'DEBUG'}, 0, "checking connections on node $computer_node_name on port $port");
-	foreach my $line (@{$output}) {
-		if ($line =~ /Connection refused|Permission denied/) {
-			chomp($line);
-			notify($ERRORS{'WARNING'}, 0, "$line");
-			if ($request_state_name =~ /reserved/) {
-				$ret_val = "failed";
+	my $port_connection_info = $self->get_port_connection_info();
+	for my $protocol (keys %$port_connection_info) {
+		if (!defined($port_connection_info->{$protocol}{$port})) {
+			next;
+		}
+		
+		for my $connection (@{$port_connection_info->{$protocol}{$port}}) {
+			my $connection_local_ip = $connection->{local_ip};
+			my $connection_remote_ip = $connection->{remote_ip};
+			
+			if ($connection_local_ip ne $computer_public_ip_address) {
+				notify($ERRORS{'DEBUG'}, 0, "ignoring connection, not connected to public IP address ($computer_public_ip_address): $connection_remote_ip --> $connection_local_ip:$port ($protocol)");
+				next;
 			}
-			else {
-				$ret_val = "timeout";
+			
+			if ($connection_remote_ip eq $remote_ip) {
+				notify($ERRORS{'DEBUG'}, 0, "connection detected from reservation remote IP: $connection_remote_ip --> $connection_local_ip:$port ($protocol)");
+				return 1;
 			}
-			return $ret_val;
-		} ## end if ($line =~ /Connection refused|Permission denied/)
-		if ($line =~ /tcp\s+([0-9]*)\s+([0-9]*)\s($computer_public_ip_address:$port)\s+([.0-9]*):([0-9]*)(.*)(ESTABLISHED)/) {
-			if ($4 eq $remote_ip) {
-				$ret_val = "connected";
-				return $ret_val;
+			
+			# Connection is not from reservation remote IP address, check if user is logged in
+			if ($self->user_logged_in()) {
+				notify($ERRORS{'DEBUG'}, 0, "connection detected from different remote IP address than current reservation remote IP ($remote_ip): $connection_remote_ip --> $connection_local_ip:$port ($protocol), updating reservation remote IP to $connection_remote_ip");
+				$self->data->set_reservation_remote_ip($connection_remote_ip);
+				return 1;
 			}
-			else {
-				my $new_remote_ip = $4;
-				# this isn't the defined remoteIP
-				# Confirm the user is logged in
-				# Is user logged in
-				if (!$self->user_logged_in()) {
-					notify($ERRORS{'OK'}, 0, "Detected $new_remote_ip is connected. $username is not logged in yet. Returning no connection");
-					$ret_val = "no";
-					return $ret_val;
-				}
-				else {
-					$self->data->set_reservation_remote_ip($new_remote_ip);
-					notify($ERRORS{'OK'}, 0, "Updating reservation remote_ip with $new_remote_ip");
-					$ret_val = "conn_wrong_ip";
-					return $ret_val;
-				}
-			}
-		}    # tcp check
+			
+			notify($ERRORS{'DEBUG'}, 0, "ignoring connection, user is not logged in and remote IP address does not match current reservation remote IP ($remote_ip): $connection_remote_ip --> $connection_local_ip:$port ($protocol)");
+		}
 	}
-	return $ret_val;
+	
+	return 0;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -5133,6 +5196,42 @@ sub get_port_connection_info {
 		notify($ERRORS{'DEBUG'}, 0, "did not detect any connections on $computer_node_name");
 	}
 	return $connection_info;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 enable_ip_forwarding
+
+ Parameters  : none
+ Returns     : boolean
+ Description : Enables IP forwarding by executing:
+               echo 1 > /proc/sys/net/ipv4/ip_forward
+
+=cut
+
+sub enable_ip_forwarding {
+	my $self = shift;
+	if (ref($self) !~ /linux/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $computer_node_name = $self->data->get_computer_node_name();
+	
+	my $command = "echo 1 > /proc/sys/net/ipv4/ip_forward";
+	my ($exit_status, $output) = $self->execute($command, 0);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to enable IP forwarding on $computer_node_name: $command");
+		return;
+	}
+	elsif ($exit_status ne '0') {
+		notify($ERRORS{'WARNING'}, 0, "failed to enable IP forwarding on $computer_node_name, command: '$command', exit status: $exit_status, output:\n" . join("\n", @$output));
+		return 0;
+	}
+	else {
+		notify($ERRORS{'OK'}, 0, "verified IP forwarding is enabled on $computer_node_name");
+		return 1;
+	}
 }
 
 ##/////////////////////////////////////////////////////////////////////////////

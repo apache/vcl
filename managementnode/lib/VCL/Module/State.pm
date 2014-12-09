@@ -93,6 +93,7 @@ sub initialize {
 	my $is_vm = $self->data->get_computer_vmhost_id(0);
 	my $is_parent_reservation = $self->data->is_parent_reservation();
 	my $reservation_count = $self->data->get_reservation_count();
+	my $nathost_id = $self->data->get_nathost_id(0);
 	
 	# Initialize the database handle count
 	$ENV{dbh_count} = 0;
@@ -136,6 +137,20 @@ sub initialize {
 			$self->reservation_failed("failed to create VM host OS object");
 		}
 		$self->set_vmhost_os($vmhost_os);
+	}
+	
+	# Create a NAT host OS object if computer is mapped to a NAT host
+	my $nathost_os;
+	if ($nathost_id) {
+		$nathost_os = $self->create_nathost_os_object();
+		if (!$nathost_os) {
+			$self->reservation_failed("failed to create NAT host OS object");
+		}
+		$self->set_nathost_os($nathost_os);
+		
+		# Allow the OS object to access the nathost_os object
+		# This is necessary to allow the OS code to call the subroutines to forward ports
+		$self->os->set_nathost_os($self->nathost_os());
 	}
 	
 	# Create a provisioning object

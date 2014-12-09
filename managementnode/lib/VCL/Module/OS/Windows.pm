@@ -10818,8 +10818,11 @@ sub get_environment_variable_value {
 =head2 check_connection_on_port
 
  Parameters  : $port
- Returns     : (connected|conn_wrong_ip|timeout|failed)
- Description : uses netstat to see if any thing is connected to the provided port
+ Returns     : boolean
+ Description : Checks if a connection is established to the port specified from
+					the reservation remote IP address. If a connection is detected
+					from another address and the user is logged in,
+					reservation.remoteIP is updated.
 
 =cut
 
@@ -10832,7 +10835,7 @@ sub check_connection_on_port {
 	
 	my $computer_node_name          = $self->data->get_computer_node_name();
 	my $remote_ip                   = $self->data->get_reservation_remote_ip();
-	my $computer_public_ip_address  = $self->data->get_computer_public_ip_address();
+	my $computer_public_ip_address  = $self->get_public_ip_address();
 	my $request_state_name          = $self->data->get_request_state_name();
 	
 	my $port = shift;
@@ -10841,104 +10844,38 @@ sub check_connection_on_port {
 		return "failed";
 	}
 	
-	my $ret_val = "no";
-	my $command = "netstat -an";
-	my ($status, $output) = $self->execute($command, 0, 30, 0);
-	
-	notify($ERRORS{'DEBUG'}, 0, "checking connections on node $computer_node_name on port $port");
-	
-	foreach my $line (@{$output}) {
-		if ($line =~ /Connection refused|Permission denied/) {
-			chomp($line);
-			notify($ERRORS{'WARNING'}, 0, "$line");
-			if ($request_state_name =~ /reserved/) {
-				$ret_val = "failed";
-			}
-			else {
-				$ret_val = "timeout";
-			}
-			return $ret_val;
-		} ## end if ($line =~ /Connection refused|Permission denied/)
+	my $port_connection_info = $self->get_port_connection_info();
+	for my $protocol (keys %$port_connection_info) {
+		if (!defined($port_connection_info->{$protocol}{$port})) {
+			next;
+		}
 		
-		if ($line =~ /\s+($computer_public_ip_address:$port)\s+([.0-9]*):([0-9]*)\s+(ESTABLISHED)/) {
-			if ($2 eq $remote_ip) {
-				$ret_val = "connected";
-				return $ret_val;
+		for my $connection (@{$port_connection_info->{$protocol}{$port}}) {
+			my $connection_local_ip = $connection->{local_ip};
+			my $connection_remote_ip = $connection->{remote_ip};
+			
+			if ($connection_local_ip ne $computer_public_ip_address) {
+				notify($ERRORS{'DEBUG'}, 0, "ignoring connection, not connected to public IP address ($computer_public_ip_address): $connection_remote_ip --> $connection_local_ip:$port ($protocol)");
+				next;
 			}
-			else {
-				# this isn't the remoteIP
-				# Is user logged in
-				if (!$self->user_logged_in()) {
-					notify($ERRORS{'OK'}, 0, "Detected $4 is connected. user is not logged in yet. Returning no connection");
-					$ret_val = "no";
-					return $ret_val;
-				}
-				else {
-					my $new_remote_ip = $2;
-					$self->data->set_reservation_remote_ip($new_remote_ip);  
-					notify($ERRORS{'OK'}, 0, "Updating reservation remote_ip with $new_remote_ip");
-					$ret_val = "conn_wrong_ip";
-					return $ret_val;
-				}
+			
+			if ($connection_remote_ip eq $remote_ip) {
+				notify($ERRORS{'DEBUG'}, 0, "connection detected from reservation remote IP: $connection_remote_ip --> $connection_local_ip:$port ($protocol)");
+				return 1;
 			}
+			
+			# Connection is not from reservation remote IP address, check if user is logged in
+			if ($self->user_logged_in()) {
+				notify($ERRORS{'DEBUG'}, 0, "connection detected from different remote IP address than current reservation remote IP ($remote_ip): $connection_remote_ip --> $connection_local_ip:$port ($protocol), updating reservation remote IP to $connection_remote_ip");
+				$self->data->set_reservation_remote_ip($connection_remote_ip);
+				return 1;
+			}
+			
+			notify($ERRORS{'DEBUG'}, 0, "ignoring connection, user is not logged in and remote IP address does not match current reservation remote IP ($remote_ip): $connection_remote_ip --> $connection_local_ip:$port ($protocol)");
 		}
 	}
 	
-	
-	return $ret_val;
-}
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 firewall_compare_update
-
- Parameters  : $node,$reote_IP, $identity, $type
- Returns     : 0 or 1 (nochange or updated)
- Description : compares and updates the firewall for rdp port, specfically for windows
-               Currently only handles windows and allows two seperate scopes
-
-=cut
-
-sub firewall_compare_update {
-   my $self = shift;
-   if (ref($self) !~ /windows/i) {
-      notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-      return;
-   }
-	
-   my $computer_node_name = $self->data->get_computer_node_name();
-   my $imagerevision_id   = $self->data->get_imagerevision_id();
-   my $remote_ip          = $self->data->get_reservation_remote_ip();
-	
-	if (!$remote_ip) {
-		notify($ERRORS{'WARNING'}, 0, "unable to update firewall on $computer_node_name, remote IP could not be retrieved for reservation");
-      return;
-	}
-	
-   # Retrieve the connect method info
-   my $connect_method_info = get_connect_method_info($imagerevision_id);
-   if (!$connect_method_info) {
-      notify($ERRORS{'WARNING'}, 0, "failed to retrieve connect method info for image revision $imagerevision_id");
-      return;
-   }
-	
-   # Retrieve the firewall configuration from the computer
-   my $firewall_configuration = $self->get_firewall_configuration() || return;
-	
-	# Loop through the connect methods, check to make sure firewall is open for remote IP
-   for my $connect_method_id (sort keys %{$connect_method_info} ) {
-      my $connect_method_name = $connect_method_info->{$connect_method_id}{name};
-      my $protocol            = $connect_method_info->{$connect_method_id}{protocol} || 'TCP';
-      my $port                = $connect_method_info->{$connect_method_id}{port};
-		
-		next if (!$port);
-		
-		if ($self->enable_firewall_port($protocol, $port, $remote_ip, 0)) {
-			notify($ERRORS{'DEBUG'}, 0, "opened/verified firewall port $port on $computer_node_name for $remote_ip $connect_method_name connect method");
-		}
-	}
-	return 1;
-
+	return 0;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -11745,16 +11682,25 @@ sub check_rdp_port_configuration {
 		return;
 	}
 	
-	# Make sure only 1 port is defined
-	my @protocols = keys %{$connect_method_port_info};
-	my $protocol = $connect_method_port_info->{$protocols[0]};
-	my @ports = keys %$protocol;
-	my $connect_method_rdp_port = $ports[0];
-	if (scalar(@protocols) > 1 || scalar(@ports) > 1) {
+	# Extract the port numbers - multiple ports may be defined, for example TCP/3389 and UDP/3389
+	my %connect_method_port_hash;
+	for my $connect_method_port_id (keys %$connect_method_port_info) {
+		my $port = $connect_method_port_info->{$connect_method_port_id}{port};
+		$connect_method_port_hash{$port} = 1;
+	}
+	
+	# Make sure a single port number is defined for the RDP connect method
+	my @connect_method_ports = keys(%connect_method_port_hash);
+	if (!@connect_method_ports) {
+		notify($ERRORS{'WARNING'}, 0, "port is not defined for connect method:\n" . format_data($connect_method_port_info));
+		return;
+	}
+	elsif (scalar(@connect_method_ports) > 1) {
 		notify($ERRORS{'WARNING'}, 0, "unable to determine which port is supposed to be used for RDP, multiple ports are defined for connect method:\n" . format_data($connect_method_port_info));
 		return;
 	}
 	
+	my $connect_method_rdp_port = $connect_method_ports[0];
 	my $rdp_port_key = 'HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp';
 	my $rdp_port_value = 'PortNumber';
 	
