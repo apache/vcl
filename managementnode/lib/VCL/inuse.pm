@@ -395,7 +395,7 @@ sub user_connected {
 	}
 	
 	# If duration is >= 24 hrs set as connected and return
-	if($request_duration_hrs >= $ignore_connections_gte ) {
+	if ($request_duration_hrs >= $ignore_connections_gte ) {
 		notify($ERRORS{'OK'}, 0, "reservation duration is $request_duration_hrs hrs is >= to ignore_connections setting $ignore_connections_gte hrs, skipping inuse checks");
 		insertloadlog($reservation_id, $computer_id, "connected", "user connected to $computer_short_name");
 		return 1;
@@ -523,7 +523,7 @@ EOF
 	
 	# Send message to machine
 	if ($computer_type =~ /blade|virtualmachine/) {
-		if ($image_os_type =~ /osx/){
+		if ($image_os_type =~ /osx/) {
         # Notify via oascript
         notify_via_oascript($computer_short_name, $user_login_id, $short_message);
      }
@@ -782,7 +782,7 @@ sub _notify_user_request_ended {
 	my $subject;
 	my $message;
 	
-	if(!$request_forimaging) {
+	if (!$request_forimaging) {
 	$subject = "VCL -- End of reservation";
 	
 	$message = <<"EOF";

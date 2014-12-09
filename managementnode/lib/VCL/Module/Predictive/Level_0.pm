@@ -195,7 +195,7 @@ sub get_next_image {
 	notify($ERRORS{'OK'}, 0, "$notify_prefix returning nextimage image=$next_selected_rows[0]{imagename} imageid=$next_selected_rows[0]{imageid}");
 	push (@ret_array, "reload", $next_selected_rows[0]{imagename}, $next_selected_rows[0]{imageid}, $next_selected_rows[0]{imagerevisionid});
 	#Clear next_imageid
-	if(!clear_next_image_id($computer_id)){
+	if (!clear_next_image_id($computer_id)) {
 		notify($ERRORS{'WARNING'}, 0, "$notify_prefix failed to clear next_image_id for computerid $computer_id");
 	}
 	return @ret_array;

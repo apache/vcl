@@ -167,7 +167,7 @@ sub pre_capture {
 	}
 
 	# Log off users which were created for the imaging reservation
-	if (!$self->logoff_users()){
+	if (!$self->logoff_users()) {
 		notify($ERRORS{'WARNING'}, 0, "unable to log off all currently logged in users on $computer_node_name");
 		return 0;
 	}
@@ -445,7 +445,7 @@ sub reboot {
 	}
 	
 	my $wait_attempt_limit = 2;
-	if ($self->wait_for_reboot($wait_attempt_limit)){
+	if ($self->wait_for_reboot($wait_attempt_limit)) {
 		# Reboot was successful, calculate how long reboot took
 		my $reboot_end_time = time();
 		my $reboot_duration = ($reboot_end_time - $reboot_start_time);

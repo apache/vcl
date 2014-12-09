@@ -540,7 +540,7 @@ sub post_reserve {
 		
 		#write to local temp file
 		my $tmpfile = "/tmp/$reservation_id" ."_post_reserve_userdata";
-		if(open(TMP, ">$tmpfile")){
+		if (open(TMP, ">$tmpfile")) {
 			print TMP $variable_data;
 			close(TMP);
 
@@ -552,7 +552,7 @@ sub post_reserve {
 			notify($ERRORS{'WARNING'}, 0, "failed to open $tmpfile for writing userdata");
 		}
 		#Clean variable from variable table
-		if(delete_variable($variable_name)){
+		if (delete_variable($variable_name)) {
 			notify($ERRORS{'DEBUG'}, 0, "Deleted variable_name $variable_name from variable table");
 		}
 	}
@@ -690,8 +690,8 @@ sub update_public_hostname {
 	
 	# Set the node's hostname to public hostname
 
-	if($self->can("update_hostname_file")) {
-		if(!$self->update_hostname_file($public_hostname)) {
+	if ($self->can("update_hostname_file")) {
+		if (!$self->update_hostname_file($public_hostname)) {
 			notify($ERRORS{'WARNING'}, 0, "failed to update hostname file");
 		}
 	}
@@ -2651,7 +2651,7 @@ sub create_user {
 	my $home_directory_path = "/home/$user_login_id";
 	my $home_directory_root = "/home";
 	my $home_directory_on_local_disk = $self->is_file_on_local_disk($home_directory_root);
-	if($home_directory_on_local_disk ) {
+	if ($home_directory_on_local_disk ) {
 
 	my $useradd_command = "/usr/sbin/useradd -s /bin/bash -m -d /home/$user_login_id -g vcl";
 	$useradd_command .= " -u $uid" if ($uid);
@@ -2708,7 +2708,7 @@ sub create_user {
 	
 	# Check image profile for allowed root access
 	# If the imagemeta root access is disable don't allow manage_server_access to override
-	if(defined($imagemeta_root_access) && $imagemeta_root_access) {
+	if (defined($imagemeta_root_access) && $imagemeta_root_access) {
 		if ($root_access == 1) {
 			my $sudoers_file_path = '/etc/sudoers';
 			my $sudoers_line = "$user_login_id ALL= NOPASSWD: ALL";
@@ -4950,7 +4950,7 @@ sub notify_user_console {
 	}
 
 	my $message = shift;
-	if(!$message) {
+	if (!$message) {
 		notify($ERRORS{'WARNING'}, 0, "message argument was not supplied");
 		return;
 	}

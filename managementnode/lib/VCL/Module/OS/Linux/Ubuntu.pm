@@ -91,17 +91,17 @@ sub clean_iptables {
    my $source_file_path = "/etc/iptables.rules";
    if (run_scp_command("$computer_node_name:\"$source_file_path\"", $tmpfile, $management_node_keys)) {
       my @lines;
-      if(open(IPTAB_TMPFILE, $tmpfile)){
+      if (open(IPTAB_TMPFILE, $tmpfile)) {
          @lines = <IPTAB_TMPFILE>;
          close(IPTAB_TMPFILE);
       }
-      foreach my $line (@lines){
+      foreach my $line (@lines) {
          if ($line =~ s/-A INPUT -s .*\n//) {
          }
       }
 
       #Rewrite array to tmpfile
-      if(open(IPTAB_TMPFILE, ">$tmpfile")){
+      if (open(IPTAB_TMPFILE, ">$tmpfile")) {
          print IPTAB_TMPFILE @lines;
          close (IPTAB_TMPFILE);
       }
@@ -169,20 +169,20 @@ sub clean_known_files {
    }
    
    #Remove files
-   if(!(grep( /70-persistent-net.rules/ , @exclude_list ) ) ){ 
-      if(!$self->delete_file("/etc/udev/rules.d/70-persistent-net.rules")){
+   if (!(grep( /70-persistent-net.rules/ , @exclude_list ) ) ) {
+      if (!$self->delete_file("/etc/udev/rules.d/70-persistent-net.rules")) {
          notify($ERRORS{'WARNING'}, 0, "unable to remove /etc/udev/rules.d/70-persistent-net.rules");
       }    
    }
    
-   if(!(grep( /\/var\/log\/auth/ , @exclude_list ) ) ){ 
-      if(!$self->execute("cp /dev/null /var/log/auth.log")){
+   if (!(grep( /\/var\/log\/auth/ , @exclude_list ) ) ) {
+      if (!$self->execute("cp /dev/null /var/log/auth.log")) {
          notify($ERRORS{'WARNING'}, 0, "unable to overwrite  /var/log/auth.log");
       }    
    }
    
-   if(!(grep( /\/var\/log\/lastlog/ , @exclude_list ) ) ){ 
-      if(!$self->execute("cp /dev/null /var/log/lastlog")){
+   if (!(grep( /\/var\/log\/lastlog/ , @exclude_list ) ) ) {
+      if (!$self->execute("cp /dev/null /var/log/lastlog")) {
          notify($ERRORS{'WARNING'}, 0, "unable to overwrite /var/log/lastlog");
       }    
    }
@@ -487,7 +487,7 @@ sub get_firewall_configuration {
 				return;	
 			}
       }    
-      elsif($line =~ /^(\d+)\s+([A-Z]*)\s+([a-z]*)\s+(--)\s+(\S+)\s+(\S+)\s+(.*)/ig ) {
+      elsif ($line =~ /^(\d+)\s+([A-Z]*)\s+([a-z]*)\s+(--)\s+(\S+)\s+(\S+)\s+(.*)/ig ) {
      
          my $num = $1;
          my $target = $2;
@@ -499,7 +499,7 @@ sub get_firewall_configuration {
          my $name;
      
      
-         if (defined($port_string) && ($port_string =~ /([\s(a-zA-Z)]*)(dpt:)(\d+)/ig )){
+         if (defined($port_string) && ($port_string =~ /([\s(a-zA-Z)]*)(dpt:)(\d+)/ig )) {
             $port = $3;  
             notify($ERRORS{'DEBUG'}, 0, "output rule: $num, $target, $protocol, $scope, $destination, $port ");
          }    
@@ -515,7 +515,7 @@ sub get_firewall_configuration {
          }
          else {
             for my $sline (@$service_output) {
-               if ( $sline =~ /(^[_-a-zA-Z1-9]+)\s+($port\/$protocol)\s+(.*) /ig ){
+               if ( $sline =~ /(^[_-a-zA-Z1-9]+)\s+($port\/$protocol)\s+(.*) /ig ) {
                   $name = $1;
                }
             }
@@ -579,7 +579,7 @@ sub set_static_public_address {
    my $ip_configuration = $self->data->get_management_node_public_ip_configuration();
    
    if ($ip_configuration !~ /static/i) {
-      if( !$server_request_fixedIP ) {
+      if ( !$server_request_fixedIP ) {
          notify($ERRORS{'WARNING'}, 0, "static public address can only be set if IP configuration is static or is a server request, current value: $ip_configuration \nserver_request_fixedIP=$server_request_fixedIP");
          return;
       }    
@@ -610,7 +610,7 @@ sub set_static_public_address {
 	
 	#Try to ping address to make sure it's available
    #FIXME  -- need to add other tests for checking ip_address is or is not available.
-   if(_pingnode($computer_public_ip_address)) {
+   if (_pingnode($computer_public_ip_address)) {
       notify($ERRORS{'WARNING'}, 0, "ip_address $computer_public_ip_address is pingable, can not assign to $computer_name ");
       return;
    }
@@ -620,7 +620,7 @@ sub set_static_public_address {
 	my $network_interfaces_file_default = "/etc/network/interfaces";
    notify($ERRORS{'DEBUG'}, 0, "interface file path: $network_interfaces_file");
 	
-	if($self->execute("cp network_interfaces_file /etc/network/interfaces_orig")) {
+	if ($self->execute("cp network_interfaces_file /etc/network/interfaces_orig")) {
 		notify($ERRORS{'OK'}, 0, "Created backup of $network_interfaces_file");
 	}
 		
@@ -643,11 +643,11 @@ sub set_static_public_address {
 		push(@new_interfaces_file, $l) if($l =~ /^auto lo/);
 		push(@new_interfaces_file, $l) if($l =~ /^\n$/);
 
-		if($l =~ /^iface/) {
+		if ($l =~ /^iface/) {
 			push(@new_interfaces_file, $l) if($l !~ /$interface_name/ );
 		}	
 	
-		if($l =~ /^iface $interface_name/) {
+		if ($l =~ /^iface $interface_name/) {
 			push(@new_interfaces_file, "iface $interface_name inet static\n");
 			push(@new_interfaces_file, "address $computer_public_ip_address\n");
 			push(@new_interfaces_file, "netmask $subnet_mask\n");
@@ -660,7 +660,7 @@ sub set_static_public_address {
 	#Clear temp file
 	unlink($tmpfile);
 	#Write array to file	
-	if(open(FILE, ">$tmpfile")){
+	if (open(FILE, ">$tmpfile")) {
       print FILE @new_interfaces_file;
       close FILE;
    }

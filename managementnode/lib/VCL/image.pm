@@ -555,12 +555,12 @@ sub setup_capture_base_image {
 	my $image_is_virtual = 0;
 
 	print "\nTesting api call\n";
-	if($self->setup_test_rpc_xml(0)) {
+	if ($self->setup_test_rpc_xml(0)) {
 		print "VCL API call successful\n\n";
 	}
 
 	# Is vcld service running
-	if(!run_command('service vcld restart')){
+	if (!run_command('service vcld restart')) {
 		print "ERROR: Unable to confirm vcld is running, Attempted to use service vcld restart\n";
 		return;
 	}
@@ -640,7 +640,7 @@ sub setup_capture_base_image {
 	if ($computer_provisioning_module_name !~ /xcat/i) {
 		$image_is_virtual = 1;
 		#should have a vmhost assigned
-		if ($computer_info{$computer_id}{vmhostid}){
+		if ($computer_info{$computer_id}{vmhostid}) {
 			$vmhost_name = $computer_info{$computer_id}{vmhost}{computer}{SHORTNAME};
 			print "VM host name: $vmhost_name\n";
 			print "VM host profile: $computer_info{$computer_id}{vmhost}{vmprofile}{profilename}\n";
@@ -721,7 +721,7 @@ sub setup_capture_base_image {
 		# if 0 selected, delete all reservations related to $computer_node_name
 		# Set $computer_node_name to available, proceed with questions
 		my $epoch_time = convert_to_epoch_seconds;
-		if ($chosen_request_id == 0 ){
+		if ($chosen_request_id == 0 ) {
 			delete $existing_requests_array_choices{0};
 
 			foreach my $request_id_del (sort keys %existing_requests_array_choices) {
@@ -744,14 +744,14 @@ sub setup_capture_base_image {
 					print "Removed reservation id $request_id_del for $del_image_name\n";
 					if (update_image_name($del_image_id, $del_imagerevision_id, $new_image_name, $new_prettyimage_name)) {
 					}
-					if (update_computer_state($computer_id, "available")){
+					if (update_computer_state($computer_id, "available")) {
 						print "Set $computer_node_name to available state\n";
 					}
 				}
 			}
 		}
 		# Elseif a request id is choosen. set $computer_node_name to available, test ssh access, restart image capture
-		if ($chosen_request_id){
+		if ($chosen_request_id) {
 			$request_id = $chosen_request_id;
 			$reservation_id = $existing_requests_array_choices{$chosen_request_id}{reservation_id};
 			if (reservation_being_processed($chosen_request_id)) {
@@ -775,7 +775,7 @@ sub setup_capture_base_image {
 					return;
 				}
 			}
-			if (update_computer_state($computer_id, "available")){
+			if (update_computer_state($computer_id, "available")) {
 				 print "Set $computer_node_name to available state\n";
      	 	}
 			$chosen_prettyname = $existing_requests_array_choices{$chosen_request_id}{prettyname};
@@ -994,7 +994,7 @@ MONITOR_LOG_OUTPUT:
 		while (my $output = <COMMAND>) {
 			 if ($output =~ /$reservation_id/) {
 				print $output;
-				if ($output =~ /complete/i ){
+				if ($output =~ /complete/i ) {
 					last;
 			 	}
 			}

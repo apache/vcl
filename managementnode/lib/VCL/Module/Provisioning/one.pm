@@ -121,7 +121,7 @@ sub unload {
 
 	my $one_computer_id = $self->_one_get_object_id("computer",$computer_name);
 	if ($one_computer_id) {
-		if(!$self->_one_delete_vm($one_computer_id)) {
+		if (!$self->_one_delete_vm($one_computer_id)) {
 			return 0;
 		}
 	}
@@ -236,7 +236,7 @@ sub load {
 					my $one_net_id = $self->_one_get_object_id("network",'VLAN_ID='.$_);
 					$template->{NIC}[1]{NETWORK_ID} = $one_net_id;
 					}
-			} else { 
+			} else {
 				# no custom networks, add eth1 as default public;
 				$template->{NIC}[1]{NETWORK_ID} = $one_network_1_id;
 			}
@@ -386,7 +386,7 @@ sub capture {
 	}
 	
 	# pre_capture was called with {end_state => 'on'}. Need to shutdown VM via ACPI.
-	if(!$self->power_off()) {
+	if (!$self->power_off()) {
 		notify($ERRORS{'CRITICAL'}, 0, "Couldn't shutdown $computer_name with power_off()");
 		return 0;
 	} else {
@@ -879,7 +879,7 @@ sub _one_get_object_id {
 			
 			my $data = $xml->XMLin($reply[0][1]);
 			
-			if ( (ref($data->{VM})) eq "ARRAY" ){
+			if ( (ref($data->{VM})) eq "ARRAY" ) {
 				foreach (@{$data->{VM}}) {
 					if ($_->{NAME} =~ /$o_name/) {
 						return $_->{ID};

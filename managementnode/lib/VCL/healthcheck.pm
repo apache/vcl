@@ -147,7 +147,7 @@ sub process {
 	my $mn_hostname = $info->{managementnode}->{hostname};
 	my $last_check;
 
-	if($powerdownstage =~ /^(available|all)$/){
+	if ($powerdownstage =~ /^(available|all)$/) {
 		notify($ERRORS{'WARNING'}, 0, "ALERT: powerdown stage triggered,placing MN $mn_hostname in maintenance");
 		if (set_managementnode_state($info->{managementnode}, "maintenance")) {
 			notify($ERRORS{'OK'}, 0, "Successfully set $mn_hostname into maintenance");
@@ -156,7 +156,7 @@ sub process {
 			notify($ERRORS{'WARNING'}, 0, "Failed to set $mn_hostname into maintenance");
 		}
 	}
-	elsif($powerdownstage =~ /^restore/){
+	elsif ($powerdownstage =~ /^restore/) {
 		notify($ERRORS{'WARNING'}, 0, "ALERT: Environment OK: restoring state of MN $mn_hostname in available");
 		if (set_managementnode_state($info->{managementnode}, "available")) {
 			notify($ERRORS{'OK'}, 0, "Successfully set $mn_hostname into available");
@@ -249,7 +249,7 @@ sub process {
 		my $node_status_string = "reload";
 
 		notify($ERRORS{'OK'}, 0, "pinging node $computer_short_name ");
-		if(_pingnode($computer_short_name) ){
+		if (_pingnode($computer_short_name) ) {
 			$node_status{ping} = 1;	 
 			# Try nmap to see if any of the ssh ports are open before attempting to run a test command
 			my $port_22_status = nmap_port($computer_short_name, 22) ? "open" : "closed";
@@ -284,9 +284,9 @@ sub process {
 				notify($ERRORS{'OK'}, 0, "ssh test: failed. port 22: $port_22_status, port 24: $port_24_status");
 			}
 
-			if($sshd_status eq "on") { 
+			if ($sshd_status eq "on") {
 				$node_status{"ssh"} = 1;
-				if($computer_type eq "lab") {
+				if ($computer_type eq "lab") {
 					$node_status_string = "ready";
 					$node_status{status} = "ready";
 					next;
@@ -294,7 +294,7 @@ sub process {
 				my @currentimage_txt_contents 	 = get_current_image_contents_noDS($computer_short_name);
 					foreach my $l (@currentimage_txt_contents) {
 						#notify($ERRORS{'OK'}, 0, "NODE l=$l");
-						if( $l =~ /imagerevision_id/i ) {
+						if ( $l =~ /imagerevision_id/i ) {
 							chomp($l);
 							my ($b,$imagerevision_id) = split(/=/,$l);
 							$node_status{imagerevision_id} = $imagerevision_id;
@@ -307,7 +307,7 @@ sub process {
 						}
 					}
 					
-					if($node_status{imagerevision_id}) { 
+					if ($node_status{imagerevision_id}) {
 						#Get image info using imagerevision_id as identifier
 						my $image_info = get_imagerevision_info($node_status{imagerevision_id},0);
 						$node_status{"currentimage"} = $image_info->{imagename};
@@ -340,9 +340,9 @@ sub process {
 		}
 
 		#check for powerdownstages
-		if($powerdownstage =~ /^(available|all)$/){
+		if ($powerdownstage =~ /^(available|all)$/) {
 			$info->{computertable}->{$cid}->{"powerdownstage"} = $powerdownstage;
-			if(powerdown_event($info->{computertable}->{$cid})){
+			if (powerdown_event($info->{computertable}->{$cid})) {
 				notify($ERRORS{'OK'}, 0, "Successfully powered down $computer_hostname");
 			}
 			else {
@@ -387,7 +387,7 @@ sub process {
 
 			if ($computer_type eq "lab") {
 				#no additional checks required for lab type
-				#if(lab_investigator($info->{computertable}->{$cid})){
+				#if (lab_investigator($info->{computertable}->{$cid})) {
 					$node_available =1;
 				#}
 			}
@@ -501,7 +501,7 @@ sub powerdown_event {
 	#If blade or vm and available|failed|maintenance - simply power-off
 	#If blade and vmhostinuse - check vms, if available power-down all
 
-	if(($computer_type =~ /blade/) && ($computer_state =~ /^(available|failed|maintenance)/)){
+	if (($computer_type =~ /blade/) && ($computer_state =~ /^(available|failed|maintenance)/)) {
 		notify($ERRORS{'OK'}, 0, "calling provision module $provisioning_perl_package power_off routine $computer_short_name");
 		
 		eval "use $provisioning_perl_package";
@@ -512,7 +512,7 @@ sub powerdown_event {
 		}
 		my $power_off_status = eval "&$provisioning_perl_package" . '::power_off($computer_short_name);';
 		notify($ERRORS{'OK'}, 0, "$power_off_status ");
-		if($power_off_status){
+		if ($power_off_status) {
 			notify($ERRORS{'OK'}, 0, "SUCCESS powered_off $computer_short_name");
 			return 1;
 		}
@@ -551,7 +551,7 @@ sub _virtualmachine_investigator {
 	my $nodestatus_vmstate      = $self->{node_status}->{vmstate};
 	my $nodestatus_image_match  = $self->{node_status}->{image_match};
 
-	if($nodestatus_vmstate =~ /off/){
+	if ($nodestatus_vmstate =~ /off/) {
 		# Ok for node to be off
 		$retval =1;
 		return $retval;

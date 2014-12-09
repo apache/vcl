@@ -92,11 +92,11 @@ sub get_next_image {
 	notify($ERRORS{'OK'}, 0, "$notify_prefix starting predictive_reload_level_2 for $computer_id");
 
 	#check if node is part of block reservation 
-	if(is_inblockrequest($computer_id)){
+	if (is_inblockrequest($computer_id)) {
 		notify($ERRORS{'DEBUG'}, 0, "computer id $computer_id is in blockComputers table");
 		my @block_ret_array = get_block_request_image_info($computer_id);
 
-		if(defined($block_ret_array[0]) && $block_ret_array[0]){
+		if (defined($block_ret_array[0]) && $block_ret_array[0]) {
 			push(@ret_array, "reload", @block_ret_array);	
 			return @ret_array;
 		}
@@ -106,7 +106,7 @@ sub get_next_image {
 	}
 
 	#If nextimageid set, set to default 0 and return the imageid
-	if(defined($computer_nextimage_id) && $computer_nextimage_id) {
+	if (defined($computer_nextimage_id) && $computer_nextimage_id) {
 		#Get computer_nextimage_id info
 		my $select_nextimage = " 
 		SELECT DISTINCT
@@ -141,7 +141,7 @@ sub get_next_image {
 			push(@next_image_ret_array, "reload", $next_selected_rows[0]{imagename}, $next_selected_rows[0]{imageid}, $next_selected_rows[0]{imagerevisionid});
 			
 			#Clear next_imageid
-			if(!clear_next_image_id($computer_id)){
+			if (!clear_next_image_id($computer_id)) {
 				notify($ERRORS{'WARNING'}, 0, "$notify_prefix failed to clear next_image_id for computerid $computer_id");
 			}
 			return @next_image_ret_array;

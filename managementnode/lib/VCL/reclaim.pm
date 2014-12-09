@@ -107,7 +107,7 @@ sub process {
 	# Remove related fixedIPsr variable, if it exists
 	if ($server_request_id) {
 		my $variable_name = "fixedIPsr" . $server_request_id;
-		if (is_variable_set($variable_name)){
+		if (is_variable_set($variable_name)) {
 			#Delete from variable table.
 			my $delete_sql_statement = "DELETE variable FROM variable WHERE name = '$variable_name' ";
 			if (database_execute($delete_sql_statement)) {
@@ -250,9 +250,9 @@ sub insert_reload_and_exit {
 	# Retrieve next image
 	my ($action, $next_image_name, $next_image_id, $next_imagerevision_id) = $self->data->get_next_image_dataStructure();
 
-	if($action =~ /unload/i) {
-		if($self->provisioner->can("unload")){
-			if($self->provisioner->unload()) {
+	if ($action =~ /unload/i) {
+		if ($self->provisioner->can("unload")) {
+			if ($self->provisioner->unload()) {
 				if (update_computer_imagename($computer_id, 'noimage')) {
 					notify($ERRORS{'DEBUG'}, 0, "set computer $computer_shortname current image to 'noimage'");
 				}
@@ -263,7 +263,7 @@ sub insert_reload_and_exit {
 
 	}
 	else {
-	#elsif( $action =~ /reload/i ){ 
+	#elsif ( $action =~ /reload/i ) {
 		if (!$next_image_name || !$next_image_id || !$next_imagerevision_id) {
 			notify($ERRORS{'WARNING'}, 0, "predictor module did not return required information, calling get_next_image_default from utils");
 			($next_image_name, $next_image_id, $next_imagerevision_id) = get_next_image_default($computer_id);

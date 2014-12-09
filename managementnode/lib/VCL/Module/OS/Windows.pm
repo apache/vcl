@@ -1098,7 +1098,7 @@ sub grant_access {
 	my $system32_path        = $self->get_system32_path();
 	my $request_forimaging   = $self->data->get_request_forimaging();
 	
-	if ($self->process_connect_methods("", 1) ){
+	if ($self->process_connect_methods("", 1) ) {
 		notify($ERRORS{'OK'}, 0, "processed connection methods on $computer_node_name");
 	}
 
@@ -3530,7 +3530,7 @@ sub reboot {
 	# Wait for the reboot to complete
 	my $result = $self->wait_for_reboot($total_wait_seconds, $attempt_delay_seconds, $attempt_limit);
 	my $reboot_duration = (time - $reboot_start_time);
-	if ($result){
+	if ($result) {
 		# Reboot was successful, calculate how long reboot took
 		notify($ERRORS{'OK'}, 0, "reboot complete on $computer_node_name, took $reboot_duration seconds");
 		return 1;
@@ -8498,7 +8498,7 @@ sub configure_time_synchronization {
 	my $time_source;
 	my $variable_name = "timesource|" . $self->data->get_management_node_hostname();
 	my $variable_name_global = "timesource|global";
-	if (is_variable_set($variable_name)){
+	if (is_variable_set($variable_name)) {
 		$time_source = get_variable($variable_name);
 		notify($ERRORS{'DEBUG'}, 0, "time_source is $time_source  set for $variable_name");
 	}
@@ -11880,7 +11880,7 @@ sub notify_user_console {
 	}
 
 	my $message = shift;
-	if(!$message) {
+	if (!$message) {
 		notify($ERRORS{'WARNING'}, 0, "message argument was not supplied");
 		return;
 	}
@@ -11890,7 +11890,7 @@ sub notify_user_console {
 	   $username = $self->data->get_user_login_id();
 	}
 	my $request_forimaging = $self->data->get_request_forimaging();
-	if($request_forimaging) {
+	if ($request_forimaging) {
 		$username = "Administrator";
 	}
 

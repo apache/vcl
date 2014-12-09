@@ -383,7 +383,7 @@ sub get_image_size {
 	}
 
 	my $os_image_size_bytes = $output->{'image'}{'OS-EXT-IMG-SIZE:size'};
-	if (!defined($os_image_size_bytes)){
+	if (!defined($os_image_size_bytes)) {
 		notify($ERRORS{'WARNING'}, 0, "The openstack image size for $image_name does NOT exists");
 		return;
 	}
@@ -942,7 +942,7 @@ sub _post_os_create_instance {
 		return;
 	}
 	my $os_instance_id = $output->{'server'}{'id'};
-	if (!defined($os_instance_id)){
+	if (!defined($os_instance_id)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to execute command to get the instance id on $computer_name");
 		return;
 	}

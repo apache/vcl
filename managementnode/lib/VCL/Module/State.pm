@@ -288,7 +288,7 @@ sub reservation_failed {
 		notify($ERRORS{'OK'}, 0, "request has been deleted, setting computer state to available and exiting");
 		
 		# Update the computer state to available
-		if ($computer_state_name !~ /^(maintenance)/){
+		if ($computer_state_name !~ /^(maintenance)/) {
 			if (update_computer_state($computer_id, "available")) {
 				notify($ERRORS{'OK'}, 0, "$computer_short_name ($computer_id) state set to 'available'");
 			}
@@ -357,7 +357,7 @@ sub reservation_failed {
 		notify($ERRORS{'WARNING'}, 0, "unable to set request to $new_request_state_name/$request_state_name");
 	}
 	
-	if ($request_state_name =~ /^(new|reserved)/){
+	if ($request_state_name =~ /^(new|reserved)/) {
 		# Update log table ending column to failed for this request
 		if (update_log_ending($request_logid, "failed")) {
 			notify($ERRORS{'OK'}, 0, "updated log ending value to 'failed', logid=$request_logid");
@@ -376,7 +376,7 @@ sub reservation_failed {
 	}
 	
 	# Update the computer state to failed as long as it's not currently maintenance
-	if ($computer_state_name !~ /^(maintenance)/){
+	if ($computer_state_name !~ /^(maintenance)/) {
 		if (update_computer_state($computer_id, $new_computer_state_name)) {
 			notify($ERRORS{'OK'}, 0, "computer $computer_short_name ($computer_id) state set to $new_computer_state_name");
 		}
@@ -719,7 +719,7 @@ sub state_exit {
 			}
 		}
 
-		if($request_state_name_old =~ /complete|timeout|deleted/) {
+		if ($request_state_name_old =~ /complete|timeout|deleted/) {
 			
 			delete_computerloadlog_reservation(\@reservation_ids,0,1);
 		}

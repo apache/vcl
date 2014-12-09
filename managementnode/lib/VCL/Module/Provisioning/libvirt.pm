@@ -160,7 +160,7 @@ sub unload {
 		return;
 	}
 
-	if(!$self->delete_existing_domains()) {
+	if (!$self->delete_existing_domains()) {
 		return;
 	}
 

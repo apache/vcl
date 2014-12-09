@@ -673,7 +673,7 @@ sub notify {
 	elsif ($error == 2) {
 		my $caller_trace = get_caller_trace(15);
 		$log_message = "\n---- CRITICAL ---- \n$log_message\n$caller_trace\n\n";
-		if($sysadmin) {
+		if ($sysadmin) {
 			
 			# Assemble the e-mail message body
 			$body = <<"END";
@@ -891,15 +891,15 @@ sub check_endtimenotice_interval {
 	
 	#flag on: 2 & 1 week; 2,1 day, 1 hour, 30,15,10,5 minutes
 	#ignore over 2weeks away
-	if($diff_weeks >= 2){
+	if ($diff_weeks >= 2) {
 		return 0;
 	}
 	#2 week: between 14 days and a 14 day -6 minutes window
-	elsif($Total_days >= 13 && $diff_hours >= 23 && $diff_minutes >= 55){
+	elsif ($Total_days >= 13 && $diff_hours >= 23 && $diff_minutes >= 55) {
 		return "2 weeks";
 	}
 	#Ignore: between 7 days and 14 day - 6 minute window
-	elsif($Total_days >=7) {
+	elsif ($Total_days >=7) {
 		return 0;
 	}
 	# 1 week notice: between 7 days and a 7 day -6 minute window
@@ -911,11 +911,11 @@ sub check_endtimenotice_interval {
 		return 0;
 	}
 	# 2 day notice: between 2 days and a 2 day -6 minute window
-	elsif($Total_days >= 1 && $diff_hours >= 23 && $diff_minutes >= 55) {
+	elsif ($Total_days >= 1 && $diff_hours >= 23 && $diff_minutes >= 55) {
 		return "2 days";
 	}
 	# 1 day notice: between 1 days and a 1 day -6 minute window
-	elsif($Total_days >= 0 && $diff_hours >= 23 && $diff_minutes >= 55) {
+	elsif ($Total_days >= 0 && $diff_hours >= 23 && $diff_minutes >= 55) {
 		return "24 hours";
 	}
 	
@@ -1127,7 +1127,7 @@ sub check_time {
 					return 0;
 				}
 			}
-			elsif($reservation_cnt > 1 ){ 
+			elsif ($reservation_cnt > 1 ) {
 				my $cluster_inuse_check_time = ($ENV{management_node_info}->{CLUSTER_INUSE_CHECK} * -1);; 
 				if ($lastcheck_diff_minutes <= $cluster_inuse_check_time) {
 					return "poll";
@@ -2121,7 +2121,7 @@ sub check_ssh {
 		$port = 22;
 	}
 
-	if(nmap_port($node,$port)){
+	if (nmap_port($node,$port)) {
 		notify($ERRORS{'OK'}, $log, " $node ssh port $port open");
 		return 1;
 	}
@@ -2394,7 +2394,7 @@ sub getpw {
 		$b .= $a[rand @a ];
 	}
 
-	if($include_special_chars) {
+	if ($include_special_chars) {
 		$b .= $spchars[rand @spchars];
 	}
 
@@ -2528,7 +2528,7 @@ sub getusergroupmembers {
 
 	for (@selected_rows) {
 		my %hash = %{$_};
-		if(!defined($hash{uid})){
+		if (!defined($hash{uid})) {
 			$hash{uid} = 0;
 		}
 		push(@retarray, "$hash{unityid}:$hash{uid}:$hash{id}");
@@ -2958,7 +2958,7 @@ sub database_execute {
 		my $sql_warning_count = $statement_handle->{'mysql_warning_count'};
 		$statement_handle->finish;
 		$dbh->disconnect if !defined $ENV{dbh};
-		if($sql_insertid) {
+		if ($sql_insertid) {
 			return $sql_insertid;
 		}
 		else {
@@ -3160,7 +3160,7 @@ EOF
 			$request_info->{checkuser} = 0;
 			$request_info->{reservation}{$reservation_id}{serverrequest}{ALLOW_USERS} = $request_info->{user}{unityid};
 		}
-		elsif ($request_info->{DURATION} >= (60 * 60 * 24) ){
+		elsif ($request_info->{DURATION} >= (60 * 60 * 24) ) {
 			#notify($ERRORS{'DEBUG'}, 0, "request length > 24 hours, disabling user checks");
 			$request_info->{checkuser} = 0;
 		}
@@ -3208,15 +3208,15 @@ EOF
 sub set_managementnode_state {
 	my ($mninfo, $state) = @_;
 
-	if(!(defined($state))){
+	if (!(defined($state))) {
 		notify($ERRORS{'WARNING'}, 0, "state was not specified");
 		return ();
 	}
-	if(!(defined($mninfo->{hostname}))){
+	if (!(defined($mninfo->{hostname}))) {
 		notify($ERRORS{'WARNING'}, 0, "management node hostname was not specified");
 		return ();
 	}
-	if(!(defined($mninfo->{id}))){
+	if (!(defined($mninfo->{id}))) {
 		notify($ERRORS{'WARNING'}, 0, "management node ID was not specified");
 		return ();
 	}
@@ -3442,7 +3442,7 @@ AND module.id = OS.moduleid
 AND 
 EOF
 	
-	if ($image_identifier =~ /^\d+$/){
+	if ($image_identifier =~ /^\d+$/) {
 		$select_statement .= "image.id = $image_identifier";
 	}
 	else {
@@ -3549,7 +3549,7 @@ WHERE
 EOF
 
 	# Check input value - complete select_statement
-	if($imagerevision_identifier =~ /^\d/){
+	if ($imagerevision_identifier =~ /^\d/) {
 		$select_statement .= "imagerevision.id = '$imagerevision_identifier'";
 	}
 	else{
@@ -3624,7 +3624,7 @@ AND
 EOF
 
 	# Check input value - complete select_statement
-	if($image_identifier =~ /^\d/){
+	if ($image_identifier =~ /^\d/) {
 		$select_statement .= "imagerevision.imageid = '$image_identifier'";
 	}
 	else {
@@ -4431,12 +4431,12 @@ sub write_currentimage_txt {
 
 	#Make sure currentimage.txt writable
 	my $chown_command = "chown root currentimage.txt; chmod 777 currentimage.txt";
-	if (run_ssh_command($computer_node_name, $image_identity, $chown_command)){
+	if (run_ssh_command($computer_node_name, $image_identity, $chown_command)) {
 		notify($ERRORS{'OK'}, 0, "updated ownership and permissions  on currentimage.txt");
 	}
 
 	my $command;
-	if($image_os_type =~ /osx/i) {
+	if ($image_os_type =~ /osx/i) {
 		$command = 'echo "';
 	}
 	else {
@@ -4693,7 +4693,7 @@ sub update_computer_imagename {
 
 	#get computer infomation based on imagename
 	my $imagerevision_info;
-	if( $imagerevision_info = get_imagerevision_info($imagename)){
+	if ( $imagerevision_info = get_imagerevision_info($imagename)) {
 		notify($ERRORS{'DEBUG'}, 0, "successfully retreived image info for $imagename");
 	}
 	else{
@@ -4704,7 +4704,7 @@ sub update_computer_imagename {
 	my $image_id  = $imagerevision_info->{imageid};
 	my $imagerevision_id = $imagerevision_info->{id};
 
-	if(update_currentimage($computerid, $image_id, $imagerevision_id)){
+	if (update_currentimage($computerid, $image_id, $imagerevision_id)) {
 		notify($ERRORS{'DEBUG'}, 0, "successfully updated computerid= $computerid image_id= $image_id imagerevision_id= $imagerevision_id");
 		return 1;
 	}
@@ -5470,7 +5470,7 @@ SET
 image.name = \'$new_image_name\',
 EOF
 
-	if(defined($new_image_pretty_name) ) {
+	if (defined($new_image_pretty_name) ) {
 		$update_statement .= <<EOF;
 image.prettyname = \'$new_image_pretty_name\',
 EOF
@@ -5581,7 +5581,7 @@ sub delete_computerloadlog_reservation {
 		$reservation_id_string = $reservation_id_argument;
 	}
 
-	if(!defined($immediate)){
+	if (!defined($immediate)) {
 		$immediate =0;
 	}
 
@@ -6109,7 +6109,7 @@ sub switch_state {
 	my $computer_state_name_old    = $request_data->{reservation}{$reservation_id}{computer}{state}{name};
 	my $computer_shortname         = $request_data->{reservation}{$reservation_id}{computer}{SHORTNAME};
 	
-	if($request_state_name_old eq 'reload'){
+	if ($request_state_name_old eq 'reload') {
 		$request_logid = 0;
 	}
 
@@ -6347,7 +6347,7 @@ sub get_management_node_blockrequests {
 			
 			if ($key =~ /blockRequest_/) {
 				$blockrequests{$blockrequest_id}{$original_key} = $value;
-				if($key =~ /_groupid/){
+				if ($key =~ /_groupid/) {
 					$blockrequests{$blockrequest_id}{groupname} = get_group_name($value);
 				}
 			}
@@ -6386,7 +6386,7 @@ sub get_computers_controlled_by_mn {
 	my $management_node_hostname 	 = $managementnode{hostname};
 
 	# Collect resource group this management node is a member of
-	if($info{managementnode}{resoucegroups} = get_resource_groups($management_node_resourceid)){
+	if ($info{managementnode}{resoucegroups} = get_resource_groups($management_node_resourceid)) {
 		notify($ERRORS{'DEBUG'}, $LOGFILE, "retrieved management node resource groups from database");
 	}
 	else {
@@ -6395,21 +6395,21 @@ sub get_computers_controlled_by_mn {
 	}
 
 	# Collect resource group management node grpcan control
-	foreach my $mresgrp_id (keys %{$info{managementnode}{resoucegroups}} ) {  
+	foreach my $mresgrp_id (keys %{$info{managementnode}{resoucegroups}} ) {
 
 		my $grp_id = $info{managementnode}{resoucegroups}{$mresgrp_id}{groupid}; 
 
 		notify($ERRORS{'DEBUG'}, $LOGFILE, "grp_id = $grp_id ");
 
-		if($info{manageable_resoucegroups}{$mresgrp_id} = get_managable_resource_groups($grp_id)){
+		if ($info{manageable_resoucegroups}{$mresgrp_id} = get_managable_resource_groups($grp_id)) {
 			notify($ERRORS{'DEBUG'}, $LOGFILE, "retrieved manageable resource groups from database for mresgrp_id= $grp_id groupname= $info{managementnode}{resoucegroups}{$mresgrp_id}{groupname}");
 
 			foreach my $id (keys %{ $info{manageable_resoucegroups}{$grp_id} } ) {
 				my $computer_group_id = $info{manageable_resoucegroups}{$grp_id}{$id}{groupid};
-				if($info{"manageable_computer_grps"}{$id}{"members"} = get_computer_grp_members($computer_group_id) ){
+				if ($info{"manageable_computer_grps"}{$id}{"members"} = get_computer_grp_members($computer_group_id) ) {
 					notify($ERRORS{'DEBUG'}, $LOGFILE, "retrieved computers from computer groupname= $info{manageable_resoucegroups}{$grp_id}{$id}{groupname}");
 				}
-				else{ 
+				else{
 					notify($ERRORS{'DEBUG'}, $LOGFILE, "no computers in computer groupid= $computer_group_id}");
 					delete $info{manageable_resoucegroups}{$grp_id}{$id};
 				}
@@ -6424,9 +6424,9 @@ sub get_computers_controlled_by_mn {
 	#Build master list of computerids
 	my %computer_list;
 
-	foreach my $computergroup (keys %{ $info{manageable_computer_grps}}){
-		foreach my $computerid (keys %{ $info{manageable_computer_grps}{$computergroup}{members} }){
-			  if ( !(exists $computer_list{$computerid}) ){
+	foreach my $computergroup (keys %{ $info{manageable_computer_grps}}) {
+		foreach my $computerid (keys %{ $info{manageable_computer_grps}{$computergroup}{members} }) {
+			  if ( !(exists $computer_list{$computerid}) ) {
 				  # add to return list
 				  $computer_list{$computerid}{"computer_id"}=$computerid;
 			  }
@@ -6450,7 +6450,7 @@ sub get_computers_controlled_by_mn {
 sub get_resource_groups {
 	my ($resource_id) = @_;
 
-	if(!defined($resource_id)){
+	if (!defined($resource_id)) {
 		notify($ERRORS{'WARNING'}, $LOGFILE, "resource_id was not supplied");
 		return 0;
 	}
@@ -6503,7 +6503,7 @@ sub get_resource_groups {
 sub get_managable_resource_groups {
 	my ($managing_resgrp_id) = @_;
 
-	if(!defined($managing_resgrp_id)){
+	if (!defined($managing_resgrp_id)) {
 		notify($ERRORS{'WARNING'}, $LOGFILE, "managing_resgrp_id resource_id was not supplied");
 		return 0;
 	}
@@ -6554,7 +6554,7 @@ sub get_managable_resource_groups {
 sub get_computer_grp_members {
 	my ($computer_grp_id) = @_;
 
-	if(!defined($computer_grp_id)){
+	if (!defined($computer_grp_id)) {
 		notify($ERRORS{'WARNING'}, $LOGFILE, "computer_grp_id resource_id was not supplied");
 		return 0;
 	}
@@ -6844,7 +6844,7 @@ sub get_group_name {
 	my ($group_id) = @_;
 	
 	
-	if(!defined($group_id)){
+	if (!defined($group_id)) {
 		notify($ERRORS{'WARNING'}, $LOGFILE, "group_id was not supplied");
 		return 0;
 	}
@@ -6898,7 +6898,7 @@ EOF
 
 sub get_computer_info {
 	my ($computer_identifier, $no_cache) = @_;
-	if (!defined($computer_identifier)){
+	if (!defined($computer_identifier)) {
 		notify($ERRORS{'WARNING'}, 0, "computer identifier argument was not supplied");
 		return;
 	}
@@ -7119,7 +7119,7 @@ EOF
 
 sub get_computer_nathost_info {
 	my ($computer_identifier, $no_cache) = @_;
-	if (!defined($computer_identifier)){
+	if (!defined($computer_identifier)) {
 		notify($ERRORS{'WARNING'}, 0, "computer identifier argument was not supplied");
 		return;
 	}
@@ -7551,7 +7551,7 @@ sub get_reservation_request_info {
 sub get_computer_ids {
 	my ($computer_identifier) = @_;
 
-	if(!defined($computer_identifier)){
+	if (!defined($computer_identifier)) {
 		notify($ERRORS{'WARNING'}, $LOGFILE, "computer identifier argument was not supplied");
 		return;
 	}
@@ -11353,11 +11353,11 @@ EOF
 	my @selected_rows = database_select($select_statement);
 
 	# Check to make 1 sure row was returned
-	if (!@selected_rows){
+	if (!@selected_rows) {
 		notify($ERRORS{'DEBUG'}, 0, "variable is NOT set: $variable_name");
 		return 0;
 	}
-	elsif (@selected_rows > 1){
+	elsif (@selected_rows > 1) {
 		notify($ERRORS{'WARNING'}, 0, "unable to get value of variable '$variable_name', multiple rows exist in the database for variable:\n" . format_data(\@selected_rows));
 		return;
 	}
@@ -11424,11 +11424,11 @@ EOF
 	my @selected_rows = database_select($select_statement);
 
 	# Check to make 1 sure row was returned
-	if (!@selected_rows){
+	if (!@selected_rows) {
 		notify($ERRORS{'OK'}, 0, "variable '$variable_name' is not set in the database") if $show_warnings;
 		return 0;
 	}
-	elsif (@selected_rows > 1){
+	elsif (@selected_rows > 1) {
 		notify($ERRORS{'WARNING'}, 0, "unable to get value of variable '$variable_name', multiple rows exist in the database for variable:\n" . format_data(\@selected_rows));
 		return;
 	}

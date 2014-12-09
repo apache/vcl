@@ -149,7 +149,7 @@ sub process {
 	}
 
 	#Get image info
-	if ($image_info = get_image_info($blockrequest_image_id)){
+	if ($image_info = get_image_info($blockrequest_image_id)) {
 		$image_prettyname = $image_info->{prettyname};
 
 	}
@@ -182,14 +182,14 @@ sub process {
 		
 		my $urla = $XMLRPC_URL;
 		my $blockAlloc_URL;
-		if($urla =~ /(.*)(=xmlrpccall)/){
+		if ($urla =~ /(.*)(=xmlrpccall)/) {
 			$blockAlloc_URL = $1 . "=blockallocations";
 		}
 
 		my($allocated,$unallocated) = 0;
 
-		while(!($completed)){
-			if($loop_control < 6){
+		while (!($completed)) {
+			if ($loop_control < 6) {
 				$loop_control++;
 				notify($ERRORS{'DEBUG'}, 0, "processing blocktime_id= $blocktime_id  pass $loop_control");
 				$xmlcall = process_block_time($blocktime_id);
@@ -203,7 +203,7 @@ sub process {
 			$allocated   = $xmlcall->{allocated}   if (defined($xmlcall->{allocated}));
 			$unallocated = $xmlcall->{unallocated} if (defined($xmlcall->{unallocated}));
 
-			if($allocated >= $blockrequest_number_machines){
+			if ($allocated >= $blockrequest_number_machines) {
 				$completed=1;
 				notify($ERRORS{'OK'}, 0, "success blockTimes id $blocktime_id processed and allocated $xmlcall->{allocated} nodes \nstatus= $xmlcall->{status}");
 				last;
@@ -229,7 +229,7 @@ sub process {
 		my $subject = "VCL Block allocation results for $blockrequest_name";
 		my $mailstring;
 	
-		if(defined($warningmsg) || defined($errormsg) || ($allocated < $blockrequest_number_machines)){
+		if (defined($warningmsg) || defined($errormsg) || ($allocated < $blockrequest_number_machines)) {
 			$body .= "Problem processing block allocation \n\n";
 			$body .= "Block id		= $blockrequest_id\n";
 			$body .= "Block name		= $blockrequest_name\n";
@@ -244,7 +244,7 @@ sub process {
 
 			notify($ERRORS{'CRITICAL'}, 0, "$body");
 
-			if($allocated < $blockrequest_number_machines){
+			if ($allocated < $blockrequest_number_machines) {
 			$subject = "VCL Block allocation warning for $blockrequest_name";
 	
 			$mailstring .= << "EOF";
@@ -267,14 +267,14 @@ If you wish to cancel this session or make changes to future sessions. Please vi
 the VCL site: $blockAlloc_URL
 
 EOF
-                        	if(defined($owner_email)){
+                        	if (defined($owner_email)) {
                                 	mail($owner_email, $subject, $mailstring, $owner_affiliation_helpaddress);
                         	}
 			}
 			
 		
 		}
-		elsif($completed){
+		elsif ($completed) {
 		# Notify block request owner for given time slot has been processed.
 			
 			my $mailstring .= <<"EOF";
@@ -299,7 +299,7 @@ Thank You,
 VCL Team
 
 EOF
-			if(defined($owner_email)){
+			if (defined($owner_email)) {
 				mail($owner_email, $subject, $mailstring, $owner_affiliation_helpaddress);
 			}	
 		
@@ -323,7 +323,7 @@ EOF
 		if ($status eq "expire") {
 			#fork start processing
 			notify($ERRORS{'OK'}, 0, "Block Request $blockrequest_id has expired");
-			if(udpate_block_request_status($blockrequest_id,"completed")){
+			if (udpate_block_request_status($blockrequest_id,"completed")) {
 				notify($ERRORS{'OK'}, 0, "Updated status of blockRequest id $blockrequest_id to completed");
 			}
 		}
@@ -332,7 +332,7 @@ EOF
 	} ## end elsif ($blockrequest_mode eq "end")  [ if ($blockrequest_mode eq "start")
 	elsif ($blockrequest_mode eq "expire") {
 		notify($ERRORS{'OK'}, 0, "Block Request $blockrequest_id has expired");
-		if(udpate_block_request_status($blockrequest_id,"completed")){
+		if (udpate_block_request_status($blockrequest_id,"completed")) {
 			notify($ERRORS{'OK'}, 0, "Updated status of blockRequest id $blockrequest_id to completed");
 		}
 	}
@@ -363,7 +363,7 @@ EOF
 sub process_block_time {
 	my $blockTimesid = $_[0];
 
-	if(!$blockTimesid){
+	if (!$blockTimesid) {
 		notify($ERRORS{'WARNING'}, 0, "blockTimesid argument was not passed");
 		return 0;
 	}
@@ -375,7 +375,7 @@ sub process_block_time {
 	my $xml_ret = xmlrpc_call(@argument_string);
 
 	my %info;
-	if( ref($xml_ret) =~ /STRUCT/i){
+	if ( ref($xml_ret) =~ /STRUCT/i) {
        $info{status} = $xml_ret->value->{status};
 		 $info{allocated} = $xml_ret->value->{allocated} if(defined($xml_ret->value->{allocated})) ;
        $info{unallocated} = $xml_ret->value->{unallocated} if(defined($xml_ret->value->{unallocated}));
@@ -389,7 +389,7 @@ sub process_block_time {
 	}
 	else {
 		notify($ERRORS{'WARNING'}, 0, "return argument XMLRPCprocessBlockTime was not a STRUCT as expected" . ref($xml_ret) );
-		if(ref($xml_ret) =~ /fault/){
+		if (ref($xml_ret) =~ /fault/) {
 			$info{status} = "fault";
 		}
 		else {

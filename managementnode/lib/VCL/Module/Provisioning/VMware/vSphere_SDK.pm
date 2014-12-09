@@ -2156,16 +2156,16 @@ sub find_files {
 
 =cut 
 
-sub get_total_space { 
+sub get_total_space {
 	my $self = shift; 
-	if (ref($self) !~ /VCL::Module/i) { 
+	if (ref($self) !~ /VCL::Module/i) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return; 
 	} 
 	
 	# Get the path argument 
 	my $path = shift; 
-	if (!$path) { 
+	if (!$path) {
 		notify($ERRORS{'WARNING'}, 0, "path argument was not specified"); 
 		return; 
 	} 
@@ -2179,7 +2179,7 @@ sub get_total_space {
 	my $datastore_info = $self->_get_datastore_info() || return; 
 	
 	my $total_bytes = $datastore_info->{$datastore_name}{capacity}; 
-	if (!defined($total_bytes)) { 
+	if (!defined($total_bytes)) {
 		notify($ERRORS{'WARNING'}, 0, "datastore $datastore_name capacity key does not exist in datastore info:\n" . format_data($datastore_info));
 		return; 
 	} 

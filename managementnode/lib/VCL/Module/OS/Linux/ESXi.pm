@@ -86,7 +86,7 @@ sub post_load {
 		return 0;
 	}
 	
-	if (write_currentimage_txt($self->data)){
+	if (write_currentimage_txt($self->data)) {
 		notify($ERRORS{'OK'}, 0, "wrote current_image.txt on $computer_short_name");
 	}
 	else {

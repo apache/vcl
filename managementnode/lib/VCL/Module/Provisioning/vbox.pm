@@ -266,7 +266,7 @@ sub load {
 
 			}    # start if base not exists
 			# If the base exists but was not registered we just need to register it
-			if((!($baseisregistered)) && ($baseexists)) {
+			if ((!($baseisregistered)) && ($baseexists)) {
 				undef @sshcmd;
 
 				# So Oracle removed the method for registering an image with the server. Registration is now automated when media is attached to a VM. But a "read lock" error is given if you attempt to specify "-mtype multiattach" after the first attachment to a vm if the first vm is running. In order to avoid extra logic to determine if it is the first attachment during VM creation, a non-running VM is registered named "STORAGE_HOLDER" with a scsi controller named "STORAGE_HOLDER_SCSI". An image can be attached to port 0 in multiattach mode and any further attachments will default to multiattach when no mtype is specified, without the mtype arg no error is thrown. This feels more like a VBox bug to me, and I opened a bug report with Oracle.
@@ -624,7 +624,7 @@ sub capture { ## This is going to need to be implemented before the module is co
 
 =cut
 
-sub remove_snapshots { 
+sub remove_snapshots {
 	my $self = shift;
 	if (ref($self) !~ /vbox/i) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");

@@ -532,7 +532,7 @@ sub notify_user_console {
 	}
 
 	my $message = shift;
-	if(!$message) {
+	if (!$message) {
 		notify($ERRORS{'WARNING'}, 0, "message argument was not supplied");
 		return;
 	}
@@ -589,7 +589,7 @@ sub get_current_image_info {
 
 	my $input = shift;
 
-	if(!defined $input) {
+	if (!defined $input) {
 		$input = "imagerevision_id";
 	}
 
@@ -608,7 +608,7 @@ sub get_current_image_info {
 	if (defined $current_image_txt_contents{imagerevision_id}) {
 		notify($ERRORS{'DEBUG'}, 0, "user selected content of image currently loaded on $computer_node_name: $current_image_txt_contents{current_image_name}");
 	
-		if (my $imagerevision_info = get_imagerevision_info($current_image_txt_contents{imagerevision_id})){
+		if (my $imagerevision_info = get_imagerevision_info($current_image_txt_contents{imagerevision_id})) {
 			$self->data->set_computer_currentimage_data($imagerevision_info->{image});
 			$self->data->set_computer_currentimagerevision_data($imagerevision_info);
 			
@@ -617,7 +617,7 @@ sub get_current_image_info {
 			}
 		}
 		
-		if (defined($current_image_txt_contents{$input})){
+		if (defined($current_image_txt_contents{$input})) {
 			return $current_image_txt_contents{$input};
 		}
 		else {

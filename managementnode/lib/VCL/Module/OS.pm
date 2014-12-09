@@ -307,7 +307,7 @@ sub get_currentimage_txt_contents {
 	my @current_image_txt_contents = @{$cat_output};
 
 	my $current_image_name; 
-	if(defined $current_image_txt_contents[0]) {
+	if (defined $current_image_txt_contents[0]) {
 		$output{"current_image_name"} = $current_image_txt_contents[0];
 	}
 	
@@ -315,7 +315,7 @@ sub get_currentimage_txt_contents {
 		#remove any line break characters
 		$l =~ s/[\r\n]*//g;
 		my ($a, $b) = split(/=/, $l);
-		if(defined $b) {
+		if (defined $b) {
          $output{$a} = $b; 
       }   
    }
@@ -347,7 +347,7 @@ sub get_current_image_info {
 
 	my $input = shift;
 
-	if(!defined $input) {
+	if (!defined $input) {
 		$input = "imagerevision_id";
 	}
 
@@ -367,7 +367,7 @@ sub get_current_image_info {
 	if (defined $current_image_txt_contents{imagerevision_id}) {
 		notify($ERRORS{'DEBUG'}, 0, "user selected content of image currently loaded on $computer_node_name: $current_image_txt_contents{current_image_name}");
 	
-		if (my $imagerevision_info = get_imagerevision_info($current_image_txt_contents{imagerevision_id})){
+		if (my $imagerevision_info = get_imagerevision_info($current_image_txt_contents{imagerevision_id})) {
 			$self->data->set_computer_currentimage_data($imagerevision_info->{image});
 			$self->data->set_computer_currentimagerevision_data($imagerevision_info);
 			
@@ -376,7 +376,7 @@ sub get_current_image_info {
 			}
 		}
 		
-		if (defined($current_image_txt_contents{$input})){
+		if (defined($current_image_txt_contents{$input})) {
 			return $current_image_txt_contents{$input};
 		}
 		else {
@@ -909,10 +909,10 @@ sub server_request_set_fixedIP {
 	my $server_request_id          = $self->data->get_server_request_id();
 	my $server_request_fixedIP     = $self->data->get_server_request_fixedIP(); 
 
-   if($server_request_id) {
-      if($server_request_fixedIP) {
+   if ($server_request_id) {
+      if ($server_request_fixedIP) {
          #Update the info related to fixedIP
-         if(!$self->update_fixedIP_info()) {
+         if (!$self->update_fixedIP_info()) {
             notify($ERRORS{'WARNING'}, 0, "Unable to update information related fixedIP for server_request $server_request_id");
          }    
 
@@ -924,7 +924,7 @@ sub server_request_set_fixedIP {
 			}
 
 			#if set for static IPs, save the old address to restore
-			if($public_ip_configuration =~ /static/i) {
+			if ($public_ip_configuration =~ /static/i) {
 				notify($ERRORS{'DEBUG'}, 0, "saving original IP for restore on post reseration");
 				my $original_IPvalue = "originalIPaddr_" . $server_request_id;
 				set_variable($original_IPvalue, $computer_public_ip_address);
@@ -945,7 +945,7 @@ sub server_request_set_fixedIP {
 
                 #Update Hostname to match Public assigned name
                if ($self->can("update_public_hostname")) {
-                  if($self->update_public_hostname()){
+                  if ($self->update_public_hostname()) {
                      notify($ERRORS{'OK'}, 0, "Updated hostname based on fixedIP $server_request_fixedIP");
                   }
                }
@@ -995,14 +995,14 @@ sub confirm_fixedIP_is_available {
 	my $server_request_fixedIP       = $self->data->get_server_request_fixedIP(); 
 	
 	#check VCL computer table
-	if(is_ip_assigned_query($server_request_fixedIP)) {
+	if (is_ip_assigned_query($server_request_fixedIP)) {
 		notify($ERRORS{'WARNING'}, 0, "$server_request_fixedIP is already assigned");
 		insertloadlog($reservation_id, $computer_id, "failed","$server_request_fixedIP is already assigned");
 		return 0;
 	}
 
 	#Is IP pingable	
-	if(_pingnode($server_request_fixedIP)) {
+	if (_pingnode($server_request_fixedIP)) {
 		notify($ERRORS{'WARNING'}, 0, "$server_request_fixedIP is answering ping test");
 		insertloadlog($reservation_id, $computer_id, "failed","$server_request_fixedIP is answering ping test, but is not assigned in VCL database");
 		return 0;	
@@ -2561,11 +2561,11 @@ sub manage_server_access {
 		}
 		my $standalone = $user_hash{$userid}{user_info}{STANDALONE};
 
-		if(!$self->user_exists($user_hash{$userid}{username})){
+		if (!$self->user_exists($user_hash{$userid}{username})) {
 			delete($res_accounts{$userid});
 		}
 		
-		if(!exists($res_accounts{$userid}) || $request_laststate_name eq "reinstall" ){
+		if (!exists($res_accounts{$userid}) || $request_laststate_name eq "reinstall" ) {
 			if($request_laststate_name ne "reinstall" ){	
 
 				$user_hash{$userid}{"passwd"} = 0;
@@ -2579,7 +2579,7 @@ sub manage_server_access {
 				}
 			}
 			# if reinstall and standalone check for existing password
-			if($request_laststate_name eq "reinstall") {
+			if ($request_laststate_name eq "reinstall") {
 				#notify($ERRORS{'OK'}, 0, "Reinstall mode for $user_hash{$userid}{unityid}" . format_data(%res_accounts));
 				if ( $res_accounts{$userid}{password} ) {
 					$user_hash{$userid}{passwd} = $res_accounts{$userid}{password};
@@ -2599,7 +2599,7 @@ sub manage_server_access {
 			}
 	
 			# Create user on the OS
-			if($self->create_user($user_hash{$userid}{unityid},$user_hash{$userid}{passwd},$user_hash{$userid}{uid},$user_hash{$userid}{ROOTACCESS},$standalone,$user_hash{$userid}{user_info}{user_sshPublicKeys})) {
+			if ($self->create_user($user_hash{$userid}{unityid},$user_hash{$userid}{passwd},$user_hash{$userid}{uid},$user_hash{$userid}{ROOTACCESS},$standalone,$user_hash{$userid}{user_info}{user_sshPublicKeys})) {
 				notify($ERRORS{'OK'}, 0, "Successfully created user $user_hash{$userid}{unityid} on $computer_node_name");
 			}
 			else {
@@ -2619,14 +2619,14 @@ sub manage_server_access {
 			#Skip group checks as the owner may not be a member
 			next;
 		}
-		if(!exists($user_hash{$res_userid})) {
+		if (!exists($user_hash{$res_userid})) {
 				 notify($ERRORS{'OK'}, 0, "username= $res_accounts{$res_userid}{username} is not listed in reservationsaccounts, attempting to delete");
 				  #Delete from reservationaccounts
 				  if (update_reservation_accounts($reservation_id,$res_accounts{$res_userid}{userid},0,"delete")) {
 						  notify($ERRORS{'OK'}, 0, "Deleted $reservation_id,$res_accounts{$res_userid}{userid} from reservationsaccounts table");
 				  }
 				  #Delete from OS
-				  if($self->delete_user($res_accounts{$res_userid}{username},0,0)) {
+				  if ($self->delete_user($res_accounts{$res_userid}{username},0,0)) {
 					  notify($ERRORS{'OK'}, 0, "Successfully removed user= $res_accounts{$res_userid}{username}");	
 				  }	
 				next;
@@ -2688,7 +2688,7 @@ sub process_connect_methods {
 		notify($ERRORS{'OK'}, 0, "reservation remote IP address is not defined, connect methods will be available from any IP address");
 		$remote_ip = '0.0.0.0/0';
 	}
-	elsif ($remote_ip =~ /any/i){
+	elsif ($remote_ip =~ /any/i) {
 		notify($ERRORS{'OK'}, 0, "reservation remote IP address is set to ANY, connect methods will be available from any IP address");
 		$remote_ip = '0.0.0.0/0';
 	}
@@ -2760,7 +2760,7 @@ sub process_connect_methods {
 					if (!defined($startup_output)) {
 						notify($ERRORS{'WARNING'}, 0, "failed to run command to execute startup script '$startup_script' for '$name' connect method on $computer_node_name, command: '$startup_script'");
 					}
-					elsif ($startup_exit_status == 0){
+					elsif ($startup_exit_status == 0) {
 						notify($ERRORS{'OK'}, 0, "executed startup script '$startup_script' for '$name' connect method on $computer_node_name, command: '$startup_script', exit status: $startup_exit_status, output:\n" . join("\n", @$startup_output));	
 					}
 					else {
@@ -3318,7 +3318,7 @@ sub update_fixedIP_info {
    }
 	
 	my $server_request_id           = $self->data->get_server_request_id();
-	if(!$server_request_id) {
+	if (!$server_request_id) {
 		notify($ERRORS{'WARNING'}, 0, "Server request id not set.");
 		return;
 	}
@@ -3326,7 +3326,7 @@ sub update_fixedIP_info {
 	my $variable_name = "fixedIPsr" . $server_request_id; 	
    my $server_variable_data;
 
-	if(is_variable_set($variable_name)){
+	if (is_variable_set($variable_name)) {
 		  #fetch variable
 		  $server_variable_data  = get_variable($variable_name);
 

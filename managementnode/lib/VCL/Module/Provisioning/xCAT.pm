@@ -1231,7 +1231,7 @@ sub _edit_nodelist {
 		# Image-based install or capture
 		$groups = "all,blade,image";
 	}
-	elsif ($image_project eq "vcl"){
+	elsif ($image_project eq "vcl") {
 		$groups = "all,blade,compute";
 	}
 	else {
@@ -2263,7 +2263,7 @@ sub check_image_os {
 		# Change rhelX --> rhXimage, rhfcX --> fcXimage
 		$image_os_name_new = "$1$2image";
 	}
-	elsif($image_os_name =~ /^(centos)([0-9])/) {
+	elsif ($image_os_name =~ /^(centos)([0-9])/) {
 		# Change rhelX --> rhXimage, rhfcX --> fcXimage
 		$image_os_name_new = "$1$2image";
 	}

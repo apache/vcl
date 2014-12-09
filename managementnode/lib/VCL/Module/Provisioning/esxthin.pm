@@ -260,11 +260,11 @@ sub load {
 		chomp($_);
 		if ($_ =~ /^admin_email=(.*)/) {
 			$storage_admin_email = $1;
-		} elsif ($_ =~ /^density_limit=(.*)/) { 
+		} elsif ($_ =~ /^density_limit=(.*)/) {
 			$density_limit = int $1;
-		} elsif ($_ =~ /^density_alert_threshold=(.*)/) { 
+		} elsif ($_ =~ /^density_alert_threshold=(.*)/) {
 			$density_alert_threshold = $1;
-		} elsif ($_ =~ /^block_copy_limit=(.*)/) { 
+		} elsif ($_ =~ /^block_copy_limit=(.*)/) {
 			$block_copy_limit = int $1;
 		}
 	}
@@ -614,11 +614,11 @@ sub netapp_login
 		chomp($_);
 		if ($_ =~ /^ip=(.*)/) {
 			$ip = $1;
-		} elsif ($_ =~ /^user=(.*)/) { 
+		} elsif ($_ =~ /^user=(.*)/) {
 			$username = $1;
-		} elsif ($_ =~ /^pass=(.*)/) { 
+		} elsif ($_ =~ /^pass=(.*)/) {
 			$password = $1;
-		} elsif ($_ =~ /^https=(.*)/) { 
+		} elsif ($_ =~ /^https=(.*)/) {
 			$use_https = $1;
 		}
 	}
@@ -670,7 +670,7 @@ sub netapp_rename_dir
 
 	my $out = $s->invoke_elem($in);
  	
-	if($out->results_status() eq "failed") {
+	if ($out->results_status() eq "failed") {
 		notify($ERRORS{'CRITICAL'}, 0, $out->results_reason() ."\n");
 		return 0;
 	} else {
@@ -704,7 +704,7 @@ sub netapp_create_dir
 
 	my $out = $s->invoke_elem($in);
  	
-	if($out->results_status() eq "failed") {
+	if ($out->results_status() eq "failed") {
 		notify($ERRORS{'CRITICAL'}, 0, $out->results_reason() ."\n");
 		return 0;
 	} else {
@@ -732,7 +732,7 @@ sub netapp_read_file
 	#my $hex_data = ascii_to_hex($ascii_data);
 	my $out = $s->invoke( "file-read-file","length",1048576,"offset",0,"path",$path );
  	
-	if($out->results_status() eq "failed") {
+	if ($out->results_status() eq "failed") {
 		notify($ERRORS{'CRITICAL'}, 0, $out->results_reason() ."\n");
 		return 0;
 	} else {
@@ -760,7 +760,7 @@ sub netapp_write_file
 	my $hex_data = ascii_to_hex($ascii_data);
 	my $out = $s->invoke( "file-write-file","data",$hex_data,"offset",0,"overwrite",0,"path",$path );
  	
-	if($out->results_status() eq "failed") {
+	if ($out->results_status() eq "failed") {
 		notify($ERRORS{'CRITICAL'}, 0, $out->results_reason() ."\n");
 		return 0;
 	} else {
@@ -791,7 +791,7 @@ sub netapp_delete_dir
 	my $in = NaElement->new("file-get-file-info");
 	$in->child_add_string("path",$dir_path);
 	my $out = $s->invoke_elem($in);
-	if($out->results_status() eq "failed") {
+	if ($out->results_status() eq "failed") {
 		notify($ERRORS{'DEBUG'}, 0, $out->results_reason() ."\n");
 		return 0;
 	} else {
@@ -808,7 +808,7 @@ sub netapp_delete_dir
 	my $in = NaElement->new("file-list-directory-iter-start");
 	$in->child_add_string("path",$dir_path);
 	my $out = $s->invoke_elem($in);
-	if($out->results_status() eq "failed") {
+	if ($out->results_status() eq "failed") {
 		notify($ERRORS{'CRITICAL'}, 0, $out->results_reason() ."\n");
 		return 0;
 	} else {
@@ -821,7 +821,7 @@ sub netapp_delete_dir
 		$file_request->child_add_string("tag",$tag_id);
 
 		my $file_response = $s->invoke_elem($file_request);
-		if($file_response->results_status() eq "failed") {
+		if ($file_response->results_status() eq "failed") {
 			notify($ERRORS{'CRITICAL'}, 0, $out->results_reason() ."\n");
 			return 0;
 		} else {
@@ -869,7 +869,7 @@ sub netapp_is_dir
 	my $in = NaElement->new("file-get-file-info");
 	$in->child_add_string("path",$dir_path);
 	my $out = $s->invoke_elem($in);
-	if($out->results_status() eq "failed") {
+	if ($out->results_status() eq "failed") {
 		#notify($ERRORS{'CRITICAL'}, 0, $out->results_reason() ."\n");
 		return 0;
 	} else {
@@ -903,7 +903,7 @@ sub netapp_is_file
 	my $in = NaElement->new("file-get-file-info");
 	$in->child_add_string("path",$file_path);
 	my $out = $s->invoke_elem($in);
-	if($out->results_status() eq "failed") {
+	if ($out->results_status() eq "failed") {
 		#notify($ERRORS{'CRITICAL'}, 0, $out->results_reason() ."\n");
 		return 0;
 	} else {
@@ -937,7 +937,7 @@ sub netapp_get_size
 	my $in = NaElement->new("file-get-file-info");
 	$in->child_add_string("path",$path);
 	my $out = $s->invoke_elem($in);
-	if($out->results_status() eq "failed") {
+	if ($out->results_status() eq "failed") {
 		#notify($ERRORS{'CRITICAL'}, 0, $out->results_reason() ."\n");
 		return 0;
 	} else {
@@ -968,7 +968,7 @@ sub netapp_get_vol_density
 	my $in = NaElement->new("volume-list-info");
 	$in->child_add_string("volume",$vol);
 	my $out = $s->invoke_elem($in);
-	if($out->results_status() eq "failed") {
+	if ($out->results_status() eq "failed") {
 		#notify($ERRORS{'CRITICAL'}, 0, $out->results_reason() ."\n");
 		return 0;
 	} else {
@@ -998,7 +998,7 @@ sub netapp_delete_empty_dir
 
 	my $out = $s->invoke_elem($in);
  	
-	if($out->results_status() eq "failed") {
+	if ($out->results_status() eq "failed") {
 		notify($ERRORS{'CRITICAL'}, 0, $out->results_reason() ."\n");
 		return 0;
 	} else {
@@ -1028,7 +1028,7 @@ sub netapp_delete_file
 
 	my $out = $s->invoke_elem($in);
  	
-	if($out->results_status() eq "failed") {
+	if ($out->results_status() eq "failed") {
 		notify($ERRORS{'CRITICAL'}, 0, $out->results_reason() ."\n");
 		return 0;
 	} else {
@@ -1118,7 +1118,7 @@ sub netapp_fileclone
 
 		my $out = $s->invoke_elem($in);
 		
-		if($out->results_status() eq "failed") {
+		if ($out->results_status() eq "failed") {
 			if ($out->results_errno() == 14611) {
 				notify($ERRORS{'DEBUG'}, 0, "Too Many Clones Currently Occuring ... will try again in $retry seconds");
 				sleep($retry);
@@ -1146,8 +1146,8 @@ sub netapp_fileclone
 			my $out = $s->invoke_elem($in);
 			while($out->child_get("status")->child_get("ops-info")->child_get_string("clone-state") ne "completed") {
 				notify($ERRORS{'DEBUG'}, 0, "Waiting for clone $dest_path to finish...");
-				if($ignore_thick == 0 && $out->child_get("status")->child_get("ops-info")->child_get_string("blocks-copied") > $block_copy_limit) {
-					if($out->child_get("status")->child_get("ops-info")->child_get_string("percent-done") < 99) {
+				if ($ignore_thick == 0 && $out->child_get("status")->child_get("ops-info")->child_get_string("blocks-copied") > $block_copy_limit) {
+					if ($out->child_get("status")->child_get("ops-info")->child_get_string("percent-done") < 99) {
 						#cancel clone operation
 						notify($ERRORS{'DEBUG'}, 0, "The clone $dest_path is being inneficiently copied instead of being cloned...");
 						notify($ERRORS{'DEBUG'}, 0, "The clone for $dest_path will now be cancelled");
@@ -1161,7 +1161,7 @@ sub netapp_fileclone
 						$stop_in->child_add($stop_clone_id);
 						# send the clone-stop request
 						my $stop_output = $s->invoke_elem($stop_in);
-						if($stop_output->results_status() eq "failed") {
+						if ($stop_output->results_status() eq "failed") {
 							notify($ERRORS{'CRITICAL'}, 0, $stop_output->results_reason() ."\n");
 							return 0;
 						} else {
