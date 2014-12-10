@@ -860,7 +860,8 @@ function AJrestartImageCapture() {
 	$query = "UPDATE computer c, "
 	       .        "request rq "
 	       . "SET c.stateid = 8, "
-	       .     "rq.stateid = 16 "
+	       .     "rq.stateid = 16, "
+	       .     "rq.laststateid = 10 "
 	       . "WHERE c.id = $compid AND "
 	       .       "rq.id = $requestid";
 	doQuery($query);
