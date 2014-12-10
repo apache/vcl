@@ -2112,7 +2112,7 @@ sub remove_lines_from_file {
 =cut
 
 sub execute {
-return execute_new(@_);
+#return execute_new(@_);
 	my ($argument) = @_;
 	my ($computer_name, $command, $display_output, $timeout_seconds, $max_attempts, $port, $user, $password, $identity_key, $ignore_error);
 	
