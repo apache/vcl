@@ -1696,13 +1696,11 @@ function submitReinstallReservationCB(data, ioArgs) {
 	}
 }
 
-// TODO get this working
-// talk to Andy about preventing vcld from deleting the connecttimeout entry until the end of the reservation
 function checkConnectTimeout() {
 	var nextcheck = 15;
 	if(! dojo.byId('timeoutvalue'))
 		return;
-	var timeout = dojo.byId('timeoutvalue').value;
+	var timeout = parseInt(dojo.byId('timeoutvalue').value);
 	var tmp = new Date();
 	var now = (tmp.getTime() - tmp.getMilliseconds()) / 1000;
 	if(timeout <= now) {
