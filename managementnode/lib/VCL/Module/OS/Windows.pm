@@ -3889,7 +3889,7 @@ sub get_service_configuration {
 	
 	my $services_key = 'HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Services';
 	
-	my $cygwin_path			 = $self->get_cygwin_path();
+	my $cygwin_path = $self->get_cygwin_path();
 
 	my $node_reg_file_path = $cygwin_path . "/tmp/services_$computer_node_name.reg";
 	my $mn_reg_file_path = "/tmp/vcl/services_$computer_node_name.reg";
@@ -6826,7 +6826,7 @@ sub clean_hard_drive {
 
 	my $computer_node_name   = $self->data->get_computer_node_name();
 	my $system32_path        = $self->get_system32_path() || return;
-	my $cygwin_path			 = $self->get_cygwin_path();
+	my $cygwin_path          = $self->get_cygwin_path();
 	
 	# Run dism.exe
 	# The dism.exe file may not be present

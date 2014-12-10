@@ -221,9 +221,9 @@ sub process {
 			$info->{"computerschecked"} += 1;
 		} ## end if (defined($last_check) && $computer_state !~...
 		
-		my $computer_hostname            = $data->get_computer_host_name();
-		my $computer_short_name 	 = $1 if ($computer_hostname =~ /([-_a-zA-Z0-9]*)(\.?)/);
-		my $computer_type                = $data->get_computer_type(); 
+		my $computer_hostname = $data->get_computer_host_name();
+		my $computer_short_name = $1 if ($computer_hostname =~ /([-_a-zA-Z0-9]*)(\.?)/);
+		my $computer_type = $data->get_computer_type(); 
 		
 		if ($computer_type eq "lab") {
 			#next;
@@ -287,7 +287,7 @@ sub process {
 					$node_status{status} = "ready";
 					next;
 				}
-				my @currentimage_txt_contents 	 = get_current_image_contents_no_data_structure($computer_short_name);
+				my @currentimage_txt_contents = get_current_image_contents_no_data_structure($computer_short_name);
 				foreach my $l (@currentimage_txt_contents) {
 					#notify($ERRORS{'OK'}, 0, "NODE l=$l");
 					if ( $l =~ /imagerevision_id/i ) {
@@ -478,17 +478,17 @@ sub _blade_investigator {
 sub powerdown_event {
 	my ($self) = @_;
 
-	my $management_node_keys    = $self->{managementnode}->{keys};
-	my $computer_host_name      = $self->{computer}->{hostname};
-	my $computer_short_name     = 0;
-	my $computer_ip_address     = $self->{computer}->{IPaddress};
-	my $image_name              = $self->{imagerevision}->{imagename};
-	my $image_os_type           = $self->{image}->{OS}->{type};
+	my $management_node_keys      = $self->{managementnode}->{keys};
+	my $computer_host_name        = $self->{computer}->{hostname};
+	my $computer_short_name       = 0;
+	my $computer_ip_address       = $self->{computer}->{IPaddress};
+	my $image_name                = $self->{imagerevision}->{imagename};
+	my $image_os_type             = $self->{image}->{OS}->{type};
 	my $provisioning_perl_package = $self->{computer}->{provisioning}->{module}->{perlpackage};
-	my $computer_type                 = $self->{computer}->{type};
-	my $computer_state						= $self->{computer}->{state}->{name};
-	my $computer_node_name 			= $self->{computer}->{hostname};
-	my $power_down_stage				= $self->{powerdownstage};
+	my $computer_type             = $self->{computer}->{type};
+	my $computer_state            = $self->{computer}->{state}->{name};
+	my $computer_node_name        = $self->{computer}->{hostname};
+	my $power_down_stage          = $self->{powerdownstage};
 
 	$computer_short_name = $1 if ($computer_node_name =~ /([-_a-zA-Z0-9]*)(\.?)/);
 

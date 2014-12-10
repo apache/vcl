@@ -272,8 +272,8 @@ sub retrieve_image {
 		return;	
 	}
 
-	my $reservation_id 	= $self->data->get_reservation_id();
-	my $computer_id		= $self->data->get_computer_id();
+	my $reservation_id = $self->data->get_reservation_id();
+	my $computer_id = $self->data->get_computer_id();
 
 	# Make sure image library functions are enabled
 	my $image_lib_enable = $self->data->get_management_node_image_lib_enable();

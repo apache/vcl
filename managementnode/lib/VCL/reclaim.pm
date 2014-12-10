@@ -97,9 +97,9 @@ sub process {
 	my $computer_shortname                  = $self->data->get_computer_short_name();
 	my $computer_state_name                 = $self->data->get_computer_state_name();
 	my $computer_currentimage_name          = $self->data->get_computer_currentimage_name(0);
-	my $server_request_id     					 = $self->data->get_server_request_id();
-	my $public_ip_configuration			    = $self->data->get_management_node_public_ip_configuration() || return;
-	my @reservation_ids							 = $self->data->get_reservation_ids();
+	my $server_request_id                   = $self->data->get_server_request_id();
+	my $public_ip_configuration             = $self->data->get_management_node_public_ip_configuration() || return;
+	my @reservation_ids                     = $self->data->get_reservation_ids();
 
 	# Delete all computerloadlog rows with loadstatename = 'beginacknowledgetimeout' for all reservations in this request
 	delete_computerloadlog_reservation(\@reservation_ids,0,1);
@@ -238,7 +238,7 @@ sub insert_reload_and_exit {
 	my $self = shift;
 	my $request_data               = $self->data->get_request_data;
 	my $computer_id                = $self->data->get_computer_id();
-	my $computer_shortname			 = $self->data->get_computer_short_name();
+	my $computer_shortname         = $self->data->get_computer_short_name();
 	
 	# Run any vcl_post_reservation scripts (if exists)
 	if ($self->os->can("post_reservation")) {

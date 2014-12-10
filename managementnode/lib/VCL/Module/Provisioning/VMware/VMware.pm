@@ -8010,53 +8010,53 @@ sub setup_purge_datastore_images {
 	}
 	
 	# Find image revisions which have multiple characteristics by finding the intersection of the arrays
-	my @deleted_has_reservations 					= get_array_intersection(\@deleted, \@has_reservations);
-	my @deleted_has_reservations_loaded 		= get_array_intersection(\@deleted, \@has_reservations, \@loaded);
-	my @deleted_has_reservations_not_loaded 	= get_array_intersection(\@deleted, \@has_reservations, \@not_loaded);
-	my @deleted_no_reservations 					= get_array_intersection(\@deleted, \@no_reservations);
-	my @deleted_no_reservations_loaded 			= get_array_intersection(\@deleted, \@no_reservations, \@loaded);
-	my @deleted_no_reservations_not_loaded 	= get_array_intersection(\@deleted, \@no_reservations, \@not_loaded);
-	my @not_deleted_has_reservations 				= get_array_intersection(\@not_deleted, \@has_reservations);
-	my @not_deleted_has_reservations_loaded 		= get_array_intersection(\@not_deleted, \@has_reservations, \@loaded);
-	my @not_deleted_has_reservations_not_loaded 	= get_array_intersection(\@not_deleted, \@has_reservations, \@not_loaded);
-	my @not_deleted_no_reservations 					= get_array_intersection(\@not_deleted, \@no_reservations);
-	my @not_deleted_no_reservations_loaded 		= get_array_intersection(\@not_deleted, \@no_reservations, \@loaded);
-	my @not_deleted_no_reservations_not_loaded 	= get_array_intersection(\@not_deleted, \@no_reservations, \@not_loaded);
-	my @not_deleted_candidate													= get_array_intersection(\@not_deleted, \@no_reservations, \@not_loaded, \@in_repository);
-	my @not_deleted_no_reservations_not_loaded_not_in_repository 	= get_array_intersection(\@not_deleted, \@no_reservations, \@not_loaded, \@not_in_repository);
-	my @not_deleted_candidate_older_than_production 											= get_array_intersection(\@not_deleted_candidate, \@older_than_production); # Purgable
-	my @not_deleted_candidate_production 															= get_array_intersection(\@not_deleted_candidate, \@production);
-	my @not_deleted_candidate_production_recently_created 									= get_array_intersection(\@not_deleted_candidate, \@production, \@recently_created);
-	my @not_deleted_candidate_production_not_recently_created 								= get_array_intersection(\@not_deleted_candidate, \@production, \@not_recently_created);
-	my @not_deleted_candidate_production_not_recently_created_recently_reserved 		= get_array_intersection(\@not_deleted_candidate, \@production, \@not_recently_created, \@recently_reserved);
-	my @not_deleted_candidate_production_not_recently_created_not_recently_reserved 	= get_array_intersection(\@not_deleted_candidate, \@production, \@not_recently_created, \@not_recently_reserved); # Purgable
-	my @not_deleted_candidate_newer_than_production 											= get_array_intersection(\@not_deleted_candidate, \@newer_than_production);
-	my @not_deleted_candidate_newer_than_production_recently_created 						= get_array_intersection(\@not_deleted_candidate, \@newer_than_production, \@recently_created);
-	my @not_deleted_candidate_newer_than_production_not_recently_created 				= get_array_intersection(\@not_deleted_candidate, \@newer_than_production, \@not_recently_created); # Purgable
+	my @deleted_has_reservations              = get_array_intersection(\@deleted, \@has_reservations);
+	my @deleted_has_reservations_loaded       = get_array_intersection(\@deleted, \@has_reservations, \@loaded);
+	my @deleted_has_reservations_not_loaded   = get_array_intersection(\@deleted, \@has_reservations, \@not_loaded);
+	my @deleted_no_reservations               = get_array_intersection(\@deleted, \@no_reservations);
+	my @deleted_no_reservations_loaded        = get_array_intersection(\@deleted, \@no_reservations, \@loaded);
+	my @deleted_no_reservations_not_loaded    = get_array_intersection(\@deleted, \@no_reservations, \@not_loaded);
+	my @not_deleted_has_reservations             = get_array_intersection(\@not_deleted, \@has_reservations);
+	my @not_deleted_has_reservations_loaded      = get_array_intersection(\@not_deleted, \@has_reservations, \@loaded);
+	my @not_deleted_has_reservations_not_loaded  = get_array_intersection(\@not_deleted, \@has_reservations, \@not_loaded);
+	my @not_deleted_no_reservations              = get_array_intersection(\@not_deleted, \@no_reservations);
+	my @not_deleted_no_reservations_loaded       = get_array_intersection(\@not_deleted, \@no_reservations, \@loaded);
+	my @not_deleted_no_reservations_not_loaded   = get_array_intersection(\@not_deleted, \@no_reservations, \@not_loaded);
+	my @not_deleted_candidate                                      = get_array_intersection(\@not_deleted, \@no_reservations, \@not_loaded, \@in_repository);
+	my @not_deleted_no_reservations_not_loaded_not_in_repository   = get_array_intersection(\@not_deleted, \@no_reservations, \@not_loaded, \@not_in_repository);
+	my @not_deleted_candidate_older_than_production                                  = get_array_intersection(\@not_deleted_candidate, \@older_than_production); # Purgable
+	my @not_deleted_candidate_production                                             = get_array_intersection(\@not_deleted_candidate, \@production);
+	my @not_deleted_candidate_production_recently_created                            = get_array_intersection(\@not_deleted_candidate, \@production, \@recently_created);
+	my @not_deleted_candidate_production_not_recently_created                        = get_array_intersection(\@not_deleted_candidate, \@production, \@not_recently_created);
+	my @not_deleted_candidate_production_not_recently_created_recently_reserved      = get_array_intersection(\@not_deleted_candidate, \@production, \@not_recently_created, \@recently_reserved);
+	my @not_deleted_candidate_production_not_recently_created_not_recently_reserved  = get_array_intersection(\@not_deleted_candidate, \@production, \@not_recently_created, \@not_recently_reserved); # Purgable
+	my @not_deleted_candidate_newer_than_production                                  = get_array_intersection(\@not_deleted_candidate, \@newer_than_production);
+	my @not_deleted_candidate_newer_than_production_recently_created                 = get_array_intersection(\@not_deleted_candidate, \@newer_than_production, \@recently_created);
+	my @not_deleted_candidate_newer_than_production_not_recently_created             = get_array_intersection(\@not_deleted_candidate, \@newer_than_production, \@not_recently_created); # Purgable
 	
 	setup_print_break('-');
 	print "Analyzed image revisions stored in the virtual disk path datastore:\n";
-	print "|- Deleted: " 																				. scalar(@deleted) . "\n";
-	print "   |- Has reservation: " 																	. scalar(@deleted_has_reservations) . "\n";
-	print "      |- No reservations: " 																. scalar(@deleted_no_reservations) . "\n";
-	print "         |- Loaded: " 																		. scalar(@deleted_no_reservations_loaded) . "\n";
-	print "         |- Not loaded: " 																. scalar(@deleted_no_reservations_not_loaded) . " (*)\n";
-	print "|- Not deleted: " 																			. scalar(@not_deleted) . "\n";
-	print "   |- Has reservation: " 																	. scalar(@not_deleted_has_reservations) . "\n";
-	print "   |- No reservations: " 																	. scalar(@not_deleted_no_reservations) . "\n";
-	print "      |- Loaded: " 																			. scalar(@not_deleted_no_reservations_loaded) . "\n";
-	print "      |- Not loaded: " 																	. scalar(@not_deleted_no_reservations_not_loaded) . "\n";
-	print "         |- Not in_repository: " 														. scalar(@not_deleted_no_reservations_not_loaded_not_in_repository) . "\n";
-	print "         |- In repository: " 															. scalar(@not_deleted_candidate) . "\n";
-	print "            |- Production: " 															. scalar(@not_deleted_candidate_production) . "\n";
-	print "               |- Created in last $min_imagerevision_age days: " 			. scalar(@not_deleted_candidate_production_recently_created) . "\n";
-	print "               |- Not created in last $min_imagerevision_age days: " 		. scalar(@not_deleted_candidate_production_not_recently_created) . "\n";
-	print "                  |- Reserved in last $min_reservation_days days: " 		. scalar(@not_deleted_candidate_production_not_recently_created_recently_reserved) . "\n";
-	print "                  |- Not reserved in last $min_reservation_days days: " 	. scalar(@not_deleted_candidate_production_not_recently_created_not_recently_reserved) . " (*)\n";
-	print "            |- Older than production: " 												. scalar(@not_deleted_candidate_older_than_production) . " (*)\n";
-	print "            |- Newer than production: " 												. scalar(@not_deleted_candidate_newer_than_production) . "\n";
-	print "               |- Created in last $min_imagerevision_age days: " 			. scalar(@not_deleted_candidate_newer_than_production_recently_created) . "\n";
-	print "               |- Not created in last $min_imagerevision_age days: " 		. scalar(@not_deleted_candidate_newer_than_production_not_recently_created) . " (*)\n";
+	print "|- Deleted: "                                                             . scalar(@deleted) . "\n";
+	print "   |- Has reservation: "                                                  . scalar(@deleted_has_reservations) . "\n";
+	print "      |- No reservations: "                                               . scalar(@deleted_no_reservations) . "\n";
+	print "         |- Loaded: "                                                     . scalar(@deleted_no_reservations_loaded) . "\n";
+	print "         |- Not loaded: "                                                 . scalar(@deleted_no_reservations_not_loaded) . " (*)\n";
+	print "|- Not deleted: "                                                         . scalar(@not_deleted) . "\n";
+	print "   |- Has reservation: "                                                  . scalar(@not_deleted_has_reservations) . "\n";
+	print "   |- No reservations: "                                                  . scalar(@not_deleted_no_reservations) . "\n";
+	print "      |- Loaded: "                                                        . scalar(@not_deleted_no_reservations_loaded) . "\n";
+	print "      |- Not loaded: "                                                    . scalar(@not_deleted_no_reservations_not_loaded) . "\n";
+	print "         |- Not in_repository: "                                          . scalar(@not_deleted_no_reservations_not_loaded_not_in_repository) . "\n";
+	print "         |- In repository: "                                              . scalar(@not_deleted_candidate) . "\n";
+	print "            |- Production: "                                              . scalar(@not_deleted_candidate_production) . "\n";
+	print "               |- Created in last $min_imagerevision_age days: "          . scalar(@not_deleted_candidate_production_recently_created) . "\n";
+	print "               |- Not created in last $min_imagerevision_age days: "      . scalar(@not_deleted_candidate_production_not_recently_created) . "\n";
+	print "                  |- Reserved in last $min_reservation_days days: "       . scalar(@not_deleted_candidate_production_not_recently_created_recently_reserved) . "\n";
+	print "                  |- Not reserved in last $min_reservation_days days: "   . scalar(@not_deleted_candidate_production_not_recently_created_not_recently_reserved) . " (*)\n";
+	print "            |- Older than production: "                                   . scalar(@not_deleted_candidate_older_than_production) . " (*)\n";
+	print "            |- Newer than production: "                                   . scalar(@not_deleted_candidate_newer_than_production) . "\n";
+	print "               |- Created in last $min_imagerevision_age days: "          . scalar(@not_deleted_candidate_newer_than_production_recently_created) . "\n";
+	print "               |- Not created in last $min_imagerevision_age days: "      . scalar(@not_deleted_candidate_newer_than_production_not_recently_created) . " (*)\n";
 	print "(*) May be safely purged\n\n";
 	
 	my @purgable_imagerevisions;
@@ -8224,21 +8224,21 @@ sub setup_purge_repository_images {
 	}
 	
 	# Find image revisions which have multiple characteristics by finding the intersection of the arrays
-	my @deleted_has_reservations 					= get_array_intersection(\@deleted, \@has_reservations);
-	my @deleted_has_reservations_loaded 		= get_array_intersection(\@deleted, \@has_reservations, \@loaded);
-	my @deleted_has_reservations_not_loaded 	= get_array_intersection(\@deleted, \@has_reservations, \@not_loaded);
-	my @deleted_no_reservations 					= get_array_intersection(\@deleted, \@no_reservations);
-	my @deleted_no_reservations_loaded 			= get_array_intersection(\@deleted, \@no_reservations, \@loaded);
-	my @deleted_no_reservations_not_loaded 	= get_array_intersection(\@deleted, \@no_reservations, \@not_loaded);
+	my @deleted_has_reservations              = get_array_intersection(\@deleted, \@has_reservations);
+	my @deleted_has_reservations_loaded       = get_array_intersection(\@deleted, \@has_reservations, \@loaded);
+	my @deleted_has_reservations_not_loaded   = get_array_intersection(\@deleted, \@has_reservations, \@not_loaded);
+	my @deleted_no_reservations               = get_array_intersection(\@deleted, \@no_reservations);
+	my @deleted_no_reservations_loaded        = get_array_intersection(\@deleted, \@no_reservations, \@loaded);
+	my @deleted_no_reservations_not_loaded    = get_array_intersection(\@deleted, \@no_reservations, \@not_loaded);
 	
 	setup_print_break('-');
 	print "Analyzed image revisions stored in the repository datastore:\n";
-	print "|- Deleted: " 						. scalar(@deleted) . "\n";
-	print "   |- Has reservation: " 			. scalar(@deleted_has_reservations) . "\n";
-	print "      |- No reservations: " 		. scalar(@deleted_no_reservations) . "\n";
-	print "         |- Loaded: " 				. scalar(@deleted_no_reservations_loaded) . "\n";
-	print "         |- Not loaded: " 		. scalar(@deleted_no_reservations_not_loaded) . " (*)\n";
-	print "|- Not deleted: " 					. scalar(@not_deleted) . "\n";
+	print "|- Deleted: "                   . scalar(@deleted) . "\n";
+	print "   |- Has reservation: "        . scalar(@deleted_has_reservations) . "\n";
+	print "      |- No reservations: "     . scalar(@deleted_no_reservations) . "\n";
+	print "         |- Loaded: "           . scalar(@deleted_no_reservations_loaded) . "\n";
+	print "         |- Not loaded: "       . scalar(@deleted_no_reservations_not_loaded) . " (*)\n";
+	print "|- Not deleted: "               . scalar(@not_deleted) . "\n";
 	print "(*) May be safely purged\n\n";
 	
 	my @purgable_imagerevisions;

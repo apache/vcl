@@ -2534,10 +2534,10 @@ sub manage_server_access {
 	my $server_request_logingroupid = $self->data->get_server_request_logingroupid();
 	my $user_login_id_owner         = $self->data->get_user_login_id();
 	my $user_ssh_public_keys        = $self->data->get_user_ssh_public_keys(0);
-	my $user_id_owner		        = $self->data->get_user_id();
-	my $image_os_type 				= $self->data->get_image_os_type();
+	my $user_id_owner               = $self->data->get_user_id();
+	my $image_os_type               = $self->data->get_image_os_type();
 	my $request_laststate_name      = $self->data->get_request_laststate_name();
-	my $reservation_users			= $self->data->get_reservation_users();
+	my $reservation_users           = $self->data->get_reservation_users();
 
 	# Build list of users.
 	# If in admin group set admin flag

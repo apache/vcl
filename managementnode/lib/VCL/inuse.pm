@@ -368,18 +368,18 @@ sub user_connected {
 		return;
 	}
 	
-	my $request_id 						= $self->data->get_request_id();
-	my @reservation_ids 					= $self->data->get_reservation_ids();
-	my $reservation_id 					= $self->data->get_reservation_id();
-	my $reservation_lastcheck 			= $self->data->get_reservation_lastcheck_time();
-	my $reservation_count 				= $self->data->get_request_reservation_count();
-	my $computer_id 						= $self->data->get_computer_id();
-	my $computer_short_name 			= $self->data->get_computer_short_name();
-	my $server_request_id       		= $self->data->get_server_request_id();
-	my $request_duration_epoch_secs	= $self->data->get_request_duration_epoch();
-	my $request_duration_hrs 			= floor($request_duration_epoch_secs / 60 / 60);
-	my $ignore_connections_gte_min	= $self->os->get_timings('ignore_connections_gte');
-	my $ignore_connections_gte			= floor($ignore_connections_gte_min / 60);
+	my $request_id                   = $self->data->get_request_id();
+	my @reservation_ids              = $self->data->get_reservation_ids();
+	my $reservation_id               = $self->data->get_reservation_id();
+	my $reservation_lastcheck        = $self->data->get_reservation_lastcheck_time();
+	my $reservation_count            = $self->data->get_request_reservation_count();
+	my $computer_id                  = $self->data->get_computer_id();
+	my $computer_short_name          = $self->data->get_computer_short_name();
+	my $server_request_id            = $self->data->get_server_request_id();
+	my $request_duration_epoch_secs  = $self->data->get_request_duration_epoch();
+	my $request_duration_hrs         = floor($request_duration_epoch_secs / 60 / 60);
+	my $ignore_connections_gte_min   = $self->os->get_timings('ignore_connections_gte');
+	my $ignore_connections_gte       = floor($ignore_connections_gte_min / 60);
 	
 	# Check if user deleted the request
 	$self->state_exit() if is_request_deleted($request_id);
@@ -469,7 +469,7 @@ sub _notify_user_endtime {
 	my $user_emailnotices               = $self->data->get_user_emailnotices();
 	my $user_imtype_name                = $self->data->get_user_imtype_name();
 	my $user_im_id                      = $self->data->get_user_im_id();
-	my $request_forimaging 		         = $self->_check_imaging_request();	
+	my $request_forimaging              = $self->_check_imaging_request();	
 	my $request_id                      = $self->data->get_request_id();
 	
 	my $message;

@@ -131,9 +131,9 @@ sub process {
 	my $blocktime_start              = $self->data->get_blocktime_start();
 	my $blocktime_end                = $self->data->get_blocktime_end();
 	my $blockrequest_name            = $self->data->get_blockrequest_name();
-	my $blockrequest_owner_id	 = $self->data->get_blockrequest_owner_id();
-	my $block_group_id		 = $self->data->get_blockrequest_group_id();
-	my $block_group_name		 = $self->data->get_blockrequest_group_name();
+	my $blockrequest_owner_id        = $self->data->get_blockrequest_owner_id();
+	my $block_group_id               = $self->data->get_blockrequest_group_id();
+	my $block_group_name             = $self->data->get_blockrequest_group_name();
 	
 	# Get user info	
 	my $user_info;
@@ -229,15 +229,15 @@ sub process {
 		
 		if (defined($warningmsg) || defined($errormsg) || ($allocated < $blockrequest_number_machines)) {
 			$body .= "Problem processing block allocation \n\n";
-			$body .= "Block id		= $blockrequest_id\n";
-			$body .= "Block name		= $blockrequest_name\n";
-			$body .= "Block	start time	= $blocktime_start\n";
-			$body .= "Block end time	= $blocktime_end\n";
-			$body .= "Environment name      = $image_prettyname\n";
-			$body .= "Allocated		= $allocated\n";	
-			$body .= "Block requested 	= $blockrequest_number_machines\n"; 
-			$body .= "xmlrpc warn msg	= $warningmsg\n" if(defined($warningmsg));
-			$body .= "xmlrpc error msg	= $errormsg\n" if(defined($errormsg));
+			$body .= "Block id = $blockrequest_id\n";
+			$body .= "Block name = $blockrequest_name\n";
+			$body .= "Block start time = $blocktime_start\n";
+			$body .= "Block end time = $blocktime_end\n";
+			$body .= "Environment name = $image_prettyname\n";
+			$body .= "Allocated = $allocated\n"; 
+			$body .= "Block requested = $blockrequest_number_machines\n"; 
+			$body .= "xmlrpc warn msg = $warningmsg\n" if(defined($warningmsg));
+			$body .= "xmlrpc error msg = $errormsg\n" if(defined($errormsg));
 			$body .= "\n";
 			
 			notify($ERRORS{'CRITICAL'}, 0, "$body");

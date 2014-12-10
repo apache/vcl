@@ -463,8 +463,8 @@ sub reload_image {
 	my $image_name                      = $self->data->get_image_name();
 	my $image_os_install_type           = $self->data->get_image_os_install_type();
 	my $imagerevision_id                = $self->data->get_imagerevision_id();
-	my $server_request_id	            = $self->data->get_server_request_id();
-	my $server_request_fixed_ip		    = $self->data->get_server_request_fixed_ip();
+	my $server_request_id               = $self->data->get_server_request_id();
+	my $server_request_fixed_ip         = $self->data->get_server_request_fixed_ip();
 	
 	# Try to get the node status if the provisioning engine has implemented a node_status() subroutine
 	my $node_status;

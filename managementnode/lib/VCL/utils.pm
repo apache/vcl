@@ -4407,7 +4407,7 @@ sub write_currentimage_txt {
 	my $image_prettyname           = $data->get_image_prettyname();
 	my $imagerevision_id           = $data->get_imagerevision_id();
 	my $imagerevision_date_created = $data->get_imagerevision_date_created();
-	my $image_os_type					 = $data->get_image_os_type();
+	my $image_os_type              = $data->get_image_os_type();
 
 	my @current_image_lines;
 	push @current_image_lines, "$image_name";
@@ -6376,8 +6376,8 @@ sub get_computers_controlled_by_mn {
 
 	#set some local variables
 	my $management_node_resourceid = $managementnode{resource_id};
-	my $management_node_id       	 = $managementnode{id};
-	my $management_node_hostname 	 = $managementnode{hostname};
+	my $management_node_id         = $managementnode{id};
+	my $management_node_hostname   = $managementnode{hostname};
 
 	# Collect resource group this management node is a member of
 	if ($info{managementnode}{resoucegroups} = get_resource_groups($management_node_resourceid)) {

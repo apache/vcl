@@ -125,7 +125,7 @@ sub pre_capture {
 		return 0;
 	}
 
-	my $computer_node_name	   = $self->data->get_computer_node_name();
+	my $computer_node_name = $self->data->get_computer_node_name();
 
 	my $args = shift;
 
@@ -139,24 +139,6 @@ sub pre_capture {
 	else {
 		$self->{end_state} = 'off';
 	}
-
-	#	my $request_id			   = $self->data->get_request_id();
-	#	my $reservation_id		   = $self->data->get_reservation_id();
-	#	my $image_id				 = $self->data->get_image_id();
-	#	my $image_os_name			= $self->data->get_image_os_name();
-	#	my $management_node_keys	 = $self->data->get_management_node_keys();
-	#	my $image_os_type			= $self->data->get_image_os_type();
-	#	my $image_name			   = $self->data->get_image_name();
-	#	my $computer_id			  = $self->data->get_computer_id();
-	#	my $computer_short_name	  = $self->data->get_computer_short_name();
-	#	my $computer_type			= $self->data->get_computer_type();
-	#	my $user_id				  = $self->data->get_user_id();
-	#	my $user_unityid			 = $self->data->get_user_login_id();
-	#	my $managementnode_shortname = $self->data->get_management_node_short_name();
-	#	my $computer_private_ip	  = $self->data->get_computer_private_ip_address();
-	#	my $ip_configuration 		 = $self->data->get_management_node_public_ip_configuration();
-	#	my $image_os_install_type	= $self->data->get_image_os_install_type();
-
 
 	notify($ERRORS{'OK'}, 0, "beginning OSX image PRE_CAPTURE() preparation tasks on $computer_node_name");
 
@@ -245,9 +227,9 @@ sub post_load {
 		return 0;
 	}
 	
-	my $computer_node_name	  = $self->data->get_computer_node_name();
+	my $computer_node_name    = $self->data->get_computer_node_name();
 	my $management_node_keys  = $self->data->get_management_node_keys();
-	my $image_name	          = $self->data->get_image_name();
+	my $image_name	           = $self->data->get_image_name();
 	my $computer_short_name   = $self->data->get_computer_short_name();
 	my $image_os_install_type = $self->data->get_image_os_install_type();
 	my $imagemeta_postoption  = $self->data->get_imagemeta_postoption();
