@@ -520,6 +520,30 @@ class ManagementNode extends Resource {
 				else
 					setVariable("timesource|{$data['name']}", $data['timeservers'], 'none');
 			}
+			# update nathost (TODO change in release after 2.4 when section added to manage nat hosts)
+			if($data['ipaddress'] != $olddata['IPaddress']) {
+				$query = "SELECT id "
+				       . "FROM resource "
+				       . "WHERE resourcetypeid = 16 AND "
+				       .       "subid = {$data['rscid']}";
+				$qh = doQuery($query);
+				if($row = mysql_fetch_assoc($qh)) {
+					$resourceid = $row['id'];
+					$query = "UPDATE nathost "
+					       . "SET natIP = '{$data['ipaddress']}' "
+					       . "WHERE resourceid = $resourceid";
+					doQuery($query);
+					if(! mysql_affected_rows($GLOBALS['mysql_link_vcl'])) {
+						$query = "INSERT INTO nathost "
+						       .        "(resourceid, "
+						       .        "natIP) "
+						       . "VALUES "
+						       .        "($resourceid, "
+						       .        "'{$data['ipaddress']}')";
+						doQuery($query);
+					}
+				}
+			}
 		}
 
 		# clear user resource cache for this type
@@ -901,6 +925,16 @@ class ManagementNode extends Resource {
 				 .        "subid) "
 				 . "VALUES (16, "
 				 .         "$rscid)";
+		doQuery($query);
+
+		$resourceid = dbLastInsertID();
+
+		// add entry to nathost table (TODO change in release after 2.4 when section added to manage nat hosts)
+		$query = "INSERT INTO nathost "
+				 .        "(resourceid, "
+				 .        "natIP) "
+				 . "VALUES ($resourceid, "
+				 .         "'{$data['ipaddress']}')";
 		doQuery($query);
 
 		# time server
