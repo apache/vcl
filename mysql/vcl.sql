@@ -643,7 +643,8 @@ CREATE TABLE IF NOT EXISTS `module` (
 CREATE TABLE IF NOT EXISTS `nathost` (
   `id` smallint(5) unsigned NOT NULL auto_increment,
   `resourceid` mediumint(8) unsigned NOT NULL,
-  `natIP` varchar(15) NOT NULL,
+  `publicIPaddress` varchar(15) NOT NULL,
+  `internalIPaddress` varchar(15) DEFAULT NULL,
   `deleted` tinyint(1) unsigned NOT NULL default '0',
   `datedeleted` DATETIME DEFAULT NULL,
   PRIMARY KEY  (`id`),
@@ -660,7 +661,7 @@ CREATE TABLE IF NOT EXISTS `natlog` (
   `logid` int(10) unsigned NOT NULL,
   `connectmethodportid` tinyint(3) unsigned default NULL,
   `nathostid` smallint(5) unsigned default NULL,
-  `natIP` varchar(15) NOT NULL,
+  `publicIPaddress` varchar(15) NOT NULL,
   `computerid` smallint(5) unsigned NOT NULL,
   `publicport` smallint(5) unsigned NOT NULL,
   `privateport` smallint(5) unsigned NOT NULL,
@@ -2232,7 +2233,7 @@ ALTER TABLE `natlog`
 -- Constraints for table `nathostcomputermap`
 -- 
 ALTER TABLE `nathostcomputermap`
-  ADD CONSTRAINT `nathostcomputermap_ibfk_2` FOREIGN KEY (`nathostid`) REFERENCES `nathost` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  ADD CONSTRAINT `nathostcomputermap_ibfk_2` FOREIGN KEY (`nathostid`) REFERENCES `nathost` (`id`) ON UPDATE CASCADE,
   ADD CONSTRAINT `nathostcomputermap_ibfk_1` FOREIGN KEY (`computerid`) REFERENCES `computer` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- 

@@ -846,6 +846,7 @@ CREATE TABLE IF NOT EXISTS `connectmethodport` (
   `port` mediumint(8) unsigned NOT NULL,
   `protocol` enum('TCP','UDP') NOT NULL,
   PRIMARY KEY  (`id`),
+  UNIQUE KEY `connectmethodid_2` (`connectmethodid`,`port`,`protocol`),
   KEY `connectmethodid` (`connectmethodid`)
 ) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
 
@@ -965,7 +966,8 @@ CALL AddUniqueIndex('module', 'name');
 CREATE TABLE IF NOT EXISTS `nathost` (
   `id` smallint(5) unsigned NOT NULL auto_increment,
   `resourceid` mediumint(8) unsigned NOT NULL,
-  `natIP` varchar(15) NOT NULL,
+  `publicIPaddress` varchar(15) NOT NULL,
+  `internalIPaddress` varchar(15) DEFAULT NULL,
   `deleted` tinyint(1) unsigned NOT NULL default '0',
   `datedeleted` DATETIME DEFAULT NULL,
   PRIMARY KEY  (`id`),
@@ -979,14 +981,14 @@ CREATE TABLE IF NOT EXISTS `nathost` (
 -- 
 
 CREATE TABLE IF NOT EXISTS `natlog` (
-  `logid` int(11) NOT NULL,
-  `connectmethodportid` int(11) NOT NULL,
-  `nathostid` int(11) NOT NULL,
-  `natIP` int(11) NOT NULL,
-  `computerid` int(11) NOT NULL,
-  `publicport` int(11) NOT NULL,
-  `privateport` int(11) NOT NULL,
-  `protocol` int(11) NOT NULL,
+  `logid` int(10) unsigned NOT NULL,
+  `connectmethodportid` tinyint(3) unsigned default NULL,
+  `nathostid` smallint(5) unsigned default NULL,
+  `publicIPaddress` varchar(15) NOT NULL,
+  `computerid` smallint(5) unsigned NOT NULL,
+  `publicport` smallint(5) unsigned NOT NULL,
+  `privateport` smallint(5) unsigned NOT NULL,
+  `protocol` enum('TCP','UDP') NOT NULL,
   KEY `logid` (`logid`),
   KEY `connectmethodportid` (`connectmethodportid`),
   KEY `nathostid` (`nathostid`),
@@ -996,12 +998,12 @@ CREATE TABLE IF NOT EXISTS `natlog` (
 -- --------------------------------------------------------
 
 -- 
--- Table structure for table `natmap`
+-- Table structure for table `nathostcomputermap`
 -- 
 
-CREATE TABLE IF NOT EXISTS `natmap` (
-  `computerid` smallint(5) unsigned NOT NULL,
+CREATE TABLE IF NOT EXISTS `nathostcomputermap` (
   `nathostid` smallint(5) unsigned NOT NULL,
+  `computerid` smallint(5) unsigned NOT NULL,
   UNIQUE KEY `computerid` (`computerid`,`nathostid`)
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
@@ -1013,10 +1015,14 @@ CREATE TABLE IF NOT EXISTS `natmap` (
 
 CREATE TABLE IF NOT EXISTS `natport` (
   `reservationid` mediumint(8) unsigned NOT NULL,
+  `nathostid` smallint(5) unsigned NOT NULL,
   `publicport` smallint(5) unsigned NOT NULL,
   `connectmethodportid` tinyint(3) unsigned NOT NULL,
+  UNIQUE KEY `reservationid_connectmethodportid` (`reservationid`,`connectmethodportid`),
+  UNIQUE KEY `nathostid_publicport` (`nathostid`,`publicport`),
   KEY `reservationid` (`reservationid`),
-  KEY `connectmethodportid` (`connectmethodportid`)
+  KEY `connectmethodportid` (`connectmethodportid`),
+  KEY `nathostid` (`nathostid`)
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
@@ -1454,7 +1460,7 @@ INSERT IGNORE INTO `module` (`name`, `prettyname`, `description`, `perlpackage`)
 -- Inserts for table `nathost`
 -- 
 
-INSERT IGNORE INTO nathost (resourceid, natIP) SELECT resource.id, managementnode.IPaddress FROM resource, managementnode WHERE resource.resourcetypeid = 16 AND resource.subid = managementnode.id AND managementnode.stateid != 1;
+INSERT IGNORE INTO nathost (resourceid, publicIPaddress) SELECT resource.id, managementnode.IPaddress FROM resource, managementnode WHERE resource.resourcetypeid = 16 AND resource.subid = managementnode.id AND managementnode.stateid != 1;
 
 -- --------------------------------------------------------
 
@@ -1708,6 +1714,7 @@ INSERT IGNORE INTO `variable` (`name`, `serialization`, `value`) VALUES ('genera
 INSERT IGNORE INTO `variable` (`name`, `serialization`, `value`) VALUES ('general_end_notice_second', 'none', '300');
 INSERT IGNORE INTO `variable` (`name`, `serialization`, `value`) VALUES ('ignore_connections_gte', 'none', '1440');
 INSERT IGNORE INTO `variable` (`name`, `serialization`, `value`) VALUES ('ignored_remote_ip_addresses', 'none', '');
+INSERT IGNORE INTO `variable` (`name`, `serialization`, `value`) VALUES ('natport_ranges', 'none', '5700-6500,9696-9701,49152-65535');
 
 -- 
 
@@ -1756,6 +1763,52 @@ CALL AddConstraintIfNotExists('connectlog', 'userid', 'user', 'id', 'both', 'CAS
 --
 
 CALL AddConstraintIfNotExists('image', 'imagetypeid', 'imagetype', 'id', 'update', 'CASCADE');
+
+-- --------------------------------------------------------
+
+--
+-- Constraints for table `image`
+--
+
+CALL AddConstraintIfNotExists('image', 'imagetypeid', 'imagetype', 'id', 'update', 'CASCADE');
+
+-- --------------------------------------------------------
+
+--
+-- Constraints for table `nathost`
+--
+
+CALL AddConstraintIfNotExists('nathost', 'resourceid', 'resource', 'id', 'both', 'CASCADE');
+
+-- --------------------------------------------------------
+
+--
+-- Constraints for table `natlog`
+--
+
+CALL AddConstraintIfNotExists('natlog', 'computerid', 'computer', 'id', 'both', 'CASCADE');
+CALL AddConstraintIfNotExists('natlog', 'logid', 'log', 'id', 'both', 'CASCADE');
+CALL AddConstraintIfNotExists('natlog', 'connectmethodportid', 'connectmethodport', 'id', 'UPDATE', 'CASCADE');
+CALL AddConstraintIfNotExists('natlog', 'nathostid', 'nathost', 'id', 'UPDATE', 'CASCADE');
+
+-- --------------------------------------------------------
+
+--
+-- Constraints for table `nathostcomputermap`
+--
+
+CALL AddConstraintIfNotExists('nathostcomputermap', 'nathostid', 'nathost', 'id', 'UPDATE', 'CASCADE');
+CALL AddConstraintIfNotExists('nathostcomputermap', 'computerid', 'computer', 'id', 'both', 'CASCADE');
+
+-- --------------------------------------------------------
+
+--
+-- Constraints for table `natport`
+--
+
+CALL AddConstraintIfNotExists('natport', 'connectmethodportid', 'connectmethodport', 'id', 'both', 'CASCADE');
+CALL AddConstraintIfNotExists('natport', 'reservationid', 'reservation', 'id', 'both', 'CASCADE');
+CALL AddConstraintIfNotExists('natport', 'nathostid', 'nathost', 'id', 'both', 'CASCADE');
 
 -- --------------------------------------------------------
 
