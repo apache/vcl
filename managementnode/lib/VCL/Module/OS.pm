@@ -2812,7 +2812,7 @@ sub process_connect_methods {
 					}
 					
 					if ($self->nathost_os->firewall->add_nat_port_forward($protocol, $nat_public_port, $computer_ip_address, $port, $reservation_id)) {
-						notify($ERRORS{'OK'}, 0, "NAT port forwarding configured on $nathost_hostname for '$name' connect method: $nat_public_port --> $computer_ip_address:$port ($protocol)");
+						notify($ERRORS{'OK'}, 0, "NAT port forwarding configured on $nathost_hostname for '$name' connect method: $nathost_public_ip_address:$nat_public_port --> $computer_ip_address:$port ($protocol)");
 					}
 					else {
 						notify($ERRORS{'WARNING'}, 0, "failed to configure NAT port forwarding on $nathost_hostname for '$name' connect method: $nathost_public_ip_address:$nat_public_port --> $computer_ip_address:$port ($protocol)");

@@ -284,7 +284,7 @@ sub initialize {
 		return;
 	}
 	
-	#return 1 if ($self->data->get_request_state_name() =~ /test/i);
+	return 1 if ($self->data->get_request_state_name() =~ /test/i);
 	notify($ERRORS{'DEBUG'}, 0, "initializing " . ref($self) . " object");
 	
 	# Get a DataStructure object containing data for the VM host computer

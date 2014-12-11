@@ -663,7 +663,10 @@ sub configure_nat {
 		notify($ERRORS{'WARNING'}, 0, "failed to configure NAT host $computer_name, no interface is assigned the internal IP address configured in the nathost table: $internal_ip_address\n" . format_data($network_configuration));
 		return;
 	}
-	
+	notify($ERRORS{'DEBUG'}, 0, "determined NAT host interfaces:\n" .
+		"public: $public_interface_name ($public_ip_address)\n" .
+		"internal: $internal_interface_name: ($internal_ip_address)"
+	);
 	
 	my $natport_ranges_variable = get_variable('natport_ranges') || '49152-65535';
 	my $destination_ports = '';
@@ -676,7 +679,6 @@ sub configure_nat {
 		$destination_ports .= "," if ($destination_ports);
 		$destination_ports .= "$start_port:$end_port";
 	}
-	
 	
 	if (!$self->insert_rule({
 		'table' => 'nat',
