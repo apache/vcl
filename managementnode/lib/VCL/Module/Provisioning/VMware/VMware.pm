@@ -284,7 +284,7 @@ sub initialize {
 		return;
 	}
 	
-	return 1 if ($self->data->get_request_state_name() =~ /test/i);
+	#return 1 if ($self->data->get_request_state_name() =~ /test/i);
 	notify($ERRORS{'DEBUG'}, 0, "initializing " . ref($self) . " object");
 	
 	# Get a DataStructure object containing data for the VM host computer
@@ -678,12 +678,6 @@ sub capture {
 		return;
 	}
 	
-	# Check if VM is responding to SSH before proceeding
-	if (!$self->os->is_ssh_responding()) {
-		notify($ERRORS{'WARNING'}, 0, "unable to capture image, VM $computer_name is not responding to SSH");
-		return;
-	}
-	
 	# Determine the vmx file path actively being used by the VM
 	my $vmx_file_path_original = $self->get_active_vmx_file_path();
 	if (!$vmx_file_path_original) {
@@ -765,13 +759,6 @@ sub capture {
 	# Do this before calling pre_capture and shutting down the VM
 	if ($vmdk_file_path_original ne $vmdk_file_path_renamed && $self->vmhost_os->file_exists($vmdk_file_path_renamed)) {
 		notify($ERRORS{'WARNING'}, 0, "vmdk file that captured image will be renamed to already exists: $vmdk_file_path_renamed");
-		return;
-	}
-	
-	
-	# Write the details about the new image to ~/currentimage.txt
-	if (!write_currentimage_txt($self->data)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to create the currentimage.txt file on the VM being captured");
 		return;
 	}
 	
@@ -994,6 +981,9 @@ sub capture {
                capture to work if the VM was created by hand with a different
                vmx directory name or file name. This is useful to make base
                image capture easier with fewer restrictions.
+               
+               If the MAC addresses cannot be retrieved from the VM's OS, the
+               MAC addresses in the database are used.
 
 =cut
 
@@ -1006,48 +996,58 @@ sub get_active_vmx_file_path {
 	
 	my $os_type = $self->data->get_image_os_type();
 	my $computer_name = $self->data->get_computer_short_name();
+	my $computer_eth0_mac_address = $self->data->get_computer_eth0_mac_address();
+	my $computer_eth1_mac_address = $self->data->get_computer_eth1_mac_address();
 	
-	my $active_os;
-	my $active_os_type = $self->os->get_os_type();
-	if (!$active_os_type) {
-		notify($ERRORS{'WARNING'}, 0, "unable to determine active vmx file path, OS type currently installed on $computer_name could not be determined");
-		return;
-	}
-	elsif ($active_os_type ne $os_type) {
-		notify($ERRORS{'DEBUG'}, 0, "OS type currently installed on $computer_name does not match the OS type of the reservation image:\nOS type installed on $computer_name: $active_os_type\nreservation image OS type: $os_type");
-		
-		my $active_os_perl_package;
-		if ($active_os_type =~ /linux/i) {
-			$active_os_perl_package = 'VCL::Module::OS::Linux';
-		}
-		else {
-			$active_os_perl_package = 'VCL::Module::OS::Windows';
-		}
-		
-		if ($active_os = $self->create_os_object($active_os_perl_package)) {
-			notify($ERRORS{'DEBUG'}, 0, "created a '$active_os_perl_package' OS object for the '$active_os_type' OS type currently installed on $computer_name");
-		}
-		else {
-			notify($ERRORS{'WARNING'}, 0, "unable to determine active vmx file path, failed to create a '$active_os_perl_package' OS object for the '$active_os_type' OS type currently installed on $computer_name");
-			return;
-		}
+	my @vm_mac_addresses;
+	
+	if (!$self->os->is_ssh_responding()) {
+		notify($ERRORS{'WARNING'}, 0, "$computer_name is not responding, unable to verify MAC addresses reported by OS match MAC addresses in vmx file");
+		@vm_mac_addresses = ($computer_eth0_mac_address, $computer_eth1_mac_address);
 	}
 	else {
-		notify($ERRORS{'DEBUG'}, 0, "'$active_os_type' OS type currently installed on $computer_name matches the OS type of the image assigned to this reservation");
-		$active_os = $self->os;
-	}
-	
-	# Make sure the active OS object implements the required subroutines called below
-	if (!$active_os->can('get_private_mac_address') || !$active_os->can('get_public_mac_address')) {
-		notify($ERRORS{'WARNING'}, 0, "unable to determine active vmx file path, " . ref($active_os) . " OS object does not implement 'get_private_mac_address' and 'get_public_mac_address' subroutines");
-		return;
-	}
-	
-	# Get the MAC addresses being used by the running VM for this reservation
-	my @vm_mac_addresses = ($active_os->get_private_mac_address(), $active_os->get_public_mac_address());
-	if (!@vm_mac_addresses) {
-		notify($ERRORS{'WARNING'}, 0, "unable to retrieve the private and public MAC address being used by VM $computer_name");
-		return;
+		my $active_os;
+		my $active_os_type = $self->os->get_os_type();
+		if (!$active_os_type) {
+			notify($ERRORS{'WARNING'}, 0, "unable to determine OS type currently installed on $computer_name");
+			$active_os = $self->os();
+		}
+		elsif ($active_os_type ne $os_type) {
+			notify($ERRORS{'DEBUG'}, 0, "OS type currently installed on $computer_name does not match the OS type of the reservation image:\nOS type installed on $computer_name: $active_os_type\nreservation image OS type: $os_type");
+			
+			my $active_os_perl_package;
+			if ($active_os_type =~ /linux/i) {
+				$active_os_perl_package = 'VCL::Module::OS::Linux';
+			}
+			else {
+				$active_os_perl_package = 'VCL::Module::OS::Windows';
+			}
+			
+			if ($active_os = $self->create_os_object($active_os_perl_package)) {
+				notify($ERRORS{'DEBUG'}, 0, "created a '$active_os_perl_package' OS object for the '$active_os_type' OS type currently installed on $computer_name");
+			}
+			else {
+				notify($ERRORS{'WARNING'}, 0, "unable to determine active vmx file path, failed to create a '$active_os_perl_package' OS object for the '$active_os_type' OS type currently installed on $computer_name");
+				return;
+			}
+		}
+		else {
+			notify($ERRORS{'DEBUG'}, 0, "'$active_os_type' OS type currently installed on $computer_name matches the OS type of the image assigned to this reservation");
+			$active_os = $self->os;
+		}
+		
+		# Make sure the active OS object implements the required subroutines called below
+		if (!$active_os->can('get_private_mac_address') || !$active_os->can('get_public_mac_address')) {
+			notify($ERRORS{'WARNING'}, 0, ref($active_os) . " OS object does not implement 'get_private_mac_address' and 'get_public_mac_address' subroutines, unable to verify MAC addresses reported by OS match MAC addresses in vmx file");
+			@vm_mac_addresses = ($computer_eth0_mac_address, $computer_eth1_mac_address);
+		}
+		else {
+			# Get the MAC addresses being used by the running VM for this reservation
+			my $active_private_mac_address = $active_os->get_private_mac_address();
+			my $active_public_mac_address = $active_os->get_public_mac_address();
+			push @vm_mac_addresses, $active_private_mac_address if $active_private_mac_address;
+			push @vm_mac_addresses, $active_public_mac_address if $active_public_mac_address;
+		}
 	}
 	
 	# Remove the colons from the MAC addresses and convert to lower case so they can be compared
@@ -1066,10 +1066,11 @@ sub get_active_vmx_file_path {
 	
 	# Loop through the vmx files found on the VM host
 	# Check if the MAC addresses in the vmx file match the MAC addresses currently in use on the VM to be captured
-	my @matching_host_vmx_paths;
+	my @matching_host_vmx_paths_powered_on;
+	my @matching_host_vmx_paths_powered_off;
 	for my $host_vmx_path (@host_vmx_file_paths) {
 		# Quit checking if a match has already been found and the vmx path being checked doesn't contain the computer name
-		last if (@matching_host_vmx_paths && $host_vmx_path !~ /$computer_name/);
+		last if ((@matching_host_vmx_paths_powered_on || @matching_host_vmx_paths_powered_off) && $host_vmx_path !~ /$computer_name/);
 		
 		# Get the info from the existing vmx file on the VM host
 		my $host_vmx_info = $self->get_vmx_info($host_vmx_path);
@@ -1109,28 +1110,38 @@ sub get_active_vmx_file_path {
 		# Ignore the vmx file if the VM is powered on
 		my $power_state = $self->api->get_vm_power_state($host_vmx_path) || 'unknown';
 		if ($power_state !~ /on/i) {
-			notify($ERRORS{'DEBUG'}, 0, "ignoring $vmx_file_name because the VM is not powered on");
-			next;
+			notify($ERRORS{'DEBUG'}, 0, "found matching MAC address between $computer_name (powered off) and $vmx_file_name:\n" . join("\n", sort(@matching_mac_addresses)));
+			push @matching_host_vmx_paths_powered_off, $host_vmx_path;
 		}
-		
-		
-		notify($ERRORS{'DEBUG'}, 0, "found matching MAC address between $computer_name and $vmx_file_name:\n" . join("\n", sort(@matching_mac_addresses)));
-		push @matching_host_vmx_paths, $host_vmx_path;
+		else {
+			notify($ERRORS{'DEBUG'}, 0, "found matching MAC address between $computer_name (powered on) and $vmx_file_name:\n" . join("\n", sort(@matching_mac_addresses)));
+			push @matching_host_vmx_paths_powered_on, $host_vmx_path;
+		}
 	}
 	
 	# Check if any matching vmx files were found
-	if (!@matching_host_vmx_paths) {
-		notify($ERRORS{'WARNING'}, 0, "did not find any vmx files on the VM host containing a MAC address matching $computer_name");
+	if (@matching_host_vmx_paths_powered_on) {
+		if (scalar(@matching_host_vmx_paths_powered_on) > 1) {
+			notify($ERRORS{'WARNING'}, 0, "unable to determine active vmx file path, found multiple vmx files of powered on VMs on the VM host containing a MAC address matching $computer_name:\n" . join("\n", @matching_host_vmx_paths_powered_on));
+			return;
+		}
+		my $matching_vmx_file_path = $matching_host_vmx_paths_powered_on[0];
+		notify($ERRORS{'OK'}, 0, "found vmx file being used by $computer_name (powered on): $matching_vmx_file_path");
+		return $matching_vmx_file_path;
+	}
+	elsif (@matching_host_vmx_paths_powered_off) {
+		if (scalar(@matching_host_vmx_paths_powered_off) > 1) {
+			notify($ERRORS{'WARNING'}, 0, "unable to determine active vmx file path, found no vmx files of powered on VMs, found multiple vmx files of powered off VMs on the VM host containing a MAC address matching $computer_name:\n" . join("\n", @matching_host_vmx_paths_powered_off));
+			return;
+		}
+		my $matching_vmx_file_path = $matching_host_vmx_paths_powered_off[0];
+		notify($ERRORS{'OK'}, 0, "found vmx file being used by $computer_name (powered off): $matching_vmx_file_path");
+		return $matching_vmx_file_path;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine active vmx file path, did not find any vmx files on the VM host containing a MAC address matching $computer_name");
 		return;
 	}
-	elsif (scalar(@matching_host_vmx_paths) > 1) {
-		notify($ERRORS{'WARNING'}, 0, "found multiple vmx files on the VM host containing a MAC address matching $computer_name:\n" . join("\n", @matching_host_vmx_paths));
-		return
-	}
-	
-	my $matching_vmx_file_path = $matching_host_vmx_paths[0];
-	notify($ERRORS{'OK'}, 0, "found vmx file being used by $computer_name: $matching_vmx_file_path");
-	return $matching_vmx_file_path;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
