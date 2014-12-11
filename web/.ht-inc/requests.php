@@ -121,7 +121,11 @@ function viewRequests() {
 				$cont = addContinuationsEntry('AJconnectRequest', $cdata, SECINDAY);
 				$text .= getViewRequestHTMLitem('connectbtn', $cont);
 				if($requests[$i]['serveradmin']) {
-					$cont = addContinuationsEntry('AJconfirmDeleteRequest', $cdata, SECINDAY);
+					$cdata2 = $cdata;
+					$cdata2['notbyowner'] = 0;
+					if($user['id'] != $requests[$i]['userid'])
+						$cdata2['notbyowner'] = 1;
+					$cont = addContinuationsEntry('AJconfirmDeleteRequest', $cdata2, SECINDAY);
 					$text .= getViewRequestHTMLitem('deletebtn', $cont);
 				}
 				else
@@ -192,7 +196,11 @@ function viewRequests() {
 					$text .= getViewRequestHTMLitem('pendingblock', $requests[$i]['id'], $data);
 					$refresh = 1;
 					if($requests[$i]['serveradmin'] && $requests[$i]['laststateid'] != 24) {
-						$cont = addContinuationsEntry('AJconfirmDeleteRequest', $cdata, SECINDAY);
+						$cdata2 = $cdata;
+						$cdata2['notbyowner'] = 0;
+						if($user['id'] != $requests[$i]['userid'])
+							$cdata2['notbyowner'] = 1;
+						$cont = addContinuationsEntry('AJconfirmDeleteRequest', $cdata2, SECINDAY);
 						$text .= getViewRequestHTMLitem('deletebtn', $cont);
 					}
 					else
@@ -203,7 +211,11 @@ function viewRequests() {
 				# reservation is in the future
 				$text .= "    <TD></TD>\n";
 				if($requests[$i]['serveradmin']) {
-					$cont = addContinuationsEntry('AJconfirmDeleteRequest', $cdata, SECINDAY);
+					$cdata2 = $cdata;
+					$cdata2['notbyowner'] = 0;
+					if($user['id'] != $requests[$i]['userid'])
+						$cdata2['notbyowner'] = 1;
+					$cont = addContinuationsEntry('AJconfirmDeleteRequest', $cdata2, SECINDAY);
 					$text .= getViewRequestHTMLitem('deletebtn', $cont);
 				}
 				else
@@ -863,6 +875,34 @@ function viewRequests() {
 		$text .= "     " . _("Close") . "\n";
 		$text .= "     <script type=\"dojo/method\" event=\"onClick\">\n";
 		$text .= "       dijit.byId('clickthroughpreviewdlg').hide();\n";
+		$text .= "     </script>\n";
+		$text .= "   </button>\n";
+		$text .= "   </div>\n";
+		$text .= "</div>\n";
+
+		$text .= "<div dojoType=dijit.Dialog\n";
+		$text .= "      id=\"serverdeletedlg\"\n";
+		$text .= "      duration=250\n";
+		$text .= "      draggable=true>\n";
+		$text .= "   <div id=\"serverDeleteDlgContent\">\n";
+		$text .= "   <h2>Confirm Server Delete</h2>\n";
+		$text .= "   <span class=\"rederrormsg\"><big>\n";
+		$warn = _("WARNING: You are not the owner of this reservation. You have been granted access to manage this reservation by another user. Hover over the details icon to see who the owner is. You should not delete this reservation unless the owner is aware that you are deleting it.");
+		$text .= preg_replace("/(.{1,80}([ \n]|$))/", '\1<br>', $warn);
+		$text .= "   </big></span>\n";
+		$text .= "   </div><br>\n";
+		$text .= "   <div align=\"center\">\n";
+		$text .= "   <input type=\"hidden\" id=\"deletecontholder\">\n";
+		$text .= "   <button id=\"serverDeleteDlgBtn\" dojoType=\"dijit.form.Button\">\n";
+		$text .= "     " . _("Confirm Delete Reservation") . "\n";
+		$text .= "     <script type=\"dojo/method\" event=\"onClick\">\n";
+		$text .= "       endServerReservation();\n";
+		$text .= "     </script>\n";
+		$text .= "   </button>\n";
+		$text .= "   <button dojoType=\"dijit.form.Button\">\n";
+		$text .= "     " . _("Cancel") . "\n";
+		$text .= "     <script type=\"dojo/method\" event=\"onClick\">\n";
+		$text .= "       dijit.byId('serverdeletedlg').hide();\n";
 		$text .= "     </script>\n";
 		$text .= "   </button>\n";
 		$text .= "   </div>\n";
@@ -3727,9 +3767,13 @@ function AJsubmitEditRequest() {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function AJconfirmDeleteRequest() {
+	global $user;
 	$requestid = getContinuationVar('requestid', 0);
 	$notbyowner = getContinuationVar('notbyowner', 0);
 	$fromtimetable = getContinuationVar('fromtimetable', 0);
+	$skipconfirm = processInputVar('skipconfirm', ARG_NUMERIC, 0);
+	if($skipconfirm != 0 && $skipconfirm != 1)
+		$skipconfirm = 0;
 	$request = getRequestInfo($requestid, 1);
 	if(is_null($request)) {
 		$data = array('error' => 1,
@@ -3756,6 +3800,11 @@ function AJconfirmDeleteRequest() {
 				break;
 			}
 		}
+	}
+	if(! $skipconfirm && $user['id'] != $request['userid']) {
+		$data = array('status' => 'serverconfirm');
+		sendJSON($data);
+		return;
 	}
 	if(datetimeToUnix($request["start"]) > time()) {
 		$text = _("Delete reservation for <b>") . $reservation["prettyimage"]
@@ -3795,6 +3844,7 @@ function AJconfirmDeleteRequest() {
 	$data = array('content' => $text,
 	              'cont' => $cont,
 	              'requestid' => $requestid,
+	              'status' => 'success',
 	              'btntxt' => _('Delete Reservation'));
 	sendJSON($data);
 }
@@ -4812,7 +4862,6 @@ function addConnectTimeout($resid, $compid) {
 	       .        "NOW())";
 	doQuery($query);
 }
-
 
 ////////////////////////////////////////////////////////////////////////////////
 ///

@@ -1332,7 +1332,15 @@ function connectRequestCB(data, ioArgs) {
 }
 
 function endReservation(cont) {
+	dojo.byId('deletecontholder').value = cont;
 	RPCwrapper({continuation: cont}, endReservationCB, 1, 30000);
+}
+
+function endServerReservation() {
+	dijit.byId('serverDeleteDlgBtn').set('disabled', true);
+	var data = {continuation: dojo.byId('deletecontholder').value,
+	            skipconfirm: 1};
+	RPCwrapper(data, endReservationCB, 1, 30000);
 }
 
 function endReservationCB(data, ioArgs) {
@@ -1341,6 +1349,15 @@ function endReservationCB(data, ioArgs) {
 		if('refresh' in data.items && data.items.refresh)
 			setTimeout(resRefresh, 800);
 		return;
+	}
+	if(data.items.status == 'serverconfirm') {
+		dijit.byId('serverDeleteDlgBtn').set('disabled', false);
+		dijit.byId('serverdeletedlg').show();
+		return;
+	}
+	if(dijit.byId('serverdeletedlg').open) {
+		dijit.byId('serverdeletedlg').hide();
+		dijit.byId('serverDeleteDlgBtn').set('disabled', false);
 	}
 	dojo.byId('endrescont').value = data.items.cont;
 	dojo.byId('endresid').value = data.items.requestid;
