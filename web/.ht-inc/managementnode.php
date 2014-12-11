@@ -530,13 +530,13 @@ class ManagementNode extends Resource {
 				if($row = mysql_fetch_assoc($qh)) {
 					$resourceid = $row['id'];
 					$query = "UPDATE nathost "
-					       . "SET natIP = '{$data['ipaddress']}' "
+					       . "SET publicIPaddress = '{$data['ipaddress']}' "
 					       . "WHERE resourceid = $resourceid";
 					doQuery($query);
 					if(! mysql_affected_rows($GLOBALS['mysql_link_vcl'])) {
 						$query = "INSERT INTO nathost "
 						       .        "(resourceid, "
-						       .        "natIP) "
+						       .        "publicIPaddress) "
 						       . "VALUES "
 						       .        "($resourceid, "
 						       .        "'{$data['ipaddress']}')";
@@ -932,7 +932,7 @@ class ManagementNode extends Resource {
 		// add entry to nathost table (TODO change in release after 2.4 when section added to manage nat hosts)
 		$query = "INSERT INTO nathost "
 				 .        "(resourceid, "
-				 .        "natIP) "
+				 .        "publicIPaddress) "
 				 . "VALUES ($resourceid, "
 				 .         "'{$data['ipaddress']}')";
 		doQuery($query);

@@ -5471,7 +5471,7 @@ function getRequestInfo($id, $returnNULL=0) {
 	       .        "c.hostname, "
 	       .        "i.forcheckout, "
 	       .        "rs.pw AS password, "
-	       .        "COALESCE(nh.natIP, c.IPaddress) AS connectIP, "
+	       .        "COALESCE(nh.publicIPaddress, c.IPaddress) AS connectIP, "
 	       .        "rs.remoteIP "
 	       . "FROM reservation rs, "
 	       .      "image i, "
@@ -8678,7 +8678,7 @@ function getUsedBlockComputerids($start, $end) {
 /// \return an array with info about the NAT hosts; each element's index is the
 /// id from the table; each element has the following items\n
 /// \b hostname\n
-/// \b natIP - IP to which users will connect
+/// \b publicIPaddress - IP to which users will connect
 ///
 /// \brief builds an array of NAT hosts
 ///
@@ -8686,7 +8686,7 @@ function getUsedBlockComputerids($start, $end) {
 function getNAThosts($id=0, $sort=0) {
 	$nathosts = array();
 	$query = "SELECT n.id, "
-	       .        "n.natIP, "
+	       .        "n.publicIPaddress, "
 	       .        "COALESCE(c.hostname, m.hostname) AS hostname "
 	       . "FROM nathost n "
 	       . "LEFT JOIN resource r ON (n.resourceid = r.id) "
