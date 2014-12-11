@@ -132,7 +132,7 @@ sub get_service_names {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 enable_service
+=head2 _enable_service
 
  Parameters  : $service_name
  Returns     : boolean
@@ -141,7 +141,7 @@ sub get_service_names {
 
 =cut
 
-sub enable_service {
+sub _enable_service {
 	my $self = shift;
 	if (ref($self) !~ /VCL::Module/i) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
@@ -181,7 +181,7 @@ sub enable_service {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 disable_service
+=head2 _disable_service
 
  Parameters  : $service_name
  Returns     : boolean
@@ -190,7 +190,7 @@ sub enable_service {
 
 =cut
 
-sub disable_service {
+sub _disable_service {
 	my $self = shift;
 	if (ref($self) !~ /VCL::Module/i) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
@@ -226,6 +226,113 @@ sub disable_service {
 	}
 	
 	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 service_enabled
+
+ Parameters  : $service_name
+ Returns     : boolean
+ Description : Calls 'chkconfig --list <$service_name>' to determine if a
+               service is enabled.
+
+=cut
+
+sub service_enabled {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return 0;
+	}
+	
+	my $service_name = shift;
+	if (!$service_name) {
+		notify($ERRORS{'WARNING'}, 0, "service name argument was not supplied");
+		return;
+	}
+	
+	my $computer_node_name = $self->data->get_computer_node_name();
+	
+	my $command = "chkconfig --list $service_name";
+	my ($exit_status, $output) = $self->execute($command, 0);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to determine if '$service_name' service is enabled on $computer_node_name: $command");
+		return;
+	}
+	elsif (grep(/(error reading information|No such file)/i, @$output)) {
+		# Output if the service does not exist: 'error reading information on service httpdx: No such file or directory'
+		notify($ERRORS{'WARNING'}, 0, "'$service_name' service does not exist on $computer_node_name");
+		return;
+	}
+	elsif (grep(/^$service_name\s+.*3:on/i, @$output)) {
+		# Output if the service is enabled: '<service name>    0:off   1:off   2:on    3:on    4:on    5:on    6:off'
+		notify($ERRORS{'DEBUG'}, 0, "'$service_name' service is enabled on $computer_node_name");
+		return 1;
+	}
+	elsif (grep(/^$service_name\s+.*3:off/i, @$output)) {
+		# Output if the service is disabled: '<service name>    0:off   1:off   2:off   3:off   4:off   5:off   6:off'
+		notify($ERRORS{'DEBUG'}, 0, "'$service_name' service is not enabled on $computer_node_name");
+		return 0;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to determine if '$service_name' service is enabled on $computer_node_name, exit status: $exit_status, output:\n" . join("\n", @$output));
+		return;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 service_running
+
+ Parameters  : $service_name
+ Returns     : boolean
+ Description : Calls 'service <$service_name> status' to determine if a
+               service is running.
+
+=cut
+
+sub service_running {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return 0;
+	}
+	
+	my $service_name = shift;
+	if (!$service_name) {
+		notify($ERRORS{'WARNING'}, 0, "service name argument was not supplied");
+		return;
+	}
+	
+	my $computer_node_name = $self->data->get_computer_node_name();
+	
+	# Enable the service
+	my $command = "service $service_name status";
+	my ($exit_status, $output) = $self->execute($command, 0);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to determine if '$service_name' service is running on $computer_node_name: $command");
+		return;
+	}
+	elsif (grep(/(error reading information|No such file)/i, @$output)) {
+		# Output if the service does not exist: 'error reading information on service httpdx: No such file or directory'
+		notify($ERRORS{'WARNING'}, 0, "'$service_name' service does not exist on $computer_node_name");
+		return;
+	}
+	elsif (grep(/is running/i, @$output)) {
+		# Output if the service is running: '<service name> is running'
+		notify($ERRORS{'DEBUG'}, 0, "'$service_name' service is running on $computer_node_name");
+		return 1;
+	}
+	elsif (grep(/is not running/i, @$output)) {
+		# Output if the service is not running: '<service name> is not running'
+		notify($ERRORS{'DEBUG'}, 0, "'$service_name' service is not running on $computer_node_name");
+		return 0;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to determine if '$service_name' service is running on $computer_node_name, exit status: $exit_status, output:\n" . join("\n", @$output));
+		return;
+	}
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -559,7 +666,7 @@ sub add_ext_sshd_service {
 	# Add the service
 	return unless $self->add_service('ext_sshd');
 	
-	return $self->enable_service('ext_sshd');
+	return $self->_enable_service('ext_sshd');
 }
 
 #/////////////////////////////////////////////////////////////////////////////

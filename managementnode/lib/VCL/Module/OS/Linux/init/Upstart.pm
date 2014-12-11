@@ -236,7 +236,7 @@ sub start_service {
 		notify($ERRORS{'DEBUG'}, 0, "'$service_name' is already running on $computer_node_name");
 		return 1;
 	}
-	elsif (grep(/process \d+/i, @$output)) {
+	elsif (grep(/running/i, @$output)) {
 		# Output if the service was started: '<service name> start/running, process <PID>'
 		notify($ERRORS{'DEBUG'}, 0, "started '$service_name' service on $computer_node_name");
 		return 1;
@@ -419,6 +419,211 @@ sub add_ext_sshd_service {
 	}
 	
 	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 service_running
+
+ Parameters  : $service_name
+ Returns     : boolean
+ Description : Calls 'initctl status <$service_name>' to determine if the
+               service is running.
+
+=cut
+
+sub service_running {
+	my $self = shift;
+	if (ref($self) !~ /linux/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $service_name = shift;
+	if (!$service_name) {
+		notify($ERRORS{'WARNING'}, 0, "service name argument was not supplied");
+		return;
+	}
+	$service_name = $SERVICE_NAME_MAPPINGS->{$service_name} || $service_name;
+	
+	my $computer_node_name = $self->data->get_computer_node_name();
+	
+	my $command = "initctl status $service_name";
+	my ($exit_status, $output) = $self->execute($command);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to determine if '$service_name' service is enabled on $computer_node_name");
+		return;
+	}
+	elsif (grep(/Unknown job/i, @$output)) {
+		# Output if the service doesn't exist: 'initctl: Unknown job: <service name>'
+		notify($ERRORS{'WARNING'}, 0, "'$service_name' service does not exist on $computer_node_name");
+		return;
+	}
+	elsif (grep(/running/i, @$output)) {
+		# Output if the service is running: '<service name> start/running, process <PID>'
+		notify($ERRORS{'DEBUG'}, 0, "'$service_name' service is running on $computer_node_name");
+		return 1;
+	}
+	elsif (grep(/stop/i, @$output)) {
+		# Output if the service is not running: '<service name>stop/waiting'
+		notify($ERRORS{'DEBUG'}, 0, "'$service_name' service is not running $computer_node_name");
+		return 1;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine if '$service_name' service is running on $computer_node_name, exit status: $exit_status, command: '$command', output:\n" . join("\n", @$output));
+		return;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 service_enabled
+
+ Parameters  : $service_name
+ Returns     : boolean
+ Description : Calls 'initctl show-config <$service_name>' to determine if the
+               service is enabled.
+
+=cut
+
+sub service_enabled {
+	my $self = shift;
+	if (ref($self) !~ /linux/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $service_name = shift;
+	if (!$service_name) {
+		notify($ERRORS{'WARNING'}, 0, "service name argument was not supplied");
+		return;
+	}
+	$service_name = $SERVICE_NAME_MAPPINGS->{$service_name} || $service_name;
+	
+	my $computer_node_name = $self->data->get_computer_node_name();
+	
+	# Check if an override file exists and contains 'manual'
+	my $service_override_file_path = "/etc/init/$service_name.override";
+	if ($self->file_exists($service_override_file_path)) {
+		my @override_file_contents = $self->get_file_contents($service_override_file_path);
+		if (!@override_file_contents) {
+			notify($ERRORS{'WARNING'}, 0, "failed to retrieve contents of $service_override_file_path from $computer_node_name");
+		}
+		else {
+			if (grep(/manual/i, @override_file_contents)) {
+				notify($ERRORS{'DEBUG'}, 0, "'$service_name' service is not enabled on $computer_node_name, $service_override_file_path exists and contains 'manual'");
+				return 0;
+			}
+		}
+	}
+	
+	my $command = "initctl show-config $service_name";
+	my ($exit_status, $output) = $self->execute($command);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to determine if '$service_name' service is enabled on $computer_node_name");
+		return;
+	}
+	elsif (grep(/Unknown job/i, @$output)) {
+		# Output if the service doesn't exist: 'initctl: Unknown job: <service name>'
+		notify($ERRORS{'WARNING'}, 0, "'$service_name' service does not exist on $computer_node_name");
+		return;
+	}
+	elsif (grep(/start on/i, @$output)) {
+		# Output if the service is enabled:
+		# <service name>
+		#   start on (filesystem or runlevel [2345])
+		#   stop on runlevel [!2345]
+		notify($ERRORS{'DEBUG'}, 0, "'$service_name' service is enabled on $computer_node_name");
+		return 1;
+	}
+	elsif (!grep(/^initctl:/, @$output)) {
+		# Output if the service is not enabled:
+		# <service name>
+		#   stop on runlevel [06]
+		notify($ERRORS{'DEBUG'}, 0, "'$service_name' service is not enabled $computer_node_name");
+		return 1;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine if '$service_name' service is enabled on $computer_node_name, exit status: $exit_status, command: '$command', output:\n" . join("\n", @$output));
+		return;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 _enable_service
+
+ Parameters  : $service_name
+ Returns     : boolean
+ Description : 
+
+=cut
+
+sub _enable_service {
+	my $self = shift;
+	if (ref($self) !~ /linux/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return 0;
+	}
+	
+	my $service_name = shift;
+	if (!$service_name) {
+		notify($ERRORS{'WARNING'}, 0, "service name argument was not supplied");
+		return;
+	}
+	$service_name = $SERVICE_NAME_MAPPINGS->{$service_name} || $service_name;
+	
+	my $computer_node_name = $self->data->get_computer_node_name();
+	
+	my $service_override_file_path = "/etc/init/$service_name.override";
+	
+	if (!$self->file_exists($service_override_file_path)) {
+		return 1;
+	}
+	if ($self->delete_file($service_override_file_path)) {
+		return 1;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "unable to enable '$service_name' service, unable to delete override file: $service_override_file_path");
+		return;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 _disable_service
+
+ Parameters  : $service_name
+ Returns     : boolean
+ Description : 
+
+=cut
+
+sub _disable_service {
+	my $self = shift;
+	if (ref($self) !~ /linux/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return 0;
+	}
+	
+	my $service_name = shift;
+	if (!$service_name) {
+		notify($ERRORS{'WARNING'}, 0, "service name argument was not supplied");
+		return;
+	}
+	$service_name = $SERVICE_NAME_MAPPINGS->{$service_name} || $service_name;
+	
+	my $computer_node_name = $self->data->get_computer_node_name();
+	
+	my $service_override_file_path = "/etc/init/$service_name.override";
+	
+	if ($self->create_text_file($service_override_file_path, "manual\n")) {
+		return 1;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "unable to disable '$service_name' service, failed to create override file: $service_override_file_path");
+		return;
+	}
 }
 
 #/////////////////////////////////////////////////////////////////////////////

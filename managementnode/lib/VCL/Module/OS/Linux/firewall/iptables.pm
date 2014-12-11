@@ -144,6 +144,11 @@ sub insert_rule {
 	# Add the parameters to the command
 	for my $parameter (sort keys %{$arguments->{parameters}}) {
 		my $value = $arguments->{parameters}{$parameter};
+		
+		if ($parameter =~ /^\!/) {
+			$command .= " !";
+			$parameter =~ s/^\!//;
+		}
 		$command .= " --$parameter $value";
 	}
 	
@@ -596,202 +601,238 @@ sub configure_nat {
 		return 0;
 	}
 	
-	my $reservation_id = $self->data->get_reservation_id();
 	my $computer_name = $self->data->get_computer_hostname();
 	
-	my $table_info = $self->get_table_info('nat');
-	if (!$table_info) {
+	my $public_ip_address = $self->os->data->get_nathost_public_ip_address();
+	my $internal_ip_address = $self->os->data->get_nathost_internal_ip_address(0);
+	if (!$internal_ip_address) {
+		notify($ERRORS{'DEBUG'}, 0, "unable to automatically configure NAT, nathost.internalIPaddress is not set");
+		return 1;
+	}
+	
+	# Enable IP port forwarding
+	if (!$self->enable_ip_forwarding()) {
+		notify($ERRORS{'WARNING'}, 0, "unable to configure NAT host $computer_name, failed to enable IP forwarding");
+		return;
+	}
+	
+	my $nat_table_info = $self->get_table_info('nat');
+	if (!$nat_table_info) {
 		notify($ERRORS{'WARNING'}, 0, "failed to configure NAT on $computer_name, nat table info could not be retrieved");
 		return;
 	}
-	elsif (!defined($table_info->{PREROUTING})) {
-		notify($ERRORS{'WARNING'}, 0, "unable to configure NAT on $computer_name, nat table does not contain a PREROUTING chain:\n" . format_data($table_info));
+	elsif (!defined($nat_table_info->{PREROUTING})) {
+		notify($ERRORS{'WARNING'}, 0, "unable to configure NAT on $computer_name, nat table does not contain a PREROUTING chain:\n" . format_data($nat_table_info));
 		return;
 	}
-	elsif (!defined($table_info->{POSTROUTING})) {
-		notify($ERRORS{'WARNING'}, 0, "unable to configure NAT on $computer_name, nat table does not contain a POSTROUTING chain:\n" . format_data($table_info));
+	elsif (!defined($nat_table_info->{POSTROUTING})) {
+		notify($ERRORS{'WARNING'}, 0, "unable to configure NAT on $computer_name, nat table does not contain a POSTROUTING chain:\n" . format_data($nat_table_info));
 		return;
 	}
 	
 	# Check if NAT has previously been configured
-	my $nat_previously_configured = 0;
-	for my $rule_specification (@{$table_info->{POSTROUTING}{rules}}) {
+	for my $rule_specification (@{$nat_table_info->{POSTROUTING}{rules}}) {
 		if ($rule_specification =~ /MASQUERADE/) {
-			$nat_previously_configured = 1;
 			notify($ERRORS{'DEBUG'}, 0, "POSTROUTING chain in nat table contains a MASQUERADE rule, assuming NAT has already been configured: $rule_specification");
-			last;
+			return 1;
 		}
 	}
-	if (!$nat_previously_configured) {
-		my $private_interface_name = $self->get_private_interface_name();
-		my $private_ip_address = $self->get_private_ip_address();
-		my $public_interface_name = $self->get_public_interface_name();
-		my $public_ip_address = $self->get_public_ip_address();
+	
+	# Figure out the public and internal interface names
+	my $public_interface_name;
+	my $internal_interface_name;
+	my $network_configuration = $self->get_network_configuration();
+	for my $interface_name (keys %$network_configuration) {
+		my @ip_addresses = keys %{$network_configuration->{$interface_name}{ip_address}};
 		
-		my $natport_ranges_variable = get_variable('natport_ranges') || '49152-65535';
-		my $destination_ports = '';
-		for my $natport_range (split(/[,;]+/, $natport_ranges_variable)) {
-			my ($start_port, $end_port) = $natport_range =~ /(\d+)-(\d+)/g;
-			if (!defined($start_port)) {
-				notify($ERRORS{'WARNING'}, 0, "unable to parse NAT port range: '$natport_range'");
-				next;
-			}
-			$destination_ports .= "," if ($destination_ports);
-			$destination_ports .= "$start_port:$end_port";
+		# Check if the interface is assigned the nathost.publicIPaddress
+		if (grep { $_ eq $public_ip_address } @ip_addresses) {
+			$public_interface_name = $interface_name;
 		}
 		
-		
-		if (!$self->insert_rule({
-			'table' => 'nat',
-			'chain' => 'POSTROUTING',
-			'parameters' => {
-				'out-interface' => $private_interface_name,
-				'jump' => 'MASQUERADE',
-			},
-			'match_extensions' => {
-				'comment' => {
-					'comment' => "change IP of outbound private $private_interface_name packets to NAT host private IP address $private_interface_name",
-				},
-			},
-		})) {
-			return;
+		# If nathost.internalIPaddress is set, check if interface is assigned matching IP address
+		if (grep { $_ eq $internal_ip_address } @ip_addresses) {
+			$internal_interface_name = $interface_name;
 		}
-		
-		if (!$self->insert_rule({
-			'chain' => 'INPUT',
-			'parameters' => {
-				'in-interface' => $public_interface_name,
-				'destination' => $public_ip_address,
-				'jump' => 'ACCEPT',
-				'protocol' => 'tcp',
-			},
-			'match_extensions' => {
-				'state' => {
-					'state' => 'RELATED,ESTABLISHED',
-				},
-				'multiport' => {
-					'destination-ports' => $destination_ports,
-				},
-			},
-		})) {
-			return;
+	}
+	if (!$public_interface_name) {
+		notify($ERRORS{'WARNING'}, 0, "failed to configure NAT host $computer_name, no interface is assigned the public IP address configured in the nathost table: $public_ip_address\n" . format_data($network_configuration));
+		return;
+	}
+	if (!$internal_interface_name) {
+		notify($ERRORS{'WARNING'}, 0, "failed to configure NAT host $computer_name, no interface is assigned the internal IP address configured in the nathost table: $internal_ip_address\n" . format_data($network_configuration));
+		return;
+	}
+	
+	
+	my $natport_ranges_variable = get_variable('natport_ranges') || '49152-65535';
+	my $destination_ports = '';
+	for my $natport_range (split(/[,;]+/, $natport_ranges_variable)) {
+		my ($start_port, $end_port) = $natport_range =~ /(\d+)-(\d+)/g;
+		if (!defined($start_port)) {
+			notify($ERRORS{'WARNING'}, 0, "unable to parse NAT port range: '$natport_range'");
+			next;
 		}
-		
-		if (!$self->insert_rule({
-			'chain' => 'INPUT',
-			'parameters' => {
-				'in-interface' => $public_interface_name,
-				'destination' => $public_ip_address,
-				'jump' => 'ACCEPT',
-				'protocol' => 'udp',
+		$destination_ports .= "," if ($destination_ports);
+		$destination_ports .= "$start_port:$end_port";
+	}
+	
+	
+	if (!$self->insert_rule({
+		'table' => 'nat',
+		'chain' => 'POSTROUTING',
+		'parameters' => {
+			'out-interface' => $public_interface_name,
+			'jump' => 'MASQUERADE',
+		},
+		'match_extensions' => {
+			'comment' => {
+				'comment' => "change IP of outbound $public_interface_name packets to NAT host IP address $public_ip_address",
 			},
-			'match_extensions' => {
-				'state' => {
-					'state' => 'RELATED,ESTABLISHED',
-				},
-				'multiport' => {
-					'destination-ports' => $destination_ports,
-				},
+		},
+	})) {
+		return;
+	}
+	
+	if (!$self->insert_rule({
+		'chain' => 'INPUT',
+		'parameters' => {
+			'in-interface' => $public_interface_name,
+			'destination' => $public_ip_address,
+			'jump' => 'ACCEPT',
+			'protocol' => 'tcp',
+		},
+		'match_extensions' => {
+			'state' => {
+				'state' => 'RELATED,ESTABLISHED',
 			},
-		})) {
-			return;
-		}
-		
-		if (!$self->insert_rule({
-			'chain' => 'FORWARD',
-			'parameters' => {
-				'in-interface' => $public_interface_name,
-				'out-interface' => $private_interface_name,
-				'jump' => 'ACCEPT',
+			'multiport' => {
+				'destination-ports' => $destination_ports,
 			},
-			'match_extensions' => {
-				'state' => {
-					'state' => 'NEW,RELATED,ESTABLISHED',
-				},
-				'comment' => {
-					'comment' => "forward inbound packets from public $public_interface_name to private $private_interface_name",
-				},
-			},	
-		})) {
-			return;
-		}
-		
-		if (!$self->insert_rule({
-			'chain' => 'FORWARD',
-			'parameters' => {
-				'in-interface' => $private_interface_name,
-				'out-interface' => $public_interface_name,
-				'jump' => 'ACCEPT',
+		},
+	})) {
+		return;
+	}
+	
+	if (!$self->insert_rule({
+		'chain' => 'INPUT',
+		'parameters' => {
+			'in-interface' => $public_interface_name,
+			'destination' => $public_ip_address,
+			'jump' => 'ACCEPT',
+			'protocol' => 'udp',
+		},
+		'match_extensions' => {
+			'state' => {
+				'state' => 'RELATED,ESTABLISHED',
 			},
-			'match_extensions' => {
-				'comment' => {
-					'comment' => "forward outbound packets from private $private_interface_name to public $public_interface_name",
-				},
+			'multiport' => {
+				'destination-ports' => $destination_ports,
 			},
-		})) {
-			return;
-		}
-		
-		#if (!$self->insert_rule({
-		#	'chain' => 'INPUT',
-		#	'parameters' => {
-		#		'in-interface' => $public_interface_name,
-		#	},
-		#	'target_extensions' => {
-		#		'REJECT' => {
-		#			'reject-with' => "icmp-host-prohibited",
-		#		},
-		#	},
-		#})) {
-		#	return;
-		#}
-		#
-		#if (!$self->insert_rule({
-		#	'chain' => 'FORWARD',
-		#	'target_extensions' => {
-		#		'REJECT' => {
-		#			'reject-with' => "icmp-host-prohibited",
-		#		},
-		#	},
-		#})) {
-		#	return;
-		#}
+		},
+	})) {
+		return;
+	}
+	
+	if (!$self->insert_rule({
+		'chain' => 'FORWARD',
+		'parameters' => {
+			'in-interface' => $public_interface_name,
+			'out-interface' => $internal_interface_name,
+			'jump' => 'ACCEPT',
+		},
+		'match_extensions' => {
+			'state' => {
+				'state' => 'NEW,RELATED,ESTABLISHED',
+			},
+			'comment' => {
+				'comment' => "forward inbound packets from public $public_interface_name to internal $internal_interface_name",
+			},
+		},	
+	})) {
+		return;
+	}
+	
+	if (!$self->insert_rule({
+		'chain' => 'FORWARD',
+		'parameters' => {
+			'in-interface' => $internal_interface_name,
+			'out-interface' => $public_interface_name,
+			'jump' => 'ACCEPT',
+		},
+		'match_extensions' => {
+			'state' => {
+				'state' => 'NEW,RELATED,ESTABLISHED',
+			},
+			'comment' => {
+				'comment' => "forward outbound packets from internal $internal_interface_name to public $public_interface_name",
+			},
+		},
+	})) {
+		return;
+	}
+	
+	notify($ERRORS{'DEBUG'}, 0, "successfully configured NAT on $computer_name");
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 configure_nat_reservation
+
+ Parameters  : none
+ Returns     : boolean
+ Description : Adds a chain named after the reservation ID to the nat table.
+               Adds a rule to the PREROUTING table to jump to the reservation
+               chain.
+
+=cut
+
+sub configure_nat_reservation {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return 0;
+	}
+	
+	my $reservation_id = $self->data->get_reservation_id();
+	my $computer_name = $self->data->get_computer_hostname();
+	
+	my $nat_table_info = $self->get_table_info('nat');
+	if (!$nat_table_info) {
+		notify($ERRORS{'WARNING'}, 0, "failed to configure NAT host $computer_name for reservation, nat table information could not be retrieved");
+		return;
 	}
 	
 	# Check if chain for reservation has already been created
-	if (defined($table_info->{$reservation_id})) {
-		notify($ERRORS{'DEBUG'}, 0, "'$reservation_id' chain already exists in nat table on $computer_name for this reservation");
+	if (defined($nat_table_info->{$reservation_id})) {
+		notify($ERRORS{'DEBUG'}, 0, "'$reservation_id' chain already exists in nat table on $computer_name");
 	}
-	else {
-		if (!$self->create_chain('nat', $reservation_id)) {
-			notify($ERRORS{'WARNING'}, 0, "failed to configure NAT on $computer_name, '$reservation_id' chain could not be created in nat table for this reservation");
-			return;
-		}
+	elsif (!$self->create_chain('nat', $reservation_id)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to configure NAT host $computer_name for reservation, failed to add '$reservation_id' chain to nat table");
+		return;
 	}
 	
 	# Check if rule to jump to reservation's chain already exists in the PREROUTING table
-	my $jump_previously_configured = 0;
-	for my $rule_specification (@{$table_info->{PREROUTING}{rules}}) {
+	for my $rule_specification (@{$nat_table_info->{PREROUTING}{rules}}) {
 		if ($rule_specification =~ /-j $reservation_id(\s|$)/) {
-			$jump_previously_configured = 1;
 			notify($ERRORS{'DEBUG'}, 0, "PREROUTING chain in nat table on $computer_name already contains a rule to jump to '$reservation_id' chain: $rule_specification");
-			last;
-		}
-	}
-	if (!$jump_previously_configured) {
-		if (!$self->insert_rule({
-			'table' => 'nat',
-			'chain' => 'PREROUTING',
-			'parameters' => {
-				'jump' => $reservation_id,
-			},
-		})) {
-			notify($ERRORS{'WARNING'}, 0, "unable to configure NAT on $computer_name, failed to create rule in PREROUTING chain in nat table to jump to '$reservation_id' chain");
-			return;
+			return 1;;
 		}
 	}
 	
-	notify($ERRORS{'DEBUG'}, 0, "successfully configured NAT on $computer_name for reservation");
+	# Add a rule to the nat PREROUTING chain
+	if (!$self->insert_rule({
+		'table' => 'nat',
+		'chain' => 'PREROUTING',
+		'parameters' => {
+			'jump' => $reservation_id,
+		},
+	})) {
+		notify($ERRORS{'WARNING'}, 0, "failed to configure NAT host $computer_name for reservation, failed to create rule in PREROUTING chain in nat table to jump to '$reservation_id' chain");
+		return;
+	}
+	
 	return 1;
 }
 
@@ -845,11 +886,11 @@ sub add_nat_port_forward {
 		'parameters' => {
 			'protocol' => $protocol,
 			'in-interface' => $public_interface_name,
-			'destination' => $public_ip_address,
+			#'destination' => $public_ip_address,
 		},
 		'match_extensions' => {
 			'comment' => {
-				'comment' => "change destination address: $public_ip_address:$source_port --> $destination_ip_address:$destination_port ($protocol)",
+				'comment' => "forward: $public_ip_address:$source_port --> $destination_ip_address:$destination_port ($protocol)",
 			},
 			$protocol => {
 				'destination-port' => $source_port,

@@ -269,7 +269,7 @@ sub firewall {
 		# Attempt to create the object
 		my $firewall_object;
 		eval {
-			$firewall_object = ($firewall_perl_package)->new({data_structure => $self->data, base_package => ref($self)})
+			$firewall_object = ($firewall_perl_package)->new({data_structure => $self->data, base_package => ref($self), os => $self->os})
 		};
 		
 		if ($EVAL_ERROR) {
@@ -3115,6 +3115,163 @@ sub service_exists {
 	notify($ERRORS{'DEBUG'}, 0, "'$service_name' service does not exist on $computer_node_name");
 	$self->{service_init_module}{$service_name} = {};
 	return (wantarray) ? () : 0;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 is_service_enabled
+
+ Parameters  : $service_name
+ Returns     : boolean
+ Description : Determines if a service is enabled on the computer.
+
+=cut
+
+sub is_service_enabled {
+	my $self = shift;
+	if (ref($self) !~ /linux/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $service_name = shift;
+	if (!$service_name) {
+		notify($ERRORS{'WARNING'}, 0, "service name was not passed as an argument");
+		return;
+	}
+	
+	my $computer_node_name = $self->data->get_computer_node_name();
+	
+	my ($init_module_index) = $self->service_exists($service_name);
+	if (!defined($init_module_index)) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine if '$service_name' service is enabled, it does not exist on $computer_node_name");
+		return;
+	}
+	
+	my $init_module = ($self->get_init_modules())[$init_module_index];
+	if (!$init_module->can('service_enabled')) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine if '$service_name' service is enabled on $computer_node_name, " . ref($init_module) . " module does not implement a 'service_running' subroutine");
+		return;
+	}
+	return $init_module->service_enabled($service_name);
+}
+
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 is_service_running
+
+ Parameters  : $service_name
+ Returns     : boolean
+ Description : Determines if a service is running on the computer.
+
+=cut
+
+sub is_service_running {
+	my $self = shift;
+	if (ref($self) !~ /linux/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $service_name = shift;
+	if (!$service_name) {
+		notify($ERRORS{'WARNING'}, 0, "service name was not passed as an argument");
+		return;
+	}
+	
+	my $computer_node_name = $self->data->get_computer_node_name();
+	
+	my ($init_module_index) = $self->service_exists($service_name);
+	if (!defined($init_module_index)) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine if '$service_name' service is running, it does not exist on $computer_node_name");
+		return;
+	}
+	
+	my $init_module = ($self->get_init_modules())[$init_module_index];
+	if (!$init_module->can('service_running')) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine if '$service_name' service is running on $computer_node_name, " . ref($init_module) . " module does not implement a 'service_running' subroutine");
+		return;
+	}
+	return $init_module->service_running($service_name);
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 enable_service
+
+ Parameters  : $service_name
+ Returns     : boolean
+ Description : Enables a service on the computer.
+
+=cut
+
+sub enable_service {
+	my $self = shift;
+	if (ref($self) !~ /linux/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $service_name = shift;
+	if (!$service_name) {
+		notify($ERRORS{'WARNING'}, 0, "service name was not passed as an argument");
+		return;
+	}
+	
+	my $computer_node_name = $self->data->get_computer_node_name();
+	
+	my ($init_module_index) = $self->service_exists($service_name);
+	if (!defined($init_module_index)) {
+		notify($ERRORS{'WARNING'}, 0, "unable to enable '$service_name' service, it does not exist on $computer_node_name");
+		return;
+	}
+	
+	my $init_module = ($self->get_init_modules())[$init_module_index];
+	if (!$init_module->can('_enable_service')) {
+		notify($ERRORS{'WARNING'}, 0, "unable to enable '$service_name' service on $computer_node_name, " . ref($init_module) . " module does not implement an '_enable_service' subroutine");
+		return;
+	}
+	return $init_module->_enable_service($service_name);
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 disable_service
+
+ Parameters  : $service_name
+ Returns     : boolean
+ Description : disables a service on the computer.
+
+=cut
+
+sub disable_service {
+	my $self = shift;
+	if (ref($self) !~ /linux/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $service_name = shift;
+	if (!$service_name) {
+		notify($ERRORS{'WARNING'}, 0, "service name was not passed as an argument");
+		return;
+	}
+	
+	my $computer_node_name = $self->data->get_computer_node_name();
+	
+	my ($init_module_index) = $self->service_exists($service_name);
+	if (!defined($init_module_index)) {
+		notify($ERRORS{'WARNING'}, 0, "unable to disable '$service_name' service, it does not exist on $computer_node_name");
+		return;
+	}
+	
+	my $init_module = ($self->get_init_modules())[$init_module_index];
+	if (!$init_module->can('_disable_service')) {
+		notify($ERRORS{'WARNING'}, 0, "unable to disable '$service_name' service on $computer_node_name, " . ref($init_module) . " module does not implement an '_disable_service' subroutine");
+		return;
+	}
+	return $init_module->_disable_service($service_name);
 }
 
 #/////////////////////////////////////////////////////////////////////////////

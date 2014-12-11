@@ -130,7 +130,103 @@ sub get_service_names {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 enable_service
+=head2 service_running
+
+ Parameters  : $service_name
+ Returns     : boolean
+ Description : Calls 'systemctl is-active' to determines if a service is
+               running.
+
+=cut
+
+sub service_running {
+	my $self = shift;
+	if (ref($self) !~ /linux/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $service_name = shift;
+	if (!$service_name) {
+		notify($ERRORS{'WARNING'}, 0, "service name argument was not supplied");
+		return;
+	}
+	
+	my $computer_node_name = $self->data->get_computer_node_name();
+	
+	my $command = "systemctl is-active $service_name.service";
+	my ($exit_status, $output) = $self->execute($command, 0);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to determine if $service_name service is running on $computer_node_name");
+		return;
+	}
+	
+	# Output should either be 'active' or 'inactive
+	if (grep(/inactive/, @$output)) {
+		notify($ERRORS{'DEBUG'}, 0, "$service_name service is not running on $computer_node_name");
+		return 0;
+	}
+	elsif (grep(/active/, @$output)) {
+		notify($ERRORS{'DEBUG'}, 0, "$service_name service is running on $computer_node_name");
+		return 1;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to determine if $service_name service is running on $computer_node_name, output does not contain 'active' or 'inactive':\n" . join("\n", @$output));
+		return;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 service_enabled
+
+ Parameters  : $service_name
+ Returns     : boolean
+ Description : Calls 'systemctl is-enabled' to determines if a service is
+               enabled.
+
+=cut
+
+sub service_enabled {
+	my $self = shift;
+	if (ref($self) !~ /linux/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $service_name = shift;
+	if (!$service_name) {
+		notify($ERRORS{'WARNING'}, 0, "service name argument was not supplied");
+		return;
+	}
+	
+	my $computer_node_name = $self->data->get_computer_node_name();
+	
+	my $command = "systemctl is-enabled $service_name.service";
+	my ($exit_status, $output) = $self->execute($command, 0);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to determine if $service_name service is running on $computer_node_name");
+		return;
+	}
+	
+	# Output should either be 'enabled' or 'disabled
+	if (grep(/disabled/, @$output)) {
+		notify($ERRORS{'DEBUG'}, 0, "$service_name service is disabled on $computer_node_name");
+		return 0;
+	}
+	elsif (grep(/enabled/, @$output)) {
+		notify($ERRORS{'DEBUG'}, 0, "$service_name service is enabled on $computer_node_name");
+		return 1;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to determine if $service_name service is enabled on $computer_node_name, output does not contain 'enabled' or 'disabled':\n" . join("\n", @$output));
+		return;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 _enable_service
 
  Parameters  : $service_name
  Returns     : boolean
@@ -139,7 +235,7 @@ sub get_service_names {
 
 =cut
 
-sub enable_service {
+sub _enable_service {
 	my $self = shift;
 	if (ref($self) !~ /VCL::Module/i) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
@@ -179,7 +275,7 @@ sub enable_service {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 disable_service
+=head2 _disable_service
 
  Parameters  : $service_name
  Returns     : boolean
@@ -188,7 +284,7 @@ sub enable_service {
 
 =cut
 
-sub disable_service {
+sub _disable_service {
 	my $self = shift;
 	if (ref($self) !~ /VCL::Module/i) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
@@ -254,7 +350,7 @@ sub delete_service {
 	# Disable the service before deleting it
 	if ($self->service_exists($service_name)) {
 		$self->stop_service($service_name) || return;
-		$self->disable_service($service_name) || return;
+		$self->_disable_service($service_name) || return;
 	}
 	
 	# Delete the service configuration file
@@ -478,7 +574,7 @@ sub add_ext_sshd_service {
 	
 	$self->_daemon_reload();
 	
-	return $self->enable_service('ext_sshd');
+	return $self->_enable_service('ext_sshd');
 }
 
 #/////////////////////////////////////////////////////////////////////////////

@@ -151,6 +151,10 @@ sub initialize {
 		# Allow the OS object to access the nathost_os object
 		# This is necessary to allow the OS code to call the subroutines to forward ports
 		$self->os->set_nathost_os($self->nathost_os());
+		
+		# Allow the NAT host OS object to access the OS object
+		# This allows the NAT host OS object to retrieve info about the computer being loaded
+		$nathost_os->set_os($self->os());
 	}
 	
 	# Create a provisioning object

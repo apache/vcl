@@ -182,6 +182,7 @@ our @EXPORT = qw(
 	hash_to_xml_string
 	help
 	hostname_to_ip_address
+	insert_nathost
 	insert_reload_request
 	insert_request
 	insertloadlog
@@ -6838,6 +6839,8 @@ sub get_computer_info {
 		'module',
 		'schedule',
 		'platform',
+		'resource',
+		'resourcetype',
 	);
 	
 	# Construct the select statement
@@ -6877,6 +6880,15 @@ ON (
 )
 LEFT JOIN (schedule) ON (schedule.id = computer.scheduleid)
 LEFT JOIN (module AS predictivemodule) ON (predictivemodule.id = computer.predictivemoduleid)
+LEFT JOIN (
+   resource,
+	resourcetype
+)
+ON (
+   resource.subid = computer.id
+	AND resource.resourcetypeid = resourcetype.id
+	AND resourcetype.name = 'computer'
+)
 
 WHERE
 computer.deleted != '1'
@@ -6928,6 +6940,9 @@ EOF
 		}
 		elsif ($table eq 'predictivemodule' ) {
 			$computer_info->{predictive}{module}{$column} = $value;
+		}
+		elsif ($table eq 'resourcetype') {
+			$computer_info->{resource}{$table}{$column} = $value;
 		}
 		else {
 			$computer_info->{$table}{$column} = $value;
@@ -7018,7 +7033,8 @@ EOF
                  "datedeleted" => undef,
                  "deleted" => 0,
                  "id" => 2,
-                 "natIP" => "x.x.x.x",
+                 "publicIPaddress" => "x.x.x.x",
+                 "internalIPaddress" => "x.x.x.x",
                  "nathostcomputermap" => {
                    "computerid" => 3591,
                    "nathostid" => 2
@@ -7218,7 +7234,7 @@ sub populate_reservation_natport {
 	my $nathost_info = $request_info->{reservation}{$reservation_id}{computer}{nathost};
 	my $nathost_id = $nathost_info->{id};
 	my $nathost_hostname = $nathost_info->{HOSTNAME};
-	my $nathost_public_ip_address = $nathost_info->{natIP};
+	my $nathost_public_ip_address = $nathost_info->{publicIPaddress};
 	
 	# Make sure the nathost info is defined
 	if (!defined($nathost_id)) {
@@ -7392,7 +7408,80 @@ EOF
 		return 0;
 	}
 }
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 insert_nathost
+
+ Parameters  : $resource_type, $resource_identifier
+ Returns     : boolean
+ Description : Inserts an entry into the nathost table. The $resource_type
+               argument must either be 'computer' or 'managementnode'.
+
+=cut
+
+sub insert_nathost {
+	my ($resource_type, $resource_identifier) = @_;
+	if (!defined($resource_type)) {
+		notify($ERRORS{'WARNING'}, 0, "resource type argument was not supplied");
+		return;
+	}
+	elsif ($resource_type !~ /^(computer|managementnode)$/) {
+		notify($ERRORS{'WARNING'}, 0, "resource type argument is not valid: '$resource_type', it must either be 'computer' or 'managementnode'");
+		return;
+	}
+	elsif (!defined($resource_identifier)) {
+		notify($ERRORS{'WARNING'}, 0, "resource identifier argument was not supplied");
+		return;
+	}
 	
+	my $resource_id;
+	my $public_ip_address;
+	if ($resource_type eq 'computer') {
+		my $computer_info = get_computer_info($resource_identifier);
+		if (!$computer_info) {
+			notify($ERRORS{'WARNING'}, 0, "failed to insert nathost, info could not be retrieved for computer '$resource_identifier'");
+			return;
+		}
+		$resource_id = $computer_info->{resource}{id};
+		$public_ip_address = $computer_info->{IPaddress};
+	}
+	elsif ($resource_type eq 'managementnode') {
+		my $management_node_info = get_management_node_info($resource_identifier);
+		if (!$management_node_info) {
+			notify($ERRORS{'WARNING'}, 0, "failed to insert nathost, info could not be retrieved for management node '$resource_identifier'");
+			return;
+		}
+		$resource_id = $management_node_info->{resource_id};
+		$public_ip_address = $management_node_info->{IPaddress};
+	}
+	
+	my $insert_statement = <<EOF;
+INSERT IGNORE INTO
+nathost
+(
+   resourceid,
+   publicIPaddress
+)
+VALUES
+(
+   '$resource_id',
+	'$public_ip_address'
+)
+ON DUPLICATE KEY UPDATE
+resourceid=VALUES(resourceid),
+publicIPaddress='$public_ip_address'
+EOF
+
+	if (database_execute($insert_statement)) {
+		notify($ERRORS{'DEBUG'}, 0, "inserted entry into nathost table for $resource_type, resource ID: $resource_id, NAT host public IP address: $public_ip_address");
+		return 1;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to insert entry into nathost table for $resource_type, resource ID: $resource_id, NAT host public IP address: $public_ip_address");
+		return 0;
+	}
+}
 
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -10179,7 +10268,7 @@ EOF
 		$connect_method_info->{$connectmethod_id}{RETRIEVAL_TIME} = $timestamp;
 	}
 
-	notify($ERRORS{'DEBUG'}, 0, "retrieved connect method info:\n" . format_data($connect_method_info));
+	#notify($ERRORS{'DEBUG'}, 0, "retrieved connect method info:\n" . format_data($connect_method_info));
 	$ENV{connect_method_info}{$imagerevision_id} = $connect_method_info;
 	return $ENV{connect_method_info}{$imagerevision_id};
 }

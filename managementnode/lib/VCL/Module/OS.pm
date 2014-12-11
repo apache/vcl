@@ -2664,31 +2664,14 @@ sub process_connect_methods {
 	my $reservation_id = $self->data->get_reservation_id();
 	my $request_state = $self->data->get_request_state_name();
 	my $computer_node_name = $self->data->get_computer_node_name();
+	my $nathost_hostname = $self->data->get_nathost_hostname(0);
+	my $nathost_public_ip_address = $self->data->get_nathost_public_ip_address(0);
 	
 	# Retrieve the connect method info hash
 	my $connect_method_info = $self->data->get_connect_methods();
 	if (!$connect_method_info) {
 		notify($ERRORS{'WARNING'}, 0, "failed to retrieve connect method info");
 		return;
-	}
-	
-	# Check if NAT is used
-	my $nathost_hostname;
-	my $computer_private_ip_address;
-	if ($self->nathost_os(0)) {
-		$nathost_hostname = $self->data->get_nathost_hostname();
-		# Call configure_nat - this adds a chain for the reservation if one does not already exist
-		if (!$self->nathost_os->firewall->configure_nat()) {
-			notify($ERRORS{'WARNING'}, 0, "failed to configure NAT on $nathost_hostname");
-			return;
-		}
-		
-		# Retrieve the computer's private IP address
-		$computer_private_ip_address = $self->get_private_ip_address();
-		if (!$computer_private_ip_address) {
-			notify($ERRORS{'WARNING'}, 0, "failed to retrieve private IP address of computer $computer_node_name, unable to configure NAT port forwarding");
-			return;
-		}
 	}
 	
 	my $remote_ip = shift;
@@ -2708,6 +2691,38 @@ sub process_connect_methods {
 	if (!$overwrite) {
 		notify($ERRORS{'DEBUG'}, 0, "overwrite value was not passed as an argument setting to 0");
 		$overwrite = 0;
+	}
+	
+	# Check if NAT is used
+	my $computer_ip_address;
+	if ($nathost_hostname) {
+		if (!$self->nathost_os(0)) {
+			notify($ERRORS{'WARNING'}, 0, "unable to process connect methods, $computer_node_name is assigned to NAT host $nathost_hostname but NAT host OS object is not available");
+			return;
+		}
+		elsif (!$self->nathost_os->firewall()) {
+			notify($ERRORS{'WARNING'}, 0, "unable to process connect methods, $computer_node_name is assigned to NAT host $nathost_hostname but NAT host OS's firewall object is not available");
+			return;
+		}
+		
+		# Get the IP address used to communicate between the NAT host and computer
+		$computer_ip_address = $self->get_public_ip_address();
+		if (!$computer_ip_address) {
+			notify($ERRORS{'WARNING'}, 0, "unable to process connect methods, failed to retrieve public (internal NAT) IP address of computer $computer_node_name, unable to configure NAT port forwarding");
+			return;
+		}
+		
+		# Perform general NAT configuration
+		if (!$self->nathost_os->firewall->configure_nat()) {
+			notify($ERRORS{'WARNING'}, 0, "unable to process connect methods, failed to configure NAT on $nathost_hostname");
+			return;
+		}
+		
+		# Perform reservation-specific NAT configuration
+		if (!$self->nathost_os->firewall->configure_nat_reservation()) {
+			notify($ERRORS{'WARNING'}, 0, "unable to process connect methods, failed to configure NAT on $nathost_hostname for this reservation");
+			return;
+		}
 	}
 	
 	CONNECT_METHOD: for my $connect_method_id (sort keys %{$connect_method_info} ) {
@@ -2788,23 +2803,21 @@ sub process_connect_methods {
 					}
 				}
 				
-				my $nat_public_port = $connect_method->{connectmethodport}{$connect_method_port_id}{natport}{publicport};
-				if ($nat_public_port) {
-					if (!$self->nathost_os(0)) {
-						notify($ERRORS{'WARNING'}, 0, "connect method info contains NAT port information but NAT OS object is not available to control $nathost_hostname");
+				# Configure NAT port forwarding if NAT is being used
+				if ($nathost_hostname) {
+					my $nat_public_port = $connect_method->{connectmethodport}{$connect_method_port_id}{natport}{publicport};
+					if (!defined($nat_public_port)) {
+						notify($ERRORS{'WARNING'}, 0, "$computer_node_name is assigned to NAT host $nathost_hostname but connect method info does not contain NAT port information:\n" . format_data($connect_method));
 						return;
 					}
-					if ($self->nathost_os->firewall->add_nat_port_forward($protocol, $nat_public_port, $computer_private_ip_address, $port, $reservation_id)) {
-						notify($ERRORS{'OK'}, 0, "configured forwarded NAT port on $nathost_hostname: $protocol/$nat_public_port --> $computer_private_ip_address:$port");
+					
+					if ($self->nathost_os->firewall->add_nat_port_forward($protocol, $nat_public_port, $computer_ip_address, $port, $reservation_id)) {
+						notify($ERRORS{'OK'}, 0, "NAT port forwarding configured on $nathost_hostname for '$name' connect method: $nat_public_port --> $computer_ip_address:$port ($protocol)");
 					}
 					else {
-						notify($ERRORS{'WARNING'}, 0, "failed to process '$name' connect method, unable to configure forwarded NAT port on $nathost_hostname: $protocol/$nat_public_port --> $computer_private_ip_address:$port");
+						notify($ERRORS{'WARNING'}, 0, "failed to configure NAT port forwarding on $nathost_hostname for '$name' connect method: $nathost_public_ip_address:$nat_public_port --> $computer_ip_address:$port ($protocol)");
 						return;
 					}
-				}
-				elsif ($self->nathost_os(0)) {
-					notify($ERRORS{'WARNING'}, 0, "NAT OS object is not available but connect method info does not contain NAT port information:\n" . format_data($connect_method_info));
-					return;
 				}
 			}
 		}
