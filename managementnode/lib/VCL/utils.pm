@@ -264,7 +264,6 @@ our @EXPORT = qw(
 	update_reservation_lastcheck
 	update_reservation_password
 	update_sublog_ipaddress
-	write_currentimage_txt
 	xml_string_to_hash
 	xmlrpc_call
 	yaml_deserialize
@@ -4383,79 +4382,6 @@ sub run_scp_command {
 	# Failure
 	return 0;
 } ## end sub run_scp_command
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2  write_currentimage_txt
-
- Parameters  : hash of hashes hash{image} contains image info
- Returns     : 0 failed or 1 successful
- Description : runs an ssh command on the specified node and returns the output
-
-=cut
-
-sub write_currentimage_txt {
-	my ($data) = @_;
-
-	# Store some hash variables into local variables
-	my $computer_node_name         = $data->get_computer_node_name();
-	my $computer_host_name         = $data->get_computer_host_name();
-	my $computer_id                = $data->get_computer_id();
-	my $image_identity             = $data->get_image_identity();
-	my $image_id                   = $data->get_image_id();
-	my $image_name                 = $data->get_image_name();
-	my $image_prettyname           = $data->get_image_prettyname();
-	my $imagerevision_id           = $data->get_imagerevision_id();
-	my $imagerevision_date_created = $data->get_imagerevision_date_created();
-	my $image_os_type              = $data->get_image_os_type();
-
-	my @current_image_lines;
-	push @current_image_lines, "$image_name";
-	push @current_image_lines, "id=$image_id";
-	push @current_image_lines, "prettyname=$image_prettyname";
-	push @current_image_lines, "imagerevision_id=$imagerevision_id";
-	push @current_image_lines, "imagerevision_datecreated=$imagerevision_date_created";
-	push @current_image_lines, "computer_id=$computer_id";
-	push @current_image_lines, "computer_hostname=$computer_host_name";
-
-	my $current_image_contents = join('\\r\\n', @current_image_lines);
-	
-	# Remove single quotes - they cause echo command to break
-	$current_image_contents =~ s/'//g;
-
-	#Make sure currentimage.txt writable
-	my $chown_command = "chown root currentimage.txt; chmod 777 currentimage.txt";
-	if (run_ssh_command($computer_node_name, $image_identity, $chown_command)) {
-		notify($ERRORS{'OK'}, 0, "updated ownership and permissions  on currentimage.txt");
-	}
-
-	my $command;
-	if ($image_os_type =~ /osx/i) {
-		$command = 'echo "';
-	}
-	else {
-		$command = 'echo -e "';		
-	}
-
-	$command .= $current_image_contents . '" > currentimage.txt && cat currentimage.txt';
-
-	# Copy the temp file to the node as currentimage.txt
-	my ($ssh_exit_status, $ssh_output) = run_ssh_command($computer_node_name, $image_identity, $command);
-
-	if (defined($ssh_exit_status) && $ssh_exit_status == 0) {
-		notify($ERRORS{'OK'}, 0, "created currentimage.txt file on $computer_node_name:\n" . join "\n", @{$ssh_output});
-		return 1;
-	}
-	elsif (defined($ssh_output)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to create currentimage.txt file on $computer_node_name:\n" . join "\n", @{$ssh_output});
-		return;
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to create currentimage.txt file on $computer_node_name");
-		return;
-	}
-
-} ## end sub write_currentimage_txt
 
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -11463,7 +11389,6 @@ EOF
 		return;
 	}
 	
-	notify($ERRORS{'DEBUG'}, 0, "retrieved variable '$variable_name', serialization: $serialization_type");
 	return $deserialized_value;
 }
 

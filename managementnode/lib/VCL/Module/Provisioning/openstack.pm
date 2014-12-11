@@ -981,14 +981,6 @@ sub _prepare_capture {
 		return 0;
 	}
 
-	if (write_currentimage_txt($self->data)) {
-		notify($ERRORS{'DEBUG'}, 0, "currentimage.txt updated on $computer_name");
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "unable to update currentimage.txt on $computer_name");
-		return 0;
-	}
-
 	if (!$self->data->set_imagemeta_sysprep(0)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to set the imagemeta Sysprep value to 0");
 		return 0;

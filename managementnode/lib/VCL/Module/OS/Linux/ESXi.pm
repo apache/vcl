@@ -86,11 +86,10 @@ sub post_load {
 		return 0;
 	}
 	
-	if (write_currentimage_txt($self->data)) {
-		notify($ERRORS{'OK'}, 0, "wrote current_image.txt on $computer_short_name");
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to write current_image.txt on $computer_short_name");
+	# Create the currentimage.txt file
+	if (!$self->OS->create_currentimage_txt()) {
+		notify($ERRORS{'WARNING'}, 0, "failed to create currentimage.txt on $computer_short_name");
+		return 0;
 	}
 	
 	$self->set_vcld_post_load_status();

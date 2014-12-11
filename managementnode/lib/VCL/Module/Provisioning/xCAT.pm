@@ -473,21 +473,6 @@ sub capture {
 	# Print some preliminary information
 	notify($ERRORS{'OK'}, 0, "attempting to capture image '$image_name' on $computer_node_name");
 	
-	# Make sure the computer is powered on
-	my $power_status = $self->power_status();
-	if (!$power_status || $power_status !~ /on/i) {
-		if (!$self->power_on()) {
-			notify($ERRORS{'WARNING'}, 0, "failed to power on computer before monitoring image capture");
-			return;
-		}
-	}
-	
-	# Modify currentimage.txt
-	if (!write_currentimage_txt($self->data)) {
-		notify($ERRORS{'WARNING'}, 0, "unable to update currentimage.txt on $computer_node_name");
-		return;
-	}
-	
 	# Check if pre_capture() subroutine has been implemented by the OS module
 	if ($self->os->can("pre_capture")) {
 		# Call OS pre_capture() - it should perform all OS steps necessary to capture an image

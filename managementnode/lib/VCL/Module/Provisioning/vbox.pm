@@ -500,14 +500,6 @@ sub capture { ## This is going to need to be implemented before the module is co
 	notify($ERRORS{'OK'}, 0, "$notify_prefix vmhost_hostname: $vmhost_hostname");
 	notify($ERRORS{'OK'}, 0, "$notify_prefix vmtype_name: $vmtype_name");
 
-	# Modify currentimage.txt
-	if (write_currentimage_txt($self->data)) {
-		notify($ERRORS{'OK'}, 0, "$notify_prefix currentimage.txt updated on $computer_shortname");
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "$notify_prefix unable to update currentimage.txt on $computer_shortname");
-		return 0;
-	}
 	my @sshcmd;
 
 	# Check if pre_capture() subroutine has been implemented by the OS module

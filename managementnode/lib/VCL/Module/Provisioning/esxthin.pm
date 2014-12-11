@@ -1220,10 +1220,6 @@ sub capture {
 	# These three vars are useful:
 	# $old_vmpath, $new_vmpath, $new_imagename
 
-	notify($ERRORS{'OK'}, 0, "SSHing to node to configure currentimage.txt");
-	# XXX SHOULD INSTEAD USE write_currentimage_txt IN utils.pm
-	my @sshcmd = run_ssh_command($computer_shortname, $image_identity, "echo $new_imagename > /root/currentimage.txt");
-
 	my $poweroff_command = "$VMTOOL_ROOT/vm/vmcontrol.pl";
 	$poweroff_command .= " --server '$vmhost_shortname'";
 	$poweroff_command .= " --vmname $computer_shortname";

@@ -435,8 +435,8 @@ sub post_load {
 	# Kickstart installations likely won't have currentimage.txt, generate it
 	if ($image_os_install_type eq "kickstart") {
 		notify($ERRORS{'OK'}, 0, "detected kickstart install on $computer_node_name, writing current_image.txt");
-		if (!write_currentimage_txt($self->data)) {
-			notify($ERRORS{'WARNING'}, 0, "failed to write current_image.txt on $computer_node_name");
+		if (!$self->create_currentimage_txt()) {
+			notify($ERRORS{'WARNING'}, 0, "failed to create currentimage.txt on $computer_node_name");
 		}
 	}
 	
