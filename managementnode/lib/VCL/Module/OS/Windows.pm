@@ -1101,6 +1101,10 @@ sub grant_access {
 	if ($self->process_connect_methods("", 1) ) {
 		notify($ERRORS{'OK'}, 0, "processed connection methods on $computer_node_name");
 	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to process connection methods on $computer_node_name");
+		return;
+	}
 
 	# If this is an imaging request, make sure the Administrator account is enabled
 	if ($request_forimaging) {

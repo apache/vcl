@@ -2112,7 +2112,7 @@ sub remove_lines_from_file {
 =cut
 
 sub execute {
-#return execute_new(@_);
+	my @original_arguments = @_;
 	my ($argument) = @_;
 	my ($computer_name, $command, $display_output, $timeout_seconds, $max_attempts, $port, $user, $password, $identity_key, $ignore_error);
 	
@@ -2176,6 +2176,11 @@ sub execute {
 	if (!$command) {
 		notify($ERRORS{'WARNING'}, 0, "command argument was not specified");
 		return;
+	}
+	
+	# TESTING: use the new subroutine if $ENV{execute_new} is set and the command isn't one that's known to fail with the new subroutine
+	if ($ENV{execute_new} && $command !~ /(vmkfstools|qemu-img|Convert-VHD|scp)/) {
+		return execute_new(@original_arguments);
 	}
 	
 	my $arguments = {

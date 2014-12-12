@@ -89,8 +89,8 @@ sub initialize {
 	
 	notify($ERRORS{'DEBUG'}, 0, "initializing " . ref($self) . " object to control $computer_name");
 	
-	if (!$self->service_exists('iptables')) {
-		notify($ERRORS{'DEBUG'}, 0, ref($self) . " object not initialized to control $computer_name, iptables service does not exist");
+	if (!$self->command_exists('iptables')) {
+		notify($ERRORS{'DEBUG'}, 0, ref($self) . " object not initialized to control $computer_name, iptables command does not exist");
 		return 0;
 	}
 	
@@ -641,6 +641,9 @@ sub configure_nat {
 	# Figure out the public and internal interface names
 	my $public_interface_name;
 	my $internal_interface_name;
+	my $public_subnet_mask;
+	my $internal_subnet_mask;
+	
 	my $network_configuration = $self->get_network_configuration();
 	for my $interface_name (keys %$network_configuration) {
 		my @ip_addresses = keys %{$network_configuration->{$interface_name}{ip_address}};
@@ -648,11 +651,13 @@ sub configure_nat {
 		# Check if the interface is assigned the nathost.publicIPaddress
 		if (grep { $_ eq $public_ip_address } @ip_addresses) {
 			$public_interface_name = $interface_name;
+			$public_subnet_mask = $network_configuration->{$interface_name}{ip_address}{$public_ip_address};
 		}
 		
 		# If nathost.internalIPaddress is set, check if interface is assigned matching IP address
 		if (grep { $_ eq $internal_ip_address } @ip_addresses) {
 			$internal_interface_name = $interface_name;
+			$internal_subnet_mask = $network_configuration->{$interface_name}{ip_address}{$internal_ip_address};
 		}
 	}
 	if (!$public_interface_name) {
@@ -663,9 +668,11 @@ sub configure_nat {
 		notify($ERRORS{'WARNING'}, 0, "failed to configure NAT host $computer_name, no interface is assigned the internal IP address configured in the nathost table: $internal_ip_address\n" . format_data($network_configuration));
 		return;
 	}
+	my ($public_network_address, $public_network_bits) = ip_address_to_network_address($public_ip_address, $public_subnet_mask);
+	my ($internal_network_address, $internal_network_bits) = ip_address_to_network_address($internal_ip_address, $internal_subnet_mask);
 	notify($ERRORS{'DEBUG'}, 0, "determined NAT host interfaces:\n" .
-		"public: $public_interface_name ($public_ip_address)\n" .
-		"internal: $internal_interface_name: ($internal_ip_address)"
+		"public - interface: $public_interface_name, IP address: $public_ip_address/$public_subnet_mask, network: $public_network_address/$public_network_bits\n" .
+		"internal - interface: $internal_interface_name, IP address: $internal_ip_address/$internal_subnet_mask, network: $internal_network_address/$internal_network_bits"
 	);
 	
 	my $natport_ranges_variable = get_variable('natport_ranges') || '49152-65535';
@@ -685,6 +692,7 @@ sub configure_nat {
 		'chain' => 'POSTROUTING',
 		'parameters' => {
 			'out-interface' => $public_interface_name,
+			'!destination' => "$internal_network_address/$internal_network_bits",
 			'jump' => 'MASQUERADE',
 		},
 		'match_extensions' => {
@@ -706,7 +714,7 @@ sub configure_nat {
 		},
 		'match_extensions' => {
 			'state' => {
-				'state' => 'RELATED,ESTABLISHED',
+				'state' => 'NEW,RELATED,ESTABLISHED',
 			},
 			'multiport' => {
 				'destination-ports' => $destination_ports,
@@ -726,7 +734,7 @@ sub configure_nat {
 		},
 		'match_extensions' => {
 			'state' => {
-				'state' => 'RELATED,ESTABLISHED',
+				'state' => 'NEW,RELATED,ESTABLISHED',
 			},
 			'multiport' => {
 				'destination-ports' => $destination_ports,

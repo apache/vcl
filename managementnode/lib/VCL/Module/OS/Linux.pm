@@ -644,8 +644,7 @@ sub update_public_hostname {
 		return;
 	}
 	
-	my $management_node_keys = $self->data->get_management_node_keys();
-	my $computer_node_name   = $self->data->get_computer_node_name();
+	my $computer_node_name = $self->data->get_computer_node_name();
 	
 	# Get the IP address of the public adapter
 	my $public_ip_address = $self->get_public_ip_address();
@@ -654,42 +653,11 @@ sub update_public_hostname {
 		return;
 	}
 	notify($ERRORS{'DEBUG'}, 0, "retrieved public IP address of $computer_node_name: $public_ip_address");
-	sleep 5;
 	
 	# Get the hostname for the public IP address
-	my $ipcalc_command = "/bin/ipcalc --hostname $public_ip_address";
-	my ($ipcalc_exit_status, $ipcalc_output) = run_command($ipcalc_command);
-	if (!defined($ipcalc_output)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to run ipcalc command on management node to determine public hostname of $computer_node_name, command: '$ipcalc_command'");
-		return;
-	}
-	
-	my ($public_hostname) = ("@$ipcalc_output" =~ /HOSTNAME=(.*)/i);
-	if ($public_hostname) {
-		notify($ERRORS{'DEBUG'}, 0, "determined registered public hostname of $computer_node_name ($public_ip_address) by running ipcalc on the management node: '$public_hostname'");
-	}
-	else {
-		notify($ERRORS{'DEBUG'}, 0, "failed to determine registered public hostname of $computer_node_name ($public_ip_address), command: '$ipcalc_command', output:\n" . join("\n", @$ipcalc_output));
-		
-		# Attempt to run the ipcalc command on the host
-		my ($ipcalc_exit_status, $ipcalc_output) = $self->execute($ipcalc_command);
-		if (!defined($ipcalc_output)) {
-			notify($ERRORS{'WARNING'}, 0, "failed to run ipcalc command on $computer_node_name to determine its public hostname, command: '$ipcalc_command'");
-			return;
-		}
-		
-		($public_hostname) = ("@$ipcalc_output" =~ /HOSTNAME=(.*)/i);
-		if ($public_hostname) {
-			notify($ERRORS{'DEBUG'}, 0, "determined registered public hostname of $computer_node_name ($public_ip_address) by running ipcalc on $computer_node_name: '$public_hostname'");
-		}
-		else {
-			notify($ERRORS{'WARNING'}, 0, "failed to determine registered public hostname of $computer_node_name ($public_ip_address) by running ipcalc on either the management node or $computer_node_name, command: '$ipcalc_command', output:\n" . join("\n", @$ipcalc_output));
-			return;
-		}
-	}
+	my $public_hostname = ip_address_to_hostname($public_ip_address) || $computer_node_name;
 	
 	# Set the node's hostname to public hostname
-
 	if ($self->can("update_hostname_file")) {
 		if (!$self->update_hostname_file($public_hostname)) {
 			notify($ERRORS{'WARNING'}, 0, "failed to update hostname file");
@@ -712,9 +680,7 @@ sub update_public_hostname {
 	}
 	
 	return 1;
-
 }
-
 
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -856,43 +822,40 @@ EOF
 	# Get the current public IP address being used by the computer
 	# Pass the $ignore_error flag to prevent warnings if not defined
 	my $current_public_ip_address = $self->get_public_ip_address(1);
-	if ($current_public_ip_address) {
-		if ($current_public_ip_address eq $computer_public_ip_address) {
-			notify($ERRORS{'DEBUG'}, 0, "static public IP address does not need to be set, $computer_name is already configured to use $current_public_ip_address");
-			return 1;
-		}
-		else {
+	if ($current_public_ip_address && $current_public_ip_address eq $computer_public_ip_address) {
+		notify($ERRORS{'DEBUG'}, 0, "static public IP address does not need to be set, $computer_name is already configured to use $current_public_ip_address");
+	}
+	else {
+		if ($current_public_ip_address) {
 			notify($ERRORS{'DEBUG'}, 0, "static public IP address needs to be set, public IP address currently being used by $computer_name $current_public_ip_address does NOT match correct public IP address: $computer_public_ip_address");
 		}
-	}
-	else {
-		notify($ERRORS{'DEBUG'}, 0, "static public IP address needs to be set, unable to determine public IP address currently in use on $computer_name");
-	}
-	
-	
-	# Make sure required info was retrieved
-	if ("$computer_public_ip_address $subnet_mask $default_gateway" =~ /undefined/) {
-		notify($ERRORS{'WARNING'}, 0, "failed to retrieve required network configuration for $computer_name:\n$configuration_info_string");
-		return;
-	}
-	else {
-		notify($ERRORS{'OK'}, 0, "attempting to set static public IP address on $computer_name:\n$configuration_info_string");
-	}
-	
-	# Try to ping address to make sure it's available
-	# FIXME  -- need to add other tests for checking ip_address is or is not available.
-	if ((_pingnode($computer_public_ip_address))) {
-		notify($ERRORS{'WARNING'}, 0, "ip_address $computer_public_ip_address is pingable, can not assign to $computer_name ");
-		return;
-	}
-	
-	# Assemble the ifcfg file path
-	my $network_scripts_path = "/etc/sysconfig/network-scripts";
-	my $ifcfg_file_path      = "$network_scripts_path/ifcfg-$interface_name";
-	notify($ERRORS{'DEBUG'}, 0, "public interface ifcfg file path: $ifcfg_file_path");
-	
-	# Assemble the ifcfg file contents
-	my $ifcfg_contents = <<EOF;
+		else {
+			notify($ERRORS{'DEBUG'}, 0, "static public IP address needs to be set, unable to determine public IP address currently in use on $computer_name");
+		}
+		
+		# Make sure required info was retrieved
+		if ("$computer_public_ip_address $subnet_mask $default_gateway" =~ /undefined/) {
+			notify($ERRORS{'WARNING'}, 0, "failed to retrieve required network configuration for $computer_name:\n$configuration_info_string");
+			return;
+		}
+		else {
+			notify($ERRORS{'OK'}, 0, "attempting to set static public IP address on $computer_name:\n$configuration_info_string");
+		}
+		
+		# Try to ping address to make sure it's available
+		# FIXME  -- need to add other tests for checking ip_address is or is not available.
+		if ((_pingnode($computer_public_ip_address))) {
+			notify($ERRORS{'WARNING'}, 0, "ip_address $computer_public_ip_address is pingable, can not assign to $computer_name ");
+			return;
+		}
+		
+		# Assemble the ifcfg file path
+		my $network_scripts_path = "/etc/sysconfig/network-scripts";
+		my $ifcfg_file_path      = "$network_scripts_path/ifcfg-$interface_name";
+		notify($ERRORS{'DEBUG'}, 0, "public interface ifcfg file path: $ifcfg_file_path");
+		
+		# Assemble the ifcfg file contents
+		my $ifcfg_contents = <<EOF;
 DEVICE=$interface_name
 BOOTPROTO=static
 IPADDR=$computer_public_ip_address
@@ -902,25 +865,35 @@ STARTMODE=onboot
 ONBOOT=yes
 EOF
 	
-	# Echo the contents to the ifcfg file
-	my $echo_ifcfg_command = "echo \"$ifcfg_contents\" > $ifcfg_file_path";
-	my ($echo_ifcfg_exit_status, $echo_ifcfg_output) = $self->execute($echo_ifcfg_command);
-	if (!defined($echo_ifcfg_output)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to run command to recreate $ifcfg_file_path on $computer_name: '$echo_ifcfg_command'");
-		return;
-	}
-	elsif ($echo_ifcfg_exit_status || grep(/echo:/i, @$echo_ifcfg_output)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to recreate $ifcfg_file_path on $computer_name, exit status: $echo_ifcfg_exit_status, command: '$echo_ifcfg_command', output:\n" . join("\n", @$echo_ifcfg_output));
-		return;
-	}
-	else {
-		notify($ERRORS{'DEBUG'}, 0, "recreated $ifcfg_file_path on $computer_name:\n$ifcfg_contents");
-	}
-	
-	# Restart the interface
-	if (!$self->restart_network_interface($interface_name)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to restart public interface $interface_name on $computer_name");
-		return;
+		# Echo the contents to the ifcfg file
+		my $echo_ifcfg_command = "echo \"$ifcfg_contents\" > $ifcfg_file_path";
+		my ($echo_ifcfg_exit_status, $echo_ifcfg_output) = $self->execute($echo_ifcfg_command);
+		if (!defined($echo_ifcfg_output)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to run command to recreate $ifcfg_file_path on $computer_name: '$echo_ifcfg_command'");
+			return;
+		}
+		elsif ($echo_ifcfg_exit_status || grep(/echo:/i, @$echo_ifcfg_output)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to recreate $ifcfg_file_path on $computer_name, exit status: $echo_ifcfg_exit_status, command: '$echo_ifcfg_command', output:\n" . join("\n", @$echo_ifcfg_output));
+			return;
+		}
+		else {
+			notify($ERRORS{'DEBUG'}, 0, "recreated $ifcfg_file_path on $computer_name:\n$ifcfg_contents");
+		}
+		
+		# Restart the interface
+		if (!$self->restart_network_interface($interface_name)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to restart public interface $interface_name on $computer_name");
+			return;
+		}
+		
+		my $ext_sshd_config_file_path = '/etc/ssh/external_sshd_config';
+		if ($self->file_exists($ext_sshd_config_file_path)) {
+			# Remove existing ListenAddress lines from external_sshd_config
+			$self->remove_lines_from_file($ext_sshd_config_file_path, 'ListenAddress') || return;
+			
+			# Add ListenAddress line to the end of the file
+			$self->append_text_file($ext_sshd_config_file_path, "ListenAddress $computer_public_ip_address\n") || return;
+		}
 	}
 	
 	# Delete existing default route
@@ -955,14 +928,6 @@ EOF
 	else {
 		notify($ERRORS{'DEBUG'}, 0, "added default route to $default_gateway on public interface $interface_name on $computer_name, output:\n" . format_data($route_add_output));
 	}
-	
-	my $ext_sshd_config_file_path = '/etc/ssh/external_sshd_config';
-	
-	# Remove existing ListenAddress lines from external_sshd_config
-	$self->remove_lines_from_file($ext_sshd_config_file_path, 'ListenAddress') || return;
-	
-	# Add ListenAddress line to the end of the file
-	$self->append_text_file($ext_sshd_config_file_path, "ListenAddress $computer_public_ip_address\n") || return;
 	
 	# Update resolv.conf if DNS server address is configured for the management node
 	my $resolv_conf_path = "/etc/resolv.conf";
@@ -2401,8 +2366,8 @@ sub get_network_configuration {
 		elsif (!defined($network_configuration->{$interface_name})) {
 			notify($ERRORS{'WARNING'}, 0, "found default gateway for '$interface_name' interface but the network configuration for '$interface_name' was not previously retrieved, route output:\n" . join("\n", @$route_output) . "\nnetwork configuation:\n" . format_data($network_configuration));
 		}
-		elsif (defined($network_configuration->{$interface_name}{default_gateway})) {
-			notify($ERRORS{'WARNING'}, 0, "multiple default gateway are configured for '$interface_name' interface, route output:\n" . join("\n", @$route_output));
+		elsif (defined($network_configuration->{$interface_name}{default_gateway}) && $default_gateway ne $network_configuration->{$interface_name}{default_gateway}) {
+			notify($ERRORS{'WARNING'}, 0, "multiple default gateways are configured for '$interface_name' interface, route output:\n" . join("\n", @$route_output));
 		}
 		else {
 			$network_configuration->{$interface_name}{default_gateway} = $default_gateway;

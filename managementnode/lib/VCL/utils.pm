@@ -78,7 +78,8 @@ use XML::Simple;
 use Time::HiRes qw(gettimeofday tv_interval);
 use Crypt::OpenSSL::RSA;
 use B qw(svref_2object);
-use Socket qw(inet_ntoa);
+use Socket;
+use Net::Netmask;
 
 BEGIN {
 	$ENV{PERL_RL} = 'Perl';
@@ -186,6 +187,8 @@ our @EXPORT = qw(
 	insert_reload_request
 	insert_request
 	insertloadlog
+	ip_address_to_hostname
+	ip_address_to_network_address
 	is_inblockrequest
 	is_ip_assigned_query
 	is_management_node_process_running
@@ -3990,8 +3993,11 @@ sub run_ssh_command {
 	$port = 22 if (!$port);
 	$timeout_seconds = 0 if (!$timeout_seconds);
 	$identity_paths = get_management_node_info()->{keys} if (!defined $identity_paths || length($identity_paths) == 0);
-
-#return VCL::Module::OS::execute_new($node, $command, $output_level, $timeout_seconds, $max_attempts, $port, $user, '', $identity_paths);
+	
+	# TESTING: use the new subroutine if $ENV{execute_new} is set and the command isn't one that's known to fail with the new subroutine
+	if ($ENV{execute_new} && $command !~ /(vmkfstools|qemu-img|Convert-VHD|scp)/) {
+		return VCL::Module::OS::execute_new($node, $command, $output_level, $timeout_seconds, $max_attempts, $port, $user, '', $identity_paths);
+	}
 	
 	# TODO: Add ssh path to config file and set global variable
 	# Locate the path to the ssh binary
@@ -12401,6 +12407,33 @@ sub hostname_to_ip_address {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 ip_address_to_hostname
+
+ Parameters  : $ip_address
+ Returns     : string
+ Description : Calls gethostbyaddr on the management node to determine the
+               hostname an IP address resolves to. The hostname is returned. If
+               the IP address cannot be resolved or if an error occurs, null is
+               returned.
+
+=cut
+
+sub ip_address_to_hostname {
+	my ($ip_address) = @_;
+	
+	my $hostname = gethostbyaddr(inet_aton($ip_address), AF_INET);
+	if (defined $hostname) {
+		notify($ERRORS{'DEBUG'}, 0, "determined hostname from IP address $ip_address: $hostname");
+		return $hostname;
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "unable to determine hostname from IP address: $ip_address");
+		return;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 =head2 update_request_checkuser
 
  Parameters  : $request_id, $checkuser
@@ -12537,6 +12570,45 @@ EOF
 	
 	notify($ERRORS{'DEBUG'}, 0, "retrieved info for OSinstalltypes mapped to provisioning ID $provisioning_id: " . format_data($info));
 	return $info;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 ip_address_to_network_address
+
+ Parameters  : $ip_address, $subnet_mask
+ Returns     : If called in array context: ($network_address, $network_bits)
+               If called in scalar context: $network_address
+ Description : Determines a network address and network bits.
+
+=cut
+
+sub ip_address_to_network_address {
+	my ($ip_address, $subnet_mask) = @_;
+	if (!defined($ip_address)) {
+		notify($ERRORS{'WARNING'}, 0, "$ip_address argument was not supplied");
+		return;
+	}
+	if (!defined($subnet_mask)) {
+		notify($ERRORS{'WARNING'}, 0, "$subnet_mask argument was not supplied");
+		return;
+	}
+	
+	my $netmask_object = new Net::Netmask("$ip_address/$subnet_mask");
+	if(!$netmask_object) {
+		notify($ERRORS{'WARNING'}, 0, "failed to create Net::Netmask object, IP address: $ip_address, subnet mask: $subnet_mask");
+		return;
+	}
+	
+	my $network_address = $netmask_object->base();
+	my $network_bits = $netmask_object->bits();
+	notify($ERRORS{'DEBUG'}, 0, "$ip_address/$subnet_mask --> $network_address/$network_bits");
+	if (wantarray) {
+		return ($network_address, $network_bits);
+	}
+	else {
+		return $network_address;
+	}
 }
 
 #/////////////////////////////////////////////////////////////////////////////
