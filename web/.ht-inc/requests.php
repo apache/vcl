@@ -1461,7 +1461,7 @@ function newReservationHTML() {
 	# image
 	$h .= "<span class=\"labeledform\">";
 	$h .= resourceStore('image', 1, 'detailimagestore');
-	$h .= "<div dojoType=\"dojo.data.ItemFileReadStore\" data=\"images\" ";
+	$h .= "<div dojoType=\"dojo.data.ItemFileWriteStore\" data=\"images\" ";
 	$h .= "jsId=\"imagestore\"></div>\n";
 	$h .= "<select dojoType=\"dijit.form.FilteringSelect\" id=\"deployimage\" ";
 	$h .= "style=\"width: 400px\" required=\"true\" store=\"imagestore\" ";

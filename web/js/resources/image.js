@@ -716,6 +716,12 @@ function submitUpdateImageClickthroughCB(data, ioArgs) {
 		dijit.byId('clickthroughDlgBtn').set('disabled', false);
 		return;
 	}
+	imagestore.fetch({
+		query: {id: data.items.imageid},
+		onItem: function(item, request) {
+			imagestore.setValue(item, 'revisions', 1);
+		}
+	});
 	dijit.byId('updateimagedlg').hide();
 	dijit.byId('clickthroughdlg').hide();
 	dijit.byId('clickthroughDlgBtn').set('disabled', false);

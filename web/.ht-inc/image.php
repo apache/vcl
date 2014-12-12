@@ -943,7 +943,10 @@ class Image extends Resource {
 		       .        "'$agree')";
 		doQuery($query, 101);
 	
-		sendJSON(array('status' => 'success', 'action' => 'update'));
+		$return = array('status' => 'success',
+		                'action' => 'update',
+		                'imageid' => $imageid);
+		sendJSON($return);
 	}
 
 	/////////////////////////////////////////////////////////////////////////////
