@@ -623,6 +623,15 @@ class Resource {
 			sendJSON($rt);
 			return;
 		}
+		# check usage of resource
+		$msg = $this->checkResourceInUse($rscid);
+		if($msg != '') {
+			$rt = array('status' => 'inuse',
+			            'msg' => $msg,
+			            'rscid' => $rscid);
+			sendJSON($rt);
+			return;
+		}
 		$rt = array('title' => "Confirm Delete {$this->restypename}",
 		            'question' => "Delete the following {$this->restype}?",
 		            'btntxt' => "Delete {$this->restypename}",
@@ -1591,6 +1600,21 @@ class Resource {
 	///
 	/////////////////////////////////////////////////////////////////////////////
 	function extraSelectAdminOptions() {
+	}
+
+	/////////////////////////////////////////////////////////////////////////////
+	///
+	/// \fn checkResourceInUse($rscid)
+	///
+	/// \return empty string if not being used; string of where resource is
+	/// being used if being used
+	///
+	/// \brief checks to see if a resource is being used; must be implemented in
+	/// inheriting class
+	///
+	/////////////////////////////////////////////////////////////////////////////
+	function checkResourceInUse($rscid) {
+		return '';
 	}
 }
 

@@ -147,6 +147,111 @@ class Image extends Resource {
 
 	/////////////////////////////////////////////////////////////////////////////
 	///
+	/// \fn checkResourceInUse($rscid)
+	///
+	/// \return empty string if not being used; string of where resource is
+	/// being used if being used
+	///
+	/// \brief checks to see if an image is being used
+	///
+	/////////////////////////////////////////////////////////////////////////////
+	function checkResourceInUse($rscid) {
+		$msgs = array();
+
+		# check reservations
+		$query = "SELECT rq.end "
+		       . "FROM request rq, "
+		       .      "reservation rs "
+		       . "WHERE rs.requestid = rq.id AND "
+		       .       "rs.imageid = $rscid AND "
+		       .       "rq.stateid NOT IN (1, 12) AND "
+		       .       "rq.end > NOW() "
+		       . "ORDER BY rq.end DESC "
+		       . "LIMIT 1";
+		$qh = doQuery($query);
+		if($row = mysql_fetch_assoc($qh))
+			$msgs[] = "There is at least one <strong>reservation</strong> for this image. The latest end time is " . prettyDatetime($row['end'], 1) . '.';
+
+		# check blockComputers
+		$query = "SELECT br.name, "
+		       .        "bt.end " 
+		       . "FROM blockRequest br, " 
+		       .      "blockTimes bt, "
+		       .      "blockComputers bc "
+		       . "WHERE bc.imageid = $rscid AND "
+		       .       "bc.blockTimeid = bt.id AND "
+		       .       "bt.blockRequestid = br.id AND "
+		       .       "bt.end > NOW() AND "
+		       .       "bt.skip = 0 AND "
+		       .       "br.status = 'accepted' "
+		       . "ORDER BY bt.end DESC "
+		       . "LIMIT 1";
+		$qh = doQuery($query);
+		if($row = mysql_fetch_assoc($qh))
+			$msgs[] = "There is at least one <strong>Block Allocation</strong> with computers currently allocated with this image. Block Allocation \"{$row['name']}\" has the latest end time which is " . prettyDatetime($row['end'], 1) . '.';
+
+		# check blockRequest
+		$query = "SELECT br.name, "
+		       .        "bt.end " 
+		       . "FROM blockRequest br, " 
+		       .      "blockTimes bt "
+		       . "WHERE br.imageid = $rscid AND "
+		       .       "bt.blockRequestid = br.id AND "
+		       .       "bt.end > NOW() AND "
+		       .       "bt.skip = 0 AND "
+		       .       "br.status = 'accepted' "
+		       . "ORDER BY bt.end DESC "
+		       . "LIMIT 1";
+		$qh = doQuery($query);
+		if($row = mysql_fetch_assoc($qh))
+			$msgs[] = "There is at least one <strong>Block Allocation</strong> configured to use this image. Block Allocation \"{$row['name']}\" has the latest end time which is " . prettyDatetime($row['end'], 1) . '.';
+
+		# check serverprofile
+		$query = "SELECT name "
+		       . "FROM serverprofile "
+		       . "WHERE imageid = $rscid";
+		$qh = doQuery($query);
+		$profiles = array();
+		while($row = mysql_fetch_assoc($qh))
+			$profiles[] = $row['name'];
+		if(count($profiles))
+			$msgs[] = "The following <strong>Server Profiles</strong> are configured to use this image:<br><br>\n" . implode("<br>\n", $profiles);
+
+		# check subimages
+		$query = "SELECT DISTINCT i.prettyname "
+		       . "FROM image i, "
+		       .      "imagemeta im, "
+		       .      "subimages s "
+		       . "WHERE i.imagemetaid = im.id AND "
+		       .       "im.subimages = 1 AND "
+		       .       "s.imagemetaid = im.id AND "
+		       .       "s.imageid = $rscid";
+		$images = array();
+		while($row = mysql_fetch_assoc($qh))
+			$images[] = $row['prettyname'];
+		if(count($images))
+			$msgs[] = "The following <strong>images</strong> have the selected image assigned as a <strong>subimage</strong>:<br><br>\n" . implode("<br>\n", $images);
+
+		# check vmprofile
+		$query = "SELECT profilename "
+		       . "FROM vmprofile "
+		       . "WHERE imageid = $rscid";
+		$profiles = array();
+		while($row = mysql_fetch_assoc($qh))
+			$profiles[] = $row['profilename'];
+		if(count($profiles))
+			$msgs[] = "The following <strong>VM Host Profiles</strong> have the this image selected:<br><br>\n" . implode("<br>\n", $profiles);
+
+		if(empty($msgs))
+			return '';
+
+		$msg = "The selected image is currently being used in the following ways and cannot be deleted at this time.<br><br>\n";
+		$msg .= implode("<br><br>\n", $msgs) . "<br><br>\n";
+		return $msg;
+	}
+
+	/////////////////////////////////////////////////////////////////////////////
+	///
 	/// \fn submitToggleDeleteResourceExtra($rscid, $deleted)
 	///
 	/// \param $rscid - id of a resource (from image table)

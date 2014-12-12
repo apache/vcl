@@ -3014,6 +3014,19 @@ class Computer extends Resource {
 		$qh = doQuery($query);
 		while($row = mysql_fetch_assoc($qh))
 			$skipcompids[] = $row['computerid'];
+		$query = "SELECT DISTINCT bc.computerid "
+		       . "FROM blockTimes bt, "
+		       .      "blockComputers bc, "
+		       .      "blockRequest br "
+		       . "WHERE bc.computerid in ($allids) AND "
+		       .       "bc.blockTimeid = bt.id AND "
+		       .       "bt.blockRequestid = br.id AND "
+		       .       "bt.end > NOW() AND "
+		       .       "bt.skip = 0 AND "
+		       .       "br.status = 'accepted'";
+		$qh = doQuery($query);
+		while($row = mysql_fetch_assoc($qh))
+			$skipcompids[] = $row['computerid'];
 		$delids = array_diff($compids, $skipcompids);
 		$msg = '';
 		if(count($delids)) {

@@ -261,6 +261,25 @@ function toggleDeleteResourceCB(data, ioArgs) {
 	else if(data.items.status == 'noaccess') {
 		alert(data.items.msg);
 	}
+	else if(data.items.status == 'inuse') {
+		var btn = new dijit.form.Button({
+			label: 'Close'
+		});
+		var div = document.createElement('DIV');
+		div.style = 'text-align: center;';
+		var dlg = new dijit.Dialog({
+			id: 'resourceinusedlg',
+			title: 'Resource In Use',
+			content: data.items.msg,
+			style: 'width: 400px;',
+			autofocus: false,
+			hide: function() {this.destroy();}
+		});
+		div.appendChild(btn.domNode);
+		dlg.containerNode.appendChild(div);
+		dojo.connect(btn, "onClick", function () {dlg.destroy();});
+		dlg.show();
+	}
 }
 
 function submitToggleDeleteResource() {

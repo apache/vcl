@@ -172,6 +172,58 @@ class ManagementNode extends Resource {
 
 	/////////////////////////////////////////////////////////////////////////////
 	///
+	/// \fn checkResourceInUse($rscid)
+	///
+	/// \return empty string if not being used; string of where resource is
+	/// being used if being used
+	///
+	/// \brief checks to see if a management node is being used
+	///
+	/////////////////////////////////////////////////////////////////////////////
+	function checkResourceInUse($rscid) {
+		$msgs = array();
+
+		# check reservations
+		$query = "SELECT rq.end "
+		       . "FROM request rq, "
+		       .      "reservation rs "
+		       . "WHERE rs.requestid = rq.id AND "
+		       .       "rs.managementnodeid = $rscid AND "
+		       .       "rq.stateid NOT IN (1, 12) AND "
+		       .       "rq.end > NOW() "
+		       . "ORDER BY rq.end DESC "
+		       . "LIMIT 1";
+		$qh = doQuery($query);
+		if($row = mysql_fetch_assoc($qh))
+			$msgs[] = "There is at least one <strong>reservation</strong> being processed by this management node. The latest end time is " . prettyDatetime($row['end'], 1) . '.';
+
+		# check blockRequest
+		$query = "SELECT br.name, "
+		       .        "bt.end " 
+		       . "FROM blockRequest br, " 
+		       .      "blockTimes bt "
+		       . "WHERE br.managementnodeid = $rscid AND "
+		       .       "bt.blockRequestid = br.id AND "
+		       .       "bt.end > NOW() AND "
+		       .       "bt.skip = 0 AND "
+		       .       "br.status = 'accepted' "
+		       . "ORDER BY bt.end DESC "
+		       . "LIMIT 1";
+		$qh = doQuery($query);
+		if($row = mysql_fetch_assoc($qh))
+			$msgs[] = "There is at least one <strong>Block Allocation</strong> being handled by this management node. Block Allocation \"{$row['name']}\" has the latest end time which is " . prettyDatetime($row['end'], 1) . '.';
+
+
+		if(empty($msgs))
+			return '';
+
+		$msg = "The selected management node is currently being used in the following ways and cannot be deleted at this time.<br><br>\n";
+		$msg .= implode("<br><br>\n", $msgs) . "<br><br>\n";
+		return $msg;
+	}
+
+	/////////////////////////////////////////////////////////////////////////////
+	///
 	/// \fn toggleDeleteResource($rscid)
 	///
 	/// \param $rscid - id of a resource (from managementnode table)

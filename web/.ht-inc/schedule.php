@@ -166,6 +166,33 @@ class Schedule extends Resource {
 
 	/////////////////////////////////////////////////////////////////////////////
 	///
+	/// \fn checkResourceInUse($rscid)
+	///
+	/// \return empty string if not being used; string of where resource is
+	/// being used if being used
+	///
+	/// \brief checks to see if a schedule is being used
+	///
+	/////////////////////////////////////////////////////////////////////////////
+	function checkResourceInUse($rscid) {
+		$msg = '';
+
+		$query = "SELECT hostname "
+		       . "FROM computer "
+		       . "WHERE scheduleid = $rscid AND "
+		       .       "deleted = 0";
+		$qh = doQuery($query);
+		$comps = array();
+		while($row = mysql_fetch_assoc($qh))
+			$comps[] = $row['hostname'];
+		if(count($comps))
+			$msg = "This schedule cannot be deleted because the following <strong>computers</strong> have it selected as their schedule:<br><br>\n" . implode("<br>\n", $comps);
+
+		return $msg;
+	}
+
+	/////////////////////////////////////////////////////////////////////////////
+	///
 	/// \fn AJsaveResource()
 	///
 	/// \brief saves changes to resource
