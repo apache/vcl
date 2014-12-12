@@ -1132,42 +1132,34 @@ sub set_vcld_post_load_status {
 	}
 
 	my $image_os_type = $self->data->get_image_os_type();
-	my $computer_node_name   = $self->data->get_computer_node_name();
+	my $computer_node_name = $self->data->get_computer_node_name();
 	
 	my $time = localtime;
+	
+	my $file_path = 'currentimage.txt';
+	$self->remove_lines_from_file($file_path, 'vcld_post_load');
 	
 	my $post_load_line = "vcld_post_load=success ($time)";
 	
 	# Assemble the command
 	my $command;
-	
-	# Remove existing lines beginning with vcld_post_load
-	$command .= "sed -i -e \'/vcld_post_load.*/d\' currentimage.txt";
-
-	# Add a line to the end of currentimage.txt
-	$command .= " && echo >> currentimage.txt";
-	$command .= " && echo \"$post_load_line\" >> currentimage.txt";
-	
-	# Remove blank lines
-	$command .= ' && sed -i -e \'/^[\\s\\r\\n]*$/d\' currentimage.txt';
-
-	if ($image_os_type =~ /windows/i) {
-		$command .= " && unix2dos currentimage.txt";
-	}
+	$command .= " echo >> $file_path";
+	$command .= " && echo \"$post_load_line\" >> $file_path";
 	
 	my ($exit_status, $output) = $self->execute($command, 1);
 	if (defined($exit_status) && $exit_status == 0) {
-		notify($ERRORS{'DEBUG'}, 0, "added line to currentimage.txt on $computer_node_name: '$post_load_line'");
+		notify($ERRORS{'DEBUG'}, 0, "added line to $file_path on $computer_node_name: '$post_load_line'");
 	}
 	elsif ($exit_status) {
-		notify($ERRORS{'WARNING'}, 0, "failed to add line to currentimage.txt on $computer_node_name: '$post_load_line', exit status: $exit_status, output:\n" . join("\n", @$output));
+		notify($ERRORS{'WARNING'}, 0, "failed to add line to $file_path on $computer_node_name: '$post_load_line', exit status: $exit_status, output:\n" . join("\n", @$output));
 		return;
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to run SSH command to add line to currentimage.txt on $computer_node_name");
+		notify($ERRORS{'WARNING'}, 0, "failed to run SSH command to add line to $file_path on $computer_node_name");
 		return;
 	}
 	
+	$self->set_text_file_line_endings($file_path);
 	return 1;
 }
 
@@ -1912,19 +1904,6 @@ sub create_text_file {
 		$self->create_directory($parent_directory_path) if $parent_directory_path;
 	}
 	
-	# Remove Windows-style carriage returns if the image OS isn't Windows
-	if ($image_os_type =~ /windows/) {
-		$file_contents_string =~ s/\r*\n/\r\n/g;
-	}
-	else {
-		$file_contents_string =~ s/\r//g;
-	}
-	
-	# Add a newline to the end of the contents
-	if ($file_contents_string !~ /\n$/) {
-		$file_contents_string .= "\n";
-	}
-	
 	# Convert the string to a string containing the hex value of each character
 	# This is done to avoid problems with special characters in the file contents
 	
@@ -1995,6 +1974,58 @@ sub append_text_file {
 	}
 	
 	return $self->create_text_file($file_path, $file_contents_string, 1);
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 set_text_file_line_endings
+
+ Parameters  : $file_path, $line_ending (optional)
+ Returns     : boolean
+ Description : Changes the line endings of a text file. This is equivalent to
+               running unix2dos or dos2unix. The default line ending type is
+               unix. Windows-style line endings will be applied if the
+               $line_ending argument is supplied and contains 'win' or 'r'.
+
+=cut
+
+sub set_text_file_line_endings {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my ($file_path, $line_ending) = @_;
+	if (!$file_path) {
+		notify($ERRORS{'WARNING'}, 0, "file path argument was not supplied");
+		return;
+	}
+	
+	my $command = 'sed -i -r ';
+	my $type;
+	if ($line_ending && $line_ending =~ /(r|win)/i) {
+		$type = 'windows';
+		$command .= '"s/\r*$/\r/"';
+	}
+	else {
+		$type = 'unix';
+		$command .= '"s/\r//"';
+	}
+	$command .= " $file_path";
+	my ($exit_status, $output) = $self->execute($command);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to set $type-style line endings for file: $file_path");
+		return;
+	}
+	elsif ($exit_status eq 0) {
+		notify($ERRORS{'DEBUG'}, 0, "set $type-style line endings for file: $file_path");
+		return 1;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to set $type-style line endings for file: $file_path, exit status: $exit_status, output:\n@{$output}");
+		return;
+	}
 }
 
 #/////////////////////////////////////////////////////////////////////////////

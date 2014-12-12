@@ -187,7 +187,7 @@ sub node_status {
 	$status->{currentimagerevision_id} = $current_image_revision_id;
 
 	$status->{currentimage} = $self->data->get_computer_currentimage_name();
-	my $vcld_post_load_status = $self->data->get_computer_currentimage_vcld_post_load();
+	my $vcld_post_load_status = $self->data->get_computer_currentimage_vcld_post_load(0);
 	
 	if (!$current_image_revision_id) {
 		notify($ERRORS{'OK'}, 0, "unable to retrieve currentimage.txt contents on $computer_name, returning 'RELOAD'");

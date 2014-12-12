@@ -6217,8 +6217,8 @@ sub add_group_policy_script {
 		return;
 	}
 	
-	# Run unix2dos on scripts.ini
-	$self->run_unix2dos($scripts_ini);
+	# Apply Windows-style line endings to scripts.ini
+	$self->set_text_file_line_endings($scripts_ini);
 	
 	# Get the modified contents of scripts.ini
 	my $cat_modified_command = "cat $scripts_ini";
@@ -6458,8 +6458,8 @@ sub remove_group_policy_script {
 		return;
 	}
 	
-	# Run unix2dos on scripts.ini
-	$self->run_unix2dos($scripts_ini);
+	# Apply Windows-style line endings to scripts.ini
+	$self->set_text_file_line_endings($scripts_ini);
 	
 	# Get the modified contents of scripts.ini
 	my $cat_modified_command = "cat $scripts_ini";
@@ -6571,44 +6571,33 @@ sub fix_cygwin_nodosfilewarning {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 run_unix2dos
+=head2 set_text_file_line_endings
 
- Parameters  : 
- Returns     :
- Description : 
+ Parameters  : $file_path, $line_ending (optional)
+ Returns     : boolean
+ Description : Changes the line endings of a text file. This is equivalent to
+               running unix2dos or dos2unix. The default line ending type is
+               Windows. Unix-style line endings will be applied if the
+					$line_ending argument is supplied and does not contain 'win' or
+					'r'.
 
 =cut
 
-sub run_unix2dos {
+sub set_text_file_line_endings {
 	my $self = shift;
-	if (ref($self) !~ /windows/i) {
+	if (ref($self) !~ /VCL::Module/i) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return;
 	}
-
-	# Get the arguments
-	my $file_path = shift;
-	if (!$file_path) {
-		notify($ERRORS{'WARNING'}, 0, "file path was not specified as an argument");
-		return;
-	}
-
-	# Run unix2dos on scripts.ini
-	my $unix2dos_command = "unix2dos $file_path";
-	my ($unix2dos_status, $unix2dos_output) = $self->execute($unix2dos_command);
-	if (defined($unix2dos_status) && $unix2dos_status == 0) {
-		notify($ERRORS{'DEBUG'}, 0, "ran unix2dos on $file_path");
-	}
-	elsif (defined($unix2dos_status)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to run unix2dos on $file_path, exit status: $unix2dos_status, output:\n@{$unix2dos_output}");
-		return;
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "unable to run ssh command to run unix2dos on $file_path");
-		return;
-	}
 	
-	return 1;
+	my ($file_path, $line_ending) = @_;
+	if (!$file_path) {
+		notify($ERRORS{'WARNING'}, 0, "file path argument was not supplied");
+		return;
+	}
+	$line_ending = 'win' unless $line_ending;
+	
+	return $self->SUPER::set_text_file_line_endings($file_path, $line_ending);
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -6708,9 +6697,8 @@ sub search_and_replace_in_files {
 		else {
 			notify($ERRORS{'OK'}, 0, "replaced '$search_pattern' with '$replace_string' in $matching_file");
 			
-			# sed replaces Windows newlines with \n
-			# There is a sed -b option which prevents this but it is not available on all versions of sed
-			$self->run_unix2dos($matching_file);
+			# Apply Windows-style line endings to scripts.ini
+			$self->set_text_file_line_endings($matching_file);
 		}
 	}
 	
@@ -11313,49 +11301,6 @@ sub get_installed_updates {
 	$self->{update_ids} = \@update_ids;
 	notify($ERRORS{'DEBUG'}, 0, "retrieved list updates installed on $computer_node_name(" . scalar(@update_ids) . "): " . join(", ", @update_ids));
 	return @update_ids;
-}
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 format_text_file
-
- Parameters  : $file_path
- Returns     : boolean
- Description : Runs unix2dos on the text file to format the line endings for
-               Windows.
-
-=cut
-
-sub format_text_file {
-	my $self = shift;
-	if (ref($self) !~ /VCL::Module/) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return;
-	}
-	
-	my $file_path = shift;
-	if (!$file_path) {
-		notify($ERRORS{'WARNING'}, 0, "file path argument was not specified");
-		return;
-	}
-	
-	my $computer_node_name = $self->data->get_computer_node_name();
-	
-	# Execute the command
-	my $command = "unix2dos \"$file_path\"";
-	my ($exit_status, $output) = $self->execute($command);
-	if (!defined($output)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to format text file for Windows on $computer_node_name: command: '$command'");
-		return;
-	}
-	elsif ($exit_status == 0) {
-		notify($ERRORS{'OK'}, 0, "formatted text file for Windows on $computer_node_name: '$file_path'");
-		return 1;
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to format text file for Windows on $computer_node_name, command: '$command'\noutput:\n" . join("\n", @$output));
-		return;
-	}
 }
 
 #/////////////////////////////////////////////////////////////////////////////
