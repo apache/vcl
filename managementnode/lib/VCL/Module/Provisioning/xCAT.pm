@@ -316,6 +316,7 @@ sub load {
 	my $previous_nodeset_status;
 	my $current_time;
 	my $install_started = 0;
+	my $dhcp_ack = 0;
 	MONITOR_LOADING: while (($current_time = time) < $nochange_timeout_time && $current_time < $overall_timeout_time) {
 		my $total_elapsed_seconds = ($current_time - $monitor_start_time);
 		my $nochange_elapsed_seconds = ($current_time - $last_change_time);
@@ -339,8 +340,11 @@ sub load {
 			
 			if (my ($dhcpack_line) = grep(/DHCPACK/i, @dhcp_lines)) {
 				notify($ERRORS{'DEBUG'}, 0, "$computer_node_name acquired DHCP lease: '$dhcpack_line'");
-				insertloadlog($reservation_id, $computer_id, "xcatstage2", "acquired DHCP lease");
-				insertloadlog($reservation_id, $computer_id, "xcatround2", "waiting for boot flag");
+				if(!$dhcp_ack) {
+					insertloadlog($reservation_id, $computer_id, "xcatstage2", "acquired DHCP lease");
+					insertloadlog($reservation_id, $computer_id, "xcatround2", "waiting for boot flag");
+					$dhcp_ack=1;
+				}
 			}
 			
 			$reset_timeout = 1;
