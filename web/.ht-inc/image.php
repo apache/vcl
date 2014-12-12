@@ -943,7 +943,10 @@ class Image extends Resource {
 		       .        "'$agree')";
 		doQuery($query, 101);
 	
-		sendJSON(array('status' => 'success', 'action' => 'update'));
+		$return = array('status' => 'success',
+		                'action' => 'update',
+		                'imageid' => $imageid);
+		sendJSON($return);
 	}
 
 	/////////////////////////////////////////////////////////////////////////////
@@ -1727,9 +1730,9 @@ class Image extends Resource {
 		doQuery($query);
 
 		# clear user resource cache for this type
-		$key = getKey(array(array($this->restype . 'Admin'), array('manageGroup'), 1, 0, 0));
+		$key = getKey(array(array($this->restype . 'Admin'), array('manageGroup'), 1, 0, 0, 0));
 		unset($_SESSION['userresources'][$key]);
-		$key = getKey(array(array($this->restype . 'Admin'), array('manageGroup'), 1, 1, 0));
+		$key = getKey(array(array($this->restype . 'Admin'), array('manageGroup'), 1, 1, 0, 0));
 		unset($_SESSION['userresources'][$key]);
 	}
 

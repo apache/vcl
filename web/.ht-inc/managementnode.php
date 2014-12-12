@@ -196,9 +196,9 @@ class ManagementNode extends Resource {
 			return 0;
 
 		# clear user resource cache for this type
-		$key = getKey(array(array($this->restype . "Admin", 'mgmtnodeAdmin'), array("administer"), 0, 1, 0));
+		$key = getKey(array(array($this->restype . "Admin", 'mgmtnodeAdmin'), array("administer"), 0, 1, 0, 0));
 		unset($_SESSION['userresources'][$key]);
-		$key = getKey(array(array($this->restype . "Admin", 'mgmtnodeAdmin'), array("administer"), 0, 0, 0));
+		$key = getKey(array(array($this->restype . "Admin", 'mgmtnodeAdmin'), array("administer"), 0, 0, 0, 0));
 		unset($_SESSION['userresources'][$key]);
 
 		return 1;
@@ -547,13 +547,13 @@ class ManagementNode extends Resource {
 		}
 
 		# clear user resource cache for this type
-		$key = getKey(array(array($this->restype . "Admin", 'mgmtnodeAdmin'), array("administer"), 0, 1, 0));
+		$key = getKey(array(array($this->restype . "Admin", 'mgmtnodeAdmin'), array("administer"), 0, 1, 0, 0));
 		unset($_SESSION['userresources'][$key]);
-		$key = getKey(array(array($this->restype . "Admin", 'mgmtnodeAdmin'), array("administer"), 0, 0, 0));
+		$key = getKey(array(array($this->restype . "Admin", 'mgmtnodeAdmin'), array("administer"), 0, 0, 0, 0));
 		unset($_SESSION['userresources'][$key]);
-		$key = getKey(array(array($this->restype . "Admin", 'mgmtnodeAdmin'), array("manageGroup"), 0, 1, 0));
+		$key = getKey(array(array($this->restype . "Admin", 'mgmtnodeAdmin'), array("manageGroup"), 0, 1, 0, 0));
 		unset($_SESSION['userresources'][$key]);
-		$key = getKey(array(array($this->restype . "Admin", 'mgmtnodeAdmin'), array("manageGroup"), 0, 0, 0));
+		$key = getKey(array(array($this->restype . "Admin", 'mgmtnodeAdmin'), array("manageGroup"), 0, 0, 0, 0));
 		unset($_SESSION['userresources'][$key]);
 
 		$tmp = $this->getData(array('includedeleted' => 1, 'rscid' => $data['rscid'], 'alive' => 'neither'));

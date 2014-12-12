@@ -461,9 +461,9 @@ class Config extends Resource {
 		       .        "((SELECT id FROM resourcetype WHERE name = 'config'), "
 		       .        "$id)";
 		doQuery($query);
-		$key = getKey(array(array("{$this->restype}Admin"), array("administer"), 0, 1, 0));
+		$key = getKey(array(array("{$this->restype}Admin"), array("administer"), 0, 1, 0, 0));
 		unset($_SESSION['userresources'][$key]);
-		$key = getKey(array(array("{$this->restype}Admin"), array("administer"), 0, 0, 0));
+		$key = getKey(array(array("{$this->restype}Admin"), array("administer"), 0, 0, 0, 0));
 		unset($_SESSION['userresources'][$key]);
 		$ret = array('status' => 'success', 'action' => 'add');
 		$ret['item'] = array('id' => $id,

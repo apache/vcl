@@ -1489,13 +1489,13 @@ class Computer extends Resource {
 		}
 
 		# clear user resource cache for this type
-		$key = getKey(array(array($this->restype . "Admin"), array("administer"), 0, 1, 0));
+		$key = getKey(array(array($this->restype . "Admin"), array("administer"), 0, 1, 0, 0));
 		unset($_SESSION['userresources'][$key]);
-		$key = getKey(array(array($this->restype . "Admin"), array("administer"), 0, 0, 0));
+		$key = getKey(array(array($this->restype . "Admin"), array("administer"), 0, 0, 0, 0));
 		unset($_SESSION['userresources'][$key]);
-		$key = getKey(array(array($this->restype . "Admin"), array("manageGroup"), 0, 1, 0));
+		$key = getKey(array(array($this->restype . "Admin"), array("manageGroup"), 0, 1, 0, 0));
 		unset($_SESSION['userresources'][$key]);
-		$key = getKey(array(array($this->restype . "Admin"), array("manageGroup"), 0, 0, 0));
+		$key = getKey(array(array($this->restype . "Admin"), array("manageGroup"), 0, 0, 0, 0));
 		unset($_SESSION['userresources'][$key]);
 
 		$args = $this->defaultGetDataArgs;
@@ -3128,9 +3128,9 @@ class Computer extends Resource {
 		}
 
 		# clear user resource cache for this type
-		$key = getKey(array(array($this->restype . "Admin"), array("administer"), 0, 1, 0));
+		$key = getKey(array(array($this->restype . "Admin"), array("administer"), 0, 1, 0, 0));
 		unset($_SESSION['userresources'][$key]);
-		$key = getKey(array(array($this->restype . "Admin"), array("administer"), 0, 0, 0));
+		$key = getKey(array(array($this->restype . "Admin"), array("administer"), 0, 0, 0, 0));
 		unset($_SESSION['userresources'][$key]);
 
 		$ret = array('status' => 'success',
@@ -4058,9 +4058,9 @@ class Computer extends Resource {
 		}
 
 		# clear user resource cache for this type
-		$key = getKey(array(array($this->restype . "Admin"), array("administer"), 0, 1, 0));
+		$key = getKey(array(array($this->restype . "Admin"), array("administer"), 0, 1, 0, 0));
 		unset($_SESSION['userresources'][$key]);
-		$key = getKey(array(array($this->restype . "Admin"), array("administer"), 0, 0, 0));
+		$key = getKey(array(array($this->restype . "Admin"), array("administer"), 0, 0, 0, 0));
 		unset($_SESSION['userresources'][$key]);
 
 		$ret['msg'] = $msg;
@@ -4484,9 +4484,9 @@ class Computer extends Resource {
 		$msg .= "$schname:<br>$complist\n";
 
 		# clear user resource cache for this type
-		$key = getKey(array(array($this->restype . "Admin"), array("administer"), 0, 1, 0));
+		$key = getKey(array(array($this->restype . "Admin"), array("administer"), 0, 1, 0, 0));
 		unset($_SESSION['userresources'][$key]);
-		$key = getKey(array(array($this->restype . "Admin"), array("administer"), 0, 0, 0));
+		$key = getKey(array(array($this->restype . "Admin"), array("administer"), 0, 0, 0, 0));
 		unset($_SESSION['userresources'][$key]);
 
 		$ret = array('status' => 'success',

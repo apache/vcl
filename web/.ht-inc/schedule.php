@@ -210,13 +210,13 @@ class Schedule extends Resource {
 		doQuery($query, 101);
 
 		# clear user resource cache for this type
-		$key = getKey(array(array($this->restype . "Admin"), array("administer"), 0, 1, 0));
+		$key = getKey(array(array($this->restype . "Admin"), array("administer"), 0, 1, 0, 0));
 		unset($_SESSION['userresources'][$key]);
-		$key = getKey(array(array($this->restype . "Admin"), array("administer"), 0, 0, 0));
+		$key = getKey(array(array($this->restype . "Admin"), array("administer"), 0, 0, 0, 0));
 		unset($_SESSION['userresources'][$key]);
-		$key = getKey(array(array($this->restype . "Admin"), array("manageGroup"), 0, 1, 0));
+		$key = getKey(array(array($this->restype . "Admin"), array("manageGroup"), 0, 1, 0, 0));
 		unset($_SESSION['userresources'][$key]);
-		$key = getKey(array(array($this->restype . "Admin"), array("manageGroup"), 0, 0, 0));
+		$key = getKey(array(array($this->restype . "Admin"), array("manageGroup"), 0, 0, 0, 0));
 		unset($_SESSION['userresources'][$key]);
 
 		$tmp = $this->getData(array('includedeleted' => 0, 'rscid' => $data['rscid']));
