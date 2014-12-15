@@ -548,7 +548,7 @@ function viewRequests() {
 		$text .= "      title=\"" . _("Delete Reservation") . "\"\n";
 		$text .= "      duration=250\n";
 		$text .= "      draggable=true\n";
-		$text .= "      style=\"width: 300px;\">\n";
+		$text .= "      style=\"width: 315px;\">\n";
 		$text .= "   <div id=\"endResDlgContent\"></div>\n";
 		$text .= "   <input type=\"hidden\" id=\"endrescont\">\n";
 		$text .= "   <input type=\"hidden\" id=\"endresid\">\n";
