@@ -554,6 +554,7 @@ $actions['classmapping']['generalendnotice1'] = 'siteconfig';
 $actions['classmapping']['generalendnotice2'] = 'siteconfig';
 $actions['classmapping']['userpasswordlength'] = 'siteconfig';
 $actions['classmapping']['userpasswordspecialchar'] = 'siteconfig';
+$actions['classmapping']['natportrange'] = 'siteconfig';
 
 # resource
 $actions['mode']['resource'] = "resource";

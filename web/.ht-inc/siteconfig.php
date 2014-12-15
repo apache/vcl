@@ -62,7 +62,7 @@ function generalOptions($globalopts) {
 	$h .= timeSourceHTML($globalopts);
 	# ------ end full width ---------
 
-	$h .= "<table summary=\"\" id=dashboard>\n";
+	$h .= "<table summary=\"\" id=siteconfig>\n";
 	$h .= "<tr>\n";
 
 	# -------- left column ---------
@@ -97,6 +97,10 @@ function generalOptions($globalopts) {
 	$h .= $obj->getHTML($globalopts);
 	$obj = new generalEndNotice2();
 	$h .= $obj->getHTML($globalopts);
+	if($globalopts) {
+		$obj = new NATportRange();
+		$h .= $obj->getHTML();
+	}
 	$h .= "</td>\n";
 	# -------- end right column --------
 
@@ -317,7 +321,8 @@ class TimeVariable {
 			$newval = $this->defaultval;
 			if($this->scale60)
 				$newval = (int)($newval / 60);
-			$h .= selectInputHTML('', $affils, "{$this->domidbase}newaffilid", "dojoType=\"dijit.form.Select\"");
+			$h .= selectInputHTML('', $affils, "{$this->domidbase}newaffilid",
+			                      "dojoType=\"dijit.form.Select\" maxHeight=\"250\"");
 			$h .= "<input dojoType=\"dijit.form.NumberSpinner\" ";
 			$h .=        "required=\"1\" ";
 			$h .=        "style=\"width: 70px;\" ";
@@ -801,7 +806,7 @@ class generalEndNotice2 extends TimeVariable {
 ///
 /// \class GlobalSingleVariable
 ///
-/// \brief base class for global number variables
+/// \brief base class for global single value variables
 ///
 ////////////////////////////////////////////////////////////////////////////////
 class GlobalSingleVariable {
@@ -857,6 +862,9 @@ class GlobalSingleVariable {
 				if($val == 1)
 					$extra = array('checked' => 'checked');
 				$h .= labeledFormItem($this->domidbase, $this->label, 'check', '', 1, 1, '', '', $extra);
+				break;
+			case 'textarea':
+				$h .= labeledFormItem($this->domidbase, $this->label, 'textarea', '', 1, $val, '', '', '', '120px');
 				break;
 			default:
 				$h .= labeledFormItem($this->domidbase, $this->label, 'text', '', 1, $val);
@@ -917,6 +925,19 @@ class GlobalSingleVariable {
 				             'errmsg' => _("unsupported type"));
 				sendJSON($arr);
 				return;
+			case 'textarea':
+				$newval = processInputVar('newval', ARG_STRING); 
+				if(! $this->validateValue($newval)) {
+					$arr = array('status' => 'failed',
+					             'msgid' => "{$this->domidbase}msg",
+					             'btn' => "{$this->domidbase}btn",
+					             'errmsg' => _("Invalid value submitted"));
+					if(isset($this->invalidvaluemsg))
+						$arr['errmsg'] = $this->invalidvaluemsg;
+					sendJSON($arr);
+					return;
+				}
+				break;
 			default:
 				$arr = array('status' => 'failed',
 				             'msgid' => "{$this->domidbase}msg",
@@ -932,13 +953,25 @@ class GlobalSingleVariable {
 		             'msg' => $this->updatemsg);
 		sendJSON($arr);
 	}
+
+	////////////////////////////////////////////////////////////////////////////////
+	///
+	/// \fn validateValue($val)
+	///
+	/// \brief validates that a new value is okay; should be implemented in 
+	/// inheriting class
+	///
+	////////////////////////////////////////////////////////////////////////////////
+	function validateValue($val) {
+		return 1;
+	}
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
 /// \class userPasswordLength
 ///
-/// \brief extends TimeVariable class to implement general_end_notice_second
+/// \brief extends GlobalSingleVariable class to implement userPasswordLength
 ///
 ////////////////////////////////////////////////////////////////////////////////
 class userPasswordLength extends GlobalSingleVariable {
@@ -969,7 +1002,8 @@ class userPasswordLength extends GlobalSingleVariable {
 ///
 /// \class userPasswordSpecialChar
 ///
-/// \brief extends TimeVariable class to implement general_end_notice_second
+/// \brief extends GlobalSingleVariable class to implement
+/// userPasswordSpecialChar
 ///
 ////////////////////////////////////////////////////////////////////////////////
 class userPasswordSpecialChar extends GlobalSingleVariable {
@@ -991,6 +1025,54 @@ class userPasswordSpecialChar extends GlobalSingleVariable {
 		$this->jsname = 'userPasswordSpecialChar';
 		$this->defaultval = 1;
 		$this->type = 'boolean';
+	}
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \class NATportRange
+///
+/// \brief extends GlobalSingleVariable class to implement NATportRange
+///
+////////////////////////////////////////////////////////////////////////////////
+class NATportRange extends GlobalSingleVariable {
+	/////////////////////////////////////////////////////////////////////////////
+	///
+	/// \fn __construct()
+	///
+	/// \brief class construstor
+	///
+	/////////////////////////////////////////////////////////////////////////////
+	function __construct() {
+		parent::__construct();
+		$this->name = _('NAT Port Ranges');
+		$this->key = 'nat_port_range';
+		$this->label = _("NAT Port Ranges");
+		$this->desc = _("Port ranges available for use on NAT servers. Type of port (TCP/UDP) is not specified. List ranges one per line (ex: 10000-20000).");
+		$this->domidbase = 'natportrange';
+		$this->basecdata['obj'] = $this;
+		$this->jsname = 'natPortRange';
+		$this->defaultval = '10000-60000';
+		$this->type = 'textarea';
+		$this->invalidvaluemsg = _("Invalid value submitted. Must be numeric ranges of ports of the form 10000-20000, one per line.");
+	}
+
+	////////////////////////////////////////////////////////////////////////////////
+	///
+	/// \fn validateValue($val)
+	///
+	/// \brief validates that a new value is okay
+	///
+	////////////////////////////////////////////////////////////////////////////////
+	function validateValue($val) {
+		$vals = explode("\n", $val);
+		foreach($vals as $testval) {
+			if(! preg_match('/^(\d+)-(\d+)$/', $testval, $matches))
+				return 0;
+			if($matches[1] >= $matches[2])
+				return 0;
+		}
+		return 1;
 	}
 }
 

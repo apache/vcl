@@ -20,7 +20,8 @@ function generalSiteConfigCB(data, ioArgs) {
 		dojo.removeClass(data.items.msgid, 'cfgerror');
 		dojo.addClass(data.items.msgid, 'cfgsuccess');
 		dojo.byId(data.items.msgid).innerHTML = data.items.msg;
-		dojo.byId(data.items.contid).value = data.items.savecont;
+		if('contid' in data.items && 'savecont' in data.items)
+			dojo.byId(data.items.contid).value = data.items.savecont;
 		if('btn' in data.items)
 			dijit.byId(data.items.btn).set('disabled', false);
 		if('extrafunc' in data.items) {
@@ -241,3 +242,10 @@ function userPasswordSpecialChar() {
 }
 userPasswordSpecialChar.prototype = new GlobalSingleVariable();
 var userPasswordSpecialChar = new userPasswordSpecialChar();
+
+function natPortRange() {
+	GlobalSingleVariable.apply(this, Array.prototype.slice.call(arguments));
+	this.domidbase = 'natportrange';
+}
+natPortRange.prototype = new GlobalSingleVariable();
+var natPortRange = new natPortRange();
