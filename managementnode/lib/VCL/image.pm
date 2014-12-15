@@ -400,6 +400,7 @@ sub reservation_failed {
 	my $imagemeta_sysprep          = $self->data->get_imagemeta_sysprep();
 	my $computer_id                = $self->data->get_computer_id();
 	my $computer_shortname         = $self->data->get_computer_short_name();
+	my $computer_state_name        = $self->data->get_computer_state_name();
 	my $provisioning_pretty_name   = $self->data->get_computer_provisioning_pretty_name();
 	my $provisioning_name          = $self->data->get_computer_provisioning_name();
 	my $provisioning_perl_package  = $self->data->get_computer_provisioning_module_perl_package();
@@ -410,6 +411,7 @@ sub reservation_failed {
 	my $vmhost_short_name          = $self->data->get_vmhost_short_name() || '';
 	my $vmhost_profile_id          = $self->data->get_vmhost_profile_id() || '';
 	my $vmhost_profile_name        = $self->data->get_vmhost_profile_name() || '';
+	my $request_laststate_name     = $self->data->get_request_laststate_name();
 	
 	my $message = shift;
 	
@@ -442,7 +444,10 @@ reply to this email.
 Thank You,
 VCL Team
 END
-	mail($user_email, "VCL -- NOTICE DELAY Image Creation $image_prettyname", $body_user, $affiliation_helpaddress);
+	# Don't attempt to send another notice if $request_laststate_name is image. 
+	if ($request_laststate_name ne "maintenance") {
+		mail($user_email, "VCL -- NOTICE DELAY Image Creation $image_prettyname", $body_user, $affiliation_helpaddress);
+	}
 
 	# Send mail to $sysadmin_mail_address
 	if ($sysadmin_mail_address) {
