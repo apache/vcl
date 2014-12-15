@@ -1766,64 +1766,58 @@ sub is_request_imaging {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 get_next_image_default
+=head2 get_reservation_accounts
 
  Parameters  : $reservationid
- Returns     : userid,password,affiliation
+ Returns     : 
  Description : Used for server loads, provides list of users for group access
 
 =cut
 
 sub get_reservation_accounts {
-        my ($reservationid) = @_;
-        my ($calling_package, $calling_filename, $calling_line, $calling_sub) = caller(0);
-
-        if (!defined($reservationid)) {
-                notify($ERRORS{'WARNING'}, 0, "$calling_sub $calling_package missing mandatory variable: reservationid ");
-                return 0;
-        }
-
-        my $select_statement = "
-	SELECT DISTINCT
-	reservationaccounts.userid AS reservationaccounts_userid,
-	reservationaccounts.password AS reservationaccounts_password,
-	affiliation.name AS affiliation_name,
-	user.unityid AS user_name
-	FROM
-	reservationaccounts,
-	affiliation,
-	user
-	WHERE
-	user.id = reservationaccounts.userid AND
-	affiliation.id = user.affiliationid AND
-	reservationaccounts.reservationid = $reservationid
+	my ($reservation_id) = @_;
+	if (!defined($reservation_id)) {
+		notify($ERRORS{'WARNING'}, 0, "reservation ID argument was not supplied");
+		return 0;
+	}
+	
+	my $select_statement = "
+		SELECT DISTINCT
+		reservationaccounts.userid AS reservationaccounts_userid,
+		reservationaccounts.password AS reservationaccounts_password,
+		affiliation.name AS affiliation_name,
+		user.unityid AS user_name
+		FROM
+		reservationaccounts,
+		affiliation,
+		user
+		WHERE
+		user.id = reservationaccounts.userid AND
+		affiliation.id = user.affiliationid AND
+		reservationaccounts.reservationid = $reservation_id
 	";
-
-        # Call the database select subroutine
-        # This will return an array of one or more rows based on the select statement
-        my @selected_rows = database_select($select_statement);
-
-        my @ret_array;
+	
+	# Call the database select subroutine
+	# This will return an array of one or more rows based on the select statement
+	my @selected_rows = database_select($select_statement);
+	
+	my @ret_array;
 	my %user_info;
-
-        # Check to make sure 1 or more rows were returned
-        if (scalar @selected_rows > 0) {
+	
+	# Check to make sure 1 or more rows were returned
+	if (scalar @selected_rows > 0) {
 		# It contains a hash
-                for (@selected_rows) {
-                        my %reservation_acct= %{$_};
+		for (@selected_rows) {
+			my %reservation_acct= %{$_};
 			my $userid = $reservation_acct{reservationaccounts_userid};
 			$user_info{$userid}{"userid"} = $userid;
 			$user_info{$userid}{"password"} = $reservation_acct{reservationaccounts_password};
 			$user_info{$userid}{"affiliation"} = $reservation_acct{affiliation_name};
 			$user_info{$userid}{"username"} = $reservation_acct{user_name};
 		}
-		
 		return %user_info;
-
 	}
-		
 	return ();
-
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -2981,7 +2975,7 @@ sub database_execute {
 =head2  get_request_info
 
  Parameters  : $request_id, $no_cache (optional)
- Returns     : hash
+ Returns     : hash reference
  Description : Retrieves all request/reservation information.
 
 =cut
@@ -3195,7 +3189,7 @@ EOF
 	$request_info->{UPDATED}          = '0';
 	
 	#notify($ERRORS{'DEBUG'}, 0, "retrieved request info:\n" . format_data($request_info));
-	return %$request_info;
+	return $request_info;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -5075,9 +5069,9 @@ EOF
 		my $request_id = $row->{request_id};
 		my $reservation_id = $row->{reservation_id};
 		
-		my %request_info = get_request_info($request_id);
+		my $request_info = get_request_info($request_id);
 		
-		if (!%request_info) {
+		if (!$request_info) {
 			# Request may have been deleted in this brief period
 			if (is_request_deleted($request_id)) {
 				notify($ERRORS{'OK'}, 0, "request was deleted before request info could be retrieved: $request_id");
@@ -5090,7 +5084,7 @@ EOF
 		}
 		
 		my $data_structure;
-		eval {$data_structure = new VCL::DataStructure({request_data => \%request_info, reservation_id => $reservation_id});};
+		eval {$data_structure = new VCL::DataStructure({request_data => $request_info, reservation_id => $reservation_id});};
 		if (my $exception = Exception::Class::Base->caught()) {
 			notify($ERRORS{'WARNING'}, 0, "unable to create DataStructure object" . $exception->message);
 			return;
@@ -6728,6 +6722,7 @@ EOF
 	else {
 		my $management_node_info = get_management_node_info();
 		if ($management_node_info) {
+			my $user_affiliation_name = $user_info->{affiliation}{name};
 			my $not_standalone_list = $management_node_info->{NOT_STANDALONE};
 			if (grep(/^$user_affiliation_name$/i, split(/[,;]/, $not_standalone_list))) {
 				notify($ERRORS{'DEBUG'}, 0, "non-standalone affiliation found for user $user_login_id:\nuser affiliation: $user_affiliation_name\nnot standalone list: $not_standalone_list");
@@ -7325,7 +7320,7 @@ sub populate_reservation_natport {
 		return;
 	}
 	
-	my $request_info = {get_reservation_request_info($reservation_id, 0)};
+	my $request_info = get_reservation_request_info($reservation_id, 0);
 	my $computer_id = $request_info->{reservation}{$reservation_id}{computerid};
 	my $computer_name = $request_info->{reservation}{$reservation_id}{computer}{SHORTNAME};
 	my $imagerevision_id = $request_info->{reservation}{$reservation_id}{imagerevision}{id};

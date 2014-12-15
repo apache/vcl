@@ -947,18 +947,18 @@ sub refresh {
 	my $request_laststate_name = $self->get_request_laststate_name();
 
 	# Get the full set of database data for this request
-	if (my %request_info = get_request_info($request_id)) {
+	if (my $request_info = get_request_info($request_id)) {
 		notify($ERRORS{'DEBUG'}, 0, "retrieved current request information from database for request $request_id");
 
 		# Set the state names in the newly retrieved hash to their original values
-		$request_info{state}{name}     = $request_state_name;
-		$request_info{laststate}{name} = $request_laststate_name;
+		$request_info->{state}{name}     = $request_state_name;
+		$request_info->{laststate}{name} = $request_laststate_name;
 
 		# Replace the request data for this DataStructure object
-		$self->refresh_request_data(\%request_info);
+		$self->refresh_request_data($request_info);
 		notify($ERRORS{'DEBUG'}, 0, "updated DataStructure object with current request information from database");
 
-	} ## end if (my %request_info = get_request_info($request_id...
+	}
 	else {
 		notify($ERRORS{'WARNING'}, 0, "could not retrieve current request information from database");
 		return;

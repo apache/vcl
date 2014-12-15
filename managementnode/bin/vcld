@@ -224,7 +224,7 @@ sub main () {
 				next REQUEST;
 			}
 			
-			my %request_info;
+			my $request_info;
 			
 			#===========================================================================
 			# Loop through the reservations associated with this request
@@ -294,24 +294,24 @@ sub main () {
 				}
 				
 				# Get the full set of database data for this request
-				if (!%request_info) {
-					if (%request_info = get_request_info($request_id)) {
+				if (!$request_info) {
+					if ($request_info = get_request_info($request_id)) {
 						notify($ERRORS{'DEBUG'}, $LOGFILE, "retrieved request information from database");
 						
 						# Set request variables that may have changed by other processes to their original values
 						# They may change if this is a cluster reservation
-						$request_info{state}{name}     = $request_state_name;
-						$request_info{laststate}{name} = $request_laststate_name;
-						$request_info{preload}         = $request_preload;
+						$request_info->{state}{name}     = $request_state_name;
+						$request_info->{laststate}{name} = $request_laststate_name;
+						$request_info->{preload}         = $request_preload;
 						
 						# Add the check_time result to the hash
-						$request_info{CHECKTIME} = $check_time_result;
+						$request_info->{CHECKTIME} = $check_time_result;
 						
 						# Check if preload was returned by check_time and that preload flag is 0
 						# The preload flag will be set to 1 by new.pm module after it's done
-						if ($check_time_result =~ /preload/ && !($request_info{preload})) {
+						if ($check_time_result =~ /preload/ && !($request_info->{preload})) {
 							notify($ERRORS{'OK'}, $LOGFILE, "request start time within 25-35 minute window and preload flag is 0, processing preload request");
-							$request_info{PRELOADONLY} = 1;
+							$request_info->{PRELOADONLY} = 1;
 						}
 					}
 					else {
@@ -321,11 +321,11 @@ sub main () {
 				}
 				
 				# Add the reservation ID to be processed to the hash
-				$request_info{RESERVATIONID} = $reservation_id;
+				$request_info->{RESERVATIONID} = $reservation_id;
 				
 				# Get a new data structure object
 				my $data_structure;
-				eval {$data_structure = new VCL::DataStructure({request_data => \%request_info, reservation_id => $reservation_id});};
+				eval {$data_structure = new VCL::DataStructure({request_data => $request_info, reservation_id => $reservation_id});};
 				if (my $error = Exception::Class::Base->caught()) {
 					notify($ERRORS{'CRITICAL'}, 0, "unable to create DataStructure object" . $error->message);
 					next RESERVATION;
@@ -344,7 +344,7 @@ sub main () {
 				insertloadlog($reservation_id, $computer_id, "begin", "beginning to process, state is $request_state_name");
 
 				# Make a new child process, passing it the request/reservation info
-				make_new_child({request_info => \%request_info, data_structure => $data_structure});
+				make_new_child({request_info => $request_info, data_structure => $data_structure});
 			} ## end foreach my $reservation_id (keys %{$info{request...
 		} ## end foreach my $request_id (keys %{$info{request}})
 

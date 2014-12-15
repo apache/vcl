@@ -32,13 +32,13 @@ VCL::image - Perl module for the VCL image state
  my $reservation_id = 6;
 
  # Call the VCL::utils::get_request_info subroutine to populate a hash
- my %request_info = get_request_info($request_id);
+ my $request_info = get_request_info($request_id);
 
  # Set the reservation ID in the hash
- $request_info{RESERVATIONID} = $reservation_id;
+ $request_info->{RESERVATIONID} = $reservation_id;
 
  # Create a new VCL::image object based on the request information
- my $image = VCL::image->new(%request_info);
+ my $image = VCL::image->new($request_info);
 
 =head1 DESCRIPTION
 
