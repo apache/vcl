@@ -162,6 +162,7 @@ our @EXPORT = qw(
 	get_management_node_vmhost_info
 	get_module_info
 	get_nathost_assigned_public_ports
+	get_natport_ranges
 	get_next_image_default
 	get_os_info
 	get_production_imagerevision_info
@@ -7254,6 +7255,47 @@ sub get_nathost_assigned_public_ports {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 get_natport_ranges
+
+ Parameters  : none
+ Returns     : array
+ Description : Parses the 'natport_ranges' variable. Constucts an array of
+               arrays. The child arrays are in the form:
+               ($start_port, $end_port)
+
+=cut
+
+sub get_natport_ranges {
+	return @{$ENV{natport_ranges}} if defined($ENV{natport_ranges});
+	
+	# Retrieve and parse the natport_ranges variable
+	my $natport_ranges_variable = get_variable('natport_ranges') || '49152-65535';
+	my @natport_range_strings = split(/[,;\n]+/, $natport_ranges_variable);
+	my @natport_ranges;
+	for my $natport_range_string (@natport_range_strings) {
+		my ($start_port, $end_port) = $natport_range_string =~ /(\d+)-(\d+)/g;
+		if (!defined($start_port)) {
+			notify($ERRORS{'WARNING'}, 0, "unable to parse NAT port range: '$natport_range_string'");
+			next;
+		}
+		
+		# Make sure port range isn't backwards
+		if ($end_port < $start_port) {
+			my $start_port_temp = $start_port;
+			$start_port = $end_port;
+			$end_port = $start_port_temp;
+		}
+		
+		push @natport_ranges, [$start_port, $end_port];
+	}
+	
+	notify($ERRORS{'DEBUG'}, 0, "parsed natport_ranges variable:\n" . format_data(\@natport_ranges));
+	$ENV{natport_ranges} = \@natport_ranges;
+	return @natport_ranges;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 =head2 populate_reservation_natport
 
  Parameters  : $reservation_id
@@ -7300,21 +7342,13 @@ sub populate_reservation_natport {
 	
 	my %available_port_hash;
 	
-	# Retrieve and parse the natport_ranges variable
-	my $natport_ranges_variable = get_variable('natport_ranges') || '49152-65535';
-	my @natport_ranges = split(/[,;]+/, $natport_ranges_variable);
+	# Retrieve the natport range pairs
+	my @natport_ranges = get_natport_ranges();
 	for my $natport_range (@natport_ranges) {
-		my ($start_port, $end_port) = $natport_range =~ /(\d+)-(\d+)/g;
+		my ($start_port, $end_port) = @$natport_range;
 		if (!defined($start_port)) {
-			notify($ERRORS{'WARNING'}, 0, "unable to parse NAT port range: '$natport_range'");
+			notify($ERRORS{'WARNING'}, 0, "unable to parse NAT port range:\n" . format_data($natport_range));
 			next;
-		}
-		
-		# Make sure port range isn't backwards
-		if ($end_port < $start_port) {
-			my $start_port_temp = $start_port;
-			$start_port = $end_port;
-			$end_port = $start_port_temp;
 		}
 		
 		# Loop through all of the ports in the range, check if already assigned

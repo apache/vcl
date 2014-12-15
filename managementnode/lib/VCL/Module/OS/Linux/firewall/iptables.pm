@@ -675,10 +675,10 @@ sub configure_nat {
 		"internal - interface: $internal_interface_name, IP address: $internal_ip_address/$internal_subnet_mask, network: $internal_network_address/$internal_network_bits"
 	);
 	
-	my $natport_ranges_variable = get_variable('natport_ranges') || '49152-65535';
+	my @natport_ranges = get_natport_ranges();
 	my $destination_ports = '';
-	for my $natport_range (split(/[,;]+/, $natport_ranges_variable)) {
-		my ($start_port, $end_port) = $natport_range =~ /(\d+)-(\d+)/g;
+	for my $natport_range (@natport_ranges) {
+		my ($start_port, $end_port) = @$natport_range;
 		if (!defined($start_port)) {
 			notify($ERRORS{'WARNING'}, 0, "unable to parse NAT port range: '$natport_range'");
 			next;
