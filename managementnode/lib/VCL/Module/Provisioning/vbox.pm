@@ -469,7 +469,6 @@ sub capture { ## This is going to need to be implemented before the module is co
 
 	my $image_id       = $self->data->get_image_id;
 	my $image_os_name  = $self->data->get_image_os_name;
-	my $image_identity = $self->data->get_image_identity;
 	my $image_os_type  = $self->data->get_image_os_type;
 	my $image_name     = $self->data->get_image_name();
 

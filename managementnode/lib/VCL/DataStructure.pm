@@ -1790,10 +1790,13 @@ sub get_management_node_public_default_gateway {
 	my $default_gateway;
 	
 	# Attempt to retrieve the default gateway explicitly configured for this management node
-	$default_gateway = get_management_node_info()->{PUBLIC_DEFAULT_GATEWAY};
-	if ($default_gateway && is_valid_ip_address($default_gateway)) {
-		notify($ERRORS{'DEBUG'}, 0, "returning default gateway configured in vcld.conf: $default_gateway");
-		return $default_gateway;
+	my $management_node_info = get_management_node_info();
+	if ($management_node_info) {
+		$default_gateway = $management_node_info->{PUBLIC_DEFAULT_GATEWAY};
+		if ($default_gateway && is_valid_ip_address($default_gateway)) {
+			notify($ERRORS{'DEBUG'}, 0, "returning default gateway configured for management node: $default_gateway");
+			return $default_gateway;
+		}
 	}
 	
 	# Attempt to retrieve the gateway from the route command
@@ -1876,9 +1879,15 @@ sub get_management_node_public_default_gateway {
 
 sub get_management_node_public_dns_servers {
 	# Attempt to retrieve the DNS server addresses configured for this management node
-	my $dns_address_string = get_management_node_info()->{PUBLIC_DNS_SERVER};
+	my $management_node_info = get_management_node_info();
+	if (!$management_node_info) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine public DNS servers, management node information could not be retrieved");
+		return;
+	}
+	
+	my $dns_address_string = $management_node_info->{PUBLIC_DNS_SERVER};
 	if (!$dns_address_string) {
-		notify($ERRORS{'DEBUG'}, 0, "no public dns server addresses are configured for the management node");
+		notify($ERRORS{'DEBUG'}, 0, "no public DNS server addresses are configured for the management node");
 		return ();
 	}
 	
@@ -1898,7 +1907,13 @@ sub get_management_node_public_dns_servers {
 =cut
 
 sub get_management_node_identity_key_paths {
-	my $keys_string = get_management_node_info()->{keys};
+	my $management_node_info = get_management_node_info();
+	if (!$management_node_info) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine public management node identity key paths, management node information could not be retrieved");
+		return;
+	}
+	
+	my $keys_string = $management_node_info->{keys};
 	if (!$keys_string) {
 		notify($ERRORS{'WARNING'}, 0, "no identity key paths are configured for the management node");
 		return ();

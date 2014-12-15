@@ -3506,7 +3506,11 @@ EOF
 	my $image_owner_user_info = get_user_info($image_owner_id);
 	$image_info->{owner} = $image_owner_user_info;
 	
-	$image_info->{IDENTITY} = get_management_node_info()->{keys};
+	# TODO: Get rid of the IDENTITY key, it shouldn't be used anymore
+	my $management_node_info = get_management_node_info();
+	if ($management_node_info) {
+		$image_info->{IDENTITY} = $management_node_info->{keys};
+	}
 	
 	#notify($ERRORS{'DEBUG'}, 0, "retrieved info for image '$image_identifier':\n" . format_data($image_info));
 	$ENV{image_info}{$image_identifier} = $image_info;
@@ -3998,7 +4002,11 @@ sub run_ssh_command {
 	$user = "root" if (!$user);
 	$port = 22 if (!$port);
 	$timeout_seconds = 0 if (!$timeout_seconds);
-	$identity_paths = get_management_node_info()->{keys} if (!defined $identity_paths || length($identity_paths) == 0);
+	
+	if (!defined $identity_paths || length($identity_paths) == 0) {
+		my $management_node_info = get_management_node_info();
+		$identity_paths = $management_node_info->{keys}
+	}
 	
 	# TESTING: use the new subroutine if $ENV{execute_new} is set and the command isn't one that's known to fail with the new subroutine
 	if ($ENV{execute_new} && $command !~ /(vmkfstools|qemu-img|Convert-VHD|scp)/) {
@@ -6717,11 +6725,14 @@ EOF
 	}
 	
 	# Check if the user's affiliation is listed in the management node's NOT_STANDALONE list
-	elsif (my $not_standalone_list = get_management_node_info()->{NOT_STANDALONE}) {
-		my $user_affiliation_name = $user_info->{affiliation}{name};
-		if (grep(/^$user_affiliation_name$/i, split(/[,;]/, $not_standalone_list))) {
-			notify($ERRORS{'DEBUG'}, 0, "non-standalone affiliation found for user $user_login_id:\nuser affiliation: $user_affiliation_name\nnot standalone list: $not_standalone_list");
-			$user_info->{STANDALONE} = 0;
+	else {
+		my $management_node_info = get_management_node_info();
+		if ($management_node_info) {
+			my $not_standalone_list = $management_node_info->{NOT_STANDALONE};
+			if (grep(/^$user_affiliation_name$/i, split(/[,;]/, $not_standalone_list))) {
+				notify($ERRORS{'DEBUG'}, 0, "non-standalone affiliation found for user $user_login_id:\nuser affiliation: $user_affiliation_name\nnot standalone list: $not_standalone_list");
+				$user_info->{STANDALONE} = 0;
+			}
 		}
 	}
 	

@@ -1799,14 +1799,6 @@ sub add_user {
 		return 0;
 	}
 	
-	#Make sure the identity key was passed
-	my $image_identity = shift;
-	$image_identity = $self->data->get_image_identity() if (!$image_identity);
-	if (!$image_identity) {
-		notify($ERRORS{'WARNING'}, 0, "image identity keys could not be determined");
-		return 0;
-	}
-	
 	my $useradd_cmd = $self->get_node_configuration_directory() . "/useradd $user_login_id $reservation_password";
 	if ($self->execute($useradd_cmd,1)) {
 		notify($ERRORS{'DEBUG'}, 0, "added user: $user_login_id to $computer_node_name");

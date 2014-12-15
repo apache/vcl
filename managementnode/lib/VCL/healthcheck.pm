@@ -613,7 +613,17 @@ sub _image_revision_check {
 sub send_report {
 	my ($hck) = @_;
 	
-	my $sysadmin_email = get_management_node_info()->{SYSADMIN_EMAIL};
+	my $management_node_info = get_management_node_info();
+	if (!$management_node_info) {
+		notify($ERRORS{'WARNING'}, 0, "unable to send report, management node information could not be retrieved");
+		return;
+	}
+	
+	my $sysadmin_email = $management_node_info->{SYSADMIN_EMAIL};
+	if (!$sysadmin_email) {
+		notify($ERRORS{'WARNING'}, 0, "unable to send report, management node information does not contain a SYSADMIN_EMAIL value");
+		return;
+	}
 
 	#notify($ERRORS{'OK'},0,"$hck->{globalmsg}->{body}\n\n $hck->{globalmsg}->{failedbody}\n");
 	if (defined($hck->{computercount})) {
