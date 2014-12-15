@@ -107,6 +107,7 @@ our @EXPORT = qw(
 	delete_computerloadlog_reservation
 	delete_request
 	delete_variable
+	determine_remote_connection_target
 	escape_file_path
 	format_data
 	format_hash_keys
@@ -123,6 +124,7 @@ our @EXPORT = qw(
 	get_database_table_names
 	get_code_ref_package_name
 	get_code_ref_subroutine_name
+	get_computer_current_private_ip_address
 	get_computer_current_state_name
 	get_computer_grp_members
 	get_computer_ids
@@ -2134,8 +2136,8 @@ sub check_ssh {
 
 =head2 nmap_port
 
- Parameters  : $hostname,n $port
- Returns     : 1 open 0 closed
+ Parameters  : $hostname, $port
+ Returns     : boolean
  Description : use nmap port scanning tool to determine if port is open
 
 =cut
@@ -2152,16 +2154,19 @@ sub nmap_port {
 		return;
 	}
 	
-	my $command = "/usr/bin/nmap $hostname -P0 -p $port -T Aggressive";
-	my ($exit_status, $output) = run_command($command, 1);
+	# Determine which string to use as the connection target
+	my $remote_connection_target = determine_remote_connection_target($hostname);
+	my $hostname_string = $remote_connection_target;
+	$hostname_string .= " ($hostname)" if ($hostname ne $remote_connection_target);
 	
+	my $command = "/usr/bin/nmap $remote_connection_target -P0 -p $port -T Aggressive";
+	my ($exit_status, $output) = run_command($command, 1);
 	if (!defined($output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to run nmap command on management node: '$command'");
 		return;
 	}
-	
-	if (grep(/(open|filtered)/i, @$output)) {
-		#notify($ERRORS{'DEBUG'}, 0, "port $port is open on $hostname");
+	elsif (grep(/(open|filtered)/i, @$output)) {
+		notify($ERRORS{'DEBUG'}, 0, "port $port is open on $hostname_string");
 		return 1;
 	}
 	elsif (grep(/(nmap:|warning)/i, @$output)) {
@@ -2169,7 +2174,7 @@ sub nmap_port {
 		return;
 	}
 	else {
-		#notify($ERRORS{'DEBUG'}, 0, "port $port is closed on $hostname");
+		notify($ERRORS{'DEBUG'}, 0, "port $port is closed on $hostname_string");
 		return 0;
 	}
 } ## end sub nmap_port
@@ -3999,7 +4004,6 @@ sub run_ssh_command {
 		return VCL::Module::OS::execute_new($node, $command, $output_level, $timeout_seconds, $max_attempts, $port, $user, '', $identity_paths);
 	}
 	
-	# TODO: Add ssh path to config file and set global variable
 	# Locate the path to the ssh binary
 	my $ssh_path;
 	if (-f '/usr/bin/ssh') {
@@ -4018,7 +4022,7 @@ sub run_ssh_command {
 		notify($ERRORS{'WARNING'}, 0, "unable to locate the SSH executable in the usual places");
 		return 0;
 	}
-
+	
 	# Format the identity path string
 	if (defined $identity_paths && length($identity_paths) > 0) {
 		# Add -i to beginning of string
@@ -4044,6 +4048,11 @@ sub run_ssh_command {
 	#	$command = "echo -e \"$octal_string\" | \$SHELL";
 	#	notify($ERRORS{'DEBUG'}, 0, "octal command:\n$command");
 	#}
+	
+	# Determine which string to use as the connection target
+	my $remote_connection_target = determine_remote_connection_target($node);
+	my $node_string = $remote_connection_target;
+	$node_string .= " ($node)" if ($node ne $remote_connection_target);
 
 	# Assemble the SSH command
 	# -i <identity_file>, Selects the file from which the identity (private key) for RSA authentication is read.
@@ -4061,7 +4070,7 @@ sub run_ssh_command {
 	$ssh_command .= "-l $user ";
 	$ssh_command .= "-p $port ";
 	$ssh_command .= "-x ";
-	$ssh_command .= "$node '$command' 2>&1";
+	$ssh_command .= "$remote_connection_target '$command' 2>&1";
 	
 	# Execute the command
 	my $ssh_output = '';
@@ -4088,10 +4097,10 @@ sub run_ssh_command {
 		
 		# Print the SSH command, only display the attempt # if > 1
 		if ($attempts == 1) {
-			notify($ERRORS{'DEBUG'}, 0, "executing SSH command on $node: '$command'") if $output_level;
+			notify($ERRORS{'DEBUG'}, 0, "executing SSH command on $node_string: '$command'") if $output_level;
 		}
 		else {
-			notify($ERRORS{'DEBUG'}, 0, "attempt $attempts/$max_attempts: executing SSH command on $node: '$ssh_command'") if $output_level;
+			notify($ERRORS{'DEBUG'}, 0, "attempt $attempts/$max_attempts: executing SSH command on $node_string: '$ssh_command'") if $output_level;
 		}
 		
 		# Enclose SSH command in an eval block and use alarm to eventually timeout the SSH command if it hangs
@@ -4134,16 +4143,16 @@ sub run_ssh_command {
 			kill_child_processes($PID);
 			
 			if ($max_attempts == 1 || $attempts < $max_attempts) {
-				notify($ERRORS{'WARNING'}, 0, "attempt $attempts/$max_attempts: SSH command timed out after $duration seconds, timeout threshold: $timeout_seconds seconds, command: $node:\n$ssh_command");
+				notify($ERRORS{'WARNING'}, 0, "attempt $attempts/$max_attempts: SSH command timed out after $duration seconds, timeout threshold: $timeout_seconds seconds, command: $node_string:\n$ssh_command");
 			}
 			else {
-				notify($ERRORS{'CRITICAL'}, 0, "attempt $attempts/$max_attempts: SSH command timed out after $duration seconds, timeout threshold: $timeout_seconds seconds, command: $node:\n$ssh_command");
+				notify($ERRORS{'CRITICAL'}, 0, "attempt $attempts/$max_attempts: SSH command timed out after $duration seconds, timeout threshold: $timeout_seconds seconds, command: $node_string:\n$ssh_command");
 				return;
 			}
 			next;
 		}
 		elsif ($EVAL_ERROR) {
-			notify($ERRORS{'CRITICAL'}, 0, "attempt $attempts/$max_attempts: eval error was generated attempting to run SSH command: $node:\n$ssh_command, error: $EVAL_ERROR");
+			notify($ERRORS{'CRITICAL'}, 0, "attempt $attempts/$max_attempts: eval error was generated attempting to run SSH command: $node_string:\n$ssh_command, error: $EVAL_ERROR");
 			next;
 		}
 		
@@ -4193,26 +4202,26 @@ sub run_ssh_command {
 		# ssh exits with the exit status of the remote command or with 255 if an error occurred.
 		# Check for vmware-cmd usage message, it returns 255 if the vmware-cmd usage output is returned
 		if ($ssh_output_formatted =~ /ssh:.*(lost connection|reset by peer|no route to host|connection refused|connection timed out|resource temporarily unavailable|connection reset)/i) {
-			notify($ERRORS{'WARNING'}, 0, "attempt $attempts/$max_attempts: failed to execute SSH command on $node: '$command', exit status: $exit_status, output:\n$ssh_output_formatted") if $output_level;
+			notify($ERRORS{'WARNING'}, 0, "attempt $attempts/$max_attempts: failed to execute SSH command on $node_string: '$command', exit status: $exit_status, output:\n$ssh_output_formatted") if $output_level;
 			next;
 		}
 		elsif ($ssh_output_formatted =~ /(Connection timed out during banner exchange)/i) {
 			$banner_exchange_error_count++;
 			if ($banner_exchange_error_count >= $banner_exchange_error_limit) {
-				notify($ERRORS{'WARNING'}, 0, "failed to execute SSH command on $node, encountered $banner_exchange_error_count banner exchange errors");
+				notify($ERRORS{'WARNING'}, 0, "failed to execute SSH command on $node_string, encountered $banner_exchange_error_count banner exchange errors");
 				return ();
 			}
 			else {
 				# Don't count against attempt limit
 				$attempts--;
 				my $banner_exchange_delay_seconds = ($banner_exchange_error_count * 2);
-				notify($ERRORS{'DEBUG'}, 0, "encountered banner exchange error on $node, sleeping for $banner_exchange_delay_seconds seconds, command:\n$command\noutput:\n$ssh_output") if $output_level;
+				notify($ERRORS{'DEBUG'}, 0, "encountered banner exchange error on $node_string, sleeping for $banner_exchange_delay_seconds seconds, command:\n$command\noutput:\n$ssh_output") if $output_level;
 				sleep $banner_exchange_delay_seconds;
 				next;
 			}
 		}
 		elsif ($exit_status == 255 && $ssh_command !~ /(vmware-cmd|vim-cmd|vmkfstools|vmrun)/i) {
-			notify($ERRORS{'WARNING'}, 0, "attempt $attempts/$max_attempts: failed to execute SSH command on $node: '$command', exit status: $exit_status, SSH exits with the exit status of the remote command or with 255 if an error occurred, output:\n$ssh_output_formatted") if $output_level;
+			notify($ERRORS{'WARNING'}, 0, "attempt $attempts/$max_attempts: failed to execute SSH command on $node_string: '$command', exit status: $exit_status, SSH exits with the exit status of the remote command or with 255 if an error occurred, output:\n$ssh_output_formatted") if $output_level;
 			next;
 		}
 		else {
@@ -4268,6 +4277,24 @@ sub run_scp_command {
 	# Escape spaces in the paths if they aren't already escaped
 	$path1 =~ s/([^\\]) /$1\\ /g;
 	$path2 =~ s/([^\\]) /$1\\ /g;
+	
+	# Determine which IP address or hostname should be used to connect to the target
+	if ($path1 =~ /^([^:]+):/) {
+		my $node = $1;
+		my $connection_target = determine_remote_connection_target($node);
+		if ($connection_target ne $node) {
+			$path1 =~ s/^$node:/$connection_target:/;
+		}
+	}
+	
+	if ($path2 =~ /^([^:]+):/) {
+		my $node = $1;
+		my $connection_target = determine_remote_connection_target($node);
+		if ($connection_target ne $node) {
+			$path2 =~ s/^$node:/$connection_target:/;
+		}
+	}
+	
 	
 	# Format the identity path string
 	if ($identity_paths) {
@@ -4810,10 +4837,10 @@ sub update_lastcheckin {
  Parameters  : $computer_identifier, $private_ip_address
  Returns     : boolean
  Description : Updates the computer.privateIPaddress value of the computer
-               specified by the argument. The value can be set to null by
-               passing 'null' as the argument. The $computer_identifier argument
-               may either be the numeric computer.id value or the
-               computer.hostname value.
+					specified by the argument. The value can be set to null by
+					passing 'null' as the argument. The $computer_identifier argument
+					may either be the numeric computer.id value or the
+					computer.hostname value.
 
 =cut
 
@@ -4828,6 +4855,25 @@ sub update_computer_private_ip_address {
 		notify($ERRORS{'WARNING'}, 0, "private IP address argument was not specified");
 		return;
 	}
+	
+	# Figure out the computer ID based on the $computer_identifier argument
+	my $computer_id;
+	if ($computer_identifier =~ /^\d+$/) {
+		$computer_id = $computer_identifier;
+	}
+	else {
+		$computer_id = get_computer_ids($computer_identifier);
+		if (!$computer_id) {
+			notify($ERRORS{'WARNING'}, 0, "failed to update computer private IP address, computer ID could not be determed from argument: $computer_identifier");
+			return;
+		}
+	}
+	
+	my $computer_string = $computer_identifier;
+	$computer_string .= " ($computer_id)" if ($computer_identifier ne $computer_id);
+	
+	# Delete cached data if previously set
+	delete $ENV{computer_private_ip_address}{$computer_id};
 	
 	my $private_ip_address_text;
 	if ($private_ip_address =~ /null/i) {
@@ -4845,25 +4891,19 @@ SET
 privateIPaddress = $private_ip_address_text
 WHERE
 computer.deleted != '1'
-AND 
+AND computer.id = '$computer_id'
 EOF
-
-	# If the computer identifier is all digits match it to computer.id
-	# Otherwise, match computer.hostname
-	if ($computer_identifier =~ /^\d+$/) {
-		$update_statement .= "computer.id = \'$computer_identifier\'";
-	}
-	else {
-		$update_statement .= "computer.hostname REGEXP '$computer_identifier(\\\\.|\$)'";
-	}
 
 	# Call the database execute subroutine
 	if (database_execute($update_statement)) {
-		notify($ERRORS{'OK'}, 0, "updated private IP address of computer $computer_identifier in database: $private_ip_address");
+		if ($private_ip_address !~ /null/i) {
+			$ENV{computer_private_ip_address}{$computer_id} = $private_ip_address;
+		}
+		notify($ERRORS{'OK'}, 0, "updated private IP address of computer $computer_string in database: $private_ip_address");
 		return 1;
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to update private IP address of computer $computer_identifier in database: $private_ip_address");
+		notify($ERRORS{'WARNING'}, 0, "failed to update private IP address of computer $computer_string in database: $private_ip_address");
 		return;
 	}
 }
@@ -7555,17 +7595,27 @@ sub get_reservation_request_info {
 =head2 get_computer_ids
 
  Parameters  : $computer_identifier
- Returns     : array
+ Returns     : If called in scalar context: integer
+               If called in array context: array
  Description : Queries the computer table for computers matching the
                $computer_identifier argument. The argument may contain either
-               the computer's hostname or IP address. An array containing the
-               computer IDs is returned.
+               the computer's hostname or IP address. Deleted computers are not
+               considered.
+               
+               If called in scalar context:
+               - returns an integer if a single computer matched the argument
+               - returns null if no computers or multiple computers match the
+                 argument
+               
+               If called in array context:
+               - returns an array containing matching computer IDs
+               - returns an empty array if no computers match the argument
 
 =cut
 
 sub get_computer_ids {
 	my ($computer_identifier) = @_;
-
+	
 	if (!defined($computer_identifier)) {
 		notify($ERRORS{'WARNING'}, $LOGFILE, "computer identifier argument was not supplied");
 		return;
@@ -7573,7 +7623,8 @@ sub get_computer_ids {
 
 	my $select_statement = <<EOF;
 SELECT
-*
+id,
+hostname
 FROM
 computer
 WHERE
@@ -7586,28 +7637,43 @@ AND (
 EOF
 
 	my @selected_rows = database_select($select_statement);
-	if (!@selected_rows) {
-		notify($ERRORS{'DEBUG'}, 0, "no computers were found matching identifier: $computer_identifier");
-		return ();
-	}
-
 	my @computer_ids = map { $_->{id} } @selected_rows;
-	notify($ERRORS{'DEBUG'}, 0, "found computers matching identifier: $computer_identifier, IDs: @computer_ids");
-	return sort @computer_ids;
+	my $computer_id_count = scalar(@computer_ids);
+	
+	if (!$computer_id_count) {
+		notify($ERRORS{'WARNING'}, 0, "no computers were found matching argument: $computer_identifier");
+		return;
+	}
+	
+	if (wantarray) {
+		notify($ERRORS{'DEBUG'}, 0, $computer_id_count . " computer" . ($computer_id_count == 1 ? ' was' : 's were') . " found matching argument: $computer_identifier, returning computer ID" . ($computer_id_count == 1 ? '' : 's') . ": " . join(", ", @computer_ids));
+		return @computer_ids;
+	}
+	else {
+		if ($computer_id_count > 1) {
+			notify($ERRORS{'WARNING'}, 0, "multiple computers were found matching argument: $computer_identifier\n" . format_data(\@selected_rows));
+			return;
+		}
+		else {
+			my $computer_id = $computer_ids[0];
+			#notify($ERRORS{'DEBUG'}, 0, "computer was found matching argument $computer_identifier, returning computer ID: $computer_id");
+			return $computer_id;
+		}
+	}
 }
 
 #/////////////////////////////////////////////////////////////////////////////
 
 =head2 insert_request
 
- Parameters  : $managementnode_id, $request_state_name, $request_laststate_name, $end_minutes_in_future, $user_unityid, $computer_id, $image_id, $imagerevision_id
+ Parameters  : $managementnode_id, $request_state_name, $request_laststate_name, $end_minutes_in_future, $user_unityid, $computer_identifier, $image_id, $imagerevision_id
  Returns     : 1 if successful, 0 if failed
  Description :
 
 =cut
 
 sub insert_request {
-	my ($managementnode_id, $request_state_name, $request_laststate_name, $request_logid, $user_unityid, $computer_id, $image_id, $imagerevision_id, $start_minutes_in_future, $end_minutes_in_future) = @_;
+	my ($managementnode_id, $request_state_name, $request_laststate_name, $request_logid, $user_unityid, $computer_identifier, $image_id, $imagerevision_id, $start_minutes_in_future, $end_minutes_in_future) = @_;
 
 
 	if (!$request_state_name) {
@@ -7623,8 +7689,8 @@ sub insert_request {
 		return 0;
 	}
 
-	if (!$computer_id) {
-		notify($ERRORS{'WARNING'}, 0, "missing mandatory reservation key: computer_id");
+	if (!$computer_identifier) {
+		notify($ERRORS{'WARNING'}, 0, "missing mandatory reservation key: computer_identifier");
 		return 0;
 	}
 	if (!$image_id) {
@@ -7640,15 +7706,18 @@ sub insert_request {
 		return 0;
 	}
 	
-	if ($computer_id !~ /^\d+$/) {
-		my @computer_ids = get_computer_ids($computer_id);
-		if (scalar(@computer_ids) != 1) {
-			notify($ERRORS{'WARNING'}, 0, "computer ID argument is not numeric and computer ID could not be determined");
+	my $computer_id;
+	if ($computer_identifier =~ /^\d+$/) {
+		$computer_id = $computer_identifier;
+	}
+	else {
+		$computer_id = get_computer_ids($computer_identifier);
+		if (!$computer_id) {
+			notify($ERRORS{'WARNING'}, 0, "failed to insert request, computer ID could not be determined from argument: $computer_identifier");
 			return;
 		}
-		$computer_id = $computer_ids[0];
 	}
-
+	
 	my $insert_request_statment = "
 	INSERT INTO
 	request
@@ -8762,7 +8831,7 @@ sub read_file_to_array {
 
 =head2 is_valid_ip_address
 
- Parameters  : IP address string
+ Parameters  : $ip_address, $display_output (optional)
  Returns     : If valid: true
                If not valid: false
  Description : Determines if the argument is a valid IP address.
@@ -8770,34 +8839,35 @@ sub read_file_to_array {
 =cut
 
 sub is_valid_ip_address {
-	my $ip_address = shift;
+	my ($ip_address, $display_output) = @_;
 	if (!$ip_address) {
 		notify($ERRORS{'WARNING'}, 0, "IP address argument was not specified");
 		return;
 	}
+	$display_output = 1 unless defined($display_output);
 	
 	# Split up the IP address being checked into its octets
 	my @octets = split(/\./, $ip_address);
 	
 	# Make sure 4 octets were found
 	if (scalar @octets != 4) {
-		notify($ERRORS{'DEBUG'}, 0, "IP address does not contain 4 octets: $ip_address, octets:\n" . join("\n", @octets));
+		notify($ERRORS{'DEBUG'}, 0, "IP address does not contain 4 octets: $ip_address, octets:\n" . join("\n", @octets)) if $display_output;
 		return 0;
 	}
 	
 	# Make sure address only contains digits
 	if (grep(/\D/, @octets)) {
-		notify($ERRORS{'DEBUG'}, 0, "IP address contains a non-digit: $ip_address");
+		notify($ERRORS{'DEBUG'}, 0, "IP address contains a non-digit: $ip_address") if $display_output;
 		return 0;
 	}
 	
 	# Make sure none of the octets is > 255
 	if ($octets[0] > 255 || $octets[0] > 255 || $octets[0] > 255 || $octets[0] > 255) {
-		notify($ERRORS{'DEBUG'}, 0, "IP address contains an octet > 255: $ip_address");
+		notify($ERRORS{'DEBUG'}, 0, "IP address contains an octet > 255: $ip_address") if $display_output;
 		return 0;
 	}
 	
-	#notify($ERRORS{'DEBUG'}, 0, "IP address is valid: $ip_address");
+	#notify($ERRORS{'DEBUG'}, 0, "IP address is valid: $ip_address") if $display_output;
 	return 1;
 }
 
@@ -12379,6 +12449,84 @@ EOF
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 get_computer_current_private_ip_address
+
+ Parameters  : $computer_identifier, $no_cache (optional)
+ Returns     : string
+ Description : Retrieves the privateIPaddress value from the computer table for
+               a single computer.
+               
+               Returns the private IP address if:
+               - a single non-deleted or deleted computer matches the argument
+                 (a warning is displayed if the computer is deleted)
+               
+               Returns null if:
+               - no computers or multiple computers match the argument
+
+=cut
+
+sub get_computer_current_private_ip_address {
+	my ($computer_identifier, $no_cache) = @_;
+	if (!$computer_identifier) {
+		notify($ERRORS{'WARNING'}, 0, "computer identifier argument was not supplied");
+		return;
+	}
+	$no_cache = 0 unless defined($no_cache);
+	
+	# Figure out the computer ID based on the $computer_identifier argument
+	my $computer_id;
+	if ($computer_identifier =~ /^\d+$/) {
+		$computer_id = $computer_identifier;
+	}
+	else {
+		$computer_id = get_computer_ids($computer_identifier);
+		if (!$computer_id) {
+			notify($ERRORS{'WARNING'}, 0, "failed to retrieve current private IP address from database, computer ID could not be determed from argument: $computer_identifier");
+			return;
+		}
+	}
+	
+	my $computer_string = $computer_identifier;
+	$computer_string .= " ($computer_id)" if ($computer_identifier ne $computer_id);
+	
+	if (!$no_cache && defined($ENV{computer_private_ip_address}{$computer_id})) {
+		notify($ERRORS{'DEBUG'}, 0, "returning cached private IP address for computer $computer_string: $ENV{computer_private_ip_address}{$computer_id}");
+		return $ENV{computer_private_ip_address}{$computer_id};
+	}
+	
+	my $select_statement = <<EOF;
+SELECT
+computer.hostname,
+computer.privateIPaddress
+FROM
+computer
+WHERE
+computer.id = '$computer_id'
+AND computer.deleted = 0
+EOF
+	
+	my @rows = database_select($select_statement);
+	if (!@rows) {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve private IP address from database for computer $computer_string");
+		return;
+	}
+	
+	my $row = $rows[0];
+	my $private_ip_address = $row->{privateIPaddress};
+	my $hostname = $row->{hostname};
+	if ($private_ip_address) {
+		$ENV{computer_private_ip_address}{$computer_id} = $private_ip_address;
+		notify($ERRORS{'DEBUG'}, 0, "retrieved private IP address for computer $computer_string from database: $private_ip_address");
+		return $private_ip_address;
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "private IP address for computer $computer_string is set to null in database");
+		return;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 =head2 hostname_to_ip_address
 
  Parameters  : $hostname
@@ -12396,11 +12544,11 @@ sub hostname_to_ip_address {
 	my $packed_ip_address = gethostbyname($hostname);
 	if (defined $packed_ip_address) {
 		my $ip_address = inet_ntoa($packed_ip_address);
-		#notify($ERRORS{'DEBUG'}, 0, "determined IP address hostname $hostname resolves to: $ip_address");
+		notify($ERRORS{'DEBUG'}, 0, "resolved IP address from hostname $hostname --> $ip_address");
 		return $ip_address;
 	}
 	else {
-		notify($ERRORS{'DEBUG'}, 0, "unable to determined IP address hostname $hostname resolves to");
+		notify($ERRORS{'DEBUG'}, 0, "unable to resolve IP address from hostname: $hostname");
 		return;
 	}
 }
@@ -12423,11 +12571,11 @@ sub ip_address_to_hostname {
 	
 	my $hostname = gethostbyaddr(inet_aton($ip_address), AF_INET);
 	if (defined $hostname) {
-		notify($ERRORS{'DEBUG'}, 0, "determined hostname from IP address $ip_address: $hostname");
+		notify($ERRORS{'DEBUG'}, 0, "resolved hostname from IP address $ip_address --> $hostname");
 		return $hostname;
 	}
 	else {
-		notify($ERRORS{'DEBUG'}, 0, "unable to determine hostname from IP address: $ip_address");
+		notify($ERRORS{'DEBUG'}, 0, "unable to resolve hostname from IP address: $ip_address");
 		return;
 	}
 }
@@ -12608,6 +12756,80 @@ sub ip_address_to_network_address {
 	}
 	else {
 		return $network_address;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 determine_remote_connection_target
+
+ Parameters  : $argument, $no_cache (optional)
+ Returns     : string
+ Description : Attempts to determine the string to use when connecting to a
+               remote node. If an IP address is passed, the same IP address is
+               always returned. If a hostname is passed, an attempt is made to
+               retrieve the private IP address of the host. If successful, the
+               private IP address is returned. Otherwise, the hostname argument
+               is returned.
+
+=cut
+
+sub determine_remote_connection_target {
+	my ($argument, $no_cache) = @_;
+	$no_cache = 0 unless defined($no_cache);
+	
+	if (!$no_cache && defined($ENV{remote_connection_target}{$argument})) {
+		return $ENV{remote_connection_target}{$argument};
+	}
+	
+	# If an IP address was passed, use it
+	if (is_valid_ip_address($argument, 0)) {
+		$ENV{remote_connection_target}{$argument} = $argument;
+		notify($ERRORS{'DEBUG'}, 0, "argument is a valid IP address, it will be used as the remote connection target: $ENV{remote_connection_target}{$argument}");
+		return $ENV{remote_connection_target}{$argument};
+	}
+	
+	# Attempt to retrieve the private IP address from the database
+	my $database_private_ip_address = get_computer_current_private_ip_address($argument);
+	if ($database_private_ip_address) {
+		$ENV{remote_connection_target}{$argument} = $database_private_ip_address;
+		notify($ERRORS{'DEBUG'}, 0, "private IP address is set in database for $argument, it will be used as the remote connection target: $ENV{remote_connection_target}{$argument}");
+		return $ENV{remote_connection_target}{$argument};
+	}
+	
+	# Private IP address could not be retrieved from the database or is set to NULL
+	# Try to resolve the argument to an IP address
+	# First make sure it is a valid hostname
+	if (!is_valid_dns_host_name($argument)) {
+		$ENV{remote_connection_target}{$argument} = $argument;
+		notify($ERRORS{'WARNING'}, 0, "failed to reliably determine the remote connection target to use for '$argument', it is not a valid IP address or DNS hostname");
+		return $ENV{remote_connection_target}{$argument};
+	}
+	
+	# Check if the hostname includes a DNS suffix
+	# If so, extract the short hostname and try to resolve that
+	my $resolved_ip_address;
+	if ($argument =~ /^([^\.]+)\./) {
+		my $short_hostname = $1;
+		notify($ERRORS{'DEBUG'}, 0, "hostname $argument contains a DNS suffix, attempting to resolve the hostname without its DNS suffix: $short_hostname");
+		$resolved_ip_address = hostname_to_ip_address($short_hostname);
+	}
+	if (!$resolved_ip_address) {
+		$resolved_ip_address = hostname_to_ip_address($argument);
+	}
+	
+	if ($resolved_ip_address) {
+		# Attempt to set the private IP address in the database
+		update_computer_private_ip_address($argument, $resolved_ip_address);
+		
+		$ENV{remote_connection_target}{$argument} = $resolved_ip_address;
+		notify($ERRORS{'DEBUG'}, 0, "$argument resolves to IP address $resolved_ip_address, it will be used as the remote connection target");
+		return $ENV{remote_connection_target}{$argument};
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to reliably determine the remote connection target to use for '$argument', it is not a valid IP address, a private IP address is not set in the database, and '$argument' does not resolve to an IP address on this management node");
+		$ENV{remote_connection_target}{$argument} = $argument;
+		return $ENV{remote_connection_target}{$argument};
 	}
 }
 

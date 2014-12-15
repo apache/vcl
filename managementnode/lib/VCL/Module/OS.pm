@@ -2167,7 +2167,7 @@ sub execute {
 	# Check the argument type
 	if (ref($argument)) {
 		if (ref($argument) eq 'HASH') {
-			notify($ERRORS{'DEBUG'}, 0, "first argument is a hash reference:\n" . format_data($argument));
+			#notify($ERRORS{'DEBUG'}, 0, "first argument is a hash reference:\n" . format_data($argument));
 			
 			$computer_name = $argument->{node} if (!$computer_name);
 			$command = $argument->{command};
@@ -2315,13 +2315,18 @@ sub execute_new {
 		return;
 	}
 	
+	# Determine which string to use as the connection target
+	my $remote_connection_target = determine_remote_connection_target($computer_name);
+	my $computer_string = $computer_name;
+	$computer_string .= " ($remote_connection_target)" if ($remote_connection_target ne $computer_name);
+	
 	$display_output = 0 unless $display_output;
 	$timeout_seconds = 60 unless $timeout_seconds;
 	$max_attempts = 3 unless $max_attempts;
 	$port = 22 unless $port;
 	$user = 'root' unless $user;
 	
-	my $ssh_options = '-o StrictHostKeyChecking=no -o ConnectTimeout=30';
+	my $ssh_options = '-o StrictHostKeyChecking=no -o ConnectTimeout=30 -x';
 	
 	# Figure out which identity key to use
 	# If identity key argument was supplied, it may be a single path or a comma-separated list
@@ -2349,7 +2354,7 @@ sub execute_new {
 		if ($attempt > 0) {
 			$attempt_string = "attempt $attempt/$max_attempts: ";
 			$ssh->close() if $ssh;
-			delete $ENV{net_ssh_expect}{$computer_name};
+			delete $ENV{net_ssh_expect}{$remote_connection_target};
 			
 			notify($ERRORS{'DEBUG'}, 0, $attempt_string . "sleeping for $attempt_delay seconds before making next attempt");
 			sleep $attempt_delay;
@@ -2362,10 +2367,10 @@ sub execute_new {
 		# Use a flag to determine if null should be returned without making another attempt
 		my $return_null;
 		
-		if (!$ENV{net_ssh_expect}{$computer_name}) {
+		if (!$ENV{net_ssh_expect}{$remote_connection_target}) {
 			eval {
 				$ssh = Net::SSH::Expect->new(
-					host => $computer_name,
+					host => $remote_connection_target,
 					user => $user,
 					port => $port,
 					raw_pty => 1,
@@ -2376,17 +2381,19 @@ sub execute_new {
 				
 				if ($ssh) {
 					
-					notify($ERRORS{'DEBUG'}, 0, "created " . ref($ssh) . " object to control $computer_name, SSH options: $ssh_options");
+					notify($ERRORS{'DEBUG'}, 0, "created " . ref($ssh) . " object to control $computer_string, SSH options: $ssh_options");
 				}
 				else {
-					notify($ERRORS{'WARNING'}, 0, "failed to create Net::SSH::Expect object to control $computer_name, $!");
+					notify($ERRORS{'WARNING'}, 0, "failed to create Net::SSH::Expect object to control $computer_string, $!");
 					next ATTEMPT;
 				}
 				
 				if (!$ssh->run_ssh()) {
-					notify($ERRORS{'WARNING'}, 0, ref($ssh) . " object failed to fork SSH process to control $computer_name, $!");
+					notify($ERRORS{'WARNING'}, 0, ref($ssh) . " object failed to fork SSH process to control $computer_string, $!");
 					next ATTEMPT;
 				}
+				
+				sleep_uninterrupted(1);
 				
 				#$ssh->exec("stty -echo");
 				#$ssh->exec("stty raw -echo");
@@ -2400,14 +2407,14 @@ sub execute_new {
 					notify($ERRORS{'DEBUG'}, 0, "SSH initialization output:\n$initialization_output") if ($display_output);
 					if ($initialization_output =~ /password:/i) {
 						if (defined($password)) {
-							notify($ERRORS{'WARNING'}, 0, "$attempt_string unable to connect to $computer_name, SSH is requesting a password but password authentication is not implemented, password is configured, output:\n$initialization_output");
+							notify($ERRORS{'WARNING'}, 0, "$attempt_string unable to connect to $computer_string, SSH is requesting a password but password authentication is not implemented, password is configured, output:\n$initialization_output");
 							
 							# In EVAL block here, 'return' won't return from entire subroutine, set flag
 							$return_null = 1;
 							return;
 						}
 						else {
-							notify($ERRORS{'WARNING'}, 0, "$attempt_string unable to connect to $computer_name, SSH is requesting a password but password authentication is not implemented, password is not configured, output:\n$initialization_output");
+							notify($ERRORS{'WARNING'}, 0, "$attempt_string unable to connect to $computer_string, SSH is requesting a password but password authentication is not implemented, password is not configured, output:\n$initialization_output");
 							$return_null = 1;
 							return;
 						}
@@ -2421,27 +2428,27 @@ sub execute_new {
 			return if ($return_null);
 			if ($EVAL_ERROR) {
 				if ($EVAL_ERROR =~ /^(\w+) at \//) {
-					notify($ERRORS{'DEBUG'}, 0, $attempt_string . "$1 error occurred initializing Net::SSH::Expect object for $computer_name") if ($display_output);
+					notify($ERRORS{'DEBUG'}, 0, $attempt_string . "$1 error occurred initializing Net::SSH::Expect object for $computer_string") if ($display_output);
 				}
 				else {
-					notify($ERRORS{'DEBUG'}, 0, $attempt_string . "$EVAL_ERROR error occurred initializing Net::SSH::Expect object for $computer_name") if ($display_output);
+					notify($ERRORS{'DEBUG'}, 0, $attempt_string . "$EVAL_ERROR error occurred initializing Net::SSH::Expect object for $computer_string") if ($display_output);
 				}
 				next ATTEMPT;
 			}
 		}
 		else {
-			$ssh = $ENV{net_ssh_expect}{$computer_name};
+			$ssh = $ENV{net_ssh_expect}{$remote_connection_target};
 			
 			# Delete the stored SSH object to make sure it isn't saved if the command fails
 			# The SSH object will be added back to %ENV if the command completes successfully
-			delete $ENV{net_ssh_expect}{$computer_name};
+			delete $ENV{net_ssh_expect}{$remote_connection_target};
 		}
 		
 		# Set the timeout
 		$ssh->timeout($timeout_seconds);
 		
 		(my $command_formatted = $command) =~ s/\s+(;|&|&&)\s+/\n$1 /g;
-		notify($ERRORS{'DEBUG'}, 0, $attempt_string . "executing command on $computer_name (timeout: $timeout_seconds seconds):\n$command_formatted") if ($display_output);
+		notify($ERRORS{'DEBUG'}, 0, $attempt_string . "executing command on $computer_string (timeout: $timeout_seconds seconds):\n$command_formatted") if ($display_output);
 		my $command_start_time = time;
 		$ssh->send($command . ' 2>&1 ; echo exitstatus:$?');
 		
@@ -2452,19 +2459,19 @@ sub execute_new {
 		
 		if ($EVAL_ERROR) {
 			if ($ignore_error) {
-				notify($ERRORS{'DEBUG'}, 0, "executed command on $computer_name: '$command', ignoring error, returning null") if ($display_output);
+				notify($ERRORS{'DEBUG'}, 0, "executed command on $computer_string: '$command', ignoring error, returning null") if ($display_output);
 				return;
 			}
 			elsif ($EVAL_ERROR =~ /^(\w+) at \//) {
-				notify($ERRORS{'WARNING'}, 0, $attempt_string . "$1 error occurred executing command on $computer_name: '$command'") if ($display_output);
+				notify($ERRORS{'WARNING'}, 0, $attempt_string . "$1 error occurred executing command on $computer_string: '$command'") if ($display_output);
 			}
 			else {
-				notify($ERRORS{'WARNING'}, 0, $attempt_string . "error occurred executing command on $computer_name: '$command'\nerror: $EVAL_ERROR") if ($display_output);
+				notify($ERRORS{'WARNING'}, 0, $attempt_string . "error occurred executing command on $computer_string: '$command'\nerror: $EVAL_ERROR") if ($display_output);
 			}
 			next ATTEMPT;
 		}
 		elsif (!$ssh_wait_status) {
-			notify($ERRORS{'WARNING'}, 0, $attempt_string . "command timed out after $timeout_seconds seconds on $computer_name: '$command'") if ($display_output);
+			notify($ERRORS{'WARNING'}, 0, $attempt_string . "command timed out after $timeout_seconds seconds on $computer_string: '$command'") if ($display_output);
 			next ATTEMPT;
 		}
 		
@@ -2487,15 +2494,15 @@ sub execute_new {
 		my @output_lines = split(/\n/, $output);
 		map { s/[\r]+//g; } (@output_lines);
 		
-		notify($ERRORS{'OK'}, 0, "executed command on $computer_name: '$command', exit status: $exit_status, output:\n$output") if ($display_output);
+		notify($ERRORS{'OK'}, 0, "executed command on $computer_string: '$command', exit status: $exit_status, output:\n$output") if ($display_output);
 		
 		# Save the SSH object for later use
-		$ENV{net_ssh_expect}{$computer_name} = $ssh;
+		$ENV{net_ssh_expect}{$remote_connection_target} = $ssh;
 		
 		return ($exit_status, \@output_lines);
 	}
 	
-	notify($ERRORS{'WARNING'}, 0, $attempt_string . "failed to execute command on $computer_name: '$command'") if ($display_output);
+	notify($ERRORS{'WARNING'}, 0, $attempt_string . "failed to execute command on $computer_string: '$command'") if ($display_output);
 	return;
 }
 

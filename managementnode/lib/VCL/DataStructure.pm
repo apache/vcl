@@ -1505,35 +1505,55 @@ sub get_computer_private_ip_address {
 	
 	my $suppress_warning = shift;
 	
+	my $computer_id = $self->get_computer_id();
 	my $computer_hostname = $self->get_computer_hostname();
-	if (!$computer_hostname) {
-		notify($ERRORS{'WARNING'}, 0, "computer hostname is not stored in this DataStructure object");
+	if (!defined($computer_id) || !defined($computer_hostname)) {
+		notify($ERRORS{'WARNING'}, 0, "computer ID and hostname are not stored in this DataStructure object");
 		return;
 	}
 	
-	# Check if this is being called by set_computer_private_ip_address
-	# Don't display log messages if this is the case to avoid confusion
-	my $display_output = 1;
-	if (get_calling_subroutine() =~ /set_computer_private_ip_address/) {
-		$display_output = 0;
-	}
-	
 	# Check if the IP address is already stored
-	my $private_ip_address = $self->request_data->{reservation}{$self->reservation_id}{computer}{privateIPaddress};
-	if ($private_ip_address) {
-		notify($ERRORS{'DEBUG'}, 0, "returning private IP address of $computer_hostname already stored in this DataStructure object: $private_ip_address") if $display_output;
-		return $private_ip_address;
-	}
+	my $data_structure_private_ip_address = $self->request_data->{reservation}{$self->reservation_id}{computer}{privateIPaddress};
+	my $env_private_ip_address = $ENV{computer_private_ip_address}{$computer_id};
 	
-	if ($display_output) {
-		if ($suppress_warning) {
-			notify($ERRORS{'DEBUG'}, 0, "private IP address of $computer_hostname is not set in DataStructure object")
+	# Check if private IP adddress is stored in %ENV and differs from this object's data
+	if ($data_structure_private_ip_address) {
+		if ($env_private_ip_address) {
+			if ($env_private_ip_address =~ /null/i) {
+				notify($ERRORS{'DEBUG'}, 0, "private IP address for $computer_hostname ($computer_id) is stored in this object $data_structure_private_ip_address, \%ENV is set to null, deleting private IP address from this object");
+				delete $self->request_data->{reservation}{$self->reservation_id}{computer}{privateIPaddress};
+				return;
+			}
+			elsif ($data_structure_private_ip_address eq $env_private_ip_address) {
+				notify($ERRORS{'DEBUG'}, 0, "private IP address for $computer_hostname ($computer_id) stored in this object matches IP address stored in \%ENV: $data_structure_private_ip_address");
+			}
+			else {
+				notify($ERRORS{'DEBUG'}, 0, "private IP address for $computer_hostname ($computer_id) stored in this object $data_structure_private_ip_address does not match IP address stored in \%ENV, updating private IP address stored in this object: $env_private_ip_address");
+				$self->request_data->{reservation}{$self->reservation_id}{computer}{privateIPaddress} = $env_private_ip_address;
+			}
+			return $env_private_ip_address;
 		}
 		else {
-			notify($ERRORS{'WARNING'}, 0, "private IP address of $computer_hostname is not set in DataStructure object")
+			notify($ERRORS{'DEBUG'}, 0, "returning private IP address of $computer_hostname ($computer_id) already stored in this DataStructure object: $data_structure_private_ip_address");
+			return $data_structure_private_ip_address;
 		}
 	}
-	return;
+	else {
+		if ($env_private_ip_address && $env_private_ip_address !~ /null/i) {
+			notify($ERRORS{'DEBUG'}, 0, "private IP address for $computer_hostname ($computer_id) is not stored in this object but is stored in \%ENV, setting private IP address in this object: $env_private_ip_address");
+			$self->request_data->{reservation}{$self->reservation_id}{computer}{privateIPaddress} = $env_private_ip_address;
+			return $env_private_ip_address;
+		}
+		else {
+			if ($suppress_warning) {
+				notify($ERRORS{'DEBUG'}, 0, "private IP address of $computer_hostname ($computer_id) is not set in this object");
+			}
+			else {
+				notify($ERRORS{'WARNING'}, 0, "private IP address of $computer_hostname ($computer_id) is not set in this object")
+			}
+			return;
+		}
+	}
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -1579,30 +1599,18 @@ sub set_computer_private_ip_address {
 		return;
 	}
 	
-	my $existing_private_ip_address = $self->get_computer_private_ip_address();
-	
-	if (!$existing_private_ip_address && $private_ip_address_argument =~ /null/i) {
-		notify($ERRORS{'DEBUG'}, 0, "setting private IP address of $computer_hostname to '$private_ip_address_argument' not necessary, it is not set in this DataStructure object");
-		return 1;
-	}
-	elsif ($existing_private_ip_address && $existing_private_ip_address eq $private_ip_address_argument) {
-		notify($ERRORS{'DEBUG'}, 0, "private IP address of $computer_hostname is already set to $private_ip_address_argument");
-		return 1;
+	# Update this DataStructure object
+	if ($private_ip_address_argument =~ /null/i) {
+		delete $self->request_data->{reservation}{$self->reservation_id}{computer}{privateIPaddress};
 	}
 	else {
-		# Update this DataStructure object
-		if ($private_ip_address_argument =~ /null/i) {
-			delete $self->request_data->{reservation}{$self->reservation_id}{computer}{privateIPaddress};
-		}
-		else {
-			$self->request_data->{reservation}{$self->reservation_id}{computer}{privateIPaddress} = $private_ip_address_argument;
-		}
-		
-		# Update the database
-		if (!update_computer_private_ip_address($computer_id, $private_ip_address_argument)) {
-			notify($ERRORS{'WARNING'}, 0, "failed to update private IP address of $computer_hostname to $private_ip_address_argument, unable to update the database");
-			return;
-		}
+		$self->request_data->{reservation}{$self->reservation_id}{computer}{privateIPaddress} = $private_ip_address_argument;
+	}
+	
+	# Update the database
+	if (!update_computer_private_ip_address($computer_id, $private_ip_address_argument)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to update private IP address of $computer_hostname to $private_ip_address_argument, unable to update the database");
+		return;
 	}
 	
 	notify($ERRORS{'DEBUG'}, 0, "private IP address of $computer_hostname set to $private_ip_address_argument");
