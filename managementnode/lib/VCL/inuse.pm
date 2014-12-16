@@ -387,6 +387,8 @@ sub user_connected {
 	# Check if this is an imaging request, causes process to exit if state or laststate = image
 	$self->_check_imaging_request();
 
+	delete_computerloadlog_reservation($reservation_id, '!beginacknowledgetimeout',1);
+
 	# Check if this is a server request, causes process to exit if server request
 	if ($server_request_id) {
 		notify($ERRORS{'DEBUG'}, 0, "server reservation detected, set as user is connected");
