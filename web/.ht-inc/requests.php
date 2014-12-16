@@ -4234,6 +4234,20 @@ function AJconnectRequest() {
 			$froms = array('/#userid#/',
 			               '/#password#/',
 			               '/#connectIP#/');
+			# check that connecttext includes port if nat is being used
+			if($usenat) {
+				$found = 0;
+				foreach($method['ports'] as $port) {
+					if(preg_match("/{$port['key']}/", $method['connecttext'])) {
+						$found = 1;
+						break;
+					}
+				}
+				if(! $found) {
+					# no port in connect text, assume first port will work
+					$method['connecttext'] = preg_replace("/#connectIP#/", "#connectIP#:{$method['ports'][0]['key']}", $method['connecttext']);
+				}
+			}
 			$tos = array($conuser,
 			             $passwd,
 			             $res['connectIP']);
