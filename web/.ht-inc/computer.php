@@ -4313,6 +4313,7 @@ class Computer extends Resource {
 
 		$allids = implode(',', $compids);
 		$inusecompids = array();
+		$vclreloadid = getUserlistID('vclreload@Local');
 		$query = "SELECT rs.computerid "
 		       . "FROM request rq, "
 		       .      "reservation rs "
@@ -4320,7 +4321,8 @@ class Computer extends Resource {
 		       .       "rs.computerid IN ($allids) AND "
 		       .       "rq.start <= NOW() AND "
 		       .       "rq.end > NOW() AND "
-		       .       "rq.stateid NOT IN (1,5,11,12)";
+		       .       "rq.stateid NOT IN (1,5,11,12) AND "
+		       .       "rq.userid != $vclreloadid";
 		$qh = doQuery($query);
 		while($row = mysql_fetch_assoc($qh))
 			$inusecompids[] = $row['computerid'];
