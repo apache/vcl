@@ -87,7 +87,7 @@ CREATE TABLE IF NOT EXISTS `blockRequest` (
   `groupid` smallint(5) unsigned NOT NULL,
   `repeating` enum('weekly','monthly','list') NOT NULL default 'weekly',
   `ownerid` mediumint(8) unsigned NOT NULL,
-  `admingroupid` mediumint(8) unsigned NOT NULL,
+  `admingroupid` smallint(5) unsigned NOT NULL,
   `managementnodeid` smallint(5) unsigned NOT NULL,
   `expireTime` datetime NOT NULL,
   `processing` tinyint(1) unsigned NOT NULL,
@@ -173,6 +173,7 @@ CREATE TABLE IF NOT EXISTS `changelog` (
   KEY `logid` (`logid`),
   KEY `userid` (`userid`),
   KEY `reservationid` (`reservationid`),
+  KEY `computerid` (`computerid`),
   UNIQUE KEY reservation_user_remoteIP (userid,reservationid,remoteIP)
 ) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
 
@@ -260,8 +261,8 @@ CREATE TABLE IF NOT EXISTS `computer` (
 -- 
 
 CREATE TABLE IF NOT EXISTS `computerloadflow` (
-  `computerloadstateid` smallint(8) NOT NULL,
-  `nextstateid` smallint(8) default NULL,
+  `computerloadstateid` smallint(8) unsigned NOT NULL,
+  `nextstateid` smallint(8) unsigned default NULL,
   `type` enum('blade','lab','virtualmachine') default NULL,
   KEY `computerloadstateid` (`computerloadstateid`),
   KEY `nextstateid` (`nextstateid`),
@@ -450,7 +451,8 @@ CREATE TABLE IF NOT EXISTS `image` (
   KEY `platformid` (`platformid`),
   KEY `OSid` (`OSid`),
   KEY `imagemetaid` (`imagemetaid`),
-  KEY `imagetypeid` (`imagetypeid`)
+  KEY `imagetypeid` (`imagetypeid`),
+  KEY `basedoffrevisionid` (`basedoffrevisionid`)
 ) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
@@ -660,16 +662,13 @@ CREATE TABLE IF NOT EXISTS `nathost` (
 
 CREATE TABLE IF NOT EXISTS `natlog` (
   `logid` int(10) unsigned NOT NULL,
-  `connectmethodportid` tinyint(3) unsigned default NULL,
-  `nathostid` smallint(5) unsigned default NULL,
-  `publicIPaddress` varchar(15) NOT NULL,
   `computerid` smallint(5) unsigned NOT NULL,
+  `publicIPaddress` varchar(15) NOT NULL,
+  `internalIPaddress` varchar(15) NOT NULL,
   `publicport` smallint(5) unsigned NOT NULL,
-  `privateport` smallint(5) unsigned NOT NULL,
+  `internalport` smallint(5) unsigned NOT NULL,
   `protocol` enum('TCP','UDP') NOT NULL,
   KEY `logid` (`logid`),
-  KEY `connectmethodportid` (`connectmethodportid`),
-  KEY `nathostid` (`nathostid`),
   KEY `computerid` (`computerid`)
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
@@ -1179,7 +1178,11 @@ CREATE TABLE IF NOT EXISTS `sublog` (
   KEY `logid` (`logid`),
   KEY `imageid` (`imageid`),
   KEY `imagerevisionid` (`imagerevisionid`),
-  KEY `computerid` (`computerid`)
+  KEY `computerid` (`computerid`),
+  KEY `managementnodeid` (`managementnodeid`),
+  KEY `predictivemoduleid` (`predictivemoduleid`),
+  KEY `hostcomputerid` (`hostcomputerid`),
+  KEY `blockRequestid` (`blockRequestid`)
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
@@ -1242,7 +1245,8 @@ CREATE TABLE IF NOT EXISTS `usergroup` (
   PRIMARY KEY  (`id`),
   UNIQUE KEY `name` (`name`,`affiliationid`),
   KEY `ownerid` (`ownerid`),
-  KEY `editusergroupid` (`editusergroupid`)
+  KEY `editusergroupid` (`editusergroupid`),
+  KEY `affiliationid` (`affiliationid`)
 ) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
@@ -1594,18 +1598,18 @@ INSERT IGNORE INTO `documentation` (`name`, `title`, `data`) VALUES
 ('Resources', 'Resources', '<h2>Overview</h2>\r\n<p>Computers, images, management nodes, and schedules have some very similar characteristics in how they are handled within the VCL site. Therefore, there are times where it is easier to refer to them all together as <b><span style="color: rgb(255, 0, 0);">resources</span></b>. Here are some similarities between them:</p>\r\n<ul>\r\n    <li>They are all managed by adding them to <span style="color: rgb(255, 0, 0);"><b>resource groups</b></span>.&nbsp; All resource groups have a type associated with them such that only <span style="color: rgb(0, 0, 255);">images</span> can be part of an <span style="color: rgb(0, 0, 255);">image group</span>, only <span style="color: rgb(0, 0, 255);">computers</span> can be part of a <span style="color: rgb(0, 0, 255);">computer group</span>, etc.</li>\r\n    <li>Resources of one type can be related to resources of certain other types through <span style="color: rgb(255, 0, 0);"><b>resource mapping</b></span>. <span style="color: rgb(0, 0, 255);">Image groups</span> and <span style="color: rgb(0, 0, 255);">computer groups</span> can be mapped together, and <span style="color: rgb(0, 0, 255);">management node</span><span style="color: rgb(0, 0, 255);"> groups</span> and&nbsp;<span style="color: rgb(0, 0, 255);">computer</span><span style="color: rgb(0, 0, 255);"> groups</span> can be mapped together.</li>\r\n    <li>Privileges over resources are only granted through resource groups.&nbsp; Privileges cannot be granted directly to a resource.</li>\r\n    <li>There is an <span style="color: rgb(255, 0, 0);"><b>Admin</b></span> privilege that can be granted to users for each type of resource: computerAdmin, imageAdmin, mgmtNodeAdmin, and scheduleAdmin</li>\r\n</ul>\r\n<h2>Grouping</h2>\r\n<p>The amount of images and computers that become part of a VCL install can grow very rappidly. Because of this, it is much easier to deal with them in groups rather than individually. The amount of schedules and management nodes does not typically grow very large. However, due to other similarities as resources, they are handled in groups as well.</p>\r\n<h2>Mapping</h2>\r\n<p>Mapping allows for tight control over how resources can be used together. Through image to computer mapping, one has tight control over which computers an image could end up being run. This can be used to control things like platform dependencies, to ensure only vm images get run on the correct type of vm computer, and to ensure an image containing software purchased by a specific group only gets run on computers owned by the same group (this can be handled with resource privileges as well).</p>\r\n<p>Through management node to computer mapping, assignment of which management nodes control which computers is accomplished. One can quickly switch which management node is in control of a group of computers. Additionally, when management node redundancy is fully implemented, this is how management nodes will be able to control overlapping groups of computers.</p>\r\n<h2>Resource Privileges</h2>\r\n<p>There are three privileges that can be assigned to resource groups:</p>\r\n<ul>\r\n    <li>available</li>\r\n    <li>administer</li>\r\n    <li>manageGroup</li>\r\n</ul>\r\n<p><span style="color: rgb(0, 0, 255);">available</span> is only used for image and computer groups. If it is assigned to a schedule or management node group, it is simply ignored. This privilege correspondes to these user group privileges: imageCheckOut and imageAdmin. When a user has one of these two privileges at a node along with an image group or a computer group having the available privilege at the same node, then the user will have access to make a reservations for the images in the group (imageCheckOut) or make a new images based off of images in the group (imageAdmin). Note that both an image group and a computer group must have the available permission where a user has imageCheckOut for the user to make a reservation for an image in the image group. This is used to determine which computers are available at the node to go along with which images are also available at the node.</p>\r\n<p><span style="color: rgb(0, 0, 255);">administer</span> is used for all types of resources, and thus corresponds to all of the *Admin user privileges (computerAdmin, imageAdmin, mgmtNodeAdmin, and scheduleAdmin). Administer generally grants access to manage specific <i>characteristics</i> of resources in a group, but not to manage any grouping information. For example, if a user has the imageAdmin privilege at a node where an image group has the administer privilege, the user would then have access to modify <i>characteristics</i> of images in that group (name, owner, minimum specs required by the image, etc), but would <b>not</b> have access to edit which images are <i>in the group</i>.</p>\r\n<p><span style="color: rgb(0, 0, 255);">manageGroup</span> is also used for all types of resources. It grants access to a few different things. One is the ability to modify information about a group under <span style="color: rgb(0, 0, 255);">Manage Groups </span>(if a user also has the groupAdmin privilege). Another is the ability to manage membership of a group. Finally, it provides access for mapping one type of group to another (for this, manageGroup must be granted for both types of resources). Additionally, there is an extra way manageGroup is used specifically related to computer groups: a user must have scheduleAdmin and manageGroup over a schedule group to be able to change the schedule of a computer (both through Manage Computers-&gt;Edit Computer Information and Manage Computers-&gt;Computer Utilities-&gt;Change schedule of computers).</p>');
 
 -- 
--- Dumping data for table `image`
--- 
-
-INSERT IGNORE INTO `image` (`id`, `name`, `prettyname`, `ownerid`, `imagetypeid`, `platformid`, `OSid`, `imagemetaid`, `minram`, `minprocnumber`, `minprocspeed`, `minnetwork`, `maxconcurrent`, `reloadtime`, `deleted`, `test`, `lastupdate`, `forcheckout`, `maxinitialtime`, `project`, `size`) VALUES 
-(1, 'noimage', 'No Image', 1, 1, 1, 2, NULL, 0, 1, 0, 10, NULL, 0, 0, 0, NULL, 0, 0, 'vcl', 1450);
-
--- 
 -- Dumping data for table `imagerevision`
 -- 
 
 INSERT IGNORE INTO `imagerevision` (`id`, `imageid`, `revision`, `userid`, `datecreated`, `deleted`, `production`, `comments`, `imagename`) VALUES 
 (1, 1, 0, 1, '1980-01-01 00:00:00', 0, 1, NULL, 'noimage');
+
+-- 
+-- Dumping data for table `image`
+-- 
+
+INSERT IGNORE INTO `image` (`id`, `name`, `prettyname`, `ownerid`, `imagetypeid`, `platformid`, `OSid`, `imagemetaid`, `minram`, `minprocnumber`, `minprocspeed`, `minnetwork`, `maxconcurrent`, `reloadtime`, `deleted`, `test`, `lastupdate`, `forcheckout`, `maxinitialtime`, `project`, `size`, `basedoffrevisionid`) VALUES 
+(1, 'noimage', 'No Image', 1, 1, 1, 2, NULL, 0, 1, 0, 10, NULL, 0, 0, 0, NULL, 0, 0, 'vcl', 0, 1);
 
 --
 -- Dumping data for table `imagetype`
@@ -2105,6 +2109,7 @@ INSERT IGNORE INTO `vmtype` (`id`, `name`) VALUES
 -- 
 ALTER TABLE `blockComputers` ADD CONSTRAINT FOREIGN KEY (`blockTimeid`) REFERENCES `blockTimes` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 ALTER TABLE `blockComputers` ADD CONSTRAINT FOREIGN KEY (`computerid`) REFERENCES `computer` (`id`);
+ALTER TABLE `blockComputers` ADD CONSTRAINT FOREIGN KEY (`imageid`) REFERENCES `image` (`id`);
 
 -- 
 -- Constraints for table `blockRequest`
@@ -2112,6 +2117,8 @@ ALTER TABLE `blockComputers` ADD CONSTRAINT FOREIGN KEY (`computerid`) REFERENCE
 ALTER TABLE `blockRequest` ADD CONSTRAINT FOREIGN KEY (`imageid`) REFERENCES `image` (`id`);
 ALTER TABLE `blockRequest` ADD CONSTRAINT FOREIGN KEY (`groupid`) REFERENCES `usergroup` (`id`);
 ALTER TABLE `blockRequest` ADD CONSTRAINT FOREIGN KEY (`ownerid`) REFERENCES `user` (`id`);
+ALTER TABLE `blockRequest` ADD CONSTRAINT FOREIGN KEY (`admingroupid`) REFERENCES `usergroup` (`id`);
+ALTER TABLE `blockRequest` ADD CONSTRAINT FOREIGN KEY (`managementnodeid`) REFERENCES `managementnode` (`id`);
 
 -- 
 -- Constraints for table `blockTimes`
@@ -2129,17 +2136,38 @@ ALTER TABLE `blockWebDate` ADD CONSTRAINT FOREIGN KEY (`blockRequestid`) REFEREN
 ALTER TABLE `blockWebTime` ADD CONSTRAINT FOREIGN KEY (`blockRequestid`) REFERENCES `blockRequest` (`id`) ON DELETE CASCADE;
 
 -- 
+-- Constraints for table `changelog`
+--
+ALTER TABLE `changelog` ADD CONSTRAINT FOREIGN KEY (`logid`) REFERENCES `log` (`id`) ON DELETE CASCADE;
+ALTER TABLE `changelog` ADD CONSTRAINT FOREIGN KEY (`userid`) REFERENCES `user` (`id`);
+ALTER TABLE `changelog` ADD CONSTRAINT FOREIGN KEY (`computerid`) REFERENCES `computer` (`id`);
+
+-- 
+-- Constraints for table `clickThroughs`
+--
+ALTER TABLE `clickThroughs` ADD CONSTRAINT FOREIGN KEY (`userid`) REFERENCES `user` (`id`);
+ALTER TABLE `clickThroughs` ADD CONSTRAINT FOREIGN KEY (`imageid`) REFERENCES `image` (`id`);
+ALTER TABLE `clickThroughs` ADD CONSTRAINT FOREIGN KEY (`imagerevisionid`) REFERENCES `imagerevision` (`id`);
+
+-- 
 -- Constraints for table `computer`
 -- 
-ALTER TABLE `computer` ADD CONSTRAINT FOREIGN KEY (vmhostid) REFERENCES vmhost (`id`) ON UPDATE CASCADE;
+ALTER TABLE `computer` ADD CONSTRAINT FOREIGN KEY (vmhostid) REFERENCES `vmhost` (`id`) ON UPDATE CASCADE;
 ALTER TABLE `computer` ADD CONSTRAINT FOREIGN KEY (`ownerid`) REFERENCES `user` (`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 ALTER TABLE `computer` ADD CONSTRAINT FOREIGN KEY (`scheduleid`) REFERENCES `schedule` (`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 ALTER TABLE `computer` ADD CONSTRAINT FOREIGN KEY (`stateid`) REFERENCES `state` (`id`) ON UPDATE CASCADE;
 ALTER TABLE `computer` ADD CONSTRAINT FOREIGN KEY (`platformid`) REFERENCES `platform` (`id`) ON UPDATE CASCADE;
 ALTER TABLE `computer` ADD CONSTRAINT FOREIGN KEY (`currentimageid`) REFERENCES `image` (`id`) ON UPDATE CASCADE;
 ALTER TABLE `computer` ADD CONSTRAINT FOREIGN KEY (`provisioningid`) REFERENCES `provisioning` (`id`) ON UPDATE CASCADE;
-ALTER TABLE `computer` ADD CONSTRAINT FOREIGN KEY (`imagerevisionid`) REFERENCES imagerevision (`id`) ON UPDATE CASCADE;
-ALTER TABLE `computer` ADD CONSTRAINT FOREIGN KEY (`nextimageid`) REFERENCES image (`id`) ON UPDATE CASCADE;
+ALTER TABLE `computer` ADD CONSTRAINT FOREIGN KEY (`imagerevisionid`) REFERENCES `imagerevision` (`id`) ON UPDATE CASCADE;
+ALTER TABLE `computer` ADD CONSTRAINT FOREIGN KEY (`nextimageid`) REFERENCES `image` (`id`) ON UPDATE CASCADE;
+ALTER TABLE `computer` ADD CONSTRAINT FOREIGN KEY (`predictivemoduleid`) REFERENCES `module` (`id`) ON UPDATE CASCADE;
+
+-- 
+-- Constraints for table `computerloadflow`
+--
+ALTER TABLE `computerloadflow` ADD CONSTRAINT FOREIGN KEY (computerloadstateid) REFERENCES `computerloadstate` (`id`) ON UPDATE CASCADE;
+ALTER TABLE `computerloadflow` ADD CONSTRAINT FOREIGN KEY (nextstateid) REFERENCES `computerloadstate` (`id`) ON UPDATE CASCADE;
 
 -- 
 -- Constraints for table `computerloadlog`
@@ -2171,6 +2199,7 @@ ALTER TABLE `connectlog` ADD CONSTRAINT FOREIGN KEY (`userid`) REFERENCES `user`
 -- Constraints for table `continuations`
 -- 
 ALTER TABLE `continuations` ADD CONSTRAINT FOREIGN KEY (`parentid`) REFERENCES `continuations` (`id`) ON DELETE CASCADE;
+ALTER TABLE `continuations` ADD CONSTRAINT FOREIGN KEY (`userid`) REFERENCES `user` (`id`);
 
 -- 
 -- Constraints for table `image`
@@ -2179,6 +2208,8 @@ ALTER TABLE `image` ADD CONSTRAINT FOREIGN KEY (`ownerid`) REFERENCES `user` (`i
 ALTER TABLE `image` ADD CONSTRAINT FOREIGN KEY (`platformid`) REFERENCES `platform` (`id`) ON UPDATE CASCADE;
 ALTER TABLE `image` ADD CONSTRAINT FOREIGN KEY (`OSid`) REFERENCES `OS` (`id`) ON UPDATE CASCADE;
 ALTER TABLE `image` ADD CONSTRAINT FOREIGN KEY (`imagetypeid`) REFERENCES `imagetype` (`id`) ON UPDATE CASCADE;
+ALTER TABLE `image` ADD CONSTRAINT FOREIGN KEY (`imagemetaid`) REFERENCES `imagemeta` (`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `image` ADD CONSTRAINT FOREIGN KEY (`basedoffrevisionid`) REFERENCES `imagerevision` (`id`) ON UPDATE CASCADE;
 
 -- 
 -- Constraints for table `imagerevision`
@@ -2196,6 +2227,12 @@ ALTER TABLE `localauth` ADD CONSTRAINT FOREIGN KEY (`userid`) REFERENCES `user` 
 -- 
 ALTER TABLE `log` ADD CONSTRAINT FOREIGN KEY (`userid`) REFERENCES `user` (`id`) ON UPDATE CASCADE;
 ALTER TABLE `log` ADD CONSTRAINT FOREIGN KEY (`imageid`) REFERENCES `image` (`id`) ON UPDATE CASCADE;
+ALTER TABLE `log` ADD CONSTRAINT FOREIGN KEY (`computerid`) REFERENCES `computer` (`id`) ON UPDATE CASCADE;
+
+-- 
+-- Constraints for table `loginlog`
+--
+ALTER TABLE `loginlog` ADD CONSTRAINT FOREIGN KEY (`affiliationid`) REFERENCES `affiliation` (`id`) ON UPDATE CASCADE;
 
 -- 
 -- Constraints for table `managementnode`
@@ -2211,11 +2248,9 @@ ALTER TABLE `nathost` ADD CONSTRAINT FOREIGN KEY (`resourceid`) REFERENCES `reso
 
 -- 
 -- Constraints for table `natlog`
--- 
-ALTER TABLE `natlog` ADD CONSTRAINT FOREIGN KEY (`computerid`) REFERENCES `computer` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+--
 ALTER TABLE `natlog` ADD CONSTRAINT FOREIGN KEY (`logid`) REFERENCES `log` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
-ALTER TABLE `natlog` ADD CONSTRAINT FOREIGN KEY (`connectmethodportid`) REFERENCES `connectmethodport` (`id`) ON DELETE SET NULL ON UPDATE CASCADE;
-ALTER TABLE `natlog` ADD CONSTRAINT FOREIGN KEY (`nathostid`) REFERENCES `nathost` (`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `natlog` ADD CONSTRAINT FOREIGN KEY (`computerid`) REFERENCES `computer` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- 
 -- Constraints for table `nathostcomputermap`
@@ -2302,6 +2337,8 @@ ALTER TABLE `resourcegroupmembers` ADD CONSTRAINT FOREIGN KEY (`resourcegroupid`
 -- 
 ALTER TABLE `resourcemap` ADD CONSTRAINT FOREIGN KEY (`resourcegroupid1`) REFERENCES `resourcegroup` (`id`) ON DELETE CASCADE;
 ALTER TABLE `resourcemap` ADD CONSTRAINT FOREIGN KEY (`resourcegroupid2`) REFERENCES `resourcegroup` (`id`) ON DELETE CASCADE;
+ALTER TABLE `resourcemap` ADD CONSTRAINT FOREIGN KEY (`resourcetypeid1`) REFERENCES `resourcetype` (`id`) ON DELETE CASCADE;
+ALTER TABLE `resourcemap` ADD CONSTRAINT FOREIGN KEY (`resourcetypeid2`) REFERENCES `resourcetype` (`id`) ON DELETE CASCADE;
 
 -- 
 -- Constraints for table `resourcepriv`
@@ -2313,6 +2350,11 @@ ALTER TABLE `resourcepriv` ADD CONSTRAINT FOREIGN KEY (`privnodeid`) REFERENCES 
 -- Constraints for table `schedule`
 -- 
 ALTER TABLE `schedule` ADD CONSTRAINT FOREIGN KEY (`ownerid`) REFERENCES `user` (`id`) ON UPDATE CASCADE;
+
+-- 
+-- Constraints for table `scheduletimes`
+-- 
+ALTER TABLE `scheduletimes` ADD CONSTRAINT FOREIGN KEY (`scheduleid`) REFERENCES `schedule` (`id`) ON UPDATE CASCADE;
 
 -- 
 -- Constraints for table `semaphore`
@@ -2336,6 +2378,36 @@ ALTER TABLE `serverprofile` ADD CONSTRAINT FOREIGN KEY (`imageid`) REFERENCES `i
 ALTER TABLE `serverrequest` ADD CONSTRAINT FOREIGN KEY (`requestid`) REFERENCES `request` (`id`) ON DELETE CASCADE;
 ALTER TABLE `serverrequest` ADD CONSTRAINT FOREIGN KEY (`admingroupid`) REFERENCES `usergroup` (`id`) ON UPDATE CASCADE;
 ALTER TABLE `serverrequest` ADD CONSTRAINT FOREIGN KEY (`logingroupid`) REFERENCES `usergroup` (`id`) ON UPDATE CASCADE;
+ALTER TABLE `serverrequest` ADD CONSTRAINT FOREIGN KEY (`serverprofileid`) REFERENCES `serverprofile` (`id`) ON UPDATE CASCADE;
+
+--
+-- Constraints for table `shibauth`
+--
+ALTER TABLE `shibauth` ADD CONSTRAINT FOREIGN KEY (`userid`) REFERENCES `user` (`id`);
+
+--
+-- Constraints for table `statgraphcache`
+--
+ALTER TABLE `statgraphcache` ADD CONSTRAINT FOREIGN KEY (`affiliationid`) REFERENCES `affiliation` (`id`);
+ALTER TABLE `statgraphcache` ADD CONSTRAINT FOREIGN KEY (`provisioningid`) REFERENCES `provisioning` (`id`);
+
+--
+-- Constraints for table `subimages`
+--
+ALTER TABLE `subimages` ADD CONSTRAINT FOREIGN KEY (`imagemetaid`) REFERENCES `imagemeta` (`id`);
+ALTER TABLE `subimages` ADD CONSTRAINT FOREIGN KEY (`imageid`) REFERENCES `image` (`id`);
+
+--
+-- Constraints for table `sublog`
+--
+ALTER TABLE `sublog` ADD CONSTRAINT FOREIGN KEY (`logid`) REFERENCES `log` (`id`);
+ALTER TABLE `sublog` ADD CONSTRAINT FOREIGN KEY (`imageid`) REFERENCES `image` (`id`);
+ALTER TABLE `sublog` ADD CONSTRAINT FOREIGN KEY (`imagerevisionid`) REFERENCES `imagerevision` (`id`);
+ALTER TABLE `sublog` ADD CONSTRAINT FOREIGN KEY (`computerid`) REFERENCES `computer` (`id`);
+ALTER TABLE `sublog` ADD CONSTRAINT FOREIGN KEY (`managementnodeid`) REFERENCES `managementnode` (`id`);
+ALTER TABLE `sublog` ADD CONSTRAINT FOREIGN KEY (`predictivemoduleid`) REFERENCES `module` (`id`);
+ALTER TABLE `sublog` ADD CONSTRAINT FOREIGN KEY (`hostcomputerid`) REFERENCES `computer` (`id`);
+ALTER TABLE `sublog` ADD CONSTRAINT FOREIGN KEY (`blockRequestid`) REFERENCES `blockRequest` (`id`);
 
 -- 
 -- Constraints for table `user`
@@ -2348,6 +2420,7 @@ ALTER TABLE `user` ADD CONSTRAINT FOREIGN KEY (`IMtypeid`) REFERENCES `IMtype` (
 -- 
 ALTER TABLE `usergroup` ADD CONSTRAINT FOREIGN KEY (`ownerid`) REFERENCES `user` (`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 ALTER TABLE `usergroup` ADD CONSTRAINT FOREIGN KEY (`editusergroupid`) REFERENCES `usergroup` (`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `usergroup` ADD CONSTRAINT FOREIGN KEY (`affiliationid`) REFERENCES `affiliation` (`id`);
 
 -- 
 -- Constraints for table `usergroupmembers`
@@ -2391,7 +2464,7 @@ ALTER TABLE `winKMS` ADD CONSTRAINT FOREIGN KEY (`affiliationid`) REFERENCES `af
 -- Constraints for table `winProductKey`
 --
 ALTER TABLE `winProductKey` ADD CONSTRAINT FOREIGN KEY (`affiliationid`) REFERENCES `affiliation` (`id`) ON UPDATE CASCADE;
-
+  
 --
 -- Legacy columns to drop
 --
