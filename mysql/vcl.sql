@@ -2103,341 +2103,295 @@ INSERT IGNORE INTO `vmtype` (`id`, `name`) VALUES
 -- 
 -- Constraints for table `blockComputers`
 -- 
-ALTER TABLE `blockComputers`
-  ADD CONSTRAINT `blockComputers_ibfk_1` FOREIGN KEY (`blockTimeid`) REFERENCES `blockTimes` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
-  ADD CONSTRAINT `blockComputers_ibfk_2` FOREIGN KEY (`computerid`) REFERENCES `computer` (`id`);
+ALTER TABLE `blockComputers` ADD CONSTRAINT FOREIGN KEY (`blockTimeid`) REFERENCES `blockTimes` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `blockComputers` ADD CONSTRAINT FOREIGN KEY (`computerid`) REFERENCES `computer` (`id`);
 
 -- 
 -- Constraints for table `blockRequest`
 -- 
-ALTER TABLE `blockRequest`
-  ADD CONSTRAINT `blockRequest_ibfk_4` FOREIGN KEY (`imageid`) REFERENCES `image` (`id`),
-  ADD CONSTRAINT `blockRequest_ibfk_5` FOREIGN KEY (`groupid`) REFERENCES `usergroup` (`id`),
-  ADD CONSTRAINT `blockRequest_ibfk_6` FOREIGN KEY (`ownerid`) REFERENCES `user` (`id`);
+ALTER TABLE `blockRequest` ADD CONSTRAINT FOREIGN KEY (`imageid`) REFERENCES `image` (`id`);
+ALTER TABLE `blockRequest` ADD CONSTRAINT FOREIGN KEY (`groupid`) REFERENCES `usergroup` (`id`);
+ALTER TABLE `blockRequest` ADD CONSTRAINT FOREIGN KEY (`ownerid`) REFERENCES `user` (`id`);
 
 -- 
 -- Constraints for table `blockTimes`
 -- 
-ALTER TABLE `blockTimes`
-  ADD CONSTRAINT `blockTimes_ibfk_1` FOREIGN KEY (`blockRequestid`) REFERENCES `blockRequest` (`id`) ON DELETE CASCADE;
+ALTER TABLE `blockTimes` ADD CONSTRAINT FOREIGN KEY (`blockRequestid`) REFERENCES `blockRequest` (`id`) ON DELETE CASCADE;
 
 -- 
 -- Constraints for table `blockWebDate`
 -- 
-ALTER TABLE `blockWebDate`
-  ADD CONSTRAINT `blockWebDate_ibfk_1` FOREIGN KEY (`blockRequestid`) REFERENCES `blockRequest` (`id`) ON DELETE CASCADE;
+ALTER TABLE `blockWebDate` ADD CONSTRAINT FOREIGN KEY (`blockRequestid`) REFERENCES `blockRequest` (`id`) ON DELETE CASCADE;
 
 -- 
 -- Constraints for table `blockWebTime`
 -- 
-ALTER TABLE `blockWebTime`
-  ADD CONSTRAINT `blockWebTime_ibfk_1` FOREIGN KEY (`blockRequestid`) REFERENCES `blockRequest` (`id`) ON DELETE CASCADE;
+ALTER TABLE `blockWebTime` ADD CONSTRAINT FOREIGN KEY (`blockRequestid`) REFERENCES `blockRequest` (`id`) ON DELETE CASCADE;
 
 -- 
 -- Constraints for table `computer`
 -- 
-ALTER TABLE `computer`
-  ADD CONSTRAINT `computer_ibfk_40` FOREIGN KEY (vmhostid) REFERENCES vmhost (`id`) ON UPDATE CASCADE,
-  ADD CONSTRAINT `computer_ibfk_12` FOREIGN KEY (`ownerid`) REFERENCES `user` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
-  ADD CONSTRAINT `computer_ibfk_30` FOREIGN KEY (`scheduleid`) REFERENCES `schedule` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
-  ADD CONSTRAINT `computer_ibfk_33` FOREIGN KEY (`stateid`) REFERENCES `state` (`id`) ON UPDATE CASCADE,
-  ADD CONSTRAINT `computer_ibfk_35` FOREIGN KEY (`platformid`) REFERENCES `platform` (`id`) ON UPDATE CASCADE,
-  ADD CONSTRAINT `computer_ibfk_36` FOREIGN KEY (`currentimageid`) REFERENCES `image` (`id`) ON UPDATE CASCADE,
-  ADD CONSTRAINT `computer_ibfk_37` FOREIGN KEY (`provisioningid`) REFERENCES `provisioning` (`id`) ON UPDATE CASCADE,
-  ADD CONSTRAINT `computer_ibfk_38` FOREIGN KEY (`imagerevisionid`) REFERENCES imagerevision (`id`) ON UPDATE CASCADE,
-  ADD CONSTRAINT `computer_ibfk_39` FOREIGN KEY (`nextimageid`) REFERENCES image (`id`) ON UPDATE CASCADE;
+ALTER TABLE `computer` ADD CONSTRAINT FOREIGN KEY (vmhostid) REFERENCES vmhost (`id`) ON UPDATE CASCADE;
+ALTER TABLE `computer` ADD CONSTRAINT FOREIGN KEY (`ownerid`) REFERENCES `user` (`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `computer` ADD CONSTRAINT FOREIGN KEY (`scheduleid`) REFERENCES `schedule` (`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `computer` ADD CONSTRAINT FOREIGN KEY (`stateid`) REFERENCES `state` (`id`) ON UPDATE CASCADE;
+ALTER TABLE `computer` ADD CONSTRAINT FOREIGN KEY (`platformid`) REFERENCES `platform` (`id`) ON UPDATE CASCADE;
+ALTER TABLE `computer` ADD CONSTRAINT FOREIGN KEY (`currentimageid`) REFERENCES `image` (`id`) ON UPDATE CASCADE;
+ALTER TABLE `computer` ADD CONSTRAINT FOREIGN KEY (`provisioningid`) REFERENCES `provisioning` (`id`) ON UPDATE CASCADE;
+ALTER TABLE `computer` ADD CONSTRAINT FOREIGN KEY (`imagerevisionid`) REFERENCES imagerevision (`id`) ON UPDATE CASCADE;
+ALTER TABLE `computer` ADD CONSTRAINT FOREIGN KEY (`nextimageid`) REFERENCES image (`id`) ON UPDATE CASCADE;
 
 -- 
 -- Constraints for table `computerloadlog`
 -- 
-ALTER TABLE `computerloadlog`
-  ADD CONSTRAINT `computerloadlog_ibfk_1` FOREIGN KEY (`reservationid`) REFERENCES `reservation` (`id`) ON DELETE CASCADE,
-  ADD CONSTRAINT `computerloadlog_ibfk_2` FOREIGN KEY (`loadstateid`) REFERENCES `computerloadstate` (`id`),
-  ADD CONSTRAINT `computerloadlog_ibfk_3` FOREIGN KEY (`computerid`) REFERENCES `computer` (`id`);
+ALTER TABLE `computerloadlog` ADD CONSTRAINT FOREIGN KEY (`reservationid`) REFERENCES `reservation` (`id`) ON DELETE CASCADE;
+ALTER TABLE `computerloadlog` ADD CONSTRAINT FOREIGN KEY (`loadstateid`) REFERENCES `computerloadstate` (`id`);
+ALTER TABLE `computerloadlog` ADD CONSTRAINT FOREIGN KEY (`computerid`) REFERENCES `computer` (`id`);
 
 --
 -- Constraints for table `connectmethodmap`
 --
-ALTER TABLE `connectmethodmap`
-  ADD CONSTRAINT `connectmethodmap_ibfk_1` FOREIGN KEY (`connectmethodid`) REFERENCES `connectmethod` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
-  ADD CONSTRAINT `connectmethodmap_ibfk_2` FOREIGN KEY (`OStypeid`) REFERENCES `OStype` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
-  ADD CONSTRAINT `connectmethodmap_ibfk_3` FOREIGN KEY (`OSid`) REFERENCES `OS` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
-  ADD CONSTRAINT `connectmethodmap_ibfk_4` FOREIGN KEY (`imagerevisionid`) REFERENCES `imagerevision` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `connectmethodmap` ADD CONSTRAINT FOREIGN KEY (`connectmethodid`) REFERENCES `connectmethod` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `connectmethodmap` ADD CONSTRAINT FOREIGN KEY (`OStypeid`) REFERENCES `OStype` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `connectmethodmap` ADD CONSTRAINT FOREIGN KEY (`OSid`) REFERENCES `OS` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `connectmethodmap` ADD CONSTRAINT FOREIGN KEY (`imagerevisionid`) REFERENCES `imagerevision` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 --
 -- Constraints for table `connectmethodport`
 --
-ALTER TABLE `connectmethodport`
-  ADD CONSTRAINT `connectmethodport_ibfk_1` FOREIGN KEY (`connectmethodid`) REFERENCES `connectmethod` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `connectmethodport` ADD CONSTRAINT FOREIGN KEY (`connectmethodid`) REFERENCES `connectmethod` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 --
 -- Constraints for table `connectlog`
 --
-ALTER TABLE `connectlog`
-  ADD CONSTRAINT `connectlog_ibfk_3` FOREIGN KEY (`logid`) REFERENCES `log` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
-  ADD CONSTRAINT `connectlog_ibfk_1` FOREIGN KEY (`userid`) REFERENCES `user` (`id`) ON UPDATE CASCADE;
+ALTER TABLE `connectlog` ADD CONSTRAINT FOREIGN KEY (`logid`) REFERENCES `log` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `connectlog` ADD CONSTRAINT FOREIGN KEY (`userid`) REFERENCES `user` (`id`) ON UPDATE CASCADE;
 
 -- 
 -- Constraints for table `continuations`
 -- 
-ALTER TABLE `continuations`
-  ADD CONSTRAINT `continuations_ibfk_1` FOREIGN KEY (`parentid`) REFERENCES `continuations` (`id`) ON DELETE CASCADE;
+ALTER TABLE `continuations` ADD CONSTRAINT FOREIGN KEY (`parentid`) REFERENCES `continuations` (`id`) ON DELETE CASCADE;
 
 -- 
 -- Constraints for table `image`
 -- 
-ALTER TABLE `image`
-  ADD CONSTRAINT `image_ibfk_1` FOREIGN KEY (`ownerid`) REFERENCES `user` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
-  ADD CONSTRAINT `image_ibfk_6` FOREIGN KEY (`platformid`) REFERENCES `platform` (`id`) ON UPDATE CASCADE,
-  ADD CONSTRAINT `image_ibfk_7` FOREIGN KEY (`OSid`) REFERENCES `OS` (`id`) ON UPDATE CASCADE,
-  ADD CONSTRAINT `image_ibfk_8` FOREIGN KEY (`imagetypeid`) REFERENCES `imagetype` (`id`) ON UPDATE CASCADE;
+ALTER TABLE `image` ADD CONSTRAINT FOREIGN KEY (`ownerid`) REFERENCES `user` (`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `image` ADD CONSTRAINT FOREIGN KEY (`platformid`) REFERENCES `platform` (`id`) ON UPDATE CASCADE;
+ALTER TABLE `image` ADD CONSTRAINT FOREIGN KEY (`OSid`) REFERENCES `OS` (`id`) ON UPDATE CASCADE;
+ALTER TABLE `image` ADD CONSTRAINT FOREIGN KEY (`imagetypeid`) REFERENCES `imagetype` (`id`) ON UPDATE CASCADE;
 
 -- 
 -- Constraints for table `imagerevision`
 -- 
-ALTER TABLE `imagerevision`
-  ADD CONSTRAINT `imagerevision_ibfk_1` FOREIGN KEY (`imageid`) REFERENCES `image` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
-  ADD CONSTRAINT `imagerevision_ibfk_2` FOREIGN KEY (`userid`) REFERENCES `user` (`id`) ON UPDATE CASCADE;
+ALTER TABLE `imagerevision` ADD CONSTRAINT FOREIGN KEY (`imageid`) REFERENCES `image` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `imagerevision` ADD CONSTRAINT FOREIGN KEY (`userid`) REFERENCES `user` (`id`) ON UPDATE CASCADE;
 
 -- 
 -- Constraints for table `localauth`
 -- 
-ALTER TABLE `localauth`
-  ADD CONSTRAINT `localauth_ibfk_1` FOREIGN KEY (`userid`) REFERENCES `user` (`id`) ON DELETE CASCADE;
+ALTER TABLE `localauth` ADD CONSTRAINT FOREIGN KEY (`userid`) REFERENCES `user` (`id`) ON DELETE CASCADE;
 
 -- 
 -- Constraints for table `log`
 -- 
-ALTER TABLE `log`
-  ADD CONSTRAINT `log_ibfk_1` FOREIGN KEY (`userid`) REFERENCES `user` (`id`) ON UPDATE CASCADE,
-  ADD CONSTRAINT `log_ibfk_3` FOREIGN KEY (`imageid`) REFERENCES `image` (`id`) ON UPDATE CASCADE;
+ALTER TABLE `log` ADD CONSTRAINT FOREIGN KEY (`userid`) REFERENCES `user` (`id`) ON UPDATE CASCADE;
+ALTER TABLE `log` ADD CONSTRAINT FOREIGN KEY (`imageid`) REFERENCES `image` (`id`) ON UPDATE CASCADE;
 
 -- 
 -- Constraints for table `managementnode`
 -- 
-ALTER TABLE `managementnode`
-  ADD CONSTRAINT `managementnode_ibfk_6` FOREIGN KEY (`imagelibgroupid`) REFERENCES `resourcegroup` (`id`) ON UPDATE CASCADE,
-  ADD CONSTRAINT `managementnode_ibfk_4` FOREIGN KEY (`ownerid`) REFERENCES `user` (`id`) ON UPDATE CASCADE,
-  ADD CONSTRAINT `managementnode_ibfk_5` FOREIGN KEY (`stateid`) REFERENCES `state` (`id`) ON UPDATE CASCADE;
+ALTER TABLE `managementnode` ADD CONSTRAINT FOREIGN KEY (`imagelibgroupid`) REFERENCES `resourcegroup` (`id`) ON UPDATE CASCADE;
+ALTER TABLE `managementnode` ADD CONSTRAINT FOREIGN KEY (`ownerid`) REFERENCES `user` (`id`) ON UPDATE CASCADE;
+ALTER TABLE `managementnode` ADD CONSTRAINT FOREIGN KEY (`stateid`) REFERENCES `state` (`id`) ON UPDATE CASCADE;
 
 -- 
 -- Constraints for table `nathost`
 -- 
-ALTER TABLE `nathost`
-  ADD CONSTRAINT `nathost_ibfk_1` FOREIGN KEY (`resourceid`) REFERENCES `resource` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `nathost` ADD CONSTRAINT FOREIGN KEY (`resourceid`) REFERENCES `resource` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- 
 -- Constraints for table `natlog`
 -- 
-ALTER TABLE `natlog`
-  ADD CONSTRAINT `natlog_ibfk_4` FOREIGN KEY (`computerid`) REFERENCES `computer` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
-  ADD CONSTRAINT `natlog_ibfk_1` FOREIGN KEY (`logid`) REFERENCES `log` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
-  ADD CONSTRAINT `natlog_ibfk_2` FOREIGN KEY (`connectmethodportid`) REFERENCES `connectmethodport` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
-  ADD CONSTRAINT `natlog_ibfk_3` FOREIGN KEY (`nathostid`) REFERENCES `nathost` (`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `natlog` ADD CONSTRAINT FOREIGN KEY (`computerid`) REFERENCES `computer` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `natlog` ADD CONSTRAINT FOREIGN KEY (`logid`) REFERENCES `log` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `natlog` ADD CONSTRAINT FOREIGN KEY (`connectmethodportid`) REFERENCES `connectmethodport` (`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `natlog` ADD CONSTRAINT FOREIGN KEY (`nathostid`) REFERENCES `nathost` (`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- 
 -- Constraints for table `nathostcomputermap`
 -- 
-ALTER TABLE `nathostcomputermap`
-  ADD CONSTRAINT `nathostcomputermap_ibfk_2` FOREIGN KEY (`nathostid`) REFERENCES `nathost` (`id`) ON UPDATE CASCADE,
-  ADD CONSTRAINT `nathostcomputermap_ibfk_1` FOREIGN KEY (`computerid`) REFERENCES `computer` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `nathostcomputermap` ADD CONSTRAINT FOREIGN KEY (`nathostid`) REFERENCES `nathost` (`id`) ON UPDATE CASCADE;
+ALTER TABLE `nathostcomputermap` ADD CONSTRAINT FOREIGN KEY (`computerid`) REFERENCES `computer` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- 
 -- Constraints for table `natport`
 -- 
-ALTER TABLE `natport`
-  ADD CONSTRAINT `natport_ibfk_2` FOREIGN KEY (`connectmethodportid`) REFERENCES `connectmethodport` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
-  ADD CONSTRAINT `natport_ibfk_1` FOREIGN KEY (`reservationid`) REFERENCES `reservation` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
-  ADD CONSTRAINT `natport_ibfk_3` FOREIGN KEY (`nathostid`) REFERENCES `nathost` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `natport` ADD CONSTRAINT FOREIGN KEY (`connectmethodportid`) REFERENCES `connectmethodport` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `natport` ADD CONSTRAINT FOREIGN KEY (`reservationid`) REFERENCES `reservation` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `natport` ADD CONSTRAINT FOREIGN KEY (`nathostid`) REFERENCES `nathost` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- 
 -- Constraints for table `OS`
 --
-ALTER TABLE `OS`
-  ADD CONSTRAINT `OS_ibfk_2` FOREIGN KEY (`type`) REFERENCES `OStype` (`name`) ON UPDATE CASCADE,
-  ADD CONSTRAINT `OS_ibfk_3` FOREIGN KEY (`installtype`) REFERENCES `OSinstalltype` (`name`) ON UPDATE CASCADE,
-  ADD CONSTRAINT `OS_ibfk_4` FOREIGN KEY (`moduleid`) REFERENCES `module` (`id`) ON UPDATE CASCADE;
+ALTER TABLE `OS` ADD CONSTRAINT FOREIGN KEY (`type`) REFERENCES `OStype` (`name`) ON UPDATE CASCADE;
+ALTER TABLE `OS` ADD CONSTRAINT FOREIGN KEY (`installtype`) REFERENCES `OSinstalltype` (`name`) ON UPDATE CASCADE;
+ALTER TABLE `OS` ADD CONSTRAINT FOREIGN KEY (`moduleid`) REFERENCES `module` (`id`) ON UPDATE CASCADE;
 
 --
 -- Constraints for table `privnode`
 -- 
-ALTER TABLE `privnode`
-  ADD CONSTRAINT `privnode_ibfk_1` FOREIGN KEY (`parent`) REFERENCES `privnode` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `privnode` ADD CONSTRAINT FOREIGN KEY (`parent`) REFERENCES `privnode` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 --
 -- Constraints for table `provisioning`
 --
-ALTER TABLE `provisioning`
-  ADD CONSTRAINT `provisioning_ibfk_1` FOREIGN KEY (`moduleid`) REFERENCES `module` (`id`) ON UPDATE CASCADE;
+ALTER TABLE `provisioning` ADD CONSTRAINT FOREIGN KEY (`moduleid`) REFERENCES `module` (`id`) ON UPDATE CASCADE;
 
 --
 -- Constraints for table `provisioningOSinstalltype`
 --
-ALTER TABLE `provisioningOSinstalltype`
-  ADD CONSTRAINT `provisioningOSinstalltype_ibfk_2` FOREIGN KEY (`OSinstalltypeid`) REFERENCES `OSinstalltype` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
-  ADD CONSTRAINT `provisioningOSinstalltype_ibfk_1` FOREIGN KEY (`provisioningid`) REFERENCES `provisioning` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `provisioningOSinstalltype` ADD CONSTRAINT FOREIGN KEY (`OSinstalltypeid`) REFERENCES `OSinstalltype` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `provisioningOSinstalltype` ADD CONSTRAINT FOREIGN KEY (`provisioningid`) REFERENCES `provisioning` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- 
 -- Constraints for table `querylog`
 -- 
-ALTER TABLE `querylog`
-  ADD CONSTRAINT `querylog_ibfk_1` FOREIGN KEY (`userid`) REFERENCES `user` (`id`);
+ALTER TABLE `querylog` ADD CONSTRAINT FOREIGN KEY (`userid`) REFERENCES `user` (`id`);
 
 -- 
 -- Constraints for table `request`
 -- 
-ALTER TABLE `request`
-  ADD CONSTRAINT `request_ibfk_15` FOREIGN KEY (`stateid`) REFERENCES `state` (`id`) ON UPDATE CASCADE,
-  ADD CONSTRAINT `request_ibfk_16` FOREIGN KEY (`laststateid`) REFERENCES `state` (`id`) ON UPDATE CASCADE,
-  ADD CONSTRAINT `request_ibfk_2` FOREIGN KEY (`userid`) REFERENCES `user` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `request` ADD CONSTRAINT FOREIGN KEY (`stateid`) REFERENCES `state` (`id`) ON UPDATE CASCADE;
+ALTER TABLE `request` ADD CONSTRAINT FOREIGN KEY (`laststateid`) REFERENCES `state` (`id`) ON UPDATE CASCADE;
+ALTER TABLE `request` ADD CONSTRAINT FOREIGN KEY (`userid`) REFERENCES `user` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- 
 -- Constraints for table `reservation`
 -- 
-ALTER TABLE `reservation`
-  ADD CONSTRAINT `reservation_ibfk_11` FOREIGN KEY (`requestid`) REFERENCES `request` (`id`) ON DELETE CASCADE,
-  ADD CONSTRAINT `reservation_ibfk_10` FOREIGN KEY (`managementnodeid`) REFERENCES `managementnode` (`id`),
-  ADD CONSTRAINT `reservation_ibfk_9` FOREIGN KEY (`computerid`) REFERENCES `computer` (`id`) ON UPDATE CASCADE,
-  ADD CONSTRAINT reservation_ibfk_13 FOREIGN KEY (imagerevisionid) REFERENCES imagerevision (id) ON UPDATE CASCADE,
-  ADD CONSTRAINT reservation_ibfk_12 FOREIGN KEY (imageid) REFERENCES image (id) ON UPDATE CASCADE;
+ALTER TABLE `reservation` ADD CONSTRAINT FOREIGN KEY (`requestid`) REFERENCES `request` (`id`) ON DELETE CASCADE;
+ALTER TABLE `reservation` ADD CONSTRAINT FOREIGN KEY (`managementnodeid`) REFERENCES `managementnode` (`id`);
+ALTER TABLE `reservation` ADD CONSTRAINT FOREIGN KEY (`computerid`) REFERENCES `computer` (`id`) ON UPDATE CASCADE;
+ALTER TABLE `reservation` ADD CONSTRAINT reservation_ibfk_13 FOREIGN KEY (imagerevisionid) REFERENCES imagerevision (id) ON UPDATE CASCADE;
+ALTER TABLE `reservation` ADD CONSTRAINT reservation_ibfk_12 FOREIGN KEY (imageid) REFERENCES image (id) ON UPDATE CASCADE;
 
 --
 -- Constraints for table `reservationaccounts`
 --
-ALTER TABLE `reservationaccounts`
-  ADD CONSTRAINT `reservationaccounts_ibfk_2` FOREIGN KEY (`userid`) REFERENCES `user` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
-  ADD CONSTRAINT `reservationaccounts_ibfk_1` FOREIGN KEY (`reservationid`) REFERENCES `reservation` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `reservationaccounts` ADD CONSTRAINT FOREIGN KEY (`userid`) REFERENCES `user` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `reservationaccounts` ADD CONSTRAINT FOREIGN KEY (`reservationid`) REFERENCES `reservation` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- 
 -- Constraints for table `resource`
 -- 
-ALTER TABLE `resource`
-  ADD CONSTRAINT `resource_ibfk_1` FOREIGN KEY (`resourcetypeid`) REFERENCES `resourcetype` (`id`) ON UPDATE CASCADE;
+ALTER TABLE `resource` ADD CONSTRAINT FOREIGN KEY (`resourcetypeid`) REFERENCES `resourcetype` (`id`) ON UPDATE CASCADE;
 
 -- 
 -- Constraints for table `resourcegroup`
 -- 
-ALTER TABLE `resourcegroup`
-  ADD CONSTRAINT `resourcegroup_ibfk_2` FOREIGN KEY (`ownerusergroupid`) REFERENCES `usergroup` (`id`) ON UPDATE CASCADE,
-  ADD CONSTRAINT `resourcegroup_ibfk_3` FOREIGN KEY (`resourcetypeid`) REFERENCES `resourcetype` (`id`) ON UPDATE CASCADE;
+ALTER TABLE `resourcegroup` ADD CONSTRAINT FOREIGN KEY (`ownerusergroupid`) REFERENCES `usergroup` (`id`) ON UPDATE CASCADE;
+ALTER TABLE `resourcegroup` ADD CONSTRAINT FOREIGN KEY (`resourcetypeid`) REFERENCES `resourcetype` (`id`) ON UPDATE CASCADE;
 
 -- 
 -- Constraints for table `resourcegroupmembers`
 -- 
-ALTER TABLE `resourcegroupmembers`
-  ADD CONSTRAINT `resourcegroupmembers_ibfk_1` FOREIGN KEY (`resourceid`) REFERENCES `resource` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
-  ADD CONSTRAINT `resourcegroupmembers_ibfk_2` FOREIGN KEY (`resourcegroupid`) REFERENCES `resourcegroup` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `resourcegroupmembers` ADD CONSTRAINT FOREIGN KEY (`resourceid`) REFERENCES `resource` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `resourcegroupmembers` ADD CONSTRAINT FOREIGN KEY (`resourcegroupid`) REFERENCES `resourcegroup` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- 
 -- Constraints for table `resourcemap`
 -- 
-ALTER TABLE `resourcemap`
-  ADD CONSTRAINT `resourcemap_ibfk_1` FOREIGN KEY (`resourcegroupid1`) REFERENCES `resourcegroup` (`id`) ON DELETE CASCADE,
-  ADD CONSTRAINT `resourcemap_ibfk_2` FOREIGN KEY (`resourcegroupid2`) REFERENCES `resourcegroup` (`id`) ON DELETE CASCADE;
+ALTER TABLE `resourcemap` ADD CONSTRAINT FOREIGN KEY (`resourcegroupid1`) REFERENCES `resourcegroup` (`id`) ON DELETE CASCADE;
+ALTER TABLE `resourcemap` ADD CONSTRAINT FOREIGN KEY (`resourcegroupid2`) REFERENCES `resourcegroup` (`id`) ON DELETE CASCADE;
 
 -- 
 -- Constraints for table `resourcepriv`
 -- 
-ALTER TABLE `resourcepriv`
-  ADD CONSTRAINT `resourcepriv_ibfk_1` FOREIGN KEY (`resourcegroupid`) REFERENCES `resourcegroup` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
-  ADD CONSTRAINT `resourcepriv_ibfk_2` FOREIGN KEY (`privnodeid`) REFERENCES `privnode` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `resourcepriv` ADD CONSTRAINT FOREIGN KEY (`resourcegroupid`) REFERENCES `resourcegroup` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `resourcepriv` ADD CONSTRAINT FOREIGN KEY (`privnodeid`) REFERENCES `privnode` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- 
 -- Constraints for table `schedule`
 -- 
-ALTER TABLE `schedule`
-  ADD CONSTRAINT `schedule_ibfk_1` FOREIGN KEY (`ownerid`) REFERENCES `user` (`id`) ON UPDATE CASCADE;
+ALTER TABLE `schedule` ADD CONSTRAINT FOREIGN KEY (`ownerid`) REFERENCES `user` (`id`) ON UPDATE CASCADE;
 
 -- 
 -- Constraints for table `semaphore`
 -- 
-ALTER TABLE `semaphore`
-  ADD CONSTRAINT `semaphore_ibfk_1` FOREIGN KEY (`managementnodeid`) REFERENCES `managementnode` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
-  ADD CONSTRAINT `semaphore_ibfk_2` FOREIGN KEY (`computerid`) REFERENCES `computer` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
-  ADD CONSTRAINT `semaphore_ibfk_3` FOREIGN KEY (`imageid`) REFERENCES `image` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
-  ADD CONSTRAINT `semaphore_ibfk_4` FOREIGN KEY (`imagerevisionid`) REFERENCES `imagerevision` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `semaphore` ADD CONSTRAINT FOREIGN KEY (`managementnodeid`) REFERENCES `managementnode` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `semaphore` ADD CONSTRAINT FOREIGN KEY (`computerid`) REFERENCES `computer` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `semaphore` ADD CONSTRAINT FOREIGN KEY (`imageid`) REFERENCES `image` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `semaphore` ADD CONSTRAINT FOREIGN KEY (`imagerevisionid`) REFERENCES `imagerevision` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 --
 -- Constraints for table `serverprofile`
 --
-ALTER TABLE `serverprofile`
-  ADD CONSTRAINT `serverprofile_ibfk_1` FOREIGN KEY (`ownerid`) REFERENCES `user` (`id`),
-  ADD CONSTRAINT `serverprofile_ibfk_2` FOREIGN KEY (`admingroupid`) REFERENCES `usergroup` (`id`),
-  ADD CONSTRAINT `serverprofile_ibfk_3` FOREIGN KEY (`logingroupid`) REFERENCES `usergroup` (`id`),
-  ADD CONSTRAINT `serverprofile_ibfk_4` FOREIGN KEY (`imageid`) REFERENCES `image` (`id`);
+ALTER TABLE `serverprofile` ADD CONSTRAINT FOREIGN KEY (`ownerid`) REFERENCES `user` (`id`);
+ALTER TABLE `serverprofile` ADD CONSTRAINT FOREIGN KEY (`admingroupid`) REFERENCES `usergroup` (`id`);
+ALTER TABLE `serverprofile` ADD CONSTRAINT FOREIGN KEY (`logingroupid`) REFERENCES `usergroup` (`id`);
+ALTER TABLE `serverprofile` ADD CONSTRAINT FOREIGN KEY (`imageid`) REFERENCES `image` (`id`);
 
 --
 -- Constraints for table `serverrequest`
 --
-ALTER TABLE `serverrequest`
-  ADD CONSTRAINT `serverrequest_ibfk_1` FOREIGN KEY (`requestid`) REFERENCES `request` (`id`) ON DELETE CASCADE,
-  ADD CONSTRAINT `serverrequest_ibfk_2` FOREIGN KEY (`admingroupid`) REFERENCES `usergroup` (`id`) ON UPDATE CASCADE,
-  ADD CONSTRAINT `serverrequest_ibfk_3` FOREIGN KEY (`logingroupid`) REFERENCES `usergroup` (`id`) ON UPDATE CASCADE;
+ALTER TABLE `serverrequest` ADD CONSTRAINT FOREIGN KEY (`requestid`) REFERENCES `request` (`id`) ON DELETE CASCADE;
+ALTER TABLE `serverrequest` ADD CONSTRAINT FOREIGN KEY (`admingroupid`) REFERENCES `usergroup` (`id`) ON UPDATE CASCADE;
+ALTER TABLE `serverrequest` ADD CONSTRAINT FOREIGN KEY (`logingroupid`) REFERENCES `usergroup` (`id`) ON UPDATE CASCADE;
 
 -- 
 -- Constraints for table `user`
 -- 
-ALTER TABLE `user`
-  ADD CONSTRAINT `user_ibfk_2` FOREIGN KEY (`affiliationid`) REFERENCES `affiliation` (`id`),
-  ADD CONSTRAINT `user_ibfk_3` FOREIGN KEY (`IMtypeid`) REFERENCES `IMtype` (`id`) ON UPDATE CASCADE;
+ALTER TABLE `user` ADD CONSTRAINT FOREIGN KEY (`affiliationid`) REFERENCES `affiliation` (`id`);
+ALTER TABLE `user` ADD CONSTRAINT FOREIGN KEY (`IMtypeid`) REFERENCES `IMtype` (`id`) ON UPDATE CASCADE;
 
 -- 
 -- Constraints for table `usergroup`
 -- 
-ALTER TABLE `usergroup`
-  ADD CONSTRAINT `usergroup_ibfk_1` FOREIGN KEY (`ownerid`) REFERENCES `user` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
-  ADD CONSTRAINT `usergroup_ibfk_2` FOREIGN KEY (`editusergroupid`) REFERENCES `usergroup` (`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `usergroup` ADD CONSTRAINT FOREIGN KEY (`ownerid`) REFERENCES `user` (`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `usergroup` ADD CONSTRAINT FOREIGN KEY (`editusergroupid`) REFERENCES `usergroup` (`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- 
 -- Constraints for table `usergroupmembers`
 -- 
-ALTER TABLE `usergroupmembers`
-  ADD CONSTRAINT `usergroupmembers_ibfk_1` FOREIGN KEY (`userid`) REFERENCES `user` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
-  ADD CONSTRAINT `usergroupmembers_ibfk_2` FOREIGN KEY (`usergroupid`) REFERENCES `usergroup` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `usergroupmembers` ADD CONSTRAINT FOREIGN KEY (`userid`) REFERENCES `user` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `usergroupmembers` ADD CONSTRAINT FOREIGN KEY (`usergroupid`) REFERENCES `usergroup` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 --
 -- Constraints for table `usergrouppriv`
 --
-ALTER TABLE `usergrouppriv`
-  ADD CONSTRAINT `usergrouppriv_ibfk_2` FOREIGN KEY (`userprivtypeid`) REFERENCES `usergroupprivtype` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
-  ADD CONSTRAINT `usergrouppriv_ibfk_1` FOREIGN KEY (`usergroupid`) REFERENCES `usergroup` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `usergrouppriv` ADD CONSTRAINT FOREIGN KEY (`userprivtypeid`) REFERENCES `usergroupprivtype` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `usergrouppriv` ADD CONSTRAINT FOREIGN KEY (`usergroupid`) REFERENCES `usergroup` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- 
 -- Constraints for table `userpriv`
 -- 
-ALTER TABLE `userpriv`
-  ADD CONSTRAINT `userpriv_ibfk_1` FOREIGN KEY (`userid`) REFERENCES `user` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
-  ADD CONSTRAINT `userpriv_ibfk_2` FOREIGN KEY (`usergroupid`) REFERENCES `usergroup` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
-  ADD CONSTRAINT `userpriv_ibfk_3` FOREIGN KEY (`privnodeid`) REFERENCES `privnode` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
-  ADD CONSTRAINT `userpriv_ibfk_4` FOREIGN KEY (`userprivtypeid`) REFERENCES `userprivtype` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `userpriv` ADD CONSTRAINT FOREIGN KEY (`userid`) REFERENCES `user` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `userpriv` ADD CONSTRAINT FOREIGN KEY (`usergroupid`) REFERENCES `usergroup` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `userpriv` ADD CONSTRAINT FOREIGN KEY (`privnodeid`) REFERENCES `privnode` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `userpriv` ADD CONSTRAINT FOREIGN KEY (`userprivtypeid`) REFERENCES `userprivtype` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 --
 -- Constraints for table `vmhost`
 --
-ALTER TABLE `vmhost`
-  ADD CONSTRAINT `vmhost_ibfk_2` FOREIGN KEY (`vmprofileid`) REFERENCES `vmprofile` (`id`) ON UPDATE CASCADE,
-  ADD CONSTRAINT `vmhost_ibfk_1` FOREIGN KEY (`computerid`) REFERENCES `computer` (`id`) ON UPDATE CASCADE;
+ALTER TABLE `vmhost` ADD CONSTRAINT FOREIGN KEY (`vmprofileid`) REFERENCES `vmprofile` (`id`) ON UPDATE CASCADE;
+ALTER TABLE `vmhost` ADD CONSTRAINT FOREIGN KEY (`computerid`) REFERENCES `computer` (`id`) ON UPDATE CASCADE;
 
 --
 -- Constraints for table `vmprofile`
 --
-ALTER TABLE `vmprofile`
-  ADD CONSTRAINT `vmprofile_ibfk_1` FOREIGN KEY (`imageid`) REFERENCES `image` (`id`) ON UPDATE CASCADE,
-  ADD CONSTRAINT `vmprofile_ibfk_3` FOREIGN KEY (`repositoryimagetypeid`) REFERENCES `imagetype` (`id`) ON UPDATE CASCADE,
-  ADD CONSTRAINT `vmprofile_ibfk_4` FOREIGN KEY (`datastoreimagetypeid`) REFERENCES `imagetype` (`id`) ON UPDATE CASCADE;
+ALTER TABLE `vmprofile` ADD CONSTRAINT FOREIGN KEY (`imageid`) REFERENCES `image` (`id`) ON UPDATE CASCADE;
+ALTER TABLE `vmprofile` ADD CONSTRAINT FOREIGN KEY (`repositoryimagetypeid`) REFERENCES `imagetype` (`id`) ON UPDATE CASCADE;
+ALTER TABLE `vmprofile` ADD CONSTRAINT FOREIGN KEY (`datastoreimagetypeid`) REFERENCES `imagetype` (`id`) ON UPDATE CASCADE;
 
 --
 -- Constraints for table `winKMS`
 --
-ALTER TABLE `winKMS`
-  ADD CONSTRAINT `winKMS_ibfk_1` FOREIGN KEY (`affiliationid`) REFERENCES `affiliation` (`id`) ON UPDATE CASCADE;
+ALTER TABLE `winKMS` ADD CONSTRAINT FOREIGN KEY (`affiliationid`) REFERENCES `affiliation` (`id`) ON UPDATE CASCADE;
 
 --
 -- Constraints for table `winProductKey`
 --
-ALTER TABLE `winProductKey`
-  ADD CONSTRAINT `winProductKey_ibfk_1` FOREIGN KEY (`affiliationid`) REFERENCES `affiliation` (`id`) ON UPDATE CASCADE;
-  
+ALTER TABLE `winProductKey` ADD CONSTRAINT FOREIGN KEY (`affiliationid`) REFERENCES `affiliation` (`id`) ON UPDATE CASCADE;
+
 --
 -- Legacy columns to drop
 --
