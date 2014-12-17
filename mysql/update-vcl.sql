@@ -797,6 +797,15 @@ UPDATE computer SET datedeleted = NOW() WHERE deleted = 1 AND datedeleted = '000
 
 -- --------------------------------------------------------
 
+-- 
+--  Table structure for table `computerloadlog`
+--
+
+CALL AddIndexIfNotExists('computerloadlog', 'loadstateid');
+CALL AddIndexIfNotExists('computerloadlog', 'computerid');
+
+-- --------------------------------------------------------
+
 --
 -- Table structure for table `connectmethod`
 --
@@ -844,7 +853,7 @@ CREATE TABLE IF NOT EXISTS `connectmethodport` (
   `id` tinyint(3) unsigned NOT NULL auto_increment,
   `connectmethodid` tinyint(3) unsigned NOT NULL,
   `port` mediumint(8) unsigned NOT NULL,
-  `protocol` enum('TCP','UDP') NOT NULL,
+  `protocol` enum('TCP','UDP') NOT NULL default 'TCP',
   PRIMARY KEY  (`id`),
   UNIQUE KEY `connectmethodid_2` (`connectmethodid`,`port`,`protocol`),
   KEY `connectmethodid` (`connectmethodid`)
@@ -1361,10 +1370,13 @@ UPDATE `computer` SET `imagerevisionid` = (SELECT `id` FROM `imagerevision` WHER
 -- Inserts for table `computerloadstate`
 -- 
 
-INSERT IGNORE INTO `computerloadstate` (`loadstatename`,`prettyname`) VALUES ('connecttimeout','Start Connect Timeout');
-INSERT IGNORE INTO `computerloadstate` (`loadstatename`,`prettyname`) VALUES ('beginacknowledgetimeout','Start Acknowledge Timeout');
-INSERT IGNORE INTO `computerloadstate` (`loadstatename`,`prettyname`,`est`) VALUES ('copyfrompartnerMN','Copy Image from Partner Management node','20');
-INSERT IGNORE INTO `computerloadstate` (`loadstatename`,`prettyname`) VALUES ('postreserve','Post reserve completed');
+INSERT IGNORE INTO `computerloadstate` (`loadstatename`,`prettyname`) VALUES ('acknowledgetimeout','start acknowledge timeout');
+
+INSERT IGNORE INTO `computerloadstate` (`loadstatename`,`prettyname`) VALUES ('noinitialconnection','initial user connection not detected');
+INSERT IGNORE INTO `computerloadstate` (`loadstatename`,`prettyname`) VALUES ('initialconnecttimeout','initial user connection timeout');
+INSERT IGNORE INTO `computerloadstate` (`loadstatename`,`prettyname`) VALUES ('reconnecttimeout','user reconnection timeout');
+INSERT IGNORE INTO `computerloadstate` (`loadstatename`,`prettyname`,`est`) VALUES ('copyfrompartnerMN','copy image from partner management node','20');
+INSERT IGNORE INTO `computerloadstate` (`loadstatename`,`prettyname`) VALUES ('postreserve','post reserve completed');
 
 UPDATE `computerloadstate` SET loadstatename = 'machinebooted' WHERE loadstatename = 'vmstage4';
 UPDATE `computerloadstate` SET prettyname = 'confirming image exists locally' WHERE loadstatename = 'doesimageexists';
@@ -1707,7 +1719,8 @@ INSERT IGNORE userpriv (usergroupid, privnodeid, userprivtypeid) SELECT usergrou
 INSERT IGNORE INTO `variable` (`name`, `serialization`, `value`) VALUES ('schema-version', 'none', '1');
 INSERT IGNORE INTO `variable` (`name`, `serialization`, `value`) VALUES ('timesource|global', 'none','time.nist.gov,time-a.nist.gov,time-b.nist.gov,time.windows.com');
 INSERT IGNORE INTO `variable` (`name`, `serialization`, `value`) VALUES ('acknowledgetimeout', 'none', '900');
-INSERT IGNORE INTO `variable` (`name`, `serialization`, `value`) VALUES ('connecttimeout', 'none', '900');
+INSERT IGNORE INTO `variable` (`name`, `serialization`, `value`) VALUES ('initialconnecttimeout', 'none', '900');
+INSERT IGNORE INTO `variable` (`name`, `serialization`, `value`) VALUES ('reconnecttimeout', 'none', '900');
 INSERT IGNORE INTO `variable` (`name`, `serialization`, `value`) VALUES ('general_inuse_check', 'none', '300');
 INSERT IGNORE INTO `variable` (`name`, `serialization`, `value`) VALUES ('server_inuse_check', 'none', '900');
 INSERT IGNORE INTO `variable` (`name`, `serialization`, `value`) VALUES ('general_end_notice_first', 'none', '600');
@@ -1735,6 +1748,15 @@ CALL AddConstraintIfNotExists('computer', 'currentimageid', 'image', 'id', 'upda
 CALL AddConstraintIfNotExists('computer', 'vmhostid', 'vmhost', 'id', 'update', 'CASCADE');
 CALL AddConstraintIfNotExists('computer', 'imagerevisionid', 'imagerevision', 'id', 'update', 'CASCADE');
 CALL AddConstraintIfNotExists('computer', 'nextimageid', 'image', 'id', 'update', 'CASCADE');
+
+-- --------------------------------------------------------
+
+--
+-- Constraints for table `computerloadlog`
+--
+
+CALL AddConstraintIfNotExists('computerloadlog', 'computerid', 'computer', 'id', 'both', 'RESTRICT');
+CALL AddConstraintIfNotExists('computerloadlog', 'loadstateid', 'computerloadstate', 'id', 'both', 'RESTRICT');
 
 -- --------------------------------------------------------
 
