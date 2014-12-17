@@ -925,31 +925,18 @@ sub reserve {
 	
 	notify($ERRORS{'OK'}, 0, "beginning Windows reserve tasks");
 	
-	# Generate a reservation password
-	if (!$self->check_reservation_password()) {
-		notify($ERRORS{'WARNING'}, 0, "failed to generate a reservation password");
-		return;
-	}
-	
-	my $request_forimaging = $self->data->get_request_forimaging();
-	my $reservation_password = $self->data->get_reservation_password();
-	
 	# Check if this is an imaging request or not
-	if ($request_forimaging) {
-		# Imaging request, don't create account, set the Administrator password
+	if ($self->data->get_request_forimaging()) {
+		my $reservation_password = $self->data->get_reservation_password();
+		
+		# Imaging request, set the Administrator password
 		if (!$self->set_password('Administrator', $reservation_password)) {
 			notify($ERRORS{'WARNING'}, 0, "unable to set password for Administrator account");
-			return 0;
-		}
-	}
-	else {
-		# Add the user to the computer
-		if (!$self->create_user()) {
-			notify($ERRORS{'WARNING'}, 0, "unable to add user to computer");
-			return 0;
+			return;
 		}
 	}
 	
+	notify($ERRORS{'OK'}, 0, "Windows reserve tasks complete");
 	return 1;
 } ## end sub reserve
 
@@ -1064,12 +1051,12 @@ sub sanitize {
 		return 0;
 	}
 
-	# Delete the request user
-	if ($self->delete_user()) {
-		notify($ERRORS{'OK'}, 0, "user deleted from $computer_node_name");
+	# Delete the reservation users
+	if ($self->delete_user_accounts()) {
+		notify($ERRORS{'OK'}, 0, "users deleted from $computer_node_name");
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to delete user from $computer_node_name");
+		notify($ERRORS{'WARNING'}, 0, "failed to delete users from $computer_node_name");
 		return 0;
 	}
 
@@ -1743,9 +1730,13 @@ sub user_exists {
 
 =head2 create_user
 
- Parameters  : 
- Returns     : 
- Description : 
+ Parameters  : hash reference
+ Returns     : boolean
+ Description : Creates a user on the computer. The argument must be a hash
+               reference to user parameters. The hash must contain the keys:
+               - username
+               - password
+               - root_access
 
 =cut
 
@@ -1755,50 +1746,44 @@ sub create_user {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return;
 	}
-
-	my $computer_node_name   = $self->data->get_computer_node_name();
-	my $system32_path        = $self->get_system32_path() || return;
 	
-	my $imagemeta_rootaccess = $self->data->get_imagemeta_rootaccess();
+	my $computer_node_name = $self->data->get_computer_node_name();
+	my $system32_path      = $self->get_system32_path() || return;
 	
-	# Attempt to get the username from the arguments
-	# If no argument was supplied, use the user specified in the DataStructure
-	my $username = shift;
-	my $password = shift;
-	my $uid = shift || 0;
-	my $adminoverride = shift || 0;
-
-	if (!$username) {
-		$username = $self->data->get_user_login_id();
+	my $user_parameters = shift;
+	if (!$user_parameters) {
+		notify($ERRORS{'WARNING'}, 0, "unable to create user, user parameters argument was not provided");
+		return;
 	}
-	if (!$password) {
-		$password = $self->data->get_reservation_password() || return;
+	elsif (!ref($user_parameters) || ref($user_parameters) ne 'HASH') {
+		notify($ERRORS{'WARNING'}, 0, "unable to create user, argument provided is not a hash reference");
+		return;
 	}
 	
-	# If imagemeta allows rootaccess, check the adminoverride variable
-	# Does not allow for override called from manage_server_access 
-	# 1 - allow admin access, set $imagemeta_rootaccess=1
-	# 2 - disallow admin access, set $imagemeta_rootaccess=0
-	if ($imagemeta_rootaccess) {
-		if ($adminoverride eq '1') {
-			$imagemeta_rootaccess = 1;
-		}
-		elsif ($adminoverride eq '2') {
-			$imagemeta_rootaccess = 0;
-		}
+	my $username = $user_parameters->{username};
+	if (!defined($username)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to create user on $computer_node_name, argument hash does not contain a 'username' key:\n" . format_data($user_parameters));
+		return;
 	}
-
+	
+	my $password = $user_parameters->{password};
+	if (!defined($password)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to create user on $computer_node_name, argument hash does not contain a 'password' key:\n" . format_data($user_parameters));
+		return;
+	}
+	
+	my $root_access = $user_parameters->{root_access};
+	if (!defined($root_access)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to create user on $computer_node_name, argument hash does not contain a 'root_access' key:\n" . format_data($user_parameters));
+		return;
+	}
+	
 	# Check if user already exists
 	if ($self->user_exists($username)) {
-		notify($ERRORS{'OK'}, 0, "user $username already exists on $computer_node_name, attempting to delete user");
-
-		# Attempt to delete the user
-		if (!$self->delete_user($username)) {
-			notify($ERRORS{'WARNING'}, 0, "failed to add user $username to $computer_node_name, user already exists and could not be deleted");
-			return 0;
-		}
+		notify($ERRORS{'WARNING'}, 0, "unable to create user '$username' on $computer_node_name, the user already exists");
+		return;
 	}
-
+	
 	notify($ERRORS{'DEBUG'}, 0, "attempting to add user $username to $computer_node_name ($password)");
 
 	# Attempt to add the user account
@@ -1806,14 +1791,14 @@ sub create_user {
 	$add_user_command .= " && $system32_path/net.exe localgroup \"Remote Desktop Users\" \"$username\" /ADD";
 	
 	# Add the user to the Administrators group if imagemeta.rootaccess isn't 0
-	if (defined($imagemeta_rootaccess) && $imagemeta_rootaccess eq '0') {
-		notify($ERRORS{'DEBUG'}, 0, "user will NOT be added to the Administrators group");
-	}
-	else {
+	if ($root_access) {
 		notify($ERRORS{'DEBUG'}, 0, "user will be added to the Administrators group");
 		$add_user_command .= " && $system32_path/net.exe localgroup \"Administrators\" \"$username\" /ADD";
 	}
-
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "user will NOT be added to the Administrators group");
+	}
+	
 	my ($add_user_exit_status, $add_user_output) = $self->execute($add_user_command, '1');
 	if (defined($add_user_exit_status) && $add_user_exit_status == 0) {
 		notify($ERRORS{'OK'}, 0, "added user $username ($password) to $computer_node_name");

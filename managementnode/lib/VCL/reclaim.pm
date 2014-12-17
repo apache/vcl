@@ -101,9 +101,6 @@ sub process {
 	my $public_ip_configuration             = $self->data->get_management_node_public_ip_configuration() || return;
 	my @reservation_ids                     = $self->data->get_reservation_ids();
 
-	# Delete all computerloadlog rows with loadstatename = 'beginacknowledgetimeout' for all reservations in this request
-	delete_computerloadlog_reservation(\@reservation_ids,0,1);
-
 	# Remove related fixedIPsr variable, if it exists
 	if ($server_request_id) {
 		my $variable_name = "fixedIPsr" . $server_request_id;
@@ -168,12 +165,12 @@ sub process {
 	elsif ($request_laststate_name =~ /reserved/) {
 		notify($ERRORS{'DEBUG'}, 0, "request laststate is $request_laststate_name, checking if computer table current image matches image currently loaded on $computer_shortname");
 		
-		# If server reservations and in reserved - reload
-		if ($server_request_id) {
-			notify($ERRORS{'DEBUG'}, 0, "Detected server reservations, computer will be reloaded");
-			$self->insert_reload_and_exit();
-		}
-
+		## If server reservations and in reserved - reload
+		#if ($server_request_id) {
+		#	notify($ERRORS{'DEBUG'}, 0, "Detected server reservations, computer will be reloaded");
+		#	$self->insert_reload_and_exit();
+		#}
+		
 		# Make sure computer current image name was retrieved from the database
 		if (!$computer_currentimage_name) {
 			notify($ERRORS{'WARNING'}, 0, "failed to retrieve computer current image name from the database, computer will be reloaded");

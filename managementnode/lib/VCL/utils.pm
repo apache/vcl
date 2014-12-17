@@ -93,6 +93,7 @@ our @ISA = qw(Exporter);
 our @EXPORT = qw(
 	_pingnode
 	add_imageid_to_newimages
+	add_reservation_account
 	check_blockrequest_time
 	check_endtimenotice_interval
 	check_ssh
@@ -106,6 +107,7 @@ our @EXPORT = qw(
 	database_select
 	delete_computerloadlog_reservation
 	delete_request
+	delete_reservation_account
 	delete_variable
 	determine_remote_connection_target
 	escape_file_path
@@ -267,7 +269,6 @@ our @EXPORT = qw(
 	update_preload_flag
 	update_request_checkuser
 	update_request_state
-	update_reservation_accounts
 	update_reservation_lastcheck
 	update_reservation_password
 	update_sublog_ipaddress
@@ -280,6 +281,7 @@ our @EXPORT = qw(
 	$DAEMON_MODE
 	$DATABASE
 	$DEFAULTHELPEMAIL
+	$EXECUTE_NEW
 	$FQDN
 	$LOGFILE
 	$MYSQL_SSL
@@ -344,6 +346,7 @@ our $VERBOSE;
 our $CONF_FILE_PATH;
 our $DAEMON_MODE;
 our $SETUP_MODE;
+our $EXECUTE_NEW;
 
 
 INIT {
@@ -375,6 +378,7 @@ INIT {
 		'help' => \&help,
 		'setup!' => \$SETUP_MODE,
 		'verbose!' => \$VERBOSE,
+		'exn!' => \$EXECUTE_NEW,
 	);
 	
 	my %parameters = (
@@ -475,6 +479,10 @@ INIT {
 	elsif (!defined($DAEMON_MODE)) {
 		$DAEMON_MODE = 1;
 	}
+	elsif (!defined($EXECUTE_NEW)) {
+		$EXECUTE_NEW = 0;
+	}
+	$ENV{execute_new} = $EXECUTE_NEW;
 	
 	# Set boolean variables to 0 or 1, they may be set to 'no' or 'yes' in the conf file
 	for ($MYSQL_SSL, $JABBER, $VERBOSE, $DAEMON_MODE, $SETUP_MODE) {
@@ -1768,8 +1776,8 @@ sub is_request_imaging {
 
 =head2 get_reservation_accounts
 
- Parameters  : $reservationid
- Returns     : 
+ Parameters  : $reservation_id
+ Returns     : hash reference
  Description : Used for server loads, provides list of users for group access
 
 =cut
@@ -1781,43 +1789,38 @@ sub get_reservation_accounts {
 		return 0;
 	}
 	
-	my $select_statement = "
-		SELECT DISTINCT
-		reservationaccounts.userid AS reservationaccounts_userid,
-		reservationaccounts.password AS reservationaccounts_password,
-		affiliation.name AS affiliation_name,
-		user.unityid AS user_name
-		FROM
-		reservationaccounts,
-		affiliation,
-		user
-		WHERE
-		user.id = reservationaccounts.userid AND
-		affiliation.id = user.affiliationid AND
-		reservationaccounts.reservationid = $reservation_id
-	";
+	my $select_statement = <<EOF;
+SELECT DISTINCT
+reservationaccounts.userid AS reservationaccounts_userid,
+reservationaccounts.password AS reservationaccounts_password,
+affiliation.name AS affiliation_name,
+user.unityid AS user_name
+
+FROM
+reservationaccounts,
+affiliation,
+user
+
+WHERE
+user.id = reservationaccounts.userid
+AND affiliation.id = user.affiliationid
+AND reservationaccounts.reservationid = $reservation_id
+EOF
 	
 	# Call the database select subroutine
 	# This will return an array of one or more rows based on the select statement
 	my @selected_rows = database_select($select_statement);
 	
-	my @ret_array;
-	my %user_info;
-	
-	# Check to make sure 1 or more rows were returned
-	if (scalar @selected_rows > 0) {
-		# It contains a hash
-		for (@selected_rows) {
-			my %reservation_acct= %{$_};
-			my $userid = $reservation_acct{reservationaccounts_userid};
-			$user_info{$userid}{"userid"} = $userid;
-			$user_info{$userid}{"password"} = $reservation_acct{reservationaccounts_password};
-			$user_info{$userid}{"affiliation"} = $reservation_acct{affiliation_name};
-			$user_info{$userid}{"username"} = $reservation_acct{user_name};
-		}
-		return %user_info;
+	my $reservation_accounts = {};
+	for my $row (@selected_rows) {
+		my $user_id = $row->{reservationaccounts_userid};
+		$reservation_accounts->{$user_id}{"userid"} = $user_id;
+		$reservation_accounts->{$user_id}{"password"} = $row->{reservationaccounts_password};
+		$reservation_accounts->{$user_id}{"affiliation"} = $row->{affiliation_name};
+		$reservation_accounts->{$user_id}{"username"} = $row->{user_name};
 	}
-	return ();
+	
+	return $reservation_accounts;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -1879,42 +1882,35 @@ EOF
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 update_reservation_accounts
+=head2 add_reservation_account
 
- Parameters  : $reservation_id, $userid, $password, $mode
+ Parameters  : $reservation_id, $userid, $password
  Returns     : boolean
- Description : 
+ Description : Adds an entry to the reservationaccounts table.
 
 =cut
 
-sub update_reservation_accounts {
-	my $reservation_id = shift;
-	my $user_id = shift;
-	my $password = shift;
-	my $mode = shift;
-	
-	if (!$mode) {
-		notify($ERRORS{'WARNING'}, 0, "mode argument was not specified, it must be either add or delete");
-		return;
-	}
+sub add_reservation_account {
+	my ($reservation_id, $user_id, $password) = @_;
 	
 	if (!$reservation_id) {
 		notify($ERRORS{'WARNING'}, 0, "reservation ID argument was not specified");
 		return;
 	}
-	
-	if (!$user_id) {
+	elsif (!$user_id) {
 		notify($ERRORS{'WARNING'}, 0, "user ID argument was not specified");
 		return;
 	}
 	
-	if (!$password) {
-		$password = '';
+	my $password_string;
+	if ($password) {
+		$password_string = "'$password'";
+	}
+	else {
+		$password_string = 'NULL';
 	}
 	
-	my $statement;
-	if ($mode =~ /add/i) {
-		$statement = <<EOF;
+	my $statement = <<EOF;
 INSERT IGNORE INTO 
 reservationaccounts
 (
@@ -1926,31 +1922,53 @@ VALUES
 (
 	'$reservation_id',
 	'$user_id',
-	'$password'
+	$password_string
 )
-ON DUPLICATE KEY UPDATE password = '$password'
+ON DUPLICATE KEY UPDATE password = $password_string
 EOF
+	
+	if (!database_execute($statement)) {
+		notify($ERRORS{'OK'}, 0, "failed to add user $user_id to reservationaccounts table");
+		return;
 	}
-	elsif ($mode =~ /delete/i) {
-		$statement = <<EOF;
-DELETE 
-reservationaccounts
-FROM
-reservationaccounts
-WHERE
-reservationid = '$reservation_id' AND
-userid = '$user_id' 
-EOF
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 delete_reservation_account
+
+ Parameters  : $reservation_id, $userid
+ Returns     : boolean
+ Description : Deletes an entry from the reservationaccounts table.
+
+=cut
+
+sub delete_reservation_account {
+	my ($reservation_id, $user_id) = @_;
+	
+	if (!$reservation_id) {
+		notify($ERRORS{'WARNING'}, 0, "reservation ID argument was not specified");
+		return;
+	}
+	elsif (!$user_id) {
+		notify($ERRORS{'WARNING'}, 0, "user ID argument was not specified");
+		return;
 	}
 	
-	if (database_execute($statement)) {
-		#notify($ERRORS{'OK'}, 0, "executed $statement $reservation_id $user_id");
-		return 1;
+	my $statement = <<EOF;
+DELETE FROM
+reservationaccounts
+WHERE
+reservationid = '$reservation_id'
+AND userid = '$user_id' 
+EOF
+
+	if (!database_execute($statement)) {
+		notify($ERRORS{'OK'}, 0, "failed to delete user $user_id from reservationaccounts table");
+		return;
 	}
-	else {
-		notify($ERRORS{'OK'}, 0, "failed to to execute statement to update reservationaccounts table:\n$statement");
-		return 0;
-	}
+	return 1;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -3964,7 +3982,7 @@ sub run_ssh_command {
 		$port = $arguments->{port} || '22';
 		$output_level = $arguments->{output_level};
 		$max_attempts = $arguments->{max_attempts} || 3;
-		$timeout_seconds = $arguments->{timeout};
+		$timeout_seconds = $arguments->{timeout_seconds};
 	}
 	
 	# Determine the output level if it was specified
@@ -4224,7 +4242,7 @@ sub run_ssh_command {
 			}
 		}
 		elsif ($exit_status == 255 && $ssh_command !~ /(vmware-cmd|vim-cmd|vmkfstools|vmrun)/i) {
-			notify($ERRORS{'WARNING'}, 0, "attempt $attempts/$max_attempts: failed to execute SSH command on $node_string: '$command', exit status: $exit_status, SSH exits with the exit status of the remote command or with 255 if an error occurred, output:\n$ssh_output_formatted") if $output_level;
+			notify($ERRORS{'WARNING'}, 0, "attempt $attempts/$max_attempts: failed to execute SSH command on $node_string: '$command', exit status: $exit_status, SSH exits with the exit status of the remote command or with 255 if an error occurred, output $output_level:\n$ssh_output_formatted") if $output_level;
 			next;
 		}
 		else {
@@ -5519,30 +5537,37 @@ EOF
 
 =head2 delete_computerloadlog_reservation
 
- Parameters  : $reservation_id, $loadstatename (optional), $immediate (optional)
+ Parameters  : $reservation_id_argument, $loadstate_regex (optional)
  Returns     : boolean
- Description : Deletes rows from the computerloadlog table. A loadstatename
-               argument can be specified to limit the rows removed to a
-               certain loadstatename value. To delete all rows except those
-               matching a certain loadstatename, begin the loadstatename
-               with a !. The $reservation_id argument may either be a single
-               integer or an array reference. A immediate option can be specified 
-					to clear all entries
+ Description : Deletes rows from the computerloadlog table.
+               
+               The $reservation_id argument may be either a single integer ID or
+               a reference to an array of integer IDs.
+               
+               A $loadstate_regex argument can be specified to limit the rows
+               removed to a certain loadstate names. The regex does not allow
+               all of the functionality of a Perl regex such as (?!...).
+               
+               To delete multiple loadstate names, pass something such as:
+               (begin|info)
+               
+               To delete all entries except certain loadstate names, precede the
+               expression with an exclaimation mark:
+               !(begin|info)              
 
 =cut
 
 sub delete_computerloadlog_reservation {
 	my $reservation_id_argument = shift;
-	my $loadstatename = shift;
-	my $immediate = shift;
-
+	my $loadstate_regex = shift;
 
 	# Check the passed parameter
-	unless (defined($reservation_id_argument) ) {
-		notify($ERRORS{'WARNING'}, 0, "reservation_id_argument argument were not specified");
+	if (!defined($reservation_id_argument)) {
+		notify($ERRORS{'WARNING'}, 0, "reservation ID argument were not specified");
 		return;
 	}
 	
+	# Check if a single reservation ID was specified or an array of IDs
 	my $reservation_id_string;
 	if (ref($reservation_id_argument)) {
 		$reservation_id_string = join(', ', @$reservation_id_argument);
@@ -5550,11 +5575,6 @@ sub delete_computerloadlog_reservation {
 	else {
 		$reservation_id_string = $reservation_id_argument;
 	}
-
-	if (!defined($immediate)) {
-		$immediate =0;
-	}
-
 	
 	# Construct the SQL statement
 	my $sql_statement = <<EOF;
@@ -5569,40 +5589,29 @@ computerloadlog.reservationid IN ($reservation_id_string)
 AND computerloadlog.loadstateid = computerloadstate.id
 EOF
 	
+	
 	# Check if loadstateid was specified
 	# If so, only delete rows matching the loadstateid
-	if ($loadstatename && $loadstatename !~ /^!/) {
-		notify($ERRORS{'DEBUG'}, 0, "removing computerloadlog entries matching loadstate = $loadstatename");
-		$sql_statement .= "AND computerloadstate.loadstatename = \'$loadstatename\'";
-	}
-	elsif ($loadstatename) {
-		# Remove the first character of loadstatename, it is !
-		my $modified_loadstatename = substr($loadstatename, 1);
-		notify($ERRORS{'DEBUG'}, 0, "removing computerloadlog entries NOT matching loadstate = $modified_loadstatename");
-		$sql_statement .= "AND computerloadstate.loadstatename != \'$modified_loadstatename\'";
-	}
-	else {
-		notify($ERRORS{'DEBUG'}, 0, "removing all computerloadlog entries for reservation");
-	}
-
-	#Only remove entries older than 2 minutes	unless the immediate flag
-	unless ($immediate) {
-		$sql_statement .= " AND timestamp <= (NOW() - INTERVAL 2 Minute);";
+	my $regex_string = '';
+	if ($loadstate_regex) {
+		if ($loadstate_regex =~ /^\!/) {
+			$loadstate_regex =~ s/^\!//;
+			$regex_string = " NOT matching loadstate regex '$loadstate_regex'";
+			$sql_statement .= "AND computerloadstate.loadstatename NOT REGEXP '$loadstate_regex'";
+		}
+		else {
+			$regex_string = " matching loadstate regex '$loadstate_regex'";
+			$sql_statement .= "AND computerloadstate.loadstatename REGEXP '$loadstate_regex'";
+		}
 	}
 	
 	# Call the database execute subroutine
 	if (database_execute($sql_statement)) {
-		if ($loadstatename) {
-			notify($ERRORS{'OK'}, 0, "deleted rows from computerloadlog matching loadstate '$loadstatename' for reservation IDs: $reservation_id_string");
-		}
-		else {
-			notify($ERRORS{'OK'}, 0, "deleted all rows from computerloadlog for reservation IDs: $reservation_id_string");
-		}
-		
+		notify($ERRORS{'OK'}, 0, "deleted rows from computerloadlog$regex_string for reservation IDs: $reservation_id_string");
 		return 1;
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "unable to delete from computerloadlog table for reservation IDs: $reservation_id_string");
+		notify($ERRORS{'WARNING'}, 0, "failed to delete from computerloadlog table for reservation IDs: $reservation_id_string");
 		return 0;
 	}
 } ## end sub delete_computerloadlog_reservation

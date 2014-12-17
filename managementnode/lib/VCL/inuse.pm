@@ -116,7 +116,17 @@ sub process {
 	my $is_parent_reservation   = $self->data->is_parent_reservation();
 	my $computer_id             = $self->data->get_computer_id();
 	my $computer_short_name     = $self->data->get_computer_short_name();
-	my $connect_timeout_seconds = $self->os->get_timings('connecttimeout');
+	
+	
+	my $connect_timeout_seconds;
+	if ($request_laststate_name eq 'reserved') {
+		$connect_timeout_seconds = $self->os->get_timings('initialconnecttimeout');
+		notify($ERRORS{'DEBUG'}, 0, "checking for initial user connection, using 'initialconnecttimeout' variable: $connect_timeout_seconds seconds");
+	}
+	else {
+		$connect_timeout_seconds = $self->os->get_timings('reconnecttimeout');
+		notify($ERRORS{'DEBUG'}, 0, "checking for subsequent connection, using 'reconnecttimeout' variable: $connect_timeout_seconds seconds");
+	}
 
 	# Make sure connect timeout is long enough
 	# It has to be a bit longer than the ~5 minute period between inuse checks due to cluster reservations
@@ -142,13 +152,11 @@ sub process {
 	
 	# Check if server reservation has been modified
 	if ($request_state_name =~ /servermodified/) {
-		if (!$self->os->manage_server_access()) {
+		if (!$self->os->add_user_accounts()) {
 			notify($ERRORS{'CRITICAL'}, 0, "failed to update server access");
       }
-		
 		$self->state_exit('inuse', 'inuse');
 	}
-	
 	
 	my $now_epoch_seconds = time;
 	
@@ -298,12 +306,23 @@ sub process {
 		$self->state_exit('inuse', 'inuse');
 	}
 	
+	# Insert connecttimeout immediately before beginning to check for user connection
+	# Web uses timestamp of this to determine when next to refresh the page
+	# Important because page should refresh as soon as possible to reservation timing out
+	if ($request_laststate_name eq 'reserved') {
+		insertloadlog($reservation_id, $computer_id, "connecttimeout", "begin initial connection timeout ($connect_timeout_seconds seconds)");
+	}
+	else {
+		insertloadlog($reservation_id, $computer_id, "connecttimeout", "begin reconnection timeout ($connect_timeout_seconds seconds)");
+	}
+	
 	# Check to see if user is connected. user_connected will true(1) for servers and requests > 24 hours
-	if (!$self->code_loop_timeout(sub{$self->user_connected()}, [], "waiting for user to connect to $computer_short_name", ($connect_timeout_minutes*60), 15)) {
-		
-		# Remove rows from computerloadlog for this reservation if connected, don't remove the loadstate=begin row
-		delete_computerloadlog_reservation($reservation_id, '!beginacknowledgetimeout');
-
+	my $user_connected = $self->code_loop_timeout(sub{$self->user_connected()}, [], "waiting for user to connect to $computer_short_name", $connect_timeout_seconds, 15);
+	
+	# Delete the connecttimeout immediately after acknowledgement loop ends
+	delete_computerloadlog_reservation($reservation_id, 'connecttimeout');
+	
+	if (!$user_connected) {
 		if (!$imagemeta_checkuser || !$request_checkuser) {
 			notify($ERRORS{'OK'}, 0, "never detected user connection, skipping timeout, imagemeta checkuser: $imagemeta_checkuser, request checkuser: $request_checkuser");
 		}
@@ -386,9 +405,7 @@ sub user_connected {
 	
 	# Check if this is an imaging request, causes process to exit if state or laststate = image
 	$self->_check_imaging_request();
-
-	delete_computerloadlog_reservation($reservation_id, '!beginacknowledgetimeout',1);
-
+	
 	# Check if this is a server request, causes process to exit if server request
 	if ($server_request_id) {
 		notify($ERRORS{'DEBUG'}, 0, "server reservation detected, set as user is connected");
@@ -397,7 +414,7 @@ sub user_connected {
 	}
 	
 	# If duration is >= 24 hrs set as connected and return
-	if ($request_duration_hrs >= $ignore_connections_gte ) {
+	if ($request_duration_hrs >= $ignore_connections_gte) {
 		notify($ERRORS{'OK'}, 0, "reservation duration is $request_duration_hrs hrs is >= to ignore_connections setting $ignore_connections_gte hrs, skipping inuse checks");
 		insertloadlog($reservation_id, $computer_id, "connected", "user connected to $computer_short_name");
 		return 1;

@@ -240,7 +240,7 @@ sub enable_dhcp {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 changepasswd
+=head2 set_password
 
  Parameters  : $username, $password (optional)
  Returns     : boolean
@@ -250,7 +250,7 @@ sub enable_dhcp {
 
 =cut
 
-sub changepasswd {
+sub set_password {
 	my $self = shift;
 	if (ref($self) !~ /linux/i) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");

@@ -133,7 +133,10 @@ sub pre_capture {
 
  Parameters  : none
  Returns     : boolean
- Description : Performs common OS steps to reserve the computer for a user.
+ Description : Performs common OS steps to reserve the computer for a user. The
+               public IP address is updated if necessary. User accounts are
+               added. The 'reserve' subroutine should never open the firewall
+               for a connection. This is done by the 'grant_access' subroutine.
 
 =cut
 
@@ -150,7 +153,242 @@ sub reserve {
 		return;
 	}
 	
+	# Add user accounts to the computer
+	if (!$self->add_user_accounts()) {
+		notify($ERRORS{'WARNING'}, 0, "unable to reserve computer, failed add user accounts");
+		return;
+	}
+	
 	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 add_user_accounts
+
+ Parameters  : none
+ Returns     : boolean
+ Description : Adds all user accounts to the computer for a reservation. The
+               reservationaccounts table is checked. If the user already exists
+               in the table, it is assumed the user was previously created and
+               nothing is done. If the user doesn't exist in the table it is
+               added. If an entry for a user exists in the reservationaccounts
+               table but the user is not assigned to the reservation, the user
+               is deleted from the computer.
+
+=cut
+
+sub add_user_accounts {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $request_user_id  = $self->data->get_user_id();
+	my $request_state_name  = $self->data->get_request_state_name();
+	my $reservation_id = $self->data->get_reservation_id();
+	my $reservation_users = $self->data->get_reservation_users();
+	my $reservation_password = $self->data->get_reservation_password(0);
+	my $computer_node_name = $self->data->get_computer_node_name();
+
+	# Collect users in reservationaccounts table
+	my $reservation_accounts = get_reservation_accounts($reservation_id);
+	
+	# Add users
+	RESERVATION_USER: foreach my $user_id (sort keys %$reservation_users) {
+		my $username = $reservation_users->{$user_id}{unityid};
+		my $uid = $reservation_users->{$user_id}{uid};
+		my $root_access = $reservation_users->{$user_id}{ROOTACCESS};
+		my $ssh_public_keys = $reservation_users->{$user_id}{user_info}{sshpublickeys};
+		my $password;
+		
+		# Check if entry needs to be added to the useraccounts table
+		if (defined($reservation_accounts->{$user_id})) {
+			# Entry already exists in useraccounts table, assume everything is correct
+			notify($ERRORS{'DEBUG'}, 0, "entry already exists in useraccounts table for $username (ID: $user_id)");
+			
+			# This is normal, user should exist unless state is reinstall
+			# If reinstall, proceed to try to create the user
+			# Otherwise, proceed to next user
+			if ($request_state_name !~ /(reinstall)/) {
+				next RESERVATION_USER;
+			}
+			$password = $reservation_accounts->{$user_id}{password};
+		}
+		else {
+			notify($ERRORS{'DEBUG'}, 0, "entry does not already exist in useraccounts table for $username (ID: $user_id)");
+			
+			# Determine whether or not the user account's password should be set
+			my $should_set_user_password = 1;
+			if ($self->can('should_set_user_password')) {
+				$should_set_user_password = $self->should_set_user_password($user_id);
+				if (!defined($should_set_user_password)) {
+					notify($ERRORS{'CRITICAL'}, 0, "failed to determine if user account password should be set, user ID $user_id, assuming password should be set");
+					$should_set_user_password = 1;
+				}
+			}
+			
+			if ($should_set_user_password) {
+				# Check if this is the request owner user ID and the reservation password has already been set
+				if ($user_id eq $request_user_id) {
+					if ($reservation_password) {
+						$password = $reservation_password;
+						notify($ERRORS{'DEBUG'}, 0, "user $username (ID: $user_id) is request owner, using existing reservation password: $password");
+					}
+					else {
+						# Generate a new random password
+						$password = getpw();
+						$self->data->set_reservation_password($password);
+						notify($ERRORS{'DEBUG'}, 0, "user $username (ID: $user_id) is request owner, generated new password: $password");
+						
+						# Update the password in the reservation table
+						if (!update_reservation_password($reservation_id, $password)) {
+							$self->reservation_failed("failed to update password in the reservation table");
+							return;
+						}
+					}
+				}
+				else {
+					# Generate a new random password
+					$password = getpw();
+					notify($ERRORS{'DEBUG'}, 0, "user $username (ID: $user_id) is not the request owner, generated new password: $password");
+				}
+			}
+			
+			# Add an entry to the useraccounts table
+			if (!add_reservation_account($reservation_id, $user_id, $password)) {
+				notify($ERRORS{'CRITICAL'}, 0, "failed to add entry to reservationaccounts table for $username (ID: $user_id)");
+				return;
+			}
+			
+			# Make sure the user doesn't already exist on the computer
+			if ($self->user_exists($username)) {
+				if ($password) {
+					notify($ERRORS{'WARNING'}, 0, "user '$username' already exists on $computer_node_name, password will be reset");
+					if (!$self->set_password($username, $password)) {
+						notify($ERRORS{'WARNING'}, 0, "user '$username' already exists on $computer_node_name, failed to reset password");
+					}
+				}
+				else {
+					notify($ERRORS{'WARNING'}, 0, "user '$username' already exists on $computer_node_name");
+				}
+				
+				next RESERVATION_USER;
+			}
+		}
+		
+		# Create user on the OS
+		if (!$self->create_user({
+				username => $username,
+				password => $password,
+				root_access => $root_access,
+				uid => $uid,
+				ssh_public_keys => $ssh_public_keys,
+		})) {
+			notify($ERRORS{'WARNING'}, 0, "failed to create user on $computer_node_name, removing entry added to reservationaccounts table");
+			
+			# Delete entry to the useraccounts table
+			if (!delete_reservation_account($reservation_id, $user_id)) {
+				notify($ERRORS{'CRITICAL'}, 0, "failed to delete entry from reservationaccounts table for $username (ID: $user_id)");
+			}
+		}
+	}
+	
+	# Remove anyone listed in reservationaccounts that is not a reservation user
+	foreach my $user_id (sort keys %$reservation_accounts) {
+		if (defined($reservation_users->{$user_id})) {
+			next;
+		}
+		
+		my $username = $reservation_accounts->{$user_id}{username};
+		
+		notify($ERRORS{'OK'}, 0, "user $username (ID: $user_id) exists in reservationsaccounts table but is not assigned to this reservation, attempting to delete user");
+		
+		# Delete the user from OS
+		if (!$self->delete_user($username)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to delete user $username (ID: $user_id) from $computer_node_name");
+			next;
+		}
+		
+		# Delete entry from reservationaccounts
+		if (!delete_reservation_account($reservation_id, $user_id)) {
+			notify($ERRORS{'CRITICAL'}, 0, "failed to delete entry from reservationaccounts table for user $username (ID: $user_id)");
+		}
+	}
+	
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 delete_user_accounts
+
+ Parameters  : none
+ Returns     : boolean
+ Description : Deletes all user accounts from the computer which are assigned to
+               the reservation or an entry exists in the reservationaccounts
+               table.
+
+=cut
+
+sub delete_user_accounts {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $reservation_id = $self->data->get_reservation_id();
+	my $computer_node_name = $self->data->get_computer_node_name();
+	my $reservation_users = $self->data->get_reservation_users();
+
+	# Collect users in reservationaccounts table
+	my $reservation_accounts = get_reservation_accounts($reservation_id);
+	
+	my $errors = 0;
+	
+	# Delete users
+	foreach my $user_id (sort keys %$reservation_users) {
+		my $username = $reservation_users->{$user_id}{unityid};
+		
+		# Delete the key from reservation accounts, these will be processed next
+		delete $reservation_accounts->{$user_id};
+		
+		# Delete user on the OS
+		if (!$self->delete_user($username)) {
+			$errors = 1;
+			notify($ERRORS{'WARNING'}, 0, "failed to delete user on $computer_node_name");
+			
+			# Delete entry to the useraccounts table
+			if (!delete_reservation_account($reservation_id, $user_id)) {
+				notify($ERRORS{'CRITICAL'}, 0, "failed to delete entry from reservationaccounts table for $username (ID: $user_id)");
+			}
+		}
+	}
+	
+	foreach my $user_id (sort keys %$reservation_accounts) {
+		my $username = $reservation_accounts->{$user_id}{username};
+		
+		# Delete the user from OS
+		if (!$self->delete_user($username)) {
+			$errors = 1;
+			notify($ERRORS{'WARNING'}, 0, "failed to delete user $username (ID: $user_id) from $computer_node_name");
+			next;
+		}
+		
+		# Delete entry from reservationaccounts
+		if (!delete_reservation_account($reservation_id, $user_id)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to delete entry from reservationaccounts table for user $username (ID: $user_id)");
+		}
+	}
+	
+	if ($errors) {
+		return 0;
+	}
+	else {
+		return 1;
+	}
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -316,9 +554,9 @@ sub get_currentimage_txt_contents {
 		$l =~ s/[\r\n]*//g;
 		my ($a, $b) = split(/=/, $l);
 		if (defined $b) {
-         $output{$a} = $b; 
-      }   
-   }
+			$output{$a} = $b; 
+		}   
+	}
 	
 	return %output;
 } ## end sub get_currentimage_txt_contents
@@ -328,14 +566,14 @@ sub get_currentimage_txt_contents {
 =head2 get_current_image_info
 
  Parameters  : optional 
-					id,computer_hostname,computer_id,current_image_name,imagerevision_datecreated,imagerevision_id,prettyname,vcld_post_load 
+               id,computer_hostname,computer_id,current_image_name,imagerevision_datecreated,imagerevision_id,prettyname,vcld_post_load 
  Returns     : If successful: 
-					if no parameter return the imagerevision_id
-					return the value of parameter input
+               if no parameter return the imagerevision_id
+               return the value of parameter input
                If failed: false
  Description : Collects currentimage hash on a computer and returns a
                value containing of the input paramter or the imagerevision_id if no inputs.
-					This also updates the DataStructure.pm so data matches what is currently loaded.
+               This also updates the DataStructure.pm so data matches what is currently loaded.
 =cut
 
 sub get_current_image_info {
@@ -714,8 +952,8 @@ sub is_ssh_responding {
 			node => $computer_node_name,
 			command => "echo \"testing ssh on $computer_node_name\"",
 			max_attempts => $max_attempts,
-			output_level => 0,
-			timeout_seconds => 30,
+			display_output => 0,
+			timeout_seconds => 10,
 		});
 		
 		# The exit status will be 0 if the command succeeded
@@ -2172,7 +2410,7 @@ sub execute {
 			$computer_name = $argument->{node} if (!$computer_name);
 			$command = $argument->{command};
 			$display_output = $argument->{display_output};
-			$timeout_seconds = $argument->{timeout};
+			$timeout_seconds = $argument->{timeout_seconds};
 			$max_attempts = $argument->{max_attempts};
 			$port = $argument->{port};
 			$user = $argument->{user};
@@ -2234,7 +2472,7 @@ sub execute {
 		return ($exit_status, $output);
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to run command on $computer_name: $command");
+		notify($ERRORS{'WARNING'}, 0, "failed to run command on $computer_name: $command") if $display_output;
 		return;
 	}
 }
@@ -2278,7 +2516,7 @@ sub execute_new {
 			$computer_name = $argument->{node} if (!$computer_name);
 			$command = $argument->{command};
 			$display_output = $argument->{display_output};
-			$timeout_seconds = $argument->{timeout};
+			$timeout_seconds = $argument->{timeout_seconds};
 			$max_attempts = $argument->{max_attempts};
 			$port = $argument->{port};
 			$user = $argument->{user};
@@ -2554,141 +2792,6 @@ sub get_os_type {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 manage_server_access
-
- Parameters  : None
- Returns     : 
- Description : 
-
-=cut
-
-sub manage_server_access {
-
-	my $self = shift;
-	if (ref($self) !~ /VCL::Module/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return;
-	}
-	
-	my $computer_node_name          = $self->data->get_computer_node_name() || return;
-	my $reservation_id              = $self->data->get_reservation_id();
-	my $server_request_id           = $self->data->get_server_request_id();
-	my $server_request_admingroupid = $self->data->get_server_request_admingroupid();
-	my $server_request_logingroupid = $self->data->get_server_request_logingroupid();
-	my $user_login_id_owner         = $self->data->get_user_login_id();
-	my $user_ssh_public_keys        = $self->data->get_user_ssh_public_keys(0);
-	my $user_id_owner               = $self->data->get_user_id();
-	my $image_os_type               = $self->data->get_image_os_type();
-	my $request_laststate_name      = $self->data->get_request_laststate_name();
-	my $reservation_users           = $self->data->get_reservation_users();
-
-	# Build list of users.
-	# If in admin group set admin flag
-	# If in both login and admin group, only use admin setting
-	# Check if user is in reserverationaccounts table, add user if needed
-	# Check if user exists on server, add if needed
-	
-	my %user_hash = %{$reservation_users};
-
-	# Collect users in reservationaccounts table
-	my %res_accounts = get_reservation_accounts($reservation_id);
-	my $not_standalone_list = $self->data->get_management_node_not_standalone();
-	#notify($ERRORS{'WARNING'}, 0, "request_laststate_name= $request_laststate_name Res account info" . format_data(%res_accounts));
-	#notify($ERRORS{'WARNING'}, 0, "request_laststate_name= $request_laststate_name User_hash info" . format_data(%user_hash));
-
-	#Add users
-	foreach my $userid (sort keys %user_hash) {
-		next if (!($userid));
-		#Skip reservation owner, this account is processed in the new and reserved states
-		if ($userid eq $user_id_owner) {
-			next;
-		}
-		my $standalone = $user_hash{$userid}{user_info}{STANDALONE};
-
-		if (!$self->user_exists($user_hash{$userid}{username})) {
-			delete($res_accounts{$userid});
-		}
-		
-		if (!exists($res_accounts{$userid}) || $request_laststate_name eq "reinstall" ) {
-			if($request_laststate_name ne "reinstall" ){	
-				
-				$user_hash{$userid}{"passwd"} = 0;
-				# Generate password if linux and standalone affiliation
-				unless ($image_os_type =~ /linux/ && !$standalone) {
-					$user_hash{$userid}{"passwd"} = getpw();
-				}
-				
-				if (update_reservation_accounts($reservation_id,$userid,$user_hash{$userid}{passwd},"add")) {
-					notify($ERRORS{'OK'}, 0, "Inserted $reservation_id,$userid into reservationsaccounts table");
-				}
-			}
-			# if reinstall and standalone check for existing password
-			if ($request_laststate_name eq "reinstall") {
-				#notify($ERRORS{'OK'}, 0, "Reinstall mode for $user_hash{$userid}{unityid}" . format_data(%res_accounts));
-				if ( $res_accounts{$userid}{password} ) {
-					$user_hash{$userid}{passwd} = $res_accounts{$userid}{password};
-				}
-				else {
-					#should have password for standalone accounts
-					unless ($image_os_type =~ /linux/ && !$standalone) {
-						$user_hash{$userid}{"passwd"} = getpw();
-					}
-					
-					if (update_reservation_accounts($reservation_id,$userid,0,"delete")) {
-					}
-					if (update_reservation_accounts($reservation_id,$userid,$user_hash{$userid}{passwd},"add")) {
-						notify($ERRORS{'OK'}, 0, "Inserted new password for $reservation_id,$userid into reservationsaccounts table");
-					}
-				}
-			}
-	
-			# Create user on the OS
-			if ($self->create_user(
-					$user_hash{$userid}{unityid},
-					$user_hash{$userid}{passwd},
-					$user_hash{$userid}{uid},
-					$user_hash{$userid}{ROOTACCESS},
-					$standalone,
-					$user_hash{$userid}{user_info}{sshpublickeys}
-			)) {
-				notify($ERRORS{'OK'}, 0, "Successfully created user $user_hash{$userid}{unityid} on $computer_node_name");
-			}
-			else {
-				notify($ERRORS{'WARNING'}, 0, "Failed to create user on $computer_node_name ");
-			}
-		}
-		else {
-			notify($ERRORS{'DEBUG'}, 0, "$userid exists in reservationaccounts table, assuming it exists on OS");
-		}
-	}
-
-	#Remove anyone listed in reservationaccounts list that is not in user_hash
-	foreach my $res_userid (sort keys %res_accounts) {
-		#notify($ERRORS{'OK'}, 0, "res_userid= $res_userid username= $res_accounts{$res_userid}{username}");
-		#Skip reservation owner, this account is not to be removed from the reservation.
-      if ($res_userid eq $user_login_id_owner) {
-			#Skip group checks as the owner may not be a member
-			next;
-		}
-		if (!exists($user_hash{$res_userid})) {
-			notify($ERRORS{'OK'}, 0, "username= $res_accounts{$res_userid}{username} is not listed in reservationsaccounts, attempting to delete");
-			#Delete from reservationaccounts
-			if (update_reservation_accounts($reservation_id,$res_accounts{$res_userid}{userid},0,"delete")) {
-				notify($ERRORS{'OK'}, 0, "Deleted $reservation_id,$res_accounts{$res_userid}{userid} from reservationsaccounts table");
-			}
-			#Delete from OS
-			if ($self->delete_user($res_accounts{$res_userid}{username},0,0)) {
-				notify($ERRORS{'OK'}, 0, "Successfully removed user= $res_accounts{$res_userid}{username}");	
-			}	
-			next;
-		}
-	}
-	
-	return 1;
-}
-
-#/////////////////////////////////////////////////////////////////////////////
-
 =head2 process_connect_methods
 
  Parameters  : $remote_ip (optional), $overwrite
@@ -2783,7 +2886,7 @@ sub process_connect_methods {
 				if (!$self->stop_service($service_name)) {
 					notify($ERRORS{'WARNING'}, 0, "failed to stop '$service_name' service for '$name' connect method on $computer_node_name");
 				}
-         }
+			}
 			
 			# Close the firewall ports
 			if ($self->can('disable_firewall_port')) {
@@ -2792,6 +2895,7 @@ sub process_connect_methods {
 					my $port = $connect_method->{connectmethodport}{$connect_method_port_id}{port};
 					if (!$self->disable_firewall_port($protocol, $port, $remote_ip, 1)) {
 						notify($ERRORS{'WARNING'}, 0, "failed to close firewall port $protocol/$port on $computer_node_name for $remote_ip $name connect method");
+						return;
 					}
 				}
 			}
@@ -3376,10 +3480,10 @@ sub get_tools_file_paths {
 sub update_fixed_ip_info {
 
 	my $self = shift;
-   unless (ref($self) && $self->isa('VCL::Module')) {
-     notify($ERRORS{'CRITICAL'}, 0, "subroutine can only be called as a VCL::Module:: module object method");
-     return;
-   }
+	unless (ref($self) && $self->isa('VCL::Module')) {
+	  notify($ERRORS{'CRITICAL'}, 0, "subroutine can only be called as a VCL::Module:: module object method");
+	  return;
+	}
 	
 	my $server_request_id           = $self->data->get_server_request_id();
 	if (!$server_request_id) {
@@ -3388,7 +3492,7 @@ sub update_fixed_ip_info {
 	}
 
 	my $variable_name = "fixedIPsr" . $server_request_id; 	
-   my $server_variable_data;
+	my $server_variable_data;
 
 	if (is_variable_set($variable_name)) {
 		#fetch variable
@@ -3416,12 +3520,12 @@ sub update_fixed_ip_info {
 =head2 get_timings
 
    Parameters  : $self
-   Returns     : hash of timings
+   Returns     : integer
    Description : Check for cached information or pulls from variable table
    Acceptable variables are:
       acknowledgetimeout
-      wait_for_connect
-      wait_for_reconnect
+      initialconnecttimeout
+      reconnecttimeout
       general_inuse_check
       server_inuse_check
       general_end_notice_first
@@ -3437,24 +3541,23 @@ sub get_timings {
 	my $variable = shift;
 	my $affiliation_name = $self->data->get_user_affiliation_name(0);
 
-   my %timing_defaults = (
-      acknowledgetimeout => '900',
-      connecttimeout => '900',
-      wait_for_connect => '900',
-      wait_for_reconnect => '900',
-      general_inuse_check => '300',
-      server_inuse_check => '900',
-      cluster_inuse_check => '900',
-      general_end_notice_first => '600',
-      general_end_notice_second => '300',
-      ignore_connections_gte => '1440'
-   );
+	my %timing_defaults = (
+		acknowledgetimeout => '900',
+		initialconnecttimeout => '900',
+		reconnecttimeout => '900',
+		general_inuse_check => '300',
+		server_inuse_check => '900',
+		cluster_inuse_check => '900',
+		general_end_notice_first => '600',
+		general_end_notice_second => '300',
+		ignore_connections_gte => '1440'
+	);
 
 	#Check for affiliation, if nothing return default timings
-   if (!defined($variable) || !(exists($timing_defaults{$variable}))) {
+	if (!defined($variable) || !(exists($timing_defaults{$variable}))) {
 		notify($ERRORS{'WARNING'}, 0, " input variable is not acceptable, returning 900 as value"); 
-      return '900';
-   }
+		return '900';
+	}
 
 	my $db_timing_variable_value = get_variable("$variable|$affiliation_name", 0) || get_variable("$variable", 0) || $timing_defaults{$variable} ;
 	return $db_timing_variable_value;
@@ -3542,47 +3645,6 @@ sub run_scripts {
 		notify($ERRORS{'CRITICAL'}, 0, "failed to run the following scripts on $computer_node_name, stage: $stage\n" . join("\n", @failed_file_paths));
 		return;
 	}
-	
-	return 1;
-}
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 check_reservation_password
-
- Parameters  : none
- Returns     : boolean
- Description : Checks if a reservation password has already been generated. If
-               not, a password is generated, the reservation table is updated,
-               and the DataStructure is updated.
-
-=cut
-
-sub check_reservation_password {
-	my $self = shift;
-	if (ref($self) !~ /VCL::Module/) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return;
-	}
-	
-	if ($self->data->get_reservation_password(0)) {
-		notify($ERRORS{'DEBUG'}, 0, "reservation password has already been generated");
-		return 1;
-	}
-	
-	my $reservation_id = $self->data->get_reservation_id();
-	
-	# Create a random password for the reservation
-	my $reservation_password = getpw();
-	
-	# Update the password in the reservation table
-	if (!update_reservation_password($reservation_id, $reservation_password)) {
-		$self->reservation_failed("failed to update password in the reservation table");
-		return;
-	}
-	
-	# Set the password in the DataStructure object
-	$self->data->set_reservation_password($reservation_password);
 	
 	return 1;
 }

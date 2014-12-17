@@ -102,8 +102,6 @@ sub process {
 	my $is_parent_reservation       = $self->data->is_parent_reservation();
 	my $server_request_id           = $self->data->get_server_request_id();
 	my $acknowledge_timeout_seconds = $self->os->get_timings('acknowledgetimeout');
-
-	insertloadlog($reservation_id, $computer_id, "beginacknowledgetimeout", "begin connect timeout");
 	
 	# Update the log loaded time to now for this request
 	update_log_loaded_time($request_logid);
@@ -113,20 +111,26 @@ sub process {
 	update_computer_state($computer_id, 'reserved');
 	insertloadlog($reservation_id, $computer_id, "reserved", "$computer_short_name successfully reserved");
 	
+	# Insert acknowledgetimeout immediately before beginning to check user clicked Connect
+	# Web uses timestamp of this to determine when next to refresh the page
+	# Important because page should refresh as soon as possible to reservation timing out
+	insertloadlog($reservation_id, $computer_id, "acknowledgetimeout", "begin acknowledge timeout ($acknowledge_timeout_seconds seconds)");
+	
 	# Wait for the user to acknowledge the request by clicking Connect button or from API
-	if (!$self->code_loop_timeout(sub{$self->user_acknowledged()}, [], 'waiting for user acknowledgement', $acknowledge_timeout_seconds, 1, 10)) {
+	my $user_acknowledged = $self->code_loop_timeout(sub{$self->user_acknowledged()}, [], 'waiting for user acknowledgement', $acknowledge_timeout_seconds, 1, 10);
+	
+	# Add noinitialconnection and then delete acknowledgetimeout
+	insertloadlog($reservation_id, $computer_id, "noinitialconnection", "user clicked Connect");
+	delete_computerloadlog_reservation($reservation_id, 'acknowledgetimeout');
+	
+	if (!$user_acknowledged) {
 		$self->_notify_user_timeout($request_data);
 		switch_state($request_data, 'timeout', 'timeout', 'noack', 1);
 	}
-
+	
 	# Call OS module's grant_access() subroutine which adds user accounts to computer
 	if ($self->os->can("grant_access") && !$self->os->grant_access()) {
 		$self->reservation_failed("OS module grant_access failed");
-	}
-
-	# Add additional user accounts, perform other configuration tasks if this is a server request
-	if ($server_request_id && !$self->os->manage_server_access()) {
-		$self->reservation_failed("OS module manage_server_access failed");
 	}
 	
 	# User acknowledged request

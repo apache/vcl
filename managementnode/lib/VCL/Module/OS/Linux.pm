@@ -446,7 +446,7 @@ sub post_load {
 	}
 	
 	# Change password
-	if (!$self->changepasswd("root")) {
+	if (!$self->set_password("root")) {
 		notify($ERRORS{'OK'}, 0, "failed to edit root password on $computer_node_name");
 	}
 	
@@ -1092,10 +1092,7 @@ sub logoff_user {
  Parameters  : none
  Returns     : boolean
  Description : Performs the steps necessary to reserve a computer for a user.
-               If the user "standalone" flag = 1, a random reservation password
-               is generated. Existing "AllowUsers" lines are removed from
-               /etc/ssh/external_sshd_config. A "vcl" user group is added to the
-               computer -The user account is created
+               A "vcl" user group is added to the.
 
 =cut
 
@@ -1106,20 +1103,9 @@ sub reserve {
 		return 0;
 	}
 	
-	# Call OS.pm's reserve subroutine
-	$self->SUPER::reserve() || return;
+	notify($ERRORS{'OK'}, 0, "beginning Linux reserve tasks");
 	
 	my $computer_node_name = $self->data->get_computer_node_name();
-	my $user_standalone = $self->data->get_user_standalone();
-
-	# Generate a reservation password if "standalone" (not using Kerberos authentication)
-	if ($user_standalone) {
-		# Generate a reservation password
-		if (!$self->check_reservation_password()) {
-			notify($ERRORS{'WARNING'}, 0, "failed to generate a reservation password");
-			return;
-		}
-	}
 	
 	# Configure sshd to only listen on the private interface and add ext_sshd service listening on the public interface
 	# This needs to be done after update_public_ip_address is called
@@ -1132,12 +1118,10 @@ sub reserve {
 		notify($ERRORS{'WARNING'}, 0, "failed to add vcl user group to $computer_node_name");
 	}
 	
-	if (!$self->create_user()) {
-		notify($ERRORS{'CRITICAL'}, 0, "failed to add user to $computer_node_name");
-		return;
-	}
+	notify($ERRORS{'OK'}, 0, "Linux reserve tasks complete");
 	
-	return 1;
+	# Call OS.pm's reserve subroutine
+	return unless $self->SUPER::reserve();
 } ## end sub reserve
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -1253,7 +1237,7 @@ sub synchronize_time {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 changepasswd
+=head2 set_password
 
  Parameters  : $username, $password (optional)
  Returns     : boolean
@@ -1263,7 +1247,7 @@ sub synchronize_time {
 
 =cut
 
-sub changepasswd {
+sub set_password {
 	my $self = shift;
 	if (ref($self) !~ /linux/i) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
@@ -1333,8 +1317,8 @@ sub sanitize {
 	}
 	
 	# Delete all user associated with the reservation
-	if (!$self->delete_user()) {
-		notify($ERRORS{'WARNING'}, 0, "failed to delete users from $computer_node_name");
+	if (!$self->delete_user_accounts()) {
+		notify($ERRORS{'WARNING'}, 0, "failed to delete all users from $computer_node_name");
 		return 0;
 	}
 	
@@ -2551,7 +2535,7 @@ sub shutdown {
 
 =head2 create_user
 
- Parameters  : $username, $password, $uid, $root_access, $user_standalone, $user_ssh_public_keys
+ Parameters  : 
  Returns     : boolean
  Description : 
 
@@ -2565,102 +2549,84 @@ sub create_user {
 	}
 	
 	my $computer_node_name = $self->data->get_computer_node_name();
-	my $imagemeta_root_access = $self->data->get_imagemeta_rootaccess();
 	
-	# Check if username argument was supplied
-	my $user_login_id = shift;
-	my $password = shift;
-	my $uid = shift;
-	my $root_access = shift;
-	my $user_standalone = shift;
-	my $user_ssh_public_keys = shift;
-	
-	my $reservation_user_login_id = $self->data->get_user_login_id();
-	
-	# If argument was supplied, check if it matches the reservation user
-	# Only retrieve user settings from $self->data if no argument was supplied or if the argument matches the reservation user
-	if (!$user_login_id || $user_login_id eq $reservation_user_login_id) {
-		$user_login_id = $reservation_user_login_id;
-		
-		$password = $self->data->get_reservation_password(0) unless defined $password;
-		$uid = $self->data->get_user_uid() unless defined $uid;
-		$root_access = $self->data->get_imagemeta_rootaccess() unless defined $root_access;
-		$user_standalone = $self->data->get_user_standalone() unless defined $user_standalone;
-		$user_ssh_public_keys = $self->data->get_user_ssh_public_keys(0) unless defined $user_ssh_public_keys;
+	my $user_parameters = shift;
+	if (!$user_parameters) {
+		notify($ERRORS{'WARNING'}, 0, "unable to create user, user parameters argument was not provided");
+		return;
+	}
+	elsif (!ref($user_parameters) || ref($user_parameters) ne 'HASH') {
+		notify($ERRORS{'WARNING'}, 0, "unable to create user, argument provided is not a hash reference");
+		return;
 	}
 	
-	$root_access = 1 unless defined $root_access;
-	$user_standalone = 1 unless defined $user_standalone;
-	
-	# Make sure the password was determined
-	if ($user_standalone) {
-		if (!defined($password)) {
-			notify($ERRORS{'WARNING'}, 0, "failed to create user '$user_login_id', user standalone = $user_standalone, password argument was not supplied and reservation password is not configured");
-			return;
-		}
+	my $username = $user_parameters->{username};
+	if (!defined($username)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to create user on $computer_node_name, argument hash does not contain a 'username' key:\n" . format_data($user_parameters));
+		return;
 	}
-	else {
-		# user standalone is false, undefine the password
-		undef($password);
+	
+	my $root_access = $user_parameters->{root_access};
+	if (!defined($root_access)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to create user on $computer_node_name, argument hash does not contain a 'root_access' key:\n" . format_data($user_parameters));
+		return;
+	}
+	
+	my $password = $user_parameters->{password};
+	my $uid = $user_parameters->{uid};
+	my $ssh_public_keys = $user_parameters->{ssh_public_keys};
+	
+	# Check if user already exists
+	if ($self->user_exists($username)) {
+		notify($ERRORS{'WARNING'}, 0, "unable to create user '$username' on $computer_node_name, the user already exists");
+		return;
 	}
 	
 	notify($ERRORS{'DEBUG'}, 0, "creating user on $computer_node_name:\n" .
-		"login ID: $user_login_id\n" .
-		"UID: " . ($uid ? $uid : '<not set>') . "\n" .
-		"root access: $root_access\n" .
-		"standalone: $user_standalone\n" .
+		"username: $username\n" .
 		"password: " . (defined($password) ? $password : '<not set>') . "\n" .
-		"SSH public keys: " . (defined($user_ssh_public_keys) ? $user_ssh_public_keys : '<not set>')
+		"UID: " . ($uid ? $uid : '<not set>') . "\n" .
+		"root access: " . ($root_access ? 'yes' : 'no') . "\n" .
+		"SSH public keys: " . (defined($ssh_public_keys) ? $ssh_public_keys : '<not set>')
 	);
 	
-	my $home_directory_path = "/home/$user_login_id";
 	my $home_directory_root = "/home";
+	my $home_directory_path = "$home_directory_root/$username";
 	my $home_directory_on_local_disk = $self->is_file_on_local_disk($home_directory_root);
 	if ($home_directory_on_local_disk ) {
-
-	my $useradd_command = "/usr/sbin/useradd -s /bin/bash -m -d /home/$user_login_id -g vcl";
-	$useradd_command .= " -u $uid" if ($uid);
-	$useradd_command .= " $user_login_id";
-	my ($useradd_exit_status, $useradd_output) = $self->execute($useradd_command);
-	
-	# Check if the output indicates that the user already exists
-	# useradd: warning: the home directory already exists
-	# useradd: user ibuser exists
-	
-	if ($useradd_output && grep(/ exists(\s|$)/i, @$useradd_output)) {
-		if (!$self->delete_user($user_login_id)) {
-			notify($ERRORS{'WARNING'}, 0, "failed to add user '$user_login_id' to $computer_node_name, user with same name already exists and could not be deleted");
+		my $useradd_command = "/usr/sbin/useradd -s /bin/bash -m -d /home/$username -g vcl";
+		$useradd_command .= " -u $uid" if ($uid);
+		$useradd_command .= " $username";
+		
+		my ($useradd_exit_status, $useradd_output) = $self->execute($useradd_command);
+		if (!defined($useradd_output)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to execute command to add user '$username' to $computer_node_name: '$useradd_command'");
 			return;
 		}
-		($useradd_exit_status, $useradd_output) = $self->execute($useradd_command);
-	}
-	
-	if (!defined($useradd_output)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to execute command to add user '$user_login_id' to $computer_node_name: '$useradd_command'");
-		return;
-	}
-	elsif (grep(/^useradd: /, @$useradd_output)) {
-		notify($ERRORS{'WARNING'}, 0, "warning on add user '$user_login_id' to $computer_node_name\ncommand: '$useradd_command'\noutput:\n" . join("\n", @$useradd_output));
-	}
-	else {
-		notify($ERRORS{'OK'}, 0, "added user '$user_login_id' to $computer_node_name");
-	}
+		elsif (grep(/^useradd: /, @$useradd_output)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to add user '$username' to $computer_node_name\ncommand: '$useradd_command'\noutput:\n" . join("\n", @$useradd_output));
+			return;
+		}
+		else {
+			notify($ERRORS{'OK'}, 0, "added user '$username' to $computer_node_name");
+		}
 	}
 	else {
 		notify($ERRORS{'OK'}, 0, "$home_directory_path is NOT on local disk, skipping useradd attempt");	
 	}
 	
-	if ($user_standalone) {
+	# Set the password
+	if ($password) {
 		# Set password
-		if (!$self->changepasswd($user_login_id, $password)) {
-			notify($ERRORS{'CRITICAL'}, 0, "Failed to set password on useracct: $user_login_id on $computer_node_name");
+		if (!$self->set_password($username, $password)) {
+			notify($ERRORS{'CRITICAL'}, 0, "failed to set password of user '$username' on $computer_node_name");
 			return;
 		}
 	}
 	
 	# Append AllowUsers line to the end of the file
 	my $external_sshd_config_file_path = '/etc/ssh/external_sshd_config';
-	my $allow_users_line = "AllowUsers $user_login_id";
+	my $allow_users_line = "AllowUsers $username\n";
 	if ($self->append_text_file($external_sshd_config_file_path, $allow_users_line)) {
 		notify($ERRORS{'DEBUG'}, 0, "added line to $external_sshd_config_file_path: '$allow_users_line'");
 	}
@@ -2671,61 +2637,52 @@ sub create_user {
 	
 	$self->restart_service('ext_sshd') || return;
 	
-	# Check image profile for allowed root access
-	# If the imagemeta root access is disable don't allow manage_server_access to override
-	if (defined($imagemeta_root_access) && $imagemeta_root_access) {
-		if ($root_access == 1) {
-			my $sudoers_file_path = '/etc/sudoers';
-			my $sudoers_line = "$user_login_id ALL= NOPASSWD: ALL";
-			if ($self->append_text_file($sudoers_file_path, $sudoers_line)) {
-				notify($ERRORS{'DEBUG'}, 0, "added line to $sudoers_file_path: '$sudoers_line'");
-			}
-			else {
-				notify($ERRORS{'WARNING'}, 0, "failed to add line to $sudoers_file_path: '$sudoers_line'");
-				return;
-			}
+	# Add user to sudoers if necessary
+	if ($root_access) {
+		my $sudoers_file_path = '/etc/sudoers';
+		my $sudoers_line = "$username ALL= NOPASSWD: ALL\n";
+		if ($self->append_text_file($sudoers_file_path, $sudoers_line)) {
+			notify($ERRORS{'DEBUG'}, 0, "appended line to $sudoers_file_path: '$sudoers_line'");
 		}
 		else {
-			notify($ERRORS{'DEBUG'}, 0, "root access NOT granted to $user_login_id");
+			notify($ERRORS{'WARNING'}, 0, "failed to append line to $sudoers_file_path: '$sudoers_line'");
+			return;
 		}
 	}
 	else {
-		notify($ERRORS{'DEBUG'}, 0, "root access NOT granted to $user_login_id, imagemeta_root_access set to $imagemeta_root_access");
+		notify($ERRORS{'DEBUG'}, 0, "root access not granted to $username");
 	}
-
-	# Add user's public ssh identity keys if exists
-	my $ssh_directory_path = "$home_directory_path/.ssh";
-	my $authorized_keys_file_path = "$ssh_directory_path/authorized_keys";
 	
-	if ($user_ssh_public_keys) {
+	# Add user's public ssh identity keys if exists
+	if ($ssh_public_keys) {
+		my $ssh_directory_path = "$home_directory_path/.ssh";
+		my $authorized_keys_file_path = "$ssh_directory_path/authorized_keys";
+		
 		# Determine if home directory is on a local device or network share
-		$home_directory_on_local_disk = $self->is_file_on_local_disk($home_directory_path);
-		
 		# Only add keys to home directories that are local,
-		# Don'd add keys to network mounted filesystems
-		
+		# Don't add keys to network mounted filesystems
+		$home_directory_on_local_disk = $self->is_file_on_local_disk($home_directory_path);
 		if ($home_directory_on_local_disk) {
 			# Create the .ssh directory
 			$self->create_directory($ssh_directory_path);
 			
-			if ($self->append_text_file($authorized_keys_file_path, $user_ssh_public_keys)) {
-				notify($ERRORS{'DEBUG'}, 0, "added user's public keys to $authorized_keys_file_path");
+			if ($self->append_text_file($authorized_keys_file_path, "$ssh_public_keys\n")) {
+				notify($ERRORS{'DEBUG'}, 0, "added user's public SSH keys to $authorized_keys_file_path");
 			}
 			else {
-				notify($ERRORS{'WARNING'}, 0, "failed to add user's public keys to $authorized_keys_file_path");
+				notify($ERRORS{'WARNING'}, 0, "failed to add user's public SSH keys to $authorized_keys_file_path");
 			}
 
-			if (!$self->set_file_owner($home_directory_path, $user_login_id, 'vcl', 1)) {
+			if (!$self->set_file_owner($home_directory_path, $username, 'vcl', 1)) {
 				notify($ERRORS{'WARNING'}, 0, "failed to set owner of user's home directory: $home_directory_path");
 				return;
-		}
+			}
 		}
 		else {
-			notify($ERRORS{'DEBUG'}, 0, "skipping adding user's public keys to $authorized_keys_file_path, home directory is on a network share");
+			notify($ERRORS{'DEBUG'}, 0, "user's public SSH keys not added to $authorized_keys_file_path, home directory is on a network share");
 		}
 	}
 	
-
 	return 1;
 } ## end sub create_user
 
@@ -2733,7 +2690,7 @@ sub create_user {
 
 =head2 delete_user
 
- Parameters  :
+ Parameters  : $username
  Returns     :
  Description :
 
@@ -3880,8 +3837,9 @@ sub disable_firewall_port {
 		return;
 	}
 	elsif ($port eq '22') {
-		notify($ERRORS{'WARNING'}, 0, "disabling firewall port 22 is not allowed because it will cut off access from the management node");
-		return;
+		my $mn_private_ip = $self->mn_os->get_private_ip_address();
+		notify($ERRORS{'OK'}, 0, "disabling firewall port 22 is not allowed because it will cut off access from the management node, enabling port 22 to only the management node's private IP address: $mn_private_ip");
+		return $self->enable_firewall_port("tcp", 22, $mn_private_ip, 1);
 	}
 	
 	my $chain = "INPUT";
@@ -5354,6 +5312,48 @@ sub enable_ip_forwarding {
 	else {
 		notify($ERRORS{'OK'}, 0, "verified IP forwarding is enabled on $computer_node_name");
 		return 1;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 should_set_user_password
+
+ Parameters  : $user_id
+ Returns     : boolean
+ Description : Determines whether or not a user account's password should be set
+               on the computer being loaded. The "STANDALONE" flag is used to
+               determine this.
+
+=cut
+
+sub should_set_user_password {
+	my $self = shift;
+	if (ref($self) !~ /linux/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my ($user_id) = shift;
+	if (!$user_id) {
+		notify($ERRORS{'WARNING'}, 0, "user ID argument was not supplied");
+		return;
+	}
+	
+	my $user_info = get_user_info($user_id);
+	if (!$user_info) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine if user password should be set, user info could not be retrieved for user ID $user_id");
+		return;
+	}
+	
+	my $user_standalone = $user_info->{STANDALONE};
+	
+	# Generate a reservation password if "standalone" (not using Kerberos authentication)
+	if ($user_standalone) {
+		return 1;
+	}
+	else {
+		return 0;
 	}
 }
 

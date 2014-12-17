@@ -225,6 +225,8 @@ sub initialize {
 		notify($ERRORS{'DEBUG'}, 0, "child reservation, not updating request state to 'pending'");
 	}
 	
+	notify($ERRORS{'DEBUG'}, 0, "computerloadlog states after state object is initialized:\n" . format_data(get_request_loadstate_names($request_id)));
+	
 	return 1;
 } ## end sub initialize
 
@@ -722,15 +724,6 @@ sub state_exit {
 				}
 			}
 		}
-
-		if ($request_state_name_old =~ /complete|timeout|deleted/) {
-			
-			delete_computerloadlog_reservation(\@reservation_ids,0,1);
-		}
-		
-		# Delete all computerloadlog rows with loadstatename = 'begin' for all reservations in this request
-		# beginacknowledgetimeout required for web gui
-		delete_computerloadlog_reservation(\@reservation_ids, 'begin',1);
 		
 		# Update log.ending if this is the parent reservation and argument was supplied
 		if ($request_log_ending) {
@@ -749,6 +742,18 @@ sub state_exit {
 		}
 		elsif (!update_computer_state($computer_id, $computer_state_name_new)) {
 			notify($ERRORS{'CRITICAL'}, 0, "failed update state of computer $computer_shortname: $computer_state_name_old->$computer_state_name_new");
+		}
+	}
+	
+	# Clean computerloadlog as late as possible
+	if ($is_parent_reservation) {
+		if ($request_state_name_old =~ /(new|reserved)/) {
+			# Only delete computerloadlog entries with loadstatename = 'begin' for all reservations in this request
+			delete_computerloadlog_reservation(\@reservation_ids, '(begin)');
+		}
+		else {
+			# Delete all computerloadlog entries for all reservations in this request
+			delete_computerloadlog_reservation(\@reservation_ids);
 		}
 	}
 	
@@ -801,6 +806,7 @@ sub DESTROY {
 			my @reservation_ids = $self->data->get_reservation_ids();
 			if (@reservation_ids && $request_id) {
 				$self->state_exit();
+				notify($ERRORS{'DEBUG'}, 0, "computerloadlog states remaining after process exits:\n" . format_data(get_request_loadstate_names($request_id)));
 			}
 			elsif (!$SETUP_MODE) {
 				notify($ERRORS{'WARNING'}, 0, "failed to retrieve the reservation ID, computerloadlog 'begin' rows not removed");
