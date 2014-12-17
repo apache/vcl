@@ -813,20 +813,23 @@ sub post_maintenance_action {
 	}
 	
 	my $domain_name = shift || $self->get_domain_name();
-	my $node_name = $self->data->get_vmhost_short_name();
 	my $computer_id = $self->data->get_computer_id();
+	my $computer_short_name = $self->data->get_computer_short_name();
+	my $vmhost_name = $self->data->get_vmhost_short_name();
 	
 	# Delete the domains on the node which were created for the computer being put into maintenance
 	if (!$self->delete_existing_domains()) {
-		notify($ERRORS{'WARNING'}, 0, "failed to delete existing $domain_name domains on $node_name");
+		notify($ERRORS{'WARNING'}, 0, "failed to delete existing $domain_name domains on $vmhost_name");
 		return;
+	}
+
+	# Set the computer current image in the database to 'noimage'
+	if (!update_computer_imagename($computer_id, 'noimage')) {
+		notify($ERRORS{'WARNING'}, 0, "failed to set computer $computer_short_name current image to 'noimage'");
 	}
 	
 	# Unassign the VM from the VM host, change computer.vmhostid to NULL
-	if (switch_vmhost_id($computer_id, 'NULL')) {
-		notify($ERRORS{'OK'}, 0, "set vmhostid to NULL for for $domain_name");
-	}
-	else {
+	if (!switch_vmhost_id($computer_id, 'NULL')) {
 		notify($ERRORS{'WARNING'}, 0, "failed to set the vmhostid to NULL for $domain_name");
 		return;
 	}

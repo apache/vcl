@@ -1485,14 +1485,6 @@ sub remove_existing_vms {
 		return;
 	}
 	
-	# Set the computer current image in the database to 'noimage'
-	if (update_computer_imagename($computer_id, 'noimage')) {
-		notify($ERRORS{'DEBUG'}, 0, "set computer $computer_name current image to 'noimage'");
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to set computer $computer_name current image to 'noimage'");
-	}
-	
 	return 1;
 }
 
@@ -6622,10 +6614,12 @@ sub post_maintenance_action {
 		return;
 	}
 
-	if (switch_vmhost_id($computer_id, 'NULL')) {
-		notify($ERRORS{'OK'}, 0, "set vmhostid to NULL for for VM $computer_short_name");
+	# Set the computer current image in the database to 'noimage'
+	if (!update_computer_imagename($computer_id, 'noimage')) {
+		notify($ERRORS{'WARNING'}, 0, "failed to set computer $computer_short_name current image to 'noimage'");
 	}
-	else {
+	
+	if (!switch_vmhost_id($computer_id, 'NULL')) {
 		notify($ERRORS{'WARNING'}, 0, "failed to set the vmhostid to NULL for VM $computer_short_name");
 		return;
 	}

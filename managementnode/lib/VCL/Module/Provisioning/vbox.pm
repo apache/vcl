@@ -1089,16 +1089,18 @@ sub post_maintenance_action {
 	my $computer_id = $self->data->get_computer_id();
 	my $vmhost_hostname = $self->data->get_vmhost_hostname;
 
-	if ($self->control_vm("remove")) {
-		notify($ERRORS{'OK'}, 0, "removed node $computer_short_name from vmhost $vmhost_hostname");
+	if (!$self->control_vm("remove")) {
+		notify($ERRORS{'WARNING'}, 0, "failed to remove node $computer_short_name from vmhost $vmhost_hostname");
+		return;
 	}
 
-	if (switch_vmhost_id($computer_id, 'NULL')) {
-		notify($ERRORS{'OK'}, 0, "set vmhostid to NULL for for VM $computer_short_name");
+	# Set the computer current image in the database to 'noimage'
+	if (!update_computer_imagename($computer_id, 'noimage')) {
+		notify($ERRORS{'WARNING'}, 0, "failed to set computer $computer_short_name current image to 'noimage'");
 	}
-	else {
+	
+	if (!switch_vmhost_id($computer_id, 'NULL')) {
 		notify($ERRORS{'WARNING'}, 0, "failed to set the vmhostid to NULL for VM $computer_short_name");
-		return;
 	}
 
 	return 1;
