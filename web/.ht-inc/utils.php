@@ -6795,19 +6795,19 @@ function getManagementNodes($alive="neither", $includedeleted=0, $id=0) {
 	       .        "m.sharedMailBox AS sharedmailbox, "
 	       .        "r.id as resourceid, "
 	       .        "m.availablenetworks, "
-	       .        "m.NOT_STANDALONE AS federatedauth "
+	       .        "m.NOT_STANDALONE AS federatedauth, "
+	       .        "nh.publicIPaddress AS natpublicIPaddress, "
+	       .        "COALESCE(nh.internalIPaddress, '') AS natinternalIPaddress "
 	       . "FROM user u, "
 	       .      "state s, "
-	       .      "resource r, "
-	       .      "resourcetype rt, "
 	       .      "affiliation a, "
 	       .      "managementnode m "
 	       . "LEFT JOIN resourcegroup rg ON (m.imagelibgroupid = rg.id) "
+	       . "LEFT JOIN resourcetype rt ON (rt.name = 'managementnode') "
+	       . "LEFT JOIN resource r ON (r.resourcetypeid = rt.id AND r.subid = m.id) "
+	       . "LEFT JOIN nathost nh ON (r.id = nh.resourceid) "
 	       . "WHERE m.ownerid = u.id AND "
 	       .       "m.stateid = s.id AND "
-	       .       "m.id = r.subid AND "
-	       .       "r.resourcetypeid = rt.id AND "
-	       .       "rt.name = 'managementnode' AND "
 	       .       "u.affiliationid = a.id";
 	if($id != 0)
 		$query .= " AND m.id = $id";
@@ -6820,6 +6820,12 @@ function getManagementNodes($alive="neither", $includedeleted=0, $id=0) {
 	$qh = doQuery($query, 101);
 	$return = array();
 	while($row = mysql_fetch_assoc($qh)) {
+		if(is_null($row['natpublicIPaddress'])) {
+			$row['nathostenabled'] = 0;
+			$row['natpublicIPaddress'] = '';
+		}
+		else
+			$row['nathostenabled'] = 1;
 		$return[$row["id"]] = $row;
 		$return[$row['id']]['availablenetworks'] = explode(',', $row['availablenetworks']);
 		if($row['state'] == 'deleted')

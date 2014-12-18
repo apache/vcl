@@ -518,6 +518,7 @@ function addNewResource(title) {
 	dojo.addClass('curimgspan', 'hidden');
 	dojo.addClass('compidspan', 'hidden');
 	dijit.byId('nathostid').set('disabled', true);
+	dijit.byId('nathostenabled').set('checked', false);
 	dijit.byId('natpublicipaddress').set('disabled', true);
 	dijit.byId('natinternalipaddress').set('disabled', true);
 	dijit.byId('addeditdlg').show();

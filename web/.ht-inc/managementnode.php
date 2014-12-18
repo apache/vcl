@@ -408,6 +408,21 @@ class ManagementNode extends Resource {
 		$h .= labeledFormItem('federatedauth', 'Affiliations using Federated Authentication for Linux Images',
 		                      'textarea', '', 1, '', '', '', '', '', helpIcon('federatedauthhelp'));
 
+		# NAT Host
+		$h .= "<div id=\"nathost\" class=\"boxedoptions\">\n";
+		# use as NAT host
+		$extra = array('onChange' => "toggleNAThost();");
+		$h .= labeledFormItem('nathostenabled', 'Use as NAT Host', 'check', '', '', '1', '', '', $extra);
+		# public IP
+		$errmsg = "Invalid NAT Public IP address specified - must be a valid IPV4 address";
+		$h .= labeledFormItem('natpublicipaddress', 'NAT Public IP Address', 'text', $ipreg1, 1, '', $errmsg,
+		                      '', '', '', helpIcon('natpubliciphelp')); 
+		# internal IP
+		$errmsg = "Invalid NAT Internal IP address specified - must be a valid IPV4 address";
+		$h .= labeledFormItem('natinternalipaddress', 'NAT Internal IP Address', 'text', $ipreg1, 1, '', $errmsg,
+		                      '', '', '', helpIcon('natinternaliphelp')); 
+		$h .= "</div>\n"; # NAT Host
+
 		$h .= "</div>\n"; # mgmtnodedlgcontent
 		$h .= "</div>\n"; # addeditdlgcontent
 
@@ -460,6 +475,8 @@ class ManagementNode extends Resource {
 		$h .= helpTooltip('dnsserverhelp', _("comma delimited list of IP addresses of DNS servers for public network"));
 		$h .= helpTooltip('availnetshelp', _("This is a list of IP networks, one per line, available to nodes deployed by this management node. Networks should be specified in x.x.x.x/yy form.  It is for deploying servers having a fixed IP address to ensure a node is selected that can actually be on the specified network."));
 		$h .= helpTooltip('federatedauthhelp', _("Comma delimited list of affiliations for which user passwords are not set for Linux image reservations under this management node. Each Linux image is then required to have federated authentication set up so that users' passwords are passed along to the federated authentication system when a user attempts to log in. (for clarity, not set setting user passwords does not mean users have an empty password, but that a federated system must authenticate the users)"));
+		$h .= helpTooltip('natpubliciphelp', _("message"));
+		$h .= helpTooltip('natinternaliphelp', _("message 2"));
 		$h .= "</div>\n"; # tooltips
 		return $h;
 	}
@@ -572,29 +589,37 @@ class ManagementNode extends Resource {
 				else
 					setVariable("timesource|{$data['name']}", $data['timeservers'], 'none');
 			}
-			# update nathost (TODO change in release after 2.4 when section added to manage nat hosts)
-			if($data['ipaddress'] != $olddata['IPaddress']) {
-				$query = "SELECT id "
-				       . "FROM resource "
-				       . "WHERE resourcetypeid = 16 AND "
-				       .       "subid = {$data['rscid']}";
-				$qh = doQuery($query);
-				if($row = mysql_fetch_assoc($qh)) {
-					$resourceid = $row['id'];
-					$query = "UPDATE nathost "
-					       . "SET publicIPaddress = '{$data['ipaddress']}' "
-					       . "WHERE resourceid = $resourceid";
+
+			# NAT host
+			if($data['nathostenabled'] != $olddata['nathostenabled']) {
+				if($data['nathostenabled']) {
+					$query = "INSERT INTO nathost "
+					       .       "(resourceid, "
+					       .       "publicIPaddress, "
+					       .       "internalIPaddress) "
+					       . "VALUES "
+					       .       "({$olddata['resourceid']}, "
+					       .       "'{$data['natpublicIPaddress']}', "
+					       .       "'{$data['natinternalIPaddress']}') "
+					       . "ON DUPLICATE KEY UPDATE "
+					       . "publicIPaddress = '{$data['natpublicIPaddress']}', "
+					       . "internalIPaddress = '{$data['natinternalIPaddress']}'";
 					doQuery($query);
-					if(! mysql_affected_rows($GLOBALS['mysql_link_vcl'])) {
-						$query = "INSERT INTO nathost "
-						       .        "(resourceid, "
-						       .        "publicIPaddress) "
-						       . "VALUES "
-						       .        "($resourceid, "
-						       .        "'{$data['ipaddress']}')";
-						doQuery($query);
-					}
 				}
+				else {
+					$query = "DELETE FROM nathost "
+					       . "WHERE resourceid = {$olddata['resourceid']}";
+					doQuery($query);
+				}
+			}
+			elseif($data['nathostenabled'] &&
+			       ($olddata['natpublicIPaddress'] != $data['natpublicIPaddress'] ||
+					 $olddata['natinternalIPaddress'] != $data['natinternalIPaddress'])) {
+				$query = "UPDATE nathost "
+				       . "SET publicIPaddress = '{$data['natpublicIPaddress']}', "
+				       .     "internalIPaddress = '{$data['natinternalIPaddress']}' "
+				       . "WHERE resourceid = {$olddata['resourceid']}";
+				doQuery($query);
 			}
 		}
 
@@ -692,6 +717,9 @@ class ManagementNode extends Resource {
 		$return['checkininterval'] = processInputVar('checkininterval', ARG_NUMERIC);
 		$return['availablenetworks'] = processInputVar('availablenetworks', ARG_STRING);
 		$return['federatedauth'] = processInputVar('federatedauth', ARG_STRING);
+		$return['nathostenabled'] = processInputVar('nathostenabled', ARG_NUMERIC);
+		$return['natpublicIPaddress'] = processInputVar('natpublicipaddress', ARG_STRING);
+		$return['natinternalIPaddress'] = processInputVar('natinternalipaddress', ARG_STRING);
 
 		if(get_magic_quotes_gpc()) {
 			$return['sysadminemail'] = stripslashes($return['sysadminemail']);
@@ -904,6 +932,60 @@ class ManagementNode extends Resource {
 			}
 		}
 
+
+
+
+
+		$nathosterror = 0;
+		# nathostenabled
+		if($return['nathostenabled'] != 0 && $return['nathostenabled'] != 1) {
+			$return['error'] = 1;
+			$errormsg[] = "Invalid value for Use as NAT Host";
+			$nathosterror = 1;
+		}
+		# natpublicIPaddress
+		if($return['nathostenabled']) {
+			if(! validateIPv4addr($return['natpublicIPaddress'])) {
+				$return['error'] = 1;
+				$errormsg[] = "Invalid NAT Public IP address. Must be w.x.y.z with each of "
+			               . "w, x, y, and z being between 1 and 255 (inclusive)";
+				$nathosterror = 1;
+			}
+			# natinternalIPaddress
+			if(! validateIPv4addr($return['natinternalIPaddress'])) {
+				$return['error'] = 1;
+				$errormsg[] = "Invalid NAT Internal IP address. Must be w.x.y.z with each of "
+			               . "w, x, y, and z being between 1 and 255 (inclusive)";
+				$nathosterror = 1;
+			}
+		}
+		# nat host change - check for active reservations
+		if(! $nathosterror && $return['mode'] == 'edit') {
+			if($olddata['nathostenabled'] != $return['nathostenabled'] ||
+			   $olddata['natpublicIPaddress'] != $return['natpublicIPaddress'] ||
+				$olddata['natinternalIPaddress'] != $return['natinternalIPaddress']) {
+				$vclreloadid = getUserlistID('vclreload@Local');
+				$query = "SELECT rq.id "
+				       . "FROM request rq, "
+				       .      "reservation rs, "
+				       .      "nathostcomputermap nhcm, "
+				       .      "nathost nh "
+				       . "WHERE rs.requestid = rq.id AND "
+				       .       "rs.computerid = nhcm.computerid AND "
+				       .       "nhcm.nathostid = nh.id AND "
+				       .       "nh.resourceid = {$olddata['resourceid']} AND "
+				       .       "rq.start <= NOW() AND "
+				       .       "rq.end > NOW() AND "
+				       .       "rq.stateid NOT IN (1,5,11,12) AND "
+				       .       "rq.userid != $vclreloadid";
+				$qh = doQuery($query);
+				if(mysql_num_rows($qh)) {
+					$return['error'] = 1;
+					$errormsg[] = "This management node is the NAT host for computers that have active reservations. NAT host<br>settings cannot be changed while providing NAT for active reservations.";
+				}
+			}
+		}
+
 		if($return['error'])
 			$return['errormsg'] = implode('<br>', $errormsg);
 
@@ -981,13 +1063,18 @@ class ManagementNode extends Resource {
 
 		$resourceid = dbLastInsertID();
 
-		// add entry to nathost table (TODO change in release after 2.4 when section added to manage nat hosts)
-		$query = "INSERT INTO nathost "
-				 .        "(resourceid, "
-				 .        "publicIPaddress) "
-				 . "VALUES ($resourceid, "
-				 .         "'{$data['ipaddress']}')";
-		doQuery($query);
+		# NAT host
+		if($data['nathostenabled']) {
+			$query = "INSERT INTO nathost "
+			       .       "(resourceid, "
+			       .       "publicIPaddress, "
+			       .       "internalIPaddress) "
+			       . "VALUES "
+			       .       "($resourceid, "
+			       .       "'{$data['natpublicIPaddress']}', "
+			       .       "'{$data['natinternalIPaddress']}')";
+			doQuery($query);
+		}
 
 		# time server
 		$globalval = getVariable('timesource|global');

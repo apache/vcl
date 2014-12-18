@@ -88,7 +88,21 @@ function addNewResource(title) {
 	dijit.byId('addeditbtn').set('label', title);
 	dojo.byId('editresid').value = 0;
 	resetEditResource();
+	dijit.byId('nathostenabled').set('checked', false);
+	dijit.byId('natpublicipaddress').set('disabled', true);
+	dijit.byId('natinternalipaddress').set('disabled', true);
 	dijit.byId('addeditdlg').show();
+}
+
+function toggleNAThost() {
+	if(dijit.byId('nathostenabled').checked) {
+		dijit.byId('natpublicipaddress').set('disabled', false);
+		dijit.byId('natinternalipaddress').set('disabled', false);
+	}
+	else {
+		dijit.byId('natpublicipaddress').set('disabled', true);
+		dijit.byId('natinternalipaddress').set('disabled', true);
+	}
 }
 
 function inlineEditResourceCB(data, ioArgs) {
@@ -121,6 +135,20 @@ function inlineEditResourceCB(data, ioArgs) {
 		dijit.byId('publicdnsserver').set('value', data.items.data.publicdnsserver);
 		dijit.byId('availablenetworks').set('value', data.items.data.availablenetworks.join(','));
 		dijit.byId('federatedauth').set('value', data.items.data.federatedauth);
+		if(data.items.data.nathostenabled == 1) {
+			dijit.byId('nathostenabled').set('checked', true);
+			dijit.byId('natpublicipaddress').set('disabled', false);
+			dijit.byId('natinternalipaddress').set('disabled', false);
+			dijit.byId('natpublicipaddress').set('value', data.items.data.natpublicIPaddress);
+			dijit.byId('natinternalipaddress').set('value', data.items.data.natinternalIPaddress);
+		}
+		else {
+			dijit.byId('nathostenabled').set('checked', false);
+			dijit.byId('natpublicipaddress').set('disabled', true);
+			dijit.byId('natinternalipaddress').set('disabled', true);
+			dijit.byId('natpublicipaddress').set('value', '');
+			dijit.byId('natinternalipaddress').set('value', '');
+		}
 		dojo.byId('addeditdlgerrmsg').innerHTML = '';
 		dijit.byId('addeditdlg').show();
 	}
@@ -130,7 +158,7 @@ function inlineEditResourceCB(data, ioArgs) {
 }
 
 function resetEditResource() {
-	var fields = ['name', 'owner', 'ipaddress', 'stateid', 'sysadminemail', 'sharedmailbox', 'checkininterval', 'installpath', 'timeservers', 'keys', 'sshport', 'imagelibenable', 'imagelibgroupid', 'imagelibuser', 'imagelibkey', 'publicIPconfig', 'publicnetmask', 'publicgateway', 'publicdnsserver', 'availablenetworks', 'federatedauth'];
+	var fields = ['name', 'owner', 'ipaddress', 'stateid', 'sysadminemail', 'sharedmailbox', 'checkininterval', 'installpath', 'timeservers', 'keys', 'sshport', 'imagelibenable', 'imagelibgroupid', 'imagelibuser', 'imagelibkey', 'publicIPconfig', 'publicnetmask', 'publicgateway', 'publicdnsserver', 'availablenetworks', 'federatedauth', 'natpublicipaddress', 'natinternalipaddress'];
 	for(var i = 0; i < fields.length; i++) {
 		dijit.byId(fields[i]).reset();
 	}
@@ -139,7 +167,7 @@ function resetEditResource() {
 
 function saveResource() {
 	var errobj = dojo.byId('addeditdlgerrmsg');
-	var fields = ['name', 'owner', 'ipaddress', 'sysadminemail', 'sharedmailbox', 'installpath', 'timeservers', 'keys', 'imagelibuser', 'imagelibkey', 'publicnetmask', 'publicgateway', 'publicdnsserver'];
+	var fields = ['name', 'owner', 'ipaddress', 'sysadminemail', 'sharedmailbox', 'installpath', 'timeservers', 'keys', 'imagelibuser', 'imagelibkey', 'publicnetmask', 'publicgateway', 'publicdnsserver', 'natpublicipaddress', 'natinternalipaddress'];
 	for(var i = 0; i < fields.length; i++) {
 		if(! checkValidatedObj(fields[i], errobj))
 			return;
@@ -200,6 +228,9 @@ function saveResource() {
 	data['imagelibgroupid'] = dijit.byId('imagelibgroupid').get('value');
 	data['availablenetworks'] = dijit.byId('availablenetworks').get('value');
 	data['federatedauth'] = dijit.byId('federatedauth').get('value');
+	data['nathostenabled'] = dijit.byId('nathostenabled').get('value');
+	if(data['nathostenabled'] != 1)
+		data['nathostenabled'] = 0;
 
 	dijit.byId('addeditbtn').set('disabled', true);
 	RPCwrapper(data, saveResourceCB, 1);

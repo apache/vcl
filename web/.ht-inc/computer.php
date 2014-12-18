@@ -2024,7 +2024,8 @@ class Computer extends Resource {
 			$nathosterror = 1;
 		}
 		# natpublicIPaddress
-		if($return['mode'] == 'edit' || $addmode == 'single') {
+		if($return['nathostenabled'] &&
+		   ($return['mode'] == 'edit' || $addmode == 'single')) {
 			if(! validateIPv4addr($return['natpublicIPaddress'])) {
 				$return['error'] = 1;
 				$errormsg[] = "Invalid NAT Public IP address. Must be w.x.y.z with each of "
@@ -2048,8 +2049,7 @@ class Computer extends Resource {
 				       . "FROM request rq, "
 				       .      "reservation rs, "
 				       .      "nathostcomputermap nhcm, "
-				       .      "nathost nh, "
-				       .      "resource r "
+				       .      "nathost nh "
 				       . "WHERE rs.requestid = rq.id AND "
 				       .       "rs.computerid = nhcm.computerid AND "
 				       .       "nhcm.nathostid = nh.id AND "
