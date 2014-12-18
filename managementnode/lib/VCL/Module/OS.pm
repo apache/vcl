@@ -197,10 +197,10 @@ sub add_user_accounts {
 	
 	# Add users
 	RESERVATION_USER: foreach my $user_id (sort keys %$reservation_users) {
-		my $username = $reservation_users->{$user_id}{unityid};
-		my $uid = $reservation_users->{$user_id}{uid};
-		my $root_access = $reservation_users->{$user_id}{ROOTACCESS};
-		my $ssh_public_keys = $reservation_users->{$user_id}{user_info}{sshpublickeys};
+		my $username        = $reservation_users->{$user_id}{unityid};
+		my $uid             = $reservation_users->{$user_id}{uid};
+		my $root_access     = $reservation_users->{$user_id}{ROOTACCESS};
+		my $ssh_public_keys = $reservation_users->{$user_id}{sshpublickeys};
 		my $password;
 		
 		# Check if entry needs to be added to the useraccounts table
@@ -3552,16 +3552,28 @@ sub get_timings {
 		general_end_notice_second => '300',
 		ignore_connections_gte => '1440'
 	);
-
-	#Check for affiliation, if nothing return default timings
-	if (!defined($variable) || !(exists($timing_defaults{$variable}))) {
-		notify($ERRORS{'WARNING'}, 0, " input variable is not acceptable, returning 900 as value"); 
+	
+	if (!defined($variable)) {
+		notify($ERRORS{'WARNING'}, 0, "input variable argument was not supplied, returning default value: 900");
 		return '900';
 	}
-
-	my $db_timing_variable_value = get_variable("$variable|$affiliation_name", 0) || get_variable("$variable", 0) || $timing_defaults{$variable} ;
+	elsif (!defined($timing_defaults{$variable})) {
+		notify($ERRORS{'WARNING'}, 0, "input variable '$variable' is not supported, returning default value: 900");
+		return '900';
+	}
+	
+	my $db_timing_variable_value;
+	if ($db_timing_variable_value = get_variable("$variable|$affiliation_name", 0)) {
+		notify($ERRORS{'DEBUG'}, 0, "retreived $affiliation_name affiliation specific $variable variable: $db_timing_variable_value");
+	}
+	elsif ($db_timing_variable_value = get_variable("$variable", 0)) {
+		notify($ERRORS{'DEBUG'}, 0, "retreived non-affiliation specific $variable variable: $db_timing_variable_value");
+	}
+	else {
+		$db_timing_variable_value = $timing_defaults{$variable};
+		notify($ERRORS{'DEBUG'}, 0, "$variable is not defined in the database, returning default value: $db_timing_variable_value");
+	}
 	return $db_timing_variable_value;
-
 }
 
 #/////////////////////////////////////////////////////////////////////////////
