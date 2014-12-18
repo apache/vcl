@@ -71,9 +71,9 @@ function generalOptions($globalopts) {
 	$h .= $obj->getHTML($globalopts);
 	$obj = new acknowledge();
 	$h .= $obj->getHTML($globalopts);
-	$obj = new connect();
+	$obj = new initialconnecttimeout();
 	$h .= $obj->getHTML($globalopts);
-	$obj = new reconnect();
+	$obj = new reconnecttimeout();
 	$h .= $obj->getHTML($globalopts);
 	if($globalopts) {
 		$obj = new userPasswordLength();
@@ -201,6 +201,7 @@ class TimeVariable {
 	var $jsname;
 	var $scale60;
 	var $defaultval;
+	var $minval;
 	var $maxval;
 	var $addmsg;
 	var $updatemsg;
@@ -220,6 +221,7 @@ class TimeVariable {
 		$this->addmsg = _("Time out for %s added");
 		$this->updatemsg = _("Time out values saved");
 		$this->delmsg = _("Time out for %s deleted");
+		$this->minval = 5;
 	}
 
 	////////////////////////////////////////////////////////////////////////////////
@@ -290,7 +292,7 @@ class TimeVariable {
 			$key = str_replace('|', '_', $key);
 		}
 		$extra = array('smallDelta' => 1, 'largeDelta' => 10);
-		$h .= labeledFormItem($key, $label, 'spinner', "{min:1, max:{$this->maxval}}", 1, $dispval, '', '', $extra, '', '', 0);
+		$h .= labeledFormItem($key, $label, 'spinner', "{min:{$this->minval}, max:{$this->maxval}}", 1, $dispval, '', '', $extra, '', '', 0);
 		$h .= "<br>\n";
 		$origvals[$key] = array('key' => $prekey, 'val' => $val);
 
@@ -306,7 +308,7 @@ class TimeVariable {
 				if($this->scale60)
 					$dispval = (int)($dispval / 60);
 				$h .= "<span id=\"{$key}span\">\n";
-				$h .= labeledFormItem($key, $label, 'spinner', "{min:1, max:{$this->maxval}}", 1, $dispval, '', '', $extra, '', '', 0);
+				$h .= labeledFormItem($key, $label, 'spinner', "{min:{$this->minval}, max:{$this->maxval}}", 1, $dispval, '', '', $extra, '', '', 0);
 				$h .= dijitButton("{$key}delbtn", _("Delete"), "{$this->jsname}.deleteAffiliationSetting('$key', '{$this->domidbase}');") . "<br>\n";
 				$h .= "</span>\n";
 				$origvals[$key] = array('key' => $prekey, 'val' => $val);
@@ -327,7 +329,7 @@ class TimeVariable {
 			$h .=        "required=\"1\" ";
 			$h .=        "style=\"width: 70px;\" ";
 			$h .=        "value=\"$newval\" ";
-			$h .=        "constraints=\"{min:1, max:{$this->maxval}}\" ";
+			$h .=        "constraints=\"{min:{$this->minval}, max:{$this->maxval}}\" ";
 			$h .=        "smallDelta=\"1\" ";
 			$h .=        "largeDelta=\"10\" ";
 			$h .=        "id=\"{$this->domidbase}newval\">\n";
@@ -380,7 +382,7 @@ class TimeVariable {
 			return;
 		}
 		$value = processInputVar('value', ARG_NUMERIC);
-		if($value < 1 || $value > $this->maxval) {
+		if($value < $this->minval || $value > $this->maxval) {
 			$arr = array('status' => 'failed',
 			             'msgid' => "{$this->domidbase}msg",
 			             'errmsg' => _('Invalid value submitted.'));
@@ -416,6 +418,7 @@ class TimeVariable {
 		             'extrafunc' => "{$this->jsname}.addAffiliationSettingCBextra",
 		             'deletecont' => $delcont,
 		             'savecont' => $savecont,
+		             'minval' => $this->minval,
 		             'maxval' => $this->maxval,
 		             'msg' => sprintf($this->addmsg, $affil));
 		sendJSON($arr);
@@ -440,7 +443,7 @@ class TimeVariable {
 		$newvals = array();
 		foreach($origvals as $id => $arr) {
 			$tmp = processInputVar($id, ARG_NUMERIC);
-			if($tmp < 1 || $tmp > $this->maxval) {
+			if($tmp < $this->minval || $tmp > $this->maxval) {
 				if($id == $this->key)
 					$affil = 'global';
 				else {
@@ -546,7 +549,7 @@ class connectedUserCheck extends TimeVariable {
 	/////////////////////////////////////////////////////////////////////////////
 	function __construct() {
 		parent::__construct();
-		$this->name = _('Connected User Check Timeout');
+		$this->name = _('Connected User Check Threshold');
 		$this->key = 'ignore_connections_gte';
 		$this->desc = _("Do not perform user-logged-in time out checks if reservation duration is greater than the specified value (in hours).");
 		$this->domidbase = 'connectedusercheck';
@@ -554,6 +557,7 @@ class connectedUserCheck extends TimeVariable {
 		$this->jsname = 'connectedUserCheck';
 		$this->scale60 = 1;
 		$this->defaultval = 1440;
+		$this->minval = 0;
 		$this->maxval = 168;
 	}
 }
@@ -588,12 +592,12 @@ class acknowledge extends TimeVariable {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
-/// \class connect
+/// \class initialconnecttimeout
 ///
-/// \brief extends TimeVariable class to implement connecttimeout
+/// \brief extends TimeVariable class to implement initialconnecttimeout
 ///
 ////////////////////////////////////////////////////////////////////////////////
-class connect extends TimeVariable {
+class initialconnecttimeout extends TimeVariable {
 	/////////////////////////////////////////////////////////////////////////////
 	///
 	/// \fn __construct()
@@ -604,11 +608,11 @@ class connect extends TimeVariable {
 	function __construct() {
 		parent::__construct();
 		$this->name = _('Connect To Reservation Timeout');
-		$this->key = 'connecttimeout';
+		$this->key = 'initialconnecttimeout';
 		$this->desc = _("After clicking the Connect button for a reservation, users have this long to connect to a reserved node before the reservation is timed out (in minutes, does not apply to Server Reservations).");
-		$this->domidbase = 'connect';
+		$this->domidbase = 'initialconnecttimeout';
 		$this->basecdata['obj'] = $this;
-		$this->jsname = 'connect';
+		$this->jsname = 'initialconnecttimeout';
 		$this->scale60 = 1;
 		$this->maxval = 60;
 	}
@@ -616,12 +620,12 @@ class connect extends TimeVariable {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
-/// \class reconnect
+/// \class reconnecttimeout
 ///
-/// \brief extends TimeVariable class to implement wait_for_reconnect
+/// \brief extends TimeVariable class to implement reconnecttimeout
 ///
 ////////////////////////////////////////////////////////////////////////////////
-class reconnect extends TimeVariable {
+class reconnecttimeout extends TimeVariable {
 	/////////////////////////////////////////////////////////////////////////////
 	///
 	/// \fn __construct()
@@ -632,11 +636,11 @@ class reconnect extends TimeVariable {
 	function __construct() {
 		parent::__construct();
 		$this->name = _('Re-connect To Reservation Timeout');
-		$this->key = 'wait_for_reconnect';
+		$this->key = 'reconnecttimeout';
 		$this->desc = _("After disconnecting from a reservation, users have this long to reconnect to a reserved node before the reservation is timed out (in minutes, does not apply to Server Reservations).");
-		$this->domidbase = 'reconnect';
+		$this->domidbase = 'reconnecttimeout';
 		$this->basecdata['obj'] = $this;
-		$this->jsname = 'reconnect';
+		$this->jsname = 'reconnecttimeout';
 		$this->scale60 = 1;
 		$this->maxval = 60;
 	}

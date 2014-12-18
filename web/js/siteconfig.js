@@ -86,7 +86,7 @@ TimeVariable.prototype.addAffiliationSettingCBextra = function(data) {
 		required: 'true',
 		style: 'width: 70px;',
 		value: data.items.value,
-		constraints: {min: 1, max: data.items.maxval},
+		constraints: {min: data.items.minval, max: data.items.maxval},
 		smallDelta: 1,
 		largeDelta: 10
 	}, document.createElement('div'));
@@ -164,19 +164,19 @@ function acknowledge() {
 acknowledge.prototype = new TimeVariable();
 var acknowledge = new acknowledge();
 
-function connect() {
+function initialconnecttimeout() {
 	TimeVariable.apply(this, Array.prototype.slice.call(arguments));
-	this.domidbase = 'connect';
+	this.domidbase = 'initialconnecttimeout';
 }
-connect.prototype = new TimeVariable();
-var connect = new connect();
+initialconnecttimeout.prototype = new TimeVariable();
+var initialconnecttimeout = new initialconnecttimeout();
 
-function reconnect() {
+function reconnecttimeout() {
 	TimeVariable.apply(this, Array.prototype.slice.call(arguments));
-	this.domidbase = 'reconnect';
+	this.domidbase = 'reconnecttimeout';
 }
-reconnect.prototype = new TimeVariable();
-var reconnect = new reconnect();
+reconnecttimeout.prototype = new TimeVariable();
+var reconnecttimeout = new reconnecttimeout();
 
 function generalInuse() {
 	TimeVariable.apply(this, Array.prototype.slice.call(arguments));
