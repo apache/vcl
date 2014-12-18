@@ -174,6 +174,8 @@ our @EXPORT = qw(
 	get_request_current_state_name
 	get_request_end
 	get_request_info
+	get_reservation_computerloadlog_entries
+	get_reservation_computerloadlog_time
 	get_request_loadstate_names
 	get_reservation_accounts
 	get_resource_groups
@@ -1127,9 +1129,6 @@ sub check_time {
 			notify($ERRORS{'DEBUG'}, 0, "reservation will end in 10 minutes or less ($end_diff_minutes)");
 			return "end";
 		}
-		elsif ($request_laststate_name =~ /reserved/) {
-			return "poll";
-		}
 		else {
 			# End time is more than 10 minutes in the future
 			if($serverrequest) {	
@@ -1148,20 +1147,19 @@ sub check_time {
 				}
 				else {
 					return 0;
-					}
+				}
 			}
 			else {
-			#notify($ERRORS{'DEBUG'}, 0, "reservation will end in more than 10 minutes ($end_diff_minutes)");
+				#notify($ERRORS{'DEBUG'}, 0, "reservation will end in more than 10 minutes ($end_diff_minutes)");
 				my $general_inuse_check_time = ($ENV{management_node_info}->{GENERAL_INUSE_CHECK} * -1);
-
 				if ($lastcheck_diff_minutes <= $general_inuse_check_time) {
-				#notify($ERRORS{'DEBUG'}, 0, "reservation was last checked more than 5 minutes ago ($lastcheck_diff_minutes)");
-				return "poll";
-			}
-			else {
-				#notify($ERRORS{'DEBUG'}, 0, "reservation has been checked within the past 5 minutes ($lastcheck_diff_minutes)");
-				return 0;
-			}
+					#notify($ERRORS{'DEBUG'}, 0, "reservation was last checked more than 5 minutes ago ($lastcheck_diff_minutes)");
+					return "poll";
+				}
+				else {
+					#notify($ERRORS{'DEBUG'}, 0, "reservation has been checked within the past 5 minutes ($lastcheck_diff_minutes)");
+					return 0;
+				}
 			}
 		} ## end else [ if ($end_diff_minutes <= 10)
 	} ## end elsif ($request_state_name =~ /inuse|imageinuse/) [ if ($request_state_name =~ /new|imageprep|reload|tomaintenance|tovmhostinuse/)
@@ -2701,105 +2699,61 @@ sub notify_via_im {
 
 =head2 insertloadlog
 
- Parameters  : $resid,   $computerid, $loadstatename, $additionalinfo
- Returns     : 0 or 1
- Description : accepts info from processes to update the loadlog table
+ Parameters  : $reservation_id, $computer_id, $loadstatename, $additional_info
+ Returns     : boolean
+ Description : Inserts an entry into the computerloadlog table.
 
 =cut
 
 sub insertloadlog {
-	my ($resid,   $computerid, $loadstatename, $additionalinfo) = @_;
-	my ($package, $filename,   $line,          $sub)            = caller(0);
-
-	# Check the parameters
-	if (!(defined($resid))) {
-		notify($ERRORS{'CRITICAL'}, 0, "unable to insert into computerloadlog, reservation id is not defined");
-		return 0;
+	my ($reservation_id, $computer_id, $loadstatename, $additional_info) = @_;
+	if (!defined($reservation_id)) {
+		notify($ERRORS{'WARNING'}, 0, "reservation ID argument was not supplied");
+		return;
 	}
-	elsif (!($resid)) {
-		notify($ERRORS{'CRITICAL'}, 0, "unable to insert into computerloadlog, reservation id is 0");
-		return 0;
+	elsif (!defined($computer_id)) {
+		notify($ERRORS{'WARNING'}, 0, "computer ID argument was not supplied");
+		return;
 	}
-
-	if (!(defined($computerid))) {
-		notify($ERRORS{'CRITICAL'}, 0, "unable to insert into computerloadlog, computer id is not defined");
-		return 0;
+	elsif (!defined($loadstatename)) {
+		notify($ERRORS{'WARNING'}, 0, "computerloadstate name argument was not supplied");
+		return;
 	}
-	elsif (!($computerid)) {
-		notify($ERRORS{'CRITICAL'}, 0, "unable to insert into computerloadlog, computer id is 0");
-		return 0;
-	}
+	$additional_info = 'no additional info' unless defined($additional_info);
 
-	if (!(defined($additionalinfo)) || !$additionalinfo) {
-		notify($ERRORS{'WARNING'}, 0, "additionalinfo is either not defined or 0, using 'no additional info'");
-		$additionalinfo = 'no additional info';
-	}
-
-	my $loadstateid;
-	if (!(defined($loadstatename)) || !$loadstatename) {
-		notify($ERRORS{'WARNING'}, 0, "loadstatename is either not defined or 0, using NULL");
-		$loadstatename = 'NULL';
-		$loadstateid   = 'NULL';
-	}
-	else {
-		# loadstatename was specified as a parameter
-		# Check if the loadstatename exists in the computerloadstate table
-		my $select_statement = "
-      SELECT DISTINCT
-      computerloadstate.id
-      FROM
-      computerloadstate
-      WHERE
-      computerloadstate.loadstatename = '$loadstatename'
-      ";
-
-		my @selected_rows = database_select($select_statement);
-		if ((scalar @selected_rows) == 0) {
-			notify($ERRORS{'WARNING'}, 0, "computerloadstate table entry does not exist: $loadstatename, using NULL");
-			$loadstateid   = 'NULL';
-			$loadstatename = 'NULL';
-		}
-		else {
-			$loadstateid = $selected_rows[0]{id};
-			#notify($ERRORS{'DEBUG'}, 0, "computerloadstate id found: id=$loadstateid, name=$loadstatename");
-		}
-	} ## end else [ if (!(defined($loadstatename)) || !$loadstatename)
-
-	# Escape any single quotes in additionalinfo
-	$additionalinfo =~ s/\'/\\\'/g;
+	# Escape any special characters in additional info
+	$additional_info = quotemeta $additional_info;
 
 	# Assemble the SQL statement
-	my $insert_loadlog_statement = "
-   INSERT INTO
-   computerloadlog
-   (
-      reservationid,
-      computerid,
-      loadstateid,
-      timestamp,
-      additionalinfo
-   )
-   VALUES
-   (
-      '$resid',
-      '$computerid',
-      '$loadstateid',
-      NOW(),
-      '$additionalinfo'
-   )
-   ";
+	my $insert_loadlog_statement = <<EOF;
+INSERT INTO
+computerloadlog
+(
+	reservationid,
+	computerid,
+	loadstateid,
+	timestamp,
+	additionalinfo
+)
+VALUES
+(
+	'$reservation_id',
+	'$computer_id',
+	(SELECT id FROM computerloadstate WHERE loadstatename = '$loadstatename'),
+	NOW(),
+	'$additional_info'
+)
+EOF
 
 	# Execute the insert statement, the return value should be the id of the computerloadlog row that was inserted
-	my $loadlog_id = database_execute($insert_loadlog_statement);
-	if ($loadlog_id) {
-		notify($ERRORS{'OK'}, 0, "inserted computer=$computerid, $loadstatename, $additionalinfo");
+	if (database_execute($insert_loadlog_statement)) {
+		notify($ERRORS{'OK'}, 0, "inserted '$loadstatename' computerloadlog entry");
+		return 1;
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to insert entry into computerloadlog table");
-		return 0;
+		notify($ERRORS{'WARNING'}, 0, "failed to insert '$loadstatename' computerloadlog entry");
+		return;
 	}
-
-	return 1;
 } ## end sub insertloadlog
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -8345,6 +8299,136 @@ sub switch_vmhost_id {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 get_reservation_computerloadlog_entries
+
+ Parameters  : $reservation_id
+ Returns     : array
+ Description : Retrieves computerloadlog info for a single reservation. An array
+               of hashes is returned. The array is ordered from oldest entry to
+               newest.
+               [
+                  {
+                     "additionalinfo" => "beginning to process, state is test",
+                     "computerid" => 3582,
+                     "computerloadstate" => {
+                     "loadstatename" => "begin"
+                     },
+                        "id" => 3494,
+                        "loadstateid" => 54,
+                        "reservationid" => 3115,
+                        "timestamp" => "2014-12-17 16:09:11"
+                  },
+                  {
+                     "additionalinfo" => "begin initial connection timeout (xxx seconds)",
+                     "computerid" => 3582,
+                     "computerloadstate" => {
+                     "loadstatename" => "initialconnecttimeout"
+                     },
+                        "id" => 3495,
+                        "loadstateid" => 56,
+                        "reservationid" => 3115,
+                        "timestamp" => "2014-12-17 16:09:14"
+                  }
+               ]
+
+=cut
+
+sub get_reservation_computerloadlog_entries {
+	my ($reservation_id) = @_;
+	if (!$reservation_id) {
+		notify($ERRORS{'WARNING'}, 0, "reservation ID argument was not passed");
+		return;
+	}
+
+	my $select_statement = <<EOF;
+SELECT
+computerloadlog.*,
+computerloadstate.loadstatename AS computerloadstate_loadstatename
+
+FROM
+computerloadlog,
+computerloadstate
+
+WHERE
+computerloadlog.reservationid = $reservation_id
+AND computerloadlog.loadstateid = computerloadstate.id
+
+ORDER BY computerloadlog.timestamp ASC
+EOF
+
+	my @rows = database_select($select_statement);
+	
+	my @computerloadlog_info;
+	for my $row (@rows) {
+		for my $column (keys %$row) {
+			my $value = $row->{$column};
+			if ($column =~ /^([^_]+)_([^_]+)$/) {
+				$row->{$1}{$2} = $value;
+				delete $row->{$column};
+			}
+		}
+		
+		push @computerloadlog_info, $row;
+	}
+	
+	#notify($ERRORS{'DEBUG'}, 0, "retrieved computerloadlog info for reservation $reservation_id:\n" . format_data(@computerloadlog_info));
+	return @computerloadlog_info;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_reservation_computerloadlog_time
+
+ Parameters  : $reservation_id, $loadstatename, $newest (optional)
+ Returns     : string (datetime)
+ Description : Retrieves the timestamp of a computerloadlog entry matching the
+               $loadstatename argument for a reservation and returns the time in
+               epoch seconds. By default, the timestamp of the oldest matching
+               entry is returned. The newest may be returned by providing the
+               $newest argument.
+
+=cut
+
+sub get_reservation_computerloadlog_time {
+	my ($reservation_id, $loadstatename, $newest) = @_;
+	if (!defined($reservation_id)) {
+		notify($ERRORS{'WARNING'}, 0, "reservation ID argument was not supplied");
+		return;
+	}
+	if (!defined($loadstatename)) {
+		notify($ERRORS{'WARNING'}, 0, "computerloadstate name argument was not supplied");
+		return;
+	}
+	
+	# Get all computerloadlog entries for the reservation
+	my @computerloadlog_entries = get_reservation_computerloadlog_entries($reservation_id);
+	if (!@computerloadlog_entries) {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve timestamp of computerloadlog '$loadstatename' entry for reservation $reservation_id, computerloadlog entries could not be retrieved");
+		return;
+	}
+	
+	my $timestamp;
+	for my $computerloadlog_entry (@computerloadlog_entries) {
+		if ($computerloadlog_entry->{computerloadstate}{loadstatename} eq $loadstatename) {
+			$timestamp = $computerloadlog_entry->{timestamp};
+			last unless $newest;
+		}
+	}
+	
+	my $type = ($newest ? 'newest' : 'oldest');
+	if ($timestamp) {
+		my $timestamp_epoch = convert_to_epoch_seconds($timestamp);
+		notify($ERRORS{'DEBUG'}, 0, "retrieved $type timestamp of first '$loadstatename' computerloadlog entry for reservation $reservation_id: '$timestamp', returning $timestamp_epoch");
+		return $timestamp_epoch;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve $type timestamp of first '$loadstatename' computerloadlog entry for reservation $reservation_id");
+		return;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 =head2 get_request_loadstate_names
 
  Parameters  : $request_id
@@ -8474,7 +8558,7 @@ sub reservation_being_processed {
 		notify($ERRORS{'DEBUG'}, 0, "reservation $reservation_id is currently being processed, computerloadlog 'begin' entry exists and running process was found: @processes_running");
 	}
 	elsif (!$computerloadlog_exists && @processes_running) {
-		notify($ERRORS{'WARNING'}, 0, "computerloadlog 'begin' entry does NOT exist but running process was found: @processes_running, assuming reservation $reservation_id is currently being processed");
+		notify($ERRORS{'DEBUG'}, 0, "computerloadlog 'begin' entry does NOT exist but running process was found: @processes_running, assuming reservation $reservation_id is currently being processed");
 	}
 	elsif ($computerloadlog_exists && !@processes_running) {
 		notify($ERRORS{'WARNING'}, 0, "computerloadlog 'begin' entry exists but running process was NOT found, assuming reservation $reservation_id is NOT currently being processed");

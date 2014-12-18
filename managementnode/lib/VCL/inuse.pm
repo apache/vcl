@@ -103,10 +103,8 @@ sub process {
 	
 	my $request_id              = $self->data->get_request_id();
 	my $request_state_name      = $self->data->get_request_state_name();
-	my $request_laststate_name  = $self->data->get_request_laststate_name();
 	my $request_start           = $self->data->get_request_start_time();
 	my $request_end             = $self->data->get_request_end_time();
-	my $request_data            = $self->data->get_request_data();
 	my $request_forimaging      = $self->data->get_request_forimaging();
 	my $request_checkuser       = $self->data->get_request_checkuser();
 	my $reservation_id          = $self->data->get_reservation_id();
@@ -117,24 +115,7 @@ sub process {
 	my $computer_id             = $self->data->get_computer_id();
 	my $computer_short_name     = $self->data->get_computer_short_name();
 	
-	
-	my $connect_timeout_seconds;
-	if ($request_laststate_name eq 'reserved') {
-		$connect_timeout_seconds = $self->os->get_timings('initialconnecttimeout');
-		notify($ERRORS{'DEBUG'}, 0, "checking for initial user connection, using 'initialconnecttimeout' variable: $connect_timeout_seconds seconds");
-	}
-	else {
-		$connect_timeout_seconds = $self->os->get_timings('reconnecttimeout');
-		notify($ERRORS{'DEBUG'}, 0, "checking for subsequent connection, using 'reconnecttimeout' variable: $connect_timeout_seconds seconds");
-	}
-
-	# Make sure connect timeout is long enough
-	# It has to be a bit longer than the ~5 minute period between inuse checks due to cluster reservations
-	# If too short, a user may be connected to one computer in a cluster and another inuse process times out before the connected computer is checked
-	my $connect_timeout_minutes = ceil($connect_timeout_seconds / 60);
-	
-	# Connect timeout must be in whole minutes
-	$connect_timeout_seconds = ($connect_timeout_minutes * 60);
+	my $connect_timeout_seconds = $self->os->get_timings('reconnecttimeout');
 	
 	# Check if reboot operation was requested
 	if ($request_state_name =~ /reboot/) {
@@ -157,6 +138,14 @@ sub process {
       }
 		$self->state_exit('inuse', 'inuse');
 	}
+	
+	# Make sure connect timeout is long enough
+	# It has to be a bit longer than the ~5 minute period between inuse checks due to cluster reservations
+	# If too short, a user may be connected to one computer in a cluster and another inuse process times out before the connected computer is checked
+	my $connect_timeout_minutes = ceil($connect_timeout_seconds / 60);
+	
+	# Connect timeout must be in whole minutes
+	$connect_timeout_seconds = ($connect_timeout_minutes * 60);
 	
 	my $now_epoch_seconds = time;
 	
@@ -219,7 +208,7 @@ sub process {
 			$self->state_exit() if is_request_deleted($request_id);
 			
 			# Check if this is an imaging request, causes process to exit if state or laststate = image
-			$self->_check_imaging_request();
+			$self->check_imaging_request();
 			
 			# Get the current request end time from the database
 			my $current_request_end = get_request_end($request_id);
@@ -272,6 +261,19 @@ sub process {
 		notify($ERRORS{'DEBUG'}, 0, "skipping end time notice interval check, request duration: $request_duration_hours hours, parent reservation: $is_parent_reservation");
 	}
 	
+	# Check if the computer is responding to SSH
+	# Skip connection checks if the computer is not responding to SSH
+	# This prevents a reservatino from timing out if the user is actually connected but SSH from the management node isn't working
+	if (!$self->os->is_ssh_responding()) {
+		notify($ERRORS{'OK'}, 0, "$computer_short_name is not responding to SSH, skipping user connection check");
+		$self->state_exit('inuse', 'inuse');
+	}
+	
+	# Update the firewall if necessary - this is what allows a user to click Connect from different locations
+	if ($self->os->can('firewall_compare_update')) {
+		$self->os->firewall_compare_update();
+	}
+	
 	# Compare remaining minutes to connect timeout
 	# Connect timeout may be longer than 15 minutes
 	# Make sure connect timeout doesn't run into the end time notice
@@ -286,35 +288,16 @@ sub process {
 		$self->state_exit('inuse', 'inuse');
 	}
 	
-	# Check if the computer is responding to SSH
-	# Skip connection checks if the computer is not responding to SSH
-	# This prevents a reservatino from timing out if the user is actually connected but SSH from the management node isn't working
-	if (!$self->os->is_ssh_responding()) {
-		notify($ERRORS{'OK'}, 0, "$computer_short_name is not responding to SSH, skipping user connection check");
-		$self->state_exit('inuse', 'inuse');
-	}
-	
-	# Update the firewall if necessary - this is what allows a user to click Connect from different locations
-	# Not necessary first time inuse state is processed after reserved
-	if ($request_laststate_name ne 'reserved' && $self->os->can('firewall_compare_update')) {
-		$self->os->firewall_compare_update();
-	}
-	
 	# TODO: fix user connection checking for cluster requests
-	if ($reservation_count > 1 && $request_laststate_name ne 'reserved') {
+	if ($reservation_count > 1) {
 		notify($ERRORS{'OK'}, 0, "skipping user connection check for cluster request");
 		$self->state_exit('inuse', 'inuse');
 	}
 	
-	# Insert connecttimeout immediately before beginning to check for user connection
+	# Insert reconnecttimeout immediately before beginning to check for user connection
 	# Web uses timestamp of this to determine when next to refresh the page
 	# Important because page should refresh as soon as possible to reservation timing out
-	if ($request_laststate_name eq 'reserved') {
-		insertloadlog($reservation_id, $computer_id, "connecttimeout", "begin initial connection timeout ($connect_timeout_seconds seconds)");
-	}
-	else {
-		insertloadlog($reservation_id, $computer_id, "connecttimeout", "begin reconnection timeout ($connect_timeout_seconds seconds)");
-	}
+	insertloadlog($reservation_id, $computer_id, "reconnecttimeout", "begin reconnection timeout ($connect_timeout_seconds seconds)");
 	
 	# Check to see if user is connected. user_connected will true(1) for servers and requests > 24 hours
 	my $user_connected = $self->code_loop_timeout(sub{$self->user_connected()}, [], "waiting for user to connect to $computer_short_name", $connect_timeout_seconds, 15);
@@ -329,121 +312,28 @@ sub process {
 		elsif ($server_request_id) {
 			notify($ERRORS{'OK'}, 0, "never detected user connection, skipping timeout, server reservation");
 		}
-		elsif ($request_forimaging && $request_laststate_name ne 'reserved') {
+		elsif ($request_forimaging) {
 			notify($ERRORS{'OK'}, 0, "never detected user connection, skipping timeout, imaging reservation");
 		}
-		elsif ($reservation_count > 1 && $request_laststate_name ne 'reserved') {
+		elsif ($reservation_count > 1) {
 			notify($ERRORS{'OK'}, 0, "never detected user connection, skipping timeout, cluster reservation");
 		}
 		elsif ($request_duration_hours > 24) {
 			notify($ERRORS{'OK'}, 0, "never detected user connection, skipping timeout, request duration: $request_duration_hours hours");
 		}
+		elsif (is_request_deleted($request_id)) {
+			$self->state_exit();
+		}
 		else {
-			$self->state_exit() if is_request_deleted($request_id);
-			
 			# Update reservation lastcheck, otherwise request will be processed immediately again
 			update_reservation_lastcheck($reservation_id);
 			
-			if ($request_laststate_name eq 'reserved') {
-				$self->_notify_user_no_login();
-				$self->state_exit('timeout', 'timeout', 'nologin');
-			}
-			else {
-				$self->_notify_user_timeout();
-				$self->state_exit('timeout', 'timeout', 'timeout');
-			}
-		}
-	}
-	
-	# If this is the first time the inuse state is being processed, tighten up the firewall
-	if ($request_laststate_name eq 'reserved') {
-		# Process the connect methods again, lock the firewall down to the address the user connected from
-		my $remote_ip = $self->data->get_reservation_remote_ip();
-		if (!$self->os->process_connect_methods($remote_ip, 1)) {
-			notify($ERRORS{'CRITICAL'}, 0, "failed to process connect methods after user connected to computer");
+			$self->_notify_user_timeout();
+			$self->state_exit('timeout', 'inuse', 'timeout');
 		}
 	}
 	
 	$self->state_exit('inuse', 'inuse');
-}
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 user_connected
-
- Parameters  : none
- Returns     : boolean
- Description : Checks if the user is connected to the computer. If the user
-               isn't connected and this is a cluster request, checks if a
-               computerloadlog 'connected' entry exists for any of the other
-               reservations in cluster.
-
-=cut
-
-sub user_connected {
-	my $self = shift;
-	if (ref($self) !~ /VCL::/) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine can only be called as a class method of a VCL object");
-		return;
-	}
-	
-	my $request_id                   = $self->data->get_request_id();
-	my @reservation_ids              = $self->data->get_reservation_ids();
-	my $reservation_id               = $self->data->get_reservation_id();
-	my $reservation_lastcheck        = $self->data->get_reservation_lastcheck_time();
-	my $reservation_count            = $self->data->get_request_reservation_count();
-	my $computer_id                  = $self->data->get_computer_id();
-	my $computer_short_name          = $self->data->get_computer_short_name();
-	my $server_request_id            = $self->data->get_server_request_id();
-	my $request_duration_epoch_secs  = $self->data->get_request_duration_epoch();
-	my $request_duration_hrs         = floor($request_duration_epoch_secs / 60 / 60);
-	my $ignore_connections_gte_min   = $self->os->get_timings('ignore_connections_gte');
-	my $ignore_connections_gte       = floor($ignore_connections_gte_min / 60);
-	
-	# Check if user deleted the request
-	$self->state_exit() if is_request_deleted($request_id);
-	
-	# Check if this is an imaging request, causes process to exit if state or laststate = image
-	$self->_check_imaging_request();
-	
-	# Check if this is a server request, causes process to exit if server request
-	if ($server_request_id) {
-		notify($ERRORS{'DEBUG'}, 0, "server reservation detected, set as user is connected");
-		insertloadlog($reservation_id, $computer_id, "connected", "user connected to $computer_short_name");
-		return 1;
-	}
-	
-	# If duration is >= 24 hrs set as connected and return
-	if ($request_duration_hrs >= $ignore_connections_gte) {
-		notify($ERRORS{'OK'}, 0, "reservation duration is $request_duration_hrs hrs is >= to ignore_connections setting $ignore_connections_gte hrs, skipping inuse checks");
-		insertloadlog($reservation_id, $computer_id, "connected", "user connected to $computer_short_name");
-		return 1;
-	}	
-
-	# Check if the user has connected to the reservation being processed
-	if ($self->os->is_user_connected()) {
-		insertloadlog($reservation_id, $computer_id, "connected", "user connected to $computer_short_name");
-		
-		# If this is a cluster request, update the lastcheck value for all reservations
-		# This signals the other reservation inuse processes that a connection was detected on another computer
-		if ($reservation_count > 1) {
-			update_reservation_lastcheck(@reservation_ids);
-		}
-		return 1;
-	}
-	
-	if ($reservation_count > 1) {
-		my $current_reservation_lastcheck = get_current_reservation_lastcheck($reservation_id);
-		if ($current_reservation_lastcheck ne $reservation_lastcheck) {
-			notify($ERRORS{'DEBUG'}, 0, "user connected to another computer in the cluster, reservation lastcheck updated since this process began: $reservation_lastcheck --> $current_reservation_lastcheck");
-			return 1;
-		}
-		else {
-			notify($ERRORS{'DEBUG'}, 0, "no connection to another computer in the cluster detected, reservation lastcheck has not been updated since this process began: $reservation_lastcheck");
-		}
-	}
-	
-	return 0;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -477,7 +367,6 @@ sub _notify_user_endtime {
 	
 	my $computer_short_name             = $self->data->get_computer_short_name();
 	my $computer_type                   = $self->data->get_computer_type();
-	my $computer_public_ip_address      = $self->data->get_computer_public_ip_address();
 	my $image_os_name                   = $self->data->get_image_os_name();
 	my $image_prettyname                = $self->data->get_image_prettyname();
 	my $image_os_type                   = $self->data->get_image_os_type();
@@ -488,7 +377,7 @@ sub _notify_user_endtime {
 	my $user_emailnotices               = $self->data->get_user_emailnotices();
 	my $user_imtype_name                = $self->data->get_user_imtype_name();
 	my $user_im_id                      = $self->data->get_user_im_id();
-	my $request_forimaging              = $self->_check_imaging_request();	
+	my $request_forimaging              = $self->check_imaging_request();	
 	my $request_id                      = $self->data->get_request_id();
 	
 	my $message;
@@ -585,7 +474,6 @@ sub _notify_user_disconnect {
 	
 	my $computer_short_name             = $self->data->get_computer_short_name();
 	my $computer_type                   = $self->data->get_computer_type();
-	my $computer_public_ip_address      = $self->data->get_computer_public_ip_address();
 	my $image_os_name                   = $self->data->get_image_os_name();
 	my $image_prettyname                = $self->data->get_image_prettyname();
 	my $image_os_type                   = $self->data->get_image_os_type();
@@ -597,7 +485,7 @@ sub _notify_user_disconnect {
 	my $user_imtype_name                = $self->data->get_user_imtype_name();
 	my $user_im_id                      = $self->data->get_user_im_id();
 	my $is_parent_reservation           = $self->data->is_parent_reservation();
-	my $request_forimaging              = $self->_check_imaging_request();
+	my $request_forimaging              = $self->check_imaging_request();
 	
 	my $disconnect_string;
 	if ($disconnect_time == 0) {
@@ -711,7 +599,6 @@ sub _notify_user_timeout {
 	
 	my $computer_short_name             = $self->data->get_computer_short_name();
 	my $computer_type                   = $self->data->get_computer_type();
-	my $computer_public_ip_address      = $self->data->get_computer_public_ip_address();
 	my $image_os_name                   = $self->data->get_image_os_name();
 	my $image_prettyname                = $self->data->get_image_prettyname();
 	my $image_os_type                   = $self->data->get_image_os_type();
@@ -726,7 +613,7 @@ sub _notify_user_timeout {
 	
 	my $message = <<"EOF";
 
-Your reservation has timed out due to inactivity for image $image_prettyname at address $computer_public_ip_address.
+Your reservation has timed out due to inactivity for image $image_prettyname.
 
 To make another reservation, please revisit:
 $user_affiliation_sitewwwaddress
@@ -786,7 +673,6 @@ sub _notify_user_request_ended {
 	my $computer_id                     = $self->data->get_computer_id();
 	my $computer_short_name             = $self->data->get_computer_short_name();
 	my $computer_type                   = $self->data->get_computer_type();
-	my $computer_public_ip_address      = $self->data->get_computer_public_ip_address();
 	my $image_os_name                   = $self->data->get_image_os_name();
 	my $image_prettyname                = $self->data->get_image_prettyname();
 	my $image_os_type                   = $self->data->get_image_os_type();
@@ -891,12 +777,11 @@ sub _notify_user_no_login {
 	my $affiliation_sitewwwaddress = $self->data->get_user_affiliation_sitewwwaddress();
 	my $affiliation_helpaddress    = $self->data->get_user_affiliation_helpaddress();
 	my $image_prettyname           = $self->data->get_image_prettyname();
-	my $computer_public_ip_address = $self->data->get_computer_public_ip_address();
 	my $is_parent_reservation      = $self->data->is_parent_reservation();
 
 	my $message = <<"EOF";
 
-Your reservation has timed out for image $image_prettyname at address $computer_public_ip_address because no initial connection was made.
+Your reservation has timed out for image $image_prettyname because no initial connection was made.
 
 To make another reservation, please revisit $affiliation_sitewwwaddress.
 
@@ -929,28 +814,6 @@ EOF
 	}
 	return 1;
 } ## end sub _notify_user_timeout
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 _check_imaging_request
-
- Parameters  : none
- Returns     : boolean
- Description : The inuse process exits if the request state or laststate are set
-               to image, or if the forimaging flag has been set.
-
-=cut
-
-sub _check_imaging_request {
-	my $self = shift;
-	my $request_id = $self->data->get_request_id();
-	
-	my $imaging_result = is_request_imaging($request_id);
-	if ($imaging_result eq 'image') {
-		notify($ERRORS{'OK'}, 0, "image creation process has begun, exiting");
-		$self->state_exit();
-	}
-}
 
 #/////////////////////////////////////////////////////////////////////////////
 

@@ -53,6 +53,7 @@ use strict;
 use warnings;
 use diagnostics;
 use English '-no_match_vars';
+use POSIX qw(floor);
 
 use VCL::utils;
 use VCL::DataStructure;
@@ -225,10 +226,111 @@ sub initialize {
 		notify($ERRORS{'DEBUG'}, 0, "child reservation, not updating request state to 'pending'");
 	}
 	
-	notify($ERRORS{'DEBUG'}, 0, "computerloadlog states after state object is initialized:\n" . format_data(get_request_loadstate_names($request_id)));
+	#notify($ERRORS{'DEBUG'}, 0, "computerloadlog states after state object is initialized:\n" . format_data(get_request_loadstate_names($request_id)));
 	
 	return 1;
 } ## end sub initialize
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 user_connected
+
+ Parameters  : none
+ Returns     : boolean
+ Description : Checks if the user is connected to the computer. If the user
+               isn't connected and this is a cluster request, checks if a
+               computerloadlog 'connected' entry exists for any of the other
+               reservations in cluster.
+
+=cut
+
+sub user_connected {
+	my $self = shift;
+	if (ref($self) !~ /VCL::/) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine can only be called as a class method of a VCL object");
+		return;
+	}
+	
+	my $request_id                   = $self->data->get_request_id();
+	my @reservation_ids              = $self->data->get_reservation_ids();
+	my $reservation_id               = $self->data->get_reservation_id();
+	my $reservation_lastcheck        = $self->data->get_reservation_lastcheck_time();
+	my $reservation_count            = $self->data->get_request_reservation_count();
+	my $computer_id                  = $self->data->get_computer_id();
+	my $computer_short_name          = $self->data->get_computer_short_name();
+	my $server_request_id            = $self->data->get_server_request_id();
+	my $request_duration_epoch_secs  = $self->data->get_request_duration_epoch();
+	my $request_duration_hrs         = floor($request_duration_epoch_secs / 60 / 60);
+	my $ignore_connections_gte_min   = $self->os->get_timings('ignore_connections_gte');
+	my $ignore_connections_gte       = floor($ignore_connections_gte_min / 60);
+	
+	# Check if user deleted the request
+	$self->state_exit() if is_request_deleted($request_id);
+	
+	# Check if this is an imaging request, causes process to exit if state or laststate = image
+	$self->check_imaging_request();
+	
+	# Check if this is a server request, causes process to exit if server request
+	if ($server_request_id) {
+		notify($ERRORS{'DEBUG'}, 0, "server reservation detected, set as user is connected");
+		insertloadlog($reservation_id, $computer_id, "connected", "user connected to $computer_short_name");
+		return 1;
+	}
+	
+	# If duration is >= 24 hrs set as connected and return
+	if ($request_duration_hrs >= $ignore_connections_gte) {
+		notify($ERRORS{'OK'}, 0, "reservation duration is $request_duration_hrs hrs is >= to ignore_connections setting $ignore_connections_gte hrs, skipping inuse checks");
+		insertloadlog($reservation_id, $computer_id, "connected", "user connected to $computer_short_name");
+		return 1;
+	}	
+
+	# Check if the user has connected to the reservation being processed
+	if ($self->os->is_user_connected()) {
+		insertloadlog($reservation_id, $computer_id, "connected", "user connected to $computer_short_name");
+		
+		# If this is a cluster request, update the lastcheck value for all reservations
+		# This signals the other reservation inuse processes that a connection was detected on another computer
+		if ($reservation_count > 1) {
+			update_reservation_lastcheck(@reservation_ids);
+		}
+		return 1;
+	}
+	
+	if ($reservation_count > 1) {
+		my $current_reservation_lastcheck = get_current_reservation_lastcheck($reservation_id);
+		if ($current_reservation_lastcheck ne $reservation_lastcheck) {
+			notify($ERRORS{'DEBUG'}, 0, "user connected to another computer in the cluster, reservation.lastcheck updated since this process began: $reservation_lastcheck --> $current_reservation_lastcheck");
+			return 1;
+		}
+		else {
+			notify($ERRORS{'DEBUG'}, 0, "no connection to another computer in the cluster detected, reservation.lastcheck has not been updated since this process began: $reservation_lastcheck");
+		}
+	}
+	
+	return 0;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 check_imaging_request
+
+ Parameters  : none
+ Returns     : boolean
+ Description : The inuse process exits if the request state or laststate are set
+               to image, or if the forimaging flag has been set.
+
+=cut
+
+sub check_imaging_request {
+	my $self = shift;
+	my $request_id = $self->data->get_request_id();
+	
+	my $imaging_result = is_request_imaging($request_id);
+	if ($imaging_result eq 'image') {
+		notify($ERRORS{'OK'}, 0, "image creation process has begun, exiting");
+		$self->state_exit();
+	}
+}
 
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -704,7 +806,7 @@ sub state_exit {
 			# Do this to ensure that reservations are not processed again quickly after this process exits
 			# For cluster requests, the parent may have had to wait a while for child processes to exit
 			# Resetting reservation.lastcheck causes reservations to wait the full interval between inuse checks
-			if ($request_state_name_new =~ /(inuse)/) {
+			if ($request_state_name_new =~ /(reserved|inuse)/) {
 				update_reservation_lastcheck(@reservation_ids);
 			}
 			
@@ -806,7 +908,7 @@ sub DESTROY {
 			my @reservation_ids = $self->data->get_reservation_ids();
 			if (@reservation_ids && $request_id) {
 				$self->state_exit();
-				notify($ERRORS{'DEBUG'}, 0, "computerloadlog states remaining after process exits:\n" . format_data(get_request_loadstate_names($request_id)));
+				#notify($ERRORS{'DEBUG'}, 0, "computerloadlog states remaining after process exits:\n" . format_data(get_request_loadstate_names($request_id)));
 			}
 			elsif (!$SETUP_MODE) {
 				notify($ERRORS{'WARNING'}, 0, "failed to retrieve the reservation ID, computerloadlog 'begin' rows not removed");

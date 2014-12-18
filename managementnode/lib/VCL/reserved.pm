@@ -71,6 +71,7 @@ use warnings;
 use diagnostics;
 
 use VCL::utils;
+use POSIX qw(strftime);
 
 ##############################################################################
 
@@ -92,16 +93,20 @@ use VCL::utils;
 sub process {
 	my $self = shift;
 	
-	my $request_id                  = $self->data->get_request_id();
-	my $request_data                = $self->data->get_request_data();
-	my $request_logid               = $self->data->get_request_log_id();
-	my $reservation_id              = $self->data->get_reservation_id();
-	my $reservation_count           = $self->data->get_reservation_count();
-	my $computer_id                 = $self->data->get_computer_id();
-	my $computer_short_name         = $self->data->get_computer_short_name();
-	my $is_parent_reservation       = $self->data->is_parent_reservation();
-	my $server_request_id           = $self->data->get_server_request_id();
-	my $acknowledge_timeout_seconds = $self->os->get_timings('acknowledgetimeout');
+	my $request_id                      = $self->data->get_request_id();
+	my $request_data                    = $self->data->get_request_data();
+	my $request_logid                   = $self->data->get_request_log_id();
+	my $request_checkuser               = $self->data->get_request_checkuser();
+	my $reservation_id                  = $self->data->get_reservation_id();
+	my $reservation_count               = $self->data->get_reservation_count();
+	my $computer_id                     = $self->data->get_computer_id();
+	my $computer_short_name             = $self->data->get_computer_short_name();
+	my $is_parent_reservation           = $self->data->is_parent_reservation();
+	my $server_request_id               = $self->data->get_server_request_id();
+	my $imagemeta_checkuser             = $self->data->get_imagemeta_checkuser();
+	
+	my $acknowledge_timeout_seconds     = $self->os->get_timings('acknowledgetimeout');
+	my $initial_connect_timeout_seconds = $self->os->get_timings('initialconnecttimeout');
 	
 	# Update the log loaded time to now for this request
 	update_log_loaded_time($request_logid);
@@ -118,15 +123,22 @@ sub process {
 	
 	# Wait for the user to acknowledge the request by clicking Connect button or from API
 	my $user_acknowledged = $self->code_loop_timeout(sub{$self->user_acknowledged()}, [], 'waiting for user acknowledgement', $acknowledge_timeout_seconds, 1, 10);
+	if (!$user_acknowledged) {
+		$self->_notify_user_timeout($request_data);
+		$self->state_exit('timeout', 'reserved', 'noack');
+	}
 	
 	# Add noinitialconnection and then delete acknowledgetimeout
 	insertloadlog($reservation_id, $computer_id, "noinitialconnection", "user clicked Connect");
 	delete_computerloadlog_reservation($reservation_id, 'acknowledgetimeout');
 	
-	if (!$user_acknowledged) {
-		$self->_notify_user_timeout($request_data);
-		switch_state($request_data, 'timeout', 'timeout', 'noack', 1);
-	}
+	# Capture the exact time user acknowledgement was detected
+	my $connection_check_start_epoch_seconds = time;
+	
+	# Insert initialconnecttimeout immediately after user acknowledged
+	# Web uses timestamp of this to determine when next to refresh the page
+	# The timestamp of this computerloadlog entry will be used to determine when to timeout the connection checking during the inuse state
+	insertloadlog($reservation_id, $computer_id, "initialconnecttimeout", "begin initial connection timeout ($initial_connect_timeout_seconds seconds)");
 	
 	# Call OS module's grant_access() subroutine which adds user accounts to computer
 	if ($self->os->can("grant_access") && !$self->os->grant_access()) {
@@ -144,10 +156,65 @@ sub process {
 		$self->reservation_failed("OS module post_reserve failed");
 	}
 
-	# Add a 'reserved' computerloadlog entry
+	# Add a 'postreserve' computerloadlog entry
 	# Do this last - important for cluster reservation timing
 	# Parent's reserved process will loop until this exists for all child reservations
-	insertloadlog($reservation_id, $computer_id, "postreserve", "$computer_short_name post reserve successfully");
+	insertloadlog($reservation_id, $computer_id, "postreserve", "$computer_short_name post reserve successful");
+	
+	# Get the current time
+	my $now_epoch_seconds = time;
+	
+	# Calculate the exact time when connection checking should end
+	my $connection_check_end_epoch_seconds = ($connection_check_start_epoch_seconds + $initial_connect_timeout_seconds);
+	my $connect_timeout_remaining_seconds = ($connection_check_end_epoch_seconds - $now_epoch_seconds);
+	
+	my $now_string                       = strftime('%H:%M:%S', localtime($now_epoch_seconds));
+	my $connection_check_start_string    = strftime('%H:%M:%S', localtime($connection_check_start_epoch_seconds));
+	my $connection_check_end_string      = strftime('%H:%M:%S', localtime($connection_check_end_epoch_seconds));
+	my $connect_timeout_string           = strftime('%H:%M:%S', gmtime($initial_connect_timeout_seconds));
+	my $connect_timeout_remaining_string = strftime('%H:%M:%S', gmtime($connect_timeout_remaining_seconds));
+	
+	notify($ERRORS{'DEBUG'}, 0, "beginning to check for initial user connection:\n" .
+		"connection check start    :   $connection_check_start_string\n" .
+		"connect timeout total     : + $connect_timeout_string\n" .
+		"--------------------------------------\n" .
+		"connection check end      : = $connection_check_end_string\n" .
+		"current time              : - $now_string\n" .
+		"--------------------------------------\n" .
+		"connect timeout remaining : = $connect_timeout_remaining_string ($connect_timeout_remaining_seconds seconds)\n"
+	);
+	
+	# Check to see if user is connected. user_connected will true(1) for servers and requests > 24 hours
+	my $user_connected = $self->code_loop_timeout(sub{$self->user_connected()}, [], "waiting for initial user connection to $computer_short_name", $connect_timeout_remaining_seconds, 15);
+	
+	# Delete the connecttimeout immediately after acknowledgement loop ends
+	delete_computerloadlog_reservation($reservation_id, 'connecttimeout');
+	
+	if (!$user_connected) {
+		if (!$imagemeta_checkuser || !$request_checkuser) {
+			notify($ERRORS{'OK'}, 0, "never detected user connection, skipping timeout, imagemeta checkuser: $imagemeta_checkuser, request checkuser: $request_checkuser");
+		}
+		elsif ($server_request_id) {
+			notify($ERRORS{'OK'}, 0, "never detected user connection, skipping timeout, server reservation");
+		}
+		elsif (is_request_deleted($request_id)) {
+			$self->state_exit();
+		}
+		else {
+			$self->_notify_user_no_login();
+			$self->state_exit('timeout', 'reserved', 'nologin');
+		}
+	}
+	
+	# Update reservation lastcheck, otherwise inuse request will be processed immediately again
+	update_reservation_lastcheck($reservation_id);
+	
+	# Tighten up the firewall
+	# Process the connect methods again, lock the firewall down to the address the user connected from
+	my $remote_ip = $self->data->get_reservation_remote_ip();
+	if (!$self->os->process_connect_methods($remote_ip, 1)) {
+		notify($ERRORS{'CRITICAL'}, 0, "failed to process connect methods after user connected to computer");
+	}
 	
 	# For cluster reservations, the parent must wait until all child reserved processes have exited
 	# Otherwise, the state will change to inuse while the child processes are still finishing up the reserved state
@@ -163,7 +230,7 @@ sub process {
 	}
 	
 	# Change the request and computer state to inuse then exit
-	switch_state($request_data, 'inuse', 'inuse', '', 1);
+	$self->state_exit('inuse');
 } ## end sub process
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -291,12 +358,11 @@ sub _notify_user_timeout {
 	my $affiliation_sitewwwaddress = $self->data->get_user_affiliation_sitewwwaddress();
 	my $affiliation_helpaddress    = $self->data->get_user_affiliation_helpaddress();
 	my $image_prettyname           = $self->data->get_image_prettyname();
-	my $computer_public_ip_address = $self->data->get_computer_public_ip_address();
 	my $is_parent_reservation      = $self->data->is_parent_reservation();
 
 	my $message = <<"EOF";
 
-Your reservation has timed out for image $image_prettyname at address $computer_public_ip_address because no initial connection was made.
+Your reservation has timed out for image $image_prettyname because no initial connection was made.
 
 To make another reservation, please revisit $affiliation_sitewwwaddress.
 
