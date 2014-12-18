@@ -200,7 +200,14 @@ sub add_user_accounts {
 		my $username        = $reservation_users->{$user_id}{unityid};
 		my $uid             = $reservation_users->{$user_id}{uid};
 		my $root_access     = $reservation_users->{$user_id}{ROOTACCESS};
-		my $ssh_public_keys = $reservation_users->{$user_id}{sshpublickeys};
+		my $use_public_keys = $reservation_users->{$user_id}{usepublickeys};
+		
+		# If the $use_public_keys flag is set, retrieve the keys
+		my $ssh_public_keys;
+		if ($use_public_keys) {
+			$ssh_public_keys = $reservation_users->{$user_id}{sshpublickeys};
+		}
+		
 		my $password;
 		
 		# Check if entry needs to be added to the useraccounts table
