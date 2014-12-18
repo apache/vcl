@@ -8214,17 +8214,19 @@ function getComputers($sort=0, $includedeleted=0, $compid="") {
 	       .        "vh2.vmprofileid, "
 	       .        "c.predictivemoduleid, "
 	       .        "m.prettyname AS predictivemodule, "
-	       .        "nh.id AS nathostid "
+	       .        "nh.id AS nathostid, "
+	       .        "nh2.publicIPaddress AS natpublicIPaddress, "
+	       .        "COALESCE(nh2.internalIPaddress, '') AS natinternalIPaddress "
 	       . "FROM state st, "
 	       .      "platform p, "
 	       .      "schedule sc, "
 	       .      "image cur, "
-	       .      "resource r, "
-	       .      "resourcetype t, "
 	       .      "user u, "
 	       .      "affiliation a, "
 	       .      "module m, "
 	       .      "computer c "
+	       . "LEFT JOIN resourcetype t ON (t.name = 'computer') "
+	       . "LEFT JOIN resource r ON (r.resourcetypeid = t.id AND r.subid = c.id) "
 	       . "LEFT JOIN vmhost vh ON (c.vmhostid = vh.id) "
 	       . "LEFT JOIN vmhost vh2 ON (c.id = vh2.computerid) "
 	       . "LEFT JOIN computer c2 ON (c2.id = vh.computerid) "
@@ -8232,13 +8234,11 @@ function getComputers($sort=0, $includedeleted=0, $compid="") {
 	       . "LEFT JOIN provisioning pr ON (c.provisioningid = pr.id) "
 	       . "LEFT JOIN nathostcomputermap nm ON (nm.computerid = c.id) "
 	       . "LEFT JOIN nathost nh ON (nm.nathostid = nh.id) "
+	       . "LEFT JOIN nathost nh2 ON (r.id = nh2.resourceid) "
 	       . "WHERE c.stateid = st.id AND "
 	       .       "c.platformid = p.id AND "
 	       .       "c.scheduleid = sc.id AND "
 	       .       "c.currentimageid = cur.id AND "
-	       .       "r.resourcetypeid = t.id AND "
-	       .       "t.name = 'computer' AND "
-	       .       "r.subid = c.id AND "
 	       .       "c.ownerid = u.id AND "
 	       .       "u.affiliationid = a.id AND "
 	       .       "c.predictivemoduleid = m.id ";
@@ -8257,6 +8257,12 @@ function getComputers($sort=0, $includedeleted=0, $compid="") {
 			$row['natenabled'] = 1;
 			$row['nathost'] = $nathosts[$row['nathostid']]['hostname'];
 		}
+		if(is_null($row['natpublicIPaddress'])) {
+			$row['nathostenabled'] = 0;
+			$row['natpublicIPaddress'] = '';
+		}
+		else
+			$row['nathostenabled'] = 1;
 		$return[$row['id']] = $row;
 	}
 	if($sort) {

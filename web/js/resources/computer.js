@@ -500,10 +500,11 @@ function applyExtraFilters(value) {
 }
 
 function addNewResource(title) {
-		if(dijit.byId('scheduleid').options.length == 0) {
-			dijit.byId('noschedulenoadd').show();
-			return;
-		}
+	if(dijit.byId('scheduleid').options.length == 0) {
+		dijit.byId('noschedulenoadd').show();
+		return;
+	}
+	dijit.byId('mode').set('value', 'single');
 	addedit = 'add';
 	resetEditResource();
 	dijit.byId('type').reset();
@@ -517,6 +518,8 @@ function addNewResource(title) {
 	dojo.addClass('curimgspan', 'hidden');
 	dojo.addClass('compidspan', 'hidden');
 	dijit.byId('nathostid').set('disabled', true);
+	dijit.byId('natpublicipaddress').set('disabled', true);
+	dijit.byId('natinternalipaddress').set('disabled', true);
 	dijit.byId('addeditdlg').show();
 }
 
@@ -532,6 +535,7 @@ function toggleAddSingle() {
 	dojo.addClass('startenddiv', 'hidden');
 	dojo.addClass('multiipmacdiv', 'hidden');
 	dojo.removeClass('singleipmacdiv', 'hidden');
+	dojo.removeClass('nathost', 'hidden');
 	dijit.byId('name').set('regExp', '^([a-zA-Z0-9_][-a-zA-Z0-9_\.]{1,35})$');
 	dijit.byId('addeditbtn').setLabel('Add Computer');
 	recenterDijitDialog('addeditdlg');
@@ -542,6 +546,7 @@ function toggleAddMultiple() {
 	dojo.removeClass('startenddiv', 'hidden');
 	dojo.removeClass('multiipmacdiv', 'hidden');
 	dojo.addClass('singleipmacdiv', 'hidden');
+	dojo.addClass('nathost', 'hidden');
 	dijit.byId('name').set('regExp', '^([a-zA-Z0-9_%][-a-zA-Z0-9_\.%]{1,35})$');
 	dijit.byId('addeditbtn').setLabel('Add Computers');
 	recenterDijitDialog('addeditdlg');
@@ -553,6 +558,24 @@ function toggleNAT(chkid, selid) {
 	}
 	else {
 		dijit.byId(selid).set('disabled', true);
+	}
+	if(chkid == 'natenabled' &&
+	   dijit.byId(chkid).checked &&
+	   dijit.byId('nathostenabled').checked) {
+		dijit.byId('nathostenabled').set('checked', false);
+	}
+}
+
+function toggleNAThost() {
+	if(dijit.byId('nathostenabled').checked) {
+		if(dijit.byId('natenabled').checked)
+			dijit.byId('natenabled').set('checked', false);
+		dijit.byId('natpublicipaddress').set('disabled', false);
+		dijit.byId('natinternalipaddress').set('disabled', false);
+	}
+	else {
+		dijit.byId('natpublicipaddress').set('disabled', true);
+		dijit.byId('natinternalipaddress').set('disabled', true);
 	}
 }
 
@@ -622,6 +645,20 @@ function inlineEditResourceCB(data, ioArgs) {
 		else {
 			dijit.byId('natenabled').set('checked', false);
 			dijit.byId('nathostid').set('disabled', true);
+		}
+		if(data.items.data.nathostenabled == 1) {
+			dijit.byId('nathostenabled').set('checked', true);
+			dijit.byId('natpublicipaddress').set('disabled', false);
+			dijit.byId('natinternalipaddress').set('disabled', false);
+			dijit.byId('natpublicipaddress').set('value', data.items.data.natpublicIPaddress);
+			dijit.byId('natinternalipaddress').set('value', data.items.data.natinternalIPaddress);
+		}
+		else {
+			dijit.byId('nathostenabled').set('checked', false);
+			dijit.byId('natpublicipaddress').set('disabled', true);
+			dijit.byId('natinternalipaddress').set('disabled', true);
+			dijit.byId('natpublicipaddress').set('value', '');
+			dijit.byId('natinternalipaddress').set('value', '');
 		}
 		dojo.byId('addeditdlgerrmsg').innerHTML = '';
 		dijit.byId('addeditdlg').show();
@@ -716,7 +753,8 @@ function resetEditResource() {
 	              'vmprofileid', 'platformid', 'scheduleid', 'ram', 'cores',
 	              'procspeed', 'network', 'location', 'startnum', 'endnum',
 	              'startpubipaddress', 'endpubipaddress', 'startprivipaddress',
-	              'endprivipaddress', 'startmac', 'notes', 'predictivemoduleid'];
+	              'endprivipaddress', 'startmac', 'notes', 'predictivemoduleid',
+	              'natpublicipaddress', 'natinternalipaddress'];
 	for(var i = 0; i < fields.length; i++) {
 		dijit.byId(fields[i]).reset();
 	}
@@ -735,11 +773,13 @@ function saveResource() {
 	var errobj = dojo.byId('addeditdlgerrmsg');
 	if(addedit == 'edit' || dijit.byId('mode').get('value') == 'single')
 		var fields = ['name', 'owner', 'ipaddress', 'privateipaddress', 'publicmac',
-		              'privatemac', 'ram', 'cores', 'procspeed', 'location'];
+		              'privatemac', 'ram', 'cores', 'procspeed', 'location',
+		              'natpublicipaddress', 'natinternalipaddress'];
 	else
 		var fields = ['name', 'startnum', 'endnum', 'owner', 'startpubipaddress',
 		              'endpubipaddress', 'startprivipaddress', 'endprivipaddress',
-		              'startmac', 'ram', 'cores', 'procspeed', 'location'];
+		              'startmac', 'ram', 'cores', 'procspeed', 'location',
+		              'natpublicipaddress', 'natinternalipaddress'];
 	for(var i = 0; i < fields.length; i++) {
 		if(! checkValidatedObj(fields[i], errobj))
 			return;
@@ -779,6 +819,15 @@ function saveResource() {
 		data['natenabled'] = 0;
 		data['nathostid'] = 0;
 	}
+	data['nathostenabled'] = dijit.byId('nathostenabled').get('value');
+	if(data['nathostenabled'] == 1) {
+		if(data['natenabled'] == 1) {
+			errobj.innerHTML = "Connect Using NAT and Use as NAT Host cannot both be checked";
+			return;
+		}
+	}
+	else
+		data['nathostenabled'] = 0;
 	data['addmode'] = dijit.byId('mode').get('value');
 
 	dijit.byId('addeditbtn').set('disabled', true);

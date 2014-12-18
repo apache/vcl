@@ -684,10 +684,23 @@ class Computer extends Resource {
 		# use NAT
 		$extra = array('onChange' => "toggleNAT('natenabled', 'nathostid');");
 		$h .= labeledFormItem('natenabled', 'Connect Using NAT', 'check', '', '', '1', '', '', $extra);
-		# NAT host
+		# which NAT host
 		$nathosts = getNAThosts(0, 1);
 		$h .= labeledFormItem('nathostid', 'NAT Host', 'select', $nathosts);
 		$h .= "</div>\n"; # NAT
+
+		# NAT Host
+		$h .= "<div id=\"nathost\" class=\"boxedoptions\">\n";
+		# use as NAT host
+		$extra = array('onChange' => "toggleNAThost();");
+		$h .= labeledFormItem('nathostenabled', 'Use as NAT Host', 'check', '', '', '1', '', '', $extra);
+		# public IP
+		$errmsg = "Invalid NAT Public IP address specified - must be a valid IPV4 address";
+		$h .= labeledFormItem('natpublicipaddress', 'NAT Public IP Address', 'text', $ipreg1, 1, '', $errmsg); 
+		# internal IP
+		$errmsg = "Invalid NAT Internal IP address specified - must be a valid IPV4 address";
+		$h .= labeledFormItem('natinternalipaddress', 'NAT Internal IP Address', 'text', $ipreg1, 1, '', $errmsg); 
+		$h .= "</div>\n"; # NAT Host
 
 		# compid
 		$h .= "<div id=\"compidspan\">\n";
@@ -843,7 +856,7 @@ class Computer extends Resource {
 					$updates[] = "eth1macaddress = '{$data['eth1macaddress']}'";
 			}
 
-			# NAT
+			# use NAT
 			if($data['natenabled'] != $olddata['natenabled']) {
 				if($data['natenabled']) {
 					$query = "INSERT INTO nathostcomputermap "
@@ -864,6 +877,38 @@ class Computer extends Resource {
 				$query = "UPDATE nathostcomputermap "
 				       . "SET nathostid = {$data['nathostid']} "
 				       . "WHERE computerid = {$data['rscid']}";
+				doQuery($query);
+			}
+
+			# NAT host
+			if($data['nathostenabled'] != $olddata['nathostenabled']) {
+				if($data['nathostenabled']) {
+					$query = "INSERT INTO nathost "
+					       .       "(resourceid, "
+					       .       "publicIPaddress, "
+					       .       "internalIPaddress) "
+					       . "VALUES "
+					       .       "({$olddata['resourceid']}, "
+					       .       "'{$data['natpublicIPaddress']}', "
+					       .       "'{$data['natinternalIPaddress']}') "
+					       . "ON DUPLICATE KEY UPDATE "
+					       . "publicIPaddress = '{$data['natpublicIPaddress']}', "
+					       . "internalIPaddress = '{$data['natinternalIPaddress']}'";
+					doQuery($query);
+				}
+				else {
+					$query = "DELETE FROM nathost "
+					       . "WHERE resourceid = {$olddata['resourceid']}";
+					doQuery($query);
+				}
+			}
+			elseif($data['nathostenabled'] &&
+			       ($olddata['natpublicIPaddress'] != $data['natpublicIPaddress'] ||
+					 $olddata['natinternalIPaddress'] != $data['natinternalIPaddress'])) {
+				$query = "UPDATE nathost "
+				       . "SET publicIPaddress = '{$data['natpublicIPaddress']}', "
+				       .     "internalIPaddress = '{$data['natinternalIPaddress']}' "
+				       . "WHERE resourceid = {$olddata['resourceid']}";
 				doQuery($query);
 			}
 
@@ -1639,6 +1684,9 @@ class Computer extends Resource {
 		$return['predictivemoduleid'] = processInputVar('predictivemoduleid', ARG_NUMERIC);
 		$return['natenabled'] = processInputVar('natenabled', ARG_NUMERIC);
 		$return['nathostid'] = processInputVar('nathostid', ARG_NUMERIC);
+		$return['nathostenabled'] = processInputVar('nathostenabled', ARG_NUMERIC);
+		$return['natpublicIPaddress'] = processInputVar('natpublicipaddress', ARG_STRING);
+		$return['natinternalIPaddress'] = processInputVar('natinternalipaddress', ARG_STRING);
 		$return['location'] = processInputVar('location', ARG_STRING);
 		$addmode = processInputVar('addmode', ARG_STRING);
 
@@ -1946,6 +1994,7 @@ class Computer extends Resource {
 			$naterror = 1;
 		}
 		# nat change - check for active reservations
+		$vclreloadid = getUserlistID('vclreload@Local');
 		if($return['mode'] == 'edit') {
 			if($olddata['nathostid'] == '')
 				$olddata['nathostid'] = 0;
@@ -1958,11 +2007,61 @@ class Computer extends Resource {
 				       .       "rs.computerid = {$return['rscid']} AND "
 				       .       "rq.start <= NOW() AND "
 				       .       "rq.end > NOW() AND "
-				       .       "rq.stateid NOT IN (1,5,11,12)";
+				       .       "rq.stateid NOT IN (1,5,11,12) AND "
+				       .       "rq.userid != $vclreloadid";
 				$qh = doQuery($query);
 				if(mysql_num_rows($qh)) {
 					$return['error'] = 1;
 					$errormsg[] = "This computer has an active reservation. NAT settings cannot be changed for computers having<br>active reservations.";
+				}
+			}
+		}
+		$nathosterror = 0;
+		# nathostenabled
+		if($return['nathostenabled'] != 0 && $return['nathostenabled'] != 1) {
+			$return['error'] = 1;
+			$errormsg[] = "Invalid value for Use as NAT Host";
+			$nathosterror = 1;
+		}
+		# natpublicIPaddress
+		if($return['mode'] == 'edit' || $addmode == 'single') {
+			if(! validateIPv4addr($return['natpublicIPaddress'])) {
+				$return['error'] = 1;
+				$errormsg[] = "Invalid NAT Public IP address. Must be w.x.y.z with each of "
+			               . "w, x, y, and z being between 1 and 255 (inclusive)";
+				$nathosterror = 1;
+			}
+			# natinternalIPaddress
+			if(! validateIPv4addr($return['natinternalIPaddress'])) {
+				$return['error'] = 1;
+				$errormsg[] = "Invalid NAT Internal IP address. Must be w.x.y.z with each of "
+			               . "w, x, y, and z being between 1 and 255 (inclusive)";
+				$nathosterror = 1;
+			}
+		}
+		# nat host change - check for active reservations
+		if(! $nathosterror && $return['mode'] == 'edit') {
+			if($olddata['nathostenabled'] != $return['nathostenabled'] ||
+			   $olddata['natpublicIPaddress'] != $return['natpublicIPaddress'] ||
+				$olddata['natinternalIPaddress'] != $return['natinternalIPaddress']) {
+				$query = "SELECT rq.id "
+				       . "FROM request rq, "
+				       .      "reservation rs, "
+				       .      "nathostcomputermap nhcm, "
+				       .      "nathost nh, "
+				       .      "resource r "
+				       . "WHERE rs.requestid = rq.id AND "
+				       .       "rs.computerid = nhcm.computerid AND "
+				       .       "nhcm.nathostid = nh.id AND "
+				       .       "nh.resourceid = {$olddata['resourceid']} AND "
+				       .       "rq.start <= NOW() AND "
+				       .       "rq.end > NOW() AND "
+				       .       "rq.stateid NOT IN (1,5,11,12) AND "
+				       .       "rq.userid != $vclreloadid";
+				$qh = doQuery($query);
+				if(mysql_num_rows($qh)) {
+					$return['error'] = 1;
+					$errormsg[] = "This computer is the NAT host for other computers that have active reservations. NAT host<br>settings cannot be changed while providing NAT for active reservations.";
 				}
 			}
 		}
@@ -2138,7 +2237,7 @@ class Computer extends Resource {
 				       .        "{$data['nathostid']})";
 				doQuery($query);
 			}
-		
+
 			// add entry in resource table
 			$query = "INSERT INTO resource "
 					 .        "(resourcetypeid, "
@@ -2146,6 +2245,21 @@ class Computer extends Resource {
 					 . "VALUES (12, "
 					 .         "$rscid)";
 			doQuery($query);
+
+			$resourceid = dbLastInsertID();
+
+			# NAT host
+			if($data['nathostenabled']) {
+				$query = "INSERT INTO nathost "
+				       .       "(resourceid, "
+				       .       "publicIPaddress, "
+				       .       "internalIPaddress) "
+				       . "VALUES "
+				       .       "($resourceid, "
+				       .       "'{$data['natpublicIPaddress']}', "
+				       .       "'{$data['natinternalIPaddress']}')";
+				doQuery($query);
+			}
 
 			return $rscid;
 		}
