@@ -4160,10 +4160,8 @@ function AJconnectRequest() {
 	$h = '';
 	$now = time();
 	if($requestData['reservations'][0]['remoteIP'] != $remoteIP) {
-		$setback = unixToDatetime($now - SECINDAY);
 		$query = "UPDATE reservation "
-		       . "SET remoteIP = '$remoteIP', "
-		       .     "lastcheck = '$setback' "
+		       . "SET remoteIP = '$remoteIP' "
 		       . "WHERE requestid = $requestid";
 		$qh = doQuery($query, 226);
 
