@@ -755,68 +755,6 @@ EOF
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 _notify_user_no_login
-
- Parameters  : none
- Returns     : boolean
- Description : Notifies the user that the request has timed out becuase no
-               initial connection was made. An e-mail and/or IM message will
-               be sent to the user.
-
-=cut
-
-sub _notify_user_no_login {
-	my $self = shift;
-	
-	my $request_id                 = $self->data->get_request_id();
-	my $reservation_id             = $self->data->get_reservation_id();
-	my $user_email                 = $self->data->get_user_email();
-	my $user_emailnotices          = $self->data->get_user_emailnotices();
-	my $user_im_name               = $self->data->get_user_imtype_name();
-	my $user_im_id                 = $self->data->get_user_im_id();
-	my $affiliation_sitewwwaddress = $self->data->get_user_affiliation_sitewwwaddress();
-	my $affiliation_helpaddress    = $self->data->get_user_affiliation_helpaddress();
-	my $image_prettyname           = $self->data->get_image_prettyname();
-	my $is_parent_reservation      = $self->data->is_parent_reservation();
-
-	my $message = <<"EOF";
-
-Your reservation has timed out for image $image_prettyname because no initial connection was made.
-
-To make another reservation, please revisit $affiliation_sitewwwaddress.
-
-Thank You,
-VCL Team
-
-
-******************************************************************
-This is an automated notice. If you need assistance
-please respond with detailed information on the issue
-and a help ticket will be generated.
-
-To disable email notices
--Visit $affiliation_sitewwwaddress
--Select User Preferences
--Select General Preferences
-******************************************************************
-EOF
-
-	my $subject = "VCL -- Reservation Timeout";
-
-	if ($is_parent_reservation && $user_emailnotices) {
-		#if  "0" user does not care to get additional notices
-		mail($user_email, $subject, $message, $affiliation_helpaddress);
-		notify($ERRORS{'OK'}, 0, "sent reservation timeout e-mail to $user_email");
-	}
-	if ($user_im_name ne "none") {
-		notify_via_im($user_im_name, $user_im_id, $message);
-		notify($ERRORS{'OK'}, 0, "sent reservation timeout IM to $user_im_name");
-	}
-	return 1;
-} ## end sub _notify_user_timeout
-
-#/////////////////////////////////////////////////////////////////////////////
-
 =head2 _start_imaging_request
 
  Parameters  : none

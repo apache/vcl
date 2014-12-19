@@ -132,13 +132,20 @@ sub process {
 	insertloadlog($reservation_id, $computer_id, "noinitialconnection", "user clicked Connect");
 	delete_computerloadlog_reservation($reservation_id, 'acknowledgetimeout');
 	
-	# Capture the exact time user acknowledgement was detected
-	my $connection_check_start_epoch_seconds = time;
-	
-	# Insert initialconnecttimeout immediately after user acknowledged
-	# Web uses timestamp of this to determine when next to refresh the page
-	# The timestamp of this computerloadlog entry will be used to determine when to timeout the connection checking during the inuse state
-	insertloadlog($reservation_id, $computer_id, "initialconnecttimeout", "begin initial connection timeout ($initial_connect_timeout_seconds seconds)");
+	# The frontend should have inserted an '' computerloadlog entry, retrieve its timestamp
+	my $connection_check_start_epoch_seconds = get_reservation_computerloadlog_time($reservation_id, 'initialconnecttimeout');
+	if ($connection_check_start_epoch_seconds) {
+		notify($ERRORS{'DEBUG'}, 0, "retrieved timestamp of computerloadlog 'initialconnecttimeout' entry inserted by web frontend: $connection_check_start_epoch_seconds");
+	}
+	else {
+		$connection_check_start_epoch_seconds = time;
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve timestamp of computerloadlog 'initialconnecttimeout' entry, web frontend should have inserted this, inserting new entry");
+		
+		# initialconnecttimeout should be inserted immediately after user acknowledged
+		# Web uses timestamp of this to determine when next to refresh the page
+		# The timestamp of this computerloadlog entry will be used to determine when to timeout the connection checking during the inuse state
+		insertloadlog($reservation_id, $computer_id, "initialconnecttimeout", "begin initial connection timeout ($initial_connect_timeout_seconds seconds)");
+	}
 	
 	# Call OS module's grant_access() subroutine which adds user accounts to computer
 	if ($self->os->can("grant_access") && !$self->os->grant_access()) {
@@ -155,7 +162,7 @@ sub process {
 	if ($self->os->can("post_reserve") && !$self->os->post_reserve()) {
 		$self->reservation_failed("OS module post_reserve failed");
 	}
-
+	
 	# Add a 'postreserve' computerloadlog entry
 	# Do this last - important for cluster reservation timing
 	# Parent's reserved process will loop until this exists for all child reservations
@@ -333,6 +340,68 @@ sub user_acknowledged {
 		return 0;
 	}
 }
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 _notify_user_no_login
+
+ Parameters  : none
+ Returns     : boolean
+ Description : Notifies the user that the request has timed out becuase no
+               initial connection was made. An e-mail and/or IM message will
+               be sent to the user.
+
+=cut
+
+sub _notify_user_no_login {
+	my $self = shift;
+	
+	my $request_id                 = $self->data->get_request_id();
+	my $reservation_id             = $self->data->get_reservation_id();
+	my $user_email                 = $self->data->get_user_email();
+	my $user_emailnotices          = $self->data->get_user_emailnotices();
+	my $user_im_name               = $self->data->get_user_imtype_name();
+	my $user_im_id                 = $self->data->get_user_im_id();
+	my $affiliation_sitewwwaddress = $self->data->get_user_affiliation_sitewwwaddress();
+	my $affiliation_helpaddress    = $self->data->get_user_affiliation_helpaddress();
+	my $image_prettyname           = $self->data->get_image_prettyname();
+	my $is_parent_reservation      = $self->data->is_parent_reservation();
+
+	my $message = <<"EOF";
+
+Your reservation has timed out for image $image_prettyname because no initial connection was made.
+
+To make another reservation, please revisit $affiliation_sitewwwaddress.
+
+Thank You,
+VCL Team
+
+
+******************************************************************
+This is an automated notice. If you need assistance
+please respond with detailed information on the issue
+and a help ticket will be generated.
+
+To disable email notices
+-Visit $affiliation_sitewwwaddress
+-Select User Preferences
+-Select General Preferences
+******************************************************************
+EOF
+
+	my $subject = "VCL -- Reservation Timeout";
+
+	if ($is_parent_reservation && $user_emailnotices) {
+		#if  "0" user does not care to get additional notices
+		mail($user_email, $subject, $message, $affiliation_helpaddress);
+		notify($ERRORS{'OK'}, 0, "sent reservation timeout e-mail to $user_email");
+	}
+	if ($user_im_name ne "none") {
+		notify_via_im($user_im_name, $user_im_id, $message);
+		notify($ERRORS{'OK'}, 0, "sent reservation timeout IM to $user_im_name");
+	}
+	return 1;
+} ## end sub _notify_user_no_login
 
 #/////////////////////////////////////////////////////////////////////////////
 
