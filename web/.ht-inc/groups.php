@@ -142,7 +142,8 @@ function viewGroups() {
 	print "height: 580px;\" query=\"{type: new RegExp('normal|federated|courseroll')}\">\n";
 	print "<thead>\n";
 	print "<tr>\n";
-	if(preg_match('/MSIE/i', $_SERVER['HTTP_USER_AGENT']))
+	if(preg_match('/MSIE/i', $_SERVER['HTTP_USER_AGENT']) ||
+	   preg_match('/Trident/i', $_SERVER['HTTP_USER_AGENT']))
 		$w = array('54px', '38px', '200px', '142px', '65px', '142px', '59px', '58px', '63px', '73px');
 	else
 		$w = array('4.5em', '3em', '17em', '12em', '5em', '12em', '5em', '5em', '5.6em', '6.3em');
@@ -263,7 +264,8 @@ function viewGroups() {
 	print "height: 580px;\" query=\"{type: new RegExp('.*')}\">\n";
 	print "<thead>\n";
 	print "<tr>\n";
-	if(preg_match('/MSIE/i', $_SERVER['HTTP_USER_AGENT']))
+	if(preg_match('/MSIE/i', $_SERVER['HTTP_USER_AGENT']) ||
+	   preg_match('/Trident/i', $_SERVER['HTTP_USER_AGENT']))
 		$w = array('54px', '38px', '108px', '240px', '250px', '24px');
 	else
 		$w = array('4.5em', '3em', '9em', '20em', '21em', '1.6em');
