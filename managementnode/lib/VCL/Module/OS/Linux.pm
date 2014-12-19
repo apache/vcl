@@ -709,21 +709,29 @@ sub update_hostname_file {
 
 	my $computer_node_name = $self->data->get_computer_node_name();
 	my $network_file_path = '/etc/sysconfig/network';
+	
+	my $hostname_file_path =  '/etc/hostname';
+	# For Linux OS that are using /etc/hostname
+	if($self->file_exists($hostname_file_path)) {
+		my $update_hostname_file_cmd = "echo $public_hostname > $hostname_file_path";
+		if($self->execute($update_hostname_file_cmd)) {
+			notify($ERRORS{'OK'}, 0, "updated $hostname_file_path on $computer_node_name to $public_hostname");
+		}
+	}
 
 	my $command = "sed -i -e \"/^HOSTNAME=/d\" $network_file_path; echo \"HOSTNAME=$public_hostname\" >> $network_file_path";
 	my ($exit_status, $output) = $self->execute($command);
 	if (!defined($output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to SSH command to set hostname on $computer_node_name to $public_hostname, command: '$command'");
-		return 0;
 	}
 	elsif ($exit_status == 0) {
 		notify($ERRORS{'OK'}, 0, "set public hostname on $computer_node_name to $public_hostname");
-		return 1;
 	}
 	else {
 		notify($ERRORS{'WARNING'}, 0, "failed to set public hostname on $computer_node_name to $public_hostname, exit status: $exit_status, output:\n" . join("\n", @ $output));
-		return 0;
 	}
+
+	return 1;
 
 }
 
@@ -4477,6 +4485,13 @@ sub clean_known_files {
 	if ($self->execute("/usr/sbin/tmpwatch -f 0 /tmp; /bin/cp /dev/null /var/log/wtmp")) {
 		notify($ERRORS{'DEBUG'}, 0, "cleared /tmp on $computer_node_name");
 	}
+
+	# Clear /etc/hostname file
+	if($self->file_exists("/etc/hostname")) {
+		if ($self->execute("/bin/cp /dev/null /etc/hostname")) {
+			notify($ERRORS{'DEBUG'}, 0, "cleared /etc/hostname on $computer_node_name");
+		}
+	}
 	
 	# Clear SSH idenity keys from /root/.ssh
 	if (!$self->clear_private_keys()) {
@@ -4508,7 +4523,7 @@ sub clean_known_files {
 			notify($ERRORS{'WARNING'}, 0, "unable to remove /var/log/secure");
 		}
 	}
-	
+
 	return 1;
 }
 
