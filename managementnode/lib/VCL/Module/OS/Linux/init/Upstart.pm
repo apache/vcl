@@ -123,7 +123,7 @@ sub get_service_names {
 	my $service_info = {};
 	
 	my $command = "initctl list";
-	my ($exit_status, $output) = $self->execute($command, 0);
+	my ($exit_status, $output) = $self->os->execute($command, 0);
 	if (!defined($output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to execute command to list Upstart services on $computer_node_name");
 		return;
@@ -186,7 +186,7 @@ sub delete_service {
 		
 		# Delete the service configuration file
 		my $service_file_path = "/etc/init/$service_name.conf";
-		$self->delete_file($service_file_path) || return;
+		$self->os->delete_file($service_file_path) || return;
 		
 		notify($ERRORS{'DEBUG'}, 0, "deleted '$service_name' service on $computer_node_name");
 	}
@@ -221,7 +221,7 @@ sub start_service {
 	my $computer_node_name = $self->data->get_computer_node_name();
 	
 	my $command = "initctl start $service_name";
-	my ($exit_status, $output) = $self->execute($command);
+	my ($exit_status, $output) = $self->os->execute($command);
 	if (!defined($output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to execute command to start '$service_name' service on $computer_node_name");
 		return;
@@ -282,7 +282,7 @@ sub stop_service {
 	
 	for my $service_name (@service_names) {
 		my $command = "initctl stop $service_name";
-		my ($exit_status, $output) = $self->execute($command);
+		my ($exit_status, $output) = $self->os->execute($command);
 		if (!defined($output)) {
 			notify($ERRORS{'WARNING'}, 0, "failed to execute command to stop '$service_name' service on $computer_node_name");
 			return;
@@ -337,7 +337,7 @@ sub restart_service {
 	my $computer_node_name = $self->data->get_computer_node_name();
 	
 	my $command = "initctl restart $service_name";
-	my ($exit_status, $output) = $self->execute($command);
+	my ($exit_status, $output) = $self->os->execute($command);
 	if (!defined($output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to execute command to restart '$service_name' service on $computer_node_name");
 		return;
@@ -388,7 +388,7 @@ sub add_ext_sshd_service {
 	my $ext_sshd_config_file_path = '/etc/ssh/external_sshd_config';
 	
 	# Get the contents of the sshd service startup file already on the computer
-	my @sshd_service_file_contents = $self->get_file_contents($sshd_service_file_path);
+	my @sshd_service_file_contents = $self->os->get_file_contents($sshd_service_file_path);
 	if (!@sshd_service_file_contents) {
 		notify($ERRORS{'WARNING'}, 0, "failed to retrieve contents of $sshd_service_file_path from $computer_node_name");
 		return;
@@ -408,12 +408,12 @@ sub add_ext_sshd_service {
 	# Replace /var/run/sshd --> /var/run/ext_sshd
 	$ext_sshd_service_file_contents =~ s|(/var/run/)sshd|$1ext_sshd|g;
 	
-	if (!$self->create_text_file($ext_sshd_service_file_path, $ext_sshd_service_file_contents)) {
+	if (!$self->os->create_text_file($ext_sshd_service_file_path, $ext_sshd_service_file_contents)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to create ext_sshd service file on $computer_node_name: $ext_sshd_service_file_path");
 		return;
 	}
 	
-	if (!$self->set_file_permissions($ext_sshd_service_file_path, '644')) {
+	if (!$self->os->set_file_permissions($ext_sshd_service_file_path, '644')) {
 		notify($ERRORS{'WARNING'}, 0, "failed to set permissions on ext_sshd service file to 644 on $computer_node_name: $ext_sshd_service_file_path");
 		return;
 	}
@@ -449,7 +449,7 @@ sub service_running {
 	my $computer_node_name = $self->data->get_computer_node_name();
 	
 	my $command = "initctl status $service_name";
-	my ($exit_status, $output) = $self->execute($command);
+	my ($exit_status, $output) = $self->os->execute($command);
 	if (!defined($output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to execute command to determine if '$service_name' service is enabled on $computer_node_name");
 		return;
@@ -504,8 +504,8 @@ sub service_enabled {
 	
 	# Check if an override file exists and contains 'manual'
 	my $service_override_file_path = "/etc/init/$service_name.override";
-	if ($self->file_exists($service_override_file_path)) {
-		my @override_file_contents = $self->get_file_contents($service_override_file_path);
+	if ($self->os->file_exists($service_override_file_path)) {
+		my @override_file_contents = $self->os->get_file_contents($service_override_file_path);
 		if (!@override_file_contents) {
 			notify($ERRORS{'WARNING'}, 0, "failed to retrieve contents of $service_override_file_path from $computer_node_name");
 		}
@@ -518,7 +518,7 @@ sub service_enabled {
 	}
 	
 	my $command = "initctl show-config $service_name";
-	my ($exit_status, $output) = $self->execute($command);
+	my ($exit_status, $output) = $self->os->execute($command);
 	if (!defined($output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to execute command to determine if '$service_name' service is enabled on $computer_node_name");
 		return;
@@ -551,7 +551,7 @@ sub service_enabled {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 _enable_service
+=head2 enable_service
 
  Parameters  : $service_name
  Returns     : boolean
@@ -559,7 +559,7 @@ sub service_enabled {
 
 =cut
 
-sub _enable_service {
+sub enable_service {
 	my $self = shift;
 	if (ref($self) !~ /linux/i) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
@@ -577,10 +577,10 @@ sub _enable_service {
 	
 	my $service_override_file_path = "/etc/init/$service_name.override";
 	
-	if (!$self->file_exists($service_override_file_path)) {
+	if (!$self->os->file_exists($service_override_file_path)) {
 		return 1;
 	}
-	if ($self->delete_file($service_override_file_path)) {
+	if ($self->os->delete_file($service_override_file_path)) {
 		return 1;
 	}
 	else {
@@ -591,7 +591,7 @@ sub _enable_service {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 _disable_service
+=head2 disable_service
 
  Parameters  : $service_name
  Returns     : boolean
@@ -599,7 +599,7 @@ sub _enable_service {
 
 =cut
 
-sub _disable_service {
+sub disable_service {
 	my $self = shift;
 	if (ref($self) !~ /linux/i) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
@@ -617,7 +617,7 @@ sub _disable_service {
 	
 	my $service_override_file_path = "/etc/init/$service_name.override";
 	
-	if ($self->create_text_file($service_override_file_path, "manual\n")) {
+	if ($self->os->create_text_file($service_override_file_path, "manual\n")) {
 		return 1;
 	}
 	else {

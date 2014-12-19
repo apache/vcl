@@ -106,10 +106,10 @@ sub get_service_names {
 		return;
 	}
 	
-	my $computer_node_name   = $self->data->get_computer_node_name();
+	my $computer_node_name = $self->data->get_computer_node_name();
 	
 	my $command = "systemctl --no-pager list-unit-files";
-	my ($exit_status, $output) = $self->execute($command, 0);
+	my ($exit_status, $output) = $self->os->execute($command, 0);
 	if (!defined($output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to execute command to retrieve systemd service names on $computer_node_name");
 		return;
@@ -126,6 +126,42 @@ sub get_service_names {
 	my @service_names = sort(keys %service_name_hash);
 	notify($ERRORS{'DEBUG'}, 0, "retrieved systemd service names from $computer_node_name: " . join(", ", @service_names));
 	return @service_names;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 service_exists
+
+ Parameters  : $service_name
+ Returns     : boolean
+ Description : Determines if a service controlled by systemd exists on the
+               computer.
+
+=cut
+
+sub service_exists {
+	my $self = shift;
+	if (ref($self) !~ /linux/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	my ($service_name) = @_;
+	if (!defined($service_name)) {
+		notify($ERRORS{'WARNING'}, 0, "service name argument was not supplied");
+		return;
+	}
+	
+	my $computer_node_name = $self->data->get_computer_node_name();
+	
+	my @service_names = $self->get_service_names();
+	if (grep { $_ eq $service_name } @service_names) {
+		notify($ERRORS{'DEBUG'}, 0, "$service_name service exists on $computer_node_name");
+		return 1;
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "$service_name service does not exist on $computer_node_name");
+		return 0;
+	}
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -155,7 +191,7 @@ sub service_running {
 	my $computer_node_name = $self->data->get_computer_node_name();
 	
 	my $command = "systemctl is-active $service_name.service";
-	my ($exit_status, $output) = $self->execute($command, 0);
+	my ($exit_status, $output) = $self->os->execute($command, 0);
 	if (!defined($output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to execute command to determine if $service_name service is running on $computer_node_name");
 		return;
@@ -203,7 +239,7 @@ sub service_enabled {
 	my $computer_node_name = $self->data->get_computer_node_name();
 	
 	my $command = "systemctl is-enabled $service_name.service";
-	my ($exit_status, $output) = $self->execute($command, 0);
+	my ($exit_status, $output) = $self->os->execute($command, 0);
 	if (!defined($output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to execute command to determine if $service_name service is running on $computer_node_name");
 		return;
@@ -226,7 +262,7 @@ sub service_enabled {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 _enable_service
+=head2 enable_service
 
  Parameters  : $service_name
  Returns     : boolean
@@ -235,7 +271,7 @@ sub service_enabled {
 
 =cut
 
-sub _enable_service {
+sub enable_service {
 	my $self = shift;
 	if (ref($self) !~ /VCL::Module/i) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
@@ -252,7 +288,7 @@ sub _enable_service {
 	
 	# Enable the service
 	my $command = "systemctl --no-reload enable $service_name.service";
-	my ($exit_status, $output) = $self->execute($command, 0);
+	my ($exit_status, $output) = $self->os->execute($command, 0);
 	if (!defined($output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to execute command to enable '$service_name' service on $computer_node_name: $command");
 		return;
@@ -275,7 +311,7 @@ sub _enable_service {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 _disable_service
+=head2 disable_service
 
  Parameters  : $service_name
  Returns     : boolean
@@ -284,7 +320,7 @@ sub _enable_service {
 
 =cut
 
-sub _disable_service {
+sub disable_service {
 	my $self = shift;
 	if (ref($self) !~ /VCL::Module/i) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
@@ -300,7 +336,7 @@ sub _disable_service {
 	my $computer_node_name = $self->data->get_computer_node_name();
 	
 	my $command = "systemctl --no-reload disable $service_name.service";
-	my ($exit_status, $output) = $self->execute($command, 0);
+	my ($exit_status, $output) = $self->os->execute($command, 0);
 	if (!defined($output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to execute command to disable '$service_name' service on $computer_node_name: $command");
 		return;
@@ -350,12 +386,12 @@ sub delete_service {
 	# Disable the service before deleting it
 	if ($self->service_exists($service_name)) {
 		$self->stop_service($service_name) || return;
-		$self->_disable_service($service_name) || return;
+		$self->disable_service($service_name) || return;
 	}
 	
 	# Delete the service configuration file
 	my $service_file_path = "/lib/systemd/system/$service_name.service";
-	if (!$self->delete_file($service_file_path)) {
+	if (!$self->os->delete_file($service_file_path)) {
 		return;
 	}
 	
@@ -392,7 +428,7 @@ sub start_service {
 	
 	# start the service
 	my $command = "systemctl start $service_name.service";
-	my ($exit_status, $output) = $self->execute($command, 0);
+	my ($exit_status, $output) = $self->os->execute($command, 0);
 	if (!defined($output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to execute command to start '$service_name' service on $computer_node_name: $command");
 		return;
@@ -442,7 +478,7 @@ sub stop_service {
 	
 	# stop the service
 	my $command = "systemctl stop $service_name.service";
-	my ($exit_status, $output) = $self->execute($command, 0);
+	my ($exit_status, $output) = $self->os->execute($command, 0);
 	if (!defined($output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to execute command to stop '$service_name' service on $computer_node_name: $command");
 		return;
@@ -492,7 +528,7 @@ sub restart_service {
 	
 	# Restart the service
 	my $command = "systemctl restart $service_name.service";
-	my ($exit_status, $output) = $self->execute($command, 0);
+	my ($exit_status, $output) = $self->os->execute($command, 0);
 	if (!defined($output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to execute command to restart '$service_name' service on $computer_node_name: $command");
 		return;
@@ -538,7 +574,7 @@ sub add_ext_sshd_service {
 	my $ext_sshd_service_file_path = '/lib/systemd/system/ext_sshd.service';
 	
 	# Get the contents of the sshd service configuration file already on the computer
-	my @sshd_service_file_contents = $self->get_file_contents($sshd_service_file_path);
+	my @sshd_service_file_contents = $self->os->get_file_contents($sshd_service_file_path);
 	if (!@sshd_service_file_contents) {
 		notify($ERRORS{'WARNING'}, 0, "failed to retrieve contents of $sshd_service_file_path from $computer_node_name");
 		return;
@@ -562,19 +598,19 @@ sub add_ext_sshd_service {
 	
 	$ext_sshd_service_file_contents .= "\n";
 	
-	if (!$self->create_text_file($ext_sshd_service_file_path, $ext_sshd_service_file_contents)) {
+	if (!$self->os->create_text_file($ext_sshd_service_file_path, $ext_sshd_service_file_contents)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to create ext_sshd service file on $computer_node_name: $ext_sshd_service_file_path");
 		return;
 	}
 	
-	if (!$self->set_file_permissions($ext_sshd_service_file_path, '644')) {
+	if (!$self->os->set_file_permissions($ext_sshd_service_file_path, '644')) {
 		notify($ERRORS{'WARNING'}, 0, "failed to set permissions of ext_sshd service file to 644 on $computer_node_name: $ext_sshd_service_file_path");
 		return;
 	}
 	
 	$self->_daemon_reload();
 	
-	return $self->_enable_service('ext_sshd');
+	return $self->enable_service('ext_sshd');
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -599,7 +635,7 @@ sub _daemon_reload {
 	my $computer_node_name = $self->data->get_computer_node_name();
 	
 	my $command = "systemctl --system daemon-reload";
-	my ($exit_status, $output) = $self->execute($command, 0);
+	my ($exit_status, $output) = $self->os->execute($command, 0);
 	if (!defined($output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to execute command to reload systemd manager configuration on $computer_node_name: $command");
 		return;

@@ -36,7 +36,7 @@ use FindBin;
 use lib "$FindBin::Bin/../../../../..";
 
 # Configure inheritance
-use base qw(VCL::Module::OS::Linux);
+use base qw(VCL::Module::OS::Linux::firewall);
 
 # Specify the version of this module
 our $VERSION = '2.3';
@@ -77,19 +77,11 @@ sub initialize {
 	
 	my $arguments = shift || {};
 	
-	# Check if base_package argument was specified
-	# This is necessary for ManagementNode OS objects to work
-	# Otherwise the base Linux.pm subroutines would be used instead of ManagementNode.pm
-	if (defined($arguments->{base_package})) {
-		notify($ERRORS{'DEBUG'}, 0, "overriding object package: " . $ISA[0] . " --> $arguments->{base_package}");
-		@ISA = ($arguments->{base_package});
-	}
-	
 	my $computer_name = $self->data->get_computer_hostname();
 	
 	notify($ERRORS{'DEBUG'}, 0, "initializing " . ref($self) . " object to control $computer_name");
 	
-	if (!$self->command_exists('iptables')) {
+	if (!$self->os->command_exists('iptables')) {
 		notify($ERRORS{'DEBUG'}, 0, ref($self) . " object not initialized to control $computer_name, iptables command does not exist");
 		return 0;
 	}
@@ -175,7 +167,7 @@ sub insert_rule {
 		}
 	}
 	
-	my ($exit_status, $output) = $self->execute($command, 0);
+	my ($exit_status, $output) = $self->os->execute($command, 0);
 	if (!defined($output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to execute command $computer_name: $command");
 		return;
@@ -277,7 +269,7 @@ sub delete_rule {
 		$command .= " -D $chain_name -t $table_name $specification";
 	}
 	
-	my ($exit_status, $output) = $self->execute($command, 0);
+	my ($exit_status, $output) = $self->os->execute($command, 0);
 	if (!defined($output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to execute command $computer_name: $command");
 		return;
@@ -323,7 +315,7 @@ sub create_chain {
 	my $computer_name = $self->data->get_computer_hostname();
 	
 	my $command = "/sbin/iptables --new-chain $chain_name --table $table_name";
-	my ($exit_status, $output) = $self->execute($command, 0);
+	my ($exit_status, $output) = $self->os->execute($command, 0);
 	if (!defined($output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to execute command $computer_name: $command");
 		return;
@@ -392,7 +384,7 @@ sub delete_chain {
 	}
 	
 	my $command = "/sbin/iptables --delete-chain $chain_name --table $table_name";
-	my ($exit_status, $output) = $self->execute($command, 0);
+	my ($exit_status, $output) = $self->os->execute($command, 0);
 	if (!defined($output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to execute command $computer_name: $command");
 		return;
@@ -495,7 +487,7 @@ sub flush_chain {
 	}
 	$command .= " --table $table_name";
 	
-	my ($exit_status, $output) = $self->execute($command, 0);
+	my ($exit_status, $output) = $self->os->execute($command, 0);
 	if (!defined($output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to execute command $computer_name: $command");
 		return;
@@ -543,7 +535,7 @@ sub get_table_info {
 	}
 	$command .= " --table $table_name";
 	
-	my ($exit_status, $output) = $self->execute($command, 0);
+	my ($exit_status, $output) = $self->os->execute($command, 0);
 	if (!defined($output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to execute command $computer_name: $command");
 		return;
@@ -611,7 +603,7 @@ sub configure_nat {
 	}
 	
 	# Enable IP port forwarding
-	if (!$self->enable_ip_forwarding()) {
+	if (!$self->os->enable_ip_forwarding()) {
 		notify($ERRORS{'WARNING'}, 0, "unable to configure NAT host $computer_name, failed to enable IP forwarding");
 		return;
 	}
@@ -644,7 +636,7 @@ sub configure_nat {
 	my $public_subnet_mask;
 	my $internal_subnet_mask;
 	
-	my $network_configuration = $self->get_network_configuration();
+	my $network_configuration = $self->os->get_network_configuration();
 	for my $interface_name (keys %$network_configuration) {
 		my @ip_addresses = keys %{$network_configuration->{$interface_name}{ip_address}};
 		
@@ -887,8 +879,8 @@ sub add_nat_port_forward {
 	
 	$protocol = lc($protocol);
 	
-	my $public_interface_name = $self->get_public_interface_name();
-	my $public_ip_address = $self->get_public_ip_address();
+	my $public_interface_name = $self->os->get_public_interface_name();
+	my $public_ip_address = $self->os->get_public_ip_address();
 	
 	if ($self->insert_rule({
 		'table' => 'nat',

@@ -20,16 +20,16 @@
 
 =head1 NAME
 
-VCL::Module::OS::Linux::init
+VCL::Module::OS::Linux::firewall
 
 =head1 DESCRIPTION
 
- This module is the parent class for the Linux init modules.
+ This module is the parent class for the Linux firewall modules.
 
 =cut
 
 ##############################################################################
-package VCL::Module::OS::Linux::init;
+package VCL::Module::OS::Linux::firewall;
 
 # Specify the lib path using FindBin
 use FindBin;

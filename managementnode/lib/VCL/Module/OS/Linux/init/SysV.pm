@@ -112,7 +112,7 @@ sub get_service_names {
 	my $computer_node_name = $self->data->get_computer_node_name();
 	
 	my $command = "chkconfig --list";
-	my ($exit_status, $output) = $self->execute($command, 0);
+	my ($exit_status, $output) = $self->os->execute($command, 0);
 	if (!defined($output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to execute command to list SysV services on $computer_node_name");
 		return;
@@ -132,7 +132,7 @@ sub get_service_names {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 _enable_service
+=head2 enable_service
 
  Parameters  : $service_name
  Returns     : boolean
@@ -141,7 +141,7 @@ sub get_service_names {
 
 =cut
 
-sub _enable_service {
+sub enable_service {
 	my $self = shift;
 	if (ref($self) !~ /VCL::Module/i) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
@@ -158,7 +158,7 @@ sub _enable_service {
 	
 	# Enable the service
 	my $command = "chkconfig $service_name on";
-	my ($exit_status, $output) = $self->execute($command, 0);
+	my ($exit_status, $output) = $self->os->execute($command, 0);
 	if (!defined($output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to execute command to enable '$service_name' service on $computer_node_name: $command");
 		return;
@@ -181,7 +181,7 @@ sub _enable_service {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 _disable_service
+=head2 disable_service
 
  Parameters  : $service_name
  Returns     : boolean
@@ -190,7 +190,7 @@ sub _enable_service {
 
 =cut
 
-sub _disable_service {
+sub disable_service {
 	my $self = shift;
 	if (ref($self) !~ /VCL::Module/i) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
@@ -207,7 +207,7 @@ sub _disable_service {
 	
 	# Disable the service
 	my $command = "chkconfig $service_name off";
-	my ($exit_status, $output) = $self->execute($command, 0);
+	my ($exit_status, $output) = $self->os->execute($command, 0);
 	if (!defined($output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to execute command to disable '$service_name' service on $computer_node_name: $command");
 		return;
@@ -255,7 +255,7 @@ sub service_enabled {
 	my $computer_node_name = $self->data->get_computer_node_name();
 	
 	my $command = "chkconfig --list $service_name";
-	my ($exit_status, $output) = $self->execute($command, 0);
+	my ($exit_status, $output) = $self->os->execute($command, 0);
 	if (!defined($output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to execute command to determine if '$service_name' service is enabled on $computer_node_name: $command");
 		return;
@@ -309,7 +309,7 @@ sub service_running {
 	
 	# Enable the service
 	my $command = "service $service_name status";
-	my ($exit_status, $output) = $self->execute($command, 0);
+	my ($exit_status, $output) = $self->os->execute($command, 0);
 	if (!defined($output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to execute command to determine if '$service_name' service is running on $computer_node_name: $command");
 		return;
@@ -364,7 +364,7 @@ sub add_service {
 	
 	# Add the service
 	my $command = "chkconfig --add $service_name";
-	my ($exit_status, $output) = $self->execute($command);
+	my ($exit_status, $output) = $self->os->execute($command);
 	if (!defined($output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to execute command to add '$service_name' service on $computer_node_name");
 		return;
@@ -408,7 +408,7 @@ sub delete_service {
 	
 	# Delete the service
 	my $command = "chkconfig --del $service_name";
-	my ($exit_status, $output) = $self->execute($command);
+	my ($exit_status, $output) = $self->os->execute($command);
 	if (!defined($output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to execute command to delete '$service_name' service on $computer_node_name");
 		return;
@@ -424,7 +424,7 @@ sub delete_service {
 	
 	# Delete the service configuration file
 	my $service_file_path = "/etc/rc.d/init.d/$service_name";
-	if (!$self->delete_file($service_file_path)) {
+	if (!$self->os->delete_file($service_file_path)) {
 		return;
 	}
 	
@@ -458,7 +458,7 @@ sub start_service {
 	my $computer_node_name = $self->data->get_computer_node_name();
 	
 	my $command = "service $service_name start";
-	my ($exit_status, $output) = $self->execute($command);
+	my ($exit_status, $output) = $self->os->execute($command);
 	if (!defined($output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to execute command to start '$service_name' service on $computer_node_name");
 		return;
@@ -503,7 +503,7 @@ sub stop_service {
 	my $computer_node_name = $self->data->get_computer_node_name();
 	
 	my $command = "service $service_name status ; service $service_name stop";
-	my ($exit_status, $output) = $self->execute($command);
+	my ($exit_status, $output) = $self->os->execute($command);
 	if (!defined($output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to execute command to stop '$service_name' service on $computer_node_name");
 		return;
@@ -553,7 +553,7 @@ sub restart_service {
 	my $computer_node_name = $self->data->get_computer_node_name();
 	
 	my $command = "service $service_name restart";
-	my ($exit_status, $output) = $self->execute($command, 0);
+	my ($exit_status, $output) = $self->os->execute($command, 0);
 	if (!defined($output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to execute command to restart '$service_name' service on $computer_node_name");
 		return;
@@ -600,7 +600,7 @@ sub add_ext_sshd_service {
 	my $ext_sshd_config_file_path       = '/etc/ssh/external_sshd_config';
 	
 	# Get the contents of the sshd service startup file already on the computer
-	my @sshd_service_file_lines = $self->get_file_contents($sshd_service_file_path);
+	my @sshd_service_file_lines = $self->os->get_file_contents($sshd_service_file_path);
 	if (!@sshd_service_file_lines) {
 		notify($ERRORS{'WARNING'}, 0, "failed to retrieve contents of $sshd_service_file_path from $computer_node_name");
 		return;
@@ -641,11 +641,11 @@ sub add_ext_sshd_service {
 	# Check if any changes were made to the original sshd file
 	if ($sshd_service_file_contents_updated ne $sshd_service_file_contents_original) {
 		# Save a copy of the original sshd file if the backup doesn't already exist
-		if (!$self->file_exists($sshd_service_file_path_original)) {
-			$self->copy_file($sshd_service_file_path, $sshd_service_file_path_original);
+		if (!$self->os->file_exists($sshd_service_file_path_original)) {
+			$self->os->copy_file($sshd_service_file_path, $sshd_service_file_path_original);
 		}
 		
-		if (!$self->create_text_file($sshd_service_file_path, $sshd_service_file_contents_updated)) {
+		if (!$self->os->create_text_file($sshd_service_file_path, $sshd_service_file_contents_updated)) {
 			notify($ERRORS{'WARNING'}, 0, "failed to update sshd service file on $computer_node_name: $sshd_service_file_path");
 		}
 	}
@@ -653,12 +653,12 @@ sub add_ext_sshd_service {
 		notify($ERRORS{'DEBUG'}, 0, "sshd service file on $computer_node_name does not need to be updated");
 	}
 	
-	if (!$self->create_text_file($ext_sshd_service_file_path, $ext_sshd_service_file_contents)) {
+	if (!$self->os->create_text_file($ext_sshd_service_file_path, $ext_sshd_service_file_contents)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to create ext_sshd service file on $computer_node_name: $ext_sshd_service_file_path");
 		return;
 	}
 	
-	if (!$self->set_file_permissions($ext_sshd_service_file_path, '755')) {
+	if (!$self->os->set_file_permissions($ext_sshd_service_file_path, '755')) {
 		notify($ERRORS{'WARNING'}, 0, "failed to set permissions on ext_sshd service file to 755 on $computer_node_name: $ext_sshd_service_file_path");
 		return;
 	}
@@ -666,7 +666,7 @@ sub add_ext_sshd_service {
 	# Add the service
 	return unless $self->add_service('ext_sshd');
 	
-	return $self->_enable_service('ext_sshd');
+	return $self->enable_service('ext_sshd');
 }
 
 #/////////////////////////////////////////////////////////////////////////////

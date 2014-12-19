@@ -164,7 +164,12 @@ sub get_init_modules {
 		# initialize will check the computer to determine if it contains the corresponding Linux init daemon installed
 		# If not installed, the constructor will return false
 		my $init;
-		eval { $init = ($init_perl_package)->new({data_structure => $self->data, os => $self, mn_os => $self->mn_os, base_package => ref($self)}) };
+		eval { $init = ($init_perl_package)->new({
+					data_structure => $self->data,
+					os => $self,
+					mn_os => $self->mn_os,
+					init_modules => $self->{init_modules},
+		}) };
 		if ($init) {
 			my @required_commands = eval "@" . $init_perl_package . "::REQUIRED_COMMANDS";
 			if ($EVAL_ERROR) {
@@ -269,7 +274,11 @@ sub firewall {
 		# Attempt to create the object
 		my $firewall_object;
 		eval {
-			$firewall_object = ($firewall_perl_package)->new({data_structure => $self->data, base_package => ref($self), os => $self->os})
+			$firewall_object = ($firewall_perl_package)->new({
+				data_structure => $self->data,
+				os => $self,
+				mn_os => $self->mn_os,
+			})
 		};
 		
 		if ($EVAL_ERROR) {
@@ -3158,11 +3167,11 @@ sub enable_service {
 	}
 	
 	my $init_module = ($self->get_init_modules())[$init_module_index];
-	if (!$init_module->can('_enable_service')) {
-		notify($ERRORS{'WARNING'}, 0, "unable to enable '$service_name' service on $computer_node_name, " . ref($init_module) . " module does not implement an '_enable_service' subroutine");
+	if (!$init_module->can('enable_service')) {
+		notify($ERRORS{'WARNING'}, 0, "unable to enable '$service_name' service on $computer_node_name, " . ref($init_module) . " module does not implement an 'enable_service' subroutine");
 		return;
 	}
-	return $init_module->_enable_service($service_name);
+	return $init_module->enable_service($service_name);
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -3197,11 +3206,11 @@ sub disable_service {
 	}
 	
 	my $init_module = ($self->get_init_modules())[$init_module_index];
-	if (!$init_module->can('_disable_service')) {
-		notify($ERRORS{'WARNING'}, 0, "unable to disable '$service_name' service on $computer_node_name, " . ref($init_module) . " module does not implement an '_disable_service' subroutine");
+	if (!$init_module->can('disable_service')) {
+		notify($ERRORS{'WARNING'}, 0, "unable to disable '$service_name' service on $computer_node_name, " . ref($init_module) . " module does not implement an 'disable_service' subroutine");
 		return;
 	}
-	return $init_module->_disable_service($service_name);
+	return $init_module->disable_service($service_name);
 }
 
 #/////////////////////////////////////////////////////////////////////////////

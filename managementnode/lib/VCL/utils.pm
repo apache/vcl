@@ -484,7 +484,7 @@ INIT {
 	elsif (!defined($EXECUTE_NEW)) {
 		$EXECUTE_NEW = 0;
 	}
-	$ENV{execute_new} = $EXECUTE_NEW;
+	$ENV{execute_new} = $EXECUTE_NEW if $EXECUTE_NEW;
 	
 	# Set boolean variables to 0 or 1, they may be set to 'no' or 'yes' in the conf file
 	for ($MYSQL_SSL, $JABBER, $VERBOSE, $DAEMON_MODE, $SETUP_MODE) {
@@ -6839,7 +6839,7 @@ sub get_computer_info {
 		notify($ERRORS{'WARNING'}, 0, "computer identifier argument was not supplied");
 		return;
 	}
-
+	
 	if (!$no_cache && defined($ENV{computer_info}{$computer_identifier})) {
 		return $ENV{computer_info}{$computer_identifier};
 	}
@@ -7090,6 +7090,8 @@ sub get_computer_nathost_info {
 	
 	# Construct the select statement
 	my $select_statement = "SELECT DISTINCT\n";
+	$select_statement .= "computer.id AS 'computer-id',\n";
+	$select_statement .= "computer.hostname AS 'computer-hostname',\n";
 	
 	# Get the column names for each table and add them to the select statement
 	for my $table (@tables) {
@@ -7168,6 +7170,7 @@ EOF
 	
 	$nathost_info->{HOSTNAME} = '<unknown>';
 	
+	my $computer_id = $nathost_info->{computer}{id};
 	my $resource_id = $nathost_info->{resource}{id};
 	my $resource_type = $nathost_info->{resource}{resourcetype}{name};
 	my $resource_subid = $nathost_info->{resource}{subid};
@@ -7176,8 +7179,14 @@ EOF
 		$nathost_info->{HOSTNAME} = $management_node_info->{hostname};
 	}
 	elsif ($resource_type eq 'computer') {
-		my $computer_info = get_computer_info($resource_subid) || {};
-		$nathost_info->{HOSTNAME} = $computer_info->{hostname};
+		# Check if NAT host is the same computer as it is assigned to to avoid recursion
+		if ($computer_id eq $resource_subid) {
+			$nathost_info->{HOSTNAME} = $nathost_info->{computer}{hostname};
+		}
+		else {
+			my $computer_info = get_computer_info($resource_subid) || {};
+			$nathost_info->{HOSTNAME} = $computer_info->{hostname};
+		}
 	}
 	else {
 		notify($ERRORS{'WARNING'}, 0, "NAT host resource type is not supported: $resource_type, resource ID: $resource_id");
