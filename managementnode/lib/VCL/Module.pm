@@ -559,7 +559,7 @@ sub create_vmhost_os_object {
 	}
 	
 	# Do not try to load the UnixLab module for VM hosts -- most likely not the intended OS module
-	if ($vmhost_os_perl_package =~ /UnixLab/i) {
+	if ($vmhost_os_perl_package =~ /UnixLab/i || $vmhost_os_perl_package =~ /^VCL::Module::OS$/) {
 		my $vmhost_os_perl_package_override = 'VCL::Module::OS::Linux';
 		notify($ERRORS{'OK'}, 0, "VM host OS image Perl package is $vmhost_os_perl_package, most likely will not work correctly, changing to Linux");
 		$vmhost_os_perl_package = $vmhost_os_perl_package_override;
