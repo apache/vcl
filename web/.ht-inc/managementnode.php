@@ -977,6 +977,7 @@ class ManagementNode extends Resource {
 				       .       "rq.start <= NOW() AND "
 				       .       "rq.end > NOW() AND "
 				       .       "rq.stateid NOT IN (1,5,11,12) AND "
+				       .       "rq.laststateid NOT IN (1,5,11,12) AND "
 				       .       "rq.userid != $vclreloadid";
 				$qh = doQuery($query);
 				if(mysql_num_rows($qh)) {
