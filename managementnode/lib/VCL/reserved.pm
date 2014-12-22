@@ -237,7 +237,7 @@ sub process {
 	}
 	
 	# Change the request and computer state to inuse then exit
-	$self->state_exit('inuse');
+	$self->state_exit('inuse', 'inuse');
 } ## end sub process
 
 #/////////////////////////////////////////////////////////////////////////////
