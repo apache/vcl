@@ -119,42 +119,36 @@ our %VM_OS_CONFIGURATION = (
 		"guestOS" => "winvista",
 		"ethernet-virtualDev" => "e1000",
 		"scsi-virtualDev" => "lsiLogic",
-		"memsize" => 1024,
 		"cpu_socket_limit" => 2,
 	},
 	"vista-x86_64" => {
 		"guestOS" => "winvista-64",
 		"ethernet-virtualDev" => "e1000",
 		"scsi-virtualDev" => "lsiLogic",
-		"memsize" => 1024,
 		"cpu_socket_limit" => 2,
 	}, 
 	"win7-x86" => {
 		"guestOS" => "windows7",
 		"ethernet-virtualDev" => "e1000",
 		"scsi-virtualDev" => "lsiLogic",
-		"memsize" => 1024,
 		"cpu_socket_limit" => 2,
 	},
 	"win7-x86_64" => {
 		"guestOS" => "windows7-64",
 		"ethernet-virtualDev" => "e1000",
 		"scsi-virtualDev" => "lsiLogic",
-		"memsize" => 2048,
 		"cpu_socket_limit" => 2,
 	},
 	"win8-x86" => {
 		"guestOS" => "windows8",
 		"ethernet-virtualDev" => "e1000",
 		"scsi-virtualDev" => "lsiLogic",
-		"memsize" => 1024,
 		"cpu_socket_limit" => 2,
 	}, 
 	"win8-x86_64" => {
 		"guestOS" => "windows8-64",
 		"ethernet-virtualDev" => "e1000",
 		"scsi-virtualDev" => "lsiLogic",
-		"memsize" => 2048,
 		"cpu_socket_limit" => 2,
 	}, 
 	"win2003-x86" => {
@@ -167,7 +161,6 @@ our %VM_OS_CONFIGURATION = (
 		"guestOS" => "winNetEnterprise-64",
 		"ethernet-virtualDev" => "e1000",
 		"scsi-virtualDev" => "lsiLogic",
-		"memsize" => 1024,
 		"cpu_socket_limit" => 64,
 	},
 	"win2008-x86" => {
@@ -211,16 +204,6 @@ our %VM_OS_CONFIGURATION = (
 		"scsi-virtualDev" => "lsiLogic",
 	},
 );
-
-=head2 $VM_MINIMUM_MEMORY_MB
-
- Data type   : string
- Description : Minimum amount of memory in megabytes to be allocated to any VM.
-
-=cut
-
-our $VM_MINIMUM_MEMORY_MB = 512;
-
 
 =head2 $VSPHERE_SDK_PACKAGE
 
@@ -4846,16 +4829,12 @@ sub get_vm_ethernet_adapter_type {
  Parameters  : none
  Returns     : integer
  Description : Returns the amount of RAM in MB to be assigned to the VM. The
-               VCL minimum RAM value configured for the image is used as the
+               larger of the image and OS table 'minram' values is used as the
                base value.
                
                The RAM setting in the vmx file must be a multiple of 4. The
                minimum RAM value is checked to make sure it is a multiple of 4.
                If not, the value is rounded down.
-               
-               The RAM value is also checked to make sure it is not lower than
-               the $VM_MINIMUM_MEMORY_MB value. If so, the $VM_MINIMUM_MEMORY_MB
-               is returned.
 
 =cut
 
@@ -4880,18 +4859,7 @@ sub get_vm_ram {
 		notify($ERRORS{'DEBUG'}, 0, "image minimum RAM value ($image_minram_mb_original MB) is not a multiple of 4, adjusting to $image_minram_mb MB");
 	}
 	
-	# Check if the image setting is too low
-	# Get the minimum memory size for the OS
-	my $vm_os_configuration = $self->get_vm_os_configuration();
-	my $vm_guest_os = $vm_os_configuration->{guestOS} || 'unknown';
-	my $vm_os_memsize = $vm_os_configuration->{memsize} || $VM_MINIMUM_MEMORY_MB;
-	if ($image_minram_mb < $vm_os_memsize) {
-		notify($ERRORS{'DEBUG'}, 0, "image minimum RAM value ($image_minram_mb MB) is too low for the $vm_guest_os guest OS, adjusting to $vm_os_memsize MB");
-		return $vm_os_memsize;
-	}
-	else {
-		return $image_minram_mb;
-	}
+	return $image_minram_mb;
 }
 
 #/////////////////////////////////////////////////////////////////////////////

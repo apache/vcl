@@ -714,6 +714,7 @@ CREATE TABLE IF NOT EXISTS `OS` (
   `prettyname` varchar(64) NOT NULL default '',
   `type` varchar(30) NOT NULL,
   `installtype` varchar(30) NOT NULL default 'image',
+  `minram` mediumint(8) unsigned NOT NULL DEFAULT '512',
   `sourcepath` varchar(30) default NULL,
   `moduleid` smallint(5) unsigned default NULL,
   PRIMARY KEY  (`id`),
@@ -1731,6 +1732,10 @@ INSERT IGNORE INTO `OS` (`id`, `name`, `prettyname`, `type`, `installtype`, `sou
 (53, 'centos7image', 'CentOS 7 (Bare Metal) Image', 'linux', 'partimage', 'image', 5),
 (54, 'rhelimage', 'Red Hat Based Image', 'linux', 'partimage', 'image', 5);
 
+UPDATE OS SET minram = 1024 WHERE name REGEXP 'win.*';
+UPDATE OS SET minram = 2048 WHERE name REGEXP 'win.*(7|8|2008|2012)';
+UPDATE OS SET minram = 1024 WHERE name REGEXP '(centos|rh|rhel)(5|6|7)';
+
 -- 
 -- Dumping data for table `OSinstalltype`
 -- 
@@ -2170,7 +2175,7 @@ ALTER TABLE `computerloadflow` ADD CONSTRAINT FOREIGN KEY (computerloadstateid) 
 ALTER TABLE `computerloadflow` ADD CONSTRAINT FOREIGN KEY (nextstateid) REFERENCES `computerloadstate` (`id`) ON UPDATE CASCADE;
 
 -- 
--- Constraints for table `computerloadlog`
+-- Constraints for table `computerloadlog` 
 -- 
 ALTER TABLE `computerloadlog` ADD CONSTRAINT FOREIGN KEY (`reservationid`) REFERENCES `reservation` (`id`) ON DELETE CASCADE;
 ALTER TABLE `computerloadlog` ADD CONSTRAINT FOREIGN KEY (`loadstateid`) REFERENCES `computerloadstate` (`id`);

@@ -377,7 +377,7 @@ $SUBROUTINE_MAPPINGS{image_maxinitialtime} = '$self->request_data->{reservation}
 $SUBROUTINE_MAPPINGS{image_minnetwork} = '$self->request_data->{reservation}{RESERVATION_ID}{image}{minnetwork}';
 $SUBROUTINE_MAPPINGS{image_minprocnumber} = '$self->request_data->{reservation}{RESERVATION_ID}{image}{minprocnumber}';
 $SUBROUTINE_MAPPINGS{image_minprocspeed} = '$self->request_data->{reservation}{RESERVATION_ID}{image}{minprocspeed}';
-$SUBROUTINE_MAPPINGS{image_minram} = '$self->request_data->{reservation}{RESERVATION_ID}{image}{minram}';
+#$SUBROUTINE_MAPPINGS{image_minram} = '$self->request_data->{reservation}{RESERVATION_ID}{image}{minram}';
 #$SUBROUTINE_MAPPINGS{image_name} = '$self->request_data->{reservation}{RESERVATION_ID}{image}{name}';
 #$SUBROUTINE_MAPPINGS{image_osid} = '$self->request_data->{reservation}{RESERVATION_ID}{image}{OSid}';
 $SUBROUTINE_MAPPINGS{image_os_id} = '$self->request_data->{reservation}{RESERVATION_ID}{image}{OSid}';
@@ -402,6 +402,7 @@ $SUBROUTINE_MAPPINGS{image_os_name} = '$self->request_data->{reservation}{RESERV
 $SUBROUTINE_MAPPINGS{image_os_prettyname} = '$self->request_data->{reservation}{RESERVATION_ID}{image}{OS}{prettyname}';
 $SUBROUTINE_MAPPINGS{image_os_type} = '$self->request_data->{reservation}{RESERVATION_ID}{image}{OS}{type}';
 $SUBROUTINE_MAPPINGS{image_os_install_type} = '$self->request_data->{reservation}{RESERVATION_ID}{image}{OS}{installtype}';
+$SUBROUTINE_MAPPINGS{image_os_minram} = '$self->request_data->{reservation}{RESERVATION_ID}{image}{OS}{minram}';
 $SUBROUTINE_MAPPINGS{image_os_source_path} = '$self->request_data->{reservation}{RESERVATION_ID}{image}{OS}{sourcepath}';
 $SUBROUTINE_MAPPINGS{image_os_moduleid} = '$self->request_data->{reservation}{RESERVATION_ID}{image}{OS}{moduleid}';
 
@@ -2160,6 +2161,33 @@ sub get_reservation_user_login_ids {
 	
 	my @reservation_users = map { $reservation_user_info->{$_}{unityid} } keys %$reservation_user_info;
 	return @reservation_users;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_image_minram
+
+ Parameters  : none
+ Returns     : integer
+ Description : Returns the larger of the image.minram and OS.minram values.
+
+=cut
+
+
+sub get_image_minram {
+	my $self = shift;
+	# Check if subroutine was called as an object method
+	unless (ref($self) && $self->isa('VCL::DataStructure')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine can only be called as a VCL::DataStructure module object method");
+		return;
+	}
+	
+	my $reservation_id = $self->reservation_id;
+	my $image_minram = $self->request_data->{reservation}{$reservation_id}{image}{minram};
+	my $os_minram = $self->request_data->{reservation}{$reservation_id}{image}{OS}{minram};
+	my $minram = max ($image_minram, $os_minram);
+	#notify($ERRORS{'DEBUG'}, 0, "image minram: $image_minram, OS minram: $os_minram, result: $minram");
+	return $minram;
 }
 
 #/////////////////////////////////////////////////////////////////////////////

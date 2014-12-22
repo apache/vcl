@@ -1041,6 +1041,7 @@ CREATE TABLE IF NOT EXISTS `natport` (
 --
 
 ALTER TABLE `OS` CHANGE `prettyname` `prettyname` varchar(64) NOT NULL default '';
+CALL AddColumnIfNotExists('OS', 'minram', "MEDIUMINT UNSIGNED NOT NULL DEFAULT '512' AFTER installtype");
 
 -- --------------------------------------------------------
 
@@ -1512,6 +1513,10 @@ INSERT IGNORE INTO `OS` (`name`, `prettyname`, `type`, `installtype`, `sourcepat
 INSERT IGNORE INTO `OS` (`name`, `prettyname`, `type`, `installtype`, `sourcepath`, `moduleid`) VALUES ('centos6image', 'CentOS 6 Image', 'linux', 'partimage', 'image', (SELECT `id` FROM `module` WHERE `name` LIKE 'os_linux'));
 INSERT IGNORE INTO `OS` (`name`, `prettyname`, `type`, `installtype`, `sourcepath`, `moduleid`) VALUES ('centos7image', 'CentOS 7 Image', 'linux', 'partimage', 'image', (SELECT `id` FROM `module` WHERE `name` LIKE 'os_linux'));
 INSERT IGNORE INTO `OS` (`name`, `prettyname`, `type`, `installtype`, `sourcepath`, `moduleid`) VALUES ('rhelimage', 'General Red Hat Based Image', 'linux', 'partimage', 'image', (SELECT `id` FROM `module` WHERE `name` LIKE 'os_linux'));
+
+UPDATE OS SET minram = 1024 WHERE name REGEXP 'win.*';
+UPDATE OS SET minram = 2048 WHERE name REGEXP 'win.*(7|8|2008|2012)';
+UPDATE OS SET minram = 1024 WHERE name REGEXP '(centos|rh|rhel)(5|6|7)';
 
 -- --------------------------------------------------------
 
