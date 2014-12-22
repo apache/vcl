@@ -12299,7 +12299,7 @@ function menulistLI($page) {
 	$testval = $actions['pages'][$mymode];
 	if($inContinuation) {
 		$obj = getContinuationVar('obj');
-		if(! is_null($obj))
+		if(! is_null($obj) && isset($obj->restype))
 			$testval = $obj->restype;
 	}
 	if($testval == $page)
