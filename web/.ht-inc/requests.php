@@ -112,10 +112,8 @@ function viewRequests() {
 			$cdata = array('requestid' => $requests[$i]['id']);
 			$reqids[] = $requests[$i]['id'];
 			$imageid = $requests[$i]["imageid"];
-			$requests[$i]['userconnected'] = 0;
 			$text .= "  <TR valign=top id=reqrow{$requests[$i]['id']}>\n";
 			if(requestIsReady($requests[$i]) && $requests[$i]['useraccountready']) {
-				$requests[$i]['userconnected'] = checkUserConnect($requests[$i]);
 				$connect = 1;
 				# request is ready, print Connect! and End buttons
 				$cont = addContinuationsEntry('AJconnectRequest', $cdata, SECINDAY);
@@ -234,8 +232,6 @@ function viewRequests() {
 					}
 					/*else
 						$text .= getViewRequestHTMLitem('endcreateoptiondisable');*/
-					// TODO uncomment the following when live imaging works
-					// TODO add a check to ensure it is a VM
 					if(array_key_exists($imageid, $resources['image']) && ! $cluster &&
 					   $requests[$i]['server'] && ($requests[$i]['currstateid'] == 8 ||
 						($requests[$i]['currstateid'] == 14 && $requests[$i]['laststateid'] == 8))) {
@@ -951,6 +947,7 @@ function viewRequests() {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function getViewRequestHTMLitem($item, $var1='', $data=array()) {
+	global $user;
 	$r = '';
 	if($item == 'connectbtn') {
 		$r .= "    <TD>\n";
@@ -1171,14 +1168,21 @@ function getViewRequestHTMLitem($item, $var1='', $data=array()) {
 		return $r;
 	}
 	if($item == 'timeoutdata') {
-		if($data['userconnected']) {
-			$end = datetimeToUnix($data['end']) + 15;
-			$r .= "     <input type=\"hidden\" class=\"timeoutvalue\" value=\"$end\">\n";
+		$timeout = getReservationNextTimeout($data['resid']);
+		$end = datetimeToUnix($data['end']);
+		if(! is_null($timeout)) {
+			if($timeout > $end)
+				$timeout = $end;
+			$r .= "     <input type=\"hidden\" class=\"timeoutvalue\" id=\"timeoutvalue|$var1\" value=\"$timeout\">\n";
 		}
 		else {
-			$timeout = getReservationNextTimeout($data['resid']);
-			if(! is_null($timeout))
-				$r .= "     <input type=\"hidden\" class=\"timeoutvalue\" value=\"$timeout\">\n";
+			$timeout = getVariable("reconnecttimeout|{$user['affiliation']}");
+			if(is_null($timeout))
+				$timeout = getVariable("reconnecttimeout", 900);
+			$timeout = time() + $timeout + 15;
+			if($timeout > $end)
+				$timeout = $end;
+			$r .= "     <input type=\"hidden\" class=\"timeoutvalue\" id=\"timeoutvalue|$var1\" value=\"$timeout\">\n";
 		}
 		return $r;
 	}
@@ -1788,7 +1792,6 @@ function AJupdateWaitTime() {
 			$maxstart = mktime(23, 45, 0, date('n', $tmp), date('j', $tmp), date('Y', $tmp));
 			if($start > $maxstart)
 				return;
-			#print "console.log('start okay');";
 		}
 	}
 
@@ -1796,7 +1799,6 @@ function AJupdateWaitTime() {
 	$ending = processInputVar('ending', ARG_STRING);
 	if(! preg_match('/^indefinite|endat|duration$/', $ending))
 		return;
-	#print "console.log('right ending');";
 	if($ending == 'indefinite') {
 		$end = datetimeToUnix('2038-01-01 00:00:00');
 	}
@@ -1830,7 +1832,6 @@ function AJupdateWaitTime() {
 			print "dojo.removeClass('deployerr', 'hidden');";
 			return;
 		}
-		#print "console.log('valid IP address');";
 		$mappedmns = getMnsFromImage($imageid);
 		$mnnets = checkAvailableNetworks($fixedIP);
 		$intersect = array_intersect($mappedmns, $mnnets);
@@ -1840,7 +1841,6 @@ function AJupdateWaitTime() {
 			print "dojo.removeClass('deployerr', 'hidden');";
 			return;
 		}
-		#print "console.log('IP to mn okay');";
 	}
 
 	printImageDescription($imageid);
@@ -4171,9 +4171,9 @@ function AJconnectRequest() {
 			                  $requestData['reservations'][0]['computerid']);
 	}
 
-	$timeout = getReservationConnectTimeout($requestData['reservations'][0]['reservationid']);
+	$timeout = getReservationNextTimeout($requestData['reservations'][0]['reservationid']);
 	if(! is_null($timeout))
-		$h .= "<input type=\"hidden\" class=\"timeoutvalue\" id=\"timeoutvalue\" value=\"$timeout\">\n";
+		$h .= "<input type=\"hidden\" id=\"connecttimeout\" value=\"$timeout\">\n";
 
 	if($requestData['forimaging']) {
 		$h .= _("<font color=red><big><strong>NOTICE:</strong> Later in this process, you must accept a ");
@@ -4285,7 +4285,12 @@ function AJconnectRequest() {
 	$cdata = array('requestid' => $requestid);
 	$cont = addContinuationsEntry('AJcheckConnectTimeout', $cdata, SECINDAY);
 	$h .= "<input type=\"hidden\" id=\"refreshcont\" value=\"$cont\">\n";
-	sendJSON(array('html' => $h));
+	$return = array('html' => $h);
+	if(! is_null($timeout)) {
+		$return['timeoutid'] = "timeoutvalue|$requestid";
+		$return['timeout'] = $timeout;
+	}
+	sendJSON($return);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -4300,7 +4305,7 @@ function AJcheckConnectTimeout() {
 	$reqdata = getRequestInfo($requestid, 1);
 	$stateid = $reqdata['stateid'];
 	if($stateid == 14)
-		$stateid == $reqdata['laststateid'];
+		$stateid = $reqdata['laststateid'];
 	if(is_null($reqdata) ||
 	   $stateid == 1 ||
 	   $stateid == 11 ||
@@ -4765,90 +4770,43 @@ function processRequestInput() {
 function getReservationNextTimeout($resid) {
 	global $user;
 	$query = "SELECT UNIX_TIMESTAMP(cll.timestamp) AS timestamp, "
-	       .        "cll.loadstateid, "
+	       .        "cls.loadstatename, "
 	       .        "COALESCE(v2.value, v1.value) AS acknowledgetimeout, "
-	       .        "COALESCE(v4.value, v3.value) AS connecttimeout "
+	       .        "COALESCE(v4.value, v3.value) AS initialconnecttimeout, "
+	       .        "COALESCE(v6.value, v5.value) AS reconnecttimeout "
 	       . "FROM computerloadlog cll, "
+	       .      "computerloadstate cls, "
 	       .      "variable v1, "
-	       .      "variable v3 "
+	       .      "variable v3, "
+	       .      "variable v5 "
 	       . "LEFT JOIN variable v2 ON (v2.name = 'acknowledgetimeout|{$user['affiliation']}') "
-	       . "LEFT JOIN variable v4 ON (v4.name = 'connecttimeout|{$user['affiliation']}') "
+	       . "LEFT JOIN variable v4 ON (v4.name = 'initialconnecttimeout|{$user['affiliation']}') "
+	       . "LEFT JOIN variable v6 ON (v6.name = 'reconnecttimeout|{$user['affiliation']}') "
 	       . "WHERE cll.reservationid = $resid AND "
-	       .       "(cll.loadstateid = 58 OR "
-	       .       "cll.loadstateid = 55) AND "
+	       .       "cll.loadstateid = cls.id AND "
+	       .       "cll.loadstateid IN (SELECT id "
+	       .                           "FROM computerloadstate "
+	       .                           "WHERE loadstatename IN ('acknowledgetimeout', 'initialconnecttimeout', 'reconnecttimeout')) AND "
 	       .       "v1.name = 'acknowledgetimeout' AND "
-	       .       "v3.name = 'connecttimeout' "
+	       .       "v3.name = 'initialconnecttimeout' AND "
+	       .       "v5.name = 'reconnecttimeout' "
 	       . "ORDER BY cll.timestamp DESC "
 	       . "LIMIT 1";
 	$qh = doQuery($query);
 	if($row = mysql_fetch_assoc($qh)) {
 		if(! is_numeric($row['timestamp']))
 			return NULL;
-		if($row['loadstateid'] == 58)
-			return $row['timestamp'] + $row['acknowledgetimeout'] + 15;
-		elseif($row['loadstateid'] == 55)
-			return $row['timestamp'] + $row['connecttimeout'] + 15;
+		if($row['loadstatename'] == 'acknowledgetimeout')
+			return $row['timestamp'] + $row['acknowledgetimeout'] + 5;
+		elseif($row['loadstatename'] == 'initialconnecttimeout')
+			return $row['timestamp'] + $row['initialconnecttimeout'] + 5;
+		elseif($row['loadstatename'] == 'reconnecttimeout')
+			return $row['timestamp'] + $row['reconnecttimeout'] + 5;
 		else
 			return NULL;
 	}
 	else
 		return NULL;
-}
-
-////////////////////////////////////////////////////////////////////////////////
-///
-/// \fn getReservationConnectTimeout($resid)
-///
-/// \param $resid - reservation id
-///
-/// \return unix timestamp
-///
-/// \brief determines the time at which the specified reservation will time out
-/// if not connected or NULL if there is no entry
-///
-////////////////////////////////////////////////////////////////////////////////
-function getReservationConnectTimeout($resid) {
-	global $user;
-	$query = "SELECT UNIX_TIMESTAMP(cll.timestamp) AS timestamp, "
-	       .        "COALESCE(v2.value, v1.value) AS connecttimeout "
-	       . "FROM computerloadlog cll, "
-	       .      "variable v1 "
-	       . "LEFT JOIN variable v2 ON (v2.name = 'connecttimeout|{$user['affiliation']}') "
-	       . "WHERE cll.reservationid = $resid AND "
-	       .       "cll.loadstateid = 55 AND "
-	       .       "v1.name = 'connecttimeout'";
-	$qh = doQuery($query);
-	if($row = mysql_fetch_assoc($qh)) {
-		if(! is_numeric($row['timestamp']))
-			return NULL;
-		return $row['timestamp'] + $row['connecttimeout'] + 15;
-	}
-	else
-		return NULL;
-}
-
-////////////////////////////////////////////////////////////////////////////////
-///
-/// \fn checkUserConnect($data)
-///
-/// \param $data - item from request data array returned by getUserRequests
-///
-/// \return 0 if user has not connected; 1 if user has connected
-///
-/// \brief checks computerloadlog to see if user has connected to reservation
-/// yet
-///
-////////////////////////////////////////////////////////////////////////////////
-function checkUserConnect($data) {
-	$query = "SELECT loadstateid "
-	       . "FROM computerloadlog "
-	       . "WHERE loadstateid = 42 AND "
-	       .       "reservationid = {$data['resid']} "
-	       . "LIMIT 1";
-	$qh = doQuery($query);
-	if($row = mysql_fetch_assoc($qh))
-		return 1;
-	return 0;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -4867,11 +4825,12 @@ function addConnectTimeout($resid, $compid) {
 	       .        "computerid, "
 	       .        "loadstateid, "
 	       .        "timestamp) "
-	       . "VALUES "
-	       .        "($resid, "
+	       . "SELECT $resid, "
 	       .        "$compid, "
-	       .        "55, "
-	       .        "NOW())";
+	       .        "id, "
+	       .        "NOW() "
+	       . "FROM computerloadstate "
+	       . "WHERE loadstatename = 'initialconnecttimeout'";
 	doQuery($query);
 }
 

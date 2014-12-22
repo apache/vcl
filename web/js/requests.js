@@ -1249,20 +1249,22 @@ function submitNewReservationCB(data, ioArgs) {
 }
 
 function checkTimeouts() {
-	// TODO set nextcheck to 15 once VCL-568 is completed in vcld
-	var nextcheck = 16;
+	var nextcheck = 15;
 	var nodes = dojo.query('.timeoutvalue');
 	var tmp = new Date();
 	var now = (tmp.getTime() - tmp.getMilliseconds()) / 1000;
 	for(var i = 0; i < nodes.length; i++) {
 		var testval = parseInt(nodes[i].value);
 		if(testval <= now) {
+			nodes[i].parentNode.removeChild(nodes[i]);
 			resRefresh();
 			break;
 		}
 		else if(testval - now < nextcheck)
 			nextcheck = testval - now;
 	}
+	if(nodes.length == 0)
+		nextcheck = 60;
 	check_timeout_timer = setTimeout(checkTimeouts, nextcheck * 1000);
 }
 
@@ -1324,6 +1326,8 @@ function connectRequest(cont) {
 
 function connectRequestCB(data, ioArgs) {
 	dijit.byId('connectDlgContent').set('content', data.items.html);
+	if('timeoutid' in data.items)
+		dojo.byId(data.items.timeoutid).value = data.items.timeout;
 	dijit.byId('connectDlg').show();
 	if('refresh' in data.items && data.items.refresh == 1)
 		resRefresh();
@@ -1715,12 +1719,15 @@ function submitReinstallReservationCB(data, ioArgs) {
 
 function checkConnectTimeout() {
 	var nextcheck = 15;
-	if(! dojo.byId('timeoutvalue'))
+	if(! dojo.byId('connecttimeout'))
 		return;
-	var timeout = parseInt(dojo.byId('timeoutvalue').value);
+	var timeout = parseInt(dojo.byId('connecttimeout').value);
+	if(timeout == 0)
+		return;
 	var tmp = new Date();
 	var now = (tmp.getTime() - tmp.getMilliseconds()) / 1000;
 	if(timeout <= now) {
+		dojo.byId('connecttimeout').value = 0;
 		var cont = dojo.byId('refreshcont').value;
 		RPCwrapper({continuation: cont}, checkConnectTimeoutCB, 1, 30000);
 		return;
