@@ -94,7 +94,8 @@ Computer.prototype.colformatter = function(value, rowIndex, obj) {
 		return value.replace('@', '<br>').replace(/\n/g, '<br>');
 	}
 	else if(obj.field == 'deleted' ||
-	        obj.field == 'natenabled') {
+	        obj.field == 'natenabled' ||
+	        obj.field == 'nathostenabled') {
 		if(value == "0")
 			return '<span class="rederrormsg">false</span>';
 		if(value == "1")
@@ -916,6 +917,9 @@ function saveResourceCB(data, ioArgs) {
 					resourcegrid.store.setValue(item, 'provisioning', data.items.data.provisioning);
 					resourcegrid.store.setValue(item, 'natenabled', data.items.data.natenabled);
 					resourcegrid.store.setValue(item, 'nathost', data.items.data.nathost);
+					resourcegrid.store.setValue(item, 'nathostenabled', data.items.data.nathostenabled);
+					resourcegrid.store.setValue(item, 'natpublicIPaddress', data.items.data.natpublicIPaddress);
+					resourcegrid.store.setValue(item, 'natinternalIPaddress', data.items.data.natinternalIPaddress);
 				},
 				onComplete: function(items, result) {
 					// when call resourcegrid.sort directly, the table contents disappear; not sure why

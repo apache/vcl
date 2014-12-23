@@ -87,6 +87,8 @@ class ManagementNode extends Resource {
 			case 'publicIPconfig':
 			case 'publicnetmask':
 			case 'publicgateway':
+			case 'natpublicIPaddress':
+			case 'natinternalIPaddress':
 				$w = 8;
 				break;
 			case 'installpath':
@@ -166,6 +168,12 @@ class ManagementNode extends Resource {
 				return 'Federated Auth. Affiliations';
 			case 'timeservers':
 				return 'Time Servers';
+			case 'nathostenabled':
+				return 'Use as NAT Host';
+			case 'natpublicIPaddress':
+				return 'NAT Public IP Address';
+			case 'natinternalIPaddress':
+				return 'NAT Internal IP Address';
 		}
 		return ucfirst($field);
 	}

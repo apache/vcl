@@ -86,6 +86,8 @@ class Computer extends Resource {
 				break;
 			case 'IPaddress':
 			case 'privateIPaddress':
+			case 'natpublicIPaddress':
+			case 'natinternalIPaddress':
 				$w = 8;
 				break;
 			case 'eth0macaddress':
@@ -165,6 +167,12 @@ class Computer extends Resource {
 				return 'Connect Using NAT';
 			case 'nathost':
 				return 'NAT Host';
+			case 'nathostenabled':
+				return 'Use as NAT Host';
+			case 'natpublicIPaddress':
+				return 'NAT Public IP Address';
+			case 'natinternalIPaddress':
+				return 'NAT Internal IP Address';
 		}
 		return ucfirst($field);
 	}
