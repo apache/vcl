@@ -3803,33 +3803,33 @@ sub get_connect_method_remote_ip_addresses {
 =cut
 
 sub firewall_compare_update {
-   my $self = shift;
-   if (ref($self) !~ /VCL::Module/i) {
-      notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-      return;
-   }
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
 	
 	# Make sure the OS module implements get_firewall_configuration and enable_firewall_port subroutine
 	return 1 unless $self->can('enable_firewall_port');
 	return 1 unless $self->can('get_firewall_configuration');
 	
-   my $computer_node_name = $self->data->get_computer_node_name();
+	my $computer_node_name = $self->data->get_computer_node_name();
 	
 	my $remote_ip = $self->data->get_reservation_remote_ip();
 	if (!$remote_ip) {
 		notify($ERRORS{'WARNING'}, 0, "unable to update firewall on $computer_node_name, remote IP could not be retrieved for reservation");
-      return;
+		return;
 	}
 	
-   # Retrieve the connect method info
-   my $connect_method_info = $self->data->get_connect_methods();
-   if (!$connect_method_info) {
-      notify($ERRORS{'WARNING'}, 0, "failed to retrieve connect method info");
-      return;
-   }
+	# Retrieve the connect method info
+	my $connect_method_info = $self->data->get_connect_methods();
+	if (!$connect_method_info) {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve connect method info");
+		return;
+	}
 	
-   # Retrieve the firewall configuration from the computer
-   my $firewall_configuration = $self->get_firewall_configuration() || return;
+	# Retrieve the firewall configuration from the computer
+	my $firewall_configuration = $self->get_firewall_configuration() || return;
 	
 	# Loop through the connect methods, check to make sure firewall is open for remote IP
 	my $error_encountered = 0;
