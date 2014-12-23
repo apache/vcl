@@ -694,7 +694,7 @@ class Computer extends Resource {
 		$h .= labeledFormItem('natenabled', 'Connect Using NAT', 'check', '', '', '1', '', '', $extra);
 		# which NAT host
 		$nathosts = getNAThosts(0, 1);
-		$h .= labeledFormItem('nathostid', 'NAT Host', 'select', $nathosts);
+		$h .= labeledFormItem('nathostid', 'NAT Host', 'selectonly', $nathosts);
 		$h .= "</div>\n"; # NAT
 
 		# NAT Host

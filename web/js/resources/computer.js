@@ -850,6 +850,8 @@ function saveResourceCB(data, ioArgs) {
 				if(typeof resourcegrid !== 'undefined') {
 					resourcegrid.store.newItem(data.items.data);
 					resourcegrid.sort();
+					if(data.items.data.nathostenabled)
+						dijit.byId('nathostid').addOption({label: data.items.data.hostname, value: data.items.data.nathostenabledid});
 				}
 				dojo.forEach(dijit.findWidgets(dojo.byId('groupdlgcontent')), function(w) {
 					w.destroyRecursive();
@@ -893,6 +895,7 @@ function saveResourceCB(data, ioArgs) {
 			resourcegrid.store.fetch({
 				query: {id: data.items.data.id},
 				onItem: function(item) {
+					var washost = resourcegrid.store.getValue(item, 'nathostenabled');
 					resourcegrid.store.setValue(item, 'name', data.items.data.hostname);
 					resourcegrid.store.setValue(item, 'owner', data.items.data.owner);
 					resourcegrid.store.setValue(item, 'state', data.items.data.state);
@@ -920,6 +923,18 @@ function saveResourceCB(data, ioArgs) {
 					resourcegrid.store.setValue(item, 'nathostenabled', data.items.data.nathostenabled);
 					resourcegrid.store.setValue(item, 'natpublicIPaddress', data.items.data.natpublicIPaddress);
 					resourcegrid.store.setValue(item, 'natinternalIPaddress', data.items.data.natinternalIPaddress);
+					if(data.items.data.nathostenabled) {
+						if(washost == 0)
+							dijit.byId('nathostid').addOption({label: data.items.data.hostname, value: data.items.data.nathostenabledid});
+					}
+					else {
+						dijit.byId('nathostid').options.forEach(
+							function(node, index, nodelist) {
+								if(node.label == data.items.data.hostname)
+									dijit.byId('nathostid').removeOption({value: node.value});
+							}
+						);
+					}
 				},
 				onComplete: function(items, result) {
 					// when call resourcegrid.sort directly, the table contents disappear; not sure why

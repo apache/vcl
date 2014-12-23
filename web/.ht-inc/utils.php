@@ -8221,7 +8221,8 @@ function getComputers($sort=0, $includedeleted=0, $compid="") {
 	       .        "c.predictivemoduleid, "
 	       .        "m.prettyname AS predictivemodule, "
 	       .        "nh.id AS nathostid, "
-	       .        "nh2.publicIPaddress AS natpublicIPaddress, "
+	       .        "nh2.id AS nathostenabledid, "
+	       .        "COALESCE(nh2.publicIPaddress, '') AS natpublicIPaddress, "
 	       .        "COALESCE(nh2.internalIPaddress, '') AS natinternalIPaddress "
 	       . "FROM state st, "
 	       .      "platform p, "
@@ -8263,10 +8264,8 @@ function getComputers($sort=0, $includedeleted=0, $compid="") {
 			$row['natenabled'] = 1;
 			$row['nathost'] = $nathosts[$row['nathostid']]['hostname'];
 		}
-		if(is_null($row['natpublicIPaddress'])) {
+		if(is_null($row['nathostenabledid']))
 			$row['nathostenabled'] = 0;
-			$row['natpublicIPaddress'] = '';
-		}
 		else
 			$row['nathostenabled'] = 1;
 		$return[$row['id']] = $row;
