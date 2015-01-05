@@ -804,6 +804,8 @@ UPDATE computer SET datedeleted = NOW() WHERE deleted = 1 AND datedeleted = '000
 CALL AddIndexIfNotExists('computerloadlog', 'loadstateid');
 CALL AddIndexIfNotExists('computerloadlog', 'computerid');
 
+ALTER TABLE `computerloadlog` CHANGE `loadstateid` `loadstateid` SMALLINT( 8 ) UNSIGNED NOT NULL;
+
 -- --------------------------------------------------------
 
 --

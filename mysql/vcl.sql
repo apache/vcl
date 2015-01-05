@@ -279,7 +279,7 @@ CREATE TABLE IF NOT EXISTS `computerloadlog` (
   `id` int(12) unsigned NOT NULL auto_increment,
   `reservationid` mediumint(8) unsigned NOT NULL,
   `computerid` smallint(8) unsigned NOT NULL,
-  `loadstateid` smallint(8) unsigned default NULL,
+  `loadstateid` smallint(8) unsigned NOT NULL,
   `timestamp` datetime default NULL,
   `additionalinfo` text,
   PRIMARY KEY  (`id`),
