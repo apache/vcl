@@ -5535,7 +5535,6 @@ sub delete_computerloadlog_reservation {
 DELETE
 computerloadlog
 FROM
-reservation,
 computerloadlog,
 computerloadstate
 WHERE
