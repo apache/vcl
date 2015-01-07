@@ -2657,7 +2657,7 @@ sub create_user {
 	# Add user to sudoers if necessary
 	if ($root_access) {
 		my $sudoers_file_path = '/etc/sudoers';
-		my $sudoers_line = "$username ALL= NOPASSWD: ALL\n";
+		my $sudoers_line = "\n$username ALL= NOPASSWD: ALL\n";
 		if ($self->append_text_file($sudoers_file_path, $sudoers_line)) {
 			notify($ERRORS{'DEBUG'}, 0, "appended line to $sudoers_file_path: '$sudoers_line'");
 		}

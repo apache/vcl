@@ -2168,7 +2168,7 @@ sub create_text_file {
 	
 	# Create a command to echo the hex string to the file
 	# Use -e to enable interpretation of backslash escapes
-	my $command .= "echo -n -e \"$hex_string\"";
+	my $command .= "echo -e \"$hex_string\"";
 	if ($concatenate) {
 		$command .= " >> $file_path";
 	}
