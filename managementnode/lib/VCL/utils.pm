@@ -1168,7 +1168,7 @@ sub check_time {
 					return "poll";
 				}
 				else {
-					notify($ERRORS{'DEBUG'}, 0, "reservation has been checked within the past $general_inuse_check_time minutes ($lastcheck_diff_minutes)");
+					#notify($ERRORS{'DEBUG'}, 0, "reservation has been checked within the past $general_inuse_check_time minutes ($lastcheck_diff_minutes)");
 					return 0;
 				}
 			}
