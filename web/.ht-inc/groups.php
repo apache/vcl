@@ -807,7 +807,7 @@ function editOrAddGroup($state) {
 			if($submitErr & EDITGROUPERR)
 				$ownerid = $resourcegroups[$groupid]['ownerid'];
 			if($state == 0 && $ownerid != '' &&
-			   ! array_key_exists($usergroups[$groupid]['editgroupid'], $dispUserGrpIDs)) {
+			   ! array_key_exists($ownerid, $dispUserGrpIDs)) {
 				$dispUserGrpIDs[$ownerid] = $usergroups[$ownerid]['name'];
 				uasort($dispUserGrpIDs, "sortKeepIndex");
 			}
