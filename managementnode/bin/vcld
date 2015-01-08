@@ -182,7 +182,7 @@ sub main () {
 		
 		# Get all the requests assigned to this management node
 		# get_management_node_requests() gets a subset of the information available
-		if ($info{request} = {get_management_node_requests($management_node_id)}) {
+		if ($info{request} = get_management_node_requests($management_node_id)) {
 			#notify($ERRORS{'DEBUG'}, $LOGFILE, "retrieved request information for management node $management_node_id");
 		}
 		else {
@@ -204,6 +204,7 @@ sub main () {
 			my $request_start          = $info{request}{$request_id}{start};
 			my $request_end            = $info{request}{$request_id}{end};
 			my $request_preload        = $info{request}{$request_id}{preload};
+			my $changelog_timestamp    = $info{request}{$request_id}{log}{changelog}{timestamp};
 
 			
 			my @reservation_ids = sort { $a <=> $b } keys %{$info{request}{$request_id}{reservation}};
@@ -249,7 +250,7 @@ sub main () {
 				
 				# Figure out the status of this reservation based on reservation times and the request state
 				# check_time_result can be: start, preload, end, poll, old, remove, 0
-				my $check_time_result = check_time($request_start, $request_end, $reservation_lastcheck, $request_state_name, $request_laststate_name, $server_request_id, $reservation_count);
+				my $check_time_result = check_time($request_start, $request_end, $reservation_lastcheck, $request_state_name, $request_laststate_name, $server_request_id, $reservation_count, $changelog_timestamp);
 				
 				# Do nothing if check_time returned 0
 				# Check this before querying for the large set of request data

@@ -1028,7 +1028,7 @@ sub check_blockrequest_time {
 =cut
 
 sub check_time {
-	my ($request_start, $request_end, $reservation_lastcheck, $request_state_name, $request_laststate_name, $serverrequest, $reservation_cnt) = @_;
+	my ($request_start, $request_end, $reservation_lastcheck, $request_state_name, $request_laststate_name, $serverrequest, $reservation_cnt, $changelog_timestamp) = @_;
 	
 	# Check the arguments
 	if (!defined($request_state_name)) {
@@ -1039,12 +1039,19 @@ sub check_time {
 		notify($ERRORS{'WARNING'}, 0, "\$request_laststate_name argument is not defined");
 		return 0;
 	}
+	
+	# Get the current time epoch seconds
+	my $current_time_epoch_seconds = time();
 
 	# If lastcheck isn't set, set it to now
 	if (!defined($reservation_lastcheck) || !$reservation_lastcheck) {
-		$reservation_lastcheck = makedatestring();
+		$reservation_lastcheck = makedatestring($current_time_epoch_seconds);
 	}
-
+	
+	if (!defined($changelog_timestamp) || !$changelog_timestamp) {
+		$changelog_timestamp = makedatestring($current_time_epoch_seconds);
+	}
+	
 	# First convert to datetime in case epoch seconds was passed
 	if ($reservation_lastcheck !~ /\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2}/) {
 		$reservation_lastcheck = convert_to_datetime($reservation_lastcheck);
@@ -1060,16 +1067,15 @@ sub check_time {
 	my $lastcheck_epoch_seconds  = convert_to_epoch_seconds($reservation_lastcheck);
 	my $start_time_epoch_seconds = convert_to_epoch_seconds($request_start);
 	my $end_time_epoch_seconds   = convert_to_epoch_seconds($request_end);
-
-	# Get the current time epoch seconds
-	my $current_time_epoch_seconds = time();
+	my $changelog_epoch_seconds   = convert_to_epoch_seconds($changelog_timestamp);
 
 	# Calculate time differences from now in seconds
 	# These will be positive if in the future, negative if in the past
 	my $lastcheck_diff_seconds = $lastcheck_epoch_seconds - $current_time_epoch_seconds;
 	my $start_diff_seconds     = $start_time_epoch_seconds - $current_time_epoch_seconds;
 	my $end_diff_seconds       = $end_time_epoch_seconds - $current_time_epoch_seconds;
-
+	my $changelog_diff_seconds = $changelog_epoch_seconds - $current_time_epoch_seconds;
+	
 	# Calculate the time differences from now in minutes
 	# These will be positive if in the future, negative if in the past
 	my $lastcheck_diff_minutes = round($lastcheck_diff_seconds / 60);
@@ -1077,9 +1083,10 @@ sub check_time {
 	my $end_diff_minutes       = round($end_diff_seconds / 60);
 
 	# Print the time differences
-	#notify($ERRORS{'OK'}, 0, "reservation lastcheck difference: $lastcheck_diff_minutes minutes");
+	#notify($ERRORS{'OK'}, 0, "reservation lastcheck difference: $lastcheck_diff_minutes minutes ($lastcheck_diff_seconds seconds)");
 	#notify($ERRORS{'OK'}, 0, "request start time difference:    $start_diff_minutes minutes");
 	#notify($ERRORS{'OK'}, 0, "request end time difference:      $end_diff_minutes minutes");
+	#notify($ERRORS{'OK'}, 0, "changelog timestamp difference:   $changelog_diff_seconds seconds");
 
 	# Check the state, and then figure out the return code
 	if ($request_state_name =~ /new|imageprep|reload|tovmhostinuse/) {
@@ -1129,9 +1136,13 @@ sub check_time {
 			notify($ERRORS{'DEBUG'}, 0, "reservation will end in 10 minutes or less ($end_diff_minutes)");
 			return "end";
 		}
+		elsif ($lastcheck_epoch_seconds < $changelog_epoch_seconds && $changelog_diff_seconds < 0) {
+			notify($ERRORS{'DEBUG'}, 0, "reservation lastcheck $reservation_lastcheck is older than most recent changelog timestamp $changelog_timestamp, returning 'poll'");
+			return "poll";
+		}
 		else {
 			# End time is more than 10 minutes in the future
-			if($serverrequest) {	
+			if ($serverrequest) {	
 				my $server_inuse_check_time = ($ENV{management_node_info}->{SERVER_INUSE_CHECK} * -1);
 				if ($lastcheck_diff_minutes <= $server_inuse_check_time) {
 					return "poll";
@@ -1140,7 +1151,7 @@ sub check_time {
 					return 0;
 				}
 			}
-			elsif ($reservation_cnt > 1 ) {
+			elsif ($reservation_cnt > 1) {
 				my $cluster_inuse_check_time = ($ENV{management_node_info}->{CLUSTER_INUSE_CHECK} * -1);; 
 				if ($lastcheck_diff_minutes <= $cluster_inuse_check_time) {
 					return "poll";
@@ -1153,11 +1164,11 @@ sub check_time {
 				#notify($ERRORS{'DEBUG'}, 0, "reservation will end in more than 10 minutes ($end_diff_minutes)");
 				my $general_inuse_check_time = ($ENV{management_node_info}->{GENERAL_INUSE_CHECK} * -1);
 				if ($lastcheck_diff_minutes <= $general_inuse_check_time) {
-					#notify($ERRORS{'DEBUG'}, 0, "reservation was last checked more than 5 minutes ago ($lastcheck_diff_minutes)");
+					notify($ERRORS{'DEBUG'}, 0, "reservation was last checked more than $general_inuse_check_time minutes ago ($lastcheck_diff_minutes), returning 'poll'");
 					return "poll";
 				}
 				else {
-					#notify($ERRORS{'DEBUG'}, 0, "reservation has been checked within the past 5 minutes ($lastcheck_diff_minutes)");
+					notify($ERRORS{'DEBUG'}, 0, "reservation has been checked within the past $general_inuse_check_time minutes ($lastcheck_diff_minutes)");
 					return 0;
 				}
 			}
@@ -2311,13 +2322,13 @@ sub getnewdbh {
 		if (defined(DBI::errstr())) {
 			$dbi_result .= " " . DBI::errstr();
 		}
-
+		
 		# Check for access denied
 		if (DBI::err() == 1045 || DBI::errstr() =~ /access denied/i) {
 			notify($ERRORS{'WARNING'}, 0, "unable to connect to database, $dbi_result");
 			return 0;
 		}
-
+		
 		# Either connect or ping failed
 		if ($dbh && !$dbh->ping) {
 			notify($ERRORS{'DEBUG'}, 0, "database connect succeeded but ping failed, attempt $attempt/$max_attempts, $dbi_result");
@@ -2326,7 +2337,7 @@ sub getnewdbh {
 		else {
 			notify($ERRORS{'DEBUG'}, 0, "database connect failed, attempt $attempt/$max_attempts, $dbi_result");
 		}
-
+		
 		notify($ERRORS{'DEBUG'}, 0, "sleeping for $retry_delay seconds");
 		sleep $retry_delay;
 		next;
@@ -3260,11 +3271,14 @@ sub get_management_node_requests {
    reservation.managementnodeid AS reservation_managementnodeid,
 	reservation.lastcheck AS reservation_lastcheck,
 
-	serverrequest.id AS ServerRequest_serverrequestid
+	serverrequest.id AS serverrequest_serverrequestid,
+	
+	MAX(changelog.timestamp) AS changelog_timestamp
 
    FROM
    request
-	LEFT JOIN (serverrequest) ON (serverrequest.requestid = request.id),
+	LEFT JOIN (serverrequest) ON (serverrequest.requestid = request.id)
+	LEFT JOIN (log, changelog) ON (request.logid = log.id AND changelog.logid = log.id AND changelog.remoteIP IS NOT NULL),
    reservation,
 	state requeststate,
    state requestlaststate
@@ -3289,7 +3303,7 @@ sub get_management_node_requests {
 	}
 
 	# Build the hash
-	my %requests;
+	my $requests;
 
 	for (@selected_rows) {
 		my %reservation_row = %{$_};
@@ -3301,37 +3315,37 @@ sub get_management_node_requests {
 		# Loop through all the columns returned for the reservation
 		foreach my $key (keys %reservation_row) {
 			my $value = $reservation_row{$key};
-
+			
 			# Create another variable by stripping off the column_ part of each key
 			# This variable stores the original (correct) column name
 			(my $original_key = $key) =~ s/^.+_//;
-
-			if ($key =~ /request_/) {
+			
+			if ($key =~ /^request_/) {
 				# Set the top-level key if not already set
-				$requests{$request_id}{$original_key} = $value if (!$requests{$request_id}{$original_key});
+				$requests->{$request_id}{$original_key} = $value if (!$requests->{$request_id}{$original_key});
 			}
 			elsif ($key =~ /requeststate_/) {
-				$requests{$request_id}{state}{$original_key} = $value if (!$requests{$request_id}{state}{$original_key});
+				$requests->{$request_id}{state}{$original_key} = $value if (!$requests->{$request_id}{state}{$original_key});
 			}
 			elsif ($key =~ /requestlaststate_/) {
-				$requests{$request_id}{laststate}{$original_key} = $value if (!$requests{$request_id}{laststate}{$original_key});
+				$requests->{$request_id}{laststate}{$original_key} = $value if (!$requests->{$request_id}{laststate}{$original_key});
 			}
 			elsif ($key =~ /reservation_/) {
-				$requests{$request_id}{reservation}{$reservation_id}{$original_key} = $value;
+				$requests->{$request_id}{reservation}{$reservation_id}{$original_key} = $value;
 			}
-			elsif ($key =~ /ServerRequest_/) {
-				$requests{$request_id}{reservation}{$reservation_id}{$original_key} = $value;
+			elsif ($key =~ /serverrequest_/) {
+				$requests->{$request_id}{reservation}{$reservation_id}{$original_key} = $value;
+			}
+			elsif ($key =~ /changelog_/) {
+				$requests->{$request_id}{log}{changelog}{$original_key} = $value;
 			}
 			else {
 				notify($ERRORS{'WARNING'}, 0, "unknown key found in SQL data: $key");
 			}
-
 		}    # Close foreach key in reservation row
 	}    # Close loop through selected rows
-
-	# Each selected row represents a reservation associated with this request
 	
-	return %requests;
+	return $requests;
 } ## end sub get_management_node_requests
 
 
@@ -5541,7 +5555,7 @@ WHERE
 computerloadlog.reservationid IN ($reservation_id_string)
 AND computerloadlog.loadstateid = computerloadstate.id
 EOF
-	
+
 	
 	# Check if loadstateid was specified
 	# If so, only delete rows matching the loadstateid
@@ -5557,7 +5571,7 @@ EOF
 			$sql_statement .= "AND computerloadstate.loadstatename REGEXP '$loadstate_regex'";
 		}
 	}
-	
+
 	# Call the database execute subroutine
 	if (database_execute($sql_statement)) {
 		notify($ERRORS{'OK'}, 0, "deleted rows from computerloadlog$regex_string for reservation IDs: $reservation_id_string");
