@@ -1351,6 +1351,34 @@ CREATE TABLE IF NOT EXISTS `winProductKey` (
 
 -- --------------------------------------------------------
 
+--
+-- Table structure for table `openstackcomputermap`
+--
+
+CREATE TABLE IF NOT EXISTS `openstackcomputermap` (
+  `instanceid` varchar(50) NOT NULL,
+  `computerid` smallint(5) unsigned DEFAULT NULL,
+  PRIMARY KEY (`instanceid`),
+  UNIQUE KEY `computerid` (`computerid`)
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+
+
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `openstackimagerevision`
+--
+
+CREATE TABLE IF NOT EXISTS `openstackimagerevision` (
+  `imagerevisionid` mediumint(8) unsigned NOT NULL,
+  `imagedetails` text NOT NULL,
+  `flavordetails` text NOT NULL,
+  PRIMARY KEY (`imagerevisionid`)
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+
+-- --------------------------------------------------------
+
 -- 
 -- Inserts for table `affiliation`
 -- 
@@ -1468,6 +1496,7 @@ INSERT IGNORE INTO `module` (`name`, `prettyname`, `description`, `perlpackage`)
 INSERT IGNORE INTO `module` (`name`, `prettyname`, `description`, `perlpackage`) VALUES ('os_win8', 'Windows 8.x OS Module', '', 'VCL::Module::OS::Windows::Version_6::8');
 INSERT IGNORE INTO `module` (`name`, `prettyname`, `description`, `perlpackage`) VALUES ('os_win2012', 'Windows Server 2012 OS Module', '', 'VCL::Module::OS::Windows::Version_6::2012');
 INSERT IGNORE INTO `module` (`name`, `prettyname`, `description`, `perlpackage`) VALUES ('predictive_level_2', 'Predictive Loading Module Level 2', 'Power off computer. If a virtual machine, it will be also destroyed.', 'VCL::Module::Predictive::Level_2');
+INSERT IGNORE INTO `module` (`name`, `prettyname`, `description`, `perlpackage`) VALUES ('provisioning_openstack', 'OpenStack Provisioning Module', '', 'VCL::Module::Provisioning::openstack');
 
 -- --------------------------------------------------------
 
@@ -1527,6 +1556,7 @@ UPDATE OS SET minram = 1024 WHERE name REGEXP '(centos|rh|rhel)(5|6|7)';
 --
 
 INSERT IGNORE INTO `OSinstalltype` (`name`) VALUES ('vbox');
+INSERT IGNORE INTO `OSinstalltype` (`name`) VALUES ('openstack');
 
 -- --------------------------------------------------------
 
@@ -1538,6 +1568,7 @@ INSERT IGNORE INTO `provisioning` (`name`, `prettyname`, `moduleid`) VALUES ('vm
 INSERT IGNORE INTO `provisioning` (`name`, `prettyname`, `moduleid`) VALUES ('vbox', 'Virtual Box', (SELECT `id` FROM `module` WHERE `name` LIKE 'provisioning_vbox'));
 INSERT IGNORE INTO `provisioning` (`name`, `prettyname`, `moduleid`) VALUES ('libvirt','Libvirt Virtualization API', (SELECT `id` FROM `module` WHERE `name` LIKE 'provisioning_libvirt'));
 INSERT IGNORE INTO `provisioning` (`name`, `prettyname`, `moduleid`) VALUES ('none','None', (SELECT `id` FROM `module` WHERE `name` = 'base_module'));
+INSERT IGNORE INTO `provisioning` (`name`, `prettyname`, `moduleid`) VALUES ('openstack', 'OpenStack Provisioning', (SELECT `id` FROM `module` WHERE `name` LIKE 'provisioning_openstack'));
 
 UPDATE IGNORE `provisioning` SET `name` = 'xcat', `prettyname` = 'xCAT' WHERE `name` = 'xcat_13'; 
 
@@ -1554,6 +1585,7 @@ INSERT IGNORE provisioningOSinstalltype (provisioningid, OSinstalltypeid) SELECT
 INSERT IGNORE provisioningOSinstalltype (provisioningid, OSinstalltypeid) SELECT provisioning.id, OSinstalltype.id FROM provisioning, OSinstalltype WHERE provisioning.name LIKE '%vbox%' AND OSinstalltype.name = 'vbox';
 INSERT IGNORE provisioningOSinstalltype (provisioningid, OSinstalltypeid) SELECT provisioning.id, OSinstalltype.id FROM provisioning, OSinstalltype WHERE provisioning.name LIKE '%lab%' AND OSinstalltype.name = 'none';
 INSERT IGNORE provisioningOSinstalltype (provisioningid, OSinstalltypeid) SELECT provisioning.id, OSinstalltype.id FROM provisioning, OSinstalltype WHERE provisioning.name LIKE '%libvirt%' AND OSinstalltype.name = 'vmware';
+INSERT IGNORE provisioningOSinstalltype (provisioningid, OSinstalltypeid) SELECT provisioning.id, OSinstalltype.id FROM provisioning, OSinstalltype WHERE provisioning.name LIKE '%openstack%' AND OSinstalltype.name = 'openstack';
 
 DELETE FROM provisioningOSinstalltype WHERE provisioningOSinstalltype.provisioningid IN (SELECT provisioning.id FROM provisioning WHERE provisioning.name LIKE '%xcat_2%');
 
@@ -1839,6 +1871,22 @@ CALL AddConstraintIfNotExists('natport', 'connectmethodportid', 'connectmethodpo
 CALL AddConstraintIfNotExists('natport', 'reservationid', 'reservation', 'id', 'both', 'CASCADE');
 CALL AddConstraintIfNotExists('natport', 'nathostid', 'nathost', 'id', 'both', 'CASCADE');
 
+-- --------------------------------------------------------
+
+--
+-- Constraints for table `openstackcomputermap`
+--
+
+CALL AddConstraintIfNotExists('openstackcomputermap', 'computerid', 'computer', 'id', 'both', 'CASCADE');
+
+-- --------------------------------------------------------
+
+--
+-- Constraints for table `openstackimagerevision`
+--
+
+CALL AddConstraintIfNotExists('openstackimagerevision', 'imagerevisionid', 'imagerevision', 'id', 'both', 'CASCADE');
+  
 -- --------------------------------------------------------
 
 --
