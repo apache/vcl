@@ -704,6 +704,32 @@ CREATE TABLE IF NOT EXISTS `natport` (
 
 -- --------------------------------------------------------
 
+--
+-- Table structure for table `openstackcomputermap`
+--
+
+CREATE TABLE IF NOT EXISTS `openstackcomputermap` (
+  `instanceid` varchar(50) NOT NULL,
+  `computerid` smallint(5) unsigned DEFAULT NULL,
+  PRIMARY KEY (`instanceid`),
+  UNIQUE KEY `computerid` (`computerid`)
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `openstackimagerevision`
+--
+
+CREATE TABLE IF NOT EXISTS `openstackimagerevision` (
+  `imagerevisionid` mediumint(8) unsigned NOT NULL,
+  `imagedetails` text NOT NULL,
+  `flavordetails` text NOT NULL,
+  PRIMARY KEY (`imagerevisionid`)
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+
+-- --------------------------------------------------------
+
 -- 
 -- Table structure for table `OS`
 -- 
@@ -1663,7 +1689,8 @@ INSERT IGNORE INTO `module` (`id`, `name`, `prettyname`, `description`, `perlpac
 (28, 'os_linux_managementnode', 'Management Node Linux OS Module', '', 'VCL::Module::OS::Linux::ManagementNode'),
 (29, 'os_win8', 'Windows 8.x OS Module', '', 'VCL::Module::OS::Windows::Version_6::8'),
 (30, 'os_win2012', 'Windows Server 2012 OS Module', '', 'VCL::Module::OS::Windows::Version_6::2012'),
-(31, 'predictive_level_2', 'Predictive Loading Module Level 2', 'Power off computer. If a virtual machine, it will be also destroyed.', 'VCL::Module::Predictive::Level_2');
+(31, 'predictive_level_2', 'Predictive Loading Module Level 2', 'Power off computer. If a virtual machine, it will be also destroyed.', 'VCL::Module::Predictive::Level_2'),
+(32, 'provisioning_openstack', 'OpenStack Provisioning Module', '', 'VCL::Module::Provisioning::openstack');
 
 -- 
 -- Dumping data for table `OStype`
@@ -1745,7 +1772,8 @@ INSERT IGNORE INTO `OSinstalltype` (`id`, `name`) VALUES
 (3, 'none'),
 (1, 'partimage'),
 (4, 'vmware'),
-(5, 'vbox');
+(5, 'vbox'),
+(6, 'openstack');
 
 -- 
 -- Dumping data for table `platform`
@@ -1777,7 +1805,8 @@ INSERT IGNORE INTO `provisioning` (`id`, `name`, `prettyname`, `moduleid`) VALUE
 (7, 'vmware', 'VMware', 21),
 (8, 'vbox', 'Virtual Box', 24),
 (9, 'libvirt', 'Libvirt Virtualization API', 27),
-(10, 'none', 'None', 23);
+(10, 'none', 'None', 23),
+(11, 'openstack', 'openstack', 32);
 
 --
 -- Dumping data for table `provisioningOSinstalltype`
@@ -1790,6 +1819,7 @@ INSERT IGNORE provisioningOSinstalltype (provisioningid, OSinstalltypeid) SELECT
 INSERT IGNORE provisioningOSinstalltype (provisioningid, OSinstalltypeid) SELECT provisioning.id, OSinstalltype.id FROM provisioning, OSinstalltype WHERE provisioning.name LIKE '%vbox%' AND OSinstalltype.name = 'vbox';
 INSERT IGNORE provisioningOSinstalltype (provisioningid, OSinstalltypeid) SELECT provisioning.id, OSinstalltype.id FROM provisioning, OSinstalltype WHERE provisioning.name LIKE '%lab%' AND OSinstalltype.name = 'none';
 INSERT IGNORE provisioningOSinstalltype (provisioningid, OSinstalltypeid) SELECT provisioning.id, OSinstalltype.id FROM provisioning, OSinstalltype WHERE provisioning.name LIKE '%libvirt%' AND OSinstalltype.name = 'vmware';
+INSERT IGNORE provisioningOSinstalltype (provisioningid, OSinstalltypeid) SELECT provisioning.id, OSinstalltype.id FROM provisioning, OSinstalltype WHERE provisioning.name LIKE '%openstack%' AND OSinstalltype.name = 'openstack';
 
 -- 
 -- Dumping data for table `resourcetype`
@@ -2269,6 +2299,16 @@ ALTER TABLE `nathostcomputermap` ADD CONSTRAINT FOREIGN KEY (`computerid`) REFER
 ALTER TABLE `natport` ADD CONSTRAINT FOREIGN KEY (`connectmethodportid`) REFERENCES `connectmethodport` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 ALTER TABLE `natport` ADD CONSTRAINT FOREIGN KEY (`reservationid`) REFERENCES `reservation` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 ALTER TABLE `natport` ADD CONSTRAINT FOREIGN KEY (`nathostid`) REFERENCES `nathost` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- 
+-- Constraints for table `openstackcomputermap`
+--
+ALTER TABLE `openstackcomputermap` ADD CONSTRAINT FOREIGN KEY (`computerid`) REFERENCES `computer` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- 
+-- Constraints for table `openstackimagerevision`
+--
+ALTER TABLE `openstackimagerevision` ADD CONSTRAINT FOREIGN KEY (`imagerevisionid`) REFERENCES `imagerevision` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- 
 -- Constraints for table `OS`
