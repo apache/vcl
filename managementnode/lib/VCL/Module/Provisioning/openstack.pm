@@ -119,7 +119,7 @@ sub unload {
 	# Remove existing openstack id for computer mapping in database 
 	# Althought the instance is not pingable (delete it accidently), it should delete the instance from database
 	if (!$self->_delete_os_computer_mapping()) {
-		notify($ERRORS{'WARNING'}, 0, "failed to delete the openstack instance id from openstackComputerMap");
+		notify($ERRORS{'WARNING'}, 0, "failed to delete the openstack instance id from openstackcomputermap");
 		return 0;
 	}
 
@@ -161,7 +161,7 @@ sub load {
 	# Remove existing openstack id for computer mapping in database 
 	# Althought the instance is not pingable (delete it accidently), it should delete the instance from database
 	if (!$self->_delete_os_computer_mapping()) {
-		notify($ERRORS{'WARNING'}, 0, "failed to delete the openstack instance id from openstackComputerMap");
+		notify($ERRORS{'WARNING'}, 0, "failed to delete the openstack instance id from openstackcomputermap");
 		return;
 	}
 
@@ -414,7 +414,7 @@ sub _delete_os_computer_mapping {
 SELECT
 computerid
 FROM
-openstackComputerMap
+openstackcomputermap
 WHERE
 computerid = '$computer_id'
 EOF
@@ -428,7 +428,7 @@ EOF
 
 	$sql_statement = <<EOF;
 DELETE FROM
-openstackComputerMap
+openstackcomputermap
 WHERE
 computerid = '$computer_id'
 EOF
@@ -562,7 +562,7 @@ sub _get_os_instance_id {
 SELECT
 instanceid as id
 FROM
-openstackComputerMap
+openstackcomputermap
 WHERE
 computerid = '$computer_id'
 EOF
@@ -772,7 +772,7 @@ sub _insert_os_instance_id {
 
 	my $sql_statement = <<EOF;
 INSERT INTO
-openstackComputerMap (
+openstackcomputermap (
 instanceid,
 computerid)
 VALUES
