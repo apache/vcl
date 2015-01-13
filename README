@@ -153,7 +153,9 @@ Management Node Backend Conditional System Requirements:
 
 
 Bundled 3rd Party Software
-A copy of Dojo Toolkit version 1.6.1 is included in the web code under
+A copy of Dojo Toolkit version 1.6.2 is included in the web code under
 web/dojo.
 Portions of the phpseclib (http://phpseclib.sourceforge.net) project are
 included in the web code under web/.ht-inc/phpseclib.
+spyc version 0.5.1 (https://github.com/mustangostang/spyc/) is included
+in the web code under web/.ht-inc/spyc-0.5.1.

@@ -372,6 +372,10 @@ Portions of the phpseclib (http://phpseclib.sourceforge.net) project are
 included in the web code (web/.ht-inc/phpseclib). phpseclib is licensed
 under the MIT License.
 
+spyc version 0.5.1 (https://github.com/mustangostang/spyc/) is included
+in the web code under web/.ht-inc/spyc-0.5.1. spyc is licensed under the
+MIT License.
+
 The MIT License (MIT)
 **********************************
 
