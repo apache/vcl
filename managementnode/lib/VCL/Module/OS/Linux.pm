@@ -2640,20 +2640,16 @@ sub create_user {
 			return;
 		}
 	}
-	
-	# Append AllowUsers line to the end of the file
-	my $external_sshd_config_file_path = '/etc/ssh/external_sshd_config';
-	my $allow_users_line = "AllowUsers $username\n";
-	if ($self->append_text_file($external_sshd_config_file_path, $allow_users_line)) {
-		notify($ERRORS{'DEBUG'}, 0, "added line to $external_sshd_config_file_path: '$allow_users_line'");
+
+	# Process connect_methods
+	if($self->can("grant_connect_method_access")) {
+		if(!$self->grant_connect_method_access({
+			username => $username,
+			})) {
+			notify($ERRORS{'WARNING'}, 0, "failed to process grant_connect_method_access for $username");
+		}
 	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to add line to $external_sshd_config_file_path: '$allow_users_line'");
-		return;
-	}
-	
-	$self->restart_service('ext_sshd') || return;
-	
+
 	# Add user to sudoers if necessary
 	if ($root_access) {
 		my $sudoers_file_path = '/etc/sudoers';
@@ -5379,6 +5375,60 @@ sub should_set_user_password {
 	else {
 		return 0;
 	}
+}
+
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 grant_connect_method_access
+
+ Parameters  : user login id 
+ Returns     : boolean
+ Description : Edits the external_sshd_config. 
+ 					TODO - in next release pull this out into connect method modules.
+
+=cut
+
+sub grant_connect_method_access {
+	my $self = shift;
+	if (ref($self) !~ /linux/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $computer_node_name = $self->data->get_computer_node_name();
+	my $user_parameters = shift;
+
+	if (!$user_parameters) {
+		notify($ERRORS{'WARNING'}, 0, "unable to create user, user parameters argument was not provided");
+		return;
+	}
+	elsif (!ref($user_parameters) || ref($user_parameters) ne 'HASH') {
+		notify($ERRORS{'WARNING'}, 0, "unable to create user, argument provided is not a hash reference");
+		return;
+	}
+
+	my $username = $user_parameters->{username};
+	if (!defined($username)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to create user on $computer_node_name, argument hash does not contain a 'username' key:\n" . format_data($user_parameters));
+		return;
+	}
+
+	# Append AllowUsers line to the end of the file
+	my $external_sshd_config_file_path = '/etc/ssh/external_sshd_config';
+	my $allow_users_line = "AllowUsers $username";
+	if ($self->append_text_file($external_sshd_config_file_path, $allow_users_line)) {
+		notify($ERRORS{'DEBUG'}, 0, "added line to $external_sshd_config_file_path: '$allow_users_line'");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to add line to $external_sshd_config_file_path: '$allow_users_line'");
+		return;
+	}
+
+	$self->restart_service('ext_sshd') || return;
+
+	return 1;
+
 }
 
 ##/////////////////////////////////////////////////////////////////////////////

@@ -281,6 +281,14 @@ sub add_user_accounts {
 					notify($ERRORS{'WARNING'}, 0, "user '$username' already exists on $computer_node_name");
 				}
 				
+				# Since user already exists, Make sure the connect methods are setup correctly
+				if($self->can("grant_connect_method_access")) {
+					if(!$self->grant_connect_method_access({
+						username => $username,
+					})) {
+						notify($ERRORS{'WARNING'}, 0, "failed to process grant_connect_method_access for $username");
+					}
+				}
 				next RESERVATION_USER;
 			}
 		}
