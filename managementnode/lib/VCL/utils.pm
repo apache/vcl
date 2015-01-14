@@ -1042,7 +1042,7 @@ sub check_time {
 	
 	# Get the current time epoch seconds
 	my $current_time_epoch_seconds = time();
-
+	
 	# If lastcheck isn't set, set it to now
 	if (!defined($reservation_lastcheck) || !$reservation_lastcheck) {
 		$reservation_lastcheck = makedatestring($current_time_epoch_seconds);
@@ -3231,10 +3231,10 @@ sub set_managementnode_state {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 get_requests
+=head2 get_management_node_requests
 
- Parameters  : management node id
- Returns     : hash
+ Parameters  : $management_node_id
+ Returns     : hash reference
  Description : gets request information for a particular management node
 
 =cut
@@ -3242,8 +3242,7 @@ sub set_managementnode_state {
 
 sub get_management_node_requests {
 	my ($management_node_id) = @_;
-	my ($package, $filename, $line, $sub) = caller(0);
-
+	
 	if (!(defined($management_node_id))) {
 		notify($ERRORS{'WARNING'}, 0, "management node ID was not specified");
 		return ();
@@ -3296,14 +3295,9 @@ sub get_management_node_requests {
 	# Call the database select subroutine
 	# This will return an array of one or more rows based on the select statement
 	my @selected_rows = database_select($select_statement);
-
-	# Check to make sure 1 or more rows were returned
-	if (scalar @selected_rows == 0) {
-		return ();
-	}
-
+	
 	# Build the hash
-	my $requests;
+	my $requests = {};
 
 	for (@selected_rows) {
 		my %reservation_row = %{$_};
@@ -3345,6 +3339,7 @@ sub get_management_node_requests {
 		}    # Close foreach key in reservation row
 	}    # Close loop through selected rows
 	
+	#notify($ERRORS{'DEBUG'}, 0, "retrieved management node requests:\n" . format_data($requests));
 	return $requests;
 } ## end sub get_management_node_requests
 
@@ -4133,6 +4128,10 @@ sub run_ssh_command {
 			
 			if ($max_attempts == 1 || $attempts < $max_attempts) {
 				notify($ERRORS{'WARNING'}, 0, "attempt $attempts/$max_attempts: SSH command timed out after $duration seconds, timeout threshold: $timeout_seconds seconds, command: $node_string:\n$ssh_command");
+			}
+			elsif ($command =~ /testing/) {
+				notify($ERRORS{'WARNING'}, 0, "attempt $attempts/$max_attempts: SSH command timed out after $duration seconds, timeout threshold: $timeout_seconds seconds, command: $node_string:\n$ssh_command");
+				return;
 			}
 			else {
 				notify($ERRORS{'CRITICAL'}, 0, "attempt $attempts/$max_attempts: SSH command timed out after $duration seconds, timeout threshold: $timeout_seconds seconds, command: $node_string:\n$ssh_command");
@@ -5918,8 +5917,9 @@ sub rename_vcld_process {
 			my $reservation_is_parent = $data_structure->is_parent_reservation();
 			
 			# Append the request and reservation IDs if they are set
-			$new_process_name .= " $request_id:$reservation_id";
-			$new_process_name .= " $request_state_name" if ($request_state_name);
+			$new_process_name .= " |$request_id|$reservation_id|";
+			$new_process_name .= "$request_state_name|" if ($request_state_name);
+			
 			$new_process_name .= " $computer_short_name" if ($computer_short_name);
 			$new_process_name .= ">$vmhost_hostname" if ($vmhost_hostname);
 			$new_process_name .= " $image_name" if ($image_name);
