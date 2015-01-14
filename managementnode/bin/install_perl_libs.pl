@@ -151,9 +151,11 @@ for my $key (keys %$ERRORS) {
 
 if (!$error_encountered) {
 	print "COMPLETE: installed all components\n";
+	exit 0;
 }
-
-exit;
+else {
+	exit 1;
+}
 
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -183,11 +185,11 @@ EOF
 	print "Creating file: $epel_install_repo_path\n";
 	if (!open FILE, ">", $epel_install_repo_path) {
 		print "ERROR: failed to create file: $epel_install_repo_path\n";
-		exit;
+		exit 1;
 	}
 	if (!print FILE $epel_install_repo_contents) {
 		print "ERROR: failed to write to file: $epel_install_repo_path\n";
-		exit;
+		exit 1;
 	}
 	close FILE;
 	
@@ -588,7 +590,7 @@ EOF
 			last;
 		}
 		elsif ($input =~ /^\s*NO\s*$/i) {
-			exit;
+			exit 2;
 		}
 		else {
 			next;
