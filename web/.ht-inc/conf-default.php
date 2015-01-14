@@ -19,10 +19,8 @@
 define("ONLINEDEBUG", 1);     // 1 to display errors to screen, 0 to email errors
 
 
-################   Things in this section must be modified #####################
+################   Things in this section must be modified/reviewed #####################
 
-define("BASEURL", "https://vcl.example.org/vcl");   // no trailing slash - all of the URL except /index.php
-define("SCRIPT", "/index.php");                 // this should only be "/index.php" unless you rename index.php to something else
 define("HELPURL", "https://vcl.example.org/help/"); // URL pointed to by the "Help" link in the navigation area
 define("HELPEMAIL", "vcl_help@example.org");        // if an unexpected error occurs, users will be prompted that they can email
                                                     //   this address for further assistance
@@ -30,8 +28,6 @@ define("ERROREMAIL", "webmaster@example.org");      // if an unexpected error oc
                                                     //   to this address
 define("ENVELOPESENDER", "webserver@example.org");   // email address for envelope sender of mail messages
                                                      //   if a message gets bounced, it goes to this address
-define("COOKIEDOMAIN", ".example.org");       // domain in which cookies are set
-define("HOMEURL", "http://vcl.example.org/"); // url to go to when someone clicks HOME or Logout
 
 date_default_timezone_set('America/New_York'); // set this to your timezone; a list of available values can
                                                // be found at http://php.net/manual/en/timezones.php
@@ -61,9 +57,10 @@ regarding specific terms and conditions, please contact
 
 #######################   end required modifications ###########################
 
-
-
-
+define("BASEURL", "https://{$_SERVER['HTTP_HOST']}/vcl");   // no trailing slash - all of the URL except /index.php
+define("SCRIPT", "/index.php");                 // this should only be "/index.php" unless you rename index.php to something else
+define("HOMEURL", "https://{$_SERVER['HTTP_HOST']}/vcl/"); // url to go to when someone clicks HOME or Logout
+define("COOKIEDOMAIN", "{$_SERVER['HTTP_HOST']}");       // domain in which cookies are set
 
 define("DEFAULTGROUP", "adminUsers"); // if a user is in no groups, use reservation
 										  //   length attriubtes from this group
