@@ -2234,7 +2234,6 @@ ALTER TABLE `connectlog` ADD CONSTRAINT FOREIGN KEY (`userid`) REFERENCES `user`
 -- Constraints for table `continuations`
 -- 
 ALTER TABLE `continuations` ADD CONSTRAINT FOREIGN KEY (`parentid`) REFERENCES `continuations` (`id`) ON DELETE CASCADE;
-ALTER TABLE `continuations` ADD CONSTRAINT FOREIGN KEY (`userid`) REFERENCES `user` (`id`);
 
 -- 
 -- Constraints for table `image`
