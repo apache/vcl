@@ -677,7 +677,7 @@ function getNewReservationData() {
 	$query = "SELECT c.hostname AS computer, "
 	       .        "i.prettyname AS image, "
 	       .        "rq.id, "
-	       .        "rq.start, "
+	       .        "UNIX_TIMESTAMP(rq.start) AS start, "
 	       .        "CONCAT(s1.name, '|', s2.name) AS state, "
 	       .        "o.installtype, "
 	       .        "m.hostname AS managementnode, "
@@ -704,8 +704,7 @@ function getNewReservationData() {
 	while($row = mysql_fetch_assoc($qh)) {
 		$tmp = explode('.', $row['computer']);
 		$row['computer'] = $tmp[0];
-		$tmp = explode(' ', $row['start']);
-		$row['start'] = $tmp[1];
+		$row['start'] = date('D h:i', $row['start']);
 		$tmp = explode('.', $row['managementnode']);
 		$row['managementnode'] = $tmp[0];
 		$data[] = $row;
