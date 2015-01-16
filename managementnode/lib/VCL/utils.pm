@@ -53,7 +53,6 @@ use warnings;
 use diagnostics;
 
 use Mail::Mailer;
-use Shell qw(mkdir);
 use File::Find;
 use Time::Local;
 use DBI;
@@ -3231,10 +3230,10 @@ sub set_managementnode_state {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 get_management_node_requests
+=head2 get_requests
 
- Parameters  : $management_node_id
- Returns     : hash reference
+ Parameters  : management node id
+ Returns     : hash
  Description : gets request information for a particular management node
 
 =cut
@@ -5917,13 +5916,13 @@ sub rename_vcld_process {
 			my $reservation_is_parent = $data_structure->is_parent_reservation();
 			
 			# Append the request and reservation IDs if they are set
-			$new_process_name .= " |$request_id|$reservation_id|";
+			$new_process_name .= " '|$PID|$request_id|$reservation_id|";
 			$new_process_name .= "$request_state_name|" if ($request_state_name);
-			
+			$new_process_name .= "'";
 			$new_process_name .= " $computer_short_name" if ($computer_short_name);
 			$new_process_name .= ">$vmhost_hostname" if ($vmhost_hostname);
 			$new_process_name .= " $image_name" if ($image_name);
-			$new_process_name .= " $user_login_id" if ($user_login_id);
+			$new_process_name .= " $user_login_id" if ($user_login_id && $user_login_id !~ /(vclreload)/);
 			$new_process_name .= " (imaging)" if $request_forimaging;
 
 			# Append cluster if there are multiple reservations for this request
@@ -8573,7 +8572,7 @@ sub reservation_being_processed {
 	}
 	
 	# Check if a vcld process is running matching for this reservation
-	my @processes_running = is_management_node_process_running("$PROCESSNAME [0-9]+:$reservation_id ");
+	my @processes_running = is_management_node_process_running("$PROCESSNAME .\\|[0-9]+\\|[0-9]+\\|$reservation_id\\|");
 	
 	# Check the results and return
 	if ($computerloadlog_exists && @processes_running) {
