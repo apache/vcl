@@ -973,50 +973,58 @@ sub get_active_domain_name {
 	
 	my $os_type = $self->data->get_image_os_type();
 	my $computer_name = $self->data->get_computer_short_name();
-	
-	my $active_os;
-	my $active_os_type = $self->os->get_os_type();
-	if (!$active_os_type) {
-		notify($ERRORS{'WARNING'}, 0, "unable to determine active domain, OS type currently installed on $computer_name could not be determined");
-		return;
-	}
-	elsif ($active_os_type ne $os_type) {
-		notify($ERRORS{'DEBUG'}, 0, "OS type currently installed on $computer_name does not match the OS type of the reservation image:\nOS type installed on $computer_name: $active_os_type\nreservation image OS type: $os_type");
-		
-		my $active_os_perl_package;
-		if ($active_os_type =~ /linux/i) {
-			$active_os_perl_package = 'VCL::Module::OS::Linux';
-		}
-		else {
-			$active_os_perl_package = 'VCL::Module::OS::Windows';
-		}
-		
-		if ($active_os = $self->create_os_object($active_os_perl_package)) {
-			notify($ERRORS{'DEBUG'}, 0, "created a '$active_os_perl_package' OS object for the '$active_os_type' OS type currently installed on $computer_name");
-		}
-		else {
-			notify($ERRORS{'WARNING'}, 0, "unable to determine active domain name, failed to create a '$active_os_perl_package' OS object for the '$active_os_type' OS type currently installed on $computer_name");
-			return;
-		}
+	my $computer_eth0_mac_address = $self->data->get_computer_eth0_mac_address();
+	my $computer_eth1_mac_address = $self->data->get_computer_eth1_mac_address();
+
+	my @domain_mac_addresses;
+
+	if (!$self->os->is_ssh_responding()) {
+		notify($ERRORS{'WARNING'}, 0, "$computer_name is not responding, unable to verify MAC addresses reported by OS match MAC addresses in vmx file")     ;
+		@domain_mac_addresses = ($computer_eth0_mac_address, $computer_eth1_mac_address);
 	}
 	else {
-		notify($ERRORS{'DEBUG'}, 0, "'$active_os_type' OS type currently installed on $computer_name matches the OS type of the image assigned to this reservation");
-		$active_os = $self->os;
-	}
-	
-	# Make sure the active OS object implements the required subroutines called below
-	if (!$active_os->can('get_private_mac_address') || !$active_os->can('get_public_mac_address')) {
-		notify($ERRORS{'WARNING'}, 0, "unable to determine active domain name, " . ref($active_os) . " OS object does not implement 'get_private_mac_address' and 'get_public_mac_address' subroutines");
-		return;
-	}
-	
-	# Get the MAC addresses being used by the running VM for this reservation
-	my @domain_mac_addresses = ($active_os->get_private_mac_address(), $active_os->get_public_mac_address());
-	if (!@domain_mac_addresses) {
-		notify($ERRORS{'WARNING'}, 0, "unable to retrieve the private and public MAC address being used by $computer_name");
-		return;
-	}
-	
+		my $active_os;
+		my $active_os_type = $self->os->get_os_type();
+		if (!$active_os_type) {
+			notify($ERRORS{'WARNING'}, 0, "unable to determine active domain, OS type currently installed on $computer_name could not be determined");
+		}
+		elsif ($active_os_type ne $os_type) {
+			notify($ERRORS{'DEBUG'}, 0, "OS type currently installed on $computer_name does not match the OS type of the reservation image:\nOS type installed on $computer_name: $active_os_type\nreservation image OS type: $os_type");
+			
+			my $active_os_perl_package;
+			if ($active_os_type =~ /linux/i) {
+				$active_os_perl_package = 'VCL::Module::OS::Linux';
+			}
+			else {
+				$active_os_perl_package = 'VCL::Module::OS::Windows';
+			}
+			
+			if ($active_os = $self->create_os_object($active_os_perl_package)) {
+				notify($ERRORS{'DEBUG'}, 0, "created a '$active_os_perl_package' OS object for the '$active_os_type' OS type currently installed on $computer_name");
+			}
+			else {
+				notify($ERRORS{'WARNING'}, 0, "unable to determine active domain name, failed to create a '$active_os_perl_package' OS object for the '$active_os_type' OS type currently installed on $computer_name");
+				return;
+			}
+		}
+		else {
+			notify($ERRORS{'DEBUG'}, 0, "'$active_os_type' OS type currently installed on $computer_name matches the OS type of the image assigned to this reservation");
+			$active_os = $self->os;
+		}
+		
+		# Make sure the active OS object implements the required subroutines called below
+		if (!$active_os->can('get_private_mac_address') || !$active_os->can('get_public_mac_address')) {
+			notify($ERRORS{'WARNING'}, 0, "unable to determine active domain name, " . ref($active_os) . " OS object does not implement 'get_private_mac_address' and 'get_public_mac_address' subroutines");
+			@domain_mac_addresses = ($computer_eth0_mac_address, $computer_eth1_mac_address);
+		}
+		else {	
+			# Get the MAC addresses being used by the running VM for this reservation
+			my $active_private_mac_address = $active_os->get_private_mac_address();
+			my $active_public_mac_address = $active_os->get_public_mac_address();
+			push @domain_mac_addresses, $active_private_mac_address if $active_private_mac_address;
+			push @domain_mac_addresses, $active_public_mac_address if $active_public_mac_address;
+		}
+	}	
 	# Remove the colons from the MAC addresses and convert to lower case so they can be compared
 	map { s/[^\w]//g; $_ = lc($_) } (@domain_mac_addresses);
 	
