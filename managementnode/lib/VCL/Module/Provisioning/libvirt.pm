@@ -378,6 +378,12 @@ repository image file path: $repository_image_file_path
 EOF
 );
 	
+	# Call the OS module's pre_capture() subroutine
+	if ($self->os->can("pre_capture") && !$self->os->pre_capture({end_state => 'on'})) {
+		notify($ERRORS{'WARNING'}, 0, "failed to complete OS module's pre_capture tasks");
+		return;
+	}
+
 	# Check the power status before proceeding
 	my $power_status = $self->power_status();
 	if (!$power_status) {
@@ -421,12 +427,6 @@ EOF
 		return;
 	}
 	
-	# Call the OS module's pre_capture() subroutine
-	if ($self->os->can("pre_capture") && !$self->os->pre_capture({end_state => 'off'})) {
-		notify($ERRORS{'WARNING'}, 0, "failed to complete OS module's pre_capture tasks");
-		return;
-	}
-	
 	# Update the image name in the database
 	if ($old_image_name ne $new_image_name && !update_image_name($image_id, $imagerevision_id, $new_image_name)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to update image name in the database: $old_image_name --> $new_image_name");
@@ -439,10 +439,9 @@ EOF
 		return;
 	}
 	
-	# Wait for the domain to power off
-	if (!$self->wait_for_power_off(600)) {
+	# Shutdown domain 
+	if (!$self->os->shutdown()) {
 		notify($ERRORS{'WARNING'}, 0, "$domain_name has not powered off after the OS module's pre_capture tasks were completed, powering off forcefully");
-		
 		if (!$self->power_off($domain_name)) {
 			notify($ERRORS{'WARNING'}, 0, "failed to power off $domain_name after the OS module's pre_capture tasks were completed");
 			return;
