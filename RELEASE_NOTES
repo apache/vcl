@@ -1,4 +1,4 @@
-VCL 2.3
+VCL 2.4
 
 I. Intro and Description
 
@@ -21,28 +21,24 @@ servers in a server farm or HPC cluster.
 
 II. VCL Roadmap
 
-VCL 2.3 (this release)
-  * Service deployments
-  * Allow for additional connect methods for environments (port, other
-    protocols, etc)
-  * Added framework support for libvirt 
-  * Added support for KVM
-  * Added support for OS X under ESX
-  * Added support for VMware VCenter
-  * Added multilingualization to frontend
-
 VCL 2.4
   * Improve additional connect methods
   * NAT support
-  * Remove requirement for 2 NICs
-  * Support for Spice remote display protocol
   * Scripted installation
-  * Support for ESX OS for end users
-  * Initial support for EC2 API and OpenStack
+  * Initial support for OpenStack
+  * Initial power management control
+  * Improve cluster reservations
+  * Rewrite of resource management parts of frontend
+  * New and Current Reservations pages combined and more dynamic
+  * Support multiple web servers
+  * Support for OpenNebula
 
 VCL 2.5
-  * Power management
-  * Improve cluster reservations
+  * Remove requirement for 2 NICs
+  * Support for Spice remote display protocol
+  * Support for ESX OS for end users
+  * Initial support for EC2
+  * Improve Power management
   * Service deployment configuration management
   * Initial support for Libcloud
 
@@ -94,14 +90,11 @@ IV. How to Submit Bugs and Feature Requests
 
 If you find a bug, please submit a bug report to our JIRA bug tracking system at
 http://issues.apache.org/jira/browse/VCL (you will need to set up an account
-there if you haven't already done so - it's free to anyone). Also, we would
-appreciate it if you mentioned that you filed a bug on the dev list to make
-sure we don't miss it.
+there if you haven't already done so - it's free to anyone).
 
 If you would like to requrest a new feature, you can also submit that in the
 same way through JIRA (just select "New Feature" or "Improvement" as the Issue
-Type). Again, it would be helpful if you mentioned that you filed a feature
-request on the dev list.
+Type).
 
 After you have created a JIRA issue, you have the option to vote on it to help
 us know how to prioritize issues. You can also "watch" the issue to see when
