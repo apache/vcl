@@ -298,6 +298,18 @@ sub pre_capture {
 
 =item *
 
+ Apply Windows security templates
+
+=cut
+
+	# This find any .inf security template files configured for the OS and run secedit.exe to apply them
+	if (!$self->apply_security_templates()) {
+		notify($ERRORS{'WARNING'}, 0, "unable to apply security templates");
+		return 0;
+	}
+
+=item *
+
  Set Administrator account password to known value
 
 =cut
@@ -359,18 +371,6 @@ sub pre_capture {
 
 	if (!$self->copy_capture_configuration_files()) {
 		notify($ERRORS{'WARNING'}, 0, "unable to copy general Windows capture configuration files to $computer_node_name");
-		return 0;
-	}
-
-=item *
-
- Apply Windows security templates
-
-=cut
-
-	# This find any .inf security template files configured for the OS and run secedit.exe to apply them
-	if (!$self->apply_security_templates()) {
-		notify($ERRORS{'WARNING'}, 0, "unable to apply security templates");
 		return 0;
 	}
 
