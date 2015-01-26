@@ -2645,6 +2645,8 @@ sub create_user {
 	if($self->can("grant_connect_method_access")) {
 		if(!$self->grant_connect_method_access({
 			username => $username,
+			uid => $uid,
+			ssh_public_keys => $ssh_public_keys,
 			})) {
 			notify($ERRORS{'WARNING'}, 0, "failed to process grant_connect_method_access for $username");
 		}
@@ -2653,7 +2655,7 @@ sub create_user {
 	# Add user to sudoers if necessary
 	if ($root_access) {
 		my $sudoers_file_path = '/etc/sudoers';
-		my $sudoers_line = "\n$username ALL= NOPASSWD: ALL\n";
+		my $sudoers_line = "$username ALL= NOPASSWD: ALL\n";
 		if ($self->append_text_file($sudoers_file_path, $sudoers_line)) {
 			notify($ERRORS{'DEBUG'}, 0, "appended line to $sudoers_file_path: '$sudoers_line'");
 		}
@@ -2666,38 +2668,61 @@ sub create_user {
 		notify($ERRORS{'DEBUG'}, 0, "root access not granted to $username");
 	}
 	
-	# Add user's public ssh identity keys if exists
-	if ($ssh_public_keys) {
-		my $ssh_directory_path = "$home_directory_path/.ssh";
-		my $authorized_keys_file_path = "$ssh_directory_path/authorized_keys";
-		
-		# Determine if home directory is on a local device or network share
-		# Only add keys to home directories that are local,
-		# Don't add keys to network mounted filesystems
-		$home_directory_on_local_disk = $self->is_file_on_local_disk($home_directory_path);
-		if ($home_directory_on_local_disk) {
-			# Create the .ssh directory
-			$self->create_directory($ssh_directory_path);
-			
-			if ($self->append_text_file($authorized_keys_file_path, "$ssh_public_keys\n")) {
-				notify($ERRORS{'DEBUG'}, 0, "added user's public SSH keys to $authorized_keys_file_path");
-			}
-			else {
-				notify($ERRORS{'WARNING'}, 0, "failed to add user's public SSH keys to $authorized_keys_file_path");
-			}
-
-			if (!$self->set_file_owner($home_directory_path, $username, 'vcl', 1)) {
-				notify($ERRORS{'WARNING'}, 0, "failed to set owner of user's home directory: $home_directory_path");
-				return;
-			}
-		}
-		else {
-			notify($ERRORS{'DEBUG'}, 0, "user's public SSH keys not added to $authorized_keys_file_path, home directory is on a network share");
-		}
-	}
-	
 	return 1;
 } ## end sub create_user
+
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 grant_root_access
+
+ Parameters  : $username
+ Returns     : 1 , 0
+ Description : Updates sudoers file for
+
+=cut
+
+sub grant_root_access {
+	my $self = shift;
+	if (ref($self) !~ /linux/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $user_parameters = shift;
+	if (!$user_parameters) {
+		notify($ERRORS{'WARNING'}, 0, "unable to create user, user parameters argument was not provided");
+		return;
+	}
+	elsif (!ref($user_parameters) || ref($user_parameters) ne 'HASH') {
+		notify($ERRORS{'WARNING'}, 0, "unable to create user, argument provided is not a hash reference");
+		return;
+	}
+	
+	my $username = $user_parameters->{username};
+	if (!defined($username)) {
+		notify($ERRORS{'WARNING'}, 0, "argument hash does not contain a 'username' key:\n" . format_data($user_parameters));
+		return;
+	}
+	
+	my $root_access = $user_parameters->{root_access};
+	if (!defined($root_access)) {
+		notify($ERRORS{'WARNING'}, 0, "argument hash does not contain a 'root_access' key:\n" . format_data($user_parameters));
+		return;
+	}
+	
+		my $sudoers_file_path = '/etc/sudoers';
+		my $sudoers_line = "$username ALL= NOPASSWD: ALL\n";
+		if ($self->append_text_file($sudoers_file_path, $sudoers_line)) {
+			notify($ERRORS{'DEBUG'}, 0, "appended line to $sudoers_file_path: '$sudoers_line'");
+			return 1;
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "failed to append line to $sudoers_file_path: '$sudoers_line'");
+			return;
+		}
+
+}
 
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -5414,6 +5439,50 @@ sub grant_connect_method_access {
 		return;
 	}
 
+	my $uid = $user_parameters->{uid};
+	if (!defined($uid)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to create user on $computer_node_name, argument hash does not contain a 'uid' key:\n" . format_data($user_parameters));
+		return;
+	}
+
+	my $ssh_public_keys = $user_parameters->{ssh_public_keys};
+	if (!defined($ssh_public_keys)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to create user on $computer_node_name, argument hash does not contain a 'ssh_public_keys' key:\n" . format_data($user_parameters));
+		return;
+	}
+
+	my $home_directory_root = "/home";
+	my $home_directory_path = "$home_directory_root/$username";
+	my $home_directory_on_local_disk = $self->is_file_on_local_disk($home_directory_root);
+	# Add user's public ssh identity keys if exists
+	if ($ssh_public_keys) {
+		my $ssh_directory_path = "$home_directory_path/.ssh";
+		my $authorized_keys_file_path = "$ssh_directory_path/authorized_keys";
+		
+		# Determine if home directory is on a local device or network share
+		# Only add keys to home directories that are local,
+		# Don't add keys to network mounted filesystems
+		if ($home_directory_on_local_disk) {
+			# Create the .ssh directory
+			$self->create_directory($ssh_directory_path);
+			
+			if ($self->append_text_file($authorized_keys_file_path, "$ssh_public_keys\n")) {
+				notify($ERRORS{'DEBUG'}, 0, "added user's public SSH keys to $authorized_keys_file_path");
+			}
+			else {
+				notify($ERRORS{'WARNING'}, 0, "failed to add user's public SSH keys to $authorized_keys_file_path");
+			}
+
+			if (!$self->set_file_owner($home_directory_path, $username, 'vcl', 1)) {
+				notify($ERRORS{'WARNING'}, 0, "failed to set owner of user's home directory: $home_directory_path");
+			}
+		}
+		else {
+			notify($ERRORS{'DEBUG'}, 0, "user's public SSH keys not added to $authorized_keys_file_path, home directory is on a network share");
+		}
+	}
+
+
 	# Append AllowUsers line to the end of the file
 	my $external_sshd_config_file_path = '/etc/ssh/external_sshd_config';
 	my $allow_users_line = "AllowUsers $username";
@@ -5426,6 +5495,8 @@ sub grant_connect_method_access {
 	}
 
 	$self->restart_service('ext_sshd') || return;
+
+	# If ssh_public_keys add to authorized_keys
 
 	return 1;
 

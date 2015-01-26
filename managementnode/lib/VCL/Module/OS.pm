@@ -282,11 +282,22 @@ sub add_user_accounts {
 				}
 				
 				# Since user already exists, Make sure the connect methods are setup correctly
-				if($self->can("grant_connect_method_access")) {
-					if(!$self->grant_connect_method_access({
+				if ($self->can("grant_connect_method_access")) {
+					if (!$self->grant_connect_method_access({
 						username => $username,
+						uid => $uid,
+						ssh_public_keys => $ssh_public_keys,
 					})) {
 						notify($ERRORS{'WARNING'}, 0, "failed to process grant_connect_method_access for $username");
+					}
+				}
+				# Account already exists, grant root access if allowed
+				if ($self->can("grant_root_access")) {
+					if (!$self->grant_root_access({
+						username => $username,
+						root_access => $root_access,
+					})) {
+						notify($ERRORS{'WARNING'}, 0, "failed to process grant_root_access for $username");
 					}
 				}
 				next RESERVATION_USER;
