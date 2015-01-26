@@ -897,8 +897,22 @@ EOF
 	
 	
 	my $insert_image_statement = <<EOF;
-INSERT INTO image (name, prettyname, ownerid, platformid, OSid, imagemetaid, deleted, lastupdate, size, architecture, basedoffrevisionid)
-VALUES ('$image_name', '$image_prettyname', '$user_id', '1', $os_id, $imagemeta_id, '1', NOW( ), '1450', '$architecture_choice', '4')
+INSERT INTO image
+(name, prettyname, ownerid, platformid, OSid, imagemetaid, deleted, lastupdate, size, architecture, basedoffrevisionid)
+VALUES
+(
+'$image_name',
+'$image_prettyname',
+'$user_id',
+'1',
+$os_id,
+$imagemeta_id,
+'1',
+NOW(),
+'1',
+'$architecture_choice',
+(SELECT id FROM imagerevision WHERE imagename = 'noimage')
+)
 EOF
 	
 	my $image_id = database_execute($insert_image_statement);
