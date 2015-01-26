@@ -2653,21 +2653,15 @@ sub create_user {
 	}
 
 	# Add user to sudoers if necessary
-	if ($root_access) {
-		my $sudoers_file_path = '/etc/sudoers';
-		my $sudoers_line = "$username ALL= NOPASSWD: ALL\n";
-		if ($self->append_text_file($sudoers_file_path, $sudoers_line)) {
-			notify($ERRORS{'DEBUG'}, 0, "appended line to $sudoers_file_path: '$sudoers_line'");
-		}
-		else {
-			notify($ERRORS{'WARNING'}, 0, "failed to append line to $sudoers_file_path: '$sudoers_line'");
-			return;
-		}
+	if ($self->can("grant_root_access")) {
+		if (!$self->grant_root_access({
+			username => $username,
+			root_access => $root_access,
+			})) {
+			notify($ERRORS{'WARNING'}, 0, "failed to process grant_root_access for $username");
+			}
 	}
-	else {
-		notify($ERRORS{'DEBUG'}, 0, "root access not granted to $username");
-	}
-	
+
 	return 1;
 } ## end sub create_user
 
