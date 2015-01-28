@@ -952,6 +952,21 @@ CALL DropColumnIfExists('imagemeta', 'usergroupid');
 
 CALL AddColumnIfNotExists('imagerevision', 'autocaptured', "tinyint(1) unsigned NOT NULL default '0'");
 
+
+-- --------------------------------------------------------
+
+-- 
+-- Table structure for table `imagerevisioninfo`
+--
+
+CREATE TABLE IF NOT EXISTS `imagerevisioninfo` (
+  `imagerevisionid` mediumint(8) unsigned NOT NULL,
+  `usernames` varchar(512) DEFAULT NULL,
+  `firewallenabled` varchar(20) NOT NULL,
+  `timestamp` datetime NOT NULL,
+  UNIQUE KEY `imagerevisionid` (`imagerevisionid`)
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+
 -- --------------------------------------------------------
 
 --
@@ -1816,6 +1831,8 @@ INSERT IGNORE INTO `variable` (`name`, `serialization`, `value`) VALUES ('genera
 INSERT IGNORE INTO `variable` (`name`, `serialization`, `value`) VALUES ('ignore_connections_gte', 'none', '1440');
 INSERT IGNORE INTO `variable` (`name`, `serialization`, `value`) VALUES ('ignored_remote_ip_addresses', 'none', '');
 INSERT IGNORE INTO `variable` (`name`, `serialization`, `value`) VALUES ('natport_ranges', 'none', '5700-6500,9696-9701,49152-65535');
+INSERT IGNORE INTO `variable` (`name`, `serialization`, `value`) VALUES ('windows_ignore_users', 'none', 'Administrator,cyg_server,root,sshd,Guest');
+INSERT IGNORE INTO `variable` (`name`, `serialization`, `value`) VALUES ('windows_disable_users', 'none', '');
 
 -- 
 
@@ -1971,10 +1988,10 @@ CALL AddConstraintIfNotExists('image', 'imagemetaid', 'imagemeta', 'id', 'update
 -- --------------------------------------------------------
 
 --
--- Constraints for table `image`
+-- Constraints for table `imagerevisioninfo`
 --
 
-CALL AddConstraintIfNotExists('image', 'imagetypeid', 'imagetype', 'id', 'update', 'CASCADE');
+CALL AddConstraintIfNotExists('imagerevisioninfo', 'imagerevisionid', 'imagerevision', 'id', 'both', 'CASCADE');
 
 -- --------------------------------------------------------
 

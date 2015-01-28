@@ -747,7 +747,17 @@ sub post_load {
 		notify($ERRORS{'WARNING'}, 0, "unable to enable ping from private IP address");
 		return 0;
 	}
-	
+
+=item *
+
+ Check the image for user account names known to be bad or easily compromised
+
+=cut
+
+	if (!$self->check_image()) {
+		notify($ERRORS{'WARNING'}, 0, "unable to check the image for user accounts known to be bad");
+	}
+
 =item *
 
  Set persistent public default route
@@ -11340,8 +11350,12 @@ sub get_user_names {
  Parameters  : none
  Returns     : boolean
  Description : Checks the image currently loaded on the computer and updates the
-               imagerevision table if necessary.
-					Note: This feature is not complete and is not currently called.
+               imagerevisioninfo table if necessary. If the
+               windows_disable_users variable is set in the variable table, the
+               list of user accounts is retrieved from the computer and compared
+               against the variable. Any user accounts listed in the variable
+               which reside in the image have a random password set and are
+               disabled.
 
 =cut
 
@@ -11359,67 +11373,72 @@ sub check_image {
 	my $image_name = $self->data->get_image_name();
 	my $computer_node_name = $self->data->get_computer_node_name();
 	
-	# Get list of user names from loaded image
-	my @image_user_names = $self->get_user_names();
-	if (!@image_user_names) {
-		notify($ERRORS{'DEBUG'}, 0, "skipping image check, unable to retrieve user names from $computer_node_name");
-		return;
-	}
-	
-	# Get the list of reservation users - includes imagemeta users and server profile users
-	my $reservation_user_hashref = $self->data->get_reservation_users();
-	my @reservation_user_names = sort {lc($a) cmp lc($b)} (map { $reservation_user_hashref->{$_}{unityid} } (keys %$reservation_user_hashref));
-	my $reservation_user_names_regex = join("|", @reservation_user_names);
-
-	# Get list of user names which should be ignored in images (safe, normal users: Administrator, guest...)
-	my $ignore_user_names_variable = get_variable('ignore_users') || '';
-	my @ignore_user_names = sort {lc($a) cmp lc($b)} (split(/[,;]+/, $ignore_user_names_variable));
-	my $ignore_user_names_regex = join("|", @ignore_user_names);
-	
-	# Get list of user names which should be disabled in images - known bad, unsafe
-	my $disable_user_names_variable = get_variable('disable_users') || '';
-	my @disable_user_names = sort {lc($a) cmp lc($b)} (split(/[,;]+/, $disable_user_names_variable));
-	my $disable_user_names_regex = join("|", @disable_user_names);
-	
-	notify($ERRORS{'DEBUG'}, 0, "image users:\n" .
-		"users on $image_name: " . join(", ", @image_user_names) . "\n" .
-		"reservation users: " . join(", ", @reservation_user_names) . "\n" .
-		"users which should be disabled for all images: " . join(", ", @disable_user_names) . "\n" .
-		"users which can be ignored for all images: " . join(", ", @ignore_user_names) . "\n"
-	);
-	
+	my @image_user_names_report = ();
 	my @image_user_names_reservation = ();
 	my @image_user_names_ignore = ();
-	my @image_user_names_report = ();
 	
-	OS_USER_NAME: for my $image_user_name (sort {lc($a) cmp lc($b)} @image_user_names) {
-		for my $disable_user_name_pattern (@disable_user_names) {
-			if ($image_user_name =~ /$disable_user_name_pattern/i) {
-				notify($ERRORS{'DEBUG'}, 0, "found user on $image_name which should be disabled: '$image_user_name' (matches pattern: '$disable_user_name_pattern')");
-				
-				my $random_password = getpw(11);
-				if (!$self->set_password($image_user_name, $random_password, 1)) {
-					notify($ERRORS{'WARNING'}, 0, "failed to set random password for user: '$image_user_name'");
-				}
-				else {
-					notify($ERRORS{'OK'}, 0, "set random password for user: '$image_user_name', '$random_password'");
-				}
-				
-				$self->disable_user($image_user_name);
-			}
+	# Get list of user names which should be disabled in images - known bad, unsafe
+	my $disable_user_names_variable = get_variable('windows_disable_users');
+	if (!$disable_user_names_variable) {
+		notify($ERRORS{'DEBUG'}, 0, "$image_name not being checked for bad user accounts, windows_disable_users is not set in the variable table");
+	}
+	else {
+		my @disable_user_names = sort {lc($a) cmp lc($b)} (split(/[,;]+/, $disable_user_names_variable));
+		my $disable_user_names_regex = join("|", @disable_user_names);
+		
+		# Get list of user names which should be ignored in images (safe, normal users: Administrator, guest...)
+		my $ignore_user_names_variable = get_variable('windows_ignore_users') || '';
+		my @ignore_user_names = sort {lc($a) cmp lc($b)} (split(/[,;]+/, $ignore_user_names_variable));
+		my $ignore_user_names_regex = join("|", @ignore_user_names);
+		
+		# Get list of user names from loaded image
+		my @image_user_names = $self->get_user_names();
+		if (!@image_user_names) {
+			notify($ERRORS{'DEBUG'}, 0, "skipping image check, unable to retrieve user names from $computer_node_name");
+			return;
 		}
 		
-		if ($image_user_name =~ /^($reservation_user_names_regex)$/i) {
-			notify($ERRORS{'DEBUG'}, 0, "ignoring reservation user on image: '$image_user_name'");
-			push @image_user_names_reservation, $image_user_name;
-		}
-		elsif ($image_user_name =~ /^($ignore_user_names_regex)$/i) {
-			notify($ERRORS{'DEBUG'}, 0, "ignoring user on image: '$image_user_name'");
-			push @image_user_names_ignore, $image_user_name;
-		}
-		else {
-			notify($ERRORS{'DEBUG'}, 0, "reporting user on image: '$image_user_name'");
-			push @image_user_names_report, $image_user_name;
+		# Get the list of reservation users - includes imagemeta users and server profile users
+		my $reservation_user_hashref = $self->data->get_reservation_users();
+		my @reservation_user_names = sort {lc($a) cmp lc($b)} (map { $reservation_user_hashref->{$_}{unityid} } (keys %$reservation_user_hashref));
+		my $reservation_user_names_regex = join("|", @reservation_user_names);
+		
+		notify($ERRORS{'DEBUG'}, 0, "image users:\n" .
+			"users on $image_name: " . join(", ", @image_user_names) . "\n" .
+			"reservation users: " . join(", ", @reservation_user_names) . "\n" .
+			"users which should be disabled for all images: " . join(", ", @disable_user_names) . "\n" .
+			"users which can be ignored for all images: " . join(", ", @ignore_user_names) . "\n"
+		);
+		
+		OS_USER_NAME: for my $image_user_name (sort {lc($a) cmp lc($b)} @image_user_names) {
+			for my $disable_user_name_pattern (@disable_user_names) {
+				if ($image_user_name =~ /$disable_user_name_pattern/i) {
+					notify($ERRORS{'DEBUG'}, 0, "found user on $image_name which should be disabled: '$image_user_name' (matches pattern: '$disable_user_name_pattern')");
+					
+					my $random_password = getpw(11);
+					if (!$self->set_password($image_user_name, $random_password, 1)) {
+						notify($ERRORS{'WARNING'}, 0, "failed to set random password for user: '$image_user_name'");
+					}
+					else {
+						notify($ERRORS{'OK'}, 0, "set random password for user: '$image_user_name', '$random_password'");
+					}
+					
+					$self->disable_user($image_user_name);
+				}
+			}
+			
+			if ($image_user_name =~ /^($reservation_user_names_regex)$/i) {
+				notify($ERRORS{'DEBUG'}, 0, "ignoring reservation user in image: '$image_user_name'");
+				push @image_user_names_reservation, $image_user_name;
+			}
+			elsif ($image_user_name =~ /^($ignore_user_names_regex)$/i) {
+				notify($ERRORS{'DEBUG'}, 0, "ignoring user in image: '$image_user_name'");
+				push @image_user_names_ignore, $image_user_name;
+			}
+			else {
+				notify($ERRORS{'DEBUG'}, 0, "reporting user in image: '$image_user_name'");
+				push @image_user_names_report, $image_user_name;
+			}
 		}
 	}
 	
@@ -11489,18 +11508,21 @@ INSERT INTO imagerevisioninfo
 (
 imagerevisionid,
 usernames,
-firewallenabled
+firewallenabled,
+timestamp
 )
 VALUES
 (
 '$imagerevision_id',
 '$usernames',
-'$firewall_enabled'
+'$firewall_enabled',
+NOW()
 )
 ON DUPLICATE KEY UPDATE
 imagerevisionid=VALUES(imagerevisionid),
 usernames=VALUES(usernames),
-firewallenabled=VALUES(firewallenabled)
+firewallenabled=VALUES(firewallenabled),
+timestamp=VALUES(timestamp)
 EOF
 	
 	return database_execute($update_statement);

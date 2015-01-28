@@ -498,6 +498,20 @@ CREATE TABLE IF NOT EXISTS `imagerevision` (
 
 -- --------------------------------------------------------
 
+-- 
+-- Table structure for table `imagerevisioninfo`
+--
+
+CREATE TABLE IF NOT EXISTS `imagerevisioninfo` (
+  `imagerevisionid` mediumint(8) unsigned NOT NULL,
+  `usernames` varchar(512) DEFAULT NULL,
+  `firewallenabled` varchar(20) NOT NULL,
+  `timestamp` datetime NOT NULL,
+  UNIQUE KEY `imagerevisionid` (`imagerevisionid`)
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+
+-- --------------------------------------------------------
+
 --
 -- Table structure for table `imagetype`
 --
@@ -2108,7 +2122,9 @@ INSERT IGNORE INTO `variable` (`name`, `serialization`, `value`) VALUES
 ('xcat|timeout_error_limit', 'none', '5'),
 ('xcat|rpower_error_limit', 'none', '3'),
 ('ignored_remote_ip_addresses', 'none', ''),
-('natport_ranges', 'none', '5700-6500,9696-9701,49152-65535');
+('natport_ranges', 'none', '5700-6500,9696-9701,49152-65535'),
+('windows_ignore_users', 'none', 'Administrator,cyg_server,root,sshd,Guest'),
+('windows_disable_users', 'none', '');
 
 -- 
 -- Dumping data for table `vmprofile`
@@ -2249,6 +2265,11 @@ ALTER TABLE `image` ADD CONSTRAINT FOREIGN KEY (`imagemetaid`) REFERENCES `image
 -- 
 ALTER TABLE `imagerevision` ADD CONSTRAINT FOREIGN KEY (`imageid`) REFERENCES `image` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 ALTER TABLE `imagerevision` ADD CONSTRAINT FOREIGN KEY (`userid`) REFERENCES `user` (`id`) ON UPDATE CASCADE;
+
+-- 
+-- Constraints for table `imagerevisioninfo`
+-- 
+ALTER TABLE `imagerevisioninfo` ADD CONSTRAINT FOREIGN KEY (`imagerevisionid`) REFERENCES `imagerevision` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- 
 -- Constraints for table `localauth`
