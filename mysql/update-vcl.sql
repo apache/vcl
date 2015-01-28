@@ -144,13 +144,17 @@ BEGIN
     SELECT CONSTRAINT_NAME, TABLE_SCHEMA FROM information_schema.KEY_COLUMN_USAGE WHERE
     TABLE_SCHEMA = Database()
     AND TABLE_NAME = tableName
-    AND COLUMN_NAME = columnName;
+    AND COLUMN_NAME = columnName
+    AND REFERENCED_TABLE_NAME IS NOT NULL;
   
   DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = 1;
   OPEN select_existing_constraint_names;
+  
+  -- CALL PrintMessage((SELECT CONCAT('DropExistingConstraints: ', tableName, '.', columnName)));
 
   REPEAT
     FETCH select_existing_constraint_names INTO existing_constraint_name, database_name;
+    -- CALL PrintMessage((SELECT CONCAT('existing constraint: ', existing_constraint_name)));
     -- SELECT existing_constraint_name, database_name;
     IF NOT done THEN
       SET @drop_existing_constraint = CONCAT('ALTER TABLE `', Database(), '`.', tableName, ' DROP FOREIGN KEY ', existing_constraint_name);
@@ -304,6 +308,14 @@ CREATE PROCEDURE `AddConstraintIfNotExists`(
   IN constraintAction tinytext
 )
 BEGIN
+  DECLARE EXIT HANDLER FOR SQLEXCEPTION
+  BEGIN
+    SELECT CONCAT('WARNING: AddConstraintIfNotExists: ', tableName, '.', columnName, ' --> ', referencedTableName, '.', referencedColumnName) AS '';
+    -- GET DIAGNOSTICS CONDITION 1 @sqlstate = RETURNED_SQLSTATE, @errno = MYSQL_ERRNO, @text = MESSAGE_TEXT;
+    -- SELECT CONCAT('ERROR ', @errno, ': ', @text) AS '';
+	END;
+  
+  -- CALL PrintMessage((SELECT CONCAT('AddConstraintIfNotExists: ', tableName, '.', columnName, ' --> ', referencedTableName, '.', referencedColumnName)));
   IF NOT EXISTS (
     SELECT * FROM information_schema.KEY_COLUMN_USAGE WHERE
     TABLE_SCHEMA=Database()
@@ -648,7 +660,7 @@ END$$
 -- --------------------------------------------------------
 
 /*
-Procedure   : populateConnectMethodPort
+Procedure   : moveConnectMethodPortProtocol
 Description : Populates connectmethodport table from connectmethod table if it is empty
 */
 
@@ -678,7 +690,7 @@ BEGIN
       AND TABLE_NAME='connectmethod'
     )
     THEN
-      INSERT INTO connectmethodport (connectmethodid, port, protocol) SELECT id, port, protocol FROM connectmethod;
+      INSERT INTO connectmethodport (connectmethodid, port, protocol) SELECT id, port, IFNULL(NULLIF(protocol,''),'TCP') FROM connectmethod;
       CALL DropColumnIfExists('connectmethod', 'port');
       CALL DropColumnIfExists('connectmethod', 'protocol');
     END IF;
@@ -714,6 +726,22 @@ BEGIN
 
 END$$
 
+-- --------------------------------------------------------
+
+/*
+Procedure   : PrintMessage
+Parameters  : message
+Description : 
+*/
+
+DROP PROCEDURE IF EXISTS `PrintMessage`$$
+CREATE PROCEDURE PrintMessage(
+  IN message VARCHAR(255)
+)
+BEGIN
+  SELECT CONCAT("** ", message) AS '';
+END $$
+
 /* ============= End of Stored Procedures ===============*/
 
 -- --------------------------------------------------------
@@ -742,6 +770,7 @@ CALL AddColumnIfNotExists('blockComputers', 'reloadrequestid', "mediumint(8) uns
 CALL AddColumnIfNotExists('blockRequest', 'status', "enum('requested','accepted','completed','rejected','deleted') NOT NULL DEFAULT 'accepted'");
 CALL AddColumnIfNotExists('blockRequest', 'comments', "text");
 
+ALTER TABLE `blockRequest` CHANGE `admingroupid` `admingroupid` smallint(5) unsigned NOT NULL;
 -- --------------------------------------------------------
 
 --
@@ -790,10 +819,19 @@ EXECUTE nextimageid_noimage;
 -- change RAM to mediumint
 ALTER TABLE `computer` CHANGE `RAM` `RAM` MEDIUMINT UNSIGNED NOT NULL DEFAULT '0';
 ALTER TABLE `computer` CHANGE `location` `location` VARCHAR(255) NULL DEFAULT NULL;
-CALL AddColumnIfNotExists('computer', 'predictivemoduleid', "SMALLINT(5) UNSIGNED NOT NULL DEFAULT '8'");
+CALL AddColumnIfNotExists('computer', 'predictivemoduleid', "SMALLINT(5) UNSIGNED NOT NULL DEFAULT '9'");
 
 -- set datedeleted for deleted computers
 UPDATE computer SET datedeleted = NOW() WHERE deleted = 1 AND datedeleted = '0000-00-00 00:00:00';
+
+-- --------------------------------------------------------
+
+-- 
+--  Table structure for table `computerloadflow`
+--
+
+ALTER TABLE `computerloadflow` CHANGE `computerloadstateid` `computerloadstateid` smallint(8) unsigned NOT NULL;
+ALTER TABLE `computerloadflow` CHANGE `nextstateid` `nextstateid` smallint(8) unsigned default NULL;
 
 -- --------------------------------------------------------
 
@@ -861,8 +899,6 @@ CREATE TABLE IF NOT EXISTS `connectmethodport` (
   KEY `connectmethodid` (`connectmethodid`)
 ) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
 
-CALL moveConnectMethodPortProtocol;
-
 -- --------------------------------------------------------
 
 --
@@ -890,10 +926,15 @@ CREATE TABLE IF NOT EXISTS connectlog (
 --  Table structure for table `image`
 --
 
--- change minram to mediumint
 ALTER TABLE `image` CHANGE `minram` `minram` MEDIUMINT UNSIGNED NOT NULL DEFAULT '0';
+ALTER TABLE `image` CHANGE `platformid` `platformid` tinyint(3) unsigned NOT NULL default '1';
+ALTER TABLE `image` CHANGE `size` `size` smallint(5) unsigned NOT NULL default '0';
+
 CALL AddColumnIfNotExists('image', 'imagetypeid', "smallint(5) unsigned NOT NULL default '1' AFTER ownerid");
 CALL AddIndexIfNotExists('image', 'imagetypeid');
+
+ALTER TABLE `image` CHANGE `basedoffrevisionid` `basedoffrevisionid` mediumint(8) unsigned NOT NULL default '1';
+CALL AddIndexIfNotExists('image', 'basedoffrevisionid');
 
 -- --------------------------------------------------------
 
@@ -993,16 +1034,13 @@ CREATE TABLE IF NOT EXISTS `nathost` (
 
 CREATE TABLE IF NOT EXISTS `natlog` (
   `logid` int(10) unsigned NOT NULL,
-  `connectmethodportid` tinyint(3) unsigned default NULL,
-  `nathostid` smallint(5) unsigned default NULL,
-  `publicIPaddress` varchar(15) NOT NULL,
   `computerid` smallint(5) unsigned NOT NULL,
+  `publicIPaddress` varchar(15) NOT NULL,
+  `internalIPaddress` varchar(15) NOT NULL,
   `publicport` smallint(5) unsigned NOT NULL,
-  `privateport` smallint(5) unsigned NOT NULL,
+  `internalport` smallint(5) unsigned NOT NULL,
   `protocol` enum('TCP','UDP') NOT NULL,
   KEY `logid` (`logid`),
-  KEY `connectmethodportid` (`connectmethodportid`),
-  KEY `nathostid` (`nathostid`),
   KEY `computerid` (`computerid`)
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
@@ -1238,7 +1276,7 @@ CALL AddColumnIfNotExists('request', 'checkuser', "tinyint(1) unsigned NOT NULL 
 
 CALL AddColumnIfNotExists('user', 'validated', "tinyint(1) unsigned NOT NULL default '1'");
 CALL AddColumnIfNotExists('user', 'usepublickeys', "tinyint(1) unsigned NOT NULL default '0'");
-CALL AddColumnIfNotExists('user', 'sshPublicKeys', "text");
+CALL AddColumnIfNotExists('user', 'sshpublickeys', "text");
 CALL AddColumnIfNotExists('user', 'rdpport', "SMALLINT UNSIGNED NULL AFTER `mapserial`");
 
 --
@@ -1476,6 +1514,8 @@ UPDATE image, OS, module SET image.imagetypeid = (SELECT `id` FROM `imagetype` W
 UPDATE image, OS, module SET image.imagetypeid = (SELECT `id` FROM `imagetype` WHERE `name` = 'vmdk') WHERE image.imagetypeid = 0 AND image.OSid = OS.id AND OS.moduleid = module.id AND module.perlpackage REGEXP 'vmware|esx';
 UPDATE image SET image.imagetypeid = (SELECT `id` FROM `imagetype` WHERE `name` = 'none') WHERE image.imagetypeid = 0;
 
+UPDATE image SET imagemetaid = NULL WHERE NOT EXISTS (SELECT * FROM imagemeta WHERE image.imagemetaid = imagemeta.id);
+
 -- --------------------------------------------------------
 
 -- 
@@ -1595,10 +1635,15 @@ DELETE FROM provisioningOSinstalltype WHERE provisioningOSinstalltype.provisioni
 -- Inserts for table `connectmethod`
 --
 
+UPDATE `connectmethod` SET name = 'SSH', description = 'SSH for Linux & Unix' WHERE name = 'ssh';
+UPDATE `connectmethod` SET name = 'RDP', description = 'Remote Desktop for Windows' WHERE name = 'rdp';
+
 INSERT IGNORE INTO `connectmethod` (`name`, `description`, `connecttext`, `servicename`, `startupscript`) VALUES
-('ssh', 'ssh on port 22', 'You will need to have an X server running on your local computer and use an ssh client to connect to the system. If you did not click on the <b>Connect!</b> button from the computer you will be using to access the VCL system, you will need to return to the <strong>Current Reservations</strong> page and click the <strong>Connect!</strong> button from a web browser running on the same computer from which you will be connecting to the VCL system. Otherwise, you may be denied access to the remote computer.<br><br>\r\nUse the following information when you are ready to connect:<br>\r\n<UL>\r\n<LI><b>Remote Computer</b>: #connectIP#</LI>\r\n<LI><b>User ID</b>: #userid#</LI>\r\n<LI><b>Password</b>: #password#<br></LI>\r\n</UL>\r\n<b>NOTE</b>: The given password is for <i>this reservation only</i>. You will be given a different password for any other reservations.<br>\r\n<strong><big>NOTE:</big> You cannot use the Windows Remote Desktop Connection to connect to this computer. You must use an ssh client.</strong>', 'ext_sshd', '/etc/init.d/ext_sshd');
+('SSH', 'SSH for Linux & Unix', 'You will need to have an X server running on your local computer and use an SSH client to connect to the system. If you did not click on the <b>Connect!</b> button from the computer you will be using to access the VCL system, you will need to return to the <strong>Current Reservations</strong> page and click the <strong>Connect!</strong> button from a web browser running on the same computer from which you will be connecting to the VCL system. Otherwise, you may be denied access to the remote computer.<br><br>\r\nUse the following information when you are ready to connect:<br>\r\n<UL>\r\n<LI><b>Remote Computer</b>: #connectIP#</LI>\r\n<LI><b>User ID</b>: #userid#</LI>\r\n<LI><b>Password</b>: #password#<br></LI>\r\n</UL>\r\n<b>NOTE</b>: The given password is for <i>this reservation only</i>. You will be given a different password for any other reservations.<br>\r\n<strong><big>NOTE:</big> You cannot use the Windows Remote Desktop Connection to connect to this computer. You must use an ssh client.</strong>', 'ext_sshd', '/etc/init.d/ext_sshd');
+
 INSERT IGNORE INTO `connectmethod` (`name`, `description`, `connecttext`, `servicename`, `startupscript`) VALUES
-('RDP', 'Remote Desktop', 'You will need to use a Remote Desktop program to connect to the system. If you did not click on the <b>Connect!</b> button from the computer you will be using to access the VCL system, you will need to return to the <strong>Current Reservations</strong> page and click the <strong>Connect!</strong> button from a web browser running on the same computer from which you will be connecting to the VCL system. Otherwise, you may be denied access to the remote computer.<br><br>\r\n\r\nUse the following information when you are ready to connect:<br>\r\n<UL>\r\n<LI><b>Remote Computer</b>: #connectIP#</LI>\r\n<LI><b>User ID</b>: #userid#</LI>\r\n<LI><b>Password</b>: #password#<br></LI>\r\n</UL>\r\n<b>NOTE</b>: The given password is for <i>this reservation only</i>. You will be given a different password for any other reservations.<br>\r\n<br>\r\nFor automatic connection, you can download an RDP file that can be opened by the Remote Desktop Connection program.<br><br>\r\n', 'TermService', NULL);
+('RDP', 'Remote Desktop for Windows', 'You will need to use a Remote Desktop program to connect to the system. If you did not click on the <b>Connect!</b> button from the computer you will be using to access the VCL system, you will need to return to the <strong>Current Reservations</strong> page and click the <strong>Connect!</strong> button from a web browser running on the same computer from which you will be connecting to the VCL system. Otherwise, you may be denied access to the remote computer.<br><br>\r\n\r\nUse the following information when you are ready to connect:<br>\r\n<UL>\r\n<LI><b>Remote Computer</b>: #connectIP#</LI>\r\n<LI><b>User ID</b>: #userid#</LI>\r\n<LI><b>Password</b>: #password#<br></LI>\r\n</UL>\r\n<b>NOTE</b>: The given password is for <i>this reservation only</i>. You will be given a different password for any other reservations.<br>\r\n<br>\r\nFor automatic connection, you can download an RDP file that can be opened by the Remote Desktop Connection program.<br><br>\r\n', 'TermService', NULL);
+
 INSERT IGNORE INTO `connectmethod` (`name`, `description`, `connecttext`, `servicename`, `startupscript`) VALUES
 ('iRAPP RDP', 'Remote Desktop for OS X', 'You will need to use a Remote Desktop program to connect to the system. If you did not click on the <b>Connect!</b> button from the computer you will be using to access the VCL system, you will need to return to the <strong>Current Reservations</strong> page and click the <strong>Connect!</strong> button from a web browser running on the same computer from which you will be connecting to the VCL system. Otherwise, you may be denied access to the remote computer.<br><br>\r\n\r\nUse the following information when you are ready to connect:<br>\r\n<UL>\r\n<LI><b>Remote Computer</b>: #connectIP#</LI>\r\n<LI><b>User ID</b>: #userid#</LI>\r\n<LI><b>Password</b>: #password#<br></LI>\r\n</UL>\r\n<b>NOTE</b>: The given password is for <i>this reservation only</i>. You will be given a different password for any other reservations.<br>\r\n<br>\r\nFor automatic connection, you can download an RDP file that can be opened by the Remote Desktop Connection program.<br><br>\r\n', NULL, NULL);
 
@@ -1608,8 +1653,12 @@ INSERT IGNORE INTO `connectmethod` (`name`, `description`, `connecttext`, `servi
 -- Inserts for table `connectmethodport`
 --
 
+CALL moveConnectMethodPortProtocol;
+
+UPDATE connectmethodport SET protocol = 'TCP' WHERE protocol = '';
+
 INSERT IGNORE INTO `connectmethodport` (`connectmethodid`, `port`, `protocol`) VALUES
-((SELECT id FROM connectmethod WHERE name = 'ssh'), 22, 'TCP'),
+((SELECT id FROM connectmethod WHERE name LIKE 'ssh'), 22, 'TCP'),
 ((SELECT id FROM connectmethod WHERE name = 'RDP'), 3389, 'TCP'),
 ((SELECT id FROM connectmethod WHERE name = 'iRAPP RDP'), 3389, 'TCP');
 
@@ -1780,6 +1829,81 @@ UPDATE vmprofile SET vmprofile.datastoreimagetypeid = (SELECT `id` FROM `imagety
 -- --------------------------------------------------------
 
 --
+-- Constraints for table `blockComputers`
+--
+
+CALL DropExistingConstraints('blockComputers', 'computerid');
+
+CALL AddConstraintIfNotExists('blockComputers', 'blockTimeid', 'blockTimes', 'id', 'both', 'CASCADE');
+CALL AddConstraintIfNotExists('blockComputers', 'computerid', 'computer', 'id', 'UPDATE', 'CASCADE');
+CALL AddConstraintIfNotExists('blockComputers', 'imageid', 'image', 'id', 'UPDATE', 'CASCADE');
+
+-- --------------------------------------------------------
+
+--
+-- Constraints for table `blockRequest`
+--
+
+CALL DropExistingConstraints('blockRequest', 'imageid');
+CALL DropExistingConstraints('blockRequest', 'groupid');
+CALL DropExistingConstraints('blockRequest', 'ownerid');
+
+CALL AddConstraintIfNotExists('blockRequest', 'imageid', 'image', 'id', 'update', 'CASCADE');
+CALL AddConstraintIfNotExists('blockRequest', 'groupid', 'usergroup', 'id', 'update', 'CASCADE');
+CALL AddConstraintIfNotExists('blockRequest', 'ownerid', 'user', 'id', 'update', 'CASCADE');
+CALL AddConstraintIfNotExists('blockRequest', 'admingroupid', 'usergroup', 'id', 'update', 'CASCADE');
+CALL AddConstraintIfNotExists('blockRequest', 'managementnodeid', 'managementnode', 'id', 'update', 'CASCADE');
+
+-- --------------------------------------------------------
+
+--
+-- Constraints for table `blockTimes`
+--
+
+CALL DropExistingConstraints('blockTimes', 'blockRequestid');
+CALL AddConstraintIfNotExists('blockTimes', 'blockRequestid', 'blockRequest', 'id', 'both', 'CASCADE');
+
+-- --------------------------------------------------------
+
+--
+-- Constraints for table `blockWebDate`
+--
+
+CALL DropExistingConstraints('blockWebDate', 'blockRequestid');
+CALL AddConstraintIfNotExists('blockWebDate', 'blockRequestid', 'blockRequest', 'id', 'both', 'CASCADE');
+
+-- --------------------------------------------------------
+
+--
+-- Constraints for table `blockWebTime`
+--
+
+CALL DropExistingConstraints('blockWebTime', 'blockRequestid');
+CALL AddConstraintIfNotExists('blockWebTime', 'blockRequestid', 'blockRequest', 'id', 'both', 'CASCADE');
+
+-- --------------------------------------------------------
+
+--
+-- Constraints for table `changelog`
+--
+
+CALL AddConstraintIfNotExists('changelog', 'computerid', 'computer', 'id', 'update', 'CASCADE');
+CALL AddConstraintIfNotExists('changelog', 'logid', 'log', 'id', 'update', 'CASCADE');
+CALL AddConstraintIfNotExists('changelog', 'userid', 'user', 'id', 'update', 'CASCADE');
+
+-- --------------------------------------------------------
+
+--
+-- Constraints for table `clickThroughs`
+--
+
+CALL AddConstraintIfNotExists('clickThroughs', 'userid', 'user', 'id', 'update', 'CASCADE');
+CALL AddConstraintIfNotExists('clickThroughs', 'imageid', 'image', 'id', 'update', 'CASCADE');
+CALL AddConstraintIfNotExists('clickThroughs', 'imagerevisionid', 'imagerevision', 'id', 'update', 'CASCADE');
+
+-- --------------------------------------------------------
+
+--
 -- Constraints for table `computer`
 --
 
@@ -1787,6 +1911,16 @@ CALL AddConstraintIfNotExists('computer', 'currentimageid', 'image', 'id', 'upda
 CALL AddConstraintIfNotExists('computer', 'vmhostid', 'vmhost', 'id', 'update', 'CASCADE');
 CALL AddConstraintIfNotExists('computer', 'imagerevisionid', 'imagerevision', 'id', 'update', 'CASCADE');
 CALL AddConstraintIfNotExists('computer', 'nextimageid', 'image', 'id', 'update', 'CASCADE');
+CALL AddConstraintIfNotExists('computer', 'predictivemoduleid', 'module', 'id', 'update', 'CASCADE');
+
+-- --------------------------------------------------------
+
+--
+-- Constraints for table `computerloadflow`
+--
+
+CALL AddConstraintIfNotExists('computerloadflow', 'computerloadstateid', 'computerloadstate', 'id', 'update', 'CASCADE');
+CALL AddConstraintIfNotExists('computerloadflow', 'nextstateid', 'computerloadstate', 'id', 'update', 'CASCADE');
 
 -- --------------------------------------------------------
 
@@ -1811,6 +1945,14 @@ CALL AddConstraintIfNotExists('connectmethodmap', 'imagerevisionid', 'imagerevis
 -- --------------------------------------------------------
 
 --
+-- Constraints for table `connectmethodport`
+--
+
+CALL AddConstraintIfNotExists('connectmethodport', 'connectmethodid', 'connectmethod', 'id', 'both', 'CASCADE');
+
+-- --------------------------------------------------------
+
+--
 -- Constraints for table `connectlog`
 --
 
@@ -1824,6 +1966,7 @@ CALL AddConstraintIfNotExists('connectlog', 'userid', 'user', 'id', 'both', 'CAS
 --
 
 CALL AddConstraintIfNotExists('image', 'imagetypeid', 'imagetype', 'id', 'update', 'CASCADE');
+CALL AddConstraintIfNotExists('image', 'imagemetaid', 'imagemeta', 'id', 'update', 'CASCADE');
 
 -- --------------------------------------------------------
 
@@ -1832,6 +1975,22 @@ CALL AddConstraintIfNotExists('image', 'imagetypeid', 'imagetype', 'id', 'update
 --
 
 CALL AddConstraintIfNotExists('image', 'imagetypeid', 'imagetype', 'id', 'update', 'CASCADE');
+
+-- --------------------------------------------------------
+
+--
+-- Constraints for table `log`
+--
+
+CALL AddConstraintIfNotExists('log', 'computerid', 'computer', 'id', 'update', 'CASCADE');
+
+-- --------------------------------------------------------
+
+--
+-- Constraints for table `loginlog`
+--
+
+CALL AddConstraintIfNotExists('loginlog', 'affiliationid', 'affiliation', 'id', 'update', 'CASCADE');
 
 -- --------------------------------------------------------
 
@@ -1849,8 +2008,6 @@ CALL AddConstraintIfNotExists('nathost', 'resourceid', 'resource', 'id', 'both',
 
 CALL AddConstraintIfNotExists('natlog', 'computerid', 'computer', 'id', 'both', 'CASCADE');
 CALL AddConstraintIfNotExists('natlog', 'logid', 'log', 'id', 'both', 'CASCADE');
-CALL AddConstraintIfNotExists('natlog', 'connectmethodportid', 'connectmethodport', 'id', 'UPDATE', 'CASCADE');
-CALL AddConstraintIfNotExists('natlog', 'nathostid', 'nathost', 'id', 'UPDATE', 'CASCADE');
 
 -- --------------------------------------------------------
 
@@ -1902,8 +2059,8 @@ CALL AddConstraintIfNotExists('provisioningOSinstalltype', 'OSinstalltypeid', 'O
 -- Constraints for table `reservation`
 --
 
-CALL AddConstraintIfNotExists('reservation', 'imageid', 'image', 'id', 'restrict', 'CASCADE');
-CALL AddConstraintIfNotExists('reservation', 'imagerevisionid', 'imagerevision', 'id', 'restrict', 'CASCADE');
+CALL AddConstraintIfNotExists('reservation', 'imageid', 'image', 'id', 'update', 'CASCADE');
+CALL AddConstraintIfNotExists('reservation', 'imagerevisionid', 'imagerevision', 'id', 'update', 'CASCADE');
 
 -- --------------------------------------------------------
 
@@ -1913,6 +2070,39 @@ CALL AddConstraintIfNotExists('reservation', 'imagerevisionid', 'imagerevision',
 
 CALL AddConstraintIfNotExists('reservationaccounts', 'reservationid', 'reservation', 'id', 'both', 'CASCADE');
 CALL AddConstraintIfNotExists('reservationaccounts', 'userid', 'user', 'id', 'both', 'CASCADE');
+
+-- --------------------------------------------------------
+
+--
+-- Constraints for table `resourcemap`
+--
+
+CALL DropExistingConstraints('resourcemap', 'resourcegroupid1');
+CALL DropExistingConstraints('resourcemap', 'resourcegroupid2');
+
+CALL AddConstraintIfNotExists('resourcemap', 'resourcegroupid1', 'resourcegroup', 'id', 'both', 'CASCADE');
+CALL AddConstraintIfNotExists('resourcemap', 'resourcegroupid2', 'resourcegroup', 'id', 'both', 'CASCADE');
+CALL AddConstraintIfNotExists('resourcemap', 'resourcetypeid1', 'resourcetype', 'id', 'update', 'CASCADE');
+CALL AddConstraintIfNotExists('resourcemap', 'resourcetypeid2', 'resourcetype', 'id', 'update', 'CASCADE');
+
+-- --------------------------------------------------------
+
+--
+-- Constraints for table `scheduletimes`
+--
+
+CALL AddConstraintIfNotExists('scheduletimes', 'scheduleid', 'schedule', 'id', 'update', 'CASCADE');
+
+-- --------------------------------------------------------
+
+--
+-- Constraints for table `semaphore`
+--
+
+CALL AddConstraintIfNotExists('semaphore', 'computerid', 'computer', 'id', 'update', 'CASCADE');
+CALL AddConstraintIfNotExists('semaphore', 'imageid', 'image', 'id', 'update', 'CASCADE');
+CALL AddConstraintIfNotExists('semaphore', 'imagerevisionid', 'imagerevision', 'id', 'update', 'CASCADE');
+CALL AddConstraintIfNotExists('semaphore', 'managementnodeid', 'managementnode', 'id', 'update', 'CASCADE');
 
 -- --------------------------------------------------------
 
@@ -1934,6 +2124,54 @@ CALL AddConstraintIfNotExists('serverprofile', 'imageid', 'image', 'id', 'none',
 CALL AddConstraintIfNotExists('serverrequest', 'requestid', 'request', 'id', 'delete', 'CASCADE');
 CALL AddConstraintIfNotExists('serverrequest', 'admingroupid', 'usergroup', 'id', 'update', 'CASCADE');
 CALL AddConstraintIfNotExists('serverrequest', 'logingroupid', 'usergroup', 'id', 'update', 'CASCADE');
+
+-- --------------------------------------------------------
+
+--
+-- Constraints for table `shibauth`
+--
+
+CALL AddConstraintIfNotExists('shibauth', 'userid', 'user', 'id', 'update', 'CASCADE');
+
+-- --------------------------------------------------------
+
+--
+-- Constraints for table `statgraphcache`
+--
+
+CALL AddConstraintIfNotExists('statgraphcache', 'affiliationid', 'affiliation', 'id', 'update', 'CASCADE');
+CALL AddConstraintIfNotExists('statgraphcache', 'provisioningid', 'provisioning', 'id', 'update', 'CASCADE');
+
+-- --------------------------------------------------------
+
+--
+-- Constraints for table `subimages`
+--
+
+CALL AddConstraintIfNotExists('subimages', 'imageid', 'image', 'id', 'update', 'CASCADE');
+CALL AddConstraintIfNotExists('subimages', 'imagemetaid', 'imagemeta', 'id', 'update', 'CASCADE');
+
+-- --------------------------------------------------------
+
+--
+-- Constraints for table `sublog`
+--
+
+CALL AddConstraintIfNotExists('sublog', 'logid', 'log', 'id', 'UPDATE', 'CASCADE');
+CALL AddConstraintIfNotExists('sublog', 'imageid', 'image', 'id', 'UPDATE', 'CASCADE');
+CALL AddConstraintIfNotExists('sublog', 'imagerevisionid', 'imagerevision', 'id', 'UPDATE', 'CASCADE');
+CALL AddConstraintIfNotExists('sublog', 'computerid', 'computer', 'id', 'UPDATE', 'CASCADE');
+CALL AddConstraintIfNotExists('sublog', 'managementnodeid', 'managementnode', 'id', 'UPDATE', 'CASCADE');
+CALL AddConstraintIfNotExists('sublog', 'predictivemoduleid', 'module', 'id', 'UPDATE', 'CASCADE');
+CALL AddConstraintIfNotExists('sublog', 'hostcomputerid', 'computer', 'id', 'UPDATE', 'CASCADE');
+
+-- --------------------------------------------------------
+
+--
+-- Constraints for table `usergroup`
+--
+
+CALL AddConstraintIfNotExists('usergroup', 'affiliationid', 'affiliation', 'id', 'update', 'CASCADE');
 
 -- --------------------------------------------------------
 

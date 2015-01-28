@@ -234,7 +234,7 @@ CREATE TABLE IF NOT EXISTS `computer` (
   `host` blob,
   `hostpub` mediumtext,
   `vmtypeid` tinyint(3) unsigned default NULL,
-  `predictivemoduleid` smallint(5) unsigned NOT NULL default '1',
+  `predictivemoduleid` smallint(5) unsigned NOT NULL default '9',
   PRIMARY KEY  (`id`),
   UNIQUE KEY `hostname` (`hostname`, `datedeleted`),
   UNIQUE KEY `eth1macaddress` (`eth1macaddress`, `datedeleted`),
@@ -443,7 +443,7 @@ CREATE TABLE IF NOT EXISTS `image` (
   `architecture` enum('x86','x86_64') NOT NULL default 'x86',
   `description` text,
   `usage` text,
-  `basedoffrevisionid` mediumint(8) unsigned NOT NULL default '0',
+  `basedoffrevisionid` mediumint(8) unsigned NOT NULL default '1',
   PRIMARY KEY  (`id`),
   UNIQUE KEY `name` (`name`),
   UNIQUE KEY `prettyname` (`prettyname`),
@@ -1588,8 +1588,8 @@ INSERT IGNORE INTO `computerloadflow` (`computerloadstateid`, `nextstateid`, `ty
 --
 
 INSERT IGNORE INTO `connectmethod` (`id`, `name`, `description`, `connecttext`, `servicename`, `startupscript`) VALUES
-(1, 'ssh', 'ssh on port 22', 'You will need to have an X server running on your local computer and use an ssh client to connect to the system. If you did not click on the <b>Connect!</b> button from the computer you will be using to access the VCL system, you will need to return to the <strong>Current Reservations</strong> page and click the <strong>Connect!</strong> button from a web browser running on the same computer from which you will be connecting to the VCL system. Otherwise, you may be denied access to the remote computer.<br><br>\r\nUse the following information when you are ready to connect:<br>\r\n<UL>\r\n<LI><b>Remote Computer</b>: #connectIP#</LI>\r\n<LI><b>User ID</b>: #userid#</LI>\r\n<LI><b>Password</b>: #password#<br></LI>\r\n</UL>\r\n<b>NOTE</b>: The given password is for <i>this reservation only</i>. You will be given a different password for any other reservations.<br>\r\n<strong><big>NOTE:</big> You cannot use the Windows Remote Desktop Connection to connect to this computer. You must use an ssh client.</strong>', 'ext_sshd', '/etc/init.d/ext_sshd'),
-(2, 'RDP', 'Remote Desktop', 'You will need to use a Remote Desktop program to connect to the system. If you did not click on the <b>Connect!</b> button from the computer you will be using to access the VCL system, you will need to return to the <strong>Current Reservations</strong> page and click the <strong>Connect!</strong> button from a web browser running on the same computer from which you will be connecting to the VCL system. Otherwise, you may be denied access to the remote computer.<br><br>\r\n\r\nUse the following information when you are ready to connect:<br>\r\n<UL>\r\n<LI><b>Remote Computer</b>: #connectIP#</LI>\r\n<LI><b>User ID</b>: #userid#</LI>\r\n<LI><b>Password</b>: #password#<br></LI>\r\n</UL>\r\n<b>NOTE</b>: The given password is for <i>this reservation only</i>. You will be given a different password for any other reservations.<br>\r\n<br>\r\nFor automatic connection, you can download an RDP file that can be opened by the Remote Desktop Connection program.<br><br>\r\n', 'TermService', NULL),
+(1, 'SSH', 'SSH for Linux & Unix', 'You will need to have an X server running on your local computer and use an SSH client to connect to the system. If you did not click on the <b>Connect!</b> button from the computer you will be using to access the VCL system, you will need to return to the <strong>Current Reservations</strong> page and click the <strong>Connect!</strong> button from a web browser running on the same computer from which you will be connecting to the VCL system. Otherwise, you may be denied access to the remote computer.<br><br>\r\nUse the following information when you are ready to connect:<br>\r\n<UL>\r\n<LI><b>Remote Computer</b>: #connectIP#</LI>\r\n<LI><b>User ID</b>: #userid#</LI>\r\n<LI><b>Password</b>: #password#<br></LI>\r\n</UL>\r\n<b>NOTE</b>: The given password is for <i>this reservation only</i>. You will be given a different password for any other reservations.<br>\r\n<strong><big>NOTE:</big> You cannot use the Windows Remote Desktop Connection to connect to this computer. You must use an ssh client.</strong>', 'ext_sshd', '/etc/init.d/ext_sshd'),
+(2, 'RDP', 'Remote Desktop for Windows', 'You will need to use a Remote Desktop program to connect to the system. If you did not click on the <b>Connect!</b> button from the computer you will be using to access the VCL system, you will need to return to the <strong>Current Reservations</strong> page and click the <strong>Connect!</strong> button from a web browser running on the same computer from which you will be connecting to the VCL system. Otherwise, you may be denied access to the remote computer.<br><br>\r\n\r\nUse the following information when you are ready to connect:<br>\r\n<UL>\r\n<LI><b>Remote Computer</b>: #connectIP#</LI>\r\n<LI><b>User ID</b>: #userid#</LI>\r\n<LI><b>Password</b>: #password#<br></LI>\r\n</UL>\r\n<b>NOTE</b>: The given password is for <i>this reservation only</i>. You will be given a different password for any other reservations.<br>\r\n<br>\r\nFor automatic connection, you can download an RDP file that can be opened by the Remote Desktop Connection program.<br><br>\r\n', 'TermService', NULL),
 (3, 'iRAPP RDP', 'Remote Desktop for OS X', 'You will need to use a Remote Desktop program to connect to the system. If you did not click on the <b>Connect!</b> button from the computer you will be using to access the VCL system, you will need to return to the <strong>Current Reservations</strong> page and click the <strong>Connect!</strong> button from a web browser running on the same computer from which you will be connecting to the VCL system. Otherwise, you may be denied access to the remote computer.<br><br>\r\n\r\nUse the following information when you are ready to connect:<br>\r\n<UL>\r\n<LI><b>Remote Computer</b>: #connectIP#</LI>\r\n<LI><b>User ID</b>: #userid#</LI>\r\n<LI><b>Password</b>: #password#<br></LI>\r\n</UL>\r\n<b>NOTE</b>: The given password is for <i>this reservation only</i>. You will be given a different password for any other reservations.<br>\r\n<br>\r\nFor automatic connection, you can download an RDP file that can be opened by the Remote Desktop Connection program.<br><br>\r\n', NULL, NULL);
 
 --
@@ -2243,7 +2243,6 @@ ALTER TABLE `image` ADD CONSTRAINT FOREIGN KEY (`platformid`) REFERENCES `platfo
 ALTER TABLE `image` ADD CONSTRAINT FOREIGN KEY (`OSid`) REFERENCES `OS` (`id`) ON UPDATE CASCADE;
 ALTER TABLE `image` ADD CONSTRAINT FOREIGN KEY (`imagetypeid`) REFERENCES `imagetype` (`id`) ON UPDATE CASCADE;
 ALTER TABLE `image` ADD CONSTRAINT FOREIGN KEY (`imagemetaid`) REFERENCES `imagemeta` (`id`) ON DELETE SET NULL ON UPDATE CASCADE;
-ALTER TABLE `image` ADD CONSTRAINT FOREIGN KEY (`basedoffrevisionid`) REFERENCES `imagerevision` (`id`) ON UPDATE CASCADE;
 
 -- 
 -- Constraints for table `imagerevision`
@@ -2350,8 +2349,8 @@ ALTER TABLE `request` ADD CONSTRAINT FOREIGN KEY (`userid`) REFERENCES `user` (`
 ALTER TABLE `reservation` ADD CONSTRAINT FOREIGN KEY (`requestid`) REFERENCES `request` (`id`) ON DELETE CASCADE;
 ALTER TABLE `reservation` ADD CONSTRAINT FOREIGN KEY (`managementnodeid`) REFERENCES `managementnode` (`id`);
 ALTER TABLE `reservation` ADD CONSTRAINT FOREIGN KEY (`computerid`) REFERENCES `computer` (`id`) ON UPDATE CASCADE;
-ALTER TABLE `reservation` ADD CONSTRAINT reservation_ibfk_13 FOREIGN KEY (imagerevisionid) REFERENCES imagerevision (id) ON UPDATE CASCADE;
-ALTER TABLE `reservation` ADD CONSTRAINT reservation_ibfk_12 FOREIGN KEY (imageid) REFERENCES image (id) ON UPDATE CASCADE;
+ALTER TABLE `reservation` ADD CONSTRAINT FOREIGN KEY (`imagerevisionid`) REFERENCES `imagerevision` (`id`) ON UPDATE CASCADE;
+ALTER TABLE `reservation` ADD CONSTRAINT FOREIGN KEY (`imageid`) REFERENCES `image` (`id`) ON UPDATE CASCADE;
 
 --
 -- Constraints for table `reservationaccounts`
@@ -2422,7 +2421,6 @@ ALTER TABLE `serverprofile` ADD CONSTRAINT FOREIGN KEY (`imageid`) REFERENCES `i
 ALTER TABLE `serverrequest` ADD CONSTRAINT FOREIGN KEY (`requestid`) REFERENCES `request` (`id`) ON DELETE CASCADE;
 ALTER TABLE `serverrequest` ADD CONSTRAINT FOREIGN KEY (`admingroupid`) REFERENCES `usergroup` (`id`) ON UPDATE CASCADE;
 ALTER TABLE `serverrequest` ADD CONSTRAINT FOREIGN KEY (`logingroupid`) REFERENCES `usergroup` (`id`) ON UPDATE CASCADE;
-ALTER TABLE `serverrequest` ADD CONSTRAINT FOREIGN KEY (`serverprofileid`) REFERENCES `serverprofile` (`id`) ON UPDATE CASCADE;
 
 --
 -- Constraints for table `shibauth`
@@ -2451,7 +2449,6 @@ ALTER TABLE `sublog` ADD CONSTRAINT FOREIGN KEY (`computerid`) REFERENCES `compu
 ALTER TABLE `sublog` ADD CONSTRAINT FOREIGN KEY (`managementnodeid`) REFERENCES `managementnode` (`id`);
 ALTER TABLE `sublog` ADD CONSTRAINT FOREIGN KEY (`predictivemoduleid`) REFERENCES `module` (`id`);
 ALTER TABLE `sublog` ADD CONSTRAINT FOREIGN KEY (`hostcomputerid`) REFERENCES `computer` (`id`);
-ALTER TABLE `sublog` ADD CONSTRAINT FOREIGN KEY (`blockRequestid`) REFERENCES `blockRequest` (`id`);
 
 -- 
 -- Constraints for table `user`
