@@ -5441,8 +5441,7 @@ sub grant_connect_method_access {
 
 	my $ssh_public_keys = $user_parameters->{ssh_public_keys};
 	if (!defined($ssh_public_keys)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to create user on $computer_node_name, argument hash does not contain a 'ssh_public_keys' key:\n" . format_data($user_parameters));
-		return;
+		notify($ERRORS{'OK'}, 0, "argument hash does not contain a 'ssh_public_keys' key:\n" . format_data($user_parameters));
 	}
 
 	my $home_directory_root = "/home";
