@@ -2157,6 +2157,8 @@ CALL AddConstraintIfNotExists('subimages', 'imagemetaid', 'imagemeta', 'id', 'up
 -- Constraints for table `sublog`
 --
 
+CALL DropExistingConstraints('sublog', 'blockRequestid');
+
 CALL AddConstraintIfNotExists('sublog', 'logid', 'log', 'id', 'UPDATE', 'CASCADE');
 CALL AddConstraintIfNotExists('sublog', 'imageid', 'image', 'id', 'UPDATE', 'CASCADE');
 CALL AddConstraintIfNotExists('sublog', 'imagerevisionid', 'imagerevision', 'id', 'UPDATE', 'CASCADE');
