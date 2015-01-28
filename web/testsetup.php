@@ -268,9 +268,9 @@ if($includeconf && include('.ht-inc/conf.php')) {
 # required extentions
 title("Testing for required php extensions");
 if(version_compare(phpversion(), "5.2", "<"))
-	$requiredexts = array('gd', 'mysql', 'openssl', 'sysvsem', 'xml', 'xmlrpc', 'session', 'pcre', 'sockets', 'ldap', 'gettext');
+	$requiredexts = array('gd', 'mysql', 'openssl', 'xml', 'xmlrpc', 'session', 'pcre', 'sockets', 'ldap', 'gettext');
 else
-	$requiredexts = array('gd', 'mysql', 'openssl', 'sysvsem', 'xml', 'xmlrpc', 'session', 'pcre', 'sockets', 'ldap', 'gettext', 'json');
+	$requiredexts = array('gd', 'mysql', 'openssl', 'xml', 'xmlrpc', 'session', 'pcre', 'sockets', 'ldap', 'gettext', 'json');
 $exts = get_loaded_extensions();
 $diff = array_diff($requiredexts, $exts);
 print "<ul>\n";
