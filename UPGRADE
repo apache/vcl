@@ -1,257 +1,47 @@
-This file explains how to upgrade an existing install of Apache VCL
-to Apache VCL 2.3. It assumed that you extracted the release archive
-to /root/apache-VCL-2.3
+Upgrading to VCL 2.4
 
-The basic steps that will be performed:
+VCL 2.4 is the first release to include an upgrade script. All you need to
+upgrade VCL is the script. It will download and validate the VCL software and
+then upgrade your system. The script can be used to upgrade all three parts of
+VCL (database, web portal, and management node) or to upgrade each part
+individually.
 
-1. Shutdown httpd and vcld services
-2. Create backup of vcl database
-3. Update mysql schema
-4. Grant CREATE TEMPORARY TABLES to mysql user
-5. Update Web code, create a backup, copy in new, make changes
-6. Restart httpd service
-7. Update Management node vcl code, create a backup, copy in new, make changes
-8. Restart vcld service
+Running the upgrade script with no arguments will step you through upgrading
+all three parts of VCL.
 
 
-1. Shutdown httpd and vcld services
+./vcl-install.sh
 
-   service httpd stop
-   service vcld stop
 
-2. Create a backup of vcl database
+Alternatively, any combination of the three parts of VCL can be upgraded by
+passing arguments to the script. If upgrading the management node part of VCL,
+it will also prompt you to agree to the installation of various system level
+requirements needed for the code to run. The database upgrade portion does not
+have to be run on the actual database server. The following are the arguments
+available:
 
-We will create a backup of the vcl database. This will provide a restore point
-if necessary.
+   vcl-upgrade.sh [-h|--help] [-d|--database] [-w|--web] [-m|--managementnode]
+           [--dbhost <hostname>] [--dbadminuser <username>]
+           [--dbadminpass <password>]
 
-   mysqldump vcl > ~/vcl-pre2.3-upgrade.sql
+   -d|--database - upgrade database components
+           --dbhost may optionally be specified if not localhost
 
-3. Update mysql schema
+   -w|--web - upgrade web server components
 
-This step updates the mysql schema.
+   -m|--managementnode - upgrade management node (vcld) components
 
-   cd /root/apache-VCL-2.3
-   mysql vcl < mysql/update-vcl.sql
+   --dbhost <hostname> - hostname of database server (default=localhost)
 
-One item of note: A new resource group is added in update-vcl.sql - 
-"all profiles". Access to manage the group is added to the VCL->admin node
-in the privilege tree if that node exists. If not, you will need to add it
-manually after starting httpd again (step 6). To add it manually, pick a node
-in the privilege tree, scroll to Resources, click Add Resource Group, select
-"serverprofile/all profiles" from the drop-down box, check available,
-administer, manageGroup, and manageMapping, and click "Submit New Resource
-Group".
+   --dbname <name> - name of VCL database on database server (default=vcl)
 
-4. FOR UPGRADING from 2.1 and 2.2 ONLY (skip to step 5 if upgrading from 2.2.1) 
+   --dbadminuser <username> - admin username for database; must have access
+           to modify database schema and dump data for backup (default=root)
 
-Grant CREATE TEMPORARY TABLES to mysql user
+   --dbadminpass <password> - password for dbadminuser (default=[no password])
 
-The web code now requires access to create temporary tables in mysql. You need
-to grant the user your web code uses to access mysql the "CREATE TEMPORARY
-TABLES" permission. Look at the secrets.php file in your web code for the user
-and hostname. For example, if your web code is installed at /var/www/html/vcl,
-your secrets.php file would be /var/www/html/vcl/.ht-inc/secrets.php. Look for
-$vclhost and $vclusername. The secrets.php file might have something like:
 
-$vclhost = 'localhost';
-$vcluser = 'vcluser';
 
-Then, you need to issue the grant command to mysql. Using the values from
-above as examples, connect to mysql and then issue the grant command:
 
-mysql
-GRANT CREATE TEMPORARY TABLES ON `vcl`.* TO 'vcluser'@'localhost';
-exit
 
-5. Update web code
-
-This step we will move the existing web directory out of the way, so we can
-copy in the new web code base. After copying in the new code, we will migrate
-your configuration changes. These instructions assume that you installed the
-vcl web code at /var/www/html/vcl. If you installed it elsewhere, replace
-/var/www/html/vcl with your vcl web root.
-
-   a. move your old code out of the way
-
-      cd /var/www/html
-      mv vcl ~/vcl-pre2.3_web
-
-   b. copy the new code in place
-
-      cd /root/apache-VCL-2.3
-      cp -r web /var/www/html/vcl
-
-   c. copy your config files from the previous version:
-
-      cd ~/vcl-pre2.3_web/.ht-inc
-      cp conf.php secrets.php pubkey.pem keys.pem /var/www/html/vcl/.ht-inc
-
-   d. make /var/www/html/vcl/.ht-inc/maintenance writable by
-      the web server - if httpd on your server is running as the user apache:
-
-      chown apache /var/www/html/vcl/.ht-inc/maintenance
-
-   e. update conf.php
-
-      upgrading from 2.2.1:
-
-         * add the following defines:
-
-           define("DEFAULTLOCALE", "en_US");
-           define("ALLOWADDSHIBUSERS", 0);
-
-         * remove the following arrays:
-
-           $blockNotifyUsers - This has been replace by a user group permission
-           that controls who can manage block allocations globally or for a
-           specific affiliation. It can be granted to any user group under
-           Privileges->Additional User Permissions->Manage Block Allocations
-
-           $userlookupUsers  - This has been replace by a user group permission
-           that controls who can look up users globally or for a specific
-           affiliation.  It can be granted to any user group under
-           Privileges->Additional User Permissions->User Lookup
-
-         * Add the following two keys to each entry you have for LDAP
-           authentication in the $authMechs array. Descriptions of the items
-           can be found in the 2.3 conf-default.php file.
-
-           "lookupuserbeforeauth" => 0,
-           "lookupuserfield" => '',
-
-         * change the following two lines for local authentication from
-
-           $addUserFunc[$item['affiliationid']] = create_function('', 'return 0;');
-		     $updateUserFunc[$item['affiliationid']] = create_function('', 'return 0;');
-
-           to
-
-           $addUserFunc[$item['affiliationid']] = create_function('', 'return NULL;');
-		     $updateUserFunc[$item['affiliationid']] = create_function('', 'return NULL;');
-
-         * remove the three commented lines toward the bottom that talk about
-           adding an entry to $addUserFund for Shibboleth authenticated
-           affiliations (# any affiliation that is shibboleth...)
-
-
-      upgrading from 2.2:
-
-         * add the following defines:
-
-           define("DEFAULTLOCALE", "en_US");
-           define("ALLOWADDSHIBUSERS", 0);
-
-         * remove the following arrays:
-
-           $blockNotifyUsers - This has been replace by a user group permission
-           that controls who can manage block allocations globally or for a
-           specific affiliation. It can be granted to any user group under
-           Privileges->Additional User Permissions->Manage Block Allocations
-
-           $userlookupUsers  - This has been replace by a user group permission
-           that controls who can look up users globally or for a specific
-           affiliation.  It can be granted to any user group under
-           Privileges->Additional User Permissions->User Lookup
-
-         * Add the following two keys to each entry you have for LDAP
-           authentication in the $authMechs array. Descriptions of the items
-           can be found in the 2.3 conf-default.php file.
-
-           "lookupuserbeforeauth" => 0,
-           "lookupuserfield" => '',
-
-         * Remove all of these arrays:
-
-           $affilValFunc
-           $affilValFuncArgs
-           $addUserFunc
-           $addUserFuncArgs
-           $updateUserFunc
-           $updateUserFuncArgs
-
-         * Add the following code:
-
-           $affilValFunc = array();
-           $affilValFuncArgs = array();
-           $addUserFunc = array();
-           $addUserFuncArgs = array();
-           $updateUserFunc = array();
-           $updateUserFuncArgs = array();
-           foreach($authMechs as $key => $item) {
-              if($item['type'] == 'ldap') {
-                 $affilValFunc[$item['affiliationid']] = 'validateLDAPUser';
-                 $affilValFuncArgs[$item['affiliationid']] = $key;
-                 $addUserFunc[$item['affiliationid']] = 'addLDAPUser';
-                 $addUserFuncArgs[$item['affiliationid']] = $key;
-                 $updateUserFunc[$item['affiliationid']] = 'updateLDAPUser';
-                 $updateUserFuncArgs[$item['affiliationid']] = $key;
-              }
-              elseif($item['type'] == 'local') {
-                 $affilValFunc[$item['affiliationid']] = create_function('', 'return 0;');
-                 $addUserFunc[$item['affiliationid']] = create_function('', 'return NULL;');
-                 $updateUserFunc[$item['affiliationid']] = create_function('', 'return NULL;');
-              }
-           }
-
-      upgrading from 2.1:
-
-         If upgrading from 2.1, it is easier to start with a fresh copy of
-         conf-default.php from 2.3 and then apply your changes to it again.
-         If you are using LDAP authentication, you can copy all entries from
-         $authMech out of your 2.1 conf.php file into your 2.3 conf.php file.
-         However, note that you will need to add the following two additional
-         keys to each entry.  A description of these keys can be found in the
-         2.3 conf-default.php file.
-
-         "lookupuserbeforeauth" => 0,
-         "lookupuserfield" => '',
-
-6. Restart httpd service
-
-   service httpd start
-
-   * Confirm you can access the VCL portal before continuing.
-
-7. Update management node code
-
-This step will make a backup copy of the installed vcl code base and then copy
-the new code over the existing code to preserve any drivers or other files
-you've added.
-
-   a. Copy the existing management node code base to a backup location
-
-      cd <your vcl MN code root path>
-      ie. cd /usr/local/
-      cp -r vcl ~/vcl-pre2.3_managementnode
-
-   b. Copy in the 2.3 code base to /usr/local, copying in should preserve any
-      drivers or other files you've added.
-
-      /bin/cp -r /root/apache-VCL-2.3/managementnode/* /usr/local/vcl
-
-   c. (upgrading from 2.1 only) Make changes related to vcld.conf settings
-
-      * Open VCL web interface
-      * Go to Management Nodes
-      * Select Edit Management Node Information
-      * Select Edit.
-      * Set any relevant fields:
-      * SysAdmin Email Address(es) - comma delimited list of vcl admin email
-        addresses
-      * Address for Shadow Emails - a shared mail box, optional it receives
-        email of all notifications
-      * Public NIC configuration method - Defines what type of NIC
-        configuration is used, options are dynamic DHCP, Manual DHCP, or
-        static
-      * End Node SSH Identity Key Files
-
-   d. Run install_perl_libs.pl to update the perl dependencies (this will take
-      a few minutes.)
-      
-      /usr/local/vcl/bin/install_perl_libs.pl
-
-8. Restart vcld service
-
-   service vcld start
-
-   * Check the /var/log/vcld.log file to confirm vcld is working. 
+Manual upgrade instructions are available on our web site if those are needed.
