@@ -94,11 +94,9 @@ DB_ADMINPASS=""
 DB_HOST=localhost
 ARCHIVE=apache-VCL-$VCL_VERSION.tar.bz2
 #ARCHIVEURLPATH=http://vcl.apache.org/downloads/download.cgi?action=download&filename=%2Fvcl%2F
-#ARCHIVEURLPATH=http://people.apache.org/~jfthomps/tmp/ # TODO
-ARCHIVEURLPATH=http://people.engr.ncsu.edu/jfthomps/vcltest/ # TODO
+ARCHIVEURLPATH=http://people.apache.org/~jfthomps/tmp/ # TODO
 #SIGPATH=http://www.apache.org/dist/vcl/
-#SIGPATH=http://people.apache.org/~jfthomps/tmp/ # TODO
-SIGPATH=http://people.engr.ncsu.edu/jfthomps/vcltest/ # TODO
+SIGPATH=http://people.apache.org/~jfthomps/tmp/ # TODO
 
 
 DODB=0
