@@ -14,7 +14,7 @@ function random_string() {
 function help() {
 	name=`basename $0`
 	echo ""
-	echo "$name [-d|--database] [-w|--web] [-m|--managementnode]"
+	echo "$name [-h|--help] [-d|--database] [-w|--web] [-m|--managementnode]"
 	echo -e "\t\t[--dbhost <hostname> --dbpass <password>] "
 	echo -e "\t\t[--mnhost <hostname>] [--webhost <hostname>]"
 	echo ""
@@ -27,15 +27,19 @@ function help() {
 	echo -e "\t-m|--managementnode - install management node (vcld) components"
 	echo -e "\t\t--dbhost, --dbpass, and --adminpass must also be specified"
 	echo ""
-	echo -e "\t--dbhost <hostname> - hostname of database server"
+	echo -e "\t--dbhost <hostname> - hostname of database server (default=localhost)"
 	echo ""
-	echo -e "\t--dbpass <password> - password VCL will use for accessing database"
+	echo -e "\t--dbpass <password> - password VCL will use for accessing"
+	echo -e "\t\tdatabase (default=random)"
 	echo ""
-	echo -e "\t--mnhost <hostname> - hostname of management node"
+	echo -e "\t--mnhost <hostname> - hostname of management node (default=localhost)"
 	echo ""
-	echo -e "\t--webhost <hostname> - hostname of web server"
+	echo -e "\t--webhost <hostname> - hostname of web server (default=localhost)"
 	echo ""
 	echo -e "\t--adminpass <password> - password for VCL admin user"
+	echo ""
+	echo "If no arguments supplied, all components will be install and you"
+	echo "will be prompted for any required additional information."
 	echo ""
 	exit 2
 }
@@ -58,12 +62,10 @@ WEB_HOST=localhost
 CRYPTKEY=`random_string 20`
 PEMKEY=`random_string 20`
 ARCHIVE=apache-VCL-$VCL_VERSION.tar.bz2
-#ARCHIVEURLPATH=http://vcl.apache.org/downloads/download.cgi?action=download&filename=%2Fvcl%2F
-#ARCHIVEURLPATH=http://people.apache.org/~jfthomps/tmp/ # TODO
-ARCHIVEURLPATH=http://people.engr.ncsu.edu/jfthomps/vcltest/ # TODO
-#SIGPATH=http://www.apache.org/dist/vcl/
-#SIGPATH=http://people.apache.org/~jfthomps/tmp/ # TODO
-SIGPATH=http://people.engr.ncsu.edu/jfthomps/vcltest/ # TODO
+#ARCHIVEURLPATH="http://vcl.apache.org/downloads/download.cgi?action=download&filename=%2Fvcl%2F"
+ARCHIVEURLPATH="http://people.apache.org/~jfthomps/tmp/" # TODO
+#SIGPATH="http://www.apache.org/dist/vcl/"
+SIGPATH="http://people.apache.org/~jfthomps/tmp/" # TODO
 
 
 DODB=0
@@ -187,6 +189,13 @@ if [[ $adminpassdefault -eq 0 && ($ADMIN_PASSWORD = ^[[:space:]]+$ || $ADMIN_PAS
 	exit 1
 fi
 
+# ------------------------- check for being root -----------------------------
+who=$(whoami)
+if [[ $who != "root" ]]; then
+	echo "You must be root to run this script."
+	exit 1
+fi
+
 WORKPATH=$(pwd)
 
 if [[ -f NOTICE && -f LICENSE && -d managementnode && -d web && -d mysql ]]; then
@@ -240,12 +249,12 @@ if [[ $DOALL -eq 1 ]]; then
 	echo ""
 	echo "Enter the password you would like to use for the VCL admin user. This can be changed"
 	echo "later by running '/usr/local/vcl/bin/vcld --setup'"
-	echo -n "Password: "
+	echo -n "Admin Password: "
 	IFS= read ADMIN_PASSWORD
 
 	while [[ $ADMIN_PASSWORD = ^[[:space:]]+$ || $ADMIN_PASSWORD = "" ]]; do
 		echo "Password cannot be empty or contain only whitespace. Please enter the password."
-		echo -n "Password: "
+		echo -n "Admin Password: "
 		IFS= read ADMIN_PASSWORD
 	done
 fi
@@ -376,7 +385,8 @@ function set_localauth_password() {
 }
 
 function download_archive() {
-	wget -q "$ARCHIVEURLPATH$ARCHIVE" -O $ARCHIVE
+	wget -q "${ARCHIVEURLPATH}${ARCHIVE}" -O $ARCHIVE
+	if [ $? -ne 0 ]; then generic_error "failed to download $ARCHIVE from $ARCHIVEURLPATH"; exit 1; fi
 }
 
 function validate_archive_sha1() {
@@ -513,7 +523,7 @@ fi
 if [[ $DOWEB -eq 1 ]]; then
 	print_break
 	echo "Installing httpd and php components..."
-	yum -q -y install httpd php mod_ssl php php-gd php-CRYPT php-mysql php-xml php-xmlrpc php-ldap php-process sendmail php-mbstring
+	yum -q -y install httpd php mod_ssl php php-gd php-mysql php-xml php-xmlrpc php-ldap php-process sendmail php-mbstring
 	if [ $? -ne 0 ]; then generic_error "Failed to install httpd"; exit 1; fi;
 	echo "setting httpd to start on boot"
 	/sbin/chkconfig httpd on
@@ -634,15 +644,17 @@ fi
 # ------------------------- copy web code in place -------------------------
 if [[ $DOWEB -eq 1 ]]; then
 	print_break
-	echo "Copying VCL web code..."
-	/bin/cp -r $WORKPATH/apache-VCL-$VCL_VERSION/web/ /var/www/html/vcl
-	if [ $? -ne 0 ]; then generic_error "Failed to copy VCL web code in place"; exit 1; fi;
+	echo "Installing VCL web code..."
+	/bin/cp -r $WORKPATH/apache-VCL-$VCL_VERSION/web/ /var/www/html/vcl-$VCL_VERSION
+	if [ $? -ne 0 ]; then generic_error "Failed to install VCL web code"; exit 1; fi;
+	ln -s /var/www/html/vcl-$VCL_VERSION /var/www/html/vcl
+	if [ $? -ne 0 ]; then generic_error "Failed to install VCL web code"; exit 1; fi;
 	chown apache /var/www/html/vcl/.ht-inc/maintenance
 fi
 
 # ---------------------------- configure web code --------------------------
 if [[ $DOWEB -eq 1 ]]; then
-	echo "Configureing secrets.php..."
+	echo "Configuring secrets.php..."
 	/bin/cp -f /var/www/html/vcl/.ht-inc/secrets-default.php /var/www/html/vcl/.ht-inc/secrets.php
 	if [ $? -ne 0 ]; then echo "Error: Failed to create secrets.php"; exit 1; fi;
 	sed -i -r -e "s/(vclhost\s+=\s+).*;/\1'$DB_HOST';/" /var/www/html/vcl/.ht-inc/secrets.php
@@ -678,7 +690,10 @@ fi
 if [[ $DOMN -eq 1 ]]; then
 	print_break
 	echo "Installing management node components..."
-	/bin/cp -r $WORKPATH/apache-VCL-$VCL_VERSION/managementnode/ /usr/local/vcl
+	/bin/cp -r $WORKPATH/apache-VCL-$VCL_VERSION/managementnode/ /usr/local/vcl-$VCL_VERSION
+	if [ $? -ne 0 ]; then generic_error "Failed to install VCL management node code"; exit 1; fi;
+	ln -s /usr/local/vcl-$VCL_VERSION /usr/local/vcl
+	if [ $? -ne 0 ]; then generic_error "Failed to install VCL management node code"; exit 1; fi;
 fi
 
 #--------------------- configure management node code ------------------
@@ -710,7 +725,7 @@ if [[ $DOMN -eq 1 ]]; then
 	if [ $? -ne 0 ]; then echo "Error: Failed to configure vcld.conf"; exit 1; fi;
 fi
 
-#------------------ configure management to start at boot ---------------
+#------------------ configure vcld to start at boot ---------------
 if [[ $DOMN -eq 1 ]]; then
 	echo "Configuring vcld service..."
 	/bin/cp -f /usr/local/vcl/bin/S99vcld.linux /etc/init.d/vcld
@@ -721,7 +736,7 @@ if [[ $DOMN -eq 1 ]]; then
 	if [ $? -ne 0 ]; then echo "Error: Failed to configure vcld service to start on boot"; exit 1; fi;
 fi
 
-#----------------------- configure management in vcl --------------------
+#----------------------- configure management node in vcl --------------------
 if [[ $DODB -eq 1 ]]; then
 	print_break
 	echo "Adding managment node to database..."
