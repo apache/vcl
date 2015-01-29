@@ -10,7 +10,7 @@ Running the upgrade script with no arguments will step you through upgrading
 all three parts of VCL.
 
 
-./vcl-install.sh
+./vcl-upgrade.sh
 
 
 Alternatively, any combination of the three parts of VCL can be upgraded by
