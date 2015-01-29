@@ -482,6 +482,9 @@ sub post_load {
 	# Update Hostname to match Public assigned name
 	$self->update_public_hostname();
 	
+	# Run custom post_load scripts residing on the management node
+	$self->run_management_node_tools_scripts('post_load');
+	
 	# Run the vcl_post_load script if it exists in the image
 	my @post_load_script_paths = ('/usr/local/vcl/vcl_post_load', '/etc/init.d/vcl_post_load');	
 
@@ -529,7 +532,9 @@ sub post_reserve {
 	my @post_reserve_script_paths = ('/usr/local/vcl/vcl_post_reserve', '/etc/init.d/vcl_post_reserve');
 	
 	notify($ERRORS{'OK'}, 0, "initiating Linux post_reserve: $image_name on $computer_short_name");
-
+	
+	# Run custom post_reserve scripts residing on the management node
+	$self->run_management_node_tools_scripts('post_reserve');
 
 	# User supplied data
 	#check if variable is set

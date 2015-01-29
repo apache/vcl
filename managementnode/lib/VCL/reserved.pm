@@ -132,7 +132,7 @@ sub process {
 	insertloadlog($reservation_id, $computer_id, "noinitialconnection", "user clicked Connect");
 	delete_computerloadlog_reservation($reservation_id, 'acknowledgetimeout');
 	
-	# The frontend should have inserted an '' computerloadlog entry, retrieve its timestamp
+	# The frontend should have inserted an 'initialconnecttimeout' computerloadlog entry, retrieve its timestamp
 	my $connection_check_start_epoch_seconds = get_reservation_computerloadlog_time($reservation_id, 'initialconnecttimeout');
 	if ($connection_check_start_epoch_seconds) {
 		notify($ERRORS{'DEBUG'}, 0, "retrieved timestamp of computerloadlog 'initialconnecttimeout' entry inserted by web frontend: $connection_check_start_epoch_seconds");

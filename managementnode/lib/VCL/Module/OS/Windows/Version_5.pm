@@ -130,6 +130,61 @@ sub pre_capture {
 	return 1;
 } ## end sub pre_capture
 
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 post_load
+
+ Parameters  : none
+ Returns     : boolean
+ Description : Performs steps after an image is loaded which are specific to
+               Windows version 5.x.
+
+=over 3
+
+=cut
+
+sub post_load {
+	my $self = shift;
+	
+	# Check if subroutine was called as an object method
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine can only be called as a VCL::Module object method");
+		return;
+	}
+	
+	notify($ERRORS{'DEBUG'}, 0, "beginning Windows version 5.x post-load tasks");
+
+=item 1
+
+Call parent class's post_load() subroutine
+
+=cut
+
+	notify($ERRORS{'DEBUG'}, 0, "calling parent class post_load() subroutine");
+	if ($self->SUPER::post_load()) {
+		notify($ERRORS{'OK'}, 0, "successfully executed parent class post_load() subroutine");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute parent class post_load() subroutine");
+		return;
+	}
+
+=item *
+
+Run custom post_load scripts residing on the management node
+
+=cut
+
+	$self->run_management_node_tools_scripts('post_load');
+
+=back
+
+=cut
+
+	notify($ERRORS{'DEBUG'}, 0, "Windows version 5.x post-load tasks complete");
+	return 1;
+}
+
 ##############################################################################
 
 =head1 AUXILIARY OBJECT METHODS

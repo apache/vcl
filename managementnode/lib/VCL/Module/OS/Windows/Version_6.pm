@@ -272,6 +272,14 @@ Activate Windows license
 
 	$self->activate();
 
+=item *
+
+Run custom post_load scripts residing on the management node
+
+=cut
+
+	$self->run_management_node_tools_scripts('post_load');
+
 =back
 
 =cut
@@ -523,7 +531,11 @@ sub run_slmgr_ipk {
 	
 	# Run cscript.exe slmgr.vbs -ipk to install the product key
 	my $ipk_command = "$system32_path/cscript.exe //NoLogo \$SYSTEMROOT/System32/slmgr.vbs -ipk $product_key";
-	my ($ipk_exit_status, $ipk_output) = $self->execute($ipk_command);
+	my ($ipk_exit_status, $ipk_output) = $self->execute({
+		command => $ipk_command,
+		timeout_seconds => 240,
+		display_output => 1
+	});
 	if (defined($ipk_exit_status) && $ipk_exit_status == 0 && grep(/successfully/i, @$ipk_output)) {
 		notify($ERRORS{'OK'}, 0, "installed product key: $product_key");
 	}
@@ -562,7 +574,11 @@ sub run_slmgr_ckms {
 	# Run slmgr.vbs -ckms to clear an existing KMS server from a computer
 	# slmgr.vbs must be run in a command shell using the correct System32 path or the task it's supposed to do won't really take effect
 	my $skms_command = "$system32_path/cscript.exe //NoLogo \$SYSTEMROOT/System32/slmgr.vbs -ckms";
-	my ($skms_exit_status, $skms_output) = $self->execute($skms_command);
+	my ($skms_exit_status, $skms_output) = $self->execute({
+		command => $skms_command,
+		timeout_seconds => 240,
+		display_output => 1
+	});
 	if (defined($skms_exit_status) && $skms_exit_status == 0 && grep(/successfully/i, @$skms_output)) {
 		notify($ERRORS{'OK'}, 0, "cleared kms server");
 	}
@@ -601,7 +617,11 @@ sub run_slmgr_cpky {
 	# Run slmgr.vbs -cpky to clear an existing product key from a computer
 	# slmgr.vbs must be run in a command shell using the correct System32 path or the task it's supposed to do won't really take effect
 	my $skms_command = "$system32_path/cscript.exe //NoLogo \$SYSTEMROOT/System32/slmgr.vbs -cpky";
-	my ($skms_exit_status, $skms_output) = $self->execute($skms_command);
+	my ($skms_exit_status, $skms_output) = $self->execute({
+		command => $skms_command,
+		timeout_seconds => 240,
+		display_output => 1
+	});
 	if (defined($skms_exit_status) && $skms_exit_status == 0 && grep(/successfully/i, @$skms_output)) {
 		notify($ERRORS{'OK'}, 0, "cleared product key");
 	}
@@ -650,8 +670,11 @@ sub run_slmgr_skms {
 	# Run slmgr.vbs -skms to configure the computer to use the KMS server
 	# slmgr.vbs must be run in a command shell using the correct System32 path or the task it's supposed to do won't really take effect
 	my $skms_command = "$system32_path/cscript.exe //NoLogo \$SYSTEMROOT/System32/slmgr.vbs -skms $kms_address:$kms_port";
-	
-	my ($skms_exit_status, $skms_output) = $self->execute($skms_command);
+	my ($skms_exit_status, $skms_output) = $self->execute({
+		command => $skms_command,
+		timeout_seconds => 240,
+		display_output => 1
+	});
 	if (defined($skms_exit_status) && $skms_exit_status == 0 && grep(/successfully/i, @$skms_output)) {
 		notify($ERRORS{'OK'}, 0, "set kms server to $kms_address:$kms_port");
 	}
@@ -689,7 +712,11 @@ sub run_slmgr_ato {
 	
 	# Run cscript.exe slmgr.vbs -ato to install the product key
 	my $ato_command = "$system32_path/cscript.exe //NoLogo \$SYSTEMROOT/System32/slmgr.vbs -ato";
-	my ($ato_exit_status, $ato_output) = $self->execute($ato_command);
+	my ($ato_exit_status, $ato_output) = $self->execute({
+		command => $ato_command,
+		timeout_seconds => 240,
+		display_output => 1
+	});
 	if (defined($ato_exit_status) && $ato_exit_status == 0 && grep(/successfully/i, @$ato_output)) {
 		notify($ERRORS{'OK'}, 0, "activated license");
 	}
@@ -727,7 +754,11 @@ sub run_slmgr_dlv {
 	
 	# Run cscript.exe slmgr.vbs -dlv to install the product key
 	my $dlv_command = "$system32_path/cscript.exe //NoLogo \$SYSTEMROOT/System32/slmgr.vbs -dlv";
-	my ($dlv_exit_status, $dlv_output) = $self->execute($dlv_command);
+	my ($dlv_exit_status, $dlv_output) = $self->execute({
+		command => $dlv_command,
+		timeout_seconds => 120,
+		display_output => 1
+	});
 	if (defined($dlv_exit_status) && $dlv_exit_status == 0) {
 		notify($ERRORS{'OK'}, 0, "licensing information:\n" . join("\n", @$dlv_output));
 	}

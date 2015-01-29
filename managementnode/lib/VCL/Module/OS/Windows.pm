@@ -970,9 +970,12 @@ sub post_reserve {
 	
 	my $image_name = $self->data->get_image_name();
 	my $computer_short_name = $self->data->get_computer_short_name();
-	my $script_path = '$SYSTEMROOT/vcl_post_reserve.cmd';
 	
-	# Check if script exists
+	# Run custom post_reserve scripts residing on the management node
+	$self->run_management_node_tools_scripts('post_reserve');
+	
+	# Check if script exists in the image
+	my $script_path = '$SYSTEMROOT/vcl_post_reserve.cmd';
 	if (!$self->file_exists($script_path)) {
 		notify($ERRORS{'DEBUG'}, 0, "post_reserve script does NOT exist: $script_path");
 		return 1;

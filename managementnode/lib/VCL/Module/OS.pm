@@ -117,11 +117,20 @@ sub pre_capture {
 		}
 	}
 	
+	# Delete an existing node configuration directory to clear out any scripts and log files from a previous image revision
+	my $node_configuration_directory = $self->get_node_configuration_directory();
+	if ($node_configuration_directory) {
+		$self->delete_file($node_configuration_directory);
+	}
+	
 	# Create the currentimage.txt file
 	if (!$self->create_currentimage_txt()) {
 		notify($ERRORS{'WARNING'}, 0, "failed to create currentimage.txt on $computer_node_name");
 		return 0;
 	}
+	
+	# Run custom pre_capture scripts residing on the management node
+	$self->run_management_node_tools_scripts('pre_capture');
 	
 	notify($ERRORS{'OK'}, 0, "completed common image capture preparation tasks");
 	return 1;
@@ -2610,7 +2619,6 @@ sub execute_new {
 				);
 				
 				if ($ssh) {
-					
 					notify($ERRORS{'DEBUG'}, 0, "created " . ref($ssh) . " object to control $computer_string, SSH options: $ssh_options");
 				}
 				else {
@@ -3570,7 +3578,7 @@ sub get_timings {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 run_scripts
+=head2 run_management_node_tools_scripts
 
  Parameters  : $stage
  Returns     : boolean
@@ -3612,7 +3620,7 @@ sub get_timings {
 
 =cut
 
-sub run_scripts {
+sub run_management_node_tools_scripts {
 	my $self = shift;
 	if (ref($self) !~ /VCL::Module/) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
@@ -3622,7 +3630,7 @@ sub run_scripts {
 	# Get the stage argument
 	my $stage = shift;
 	if (!$stage) {
-		notify($ERRORS{'WARNING'}, 0, "unable to run scripts, stage argument was not supplied");
+		notify($ERRORS{'WARNING'}, 0, "stage argument was not supplied");
 		return;
 	}
 	elsif ($stage !~ /(pre_capture|post_load|post_reserve)/) {
@@ -3631,12 +3639,22 @@ sub run_scripts {
 	}
 	
 	my $computer_node_name = $self->data->get_computer_node_name();
+	my $image_name = $self->data->get_image_name();
 	
-	my @computer_tools_files = $self->get_tools_file_paths("/Scripts/$stage/");
-	
-	my @failed_file_paths;
+	if (!$self->can('run_script')) {
+		notify($ERRORS{'DEBUG'}, 0, "custom $stage scripts not executed on $computer_node_name, " . ref($self) . " module does not implement a 'run_script' subroutine");
+		return 1;
+	}
 	
 	# Loop through all tools files on the computer
+	my @failed_file_paths;
+	my @computer_tools_files = $self->get_tools_file_paths("/Scripts/$stage/");
+	if (!@computer_tools_files) {
+		notify($ERRORS{'DEBUG'}, 0, "no custom scripts reside on this management node for $image_name");
+		return 1;
+	}
+	
+	notify($ERRORS{'DEBUG'}, 0, "attempting to execute custom scripts residing on the management node for $image_name on $computer_node_name:\n" . join("\n", @computer_tools_files));
 	for my $computer_tools_file_path (@computer_tools_files) {
 		notify($ERRORS{'DEBUG'}, 0, "executing script on $computer_node_name: $computer_tools_file_path");
 		if (!$self->run_script($computer_tools_file_path)) {
@@ -3646,7 +3664,7 @@ sub run_scripts {
 	
 	# Check if any scripts failed
 	if (@failed_file_paths) {
-		notify($ERRORS{'CRITICAL'}, 0, "failed to run the following scripts on $computer_node_name, stage: $stage\n" . join("\n", @failed_file_paths));
+		notify($ERRORS{'WARNING'}, 0, "failed to run the following scripts on $computer_node_name, stage: $stage\n" . join("\n", @failed_file_paths));
 		return;
 	}
 	
