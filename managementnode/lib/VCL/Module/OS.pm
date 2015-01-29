@@ -268,55 +268,21 @@ sub add_user_accounts {
 				notify($ERRORS{'CRITICAL'}, 0, "failed to add entry to reservationaccounts table for $username (ID: $user_id)");
 				return;
 			}
-			
-			# Make sure the user doesn't already exist on the computer
-			if ($self->user_exists($username)) {
-				if ($password) {
-					notify($ERRORS{'WARNING'}, 0, "user '$username' already exists on $computer_node_name, password will be reset");
-					if (!$self->set_password($username, $password)) {
-						notify($ERRORS{'WARNING'}, 0, "user '$username' already exists on $computer_node_name, failed to reset password");
-					}
-				}
-				else {
-					notify($ERRORS{'WARNING'}, 0, "user '$username' already exists on $computer_node_name");
-				}
+
+			# Create user on the OS
+			if (!$self->create_user({
+					username => $username,
+					password => $password,
+					root_access => $root_access,
+					uid => $uid,
+					ssh_public_keys => $ssh_public_keys,
+			})) {
+				notify($ERRORS{'WARNING'}, 0, "failed to create user on $computer_node_name, removing entry added to reservationaccounts table");
 				
-				# Since user already exists, Make sure the connect methods are setup correctly
-				if ($self->can("grant_connect_method_access")) {
-					if (!$self->grant_connect_method_access({
-						username => $username,
-						uid => $uid,
-						ssh_public_keys => $ssh_public_keys,
-					})) {
-						notify($ERRORS{'WARNING'}, 0, "failed to process grant_connect_method_access for $username");
-					}
+				# Delete entry to the useraccounts table
+				if (!delete_reservation_account($reservation_id, $user_id)) {
+					notify($ERRORS{'CRITICAL'}, 0, "failed to delete entry from reservationaccounts table for $username (ID: $user_id)");
 				}
-				# Account already exists, grant root access if allowed
-				if ($self->can("grant_root_access")) {
-					if (!$self->grant_root_access({
-						username => $username,
-						root_access => $root_access,
-					})) {
-						notify($ERRORS{'WARNING'}, 0, "failed to process grant_root_access for $username");
-					}
-				}
-				next RESERVATION_USER;
-			}
-		}
-		
-		# Create user on the OS
-		if (!$self->create_user({
-				username => $username,
-				password => $password,
-				root_access => $root_access,
-				uid => $uid,
-				ssh_public_keys => $ssh_public_keys,
-		})) {
-			notify($ERRORS{'WARNING'}, 0, "failed to create user on $computer_node_name, removing entry added to reservationaccounts table");
-			
-			# Delete entry to the useraccounts table
-			if (!delete_reservation_account($reservation_id, $user_id)) {
-				notify($ERRORS{'CRITICAL'}, 0, "failed to delete entry from reservationaccounts table for $username (ID: $user_id)");
 			}
 		}
 	}

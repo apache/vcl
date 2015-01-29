@@ -2593,43 +2593,45 @@ sub create_user {
 	my $uid = $user_parameters->{uid};
 	my $ssh_public_keys = $user_parameters->{ssh_public_keys};
 	
-	# Check if user already exists
-	if ($self->user_exists($username)) {
-		notify($ERRORS{'WARNING'}, 0, "unable to create user '$username' on $computer_node_name, the user already exists");
-		return;
-	}
+	# If user account does not already exist - create it, then
+	# -- Set password if using local authentication
+	# -- update sudoers file if root access allowed
+	# -- process connect_methods_access
+
+	if (!$self->user_exists($username)) {
 	
-	notify($ERRORS{'DEBUG'}, 0, "creating user on $computer_node_name:\n" .
-		"username: $username\n" .
-		"password: " . (defined($password) ? $password : '<not set>') . "\n" .
-		"UID: " . ($uid ? $uid : '<not set>') . "\n" .
-		"root access: " . ($root_access ? 'yes' : 'no') . "\n" .
-		"SSH public keys: " . (defined($ssh_public_keys) ? $ssh_public_keys : '<not set>')
-	);
-	
-	my $home_directory_root = "/home";
-	my $home_directory_path = "$home_directory_root/$username";
-	my $home_directory_on_local_disk = $self->is_file_on_local_disk($home_directory_root);
-	if ($home_directory_on_local_disk ) {
-		my $useradd_command = "/usr/sbin/useradd -s /bin/bash -m -d /home/$username -g vcl";
-		$useradd_command .= " -u $uid" if ($uid);
-		$useradd_command .= " $username";
+		notify($ERRORS{'DEBUG'}, 0, "creating user on $computer_node_name:\n" .
+			"username: $username\n" .
+			"password: " . (defined($password) ? $password : '<not set>') . "\n" .
+			"UID: " . ($uid ? $uid : '<not set>') . "\n" .
+			"root access: " . ($root_access ? 'yes' : 'no') . "\n" .
+			"SSH public keys: " . (defined($ssh_public_keys) ? $ssh_public_keys : '<not set>')
+		);
 		
-		my ($useradd_exit_status, $useradd_output) = $self->execute($useradd_command);
-		if (!defined($useradd_output)) {
-			notify($ERRORS{'WARNING'}, 0, "failed to execute command to add user '$username' to $computer_node_name: '$useradd_command'");
-			return;
-		}
-		elsif (grep(/^useradd: /, @$useradd_output)) {
-			notify($ERRORS{'WARNING'}, 0, "failed to add user '$username' to $computer_node_name\ncommand: '$useradd_command'\noutput:\n" . join("\n", @$useradd_output));
-			return;
+		my $home_directory_root = "/home";
+		my $home_directory_path = "$home_directory_root/$username";
+		my $home_directory_on_local_disk = $self->is_file_on_local_disk($home_directory_root);
+		if ($home_directory_on_local_disk ) {
+			my $useradd_command = "/usr/sbin/useradd -s /bin/bash -m -d /home/$username -g vcl";
+			$useradd_command .= " -u $uid" if ($uid);
+			$useradd_command .= " $username";
+			
+			my ($useradd_exit_status, $useradd_output) = $self->execute($useradd_command);
+			if (!defined($useradd_output)) {
+				notify($ERRORS{'WARNING'}, 0, "failed to execute command to add user '$username' to $computer_node_name: '$useradd_command'");
+				return;
+			}
+			elsif (grep(/^useradd: /, @$useradd_output)) {
+				notify($ERRORS{'WARNING'}, 0, "failed to add user '$username' to $computer_node_name\ncommand: '$useradd_command'\noutput:\n" . join("\n", @$useradd_output));
+				return;
+			}
+			else {
+				notify($ERRORS{'OK'}, 0, "added user '$username' to $computer_node_name");
+			}
 		}
 		else {
-			notify($ERRORS{'OK'}, 0, "added user '$username' to $computer_node_name");
+			notify($ERRORS{'OK'}, 0, "$home_directory_path is NOT on local disk, skipping useradd attempt");	
 		}
-	}
-	else {
-		notify($ERRORS{'OK'}, 0, "$home_directory_path is NOT on local disk, skipping useradd attempt");	
 	}
 	
 	# Set the password
@@ -2685,11 +2687,11 @@ sub grant_root_access {
 	
 	my $user_parameters = shift;
 	if (!$user_parameters) {
-		notify($ERRORS{'WARNING'}, 0, "unable to create user, user parameters argument was not provided");
+		notify($ERRORS{'WARNING'}, 0, "unable to grant acess, user parameters argument was not provided");
 		return;
 	}
 	elsif (!ref($user_parameters) || ref($user_parameters) ne 'HASH') {
-		notify($ERRORS{'WARNING'}, 0, "unable to create user, argument provided is not a hash reference");
+		notify($ERRORS{'WARNING'}, 0, "unable to grant access, argument provided is not a hash reference");
 		return;
 	}
 	
@@ -2704,7 +2706,8 @@ sub grant_root_access {
 		notify($ERRORS{'WARNING'}, 0, "argument hash does not contain a 'root_access' key:\n" . format_data($user_parameters));
 		return;
 	}
-	
+
+	if ($root_access) {
 		my $sudoers_file_path = '/etc/sudoers';
 		my $sudoers_line = "$username ALL= NOPASSWD: ALL\n";
 		if ($self->append_text_file($sudoers_file_path, $sudoers_line)) {
@@ -2713,8 +2716,13 @@ sub grant_root_access {
 		}
 		else {
 			notify($ERRORS{'WARNING'}, 0, "failed to append line to $sudoers_file_path: '$sudoers_line'");
-			return;
+			return 1;
 		}
+	}
+	else {
+		notify($ERRORS{'OK'}, 0, "root access for user $username was not allowed root_access = $root_access ");
+      return;
+	}
 
 }
 
