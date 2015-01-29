@@ -53,6 +53,27 @@ use VCL::utils;
 
 ##############################################################################
 
+=head1 CLASS VARIABLES
+
+=cut
+
+=head2 $SOURCE_CONFIGURATION_DIRECTORY
+
+ Data type   : String
+ Description : Location on the management node of the files specific to this OS
+               module which are needed to configure the loaded OS on a computer.
+               This is normally the directory under 'tools' named after this OS
+               module.
+               
+               Example:
+               /usr/local/vcl/tools/Ubuntu
+
+=cut
+
+our $SOURCE_CONFIGURATION_DIRECTORY = "$TOOLS/Ubuntu";
+
+##############################################################################
+
 =head1 OBJECT METHODS
 
 =cut
