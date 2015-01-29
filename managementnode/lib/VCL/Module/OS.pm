@@ -220,17 +220,10 @@ sub add_user_accounts {
 		my $password;
 		
 		# Check if entry needs to be added to the useraccounts table
-		if (defined($reservation_accounts->{$user_id})) {
-			# Entry already exists in useraccounts table, assume everything is correct
-			notify($ERRORS{'DEBUG'}, 0, "entry already exists in useraccounts table for $username (ID: $user_id)");
-			
-			# This is normal, user should exist unless state is reinstall
-			# If reinstall, proceed to try to create the user
-			# Otherwise, proceed to next user
-			if ($request_state_name !~ /(reinstall)/) {
-				next RESERVATION_USER;
-			}
-			$password = $reservation_accounts->{$user_id}{password};
+		if (defined($reservation_accounts->{$user_id}) && ($request_state_name =~ /servermodified/)) {
+			# Entry already exists in useraccounts table and is servermodified, assume everything is correct skip to next user
+			notify($ERRORS{'DEBUG'}, 0, "entry already exists in useraccounts table for $username (ID: $user_id) and request_state_name = $request_state_name");
+			next RESERVATION_USER;
 		}
 		else {
 			notify($ERRORS{'DEBUG'}, 0, "entry does not already exist in useraccounts table for $username (ID: $user_id)");
