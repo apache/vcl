@@ -1,40 +1,19 @@
 #!/bin/bash
 
-(
-cat <<'EOF'
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
 
-# need to know
-database admin account
-database admin password
-database name
-database host
+#     http://www.apache.org/licenses/LICENSE-2.0
 
-# need to do
--download new archive
--validate new archive
--run install_perl_libs.pl
--stop vcld
--stop httpd
--determine installed version
--dump database
--create tar backup of web code
--create tar backup of management node code
--copy new web code in place
--copy configuration files from old web code to new code
--add any updates to conf.php
--copy new management node code in place
--add any updates to vcld.conf
--rename old web code directory
--rename old management node directory
--create web symlink
--create management node symlink
--create .htaccess file in old web code location that blocks access
--upgrade database schema
--start httpd
--start vcld
-
-EOF
-) > /dev/null
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
 function print_break() {
 	echo "------------------------------------------------------------------------------------------"
