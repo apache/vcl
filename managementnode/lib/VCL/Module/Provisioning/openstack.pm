@@ -1,6 +1,6 @@
 #!/usr/bin/perl -w
 ###############################################################################
-# $Id: openstack.pm 2014-6-22 
+# $Id: openstack.pm 
 ###############################################################################
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
@@ -108,9 +108,10 @@ sub unload {
 
 	my $computer_name = $self->data->get_computer_short_name() || return;
 	my $vmhost_name = $self->data->get_vmhost_short_name() || return;
+	my $computer_private_ip_address = $self->data->get_computer_private_ip_address();
 
 	# Remove existing VMs which were created for the reservation computer
-	if (_pingnode($computer_name)) {
+	if (_pingnode($computer_private_ip_address)) {
 		if (!$self->_terminate_os_instance()) {
 			notify($ERRORS{'WARNING'}, 0, "failed to delete VM $computer_name on VM host $vmhost_name");
 			return 0;
@@ -149,11 +150,13 @@ sub load {
 	my $computer_name = $self->data->get_computer_short_name() || return;
 	my $image_name = $self->data->get_image_name() || return;
 	my $vmhost_name = $self->data->get_vmhost_short_name() || return;
+	my $computer_private_ip_address = $self->data->get_computer_private_ip_address() || return;
 
 	insertloadlog($reservation_id, $computer_id, "startload", "$computer_name $image_name");
+	notify($ERRORS{'DEBUG'}, 0, "computer_private_ip_address = [$computer_private_ip_address]");
 
 	# Remove existing VMs which were created for the reservation computer
-	if (_pingnode($computer_name)) {
+	if (_pingnode($computer_private_ip_address)) {
 		if (!$self->_terminate_os_instance()) {
 			notify($ERRORS{'CRITICAL'}, 0, "failed to delete VM $computer_name on VM host $vmhost_name");
 		}
@@ -221,9 +224,13 @@ sub capture {
 	my $computer_id = $self->data->get_computer_id() || return;
 	my $image_name = $self->data->get_image_name() || return;
 	my $computer_name = $self->data->get_computer_short_name() || return;
+	my $computer_private_ip_address = $self->data->get_computer_private_ip_address() || return;
+
 	insertloadlog($reservation_id, $computer_id, "startcapture", "$computer_name $image_name");
+	notify($ERRORS{'DEBUG'}, 0, "computer_private_ip_address = [$computer_private_ip_address]");
 	
-	if (!_pingnode($computer_name)) {
+	# Remove existing VMs which were created for the reservation computer
+	if (!_pingnode($computer_private_ip_address)) {
 		notify($ERRORS{'WARNING'}, 0, "unable to ping to $computer_name");
 		return;
 	}
@@ -392,6 +399,190 @@ sub get_image_size {
 	return round($os_image_size_bytes / 1024 / 1024);
 } ## end sub get_image_size
 
+#/////////////////////////////////////////////////////////////////////////
+
+=head2 node_status
+
+ Parameters  : $computer_id or $hash->{computer}{id} (optional)
+ Returns     : string -- 'READY', 'POST_LOAD', or 'RELOAD'
+ Description : Checks the status of a VM. 'READY' is returned if the VM is
+	       accessible via SSH, and the OS module's post-load tasks have
+	       run. 'POST_LOAD' is returned if the VM only needs to have
+	       the OS module's post-load tasks run before it is ready.
+	       'RELOAD' is returned otherwise.
+
+=cut
+
+sub node_status {
+	my $self;
+
+	# Get the argument
+	my $argument = shift;
+
+	# Check if this subroutine was called an an object method or an argument was passed
+	if (ref($argument) =~ /VCL::Module/i) {
+		$self = $argument;
+	}
+	elsif (!ref($argument) || ref($argument) eq 'HASH') {
+		# An argument was passed, check its type and determine the computer ID
+		my $computer_id;
+		if (ref($argument)) {
+			# Hash reference was passed
+			$computer_id = $argument->{id};
+		}
+		elsif ($argument =~ /^\d+$/) {
+			# Computer ID was passed
+			$computer_id = $argument;
+		}
+		else {
+			# Computer name was passed
+			($computer_id) = get_computer_ids($argument);
+		}
+
+		if ($computer_id) {
+			notify($ERRORS{'DEBUG'}, 0, "computer ID: $computer_id");
+		}
+
+		else {
+			notify($ERRORS{'WARNING'}, 0, "unable to determine computer ID from argument:\n" . format_data($argument));
+			return;
+		}
+
+		# Create a DataStructure object containing data for the computer specified as the argument
+		my $data;
+		eval {
+			$data= new VCL::DataStructure({computer_identifier => $computer_id});
+		};
+		if ($EVAL_ERROR) {
+			notify($ERRORS{'WARNING'}, 0, "failed to create DataStructure object for computer ID: $computer_id, error: $EVAL_ERROR");
+			return;
+		}
+		elsif (!$data) {
+			notify($ERRORS{'WARNING'}, 0, "failed to create DataStructure object for computer ID: $computer_id, DataStructure object is not defined");
+			return;
+		}
+		else {
+			notify($ERRORS{'DEBUG'}, 0, "created DataStructure object  for computer ID: $computer_id");
+		}
+
+		# Create a VMware object
+		my $object_type = 'VCL::Module::Provisioning::openstack';
+		if ($self = ($object_type)->new({data_structure => $data})) {
+			notify($ERRORS{'DEBUG'}, 0, "created $object_type object to check the status of computer ID: $computer_id");
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "failed to create $object_type object to check the status of computer ID: $computer_id");
+			return;
+		}
+
+		# Create an OS object for the VMware object to access
+		if (!$self->create_os_object()) {
+			notify($ERRORS{'WARNING'}, 0, "failed to create OS object");
+			return;
+		}
+	}
+
+	my $reservation_id = $self->data->get_reservation_id();
+	my $computer_name = $self->data->get_computer_node_name();
+	my $image_name = $self->data->get_image_name();
+	my $request_forimaging = $self->data->get_request_forimaging();
+	my $imagerevision_id = $self->data->get_imagerevision_id();
+	my $computer_private_ip_address = $self->data->get_computer_private_ip_address();
+
+
+	notify($ERRORS{'DEBUG'}, 0, "attempting to check the status of computer $computer_name, image: $image_name");
+
+	# Create a hash reference and populate it with the default values
+	my $status;
+	$status->{currentimage} = '';
+	$status->{ssh} = 0;
+	$status->{image_match} = 0;
+	$status->{status} = 'RELOAD';
+
+	# Check if node is pingable and retrieve the power status if the reservation ID is 0
+	# The reservation ID will be 0 is this subroutine was not called as an object method, but with a computer ID argument
+	# The reservation ID will be 0 when called from healthcheck.pm
+	# The reservation ID will be > 0 if called from a normal VCL reservation
+	# Skip the ping and power status checks for a normal reservation to speed things up
+	if (!$reservation_id) {
+		if (_pingnode($computer_private_ip_address)) {
+			notify($ERRORS{'DEBUG'}, 0, "VM $computer_name is pingable");
+			$status->{ping} = 1;
+		}
+		else {
+			notify($ERRORS{'DEBUG'}, 0, "VM $computer_name is not pingable");
+			$status->{ping} = 0;
+		}
+
+	}
+
+	notify($ERRORS{'DEBUG'}, 0, "Trying to ssh...");
+	# Check if SSH is available
+	if ($self->os->is_ssh_responding()) {
+		notify($ERRORS{'DEBUG'}, 0, "VM $computer_name is responding to SSH");
+		$status->{ssh} = 1;
+	}
+	else {
+		notify($ERRORS{'OK'}, 0, "VM $computer_name is not responding to SSH, returning 'RELOAD'");
+		$status->{status} = 'RELOAD';
+		$status->{ssh} = 0;
+
+		# Skip remaining checks if SSH isn't available
+		return $status;
+	}
+
+	my $current_image_revision_id = $self->os->get_current_image_info();
+	$status->{currentimagerevision_id} = $current_image_revision_id;
+
+	$status->{currentimage} = $self->data->get_computer_currentimage_name();
+	my $current_image_name = $status->{currentimage};
+	my $vcld_post_load_status = $self->data->get_computer_currentimage_vcld_post_load();
+
+	if (!$current_image_revision_id) {
+		notify($ERRORS{'OK'}, 0, "unable to retrieve image name from currentimage.txt on VM $computer_name, returning 'RELOAD'");
+		return $status;
+	}
+	elsif ($current_image_revision_id eq $imagerevision_id) {
+		notify($ERRORS{'OK'}, 0, "currentimage.txt image $current_image_revision_id ($current_image_name) matches requested imagerevision_id $imagerevision_id  on VM $computer_name");
+		$status->{image_match} = 1;
+	}
+	else {
+		notify($ERRORS{'OK'}, 0, "currentimage.txt imagerevision_id $current_image_revision_id ($current_image_name) does not match requested imagerevision_id $imagerevision_id on VM $computer_name, returning 'RELOAD'");
+		return $status;
+	}
+
+
+	# Determine the overall machine status based on the individual status results
+	if ($status->{ssh} && $status->{image_match}) {
+		$status->{status} = 'READY';
+	}
+	else {
+		$status->{status} = 'RELOAD';
+	}
+
+	notify($ERRORS{'DEBUG'}, 0, "status set to $status->{status}");
+
+
+	if ($request_forimaging) {
+		$status->{status} = 'RELOAD';
+		notify($ERRORS{'OK'}, 0, "request_forimaging set, setting status to RELOAD");
+	}
+
+	if ($vcld_post_load_status) {
+		notify($ERRORS{'DEBUG'}, 0, "OS module post_load tasks have been completed on VM $computer_name");
+		$status->{status} = 'READY';
+	}
+	else {
+		notify($ERRORS{'OK'}, 0, "OS module post_load tasks have not been completed on VM $computer_name, returning 'POST_LOAD'");
+		$status->{status} = 'POST_LOAD';
+	}
+
+	notify($ERRORS{'DEBUG'}, 0, "returning node status hash reference (\$node_status->{status}=$status->{status})");
+	return $status;
+
+} ## end sub node_status
+
+											       
 #/////////////////////////////////////////////////////////////////////////////
 
 =head2 _delete_os_computer_mapping
@@ -518,7 +709,7 @@ WHERE
 imagerevisionid = '$imagerevision_id'
 EOF
 
-	#notify($ERRORS{'DEBUG'}, 0, "get_os_image_id: $sql_statement");
+	notify($ERRORS{'DEBUG'}, 0, "get_os_image_id: $sql_statement");
 	my @selected_rows = database_select($sql_statement);
 	if (scalar @selected_rows == 0 || scalar @selected_rows > 1) {
 		notify($ERRORS{'WARNING'}, 0, "" . scalar @selected_rows . " rows were returned from database select");
@@ -937,6 +1128,7 @@ sub _post_os_create_instance {
 	}
 
 	my $output = from_json($resp->content);
+	notify($ERRORS{'DEBUG'}, 0, "create_instance output: $output");
 	if (!defined($output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to parse json output");
 		return;
@@ -1083,6 +1275,7 @@ sub _terminate_os_instance {
 		return 0;
 	}
 
+	sleep 30;
 	return 1;
 } ## end sub _terminate_os_instance
 
@@ -1212,6 +1405,12 @@ sub _wait_for_copying_image {
 
 	return 0;
 } ## end sub _wait_for_copying_image
+
+sub power_reset {
+
+	return 1;
+
+}
 
 #/////////////////////////////////////////////////////////////////////////////
 1;
