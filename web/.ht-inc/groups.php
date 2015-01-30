@@ -628,6 +628,16 @@ function editOrAddGroup($state) {
 		}
 	}
 
+	if($data['type'] == 'user' && ! array_key_exists($defaultusergroupid, $affilusergroups)) {
+		if($user['showallgroups']) {
+			$affil = getAffiliationName(1);
+			$affilusergroups[$defaultusergroupid]['name'] = "Default for Editable by@$affil";
+		}
+		else
+			$affilusergroups[$defaultusergroupid]['name'] = 'Default for Editable by';
+		uasort($affilusergroups, "sortKeepIndex");
+	}
+
 	$editusergroup = 0;
 	if($data['type'] != 'user')
 		print "<FORM action=\"" . BASEURL . SCRIPT . "#resources\" method=post>\n";
@@ -1383,7 +1393,7 @@ function confirmEditOrAddGroup($state) {
 	}
 
 	$resourcetypes = getTypes("resources");
-	$usergroups = getUserGroups(1);
+	$usergroups = getUserGroups();
 	$affils = getAffiliations();
 	$editname = getContinuationVar('editname', 1);
 
