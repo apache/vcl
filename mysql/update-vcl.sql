@@ -2259,7 +2259,8 @@ computer.provisioningid = (
   WHERE
   provisioning.moduleid = (SELECT MIN(module.id) FROM module WHERE module.perlpackage = 'VCL::Module::Provisioning::VMware::VMware')
 )
-WHERE provisioning.moduleid IN (SELECT module.id FROM module WHERE module.perlpackage = 'VCL::Module::Provisioning::vmware');
+WHERE provisioning.moduleid IN (SELECT module.id FROM module WHERE module.perlpackage = 'VCL::Module::Provisioning::vmware')
+AND computer.provisioningid = provisioning.id;
 
 UPDATE IGNORE statgraphcache, provisioning SET
 statgraphcache.provisioningid = (
@@ -2271,7 +2272,10 @@ statgraphcache.provisioningid = (
   WHERE
   provisioning.moduleid = (SELECT MIN(module.id) FROM module WHERE module.perlpackage = 'VCL::Module::Provisioning::VMware::VMware')
 )
-WHERE provisioning.moduleid IN (SELECT module.id FROM module WHERE module.perlpackage = 'VCL::Module::Provisioning::vmware');
+WHERE provisioning.moduleid IN (SELECT module.id FROM module WHERE module.perlpackage = 'VCL::Module::Provisioning::vmware')
+AND statgraphcache.provisioningid = provisioning.id;
+
+DELETE FROM provisioningOSinstalltype WHERE provisioningOSinstalltype.provisioningid IN (SELECT module.id FROM module WHERE module.perlpackage = 'VCL::Module::Provisioning::vmware');
 
 DELETE FROM provisioning WHERE provisioning.moduleid IN (SELECT module.id FROM module WHERE module.perlpackage = 'VCL::Module::Provisioning::vmware');
 
@@ -2291,7 +2295,9 @@ computer.provisioningid = (
   WHERE
   provisioning.moduleid = (SELECT MIN(module.id) FROM module WHERE module.perlpackage = 'VCL::Module::Provisioning::xCAT')
 )
-WHERE provisioning.moduleid IN (SELECT module.id FROM module WHERE module.perlpackage = 'VCL::Module::Provisioning::xCAT2');
+WHERE provisioning.moduleid IN (SELECT module.id FROM module WHERE module.perlpackage = 'VCL::Module::Provisioning::xCAT2')
+AND computer.provisioningid = provisioning.id;
+
 UPDATE IGNORE statgraphcache, provisioning SET
 statgraphcache.provisioningid = (
   SELECT DISTINCT
@@ -2302,7 +2308,10 @@ statgraphcache.provisioningid = (
   WHERE
   provisioning.moduleid = (SELECT MIN(module.id) FROM module WHERE module.perlpackage = 'VCL::Module::Provisioning::xCAT')
 )
-WHERE provisioning.moduleid IN (SELECT module.id FROM module WHERE module.perlpackage = 'VCL::Module::Provisioning::xCAT2');
+WHERE provisioning.moduleid IN (SELECT module.id FROM module WHERE module.perlpackage = 'VCL::Module::Provisioning::xCAT2')
+AND statgraphcache.provisioningid = provisioning.id;
+
+DELETE FROM provisioningOSinstalltype WHERE provisioningOSinstalltype.provisioningid IN (SELECT module.id FROM module WHERE module.perlpackage = 'VCL::Module::Provisioning::xCAT2');
 
 DELETE FROM provisioning WHERE provisioning.moduleid IN (SELECT module.id FROM module WHERE module.perlpackage = 'VCL::Module::Provisioning::xCAT2');
 
@@ -2322,7 +2331,9 @@ computer.provisioningid = (
   WHERE
   provisioning.moduleid = (SELECT MIN(module.id) FROM module WHERE module.perlpackage = 'VCL::Module::Provisioning::xCAT')
 )
-WHERE provisioning.moduleid IN (SELECT module.id FROM module WHERE module.perlpackage = 'VCL::Module::Provisioning::xCAT21');
+WHERE provisioning.moduleid IN (SELECT module.id FROM module WHERE module.perlpackage = 'VCL::Module::Provisioning::xCAT21')
+AND computer.provisioningid = provisioning.id;
+
 UPDATE IGNORE statgraphcache, provisioning SET
 statgraphcache.provisioningid = (
   SELECT DISTINCT
@@ -2333,7 +2344,10 @@ statgraphcache.provisioningid = (
   WHERE
   provisioning.moduleid = (SELECT MIN(module.id) FROM module WHERE module.perlpackage = 'VCL::Module::Provisioning::xCAT')
 )
-WHERE provisioning.moduleid IN (SELECT module.id FROM module WHERE module.perlpackage = 'VCL::Module::Provisioning::xCAT21');
+WHERE provisioning.moduleid IN (SELECT module.id FROM module WHERE module.perlpackage = 'VCL::Module::Provisioning::xCAT21')
+AND statgraphcache.provisioningid = provisioning.id;
+
+DELETE FROM provisioningOSinstalltype WHERE provisioningOSinstalltype.provisioningid IN (SELECT module.id FROM module WHERE module.perlpackage = 'VCL::Module::Provisioning::xCAT21');
 
 DELETE FROM provisioning WHERE provisioning.moduleid IN (SELECT module.id FROM module WHERE module.perlpackage = 'VCL::Module::Provisioning::xCAT21');
 
