@@ -2469,8 +2469,7 @@ sub reboot {
 		return 1;
 	}
 	
-	my $wait_attempt_limit = 2;
-	if ($self->wait_for_reboot($wait_attempt_limit)) {
+	if ($self->wait_for_reboot()) {
 		# Reboot was successful, calculate how long reboot took
 		my $reboot_end_time = time();
 		my $reboot_duration = ($reboot_end_time - $reboot_start_time);
@@ -2478,7 +2477,7 @@ sub reboot {
 		return 1;
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "reboot failed on $computer_node_name, made $wait_attempt_limit attempts");
+		notify($ERRORS{'WARNING'}, 0, "reboot failed on $computer_node_name, made default wait_attempt_limit attempts");
 		return 0;
 	}
 
