@@ -6108,10 +6108,11 @@ function getUserRequests($type, $id=0) {
 	global $user;
 	if($id == 0)
 		$id = $user["id"];
-	if(empty($user['groups']))
+	$includegroups = getUsersGroups($user["id"]);
+	if(empty($includegroups))
 		$ingroupids = "''";
 	else
-		$ingroupids = implode(',', array_keys($user['groups']));
+		$ingroupids = implode(',', array_keys($includegroups));
 	$query = "SELECT i.name AS image, "
 	       .        "i.prettyname AS prettyimage, "
 	       .        "i.id AS imageid, "
