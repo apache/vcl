@@ -2626,9 +2626,8 @@ sub create_user {
 				notify($ERRORS{'WARNING'}, 0, "failed to execute command to add user '$username' to $computer_node_name: '$useradd_command'");
 				return;
 			}
-			elsif (grep(/^useradd: /, @$useradd_output)) {
-				notify($ERRORS{'WARNING'}, 0, "failed to add user '$username' to $computer_node_name\ncommand: '$useradd_command'\noutput:\n" . join("\n", @$useradd_output));
-				return;
+			elsif (grep(/^useradd: warning/, @$useradd_output)) {
+				notify($ERRORS{'WARNING'}, 0, "warning detected on add user '$username' to $computer_node_name\ncommand: '$useradd_command'\noutput:\n" . join("\n", @$useradd_output));
 			}
 			else {
 				notify($ERRORS{'OK'}, 0, "added user '$username' to $computer_node_name");
