@@ -562,7 +562,10 @@ Procedure   : Add3ColUniqueIndexIfNotExist
 Parameters  : tableName, columnName1, columnName2, columnName2
 Description : Adds a unique index to an existing table if a primary or unique
               index does not already exist for the column. Any non-unique
-              indices are dropped before the unique index is added.
+              indices are dropped before the unique index is added. If 
+              deleteduplicates is passed as 1, any duplicates in the table
+              will be dropped. If any other value is passed and there are
+              duplicates in the table, it will throw an error.
 */
 
 DROP PROCEDURE IF EXISTS `Add3ColUniqueIndexIfNotExist`$$
@@ -570,7 +573,8 @@ CREATE PROCEDURE `Add3ColUniqueIndexIfNotExist`(
   IN tableName tinytext,
   IN columnName1 tinytext,
   IN columnName2 tinytext,
-  IN columnName3 tinytext
+  IN columnName3 tinytext,
+  IN deleteduplicates tinyint
 )
 BEGIN
   DECLARE done INT DEFAULT 0;
@@ -651,7 +655,11 @@ BEGIN
     AND i3.COLUMN_NAME IN (columnName1, columnName2, columnName3)
   )
   THEN
-    SET @add_unique_index = CONCAT('ALTER TABLE `', Database(), '`.', tableName, ' ADD UNIQUE (', columnName1, ',', columnName2, ',', columnName3, ')');
+    IF deleteduplicates = 1 THEN
+      SET @add_unique_index = CONCAT('ALTER IGNORE TABLE `', Database(), '`.', tableName, ' ADD UNIQUE (', columnName1, ',', columnName2, ',', columnName3, ')');
+    ELSE
+      SET @add_unique_index = CONCAT('ALTER TABLE `', Database(), '`.', tableName, ' ADD UNIQUE (', columnName1, ',', columnName2, ',', columnName3, ')');
+    END IF;
     PREPARE add_unique_index FROM @add_unique_index;
     EXECUTE add_unique_index;
   END IF;
@@ -791,7 +799,7 @@ CALL AddColumnIfNotExists('changelog', 'other', "varchar(255) default NULL AFTER
 CALL AddIndexIfNotExists('changelog', 'userid');
 CALL AddIndexIfNotExists('changelog', 'reservationid');
 
-CALL Add3ColUniqueIndexIfNotExist('changelog', 'reservationid', 'userid', 'remoteIP');
+CALL Add3ColUniqueIndexIfNotExist('changelog', 'reservationid', 'userid', 'remoteIP', 0);
 
 -- --------------------------------------------------------
 
@@ -1800,6 +1808,18 @@ INSERT IGNORE usergrouppriv (usergroupid, userprivtypeid) SELECT usergroup.id, u
 
 INSERT IGNORE INTO userprivtype (id, name) VALUES (8, 'serverCheckOut');
 INSERT IGNORE INTO userprivtype (id, name) VALUES (9, 'serverProfileAdmin');
+
+-- --------------------------------------------------------
+
+-- 
+-- UNIQUE KEY changes for userpriv table
+--
+
+CALL DropExistingConstraints('userpriv', 'userid');
+CALL DropExistingIndices('userpriv', 'userid');
+CALL Add3ColUniqueIndexIfNotExist('userpriv', 'userid', 'privnodeid', 'userprivtypeid', 1);
+CALL Add3ColUniqueIndexIfNotExist('userpriv', 'usergroupid', 'privnodeid', 'userprivtypeid', 1);
+CALL AddConstraintIfNotExists('userpriv', 'userid', 'user', 'id', 'both', 'CASCADE');
 
 -- --------------------------------------------------------
 
