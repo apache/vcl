@@ -2275,7 +2275,7 @@ statgraphcache.provisioningid = (
 WHERE provisioning.moduleid IN (SELECT module.id FROM module WHERE module.perlpackage = 'VCL::Module::Provisioning::vmware')
 AND statgraphcache.provisioningid = provisioning.id;
 
-DELETE FROM provisioningOSinstalltype WHERE provisioningOSinstalltype.provisioningid IN (SELECT module.id FROM module WHERE module.perlpackage = 'VCL::Module::Provisioning::vmware');
+DELETE FROM provisioningOSinstalltype WHERE provisioningOSinstalltype.provisioningid IN (SELECT provisioning.id FROM provisioning, module WHERE provisioning.moduleid = module.id AND module.perlpackage = 'VCL::Module::Provisioning::vmware');
 
 DELETE FROM provisioning WHERE provisioning.moduleid IN (SELECT module.id FROM module WHERE module.perlpackage = 'VCL::Module::Provisioning::vmware');
 
@@ -2311,7 +2311,7 @@ statgraphcache.provisioningid = (
 WHERE provisioning.moduleid IN (SELECT module.id FROM module WHERE module.perlpackage = 'VCL::Module::Provisioning::xCAT2')
 AND statgraphcache.provisioningid = provisioning.id;
 
-DELETE FROM provisioningOSinstalltype WHERE provisioningOSinstalltype.provisioningid IN (SELECT module.id FROM module WHERE module.perlpackage = 'VCL::Module::Provisioning::xCAT2');
+DELETE FROM provisioningOSinstalltype WHERE provisioningOSinstalltype.provisioningid IN (SELECT provisioning.id FROM provisioning, module WHERE provisioning.moduleid = module.id AND module.perlpackage = 'VCL::Module::Provisioning::xCAT2');
 
 DELETE FROM provisioning WHERE provisioning.moduleid IN (SELECT module.id FROM module WHERE module.perlpackage = 'VCL::Module::Provisioning::xCAT2');
 
@@ -2347,12 +2347,11 @@ statgraphcache.provisioningid = (
 WHERE provisioning.moduleid IN (SELECT module.id FROM module WHERE module.perlpackage = 'VCL::Module::Provisioning::xCAT21')
 AND statgraphcache.provisioningid = provisioning.id;
 
-DELETE FROM provisioningOSinstalltype WHERE provisioningOSinstalltype.provisioningid IN (SELECT module.id FROM module WHERE module.perlpackage = 'VCL::Module::Provisioning::xCAT21');
+DELETE FROM provisioningOSinstalltype WHERE provisioningOSinstalltype.provisioningid IN (SELECT provisioning.id FROM provisioning, module WHERE provisioning.moduleid = module.id AND module.perlpackage = 'VCL::Module::Provisioning::xCAT21');
 
 DELETE FROM provisioning WHERE provisioning.moduleid IN (SELECT module.id FROM module WHERE module.perlpackage = 'VCL::Module::Provisioning::xCAT21');
 
 DELETE FROM module WHERE module.perlpackage = 'VCL::Module::Provisioning::xCAT21';
-
 
 --
 -- Remove Procedures
