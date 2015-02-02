@@ -602,7 +602,8 @@ BEGIN
     AND i2.INDEX_NAME = i1.INDEX_NAME
     AND i2.SEQ_IN_INDEX = 2
     AND i2.COLUMN_NAME IN (columnName1, columnName2, columnName3)
-    AND (i3.COLUMN_NAME IS NULL OR i3.COLUMN_NAME IN (columnName1, columnName2, columnName3));
+    AND (i3.COLUMN_NAME IS NULL OR i3.COLUMN_NAME IN (columnName1, columnName2, columnName3))
+    AND i1.NON_UNIQUE = 1;
 
   DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = 1;
 
@@ -653,6 +654,7 @@ BEGIN
     AND i1.COLUMN_NAME IN (columnName1, columnName2, columnName3)
     AND i2.COLUMN_NAME IN (columnName1, columnName2, columnName3)
     AND i3.COLUMN_NAME IN (columnName1, columnName2, columnName3)
+    AND i1.NON_UNIQUE = 0
   )
   THEN
     IF deleteduplicates = 1 THEN
