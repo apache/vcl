@@ -248,7 +248,7 @@ sub _run_vim_cmd {
 				my $request_end_time_epoch = convert_to_epoch_seconds($self->data->get_request_end_time());
 				my $current_time_epoch = time;
 				my $reservation_lastcheck_epoch = ($request_end_time_epoch-(20*60));
-				set_reservation_lastcheck($reservation_id, $reservation_lastcheck_epoch);
+				set_reservation_lastcheck($reservation_lastcheck_epoch, $reservation_id);
 			}
 			return;
 		}

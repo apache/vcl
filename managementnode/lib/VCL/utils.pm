@@ -173,10 +173,11 @@ our @EXPORT = qw(
 	get_request_current_state_name
 	get_request_end
 	get_request_info
+	get_reservation_accounts
 	get_reservation_computerloadlog_entries
 	get_reservation_computerloadlog_time
+	get_reservation_management_node_hostname
 	get_request_loadstate_names
-	get_reservation_accounts
 	get_resource_groups
 	get_user_group_member_info
 	get_user_info
@@ -5298,20 +5299,26 @@ EOF
 
 =head2 set_reservation_lastcheck
 
- Parameters  : $reservation_id, $lastcheck
+ Parameters  : $lastcheck, @reservation_ids
  Returns     : string
  Description : Updates reservation.lastcheck to the time specified.
 
 =cut
 
 sub set_reservation_lastcheck {
-	my ($reservation_id, $reservation_lastcheck) = @_;
+	my ($reservation_lastcheck, @reservation_ids) = @_;
 	
 	# Check the passed parameter
-	if (!$reservation_id || !$reservation_lastcheck) {
-		notify($ERRORS{'WARNING'}, 0, "reservation ID and last check datetime was not specified");
+	if (!$reservation_lastcheck) {
+		notify($ERRORS{'WARNING'}, 0, "reservation lastcheck argument was not specified");
 		return;
 	}
+	elsif (!@reservation_ids) {
+		notify($ERRORS{'WARNING'}, 0, "reservation ID argument was not specified");
+		return;
+	}
+	
+	my $reservation_id_string = join(", ", @reservation_ids);
 	
 	if ($reservation_lastcheck !~ /:/) {
 		$reservation_lastcheck = convert_to_datetime($reservation_lastcheck);
@@ -5322,11 +5329,11 @@ sub set_reservation_lastcheck {
 	my $current_time_epoch = time;
 	my $duration_seconds = ($reservation_lastcheck_epoch-$current_time_epoch);
 	if ($duration_seconds < 0) {
-		notify($ERRORS{'WARNING'}, 0, "reservation.lastcheck not set to $reservation_lastcheck for reservation ID $reservation_id, time is in the past");
+		notify($ERRORS{'WARNING'}, 0, "reservation.lastcheck not set to $reservation_lastcheck for reservation IDs: $reservation_id_string, time is in the past");
 		return;
 	}
 	elsif ($duration_seconds < (20*60)) {
-		notify($ERRORS{'WARNING'}, 0, "reservation.lastcheck not set to $reservation_lastcheck for reservation ID $reservation_id, time is too close to the current time");
+		notify($ERRORS{'WARNING'}, 0, "reservation.lastcheck not set to $reservation_lastcheck for reservation IDs: $reservation_id_string, time is too close to the current time");
 		return;
 	}
 	
@@ -5337,16 +5344,16 @@ reservation
 SET
 reservation.lastcheck = '$reservation_lastcheck'
 WHERE
-reservation.id = '$reservation_id'
+reservation.id IN ($reservation_id_string)
 EOF
 
 	# Call the database execute subroutine
 	if (database_execute($update_statement)) {
-		notify($ERRORS{'DEBUG'}, 0, "reservation.lastcheck set to '$reservation_lastcheck' for reservation ID $reservation_id");
+		notify($ERRORS{'DEBUG'}, 0, "reservation.lastcheck set to '$reservation_lastcheck' for reservation IDs: $reservation_id_string");
 		return 1;
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to set reservation.lastcheck to '$reservation_lastcheck' for reservation ID $reservation_id");
+		notify($ERRORS{'WARNING'}, 0, "failed to set reservation.lastcheck to '$reservation_lastcheck' for reservation IDs: $reservation_id_string");
 		return;
 	}
 }
@@ -7555,6 +7562,53 @@ EOF
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 get_reservation_management_node_hostname
+
+ Parameters  : $reservation_id, $no_cache (optional)
+ Returns     : string
+ Description : Returns the hostname of the management node assigned to the
+               reservation specified by the argument.
+
+=cut
+
+
+sub get_reservation_management_node_hostname {
+	my ($reservation_id, $no_cache) = @_;
+	if (!defined($reservation_id)) {
+		notify($ERRORS{'WARNING'}, 0, "reservation ID argument was not supplied");
+		return;
+	}
+	
+	if (!$no_cache && defined($ENV{reservation_management_node_hostname}{$reservation_id})) {
+		return $ENV{reservation_management_node_hostname}{$reservation_id};
+	}
+	
+	my $select_statement = <<EOF;
+SELECT
+managementnode.hostname
+FROM
+reservation,
+managementnode
+WHERE
+reservation.id = '$reservation_id'
+AND reservation.managementnodeid = managementnode.id
+EOF
+
+	my @selected_rows = database_select($select_statement);
+	if (!@selected_rows) {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve management node hostname for reservation $reservation_id");
+		return;
+	}
+	
+	my $row = $selected_rows[0];
+	my $hostname = $row->{hostname};
+	notify($ERRORS{'DEBUG'}, 0, "retrieved management node hostname for reservation $reservation_id: hostname");
+	$ENV{reservation_management_node_hostname}{$reservation_id} = $hostname;
+	return $hostname;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 =head2 get_reservation_request_id
 
  Parameters  : $reservation_id, $no_cache (optional)
@@ -8538,56 +8592,96 @@ sub reservation_being_processed {
 		return;
 	}
 	
-	my $select_statement = "
-	SELECT
-	computerloadlog.*
-	
-	FROM
-	computerloadlog,
-	computerloadstate
-	
-	WHERE
-	computerloadlog.reservationid = $reservation_id
-	AND computerloadlog.loadstateid = computerloadstate.id
-	AND computerloadstate.loadstatename = \'begin\'
-	";
+	my $select_statement = <<EOF;
+SELECT
+reservation.id AS reservation_id,
+computerloadlog.id AS reservation_computerloadlog_id,
+MIN(parentreservation.id) AS parent_reservation_id,
+parentcomputerloadlog.id AS parent_computerloadlog_id
+FROM
+reservation
+LEFT JOIN (computerloadlog, computerloadstate) ON (
+   computerloadlog.reservationid = reservation.id
+   AND computerloadlog.loadstateid = computerloadstate.id
+   AND computerloadstate.loadstatename = 'begin'
+),
+request,
+reservation parentreservation
+LEFT JOIN (computerloadlog parentcomputerloadlog, computerloadstate parentcomputerloadstate) ON (
+   parentcomputerloadlog.reservationid = parentreservation.id
+   AND parentcomputerloadstate.loadstatename = 'begin'
+)
+WHERE
+reservation.id = $reservation_id
+AND reservation.requestid = request.id
+AND parentreservation.requestid = request.id
+GROUP BY reservation.id
+EOF
 
 	# Call the database select subroutine
 	# This will return an array of one or more rows based on the select statement
 	my @computerloadlog_rows = database_select($select_statement);
 
 	# Check if at least 1 row was returned
-	my $computerloadlog_exists;
-	if (scalar @computerloadlog_rows == 1) {
-		notify($ERRORS{'DEBUG'}, 0, "computerloadlog 'begin' entry exists for reservation $reservation_id");
-		$computerloadlog_exists = 1;
-	}
-	elsif (scalar @computerloadlog_rows > 1) {
-		notify($ERRORS{'WARNING'}, 0, "multiple computerloadlog 'begin' entries exist for reservation $reservation_id");
-		$computerloadlog_exists = 1;
-	}
-	else {
-		notify($ERRORS{'DEBUG'}, 0, "computerloadlog 'begin' entry does NOT exist for reservation $reservation_id");
-		$computerloadlog_exists = 0;
+	my $computerloadlog_exists = 0;
+	
+	my $parent_reservation_id;
+	my $parent_computerloadlog_exists = 0;
+	
+	
+	for my $row (@computerloadlog_rows) {
+		$parent_reservation_id = $row->{parent_reservation_id} if !defined($parent_reservation_id);
+		
+		my $reservation_computerloadlog_id = $row->{reservation_computerloadlog_id};
+		my $parent_computerloadlog_id = $row->{parent_computerloadlog_id};
+		
+		if ($reservation_computerloadlog_id) {
+			$computerloadlog_exists = 1 if (!$computerloadlog_exists);
+		}
+		if ($parent_computerloadlog_id) {
+			$parent_computerloadlog_exists = 1 if (!$parent_computerloadlog_exists);
+		}
 	}
 	
 	# Check if a vcld process is running matching for this reservation
 	my @processes_running = is_management_node_process_running("$PROCESSNAME .\\|[0-9]+\\|[0-9]+\\|$reservation_id\\|");
 	
+	my $info_string = "reservation ID: $reservation_id\n";
+	$info_string .= "parent reservation ID: $parent_reservation_id\n";
+	$info_string .= "reservation computerloadlog 'begin' entry exists: " . ($computerloadlog_exists ? 'yes' : 'no') . "\n";
+	$info_string .= "parent reservation computerloadlog 'begin' entry exists: " . ($parent_computerloadlog_exists ? 'yes' : 'no') . "\n";
+	$info_string .= "reservation process running: " . (@processes_running ? (join(", ", @processes_running)) : 'no');
+	
 	# Check the results and return
 	if ($computerloadlog_exists && @processes_running) {
-		notify($ERRORS{'DEBUG'}, 0, "reservation $reservation_id is currently being processed, computerloadlog 'begin' entry exists and running process was found: @processes_running");
+		#notify($ERRORS{'DEBUG'}, 0, "reservation $reservation_id is currently being processed, computerloadlog 'begin' entry exists and running process was found:\n$info_string");
+		return 1;
 	}
 	elsif (!$computerloadlog_exists && @processes_running) {
-		notify($ERRORS{'DEBUG'}, 0, "computerloadlog 'begin' entry does NOT exist but running process was found: @processes_running, assuming reservation $reservation_id is currently being processed");
+		notify($ERRORS{'DEBUG'}, 0, "computerloadlog 'begin' entry does NOT exist but running process was found: @processes_running, assuming reservation $reservation_id is currently being processed\n$info_string");
+		return 1;
 	}
 	elsif ($computerloadlog_exists && !@processes_running) {
-		notify($ERRORS{'WARNING'}, 0, "computerloadlog 'begin' entry exists but running process was NOT found, assuming reservation $reservation_id is NOT currently being processed");
+		if ($reservation_id eq $parent_reservation_id) {
+			#notify($ERRORS{'WARNING'}, 0, "$reservation_id is the parent reservation, computerloadlog 'begin' entry exists but running process was NOT found, assuming reservation $reservation_id is NOT currently being processed\n$info_string");
+			return 0;
+		}
+		else {
+			# This is a child reservation, computerloadlog exists, no process running for this reservation
+			if ($parent_computerloadlog_exists) {
+				notify($ERRORS{'DEBUG'}, 0, "child reservation: $reservation_id, computerloadlog 'begin' entry exists but running process was NOT found, parent reservation $parent_reservation_id computerloadlog entry exists, assuming a process for this reservation already ran and parent reservation process is still running, returning true\n$info_string");
+				return 1;
+			}
+			else {
+				notify($ERRORS{'DEBUG'}, 0, "child reservation: $reservation_id, computerloadlog 'begin' entry exists but running process was NOT found, parent reservation $parent_reservation_id computerloadlog entry does not exist, assuming this reservation is NOT currently being processed and has not been processed yet, returning false\n$info_string");
+				return 0;
+			}
+		}
 	}
 	else {
-		notify($ERRORS{'DEBUG'}, 0, "reservation $reservation_id is NOT currently being processed");
+		notify($ERRORS{'DEBUG'}, 0, "reservation $reservation_id is NOT currently being processed\n$info_string");
+		return 0;
 	}
-	return wantarray ? @processes_running : scalar(@processes_running);
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -12930,7 +13024,14 @@ sub ip_address_to_network_address {
 
 sub determine_remote_connection_target {
 	my ($argument, $no_cache) = @_;
-	$no_cache = 0 unless defined($no_cache);
+	if (!defined($argument)) {
+		notify($ERRORS{'WARNING'}, 0, "remote connection argument was not supplied");
+		return;
+	}
+	
+	# Check if argument contains an '@' character: root@x.x.x.x
+	# Remove anything preceeding it
+	$argument =~ s/.*@([^@]+)$/$1/g;
 	
 	if (!$no_cache && defined($ENV{remote_connection_target}{$argument})) {
 		return $ENV{remote_connection_target}{$argument};
@@ -12974,7 +13075,10 @@ sub determine_remote_connection_target {
 	
 	if ($resolved_ip_address) {
 		# Attempt to set the private IP address in the database
-		update_computer_private_ip_address($argument, $resolved_ip_address);
+		# Only do this if a private IP was retrieved earlier to avoid additional warnings
+		if ($database_private_ip_address) {
+			update_computer_private_ip_address($argument, $resolved_ip_address);
+		}
 		
 		$ENV{remote_connection_target}{$argument} = $resolved_ip_address;
 		notify($ERRORS{'DEBUG'}, 0, "$argument resolves to IP address $resolved_ip_address, it will be used as the remote connection target");

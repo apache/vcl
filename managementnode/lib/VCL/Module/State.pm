@@ -114,6 +114,49 @@ sub initialize {
 		$self->data->set_reservation_lastcheck_time($reservation_lastcheck);
 	}
 	
+	# If this is a cluster request, wait for all reservations to begin before proceeding
+	if ($reservation_count > 1) {
+		if (!$self->wait_for_all_reservations_to_begin('begin', 90, 5)) {
+			$self->reservation_failed("failed to detect start of processing for all reservation processes", 'available');
+		}
+	}
+	
+	# Parent reservation needs to update the request state to pending
+	if ($is_parent_reservation) {
+		if ($reservation_count > 1) {
+			# Check if any reservations have failed
+			if (my @failed_reservation_ids = $self->does_loadstate_exist_any_reservation('failed')) {
+				notify($ERRORS{'WARNING'}, 0, "reservations failed: " . join(', ', @failed_reservation_ids));
+				$self->state_exit('failed');
+			}
+		}
+		
+		# Update the request state to pending for this reservation
+		if (!update_request_state($request_id, "pending", $request_state_name)) {
+			# Check if request was deleted
+			if (is_request_deleted($request_id)) {
+				exit;
+			}
+			
+			# Check the current state
+			my ($current_request_state, $current_request_laststate) = get_request_current_state_name($request_id);
+			if (!$current_request_state) {
+				# Request probably complete and already removed
+				notify($ERRORS{'DEBUG'}, 0, "current request state could not be retrieved, it was probably completed by another vcld process");
+				exit;
+			}
+			if ($current_request_state =~ /^(deleted|complete)$/ || $current_request_laststate =~ /^(deleted)$/) {
+				notify($ERRORS{'DEBUG'}, 0, "current request state: $current_request_state/$current_request_laststate, exiting");
+				exit;
+			}
+			
+			$self->reservation_failed("failed to update request state to pending");
+		}
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "child reservation, not updating request state to 'pending'");
+	}
+	
 	# Set the PARENTIMAGE and SUBIMAGE keys in the request data hash
 	# These are deprecated, DataStructure's is_parent_reservation function should be used
 	$self->data->get_request_data->{PARENTIMAGE} = ($self->data->is_parent_reservation() + 0);
@@ -182,51 +225,6 @@ sub initialize {
 			$self->set_vmhost_os($provisioner_vmhost_os);
 		}
 	}
-	
-	# If this is a cluster request, wait for all reservations to begin before proceeding
-	if ($reservation_count > 1) {
-		if (!$self->wait_for_all_reservations_to_begin('begin', 90, 5)) {
-			$self->reservation_failed("failed to detect start of processing for all reservation processes");
-		}
-	}
-	
-	# Parent reservation needs to update the request state to pending
-	if ($is_parent_reservation) {
-		if ($reservation_count > 1) {
-			# Check if any reservations have failed
-			if (my @failed_reservation_ids = $self->does_loadstate_exist_any_reservation('failed')) {
-				notify($ERRORS{'WARNING'}, 0, "reservations failed: " . join(', ', @failed_reservation_ids));
-				$self->state_exit('failed');
-			}
-		}
-		
-		# Update the request state to pending for this reservation
-		if (!update_request_state($request_id, "pending", $request_state_name)) {
-			# Check if request was deleted
-			if (is_request_deleted($request_id)) {
-				exit;
-			}
-			
-			# Check the current state
-			my ($current_request_state, $current_request_laststate) = get_request_current_state_name($request_id);
-			if (!$current_request_state) {
-				# Request probably complete and already removed
-				notify($ERRORS{'DEBUG'}, 0, "current request state could not be retrieved, it was probably completed by another vcld process");
-				exit;
-			}
-			if ($current_request_state =~ /^(deleted|complete)$/ || $current_request_laststate =~ /^(deleted)$/) {
-				notify($ERRORS{'DEBUG'}, 0, "current request state: $current_request_state/$current_request_laststate, exiting");
-				exit;
-			}
-			
-			$self->reservation_failed("failed to update request state to pending");
-		}
-	}
-	else {
-		notify($ERRORS{'DEBUG'}, 0, "child reservation, not updating request state to 'pending'");
-	}
-	
-	#notify($ERRORS{'DEBUG'}, 0, "computerloadlog states after state object is initialized:\n" . format_data(get_request_loadstate_names($request_id)));
 	
 	return 1;
 } ## end sub initialize
@@ -415,7 +413,8 @@ sub reservation_failed {
 	
 	my $new_request_state_name;
 	my $new_computer_state_name;
-
+	my $request_log_ending;
+	
 	if ($request_state_name eq 'inuse') {
 		# Check if the request end time has not been reached
 		my $request_end_time_epoch = convert_to_epoch_seconds($self->data->get_request_end_time());
@@ -425,6 +424,7 @@ sub reservation_failed {
 			# This was likely caused by this process failing to initialize all of its module objects
 			$new_request_state_name = 'complete';
 			$new_computer_state_name = 'failed';
+			$request_log_ending = 'EOR';
 			notify($ERRORS{'CRITICAL'}, 0, ($initialize_failed ? 'process failed to initialize: ' : '') . "$message, request end time has been reached, setting request state to $new_request_state_name, computer state to $new_computer_state_name");
 		}
 		else {
@@ -455,24 +455,9 @@ sub reservation_failed {
 		}
 	}
 	
-	# Update the request state to failed
-	# Don't check if parent reservation - allow child reservation to change state
-	# Otherwise, multiple failed attempts may be made
-	if (update_request_state($request_id, $new_request_state_name, $request_state_name)) {
-		notify($ERRORS{'OK'}, 0, "set request state to $new_request_state_name/$request_state_name");
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "unable to set request to $new_request_state_name/$request_state_name");
-	}
-	
 	if ($request_state_name =~ /^(new|reserved)/) {
 		# Update log table ending column to failed for this request
-		if (update_log_ending($request_logid, "failed")) {
-			notify($ERRORS{'OK'}, 0, "updated log ending value to 'failed', logid=$request_logid");
-		}
-		else {
-			notify($ERRORS{'WARNING'}, 0, "failed to update log ending value to 'failed', logid=$request_logid");
-		}
+		$request_log_ending = 'failed';
 	}
 	
 	# Insert a row into the computerloadlog table
@@ -483,19 +468,6 @@ sub reservation_failed {
 		notify($ERRORS{'WARNING'}, 0, "failed to insert computerloadlog entry");
 	}
 	
-	# Update the computer state to failed as long as it's not currently maintenance
-	if ($computer_state_name !~ /^(maintenance)/) {
-		if (update_computer_state($computer_id, $new_computer_state_name)) {
-			notify($ERRORS{'OK'}, 0, "computer $computer_short_name ($computer_id) state set to $new_computer_state_name");
-		}
-		else {
-			notify($ERRORS{'WARNING'}, 0, "unable to set computer $computer_short_name ($computer_id) state to $new_computer_state_name");
-		}
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "computer $computer_short_name ($computer_id) state NOT set to $new_computer_state_name because the current state is $computer_state_name");
-	}
-
 	# Check if computer is part of a blockrequest, if so pull out of blockcomputers table
 	if (is_inblockrequest($computer_id)) {
 		notify($ERRORS{'OK'}, 0, "$computer_short_name in blockcomputers table");
@@ -509,9 +481,8 @@ sub reservation_failed {
 	else {
 		notify($ERRORS{'OK'}, 0, "$computer_short_name is NOT in blockcomputers table");
 	}
-
-	notify($ERRORS{'OK'}, 0, "exiting 1");
-	exit 1;
+	
+	$self->state_exit($new_request_state_name, $new_computer_state_name, $request_log_ending);
 } ## end sub reservation_failed
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -558,7 +529,7 @@ sub does_loadstate_exist_all_reservations {
 	
 	my @exists;
 	my @does_not_exist;
-	for my $check_reservation_id (keys %$request_loadstate_names) {
+	for my $check_reservation_id (sort {$a <=> $b} keys %$request_loadstate_names) {
 		# Ignore the current reservation
 		if ($ignore_current_reservation && $check_reservation_id eq $reservation_id) {
 			next;
@@ -575,14 +546,19 @@ sub does_loadstate_exist_all_reservations {
 	
 	if (@does_not_exist) {
 		notify($ERRORS{'DEBUG'}, 0, "computerloadlog '$loadstate_name' entry does NOT exist for all reservations:\n" .
-			"exists for reservation IDs: " . join(', ', @exists) . "\n" .
-			"does not exist for reservation IDs: " . join(', ', @does_not_exist)
+			"exists for reservation IDs: " . join(', ',  @exists) . "\n" .
+			"does not exist for reservation IDs: " . join(', ',  @does_not_exist)
 		);
-		return 0;
 	}
 	else {
 		notify($ERRORS{'DEBUG'}, 0, "computerloadlog '$loadstate_name' entry exists for all reservations");
-		return 1;
+	}
+	
+	if (wantarray) {
+		return (\@exists, \@does_not_exist);
+	}
+	else {
+		return !scalar(@does_not_exist);
 	}
 }
 
@@ -690,7 +666,7 @@ sub wait_for_all_reservations_to_begin {
 	my $request_id = $self->data->get_request_id();
 	my $request_state_name = $self->data->get_request_state_name();
 	
-	return $self->code_loop_timeout(
+	my $result = $self->code_loop_timeout(
 		sub {
 			if ($request_state_name ne 'deleted' && is_request_deleted($request_id)) {
 				notify($ERRORS{'OK'}, 0, "request has been deleted, exiting");
@@ -702,6 +678,36 @@ sub wait_for_all_reservations_to_begin {
 		[],
 		"waiting for all reservation processes to begin", $total_wait_seconds, $attempt_delay_seconds
 	);
+	
+	if (!$result) {
+		my ($exists, $not_exists) = $self->does_loadstate_exist_all_reservations($loadstate_name, 1);
+		if (!defined($exists) || !defined($not_exists)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to determine if all reservation processes have begun, does_loadstate_exist_all_reservations returned a null value");
+			return;
+		}
+		elsif (!ref($exists) || !ref($not_exists) || ref($exists) ne 'ARRAY' || ref($not_exists) ne 'ARRAY') {
+			notify($ERRORS{'WARNING'}, 0, "failed to determine if all reservation processes have begun, does_loadstate_exist_all_reservations did not return 2 array references:\n1st item returned:\n" . format_data($exists) . "\n2nd item returned:\n" . format_data($not_exists));
+			return;
+		}
+		
+		if (scalar(@$not_exists) == 0) {
+			notify($ERRORS{'DEBUG'}, 0, "detected all reservation processes have begun after loop timed out");
+			return 1;
+		}
+		
+		my $string = '';
+		for my $reservation_id (@$not_exists) {
+			my $management_node_hostname = get_reservation_management_node_hostname($reservation_id) || '<unknown>';
+			$string .= "$reservation_id: $management_node_hostname\n"
+		}
+		$string =~ s/\n$//;
+		
+		notify($ERRORS{'WARNING'}, 0, "failed to determine if processes for the following reservations have begun, computerloadlog '$loadstate_name' entry does not exist:\n$string");
+		return;
+	}
+	
+	
+	return $result;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -711,9 +717,10 @@ sub wait_for_all_reservations_to_begin {
  Parameters  : $total_wait_seconds (optional), $attempt_delay_seconds (optional)
  Returns     : boolean
  Description : Loops until an 'exited' computerloadlog entry exists for all
-               child reservations. Returns false if the loop times out. The
-               default $total_wait_seconds value is 300 seconds. The default
-               $attempt_delay_seconds value is 15 seconds.
+               child reservations which also have a 'begin' entry. Returns false
+               if the loop times out. The default $total_wait_seconds value is
+               300 seconds. The default $attempt_delay_seconds value is 15
+               seconds.
 
 =cut
 
@@ -730,8 +737,35 @@ sub wait_for_child_reservations_to_exit {
 	my $request_id = $self->data->get_request_id();
 	my $request_state_name = $self->data->get_request_state_name();
 	
+	my $subroutine_name = get_current_subroutine_name();
+	
 	return $self->code_loop_timeout(
-		\&does_loadstate_exist_all_reservations,
+		sub {
+			if (is_request_deleted($request_id)) {
+				notify($ERRORS{'OK'}, 0, "request has been deleted, exiting");
+				exit;
+			}
+			
+			my ($exited, $not_exited) = $self->does_loadstate_exist_all_reservations('exited', 1);
+			# If no reservations are missing an 'exited' entry return true
+			if (!@$not_exited) {
+				notify($ERRORS{'DEBUG'}, 0, "$subroutine_name: computerloadlog 'exited' entry exists for all reservations");
+				return 1;
+			}
+			
+			# Some reservations are missing an 'exited' entry
+			# Ignore reservations missing both an 'exited' and 'begin' entry
+			my ($began, $not_began) = $self->does_loadstate_exist_all_reservations('begin', 1);
+			my @began_not_exited = get_array_intersection($began, $not_exited);
+			if (@began_not_exited) {
+				notify($ERRORS{'DEBUG'}, 0, "$subroutine_name: reservation exists with a computerloadlog 'begin' entry but no 'exited' entry, returning false\n" . join(', ', @began_not_exited));
+				return 0;
+			}
+			else {
+				notify($ERRORS{'DEBUG'}, 0, "$subroutine_name: no reservations have a computerloadlog 'begin' entry but no 'exited' entry, returning true");
+				return 1;
+			}
+		},
 		[$self, 'exited', 1],
 		"waiting for child reservation processes to exit", $total_wait_seconds, $attempt_delay_seconds
 	);
