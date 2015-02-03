@@ -5144,7 +5144,7 @@ EOF
 =head2 get_computer_current_state_name
 
  Parameters  : $computer_id
- Returns     : String containing state name for a particular computer
+ Returns     : string
  Description :
 
 =cut
@@ -5152,48 +5152,37 @@ EOF
 
 sub get_computer_current_state_name {
 	my ($computer_id) = @_;
-
-	my ($package, $filename, $line, $sub) = caller(0);
-
-	# Check the passed parameter
 	if (!(defined($computer_id))) {
-		notify($ERRORS{'WARNING'}, 0, "computer ID was not specified");
-		return ();
+		notify($ERRORS{'WARNING'}, 0, "computer ID argument was not specified");
+		return;
 	}
 
 	# Create the select statement
-	my $select_statement = "
-   SELECT DISTINCT
-	state.name AS name
-	FROM
-	state,
-	computer
-	WHERE
-	computer.stateid = state.id
-	AND computer.id = $computer_id
-   ";
+	my $select_statement = <<EOF;
+SELECT
+state.name
+FROM
+state,
+computer
+WHERE
+computer.stateid = state.id
+AND computer.id = $computer_id
+EOF
 
 	# Call the database select subroutine
 	# This will return an array of one or more rows based on the select statement
-	my @selected_rows = database_select($select_statement);
+	my @rows = database_select($select_statement);
 
 	# Check to make sure 1 row was returned
-	if (scalar @selected_rows == 0) {
-		notify($ERRORS{'WARNING'}, 0, "zero rows were returned from database select");
-		return ();
+	if (!@rows) {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve current computer state, no rows were returned from database select statement:\n$select_statement");
+		return;
 	}
-	elsif (scalar @selected_rows > 1) {
-		notify($ERRORS{'WARNING'}, 0, "" . scalar @selected_rows . " rows were returned from database select");
-		return ();
-	}
-
-	# Make sure we return undef if the column wasn't found
-	if (defined $selected_rows[0]{name}) {
-		return $selected_rows[0]{name};
-	}
-	else {
-		return undef;
-	}
+	
+	my $row = $rows[0];
+	my $state_name = $row->{name};
+	notify($ERRORS{'DEBUG'}, 0, "retrieved current state of computer $computer_id: $state_name");
+	return $state_name;
 } ## end sub get_computer_current_state_name
 
 #/////////////////////////////////////////////////////////////////////////////

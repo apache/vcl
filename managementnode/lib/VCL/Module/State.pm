@@ -114,12 +114,12 @@ sub initialize {
 		$self->data->set_reservation_lastcheck_time($reservation_lastcheck);
 	}
 	
-	# If this is a cluster request, wait for all reservations to begin before proceeding
-	if ($reservation_count > 1) {
-		if (!$self->wait_for_all_reservations_to_begin('begin', 90, 5)) {
-			$self->reservation_failed("failed to detect start of processing for all reservation processes", 'available');
-		}
-	}
+	#### If this is a cluster request, wait for all reservations to begin before proceeding
+	###if ($reservation_count > 1) {
+	###	if (!$self->wait_for_all_reservations_to_begin('begin', 90, 5)) {
+	###		$self->reservation_failed("failed to detect start of processing for all reservation processes", 'available');
+	###	}
+	###}
 	
 	# Parent reservation needs to update the request state to pending
 	if ($is_parent_reservation) {
@@ -815,10 +815,33 @@ sub state_exit {
 			$self->wait_for_child_reservations_to_exit();
 			
 			# Check if any reservations failed
-			if (!$request_state_name_new || $request_state_name_new ne 'failed') {
-				if ($self->does_loadstate_exist_any_reservation('failed')) {
-					notify($ERRORS{'OK'}, 0, "another reservation failed, request state will be updated to 'failed'");
-					$request_state_name_new = 'failed';
+			my @failed_reservation_ids = $self->does_loadstate_exist_any_reservation('failed');
+			if (@failed_reservation_ids && (!$request_state_name_new || $request_state_name_new ne 'failed')) {
+				notify($ERRORS{'OK'}, 0, "another reservation failed, request state will be updated to 'failed'");
+				$request_state_name_new = 'failed';
+			}
+			
+			if ($request_state_name_new eq 'failed') {
+				# Child reservations will leave the state of the computer to 'reloading' if they didn't fail
+				# Need to change state back to available for child reservations which didn't fail
+				for my $cluster_reservation_id (@reservation_ids) {
+					next if $cluster_reservation_id eq $reservation_id;
+					
+					my $reservation_data = $self->data->get_reservation_data($cluster_reservation_id) || next;
+					my $reservation_computer_id = $reservation_data->get_computer_id() || next;
+					my $reservation_computer_hostname = $reservation_data->get_computer_hostname() || next;
+					if (!(grep { $_ eq $cluster_reservation_id } @failed_reservation_ids)) {
+						notify($ERRORS{'DEBUG'}, 0, "child reservation $cluster_reservation_id did not fail, checking state of computer assigned to reservation: $reservation_computer_id");
+						
+						my $computer_current_state_name = get_computer_current_state_name($reservation_computer_id) || next;
+						if ($computer_current_state_name =~ /(reloading)/) {
+							notify($ERRORS{'DEBUG'}, 0, "state of computer $reservation_computer_id assigned to child reservation $cluster_reservation_id is $computer_current_state_name, reservation did not fail, changing state to available");
+							update_computer_state($reservation_computer_id, 'available');
+						}
+						else {
+							notify($ERRORS{'DEBUG'}, 0, "state of computer $reservation_computer_id assigned to child reservation $cluster_reservation_id is $computer_current_state_name, reservation did not fail, state of computer will not be changed");
+						}
+					}
 				}
 			}
 		}
