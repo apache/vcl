@@ -621,7 +621,7 @@ if [[ $DOWEB -eq 1 ]]; then
 	print_break
 	echo "Ensuring required php components are installed..."
 	missing=
-	for pkg in php php-gd php-mysql php-xml php-xmlrpc php-ldap php-process php-mbstring; do
+	for pkg in php php-gd php-mysql php-xml php-xmlrpc php-ldap php-mbstring; do
 		alt=$(echo $pkg | sed 's/php/php53/')
 		if ! (rpm --quiet -q $pkg || rpm --quiet -q $alt); then
 			missing="$missing $pkg"
