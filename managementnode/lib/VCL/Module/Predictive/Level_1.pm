@@ -83,7 +83,7 @@ sub get_next_image {
 	my $reservation_id       = $self->data->get_reservation_id();
 	my $computer_id          = $self->data->get_computer_id();
 	my $computer_short_name  = $self->data->get_computer_short_name();
-	my $computer_nextimage_id = $self->data->get_computer_nextimage_id();
+	my $computer_nextimage_id = $self->data->get_computer_nextimage_id(0);
 	
 	my @ret_array;
 	my $notify_prefix = "predictive_reload_Level_1 :";
