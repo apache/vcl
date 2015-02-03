@@ -114,12 +114,12 @@ sub initialize {
 		$self->data->set_reservation_lastcheck_time($reservation_lastcheck);
 	}
 	
-	#### If this is a cluster request, wait for all reservations to begin before proceeding
-	###if ($reservation_count > 1) {
-	###	if (!$self->wait_for_all_reservations_to_begin('begin', 90, 5)) {
-	###		$self->reservation_failed("failed to detect start of processing for all reservation processes", 'available');
-	###	}
-	###}
+	# If this is a cluster request, wait for all reservations to begin before proceeding
+	if ($reservation_count > 1) {
+		if (!$self->wait_for_all_reservations_to_begin('begin', 90, 5)) {
+			$self->reservation_failed("failed to detect start of processing for all reservation processes", 'available');
+		}
+	}
 	
 	# Parent reservation needs to update the request state to pending
 	if ($is_parent_reservation) {
