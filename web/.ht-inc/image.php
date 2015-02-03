@@ -642,6 +642,8 @@ class Image extends Resource {
 		$tmp = $this->getData(array('includedeleted' => 0, 'rscid' => $imageid));
 		$data = $tmp[$imageid];
 		$extra = getImageNotes($imageid);
+		$extra['description'] = htmlspecialchars_decode($extra['description']);
+		$extra['usage'] = htmlspecialchars_decode($extra['usage']);
 		$data = array_merge($data, $extra);
 		$cdata = $this->basecdata;
 		$cdata['imageid'] = $imageid;
