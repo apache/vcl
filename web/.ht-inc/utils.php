@@ -6643,9 +6643,9 @@ function getProvisioningTypes() {
 	while($row = mysql_fetch_assoc($qh)) {
 		if($row['type'] == 'kickstart' || $row['type'] == 'partimage')
 			$types['blade'][$row['id']] = $row['prettyname'];
-		if($row['type'] == 'none')
+		elseif($row['type'] == 'none')
 			$types['lab'][$row['id']] = $row['prettyname'];
-		if($row['type'] == 'vbox' || $row['type'] == 'vmware')
+		else
 			$types['virtualmachine'][$row['id']] = $row['prettyname'];
 	}
 	return $types;
