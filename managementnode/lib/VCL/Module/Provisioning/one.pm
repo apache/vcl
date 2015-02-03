@@ -43,7 +43,7 @@ use lib "$FindBin::Bin/../../..";
 use base qw(VCL::Module::Provisioning);
 
 # Specify the version of this module
-our $VERSION = '2.4';
+our $VERSION = '2.3.1';
 
 # Specify the version of Perl to use
 use 5.008000;
@@ -91,7 +91,7 @@ sub initialize {
 	
 		$xml = XML::Simple->new();
 	
-		notify($ERRORS{'DEBUG'}, 0, "Module ONE initialized with following parameters: \n one_server_url -> $one{'server_url'}, one_username:one_password -> $one{'auth'}\n");
+		#notify($ERRORS{'DEBUG'}, 0, "Module ONE initialized with following parameters: \n one_server_url -> $one{'server_url'}, one_username:one_password -> $one{'auth'}\n");
 	
 		return 1;
 	} else {
@@ -100,35 +100,6 @@ sub initialize {
 	}
 }
 
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 unload
-
- Parameters  : hash
- Returns     : 1(success) or 0(failure)
- Description : loads node with provided image
-
-=cut
-
-sub unload {
-	my $self = shift;
-	if (ref($self) !~ /one/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return 0;
-	}
-
-	my $computer_name = $self->data->get_computer_hostname();
-
-	my $one_computer_id = $self->_one_get_object_id("computer",$computer_name);
-	if ($one_computer_id) {
-		if (!$self->_one_delete_vm($one_computer_id)) {
-			return 0;
-		}
-	}
-
-		return 1;
-}
-	
 #/////////////////////////////////////////////////////////////////////////////
 
 =head2 provision
@@ -171,7 +142,9 @@ sub load {
 	my $one_computer_id = $self->_one_get_object_id("computer",$computer_name);
 	if ($one_computer_id) {
 		$self->_one_delete_vm($one_computer_id);
-		notify($ERRORS{'OK'}, 0, "Computer $computer_name already loaded on ONE ... deleted.");
+		notify($ERRORS{'OK'}, 0, "Computer $computer_name was running on ONE ... deleted.");
+		# sleep for 2sec to allow ONE process the request:
+		sleep 2;
 	}
 	
 	# check if there is ONE template already exsist for the image
@@ -186,6 +159,7 @@ sub load {
 			$template = $data->{TEMPLATE};
 			$template->{NAME} = $one_vm_name;
 			$template->{NIC}[0]{IP} = $eth0_ip;
+			#$template->{REQUIREMENTS} = "CLUSTER_ID=\"100\"";
 			
 			my $one_new_vmid = $self->_one_create_vm(XMLout($template,NoAttr => 1,RootName=>'TEMPLATE',));	
 			if ($one_new_vmid) {
@@ -222,6 +196,7 @@ sub load {
 		$template->{GRAPHICS}{TYPE} = "VNC";
 		$template->{GRAPHICS}{LISTEN} = "0.0.0.0";
 		$template->{REQUIREMENTS} = "CLUSTER_ID=\"100\"";
+		#$template->{REQUIREMENTS} = "CLUSTER_ID=\"100\" | CLUSTER_ID=\"108\"";
 		$template->{DISK}[0]{IMAGE_ID} = $one_image_id;
 		$template->{NIC}[0]{NETWORK_ID} = $one_network_0_id;
 		$template->{NIC}[0]{IP} = $eth0_ip;
@@ -236,7 +211,7 @@ sub load {
 					my $one_net_id = $self->_one_get_object_id("network",'VLAN_ID='.$_);
 					$template->{NIC}[1]{NETWORK_ID} = $one_net_id;
 					}
-			} else {
+			} else { 
 				# no custom networks, add eth1 as default public;
 				$template->{NIC}[1]{NETWORK_ID} = $one_network_1_id;
 			}
@@ -268,7 +243,7 @@ sub load {
 	# VM is created and loading, execute "post_load"
 	if ($self->os->can("post_load")) {
 		if ($self->os->post_load()) {
-			notify($ERRORS{'OK'}, 0, "performed OS post-load tasks for $computer_name");
+			insertloadlog($reservation_id, $computer_id, "loadimagecomplete", "performed OS post-load tasks for $computer_name");
 		}
 		else {
 			notify($ERRORS{'WARNING'}, 0, "failed to perform OS post-load tasks on $computer_name");
@@ -276,7 +251,7 @@ sub load {
 		}
 	}
 	else {
-		notify($ERRORS{'OK'}, 0, "OS post-load tasks not necessary $computer_name");
+		insertloadlog($reservation_id, $computer_id, "loadimagecomplete", "OS post-load tasks not necessary $computer_name");
 	}
 	
 	return 1;
@@ -374,7 +349,7 @@ sub capture {
 
 	# Call the OS module's pre_capture() subroutine (don't shutdown at the end)
 	if ($self->os->can("pre_capture")) {
-		if (!$self->os->pre_capture({end_state => 'on'})) {
+	 	if (!$self->os->pre_capture({end_state => 'on'})) {
 			notify($ERRORS{'CRITICAL'}, 0, "failed to complete OS module's pre_capture tasks");
 			return;
 		} else {
@@ -386,7 +361,7 @@ sub capture {
 	}
 	
 	# pre_capture was called with {end_state => 'on'}. Need to shutdown VM via ACPI.
-	if (!$self->power_off()) {
+	if(!$self->power_off()) {
 		notify($ERRORS{'CRITICAL'}, 0, "Couldn't shutdown $computer_name with power_off()");
 		return 0;
 	} else {
@@ -721,13 +696,16 @@ sub _one_get_template_id {
 	if ($templatepool_info[0][0]->value()) {
 		my $data = XMLin($templatepool_info[0][1]);
 		foreach (@{$data->{VMTEMPLATE}}) {
+		#notify($ERRORS{'OK'}, 0, "Looking for template $template_name in template ID ".$_->{ID}.", name ".$_->{NAME}."...");
 			if ($template_name eq $_->{NAME}) {
+				notify($ERRORS{'OK'}, 0, "Found template ".$_->{NAME}." with ID ".$_->{ID});
 				return $_->{ID};
 			}
 		}
 	} else {
-		print "Error while making one.templatepool.info call: $templatepool_info[0][1]";
+		notify($ERRORS{'WARNING'}, 0, "Error while making one.templatepool.info call: $templatepool_info[0][1]");
 	}
+	notify($ERRORS{'WARNING'}, 0, "No value found after one.templatepool.info call for template $template_name");
 	return 0;
 }
 
@@ -874,21 +852,24 @@ sub _one_get_object_id {
 	my $o_name = shift;
 	
 	if ($o_type eq "computer") {
+		notify($ERRORS{'OK'}, 0, "Searching for running VM $o_name ...");
 		my @reply = $one{'server'}->call('one.vmpool.info',$one{'auth'},-3,-1,-1,-1);
 		if ( $reply[0][0]->value() ) {
 			
 			my $data = $xml->XMLin($reply[0][1]);
 			
-			if ( (ref($data->{VM})) eq "ARRAY" ) {
+			if ( (ref($data->{VM})) eq "ARRAY" ){
 				foreach (@{$data->{VM}}) {
-					if ($_->{NAME} =~ /$o_name/) {
+					if ($_->{NAME} =~ /^$o_name\s/) {
+						notify($ERRORS{'OK'}, 0, "Found ".$_->{NAME}." matching $o_name in ARRAY");
 						return $_->{ID};
 					}
-				}
+			  	}
 			} else { #HASH, found only one entry
-				if ($data->{VM}{NAME} =~ /$o_name/) {
+				if ($data->{VM}{NAME} =~ /^$o_name\s/) {
+					notify($ERRORS{'OK'}, 0, "Found ".$data->{VM}{NAME}." matching $o_name in HASH");
 					return $data->{VM}{ID};
-				}
+			    }
 			}
 		} else {
 			notify($ERRORS{'CRITICAL'}, 0, $reply[0][1]);
@@ -902,7 +883,7 @@ sub _one_get_object_id {
 				if ( (ref($rs_data->{IMAGE})) eq "ARRAY" ) {
 					foreach (@{$rs_data->{IMAGE}}) {
 						if ($_->{NAME} eq $o_name) {
-							return $_->{ID};
+ 							return $_->{ID};
 						}
 					}
 					} else { #HASH, only one entry
