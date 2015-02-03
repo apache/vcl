@@ -227,7 +227,7 @@ sub process {
 	# Otherwise, the state will change to inuse while the child processes are still finishing up the reserved state
 	# vcld will then fail to fork inuse processes for the child reservations
 	if ($reservation_count > 1 && $is_parent_reservation) {
-		if (!$self->code_loop_timeout(sub{$self->wait_for_child_reservations()}, [], "waiting for child reservation reserved processes to complete", 180, 5)) {
+		if (!$self->code_loop_timeout(sub{$self->wait_for_child_reservations()}, [], "waiting for child reservation reserved processes to complete", 360, 5)) {
 			$self->reservation_failed('all child reservation reserved processes did not complete');
 		}
 		
