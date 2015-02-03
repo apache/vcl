@@ -45,42 +45,55 @@ VCL has been tested on the following operating systems:
 * Red Hat Enterprise 6.5
 * Red Hat Enterprise 7.0
 
-Management node linux packages:
-* expat
-* expat-devel
-* gcc
-* krb5-libs
-* krb5-devel
-* libxml2
-* libxml2-devel
-* mysql
-* nmap
-* openssh
-* openssh-clients
-* openssl
-* openssl-devel
-* perl
-* perl-CPAN
-* xmlsec1-openssl
+Required Linux Packages:
 
-Management node Perl modules:
-* Crypt::OpenSSL::RSA
-* DBI
-* Digest::SHA1
-* HTTP::Headers
-* IO::String
-* JSON
-* LWP::UserAgent
-* Mail::Mailer
-* Net::Netmask
-* Net::SSH::Expect
-* Object::InsideOut
-* RPC::XML::Client
-* Text::CSV_XS
-* Text::Wrap
-* Time::HiRes
-* XML::Simple
-* YAML
+The VCL management node daemon (vcld) requires the following Linux packages and Perl modules in order to run (see step 2 below for installation instructions). Note, there is overlap as some of the perl modules are available through the yum packager manager.
+
+* expat-devel - Libraries and include files to develop XML applications with expat
+* gcc - Various compilers (C, C++, Objective-C, Java, ...)
+* krb5-devel - Development files needed to compile Kerberos 5 programs
+* krb5-libs - The shared libraries used by Kerberos 5
+* libxml2-devel - Libraries, includes, etc. to develop XML and HTML applications
+* make - GNU make utility to maintain groups of programs
+* nmap - Network exploration tool and security scanner
+* openssh - The OpenSSH implementation of SSH protocol versions 1 and 2
+* openssl-devel - Files for development of applications which will use OpenSSL
+* perl - The Perl programming language
+* perl-Archive-Tar - provides an object oriented mechanism for handling tar files
+* perl-CPAN - provides a command interface (not a shell) to CPAN
+* perl-Crypt-OpenSSL-RSA - provides the ability to RSA encrypt,decrypt strings
+* perl-DBD-MySQL - A MySQL interface for perl
+* perl-DBI - The DBI is the standard database interface module for Perl
+* perl-Digest-SHA1 - allows use of NIST SHA-1 message digest algorithm within Perl programs
+* perl-IO-String - provides the IO::File interface for in-core strings
+* perl-MailTools - a subclass of MIME::Lite, used for sending mail from within perl
+* perl-Net-Jabber - a tool to utilize the Jabber Instant Messaging protocol from within perl
+* perl-Net-Netmask - parses and understands IPv4 CIDR blocks
+* perl-Net-SSH-Expect - a wrapper to the ssh executable that is available in system's PATH
+* perl-RPC-XML - provides classes for data, for clients, for servers and for parsers XML-RPC
+* perl-Text-CSV_XS - provides the composition and decomposition of comma-separated values
+* perl-Time-HiRes - provides high resolution time and timers
+* perl-XML-Simple - provides a simple API layer on top of an underlying XML parsing module
+* perl-YAML - implements a YAML Loader and Dumper
+* xmlsec1-openssl - OpenSSL crypto plugin for XML Security Library
+
+Management Node Perl Modules:
+
+* CPAN - provides a command interface (not a shell) to CPAN
+* DBI - Generic Database Interface
+* Digest::SHA1 - NIST SHA message digest algorithm
+* Frontier::Client - issue Frontier XML RPC requests to a server
+* LWP::Protocol::https - support for using https schemed URLs with LWP
+* JSON - JavaScript Object Notation
+* Mail::Mailer - Simple mail agent interface
+* Mo:builder - Adds the builder feature to Mo's has
+* Net::SSH::Expect - a wrapper to the ssh executable that is available in system's PATH
+* Object::InsideOut - Comprehensive inside-out object support
+* RPC::XML - Set of classes for core data, message, XML handling
+* Scalar::Util - A selection of general-utility scalar subroutines
+* Time::HiRes - provides high resolution time and timers
+* URI - Uniform Resource Identifiers (absolute and relative)
+* YAML - YAML Ain't Markup Language 
 
 The required Perl modules are distributed under one or more of the following
 licenses:
