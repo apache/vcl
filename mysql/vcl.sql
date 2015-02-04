@@ -2053,7 +2053,9 @@ INSERT IGNORE INTO `usergrouppriv` (`usergroupid`, `userprivtypeid`) VALUES
 (3, 9),
 (3, 10),
 (3, 11),
-(3, 12);
+(3, 12),
+(3, 14),
+(3, 16);
 
 -- 
 -- Dumping data for table `userprivtype`
