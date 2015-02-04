@@ -217,13 +217,6 @@ if [[ -f NOTICE && -f LICENSE && -d managementnode && -d web && -d mysql ]]; the
 	WORKPATH=$(dirname `pwd`)
 fi
 
-# TODO
-#tmp=$(dirname $0)
-#pushd $tmp > /dev/null
-#SCRIPTPATH=$(pwd)
-#popd > /dev/null
-#echo $SCRIPTPATH
-
 # ------------------- checks for existing installation -----------------------
 echo ""
 echo "This script will exit if any existing parts of VCL are found. If they exist, you"
@@ -406,6 +399,7 @@ function download_archive() {
 
 function validate_archive_sha1() {
 	echo "Downloading sha1 file for $VCL_VERSION..."
+	/bin/rm -f $ARCHIVE.sha1
 	wget -q $SIGPATH$ARCHIVE.sha1
 	echo "validating $ARCHIVE"
 	sha1sum -c $ARCHIVE.sha1
@@ -414,6 +408,7 @@ function validate_archive_sha1() {
 
 function validate_archive_gpg() {
 	echo "Downloading GPG file for $VCL_VERSION..."
+	/bin/rm -f $ARCHIVE.asc
 	wget -q $SIGPATH$ARCHIVE.asc
 	echo "Downloading KEYS file for ASF VCL..."
 	wget -q https://svn.apache.org/repos/asf/vcl/KEYS
