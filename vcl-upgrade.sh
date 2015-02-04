@@ -63,7 +63,7 @@ eval set -- "$args"
 
 # ------------------------- variables -------------------------------
 VCL_VERSION=2.4-test
-OLD_VERSION= # TODO
+OLD_VERSION=""
 DB_NAME=vcl
 WEB_PATH=/var/www/html/vcl
 MN_PATH=/usr/local/vcl
@@ -182,13 +182,6 @@ if [[ -f NOTICE && -f LICENSE && -d managementnode && -d web && -d mysql ]]; the
 	WORKPATH=$(dirname `pwd`)
 fi
 
-# TODO
-#tmp=$(dirname $0)
-#pushd $tmp > /dev/null
-#SCRIPTPATH=$(pwd)
-#popd > /dev/null
-#echo $SCRIPTPATH
-
 if [[ $DB_ADMINPASS = "" ]]; then
 	alias mysql="mysql -u $DB_ADMINUSER -h $DB_HOST"
 	alias mysqldump="mysqldump -u $DB_ADMINUSER -h $DB_HOST"
@@ -244,6 +237,10 @@ if [[ $DOWEB -eq 1 || $DOMN -eq 1 ]]; then
 	fi
 	if [[ $DOMN -eq 1 ]]; then
 		OLD_MN_VERSION=$(grep '$VERSION' $MN_PATH/lib/VCL/utils.pm | awk -F"'" '{print $2}')
+		if [[ $DOWEB -eq 1 && $OLD_WEB_VERSION = "2.2.2" && $OLD_MN_VERSION = "2.2.1" ]]; then
+			# 2.2.2 release did not include an upgrade to management node code
+			OLD_MN_VERSION="2.2.2"
+		fi
 		if [[ $OLD_MN_VERSION = "" ]]; then echo "Error: Failed to determine previous version of management node code, exiting"; exit 1; fi
 		echo "Determined previous management node code version to be $OLD_MN_VERSION"
 		OLD_VERSION=$OLD_MN_VERSION
@@ -253,8 +250,7 @@ if [[ $DOWEB -eq 1 || $DOMN -eq 1 ]]; then
 		exit 1
 	fi
 elif [[ $DODB -eq 1 && $DOWEB -eq 0 && $DOMN -eq 0 ]]; then
-	# TODO
-	OLD_VERSION=
+	OLD_VERSION=""
 fi
 
 if [[ $OLD_VERSION = $VCL_VERSION ]]; then
@@ -290,6 +286,7 @@ function download_archive() {
 
 function validate_archive_sha1() {
 	echo "Downloading sha1 file for $VCL_VERSION..."
+	/bin/rm -f $ARCHIVE.sha1
 	wget -q $SIGPATH$ARCHIVE.sha1
 	echo "validating $ARCHIVE"
 	sha1sum -c $ARCHIVE.sha1
@@ -298,6 +295,7 @@ function validate_archive_sha1() {
 
 function validate_archive_gpg() {
 	echo "Downloading GPG file for $VCL_VERSION..."
+	/bin/rm -f $ARCHIVE.asc
 	wget -q $SIGPATH$ARCHIVE.asc
 	echo "Downloading KEYS file for ASF VCL..."
 	wget -q https://svn.apache.org/repos/asf/vcl/KEYS
@@ -318,119 +316,119 @@ function generic_error() {
 }
 
 function confUpgradeFrom22() {
-	sed -i 's|https://cwiki.apache.org/VCLDOCS/|https://cwiki.apache.org/confluence/display/VCL/Using+VCL|' $WEB_PATH/.ht-inc/conf.php
+	sed -i 's|https://cwiki.apache.org/VCLDOCS/|https://cwiki.apache.org/confluence/display/VCL/Using+VCL|' $WEB_PATH-$VCL_VERSION/.ht-inc/conf.php
 	if [ $? -ne 0 ]; then echo "Error: Failed to update conf.php"; exit 1; fi
-	sed -i 's|^\$blockNotifyUsers|#\$blockNotifyUsers|' $WEB_PATH/.ht-inc/conf.php
+	sed -i 's|^\$blockNotifyUsers|#\$blockNotifyUsers|' $WEB_PATH-$VCL_VERSION/.ht-inc/conf.php
 	if [ $? -ne 0 ]; then echo "Error: Failed to update conf.php"; exit 1; fi
-	sed -i '/^\$userlookupUsers = array(.*);/d' $WEB_PATH/.ht-inc/conf.php
+	sed -i '/^\$userlookupUsers = array(.*);/d' $WEB_PATH-$VCL_VERSION/.ht-inc/conf.php
 	if [ $? -ne 0 ]; then echo "Error: Failed to update conf.php"; exit 1; fi
-	sed -i '/^\$userlookupUsers = array/,/);/d' $WEB_PATH/.ht-inc/conf.php
+	sed -i '/^\$userlookupUsers = array/,/);/d' $WEB_PATH-$VCL_VERSION/.ht-inc/conf.php
 	if [ $? -ne 0 ]; then echo "Error: Failed to update conf.php"; exit 1; fi
 
-	if ! grep -q '$NOAUTH_HOMENAV' $WEB_PATH/.ht-inc/conf.php; then
-		sed -i '/ENABLE_ITECSAUTH/a );' $WEB_PATH/.ht-inc/conf.php
+	if ! grep -q '$NOAUTH_HOMENAV' $WEB_PATH-$VCL_VERSION/.ht-inc/conf.php; then
+		sed -i '/ENABLE_ITECSAUTH/a );' $WEB_PATH-$VCL_VERSION/.ht-inc/conf.php
 		if [ $? -ne 0 ]; then echo "Error: Failed to update conf.php"; exit 1; fi
-		sed -i '/ENABLE_ITECSAUTH/a \\t"Report a Problem" => "mailto:" . HELPEMAIL,                ' $WEB_PATH/.ht-inc/conf.php
+		sed -i '/ENABLE_ITECSAUTH/a \\t"Report a Problem" => "mailto:" . HELPEMAIL,                ' $WEB_PATH-$VCL_VERSION/.ht-inc/conf.php
 		if [ $? -ne 0 ]; then echo "Error: Failed to update conf.php"; exit 1; fi
-		sed -i '/ENABLE_ITECSAUTH/a \\t"How to use VCL" => "https://cwiki.apache.org/confluence/display/VCL/Using+VCL",' $WEB_PATH/.ht-inc/conf.php
+		sed -i '/ENABLE_ITECSAUTH/a \\t"How to use VCL" => "https://cwiki.apache.org/confluence/display/VCL/Using+VCL",' $WEB_PATH-$VCL_VERSION/.ht-inc/conf.php
 		if [ $? -ne 0 ]; then echo "Error: Failed to update conf.php"; exit 1; fi
-		sed -i '/ENABLE_ITECSAUTH/a \\t"What is VCL" => "http://vcl.apache.org/",                  ' $WEB_PATH/.ht-inc/conf.php
+		sed -i '/ENABLE_ITECSAUTH/a \\t"What is VCL" => "http://vcl.apache.org/",                  ' $WEB_PATH-$VCL_VERSION/.ht-inc/conf.php
 		if [ $? -ne 0 ]; then echo "Error: Failed to update conf.php"; exit 1; fi
-		sed -i '/ENABLE_ITECSAUTH/a $NOAUTH_HOMENAV = array (                                      ' $WEB_PATH/.ht-inc/conf.php
+		sed -i '/ENABLE_ITECSAUTH/a $NOAUTH_HOMENAV = array (                                      ' $WEB_PATH-$VCL_VERSION/.ht-inc/conf.php
 		if [ $? -ne 0 ]; then echo "Error: Failed to update conf.php"; exit 1; fi
-		sed -i '/ENABLE_ITECSAUTH/a #   where authentication method is selected when NOAUTH_HOMENAV is set to 1' $WEB_PATH/.ht-inc/conf.php
+		sed -i '/ENABLE_ITECSAUTH/a #   where authentication method is selected when NOAUTH_HOMENAV is set to 1' $WEB_PATH-$VCL_VERSION/.ht-inc/conf.php
 		if [ $? -ne 0 ]; then echo "Error: Failed to update conf.php"; exit 1; fi
-		sed -i '/ENABLE_ITECSAUTH/a # documentation links to display on login page and page' $WEB_PATH/.ht-inc/conf.php
-		if [ $? -ne 0 ]; then echo "Error: Failed to update conf.php"; exit 1; fi
-	fi
-
-	if ! grep -q XMLRPCLOGGING $WEB_PATH/.ht-inc/conf.php; then
-		sed -i '/ENABLE_ITECSAUTH/G' $WEB_PATH/.ht-inc/conf.php
-		if [ $? -ne 0 ]; then echo "Error: Failed to update conf.php"; exit 1; fi
-		sed -i '/ENABLE_ITECSAUTH/a define("XMLRPCLOGGING", 1);' $WEB_PATH/.ht-inc/conf.php
-		if [ $? -ne 0 ]; then echo "Error: Failed to update conf.php"; exit 1; fi
-		sed -i '/ENABLE_ITECSAUTH/a # boolean value of 0 or 1 to control logging of XMLRPC calls for auditing or debugging purposes; queries are logged to the xmlrpcLog table' $WEB_PATH/.ht-inc/conf.php
+		sed -i '/ENABLE_ITECSAUTH/a # documentation links to display on login page and page' $WEB_PATH-$VCL_VERSION/.ht-inc/conf.php
 		if [ $? -ne 0 ]; then echo "Error: Failed to update conf.php"; exit 1; fi
 	fi
 
-	if ! grep -q QUERYLOGGING $WEB_PATH/.ht-inc/conf.php; then
-		sed -i '/ENABLE_ITECSAUTH/G' $WEB_PATH/.ht-inc/conf.php
+	if ! grep -q XMLRPCLOGGING $WEB_PATH-$VCL_VERSION/.ht-inc/conf.php; then
+		sed -i '/ENABLE_ITECSAUTH/G' $WEB_PATH-$VCL_VERSION/.ht-inc/conf.php
 		if [ $? -ne 0 ]; then echo "Error: Failed to update conf.php"; exit 1; fi
-		sed -i '/ENABLE_ITECSAUTH/a define("QUERYLOGGING", 1);' $WEB_PATH/.ht-inc/conf.php
+		sed -i '/ENABLE_ITECSAUTH/a define("XMLRPCLOGGING", 1);' $WEB_PATH-$VCL_VERSION/.ht-inc/conf.php
 		if [ $? -ne 0 ]; then echo "Error: Failed to update conf.php"; exit 1; fi
-		sed -i '/ENABLE_ITECSAUTH/a # boolean value of 0 or 1 to control logging of non SELECT database queries for auditing or debugging purposes; queries are logged to the querylog table' $WEB_PATH/.ht-inc/conf.php
-		if [ $? -ne 0 ]; then echo "Error: Failed to update conf.php"; exit 1; fi
-	fi
-
-	if ! grep -q 'define..NOAUTH_HOMENAV' $WEB_PATH/.ht-inc/conf.php; then
-		sed -i '/ENABLE_ITECSAUTH/G' $WEB_PATH/.ht-inc/conf.php
-		if [ $? -ne 0 ]; then echo "Error: Failed to update conf.php"; exit 1; fi
-		sed -i '/ENABLE_ITECSAUTH/a define("NOAUTH_HOMENAV", 0);' $WEB_PATH/.ht-inc/conf.php
-		if [ $? -ne 0 ]; then echo "Error: Failed to update conf.php"; exit 1; fi
-		sed -i '/ENABLE_ITECSAUTH/a # 0 = disables; 1 = enabled' $WEB_PATH/.ht-inc/conf.php
-		if [ $? -ne 0 ]; then echo "Error: Failed to update conf.php"; exit 1; fi
-		sed -i '/ENABLE_ITECSAUTH/a #   where authentication method is selected' $WEB_PATH/.ht-inc/conf.php
-		if [ $? -ne 0 ]; then echo "Error: Failed to update conf.php"; exit 1; fi
-		sed -i '/ENABLE_ITECSAUTH/a # boolean value of 0 or 1 to enable documentation links on login page and page' $WEB_PATH/.ht-inc/conf.php
+		sed -i '/ENABLE_ITECSAUTH/a # boolean value of 0 or 1 to control logging of XMLRPC calls for auditing or debugging purposes; queries are logged to the xmlrpcLog table' $WEB_PATH-$VCL_VERSION/.ht-inc/conf.php
 		if [ $? -ne 0 ]; then echo "Error: Failed to update conf.php"; exit 1; fi
 	fi
 
-	if ! grep -q MAXSUBIMAGES $WEB_PATH/.ht-inc/conf.php; then
-		sed -i '/ENABLE_ITECSAUTH/G' $WEB_PATH/.ht-inc/conf.php
+	if ! grep -q QUERYLOGGING $WEB_PATH-$VCL_VERSION/.ht-inc/conf.php; then
+		sed -i '/ENABLE_ITECSAUTH/G' $WEB_PATH-$VCL_VERSION/.ht-inc/conf.php
 		if [ $? -ne 0 ]; then echo "Error: Failed to update conf.php"; exit 1; fi
-		sed -i '/ENABLE_ITECSAUTH/a define("MAXSUBIMAGES", 5000);  // maximum allowed number for subimages in a config' $WEB_PATH/.ht-inc/conf.php
+		sed -i '/ENABLE_ITECSAUTH/a define("QUERYLOGGING", 1);' $WEB_PATH-$VCL_VERSION/.ht-inc/conf.php
 		if [ $? -ne 0 ]; then echo "Error: Failed to update conf.php"; exit 1; fi
-	fi
-
-	if ! grep -q MAXINITIALIMAGINGTIME $WEB_PATH/.ht-inc/conf.php; then
-		sed -i '/ENABLE_ITECSAUTH/G' $WEB_PATH/.ht-inc/conf.php
-		if [ $? -ne 0 ]; then echo "Error: Failed to update conf.php"; exit 1; fi
-		sed -i '/ENABLE_ITECSAUTH/a define("MAXINITIALIMAGINGTIME", 720); // for imaging reservations, users will have at least this long as the max selectable duration' $WEB_PATH/.ht-inc/conf.php
+		sed -i '/ENABLE_ITECSAUTH/a # boolean value of 0 or 1 to control logging of non SELECT database queries for auditing or debugging purposes; queries are logged to the querylog table' $WEB_PATH-$VCL_VERSION/.ht-inc/conf.php
 		if [ $? -ne 0 ]; then echo "Error: Failed to update conf.php"; exit 1; fi
 	fi
 
-	if ! grep -q ALLOWADDSHIBUSERS $WEB_PATH/.ht-inc/conf.php; then
-		sed -i '/ENABLE_ITECSAUTH/G' $WEB_PATH/.ht-inc/conf.php
+	if ! grep -q 'define..NOAUTH_HOMENAV' $WEB_PATH-$VCL_VERSION/.ht-inc/conf.php; then
+		sed -i '/ENABLE_ITECSAUTH/G' $WEB_PATH-$VCL_VERSION/.ht-inc/conf.php
 		if [ $? -ne 0 ]; then echo "Error: Failed to update conf.php"; exit 1; fi
-		sed -i '/ENABLE_ITECSAUTH/a \                                // will be added to the database with the typoed userid' $WEB_PATH/.ht-inc/conf.php
+		sed -i '/ENABLE_ITECSAUTH/a define("NOAUTH_HOMENAV", 0);' $WEB_PATH-$VCL_VERSION/.ht-inc/conf.php
 		if [ $? -ne 0 ]; then echo "Error: Failed to update conf.php"; exit 1; fi
-		sed -i '/ENABLE_ITECSAUTH/a \                                // a userid, there is no way to verify that it was entered incorrectly so the user' $WEB_PATH/.ht-inc/conf.php
+		sed -i '/ENABLE_ITECSAUTH/a # 0 = disables; 1 = enabled' $WEB_PATH-$VCL_VERSION/.ht-inc/conf.php
 		if [ $? -ne 0 ]; then echo "Error: Failed to update conf.php"; exit 1; fi
-		sed -i '/ENABLE_ITECSAUTH/a \                                // privilege somewhere in the privilege tree. Note that if you enable this and typo' $WEB_PATH/.ht-inc/conf.php
+		sed -i '/ENABLE_ITECSAUTH/a #   where authentication method is selected' $WEB_PATH-$VCL_VERSION/.ht-inc/conf.php
 		if [ $? -ne 0 ]; then echo "Error: Failed to update conf.php"; exit 1; fi
-		sed -i '/ENABLE_ITECSAUTH/a \                                // through things such as adding a user to a user group or directly granting a user a' $WEB_PATH/.ht-inc/conf.php
-		if [ $? -ne 0 ]; then echo "Error: Failed to update conf.php"; exit 1; fi
-		sed -i '/ENABLE_ITECSAUTH/a \                                // set this to 1 to allow users be manually added to VCL before they have ever logged in' $WEB_PATH/.ht-inc/conf.php
-		if [ $? -ne 0 ]; then echo "Error: Failed to update conf.php"; exit 1; fi
-		sed -i '/ENABLE_ITECSAUTH/a \                                // also have LDAP set up (i.e. affiliation.shibonly = 1)' $WEB_PATH/.ht-inc/conf.php
-		if [ $? -ne 0 ]; then echo "Error: Failed to update conf.php"; exit 1; fi
-		sed -i '/ENABLE_ITECSAUTH/a define("ALLOWADDSHIBUSERS", 0); // this is only related to using Shibboleth authentication for an affiliation that does not' $WEB_PATH/.ht-inc/conf.php
+		sed -i '/ENABLE_ITECSAUTH/a # boolean value of 0 or 1 to enable documentation links on login page and page' $WEB_PATH-$VCL_VERSION/.ht-inc/conf.php
 		if [ $? -ne 0 ]; then echo "Error: Failed to update conf.php"; exit 1; fi
 	fi
 
-	if ! grep -q SEMTIMEOUT $WEB_PATH/.ht-inc/conf.php; then
-		sed -i '/ENABLE_ITECSAUTH/G' $WEB_PATH/.ht-inc/conf.php
+	if ! grep -q MAXSUBIMAGES $WEB_PATH-$VCL_VERSION/.ht-inc/conf.php; then
+		sed -i '/ENABLE_ITECSAUTH/G' $WEB_PATH-$VCL_VERSION/.ht-inc/conf.php
 		if [ $? -ne 0 ]; then echo "Error: Failed to update conf.php"; exit 1; fi
-		sed -i '/ENABLE_ITECSAUTH/a define("SEMTIMEOUT", "45");' $WEB_PATH/.ht-inc/conf.php
-		if [ $? -ne 0 ]; then echo "Error: Failed to update conf.php"; exit 1; fi
-	fi
-
-	if ! grep -q DEFAULTLOCALE $WEB_PATH/.ht-inc/conf.php; then
-		sed -i '/ENABLE_ITECSAUTH/G' $WEB_PATH/.ht-inc/conf.php
-		if [ $? -ne 0 ]; then echo "Error: Failed to update conf.php"; exit 1; fi
-		sed -i '/ENABLE_ITECSAUTH/a define("DEFAULTLOCALE", "en_US");              // default locale for the site' $WEB_PATH/.ht-inc/conf.php
+		sed -i '/ENABLE_ITECSAUTH/a define("MAXSUBIMAGES", 5000);  // maximum allowed number for subimages in a config' $WEB_PATH-$VCL_VERSION/.ht-inc/conf.php
 		if [ $? -ne 0 ]; then echo "Error: Failed to update conf.php"; exit 1; fi
 	fi
 
-	sed -i '/ENABLE_ITECSAUTH/G' $WEB_PATH/.ht-inc/conf.php
+	if ! grep -q MAXINITIALIMAGINGTIME $WEB_PATH-$VCL_VERSION/.ht-inc/conf.php; then
+		sed -i '/ENABLE_ITECSAUTH/G' $WEB_PATH-$VCL_VERSION/.ht-inc/conf.php
+		if [ $? -ne 0 ]; then echo "Error: Failed to update conf.php"; exit 1; fi
+		sed -i '/ENABLE_ITECSAUTH/a define("MAXINITIALIMAGINGTIME", 720); // for imaging reservations, users will have at least this long as the max selectable duration' $WEB_PATH-$VCL_VERSION/.ht-inc/conf.php
+		if [ $? -ne 0 ]; then echo "Error: Failed to update conf.php"; exit 1; fi
+	fi
+
+	if ! grep -q ALLOWADDSHIBUSERS $WEB_PATH-$VCL_VERSION/.ht-inc/conf.php; then
+		sed -i '/ENABLE_ITECSAUTH/G' $WEB_PATH-$VCL_VERSION/.ht-inc/conf.php
+		if [ $? -ne 0 ]; then echo "Error: Failed to update conf.php"; exit 1; fi
+		sed -i '/ENABLE_ITECSAUTH/a \                                // will be added to the database with the typoed userid' $WEB_PATH-$VCL_VERSION/.ht-inc/conf.php
+		if [ $? -ne 0 ]; then echo "Error: Failed to update conf.php"; exit 1; fi
+		sed -i '/ENABLE_ITECSAUTH/a \                                // a userid, there is no way to verify that it was entered incorrectly so the user' $WEB_PATH-$VCL_VERSION/.ht-inc/conf.php
+		if [ $? -ne 0 ]; then echo "Error: Failed to update conf.php"; exit 1; fi
+		sed -i '/ENABLE_ITECSAUTH/a \                                // privilege somewhere in the privilege tree. Note that if you enable this and typo' $WEB_PATH-$VCL_VERSION/.ht-inc/conf.php
+		if [ $? -ne 0 ]; then echo "Error: Failed to update conf.php"; exit 1; fi
+		sed -i '/ENABLE_ITECSAUTH/a \                                // through things such as adding a user to a user group or directly granting a user a' $WEB_PATH-$VCL_VERSION/.ht-inc/conf.php
+		if [ $? -ne 0 ]; then echo "Error: Failed to update conf.php"; exit 1; fi
+		sed -i '/ENABLE_ITECSAUTH/a \                                // set this to 1 to allow users be manually added to VCL before they have ever logged in' $WEB_PATH-$VCL_VERSION/.ht-inc/conf.php
+		if [ $? -ne 0 ]; then echo "Error: Failed to update conf.php"; exit 1; fi
+		sed -i '/ENABLE_ITECSAUTH/a \                                // also have LDAP set up (i.e. affiliation.shibonly = 1)' $WEB_PATH-$VCL_VERSION/.ht-inc/conf.php
+		if [ $? -ne 0 ]; then echo "Error: Failed to update conf.php"; exit 1; fi
+		sed -i '/ENABLE_ITECSAUTH/a define("ALLOWADDSHIBUSERS", 0); // this is only related to using Shibboleth authentication for an affiliation that does not' $WEB_PATH-$VCL_VERSION/.ht-inc/conf.php
+		if [ $? -ne 0 ]; then echo "Error: Failed to update conf.php"; exit 1; fi
+	fi
+
+	if ! grep -q SEMTIMEOUT $WEB_PATH-$VCL_VERSION/.ht-inc/conf.php; then
+		sed -i '/ENABLE_ITECSAUTH/G' $WEB_PATH-$VCL_VERSION/.ht-inc/conf.php
+		if [ $? -ne 0 ]; then echo "Error: Failed to update conf.php"; exit 1; fi
+		sed -i '/ENABLE_ITECSAUTH/a define("SEMTIMEOUT", "45");' $WEB_PATH-$VCL_VERSION/.ht-inc/conf.php
+		if [ $? -ne 0 ]; then echo "Error: Failed to update conf.php"; exit 1; fi
+	fi
+
+	if ! grep -q DEFAULTLOCALE $WEB_PATH-$VCL_VERSION/.ht-inc/conf.php; then
+		sed -i '/ENABLE_ITECSAUTH/G' $WEB_PATH-$VCL_VERSION/.ht-inc/conf.php
+		if [ $? -ne 0 ]; then echo "Error: Failed to update conf.php"; exit 1; fi
+		sed -i '/ENABLE_ITECSAUTH/a define("DEFAULTLOCALE", "en_US");              // default locale for the site' $WEB_PATH-$VCL_VERSION/.ht-inc/conf.php
+		if [ $? -ne 0 ]; then echo "Error: Failed to update conf.php"; exit 1; fi
+	fi
+
+	sed -i '/ENABLE_ITECSAUTH/G' $WEB_PATH-$VCL_VERSION/.ht-inc/conf.php
 	if [ $? -ne 0 ]; then echo "Error: Failed to update conf.php"; exit 1; fi
 }
 
 function confUpgradeFrom221() {
 	confUpgradeFrom22
-	sed -i "s/\$addUserFunc\[\$item\['affiliationid'\]\] = create_function('', 'return 0;');/\$addUserFunc[\$item['affiliationid']] = create_function('', 'return NULL;');/" $WEB_PATH/.ht-inc/conf.php
+	sed -i "s/\$addUserFunc\[\$item\['affiliationid'\]\] = create_function('', 'return 0;');/\$addUserFunc[\$item['affiliationid']] = create_function('', 'return NULL;');/" $WEB_PATH-$VCL_VERSION/.ht-inc/conf.php
 	if [ $? -ne 0 ]; then echo "Error: Failed to update conf.php"; exit 1; fi
-	sed -i "s/\$updateUserFunc\[\$item\['affiliationid'\]\] = create_function('', 'return 0;');/\$updateUserFunc[\$item['affiliationid']] = create_function('', 'return NULL;');/" $WEB_PATH/.ht-inc/conf.php
+	sed -i "s/\$updateUserFunc\[\$item\['affiliationid'\]\] = create_function('', 'return 0;');/\$updateUserFunc[\$item['affiliationid']] = create_function('', 'return NULL;');/" $WEB_PATH-$VCL_VERSION/.ht-inc/conf.php
 	if [ $? -ne 0 ]; then echo "Error: Failed to update conf.php"; exit 1; fi
 }
 
@@ -439,79 +437,79 @@ function confUpgradeFrom222() {
 }
 
 function confUpgradeFrom23() {
-	sed -i 's|https://cwiki.apache.org/VCLDOCS/|https://cwiki.apache.org/confluence/display/VCL/Using+VCL|' $WEB_PATH/.ht-inc/conf.php
+	sed -i 's|https://cwiki.apache.org/VCLDOCS/|https://cwiki.apache.org/confluence/display/VCL/Using+VCL|' $WEB_PATH-$VCL_VERSION/.ht-inc/conf.php
 	if [ $? -ne 0 ]; then echo "Error: Failed to update conf.php"; exit 1; fi
 
-	if ! grep -q '$NOAUTH_HOMENAV' $WEB_PATH/.ht-inc/conf.php; then
-		sed -i '/ENABLE_ITECSAUTH/a );' $WEB_PATH/.ht-inc/conf.php
+	if ! grep -q '$NOAUTH_HOMENAV' $WEB_PATH-$VCL_VERSION/.ht-inc/conf.php; then
+		sed -i '/ENABLE_ITECSAUTH/a );' $WEB_PATH-$VCL_VERSION/.ht-inc/conf.php
 		if [ $? -ne 0 ]; then echo "Error: Failed to update conf.php"; exit 1; fi
-		sed -i '/ENABLE_ITECSAUTH/a \\t"Report a Problem" => "mailto:" . HELPEMAIL,                ' $WEB_PATH/.ht-inc/conf.php
+		sed -i '/ENABLE_ITECSAUTH/a \\t"Report a Problem" => "mailto:" . HELPEMAIL,                ' $WEB_PATH-$VCL_VERSION/.ht-inc/conf.php
 		if [ $? -ne 0 ]; then echo "Error: Failed to update conf.php"; exit 1; fi
-		sed -i '/ENABLE_ITECSAUTH/a \\t"How to use VCL" => "https://cwiki.apache.org/confluence/display/VCL/Using+VCL",' $WEB_PATH/.ht-inc/conf.php
+		sed -i '/ENABLE_ITECSAUTH/a \\t"How to use VCL" => "https://cwiki.apache.org/confluence/display/VCL/Using+VCL",' $WEB_PATH-$VCL_VERSION/.ht-inc/conf.php
 		if [ $? -ne 0 ]; then echo "Error: Failed to update conf.php"; exit 1; fi
-		sed -i '/ENABLE_ITECSAUTH/a \\t"What is VCL" => "http://vcl.apache.org/",                  ' $WEB_PATH/.ht-inc/conf.php
+		sed -i '/ENABLE_ITECSAUTH/a \\t"What is VCL" => "http://vcl.apache.org/",                  ' $WEB_PATH-$VCL_VERSION/.ht-inc/conf.php
 		if [ $? -ne 0 ]; then echo "Error: Failed to update conf.php"; exit 1; fi
-		sed -i '/ENABLE_ITECSAUTH/a $NOAUTH_HOMENAV = array (                                      ' $WEB_PATH/.ht-inc/conf.php
+		sed -i '/ENABLE_ITECSAUTH/a $NOAUTH_HOMENAV = array (                                      ' $WEB_PATH-$VCL_VERSION/.ht-inc/conf.php
 		if [ $? -ne 0 ]; then echo "Error: Failed to update conf.php"; exit 1; fi
-		sed -i '/ENABLE_ITECSAUTH/a #   where authentication method is selected when NOAUTH_HOMENAV is set to 1' $WEB_PATH/.ht-inc/conf.php
+		sed -i '/ENABLE_ITECSAUTH/a #   where authentication method is selected when NOAUTH_HOMENAV is set to 1' $WEB_PATH-$VCL_VERSION/.ht-inc/conf.php
 		if [ $? -ne 0 ]; then echo "Error: Failed to update conf.php"; exit 1; fi
-		sed -i '/ENABLE_ITECSAUTH/a # documentation links to display on login page and page' $WEB_PATH/.ht-inc/conf.php
-		if [ $? -ne 0 ]; then echo "Error: Failed to update conf.php"; exit 1; fi
-	fi
-
-	if ! grep -q XMLRPCLOGGING $WEB_PATH/.ht-inc/conf.php; then
-		sed -i '/ENABLE_ITECSAUTH/G' $WEB_PATH/.ht-inc/conf.php
-		if [ $? -ne 0 ]; then echo "Error: Failed to update conf.php"; exit 1; fi
-		sed -i '/ENABLE_ITECSAUTH/a define("XMLRPCLOGGING", 1);' $WEB_PATH/.ht-inc/conf.php
-		if [ $? -ne 0 ]; then echo "Error: Failed to update conf.php"; exit 1; fi
-		sed -i '/ENABLE_ITECSAUTH/a # boolean value of 0 or 1 to control logging of XMLRPC calls for auditing or debugging purposes; queries are logged to the xmlrpcLog table' $WEB_PATH/.ht-inc/conf.php
+		sed -i '/ENABLE_ITECSAUTH/a # documentation links to display on login page and page' $WEB_PATH-$VCL_VERSION/.ht-inc/conf.php
 		if [ $? -ne 0 ]; then echo "Error: Failed to update conf.php"; exit 1; fi
 	fi
 
-	if ! grep -q QUERYLOGGING $WEB_PATH/.ht-inc/conf.php; then
-		sed -i '/ENABLE_ITECSAUTH/G' $WEB_PATH/.ht-inc/conf.php
+	if ! grep -q XMLRPCLOGGING $WEB_PATH-$VCL_VERSION/.ht-inc/conf.php; then
+		sed -i '/ENABLE_ITECSAUTH/G' $WEB_PATH-$VCL_VERSION/.ht-inc/conf.php
 		if [ $? -ne 0 ]; then echo "Error: Failed to update conf.php"; exit 1; fi
-		sed -i '/ENABLE_ITECSAUTH/a define("QUERYLOGGING", 1);' $WEB_PATH/.ht-inc/conf.php
+		sed -i '/ENABLE_ITECSAUTH/a define("XMLRPCLOGGING", 1);' $WEB_PATH-$VCL_VERSION/.ht-inc/conf.php
 		if [ $? -ne 0 ]; then echo "Error: Failed to update conf.php"; exit 1; fi
-		sed -i '/ENABLE_ITECSAUTH/a # boolean value of 0 or 1 to control logging of non SELECT database queries for auditing or debugging purposes; queries are logged to the querylog table' $WEB_PATH/.ht-inc/conf.php
-		if [ $? -ne 0 ]; then echo "Error: Failed to update conf.php"; exit 1; fi
-	fi
-
-	if ! grep -q 'define..NOAUTH_HOMENAV' $WEB_PATH/.ht-inc/conf.php; then
-		sed -i '/ENABLE_ITECSAUTH/G' $WEB_PATH/.ht-inc/conf.php
-		if [ $? -ne 0 ]; then echo "Error: Failed to update conf.php"; exit 1; fi
-		sed -i '/ENABLE_ITECSAUTH/a define("NOAUTH_HOMENAV", 0);' $WEB_PATH/.ht-inc/conf.php
-		if [ $? -ne 0 ]; then echo "Error: Failed to update conf.php"; exit 1; fi
-		sed -i '/ENABLE_ITECSAUTH/a # 0 = disables; 1 = enabled' $WEB_PATH/.ht-inc/conf.php
-		if [ $? -ne 0 ]; then echo "Error: Failed to update conf.php"; exit 1; fi
-		sed -i '/ENABLE_ITECSAUTH/a #   where authentication method is selected' $WEB_PATH/.ht-inc/conf.php
-		if [ $? -ne 0 ]; then echo "Error: Failed to update conf.php"; exit 1; fi
-		sed -i '/ENABLE_ITECSAUTH/a # boolean value of 0 or 1 to enable documentation links on login page and page' $WEB_PATH/.ht-inc/conf.php
+		sed -i '/ENABLE_ITECSAUTH/a # boolean value of 0 or 1 to control logging of XMLRPC calls for auditing or debugging purposes; queries are logged to the xmlrpcLog table' $WEB_PATH-$VCL_VERSION/.ht-inc/conf.php
 		if [ $? -ne 0 ]; then echo "Error: Failed to update conf.php"; exit 1; fi
 	fi
 
-	if ! grep -q MAXSUBIMAGES $WEB_PATH/.ht-inc/conf.php; then
-		sed -i '/ENABLE_ITECSAUTH/G' $WEB_PATH/.ht-inc/conf.php
+	if ! grep -q QUERYLOGGING $WEB_PATH-$VCL_VERSION/.ht-inc/conf.php; then
+		sed -i '/ENABLE_ITECSAUTH/G' $WEB_PATH-$VCL_VERSION/.ht-inc/conf.php
 		if [ $? -ne 0 ]; then echo "Error: Failed to update conf.php"; exit 1; fi
-		sed -i '/ENABLE_ITECSAUTH/a define("MAXSUBIMAGES", 5000);  // maximum allowed number for subimages in a config' $WEB_PATH/.ht-inc/conf.php
+		sed -i '/ENABLE_ITECSAUTH/a define("QUERYLOGGING", 1);' $WEB_PATH-$VCL_VERSION/.ht-inc/conf.php
 		if [ $? -ne 0 ]; then echo "Error: Failed to update conf.php"; exit 1; fi
-	fi
-
-	if ! grep -q MAXINITIALIMAGINGTIME $WEB_PATH/.ht-inc/conf.php; then
-		sed -i '/ENABLE_ITECSAUTH/G' $WEB_PATH/.ht-inc/conf.php
-		if [ $? -ne 0 ]; then echo "Error: Failed to update conf.php"; exit 1; fi
-		sed -i '/ENABLE_ITECSAUTH/a define("MAXINITIALIMAGINGTIME", 720); // for imaging reservations, users will have at least this long as the max selectable duration' $WEB_PATH/.ht-inc/conf.php
+		sed -i '/ENABLE_ITECSAUTH/a # boolean value of 0 or 1 to control logging of non SELECT database queries for auditing or debugging purposes; queries are logged to the querylog table' $WEB_PATH-$VCL_VERSION/.ht-inc/conf.php
 		if [ $? -ne 0 ]; then echo "Error: Failed to update conf.php"; exit 1; fi
 	fi
 
-	if ! grep -q SEMTIMEOUT $WEB_PATH/.ht-inc/conf.php; then
-		sed -i '/ENABLE_ITECSAUTH/G' $WEB_PATH/.ht-inc/conf.php
+	if ! grep -q 'define..NOAUTH_HOMENAV' $WEB_PATH-$VCL_VERSION/.ht-inc/conf.php; then
+		sed -i '/ENABLE_ITECSAUTH/G' $WEB_PATH-$VCL_VERSION/.ht-inc/conf.php
 		if [ $? -ne 0 ]; then echo "Error: Failed to update conf.php"; exit 1; fi
-		sed -i '/ENABLE_ITECSAUTH/a define("SEMTIMEOUT", "45");' $WEB_PATH/.ht-inc/conf.php
+		sed -i '/ENABLE_ITECSAUTH/a define("NOAUTH_HOMENAV", 0);' $WEB_PATH-$VCL_VERSION/.ht-inc/conf.php
+		if [ $? -ne 0 ]; then echo "Error: Failed to update conf.php"; exit 1; fi
+		sed -i '/ENABLE_ITECSAUTH/a # 0 = disables; 1 = enabled' $WEB_PATH-$VCL_VERSION/.ht-inc/conf.php
+		if [ $? -ne 0 ]; then echo "Error: Failed to update conf.php"; exit 1; fi
+		sed -i '/ENABLE_ITECSAUTH/a #   where authentication method is selected' $WEB_PATH-$VCL_VERSION/.ht-inc/conf.php
+		if [ $? -ne 0 ]; then echo "Error: Failed to update conf.php"; exit 1; fi
+		sed -i '/ENABLE_ITECSAUTH/a # boolean value of 0 or 1 to enable documentation links on login page and page' $WEB_PATH-$VCL_VERSION/.ht-inc/conf.php
 		if [ $? -ne 0 ]; then echo "Error: Failed to update conf.php"; exit 1; fi
 	fi
 
-	sed -i '/ENABLE_ITECSAUTH/G' $WEB_PATH/.ht-inc/conf.php
+	if ! grep -q MAXSUBIMAGES $WEB_PATH-$VCL_VERSION/.ht-inc/conf.php; then
+		sed -i '/ENABLE_ITECSAUTH/G' $WEB_PATH-$VCL_VERSION/.ht-inc/conf.php
+		if [ $? -ne 0 ]; then echo "Error: Failed to update conf.php"; exit 1; fi
+		sed -i '/ENABLE_ITECSAUTH/a define("MAXSUBIMAGES", 5000);  // maximum allowed number for subimages in a config' $WEB_PATH-$VCL_VERSION/.ht-inc/conf.php
+		if [ $? -ne 0 ]; then echo "Error: Failed to update conf.php"; exit 1; fi
+	fi
+
+	if ! grep -q MAXINITIALIMAGINGTIME $WEB_PATH-$VCL_VERSION/.ht-inc/conf.php; then
+		sed -i '/ENABLE_ITECSAUTH/G' $WEB_PATH-$VCL_VERSION/.ht-inc/conf.php
+		if [ $? -ne 0 ]; then echo "Error: Failed to update conf.php"; exit 1; fi
+		sed -i '/ENABLE_ITECSAUTH/a define("MAXINITIALIMAGINGTIME", 720); // for imaging reservations, users will have at least this long as the max selectable duration' $WEB_PATH-$VCL_VERSION/.ht-inc/conf.php
+		if [ $? -ne 0 ]; then echo "Error: Failed to update conf.php"; exit 1; fi
+	fi
+
+	if ! grep -q SEMTIMEOUT $WEB_PATH-$VCL_VERSION/.ht-inc/conf.php; then
+		sed -i '/ENABLE_ITECSAUTH/G' $WEB_PATH-$VCL_VERSION/.ht-inc/conf.php
+		if [ $? -ne 0 ]; then echo "Error: Failed to update conf.php"; exit 1; fi
+		sed -i '/ENABLE_ITECSAUTH/a define("SEMTIMEOUT", "45");' $WEB_PATH-$VCL_VERSION/.ht-inc/conf.php
+		if [ $? -ne 0 ]; then echo "Error: Failed to update conf.php"; exit 1; fi
+	fi
+
+	sed -i '/ENABLE_ITECSAUTH/G' $WEB_PATH-$VCL_VERSION/.ht-inc/conf.php
 	if [ $? -ne 0 ]; then echo "Error: Failed to update conf.php"; exit 1; fi
 }
 
@@ -597,8 +595,15 @@ if [[ $DODB -eq 1 ]]; then
 		echo "mysqldump command not found; cannot backup database; exiting..."
 		exit 1
 	fi
-	mysqldump $DB_NAME > $WORKPATH/vcl-${OLD_VERSION}-backup.sql
-	if [ $? -ne 0 ]; then generic_error "Failed to create backup of $DB_NAME database"; exit 1; fi;
+	if [[ $OLD_VERSION = "" ]]; then
+		mysqldump $DB_NAME > $WORKPATH/vcl-pre${VCL_VERSION}-backup.sql
+		if [ $? -ne 0 ]; then generic_error "Failed to create backup of $DB_NAME database"; exit 1; fi;
+		gzip $WORKPATH/vcl-pre2.4-backup.sql
+	else
+		mysqldump $DB_NAME > $WORKPATH/vcl-${OLD_VERSION}-backup.sql
+		if [ $? -ne 0 ]; then generic_error "Failed to create backup of $DB_NAME database"; exit 1; fi;
+		gzip $WORKPATH/vcl-${OLD_VERSION}-backup.sql
+	fi
 fi
 
 # -------------------------- backup web code -------------------------
@@ -686,8 +691,6 @@ fi
 if [[ $DOMN -eq 1 ]]; then
 	print_break
 	echo "Configuring vcld.conf..."
-
-	# TODO add/remove entries from vcld.conf
 
 	if [ $? -ne 0 ]; then echo "Error: Failed to configure vcld.conf"; exit 1; fi
 fi
