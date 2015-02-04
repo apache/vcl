@@ -116,7 +116,7 @@ sub initialize {
 	
 	# If this is a cluster request, wait for all reservations to begin before proceeding
 	if ($reservation_count > 1) {
-		if (!$self->wait_for_all_reservations_to_begin('begin', 90, 5)) {
+		if (!$self->wait_for_all_reservations_to_begin('begin', 300, 30)) {
 			$self->reservation_failed("failed to detect start of processing for all reservation processes", 'available');
 		}
 	}
@@ -661,7 +661,7 @@ sub wait_for_all_reservations_to_begin {
 	}
 	
 	my $total_wait_seconds = shift || 300;
-	my $attempt_delay_seconds = shift || 15;
+	my $attempt_delay_seconds = shift || 30;
 	
 	my $request_id = $self->data->get_request_id();
 	my $request_state_name = $self->data->get_request_state_name();
@@ -732,7 +732,7 @@ sub wait_for_child_reservations_to_exit {
 	}
 	
 	my $total_wait_seconds = shift || 300;
-	my $attempt_delay_seconds = shift || 15;
+	my $attempt_delay_seconds = shift || 30;
 	
 	my $request_id = $self->data->get_request_id();
 	my $request_state_name = $self->data->get_request_state_name();

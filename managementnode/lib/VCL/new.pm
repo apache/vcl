@@ -1037,8 +1037,8 @@ sub wait_for_child_reservations {
 	
 	# Set limits on how long to wait
 	my $overall_timeout_minutes = 60;
-	my $nochange_timeout_minutes = 20;
-	my $monitor_delay_seconds = 3;
+	my $nochange_timeout_minutes = 30;
+	my $monitor_delay_seconds = 30;
 	
 	my $overall_timeout_seconds = ($overall_timeout_minutes * 60);
 	my $nochange_timeout_seconds = ($nochange_timeout_minutes * 60);
