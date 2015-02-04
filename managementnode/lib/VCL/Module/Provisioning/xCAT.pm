@@ -367,6 +367,13 @@ sub load {
 				notify($ERRORS{'DEBUG'}, 0, "installation has started, increasing wait between monitoring checks to $monitor_delay_seconds seconds");
 				$install_started = 1;
 			}
+			
+			# If installation start was missed, nodeset will go from install to boot
+			if ($previous_nodeset_status =~ /install/i && $current_nodeset_status eq 'boot') {
+				notify($ERRORS{'DEBUG'}, 0, "$computer_node_name is finished loading image, nodeset status changed: $previous_nodeset_status --> $current_nodeset_status");
+				insertloadlog($reservation_id, $computer_id, "bootstate", "$computer_node_name image load complete: $current_nodestat_status, $current_nodeset_status");
+				last MONITOR_LOADING;
+			}
 		}
 		else {
 			# nodestat will return 'sshd' if the computer is responding to SSH while it is being installed instead of the more detailed information
@@ -376,7 +383,7 @@ sub load {
 			}
 			
 			# Check if the installation has completed
-			if ($current_nodestat_status =~ /^(boot|complete)$/i || $current_nodeset_status =~ 'boot') {
+			if ($current_nodestat_status =~ /^(boot|complete)$/i || $current_nodeset_status =~ /^(boot)$/i) {
 				notify($ERRORS{'DEBUG'}, 0, "$computer_node_name is finished loading image, current nodestat status: $current_nodestat_status, nodeset status: $current_nodeset_status");
 				insertloadlog($reservation_id, $computer_id, "bootstate", "$computer_node_name image load complete: $current_nodestat_status, $current_nodeset_status");
 				last MONITOR_LOADING;
