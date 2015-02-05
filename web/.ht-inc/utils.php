@@ -8704,7 +8704,9 @@ function getNAThosts($id=0, $sort=0) {
 	       . "LEFT JOIN resource r ON (n.resourceid = r.id) "
 	       . "LEFT JOIN resourcetype rt ON (r.resourcetypeid = rt.id) "
 	       . "LEFT JOIN computer c ON (c.id = r.subid AND rt.name = 'computer') "
-	       . "LEFT JOIN managementnode m ON (m.id = r.subid AND rt.name = 'managementnode')";
+	       . "LEFT JOIN managementnode m ON (m.id = r.subid AND rt.name = 'managementnode') "
+	       . "WHERE (c.deleted IS NULL OR c.deleted = 0) AND "
+	       .       "(m.stateid IS NULL OR m.stateid != (SELECT id FROM state WHERE name = 'deleted'))";
 	if($id)
 		$query .= " WHERE n.id = $id";
 	$qh = doQuery($query);

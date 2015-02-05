@@ -225,7 +225,7 @@ class Computer extends Resource {
 		$cdata = $this->basecdata;
 		$cont = addContinuationsEntry('AJcompNATchange', $cdata);
 		$h .= "      <input type=\"hidden\" id=\"natchangecont\" value=\"$cont\"><br>\n";
-		$h .= dijitButton('', 'Confirm NAT Change', 'confirmNATchange();', 0);
+		$h .= dijitButton('newnathostbtn', 'Confirm NAT Change', 'confirmNATchange();', 0);
 		$h .= "    </div>\n";
 		$h .= "  </div>\n";
 

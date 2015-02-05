@@ -248,7 +248,7 @@ var resource = new Computer();
 function initPage() {
 	if(dojo.byId('reloadpageurl'))
 		return;
-   document.body.style.cursor = 'wait';
+	document.body.style.cursor = 'wait';
 	if(! ('resourcegrid' in window)) {
 		setTimeout(function() {
 			initPage();
@@ -277,6 +277,11 @@ function initPage() {
 		for(var i = 0; i < dojo.byId('filtercompgroups').options.length; i++) {
 			dojo.byId('filtercompgroups').options[i].selected = true;
 		}
+
+		// confirm new nathost button
+		if(dijit.byId('newnathostid').options.length == 0)
+			dijit.byId('newnathostbtn').set('disabled', true);
+
 		clearTimeout(filterdelay);
 	}
 }
@@ -850,8 +855,11 @@ function saveResourceCB(data, ioArgs) {
 				if(typeof resourcegrid !== 'undefined') {
 					resourcegrid.store.newItem(data.items.data);
 					resourcegrid.sort();
-					if(data.items.data.nathostenabled)
+					if(data.items.data.nathostenabled) {
 						dijit.byId('nathostid').addOption({label: data.items.data.hostname, value: data.items.data.nathostenabledid});
+						dijit.byId('newnathostid').addOption({label: data.items.data.hostname, value: data.items.data.nathostenabledid});
+						dijit.byId('newnathostbtn').set('disabled', false);
+					}
 				}
 				dojo.forEach(dijit.findWidgets(dojo.byId('groupdlgcontent')), function(w) {
 					w.destroyRecursive();
@@ -924,14 +932,25 @@ function saveResourceCB(data, ioArgs) {
 					resourcegrid.store.setValue(item, 'natpublicIPaddress', data.items.data.natpublicIPaddress);
 					resourcegrid.store.setValue(item, 'natinternalIPaddress', data.items.data.natinternalIPaddress);
 					if(data.items.data.nathostenabled) {
-						if(washost == 0)
+						if(washost == 0) {
 							dijit.byId('nathostid').addOption({label: data.items.data.hostname, value: data.items.data.nathostenabledid});
+							dijit.byId('newnathostid').addOption({label: data.items.data.hostname, value: data.items.data.nathostenabledid});
+							dijit.byId('newnathostbtn').set('disabled', false);
+						}
 					}
 					else {
 						dijit.byId('nathostid').options.forEach(
 							function(node, index, nodelist) {
 								if(node.label == data.items.data.hostname)
 									dijit.byId('nathostid').removeOption({value: node.value});
+							}
+						);
+						dijit.byId('newnathostid').options.forEach(
+							function(node, index, nodelist) {
+								if(node.label == data.items.data.hostname)
+									dijit.byId('newnathostid').removeOption({value: node.value});
+								if(dijit.byId('newnathostid').options.length == 0)
+									dijit.byId('newnathostbtn').set('disabled', true);
 							}
 						);
 					}
@@ -1019,6 +1038,8 @@ function confirmPredictiveModuleChange() {
 }
 
 function confirmNATchange() {
+	if(dijit.byId('newnathostid').options.length == 0)
+		return;
 	var data = {continuation: dojo.byId('natchangecont').value};
 	if(dijit.byId('newnatenabled').get('value') == 1) {
 		data['natenabled'] = 1;

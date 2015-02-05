@@ -940,10 +940,6 @@ class ManagementNode extends Resource {
 			}
 		}
 
-
-
-
-
 		$nathosterror = 0;
 		# nathostenabled
 		if($return['nathostenabled'] != 0 && $return['nathostenabled'] != 1) {
