@@ -167,12 +167,7 @@ $SUBROUTINE_MAPPINGS{log_remote_ip} = '$self->request_data->{log}{remoteIP}';
 $SUBROUTINE_MAPPINGS{log_imageid} = '$self->request_data->{log}{imageid}';
 $SUBROUTINE_MAPPINGS{log_size} = '$self->request_data->{log}{size}';
 
-$SUBROUTINE_MAPPINGS{sublog_imageid} = '$self->request_data->{log}{imageid}';
-$SUBROUTINE_MAPPINGS{sublog_imagerevisionid} = '$self->request_data->{log}{imagerevisionid}';
-$SUBROUTINE_MAPPINGS{sublog_computerid} = '$self->request_data->{log}{computerid}';
-$SUBROUTINE_MAPPINGS{sublog_ip_address} = '$self->request_data->{log}{IPaddress}';
-$SUBROUTINE_MAPPINGS{sublog_managementnodeid} = '$self->request_data->{log}{managementnodeid}';
-$SUBROUTINE_MAPPINGS{sublog_predictivemoduleid} = '$self->request_data->{log}{predictivemoduleid}';
+$SUBROUTINE_MAPPINGS{sublog_id} = '$self->request_data->{reservation}{RESERVATION_ID}{SUBLOG_ID}';
 
 #$SUBROUTINE_MAPPINGS{request_reservationid} = '$self->request_data->{RESERVATIONID}';
 $SUBROUTINE_MAPPINGS{reservation_id} = '$self->request_data->{RESERVATIONID}';
@@ -852,7 +847,11 @@ sub _automethod : Automethod {
 			
 			if ($self->get_log_data()) {
 				# Log data was retrieved, check if requested data is now populated
-				if (!eval "defined $hash_path") {
+				if (eval "defined $hash_path") {
+					$return_value = eval $hash_path;
+					notify($ERRORS{'DEBUG'}, 0, "log data was retrieved and corresponding data has been initialized for $method_name: $return_value");
+				}
+				else {
 					notify($ERRORS{'WARNING'}, 0, "log data was retrieved but corresponding data has not been initialized for $method_name: $hash_path", $self->request_data) if $show_warnings;
 					return sub { };
 				}
@@ -1398,88 +1397,73 @@ sub print_subroutines {
 
 =head2 get_log_data
 
- Parameters  : log ID (optional)
+ Parameters  : none
  Returns     : hash reference
  Description : Retrieves data from the log and sublog tables for the log ID
                either specified via an argument or the log ID for the
-					reservation represented by the DataStructure object.
+               reservation represented by the DataStructure object.
 
 =cut
 
 sub get_log_data {
-	my $self;
-	my $argument = shift;
-	my $request_log_id;
+	my $self = shift;
+	unless (ref($self) && $self->isa('VCL::DataStructure')) {
+		notify($ERRORS{'WARNING'}, 0, "subroutine can only be called as a VCL::DataStructure module object method");
+		return;
+	}
 	
-	# Check if subroutine was called as an object method
-	if (ref($argument) =~ /DataStructure/) {
-		# Subroutine was called as an object method, get next argument
-		$self = $argument;
-		$argument = shift;
-		
-		# If argument wasn't passed, attempt to get the log id from this DataStructure object
-		if (!$argument) {
-			# Get the log id and make sure it is set
-			$request_log_id = $self->get_request_log_id();
-			if (!$request_log_id) {
-				notify($ERRORS{'WARNING'}, 0, "log id was not passed as an argument and could not be retrieved from the existing DataStructure object");
-				return;
-			}
+	my $current_reservation_id = $self->get_reservation_id();
+	my $request_id = $self->get_request_id();
+	my @reservation_ids = $self->get_reservation_ids();
+	
+	# Retrieve log info for all reservations
+	my $log_info = get_request_log_info($request_id) || return;
+	
+	$self->request_data->{log} = $log_info;
+	
+	# Get a mapping between computer to reservation IDs
+	# TODO: add sublog.reservationid column, this will no longer be necessary
+	my $computer_reservation_ids = {};
+	for my $reservation_id (@reservation_ids) {
+		my $reservation_data;
+		if ($reservation_id eq $current_reservation_id) {
+			$reservation_data = $self;
 		}
 		else {
-			$request_log_id = $argument;
+			$reservation_data = $self->get_reservation_data($reservation_id);
+		}	
+		if (!$reservation_data) {
+			notify($ERRORS{'WARNING'}, 0, "DataStructure object could not be retrieved for reservation $reservation_id");
+			next;
 		}
-	}
-	else {
-		$request_log_id = $argument;
 		
-		# Make sure log id was determined and is valid
-		if (!$request_log_id) {
-			notify($ERRORS{'WARNING'}, 0, "log id was not passed as an argument and subroutine was not called as an object method");
-			return;
+		my $reservation_computer_id = $reservation_data->get_computer_id();
+		if (!$reservation_computer_id) {
+			notify($ERRORS{'WARNING'}, 0, "computer ID could not be determined for reservation $reservation_id");
+			next;
 		}
+		
+		$computer_reservation_ids->{$reservation_computer_id} = $reservation_id;
 	}
 	
-	# Make sure log id was determined and is valid
-	if (!$request_log_id) {
-		notify($ERRORS{'WARNING'}, 0, "log id could not be determined");
-		return;
-	}
-	elsif ($request_log_id !~ /^\d+$/) {
-		notify($ERRORS{'WARNING'}, 0, "log id is not valid: $request_log_id");
-		return;
-	}
-	
-	# Construct a select statement 
-	my $sql_select_statement = "
-	SELECT
-	*
-	FROM
-	log
-	LEFT JOIN sublog ON sublog.logid = log.id
-	WHERE
-	log.id = $request_log_id
-	";
-	
-	# Call database_select() to execute the select statement and make sure 1 row was returned
-	my @select_rows = VCL::utils::database_select($sql_select_statement);
-	if (!scalar @select_rows == 1) {
-		notify($ERRORS{'WARNING'}, 0, "select statement returned " . scalar @select_rows . " rows:\n" . join("\n", $sql_select_statement));
-		return;
+	for my $sublog_id (keys %{$log_info->{sublog}}) {
+		my $sublog_computer_id = $log_info->{sublog}{$sublog_id}{computerid};
+		if (!$sublog_computer_id) {
+			notify($ERRORS{'WARNING'}, 0, "computer ID is not defined for sublog $sublog_id:\n" . format_data($log_info));
+			next;
+		}
+		
+		my $reservation_id = $computer_reservation_ids->{$sublog_computer_id};
+		if (!$reservation_id) {
+			notify($ERRORS{'WARNING'}, 0, "computer ID is set to $sublog_computer_id for sublog ID $sublog_id, no reservation assigned to this request is assigned that computer ID");
+			next;
+		}
+		
+		$self->request_data->{reservation}{$reservation_id}{SUBLOG_ID} = $sublog_id;
+		$self->request_data->{reservation}{$reservation_id}{sublog} = $log_info->{sublog}{$sublog_id};
 	}
 	
-	# $select_rows[0] is a hash reference, the keys are the column names
-	# Loop through the column names and add the data to $self->request_data
-	my $row = $select_rows[0];
-	
-	my %data_hash;
-	foreach my $column_name (sort keys(%{$row})) {
-		# Get the data value for the column
-		my $data_value = $row->{$column_name};
-		$self->request_data->{log}{$column_name} = $data_value if !defined($self->request_data->{log}{$column_name});
-	}
-	
-	notify($ERRORS{'DEBUG'}, 0, "retrieved log data for log id: $request_log_id");
+	notify($ERRORS{'DEBUG'}, 0, "updated DataStructure object with log and sublog data");
 	return $self->request_data->{log};
 }
 

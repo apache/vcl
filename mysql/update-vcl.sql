@@ -87,6 +87,7 @@ BEGIN
   )
   THEN
     SET @statement_array = CONCAT('ALTER TABLE `', Database(), '`.', tableName, ' ADD COLUMN ', columnName, ' ', columnDefinition);
+    -- CALL PrintMessage((SELECT CONCAT('adding column: ', @statement_array)));
     PREPARE statement_string FROM @statement_array;
     EXECUTE statement_string;
   END IF;
@@ -1058,15 +1059,18 @@ CREATE TABLE IF NOT EXISTS `nathost` (
 -- 
 
 CREATE TABLE IF NOT EXISTS `natlog` (
-  `logid` int(10) unsigned NOT NULL,
-  `computerid` smallint(5) unsigned NOT NULL,
+  `sublogid` int(10) unsigned NOT NULL,
+  `nathostresourceid` mediumint(8) unsigned NOT NULL,
   `publicIPaddress` varchar(15) NOT NULL,
-  `internalIPaddress` varchar(15) NOT NULL,
   `publicport` smallint(5) unsigned NOT NULL,
+  `internalIPaddress` varchar(15) NOT NULL,
   `internalport` smallint(5) unsigned NOT NULL,
-  `protocol` enum('TCP','UDP') NOT NULL,
-  KEY `logid` (`logid`),
-  KEY `computerid` (`computerid`)
+  `protocol` enum('TCP','UDP') NOT NULL DEFAULT 'TCP',
+  `timestamp` datetime NOT NULL,
+  UNIQUE KEY `sublogid` (`sublogid`,`nathostresourceid`,`publicIPaddress`,`publicport`,`internalIPaddress`,`internalport`,`protocol`),
+  KEY `logid` (`sublogid`),
+  KEY `nathostid` (`nathostresourceid`),
+  KEY `nathostresourceid` (`nathostresourceid`)
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
@@ -1278,6 +1282,7 @@ CALL AddIndexIfNotExists('statgraphcache', 'provisioningid');
 -- Table structure change for table `sublog`
 --
 
+CALL AddColumnIfNotExists('sublog', 'id', "int(10) unsigned NOT NULL AUTO_INCREMENT PRIMARY KEY FIRST");
 CALL AddColumnIfNotExists('sublog', 'hostcomputerid', "smallint(5) unsigned default NULL");
 CALL AddColumnIfNotExists('sublog', 'blockRequestid', "mediumint(8) unsigned NOT NULL");
 CALL AddColumnIfNotExists('sublog', 'blockStart', "datetime NOT NULL");
@@ -2045,8 +2050,8 @@ CALL AddConstraintIfNotExists('nathost', 'resourceid', 'resource', 'id', 'both',
 -- Constraints for table `natlog`
 --
 
-CALL AddConstraintIfNotExists('natlog', 'computerid', 'computer', 'id', 'both', 'CASCADE');
-CALL AddConstraintIfNotExists('natlog', 'logid', 'log', 'id', 'both', 'CASCADE');
+CALL AddConstraintIfNotExists('natlog', 'sublogid', 'sublog', 'id', 'both', 'CASCADE');
+CALL AddConstraintIfNotExists('natlog', 'nathostresourceid', 'resource', 'id', 'update', 'CASCADE');
 
 -- --------------------------------------------------------
 

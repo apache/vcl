@@ -2852,14 +2852,26 @@ sub process_connect_methods {
 		}
 		
 		# Perform general NAT configuration
-		if (!$self->nathost_os->firewall->configure_nat()) {
-			notify($ERRORS{'WARNING'}, 0, "unable to process connect methods, failed to configure NAT on $nathost_hostname");
+		if ($self->nathost_os->firewall->can('configure_nat')) {
+			if (!$self->nathost_os->firewall->configure_nat()) {
+				notify($ERRORS{'WARNING'}, 0, "unable to process connect methods, failed to configure NAT on $nathost_hostname");
+				return;
+			}
+		}
+		else {
+			notify($ERRORS{'CRITICAL'}, 0, "NAT not configured on $nathost_hostname, " . ref($self->nathost_os->firewall) . " does not implement a 'configure_nat' subroutine");
 			return;
 		}
 		
 		# Perform reservation-specific NAT configuration
-		if (!$self->nathost_os->firewall->configure_nat_reservation()) {
-			notify($ERRORS{'WARNING'}, 0, "unable to process connect methods, failed to configure NAT on $nathost_hostname for this reservation");
+		if ($self->nathost_os->firewall->can('configure_nat_reservation')) {
+			if (!$self->nathost_os->firewall->configure_nat_reservation()) {
+				notify($ERRORS{'WARNING'}, 0, "unable to process connect methods, failed to configure NAT on $nathost_hostname for this reservation");
+				return;
+			}
+		}
+		else {
+			notify($ERRORS{'CRITICAL'}, 0, "NAT not configured on $nathost_hostname for this reservation, " . ref($self->nathost_os->firewall) . " does not implement a 'configure_nat_reservation' subroutine");
 			return;
 		}
 	}
@@ -3897,7 +3909,7 @@ sub update_cluster {
 			push(@cluster_string, "child= $request_data->{reservation}{$rid}{computer}{IPaddress}" . "\n");
 			notify($ERRORS{'DEBUG'}, 0, "writing child=  $request_data->{reservation}{$rid}{computer}{IPaddress}");
 		}
-
+		
 		#Create iptables rule for each node in cluster on the node being processed
 		# Could slow things down for large clusters, but they can communicate with each other
 		if ($self->can('enable_firewall_port')) {

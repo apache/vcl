@@ -173,6 +173,7 @@ our @EXPORT = qw(
 	get_request_current_state_name
 	get_request_end
 	get_request_info
+	get_request_log_info
 	get_reservation_accounts
 	get_reservation_computerloadlog_entries
 	get_reservation_computerloadlog_time
@@ -272,6 +273,7 @@ our @EXPORT = qw(
 	update_request_checkuser
 	update_request_state
 	update_reservation_lastcheck
+	update_reservation_natlog
 	update_reservation_password
 	update_sublog_ipaddress
 	xml_string_to_hash
@@ -3093,11 +3095,14 @@ EOF
 				if (!populate_reservation_natport($reservation_id)) {
 					notify($ERRORS{'CRITICAL'}, 0, "failed to populate natport table for reservation");
 				}
+				if (!update_reservation_natlog($reservation_id)) {
+					notify($ERRORS{'CRITICAL'}, 0, "failed to populate natlog table for reservation");
+				}
 			}
 		}
 		
 		# Add the connect method info to the hash
-		my $connect_method_info = get_connect_method_info($imagerevision_id, $no_cache);
+		my $connect_method_info = get_connect_method_info($imagerevision_id, 0);
 		$request_info->{reservation}{$reservation_id}{connect_methods} = $connect_method_info;
 		
 		# Add the managementnode info to the hash
@@ -3173,6 +3178,133 @@ EOF
 	
 	#notify($ERRORS{'DEBUG'}, 0, "retrieved request info:\n" . format_data($request_info));
 	return $request_info;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2  get_request_log_info
+
+ Parameters  : $request_id, $no_cache (optional)
+ Returns     : hash reference
+ Description : Retrieves data from the log and sublog tables for the request.
+               A hash is constructed. Example:
+               {
+                 "computerid" => 3588,
+                 "ending" => "none",
+                 "finalend" => "0000-00-00 00:00:00",
+                 "id" => 5354,
+                 ...
+                 "sublog" => {
+                   74 => {
+                     "IPaddress" => undef,
+                     "blockEnd" => undef,
+                     "blockRequestid" => undef,
+                     "blockStart" => undef,
+                     "computerid" => 3588,
+                     "hostcomputerid" => undef,
+                     "id" => 74,
+                     "imageid" => 3081,
+                     "imagerevisionid" => 9147,
+                     "logid" => 5354,
+                     "managementnodeid" => 8,
+                     "predictivemoduleid" => 8
+                   },
+                   75 => {
+                     "IPaddress" => undef,
+                     ...
+                   },
+                 },
+                 "userid" => 2870,
+                 "wasavailable" => 0
+               }
+
+=cut
+
+sub get_request_log_info {
+	my ($request_id, $no_cache) = @_;
+	if (!defined($request_id)) {
+		notify($ERRORS{'WARNING'}, 0, "request ID argument was not specified");
+		return;
+	}
+	
+	if (!$no_cache && defined($ENV{log_info}{$request_id})) {
+		return $ENV{log_info}{$request_id};
+	}
+	
+	# Get a hash ref containing the database column names
+	my $database_table_columns = get_database_table_columns();
+	
+	my %tables = (
+		'log' => 'log',
+		'sublog' => 'sublog',
+	);
+	
+	# Construct the select statement
+	my $select_statement = "SELECT DISTINCT\n";
+	
+	# Get the column names for each table and add them to the select statement
+	for my $table_alias (keys %tables) {
+		my $table_name = $tables{$table_alias};
+		my @columns = @{$database_table_columns->{$table_name}};
+		for my $column (@columns) {
+			$select_statement .= "$table_alias.$column AS '$table_alias-$column',\n";
+		}
+	}
+	
+	# Remove the comma after the last column line
+	$select_statement =~ s/,$//;
+	
+	# Complete the select statement
+	$select_statement .= <<EOF;
+FROM
+request,
+log,
+sublog
+WHERE
+request.id = $request_id
+AND log.id = request.logid
+AND sublog.logid = log.id
+EOF
+
+	# Call the database select subroutine
+	my @rows = database_select($select_statement);
+	if (!@rows) {
+		notify($ERRORS{'WARNING'}, 0, "log info for request $request_id could not be retrieved from the database, select statement:\n$select_statement");
+		return;
+	}
+
+	# Build the hash
+	my $log_info;
+
+	for my $row (@rows) {
+		my $sublog_id = $row->{'sublog-id'};
+		if (!$sublog_id) {
+			notify($ERRORS{'WARNING'}, 0, "failed to retrieve log info for request $request_id, row does not contain a 'sublog-id' value:\n" . format_data($row));
+			return;
+		}
+		
+		# Loop through all the columns returned
+		for my $key (keys %$row) {
+			my $value = $row->{$key};
+			
+			# Split the table-column names
+			my ($table, $column) = $key =~ /^([^-]+)-(.+)/;
+			
+			if ($table eq 'log') {
+				$log_info->{$column} = $value;
+			}
+			elsif ($table eq 'sublog') {
+				$log_info->{$table}{$sublog_id}{$column} = $value;
+			}
+			else {
+				$log_info->{$table}{$column} = $value;
+			}
+		}
+	}
+	
+	$ENV{log_info}{$request_id} = $log_info;
+	#notify($ERRORS{'DEBUG'}, 0, "retrieved log info for request $request_id:\n" . format_data($log_info));
+	return $log_info;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -7545,6 +7677,76 @@ EOF
 	}
 	else {
 		notify($ERRORS{'WARNING'}, 0, "failed to insert entry into nathost table for $resource_type, resource ID: $resource_id, NAT host public IP address: $public_ip_address");
+		return 0;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 update_reservation_natlog
+
+ Parameters  : $reservation_id
+ Returns     : boolean
+ Description : Adds or updates an entry in the natlog table.
+
+=cut
+
+sub update_reservation_natlog {
+	my ($reservation_id) = @_;
+	if (!defined($reservation_id)) {
+		notify($ERRORS{'WARNING'}, 0, "reservation ID argument was not supplied");
+		return;
+	}
+	
+	my $insert_statement = <<EOF;
+INSERT IGNORE INTO
+natlog
+(
+   sublogid,
+   nathostresourceid,
+   publicIPaddress,
+   publicport,
+	internalIPaddress,
+   internalport,
+   protocol,
+   timestamp
+)
+(
+SELECT
+   sublog.id,
+   nathost.resourceid,
+   nathost.publicIPaddress,
+   natport.publicport,
+	nathost.internalIPaddress,
+   connectmethodport.port AS internalport,
+   connectmethodport.protocol,
+   NOW()
+   FROM
+   request,
+   reservation,
+   sublog,
+   natport,
+   nathost,
+   connectmethodport
+   WHERE
+   reservation.id = $reservation_id
+   AND reservation.requestid = request.id
+   AND request.logid = sublog.logid
+   AND sublog.computerid = reservation.computerid
+   AND natport.reservationid = reservation.id
+   AND natport.nathostid = nathost.id
+   AND natport.connectmethodportid = connectmethodport.id
+)
+ON DUPLICATE KEY UPDATE
+timestamp=VALUES(timestamp)
+EOF
+
+	if (database_execute($insert_statement)) {
+		notify($ERRORS{'DEBUG'}, 0, "updated natlog table for reservation $reservation_id");
+		return 1;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to update natlog table for reservation $reservation_id");
 		return 0;
 	}
 }

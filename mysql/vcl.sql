@@ -675,15 +675,18 @@ CREATE TABLE IF NOT EXISTS `nathost` (
 -- 
 
 CREATE TABLE IF NOT EXISTS `natlog` (
-  `logid` int(10) unsigned NOT NULL,
-  `computerid` smallint(5) unsigned NOT NULL,
+  `sublogid` int(10) unsigned NOT NULL,
+  `nathostresourceid` mediumint(8) unsigned NOT NULL,
   `publicIPaddress` varchar(15) NOT NULL,
-  `internalIPaddress` varchar(15) NOT NULL,
   `publicport` smallint(5) unsigned NOT NULL,
+  `internalIPaddress` varchar(15) NOT NULL,
   `internalport` smallint(5) unsigned NOT NULL,
-  `protocol` enum('TCP','UDP') NOT NULL,
-  KEY `logid` (`logid`),
-  KEY `computerid` (`computerid`)
+  `protocol` enum('TCP','UDP') NOT NULL DEFAULT 'TCP',
+  `timestamp` datetime NOT NULL,
+  UNIQUE KEY `sublogid` (`sublogid`,`nathostresourceid`,`publicIPaddress`,`publicport`,`internalIPaddress`,`internalport`,`protocol`),
+  KEY `logid` (`sublogid`),
+  KEY `nathostid` (`nathostresourceid`),
+  KEY `nathostresourceid` (`nathostresourceid`)
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
@@ -1205,6 +1208,7 @@ CREATE TABLE IF NOT EXISTS `subimages` (
 -- 
 
 CREATE TABLE IF NOT EXISTS `sublog` (
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
   `logid` int(10) unsigned NOT NULL default '0',
   `imageid` smallint(5) unsigned NOT NULL default '0',
   `imagerevisionid` mediumint(8) unsigned NOT NULL,
@@ -1216,6 +1220,7 @@ CREATE TABLE IF NOT EXISTS `sublog` (
   `blockRequestid` mediumint(8) unsigned NOT NULL,
   `blockStart` datetime NOT NULL,
   `blockEnd` datetime NOT NULL,
+  PRIMARY KEY (`id`),
   KEY `logid` (`logid`),
   KEY `imageid` (`imageid`),
   KEY `imagerevisionid` (`imagerevisionid`),
@@ -2305,9 +2310,9 @@ ALTER TABLE `nathost` ADD CONSTRAINT FOREIGN KEY (`resourceid`) REFERENCES `reso
 -- 
 -- Constraints for table `natlog`
 --
-ALTER TABLE `natlog` ADD CONSTRAINT FOREIGN KEY (`logid`) REFERENCES `log` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
-ALTER TABLE `natlog` ADD CONSTRAINT FOREIGN KEY (`computerid`) REFERENCES `computer` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
-
+ALTER TABLE `natlog` ADD CONSTRAINT FOREIGN KEY (`sublogid`) REFERENCES `sublog` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `natlog` ADD CONSTRAINT FOREIGN KEY (`nathostresourceid`) REFERENCES `resource` (`id`) ON UPDATE CASCADE;
+  
 -- 
 -- Constraints for table `nathostcomputermap`
 -- 
