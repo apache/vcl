@@ -2894,7 +2894,7 @@ sub reg_delete {
 		$delete_registry_command = $system32_path . "/reg.exe DELETE \"$registry_key\" /f";
 		$registry_value = '*';
 	}
-	my ($delete_registry_exit_status, $delete_registry_output) = $self->execute($delete_registry_command, 1);
+	my ($delete_registry_exit_status, $delete_registry_output) = $self->execute($delete_registry_command, 0);
 	if (defined($delete_registry_exit_status) && $delete_registry_exit_status == 0) {
 		notify($ERRORS{'DEBUG'}, 0, "deleted registry key: $registry_key, value: $registry_value, output:\n" . join("\n", @$delete_registry_output));
 	}
@@ -7414,9 +7414,21 @@ sub get_installed_applications {
 	
 	my $uninstall_key = 'HKEY_LOCAL_MACHINE\Software\Microsoft\Windows\CurrentVersion\Uninstall';
 	my $registry_data = $self->reg_query($uninstall_key);
-	#notify($ERRORS{'DEBUG'}, 0, "retrieved installed application registry data: " . format_data($registry_data));
+	if (!$registry_data) {
+		notify($ERRORS{'WARNING'}, 0, "unable to retrieve installed applications, failed to query registry: $uninstall_key");
+		return;
+	}
+	
+	if ($self->is_64_bit()) {
+		my $uninstall_key_32 = 'HKEY_LOCAL_MACHINE\Software\Wow6432Node\Microsoft\Windows\CurrentVersion\Uninstall';
+		my $registry_data_32 = $self->reg_query($uninstall_key_32);
+		if ($registry_data_32) {
+			$registry_data = {%$registry_data, %$registry_data_32};
+		}
+	}
 	
 	my $installed_products = {};
+	my @display_names;
 	
 	# Loop through registry keys
 	REGISTRY_KEY: for my $registry_key (keys %$registry_data) {
@@ -7429,40 +7441,50 @@ sub get_installed_applications {
 			notify($ERRORS{'WARNING'}, 0, "unable to parse product key from registry key: $registry_key");
 			next REGISTRY_KEY;
 		}
-		#notify($ERRORS{'DEBUG'}, 0, "product key: $product_key");
+		elsif (!scalar(keys %{$registry_data->{$registry_key}})) {
+			#notify($ERRORS{'DEBUG'}, 0, "registry key does not contain any information: $registry_key");
+			next REGISTRY_KEY;
+		}
+		
+		my $display_name = $registry_data->{$registry_key}{DisplayName} || $registry_data->{$registry_key}{'(Default)'};
+		if (!$display_name) {
+			next REGISTRY_KEY;
+		}
 		
 		if ($regex_filter) {
 			if ($product_key =~ /$regex_filter/i) {
-				notify($ERRORS{'DEBUG'}, 0, "found product key matching filter '$regex_filter':\n$product_key");
+				notify($ERRORS{'DEBUG'}, 0, "found product matching filter '$regex_filter':\n$product_key");
 				$installed_products->{$product_key} = $registry_data->{$registry_key};
+				push @display_names, $display_name;
 				next REGISTRY_KEY;
 			}
 			
-			foreach my $info_key (keys %{$registry_data->{$product_key}}) {
+			foreach my $info_key (keys %{$registry_data->{$registry_key}}) {
 				my $info_value = $registry_data->{$registry_key}{$info_key} || '';
 				if ($info_value =~ /$regex_filter/i) {
-					notify($ERRORS{'DEBUG'}, 0, "found value matching filter '$regex_filter':\n{$product_key}{$info_key} = '$info_value'");
+					#notify($ERRORS{'DEBUG'}, 0, "found value matching filter '$regex_filter':\n{$product_key}{$info_key} = '$info_value'");
 					$installed_products->{$product_key} = $registry_data->{$registry_key};
+					push @display_names, $display_name;
 					next REGISTRY_KEY;
 				}
 				else {
-					notify($ERRORS{'DEBUG'}, 0, "value does not match filter '$regex_filter':\n{$product_key}{$info_key} = '$info_value'");
-					next REGISTRY_KEY;
+					#notify($ERRORS{'DEBUG'}, 0, "value does not match filter '$regex_filter':\n{$product_key}{$info_key} = '$info_value'");
 				}
 			}
 		}
 		else {
 			$installed_products->{$product_key} = $registry_data->{$registry_key};
+			push @display_names, $display_name;
 		}
 	}
 	
 	my $installed_product_count = scalar(keys(%$installed_products));
 	if ($installed_product_count) {
 		if ($regex_filter) {
-			notify($ERRORS{'DEBUG'}, 0, "found $installed_product_count installed applications matching filter '$regex_filter':\n" . format_data($installed_products));
+			notify($ERRORS{'DEBUG'}, 0, "found $installed_product_count installed applications matching filter '$regex_filter':\n" . join("\n", sort @display_names));
 		}
 		else {
-			notify($ERRORS{'DEBUG'}, 0, "found $installed_product_count installed applications:\n" . format_data($installed_products));
+			notify($ERRORS{'DEBUG'}, 0, "found $installed_product_count installed applications:\n" . join("\n", sort @display_names));
 		}
 	}
 	else {
@@ -8348,9 +8370,8 @@ sub set_static_public_address {
 	my $system32_path = $self->get_system32_path() || return;
 	
 	my $computer_name = $self->data->get_computer_short_name();
-
-	my $server_request_id            = $self->data->get_server_request_id();
-	my $server_request_fixed_ip      = $self->data->get_server_request_fixed_ip();
+	my $server_request_id = $self->data->get_server_request_id();
+	my $server_request_fixed_ip = $self->data->get_server_request_fixed_ip();
 	
 	# Make sure public IP configuration is static or this is a server request
 	my $ip_configuration = $self->data->get_management_node_public_ip_configuration();
@@ -8389,16 +8410,20 @@ EOF
 		notify($ERRORS{'WARNING'}, 0, "failed to retrieve required network configuration for $computer_name:\n$configuration_info_string");
 		return;
 	}
-	else {
-		notify($ERRORS{'OK'}, 0, "attempting to set static public IP address on $computer_name:\n$configuration_info_string");
+	
+	my $current_public_ip_address = $self->get_public_ip_address();
+	if ($current_public_ip_address eq $computer_public_ip_address) {
+		notify($ERRORS{'DEBUG'}, 0, "public IP address of $computer_name is already set to $current_public_ip_address, attempting to set it again in case any parameters changed");
 	}
-
-   # Try to ping address to make sure it's available
-   # FIXME  -- need to add other tests for checking ip_address is or is not available.
-   if (_pingnode($computer_public_ip_address)) {
-      notify($ERRORS{'WARNING'}, 0, "ip_address $computer_public_ip_address is pingable, can not assign to $computer_name ");
-      return;
-   }
+	else {
+		# Try to ping the address to make sure it is not in use
+		if (_pingnode($computer_public_ip_address)) {
+			notify($ERRORS{'WARNING'}, 0, "ip_address $computer_public_ip_address is pingable, can not assign to $computer_name ");
+			return;
+		}
+	}
+	
+	notify($ERRORS{'OK'}, 0, "attempting to set static public IP address on $computer_name:\n$configuration_info_string");
 	
 	my $primary_dns_server_address = shift @dns_servers;
 	notify($ERRORS{'DEBUG'}, 0, "primary DNS server address: $primary_dns_server_address\nalternate DNS server address(s):\n" . (join("\n", @dns_servers) || '<none>'));
