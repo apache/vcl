@@ -317,12 +317,12 @@ sub activate {
 		return;
 	}
 	
-	# Check if Windows has already been activated
-	my $license_status = $self->get_license_status();
-	if ($license_status && $license_status =~ /licensed/i) {
-		notify($ERRORS{'OK'}, 0, "Windows has already been activated");
-		return 1;
-	}
+	## Check if Windows has already been activated
+	#my $license_status = $self->get_license_status();
+	#if ($license_status && $license_status =~ /licensed/i) {
+	#	notify($ERRORS{'OK'}, 0, "Windows has already been activated");
+	#	return 1;
+	#}
 	
 	# Attempt to activate first using KMS server
 	# Attempt to activate using MAK if KMS fails or is not configured
