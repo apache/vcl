@@ -767,10 +767,9 @@ function viewRequests() {
 		$text .= "      title=\"" . _("Connect") . "\"\n";
 		$text .= "      duration=250\n";
 		$text .= "      autofocus=false\n";
-		$text .= "      draggable=true\n";
-		$text .= "      width=\"500px\"\n";
-		$text .= "      style=\"width: 500px;\">\n";
-		$text .= "   <div dojoType=\"dijit.layout.ContentPane\" id=\"connectDlgContent\" style=\"overflow: auto;\"></div>\n";
+		$text .= "      draggable=true>\n";
+		$text .= "   <div dojoType=\"dijit.layout.ContentPane\" id=\"connectDlgContent\" ";
+		$text .= "        style=\"overflow: auto; width: 500px;\"></div>\n";
 		$text .= "   <div align=\"center\">\n";
 		$text .= "   <button dojoType=\"dijit.form.Button\">\n";
 		$text .= "     " . _("Close") . "\n";
