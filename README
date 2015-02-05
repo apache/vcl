@@ -1,3 +1,5 @@
+Apache VCL 2.4
+
 ================================================================================
 INSTALLATION
 
@@ -20,12 +22,10 @@ VCL web server PHP modules:
 * php-json
 * php-mysql
 * php-openssl
-* php-sysvsem
 * php-xml
 * php-xmlrpc
 * php-gettext
 * php-ldap (only required if using LDAP authentication)
-* php-process (for RHEL/CentOS 6)
 
 ------------
 VCL DATABASE
@@ -47,7 +47,10 @@ VCL has been tested on the following operating systems:
 
 Required Linux Packages:
 
-The VCL management node daemon (vcld) requires the following Linux packages and Perl modules in order to run (see step 2 below for installation instructions). Note, there is overlap as some of the perl modules are available through the yum packager manager.
+The VCL management node daemon (vcld) requires the following Linux packages in
+order to run. A script is provided to assist with installing them. Several of
+the packages are required to be able to build and install some of the required
+Perl modules.
 
 * expat-devel - Libraries and include files to develop XML applications with expat
 * gcc - Various compilers (C, C++, Objective-C, Java, ...)
@@ -55,29 +58,17 @@ The VCL management node daemon (vcld) requires the following Linux packages and 
 * krb5-libs - The shared libraries used by Kerberos 5
 * libxml2-devel - Libraries, includes, etc. to develop XML and HTML applications
 * make - GNU make utility to maintain groups of programs
+* mysql/mariadb - contains MySQL/MariaDB client programs
 * nmap - Network exploration tool and security scanner
 * openssh - The OpenSSH implementation of SSH protocol versions 1 and 2
 * openssl-devel - Files for development of applications which will use OpenSSL
 * perl - The Perl programming language
-* perl-Archive-Tar - provides an object oriented mechanism for handling tar files
-* perl-CPAN - provides a command interface (not a shell) to CPAN
-* perl-Crypt-OpenSSL-RSA - provides the ability to RSA encrypt,decrypt strings
-* perl-DBD-MySQL - A MySQL interface for perl
-* perl-DBI - The DBI is the standard database interface module for Perl
-* perl-Digest-SHA1 - allows use of NIST SHA-1 message digest algorithm within Perl programs
-* perl-IO-String - provides the IO::File interface for in-core strings
-* perl-MailTools - a subclass of MIME::Lite, used for sending mail from within perl
-* perl-Net-Jabber - a tool to utilize the Jabber Instant Messaging protocol from within perl
-* perl-Net-Netmask - parses and understands IPv4 CIDR blocks
-* perl-Net-SSH-Expect - a wrapper to the ssh executable that is available in system's PATH
-* perl-RPC-XML - provides classes for data, for clients, for servers and for parsers XML-RPC
-* perl-Text-CSV_XS - provides the composition and decomposition of comma-separated values
-* perl-Time-HiRes - provides high resolution time and timers
-* perl-XML-Simple - provides a simple API layer on top of an underlying XML parsing module
-* perl-YAML - implements a YAML Loader and Dumper
 * xmlsec1-openssl - OpenSSL crypto plugin for XML Security Library
 
-Management Node Perl Modules:
+The VCL management node daemon (vcld) requires the following Perl modules in
+order to run. A script is provided to assist in installing them. The script
+will install as many as possible through package management. Any remaining
+modules will be installed from CPAN.
 
 * CPAN - provides a command interface (not a shell) to CPAN
 * DBI - Generic Database Interface
@@ -93,7 +84,15 @@ Management Node Perl Modules:
 * Scalar::Util - A selection of general-utility scalar subroutines
 * Time::HiRes - provides high resolution time and timers
 * URI - Uniform Resource Identifiers (absolute and relative)
-* YAML - YAML Ain't Markup Language 
+* YAML - provides support for YAML (Ain't Markup Language) formatted data
+* perl-Archive-Tar - provides an object oriented mechanism for handling tar files
+* perl-Crypt-OpenSSL-RSA - provides the ability to RSA encrypt,decrypt strings
+* perl-DBD-MySQL - A MySQL interface for perl
+* perl-IO-String - provides the IO::File interface for in-core strings
+* perl-Net-Jabber - a tool to utilize the Jabber Instant Messaging protocol from within perl
+* perl-Net-Netmask - parses and understands IPv4 CIDR blocks
+* perl-Text-CSV_XS - provides the composition and decomposition of comma-separated values
+* perl-XML-Simple - provides a simple API layer on top of an underlying XML parsing module
 
 The required Perl modules are distributed under one or more of the following
 licenses:
@@ -103,10 +102,13 @@ licenses:
 
 Some of the required Perl modules are included in your Perl distribution.
 Modules not included in your Perl distribution are available from CPAN
-(www.cpan.org). A script is provided which attempts to install the required
-Linux packages and Perl modules. See the "Installing Required Perl modules"
-section of the installation guide.
+(www.cpan.org).See the "Install the Required Linux Packages & Perl Modules"
+section of the online installation guide for how to use the provided script to
+install the required Linux packages and Perl modules. 
 
+Management node system requirements:
+- DHCP - VCL requires that a DHCP server, configured to listen on the private
+  network, be running on each management node.
 
 Management node conditional system requirements:
 - xCAT provisioning
