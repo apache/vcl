@@ -821,7 +821,7 @@ sub state_exit {
 				$request_state_name_new = 'failed';
 			}
 			
-			if ($request_state_name_new eq 'failed') {
+			if ($request_state_name_new && $request_state_name_new eq 'failed') {
 				# Child reservations will leave the state of the computer to 'reloading' if they didn't fail
 				# Need to change state back to available for child reservations which didn't fail
 				for my $cluster_reservation_id (@reservation_ids) {
