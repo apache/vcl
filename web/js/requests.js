@@ -39,7 +39,8 @@ function generalReqCB(data, ioArgs) {
 function initViewRequests(imaging) {
 	if(typeof(dijit) == "undefined" ||
 	   typeof(dijit.byId) == "undefined" ||
-	   typeof(images) == "undefined") {
+	   typeof(images) == "undefined" ||
+	   dojo.byId('limitstart') == null) {
 		setTimeout(function() {initViewRequests(imaging);}, 100);
 		return;
 	}
