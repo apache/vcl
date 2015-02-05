@@ -2805,6 +2805,7 @@ sub process_connect_methods {
 	my $computer_node_name = $self->data->get_computer_node_name();
 	my $nathost_hostname = $self->data->get_nathost_hostname(0);
 	my $nathost_public_ip_address = $self->data->get_nathost_public_ip_address(0);
+	my $nathost_internal_ip_address = $self->data->get_nathost_internal_ip_address(0);
 	
 	# Retrieve the connect method info hash
 	my $connect_method_info = $self->data->get_connect_methods();
@@ -2843,6 +2844,14 @@ sub process_connect_methods {
 			notify($ERRORS{'WARNING'}, 0, "unable to process connect methods, $computer_node_name is assigned to NAT host $nathost_hostname but NAT host OS's firewall object is not available");
 			return;
 		}
+		elsif (!$nathost_public_ip_address) {
+			notify($ERRORS{'WARNING'}, 0, "unable to process connect methods, $computer_node_name is assigned to NAT host $nathost_hostname but NAT host public IP address could not be determined from the nathost table");
+			return;
+		}
+		elsif (!$nathost_internal_ip_address) {
+			notify($ERRORS{'WARNING'}, 0, "unable to process connect methods, $computer_node_name is assigned to NAT host $nathost_hostname but NAT host internal IP address could not be determined from the nathost table");
+			return;
+		}
 		
 		# Get the IP address used to communicate between the NAT host and computer
 		$computer_ip_address = $self->get_public_ip_address();
@@ -2852,15 +2861,20 @@ sub process_connect_methods {
 		}
 		
 		# Perform general NAT configuration
-		if ($self->nathost_os->firewall->can('configure_nat')) {
-			if (!$self->nathost_os->firewall->configure_nat()) {
-				notify($ERRORS{'WARNING'}, 0, "unable to process connect methods, failed to configure NAT on $nathost_hostname");
+		if ($nathost_internal_ip_address) {
+			if ($self->nathost_os->firewall->can('configure_nat')) {
+				if (!$self->nathost_os->firewall->configure_nat($nathost_public_ip_address, $nathost_internal_ip_address)) {
+					notify($ERRORS{'WARNING'}, 0, "unable to process connect methods, failed to configure NAT on $nathost_hostname");
+					return;
+				}
+			}
+			else {
+				notify($ERRORS{'CRITICAL'}, 0, "NAT not configured on $nathost_hostname, " . ref($self->nathost_os->firewall) . " does not implement a 'configure_nat' subroutine");
 				return;
 			}
 		}
 		else {
-			notify($ERRORS{'CRITICAL'}, 0, "NAT not configured on $nathost_hostname, " . ref($self->nathost_os->firewall) . " does not implement a 'configure_nat' subroutine");
-			return;
+			notify($ERRORS{'DEBUG'}, 0, "unable to configure NAT, nathost.publicIPaddress is not set in the database for $nathost_hostname");
 		}
 		
 		# Perform reservation-specific NAT configuration

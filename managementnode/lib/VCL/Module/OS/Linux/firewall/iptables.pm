@@ -580,7 +580,7 @@ sub get_table_info {
 
 =head2 configure_nat
 
- Parameters  : none
+ Parameters  : $public_ip_address, $internal_ip_address
  Returns     : boolean
  Description : 
 
@@ -595,11 +595,14 @@ sub configure_nat {
 	
 	my $computer_name = $self->data->get_computer_hostname();
 	
-	my $public_ip_address = $self->os->data->get_nathost_public_ip_address();
-	my $internal_ip_address = $self->os->data->get_nathost_internal_ip_address(0);
+	my ($public_ip_address, $internal_ip_address) = @_;
+	if (!$public_ip_address) {
+		notify($ERRORS{'WARNING'}, 0, "unable to automatically configure NAT, nathost public IP address argument was not specified");
+		return;
+	}
 	if (!$internal_ip_address) {
-		notify($ERRORS{'DEBUG'}, 0, "unable to automatically configure NAT, nathost.internalIPaddress is not set");
-		return 1;
+		notify($ERRORS{'WARNING'}, 0, "unable to automatically configure NAT, nathost internal IP address argument was not specified");
+		return;
 	}
 	
 	# Enable IP port forwarding
