@@ -1,3 +1,128 @@
+ASF VCL 2.4
+
+Dependency changes:
+
+VCL web server PHP modules:
+* removed php-sysvsem and php-process (only one of these was required, depending on platform)
+
+VCL Database:
+* MariaDB 5.0 or later now listed as a supported option
+
+VCL Management Node:
+* CentOS/RedHat Enterprise Linux 5.x no longer listed as supported
+
+Required packages moved to required Perl modules:
+* perl-Archive-Tar
+* perl-CPAN
+* perl-DBD-MySQL
+* perl-DBI
+* perl-Digest-SHA1
+* perl-IO-String
+* perl-MailTools
+* perl-Net-Netmask
+* perl-Net-SSH-Expect
+* perl-RPC-XML
+* perl-Text-CSV_XS
+* perl-XML-Simple
+* perl-YAML
+
+Added required Perl modules:
+* Frontier::Client
+* LWP::Protocol::https
+* JSON
+* Mo:builder
+* Time::HiRes
+* perl-Crypt-OpenSSL-RSA
+
+Removed required Perl modules:
+* Crypt-SSLeay
+* Devel-StackTrace
+* Exception-Class
+* HTML-Parser
+* IO-Compress
+* libwww-perl
+* XML-Parser
+
+Changes to Conditional Requirements
+
+* dropped support for xCAT 1.3 for bare metal provisioning
+* vSphere SDK - no longer needed for ESX/ESXi; still needed for vCenter
+* additional modules for Jabber no longer listed (assumed to be pulled in as dependencies)
+
+================================================================================
+
+ASF VCL 2.3.2
+
+Dependency changes:
+
+No dependency changes for any components in this release.
+
+Release Notes - VCL - Version 2.3.2
+
+** Bug
+    * [VCL-666] - Administrator is always passed as the userid in RDP files for imaging reservations, even if it is for xRDP
+    * [VCL-671] - VMware may delete VM assigned to another reservation when reclaiming disk space on the host
+    * [VCL-674] - problem adding a user group to the privilege with cascade checked
+    * [VCL-675] - deleting a hierarchy of 3 or more privilege nodes throws an error
+
+================================================================================
+
+ASF VCL 2.3.1
+
+Dependency changes:
+
+No dependency changes for any components in this release.
+
+Release Notes - VCL - Version 2.3.1
+
+** Bug
+    * [VCL-451] - Cannot add deleted computers
+    * [VCL-603] - reboot hard does not work for hung windows machines
+    * [VCL-607] - 'default' skin hard-coded in initialization function when it should use the global DEFAULTTHEME
+    * [VCL-609] - Reservations fail if cat command returns non-zero exit status when retrieving contents of /etc/hosts on management node
+    * [VCL-610] - minor HTML errors 
+    * [VCL-613] - output from init.d startup scripts are slightly amiss
+    * [VCL-616] - update_cygwin.cmd fails to generate keys with current version of Cygwin
+    * [VCL-619] - usenls may be undefined in _() function in requests.js
+    * [VCL-620] - libvirt.pm does not remove VMs when unassigned from host via website
+    * [VCL-621] - confirm_public_ip_address does not detect public ip address correctly for reloads
+    * [VCL-622] - reservation_failed Linux.pm Windows.pm
+    * [VCL-623] - Invalid public IP address may be presented on Connect page
+    * [VCL-624] - getUserlistID should be passed a user's full login string, not just a unityid
+    * [VCL-625] - Image retrieval may attempt to copy multiple copies of the same file, does not retrieve VMware reference vmx file.
+    * [VCL-626] - Name RDP file download after server reservation name
+    * [VCL-627] - image type fields on VM Host Profile page do not get updated
+    * [VCL-628] - check for duplicate image name not correctly performed when specified name is the same as the base image
+    * [VCL-630] - currentimage.txt name may conflict with imagerevision name, causing unnecessary reloads
+    * [VCL-631] - imagerevision.datedeleted not getting set
+    * [VCL-632] - vSphere_SDK.pm set_file_permissions does not work
+    * [VCL-633] - Change of vmprofile.vmdisk value can cause image capture to fail due to insufficient space
+    * [VCL-634] - Cluster reservations fail if node_status returns POST_LOAD
+    * [VCL-641] - VCL fails to properly trim whitespace from `virsh list --all`
+    * [VCL-642] - colons should not be allowed in resource group names
+    * [VCL-643] - VM Limit can be decreased to below the current number of assigned VMs
+    * [VCL-648] - blockRequests re-processed at end time for skipped block time entries
+    * [VCL-649] - Images may fail to load if renamed in database by VMware code
+    * [VCL-650] - VCL breaks with PHP 5.4
+    * [VCL-651] - libvirt to vmware entry missing from provisioningOSinstalltype table
+    * [VCL-652] - xCAT nodeset failure 
+    * [VCL-653] - editing a federated user group sets the affiliation of the group that of the user editing the group
+    * [VCL-654] - Sysprep fails for 32-bit Windows 7
+    * [VCL-656] - VIM_SSH.pm times out too early when removing snapshots from a VM
+    * [VCL-657] - Prevent benign warning messages from appearing in vcld.log
+
+** Improvement
+    * [VCL-608] - XMLRPC interface inaccessible to Shibboleth-authenticated users
+    * [VCL-615] - make default adminUsers group have the same level of access as the default admin user
+    * [VCL-629] - update ownership of existing /home/$username 
+    * [VCL-639] - server loads - reinstall
+    * [VCL-640] - block allocation fixes
+
+** New Feature
+    * [VCL-617] - new XML-RPC methods
+
+================================================================================
+
 ASF VCL 2.3
 
 Dependency changes:
@@ -202,6 +327,45 @@ Release Notes - VCL - Version 2.3
 ** Task
     * [VCL-443] - update XMLRPC example to use API v2
     * [VCL-576] - Finalizing for 2.3 release
+
+================================================================================
+
+ASF VCL 2.2.2
+
+Dependency changes:
+
+No dependency changes for any components in this release.
+
+Release Notes - VCL - Version 2.2.2
+
+** Bug
+    * [VCL-328] - shibboleth sp logout URL not using SSL
+    * [VCL-342] - problem selecting image revision id when making a cluster reservation with identical subimages
+    * [VCL-348] - Setting privileges in web gui -- Slightly broken
+    * [VCL-400] - virtual hosts page shows all unassigned vms instead of checking which ones the user can access
+    * [VCL-433] - new revisions can be captured of kickstart images
+    * [VCL-447] - Notice: Uninitialized string offset: 0 in .../vcl/.ht-inc/utils.php on line 3206
+    * [VCL-456] - groupwasnone variable is not properly initialized
+    * [VCL-458] - $virtual undefined in utils.php line 3678
+    * [VCL-467] - Members of a group from one affiliation have access to groups with the same name from other affiliations
+    * [VCL-473] - query in findManagementNode in utils.php doesn't have conditional to join tables
+    * [VCL-475] - addShibUser in shibauth.php returns an array when it should be returning a user id
+    * [VCL-476] - manage block allocation page may show incorrect next start time
+    * [VCL-480] - XMLRPCproccessBlockTime can throw an error about VMhostCheck table already existing
+    * [VCL-482] - scheduler does not order VMs properly when no VMs are preloaded with the selected image
+    * [VCL-486] - Measures against cross site scripting on the Login form
+    * [VCL-487] - Problem in screen transition after successful login authentication
+    * [VCL-492] - edit computer info for VM in maintenance state
+    * [VCL-494] - Typo in testsetup.php
+    * [VCL-507] - Deleted VMs appear in the list of unassigned VMs
+    * [VCL-509] - error when adding computer with no groups selected
+    * [VCL-510] - insert correct architecture in image table when adding new entry
+    * [VCL-533] - error when trying to download dhcp data when private IP address was not entered
+    * [VCL-547] - removing site maintenance entry from .ht-inc/maintenance directory doesn't fully remove site from maintenance
+    * [VCL-549] - AJAX error when creating a new schedule
+    * [VCL-556] - edit schedule groups code not doing permissions correctly
+    * [VCL-674] - problem adding a user group to the privilege with cascade checked
+    * [VCL-675] - deleting a hierarchy of 3 or more privilege nodes throws an error
 
 ================================================================================
 
