@@ -390,7 +390,7 @@ class Computer extends Resource {
 		$h .= "<div dojoType=\"dijit.layout.ContentPane\" id=\"actionmsg\"\n";
 		$h .= "         style=\"background-color: white; padding: 5px;\">\n";
 		$h .= "</div>\n";
-		$h .= "<div id=\"complist\" style=\"height: 87%; overflow: auto;\"></div>\n";
+		$h .= "<div id=\"complist\" style=\"overflow: auto;\"></div>\n";
 		$h .= "<input type=\"hidden\" id=\"submitcont\">\n";
 		$h .= "<div style=\"text-align: center;\">\n";
 		$h .= "<span id=\"submitactionbtnspan\">\n";
