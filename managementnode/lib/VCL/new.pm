@@ -903,19 +903,11 @@ sub reserve_computer {
 	my $self = shift;
 
 	my $request_id                      = $self->data->get_request_id();
-	my $request_state_name              = $self->data->get_request_state_name();
-	my $request_logid                   = $self->data->get_request_log_id();
+	my $sublog_id                       = $self->data->get_sublog_id();
 	my $reservation_is_parent           = $self->data->is_parent_reservation;
 	my $reservation_id                  = $self->data->get_reservation_id();
 	my $computer_id                     = $self->data->get_computer_id();
 	my $computer_short_name             = $self->data->get_computer_short_name();
-	my $image_prettyname                = $self->data->get_image_prettyname();
-	my $user_affiliation_sitewwwaddress = $self->data->get_user_affiliation_sitewwwaddress();
-	my $user_affiliation_helpaddress    = $self->data->get_user_affiliation_helpaddress();
-	my $user_email                      = $self->data->get_user_email();
-	my $user_emailnotices               = $self->data->get_user_emailnotices();
-	my $user_imtype_name                = $self->data->get_user_imtype_name();
-	my $user_im_id                      = $self->data->get_user_im_id();
 	
 	# Needed for computerloadflow	
 	insertloadlog($reservation_id, $computer_id, "addinguser", "Adding user to $computer_short_name");
@@ -936,74 +928,14 @@ sub reserve_computer {
 	my $computer_public_ip_address = $self->data->get_computer_public_ip_address();
 	
 	# Update sublog table with the IP address of the machine
-	if (update_sublog_ipaddress($request_logid, $computer_public_ip_address)) {
-		notify($ERRORS{'DEBUG'}, 0, "updated computer IP address in sublog table, log ID: $request_logid, IP address: $computer_public_ip_address");
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "could not update sublog $request_logid for node $computer_short_name IP address $computer_public_ip_address");
+	if (!update_sublog_ipaddress($sublog_id, $computer_public_ip_address)) {
+		notify($ERRORS{'WARNING'}, 0, "could not update sublog $sublog_id for node $computer_short_name IP address $computer_public_ip_address");
 	}
 
 	# Check if request has been deleted
 	if (is_request_deleted($request_id)) {
 		notify($ERRORS{'OK'}, 0, "request has been deleted, setting computer state to 'available' and exiting");
 		$self->state_exit('', 'available');
-	}
-	
-	my $mailstring;
-	my $subject;
-	
-	# Assemble the message body reservations
-	if ($request_state_name =~ /^(reinstall)$/) {
-		$subject = "VCL -- $image_prettyname reservation reinstalled";
-		
-		$mailstring = <<"EOF";
-Your reservation was successfully reinstalled and you can proceed to reconnect. 
-Please revisit the 'Current Reservations' page for any additional information.
-EOF
-	}
-	else {
-		$subject = "VCL -- $image_prettyname reservation";
-		
-		$mailstring = <<"EOF";
-The resources for your VCL reservation have been successfully reserved.
-Connection will not be allowed until you click the 'Connect' button on the 'Current Reservations' page.
-You must acknowledge the reservation within the next 15 minutes or the resources will be reclaimed for other VCL users.
-
--Visit $user_affiliation_sitewwwaddress
--Select "Current Reservations"
--Click the "Connect" button
-Upon acknowledgement, all of the remaining connection details will be displayed.
-EOF
-	}
-	
-	$mailstring .= <<"EOF";
-
-Thank You,
-VCL Team
-
-******************************************************************
-This is an automated notice. If you need assistance please respond 
-with detailed information on the issue and a help ticket will be 
-generated.
-
-To disable email notices
--Visit $user_affiliation_sitewwwaddress
--Select User Preferences
--Select General Preferences
-
-******************************************************************
-EOF
-	
-	if ($user_emailnotices) {
-		mail($user_email, $subject, $mailstring, $user_affiliation_helpaddress);
-	}
-	else {
-		# For email record keeping
-		notify($ERRORS{'MAILMASTERS'}, 0, " $user_email\n$mailstring");
-	}
-	
-	if ($user_imtype_name ne "none") {
-		notify_via_im($user_imtype_name, $user_im_id, $mailstring, $user_affiliation_helpaddress);
 	}
 	
 	return 1;

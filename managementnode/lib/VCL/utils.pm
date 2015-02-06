@@ -5908,35 +5908,41 @@ sub clearfromblockrequest {
 
 =head2 update_sublog_ipaddress
 
- Parameters  : $computer_id, $computer_public_ip_address
- Returns     : 0 or 1
- Description : updates log table with IPaddress of node when dynamic dhcp is
-               enabled there is no way to track which IP was used
+ Parameters  : $sublog_id, $computer_public_ip_address
+ Returns     : boolean
+ Description : Updates the sublog table with the public IP address of the
+               computer.
 
 =cut
 
 sub update_sublog_ipaddress {
-	my ($logid, $computer_public_ip_address) = @_;
-	my ($package, $filename, $line, $sub) = caller(0);
-	# Check the passed parameter
-	if (!(defined($computer_public_ip_address))) {
-		notify($ERRORS{'WARNING'}, 0, "computer public IP address argument was not specified");
-		return 0;
+	my ($sublog_id, $computer_public_ip_address) = @_;
+	if (!defined($sublog_id)) {
+		notify($ERRORS{'WARNING'}, 0, "sublog ID argument was not specified");
+		return;
 	}
-	if (!(defined($logid))) {
-		notify($ERRORS{'WARNING'}, 0, "logid was not specified");
-		return 0;
+	elsif (!defined($computer_public_ip_address)) {
+		notify($ERRORS{'WARNING'}, 0, "computer public IP address argument was not specified");
+		return;
 	}
 
 	# Construct the SQL statement
-	my $sql_statement = "UPDATE sublog SET IPaddress = \'$computer_public_ip_address\' WHERE logid=$logid";
+	my $sql_statement = <<EOF;
+UPDATE
+sublog
+SET
+sublog.IPaddress = '$computer_public_ip_address'
+WHERE
+sublog.id = $sublog_id
+EOF
 
 	# Call the database execute subroutine
 	if (database_execute($sql_statement)) {
+		notify($ERRORS{'DEBUG'}, 0, "updated sublog table, sublog ID: $sublog_id, IP address: $computer_public_ip_address");
 		return 1;
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "unable to update sublog table logid = $logid with ipaddress $computer_public_ip_address");
+		notify($ERRORS{'WARNING'}, 0, "failed to update sublog table, sublog ID: $sublog_id, IP address: $computer_public_ip_address");
 		return 0;
 	}
 } ## end sub update_sublog_ipaddress

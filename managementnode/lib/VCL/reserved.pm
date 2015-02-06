@@ -116,6 +116,10 @@ sub process {
 	update_computer_state($computer_id, 'reserved');
 	insertloadlog($reservation_id, $computer_id, "reserved", "$computer_short_name successfully reserved");
 	
+	# Send an email and/or IM to the user
+	# Do this after updating the computer state to reserved because this is when the Connect button appears
+	$self->_notify_user_ready();
+	
 	# Insert acknowledgetimeout immediately before beginning to check user clicked Connect
 	# Web uses timestamp of this to determine when next to refresh the page
 	# Important because page should refresh as soon as possible to reservation timing out
@@ -340,6 +344,91 @@ sub user_acknowledged {
 		return 0;
 	}
 }
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 _notify_user_ready
+
+ Parameters  : none
+ Returns     : boolean
+ Description : Notifies the user that the reservation is ready.
+
+=cut
+
+sub _notify_user_ready {
+	my $self = shift;
+	
+	#my $request_id                 = $self->data->get_request_id();
+	my $request_state_name         = $self->data->get_request_id();
+	#my $reservation_id             = $self->data->get_reservation_id();
+	my $user_email                 = $self->data->get_user_email();
+	my $user_emailnotices          = $self->data->get_user_emailnotices();
+	my $user_imtype_name               = $self->data->get_user_imtype_name();
+	my $user_im_id                 = $self->data->get_user_im_id();
+	my $affiliation_sitewwwaddress = $self->data->get_user_affiliation_sitewwwaddress();
+	my $affiliation_helpaddress    = $self->data->get_user_affiliation_helpaddress();
+	my $image_prettyname           = $self->data->get_image_prettyname();
+	my $is_parent_reservation      = $self->data->is_parent_reservation();
+
+	my $mailstring;
+	my $subject;
+	
+	# Assemble the message body reservations
+	if ($request_state_name =~ /^(reinstall)$/) {
+		$subject = "VCL -- $image_prettyname reservation reinstalled";
+		
+		$mailstring = <<"EOF";
+Your reservation was successfully reinstalled and you can proceed to reconnect. 
+Please revisit the 'Current Reservations' page for any additional information.
+EOF
+	}
+	else {
+		$subject = "VCL -- $image_prettyname reservation";
+		
+		$mailstring = <<"EOF";
+The resources for your VCL reservation have been successfully reserved.
+Connection will not be allowed until you click the 'Connect' button on the 'Current Reservations' page.
+You must acknowledge the reservation within the next 15 minutes or the resources will be reclaimed for other VCL users.
+
+-Visit $affiliation_sitewwwaddress
+-Select "Current Reservations"
+-Click the "Connect" button
+Upon acknowledgement, all of the remaining connection details will be displayed.
+EOF
+	}
+	
+	$mailstring .= <<"EOF";
+
+Thank You,
+VCL Team
+
+******************************************************************
+This is an automated notice. If you need assistance please respond 
+with detailed information on the issue and a help ticket will be 
+generated.
+
+To disable email notices
+-Visit $affiliation_sitewwwaddress
+-Select User Preferences
+-Select General Preferences
+
+******************************************************************
+EOF
+	
+	if ($is_parent_reservation && $user_emailnotices) {
+		mail($user_email, $subject, $mailstring, $affiliation_helpaddress);
+	}
+	else {
+		# For email record keeping
+		notify($ERRORS{'MAILMASTERS'}, 0, " $user_email\n$mailstring");
+	}
+	
+	if ($user_imtype_name ne "none") {
+		notify_via_im($user_imtype_name, $user_im_id, $mailstring, $affiliation_helpaddress);
+	}
+	
+	return 1;
+} ## end sub _notify_user_no_login
 
 #/////////////////////////////////////////////////////////////////////////////
 
