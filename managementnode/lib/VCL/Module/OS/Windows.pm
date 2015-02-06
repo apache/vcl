@@ -800,6 +800,14 @@ sub post_load {
 
 =item *
 
+ Disable the "Select a location for the network" prompt
+
+=cut
+
+	$self->disable_set_network_location_prompt();
+
+=item *
+
  Check if the RDP port configured on the computer matches the RDP connect method
 
 =cut
@@ -2780,7 +2788,7 @@ sub reg_query_convert_data {
 
 =head2 reg_add
 
- Parameters  : key, value, type, data
+ Parameters  : $registry_key, $registry_value, $registry_type, $registry_data
  Returns     : If successful: true
                If failed: false
  Description : Adds or sets a registry key.
@@ -2797,62 +2805,59 @@ sub reg_add {
 	my $system32_path = $self->get_system32_path() || return;
 	
 	# Get the arguments
-	my $registry_key = shift;
-	if (!defined($registry_key) || !$registry_key) {
-		notify($ERRORS{'WARNING'}, 0, "registry key was not passed correctly as an argument");
+	my ($registry_key, $registry_value, $registry_type, $registry_data) = @_;
+	if (!defined($registry_key)) {
+		notify($ERRORS{'WARNING'}, 0, "registry key argument was not supplied");
 		return;
-	}
-	
-	my $registry_value = shift;
-	if (!defined($registry_value) || !$registry_value) {
-		notify($ERRORS{'WARNING'}, 0, "registry value was not passed correctly as an argument");
-		return;
-	}
-	
-	my $registry_type = shift;
-	if (!defined($registry_type) || !$registry_type) {
-		notify($ERRORS{'WARNING'}, 0, "registry type was not passed correctly as an argument");
-		return;
-	}
-	if ($registry_type !~ /^(REG_SZ|REG_MULTI_SZ|REG_DWORD_BIG_ENDIAN|REG_DWORD|REG_BINARY|REG_DWORD_LITTLE_ENDIAN|REG_NONE|REG_EXPAND_SZ)$/) {
-		notify($ERRORS{'WARNING'}, 0, "invalid registry type was specified: $registry_type");
-		return;
-	}
-	
-	my $registry_data = shift;
-	if (!defined($registry_data)) {
-		notify($ERRORS{'WARNING'}, 0, "registry data was not passed correctly as an argument");
-		return;
-	}
-	
-	# Fix the value parameter to allow 'default' to be specified
-	my $value_parameter;
-	if ($registry_value =~ /^default$/i) {
-		$value_parameter = '/ve';
-	}
-	else {
-		$value_parameter = "/v \"$registry_value\"";
 	}
 	
 	# Replace forward slashes with backslashes in registry key
 	$registry_key =~ s/\//\\\\/g;
 	
-	# Run reg.exe ADD
-	my $add_registry_command = $system32_path . "/reg.exe ADD \"$registry_key\" $value_parameter /t $registry_type /d \"$registry_data\" /f";
-	my ($add_registry_exit_status, $add_registry_output) = $self->execute($add_registry_command, 1);
-	if (defined($add_registry_exit_status) && $add_registry_exit_status == 0) {
-		notify($ERRORS{'DEBUG'}, 0, "added registry key: $registry_key, output:\n" . join("\n", @$add_registry_output));
-	}
-	elsif ($add_registry_exit_status) {
-		notify($ERRORS{'WARNING'}, 0, "failed to add registry key: $registry_key, value: $registry_value, exit status: $add_registry_exit_status, output:\n@{$add_registry_output}");
-		return;
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to run SSH command to add registry key: $registry_key, value: $registry_value");
-		return;
+	if (defined($registry_value)) {
+		if (!defined($registry_type)) {
+			notify($ERRORS{'WARNING'}, 0, "registry value argument was supplied but type argument was not");
+			return;
+		}
+		
+		my $valid_types = 'REG_SZ|REG_MULTI_SZ|REG_DWORD_BIG_ENDIAN|REG_DWORD|REG_BINARY|REG_DWORD_LITTLE_ENDIAN|REG_NONE|REG_EXPAND_SZ';
+		if ($registry_type !~ /^($valid_types)$/) {
+			notify($ERRORS{'WARNING'}, 0, "invalid registry type was specified: '$registry_type', the following types are supported:\n" . join("\n", sort split(/\|/, $valid_types)));
+			return;
+		}
+		
+		if (!defined($registry_data)) {
+			notify($ERRORS{'WARNING'}, 0, "registry value argument was supplied but data argument was not");
+			return;
+		}
 	}
 	
-	return 1;
+	# Assemble the reg.exe ADD command
+	my $add_registry_command = "$system32_path/reg.exe ADD \"$registry_key\"";
+	if ($registry_value) {
+		if ($registry_value =~ /^default$/i) {
+			$add_registry_command .= " /ve";
+		}
+		else {
+			$add_registry_command .= " /v \"$registry_value\"";
+		}
+		$add_registry_command .= " /t $registry_type /d \"$registry_data\"";
+	}
+	$add_registry_command .= " /f";
+	
+	my ($add_registry_exit_status, $add_registry_output) = $self->execute($add_registry_command, 1);
+	if (!defined($add_registry_output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to add registry key: $registry_key");
+		return;
+	}
+	elsif ($add_registry_exit_status == 0) {
+		notify($ERRORS{'DEBUG'}, 0, "added registry key: $registry_key, output:\n" . join("\n", @$add_registry_output));
+		return 1;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to add registry key: $registry_key, exit status: $add_registry_exit_status, command:\n$add_registry_command\noutput:\n" . join("\n", @$add_registry_output));
+		return 0;
+	}
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -12059,8 +12064,31 @@ sub get_cygwin_path {
 		}
 		return $self->{CYGWIN_PATH};
 	}
-
 }
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 disable_set_network_location_prompt
+
+ Parameters  : none
+ Returns     : boolean
+ Description : Adds a registry key to disable the "Select a location for the
+               'Network' network" -- Home, Work, or Public prompt when users log
+               in to Windows.
+
+=cut
+
+sub disable_set_network_location_prompt {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $registry_key = 	'HKLM\SYSTEM\CurrentControlSet\Control\Network\NewNetworkWindowOff';
+	return $self->reg_add($registry_key);
+}
+
 #/////////////////////////////////////////////////////////////////////////////
 
 1;
