@@ -2182,8 +2182,9 @@ sub nmap_port {
 	my $remote_connection_target = determine_remote_connection_target($hostname);
 	my $hostname_string = $remote_connection_target;
 	$hostname_string .= " ($hostname)" if ($hostname ne $remote_connection_target);
-	
-	my $command = "/usr/bin/nmap $remote_connection_target -P0 -p $port -T Aggressive";
+
+	my $command = "/usr/bin/nmap $remote_connection_target -P0 -p $port -T Aggressive -n";
+
 	my ($exit_status, $output) = run_command($command, 1);
 	if (!defined($output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to run nmap command on management node: '$command'");
@@ -2973,9 +2974,9 @@ sub get_request_info {
 		return;
 	}
 	
-	# Don't use cached info by default
-	if (!defined($no_cache)) {
-		$no_cache = 1;
+	# Use cached info by default
+	if (!$no_cache) {
+		$no_cache = 0;
 	}
 	
 	# Get a hash ref containing the database column names
@@ -3085,21 +3086,6 @@ EOF
 		my $computer_id = $request_info->{reservation}{$reservation_id}{computerid};
 		my $computer_info = get_computer_info($computer_id, $no_cache);
 		$request_info->{reservation}{$reservation_id}{computer} = $computer_info;
-		
-		# Populate natport table for reservation
-		# Make sure this wasn't called from populate_reservation_natport or else recursive loop will occur
-		my $caller_trace = get_caller_trace(5);
-		if ($caller_trace !~ /populate_reservation_natport/) {
-			my $request_state_name = $request_info->{state}{name};
-			if ($request_state_name =~ /(new|reserved|modified|test)/) {
-				if (!populate_reservation_natport($reservation_id)) {
-					notify($ERRORS{'CRITICAL'}, 0, "failed to populate natport table for reservation");
-				}
-				if (!update_reservation_natlog($reservation_id)) {
-					notify($ERRORS{'CRITICAL'}, 0, "failed to populate natlog table for reservation");
-				}
-			}
-		}
 		
 		# Add the connect method info to the hash
 		my $connect_method_info = get_connect_method_info($imagerevision_id, 0);
@@ -3981,7 +3967,7 @@ EOF
 	
 	# Get the vmhost computer info and add it to the hash
 	my $computer_id = $vmhost_info->{computerid};
-	my $computer_info = get_computer_info($computer_id);
+	my $computer_info = get_computer_info($computer_id, $no_cache);
 	if ($computer_info) {
 		$vmhost_info->{computer} = $computer_info;
 	}
@@ -6989,7 +6975,7 @@ sub get_computer_info {
 	if (!$no_cache && defined($ENV{computer_info}{$computer_identifier})) {
 		return $ENV{computer_info}{$computer_identifier};
 	}
-	notify($ERRORS{'DEBUG'}, 0, "retrieving info for computer $computer_identifier");
+	#notify($ERRORS{'DEBUG'}, 0, "retrieving info for computer $computer_identifier");
 	
 	# Get a hash ref containing the database column names
 	my $database_table_columns = get_database_table_columns();
@@ -7003,6 +6989,7 @@ sub get_computer_info {
 		'platform',
 		'resource',
 		'resourcetype',
+		'nathostcomputermap'
 	);
 	
 	# Construct the select statement
@@ -7051,6 +7038,7 @@ ON (
 	AND resource.resourcetypeid = resourcetype.id
 	AND resourcetype.name = 'computer'
 )
+LEFT JOIN (nathostcomputermap) ON (nathostcomputermap.computerid = computer.id)
 
 WHERE
 computer.deleted != '1'
@@ -7105,6 +7093,9 @@ EOF
 		}
 		elsif ($table eq 'resourcetype') {
 			$computer_info->{resource}{$table}{$column} = $value;
+		}
+		elsif ($table eq 'nathostcomputermap') {
+			# Do not add, will retrieve later on
 		}
 		else {
 			$computer_info->{$table}{$column} = $value;
@@ -7171,9 +7162,15 @@ EOF
 		}
 	}
 	
-	my $nathost_info = get_computer_nathost_info($computer_id, $no_cache);
-	if ($nathost_info) {
-		$computer_info->{nathost} = $nathost_info;
+	# Check if the computer associated with this reservation is assigned a NAT host
+	if (my $nathost_id = $computer_info->{'nathostcomputermap-nathostid'}) {
+		my $nathost_info = get_computer_nathost_info($computer_id, $no_cache);
+		if ($nathost_info) {
+			$computer_info->{nathost} = $nathost_info;
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "$computer_hostname is mapped to NAT host $nathost_id but NAT host info could not be retrieved");
+		}
 	}
 	
 	notify($ERRORS{'DEBUG'}, 0, "retrieved info for computer: $computer_identifier");
@@ -7330,7 +7327,7 @@ EOF
 			$nathost_info->{HOSTNAME} = $nathost_info->{computer}{hostname};
 		}
 		else {
-			my $computer_info = get_computer_info($resource_subid) || {};
+			my $computer_info = get_computer_info($resource_subid, $no_cache) || {};
 			$nathost_info->{HOSTNAME} = $computer_info->{hostname};
 		}
 	}
