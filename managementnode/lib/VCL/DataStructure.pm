@@ -1024,17 +1024,38 @@ sub get_reservation_count {
 
 =head2 get_reservation_ids
 
- Parameters  : None
- Returns     : array containing reservation IDs for the request
- Description : Returns an array containing the reservation IDs for the current request.
+ Parameters  : none
+ Returns     : array
+ Description : Returns an array containing all reservation IDs for the current
+               request sorted from lowest to highest.
 
 =cut
 
 sub get_reservation_ids {
 	my $self = shift;
-
-	my @reservation_ids = sort keys %{$self->request_data->{reservation}};
+	
+	my @reservation_ids = sort {$a <=> $b} keys %{$self->request_data->{reservation}};
 	return @reservation_ids;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_child_reservation_ids
+
+ Parameters  : none
+ Returns     : array
+ Description : Returns an array containing all child reservation IDs for the
+               current request sorted from lowest to highest. The parent
+               reservation id is omitted.
+
+=cut
+
+sub get_child_reservation_ids {
+	my $self = shift;
+	my $parent_reservation_id = $self->get_parent_reservation_id();
+	my @reservation_ids = $self->get_reservation_ids();
+	my @child_reservation_ids = grep { $_ ne $parent_reservation_id } @reservation_ids;
+	return @child_reservation_ids;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
