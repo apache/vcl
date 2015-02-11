@@ -930,7 +930,7 @@ sub is_ssh_responding {
 		notify($ERRORS{'DEBUG'}, 0, "$computer_node_name is NOT responding to SSH, ports 22 or 24 are both closed");
 		return 0;
 	}
-	
+
 	if ($max_attempts) {
 		# Run a test SSH command
 		#my ($exit_status, $output) = $self->execute({
@@ -2255,7 +2255,7 @@ sub set_text_file_line_endings {
 		return 1;
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to set $type-style line endings for file: $file_path, exit status: $exit_status, output:\n@{$output}");
+		notify($ERRORS{'WARNING'}, 0, "failed to set $type-style line endings for file: $file_path, exit status: $exit_status, command:\n$command\noutput:\n@{$output}");
 		return;
 	}
 }
@@ -3887,86 +3887,112 @@ sub firewall_compare_update {
 =cut
 
 sub update_cluster {
-
 	my $self = shift;
 	if (ref($self) !~ /VCL::Module/i) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return;
 	}
-
-	my $reservation_id      = $self->data->get_reservation_id();
+	
+	my $current_reservation_id = $self->data->get_reservation_id();
+	my @reservation_ids = $self->data->get_reservation_ids();
+	my @child_reservation_ids = $self->data->get_child_reservation_ids();
+	my $parent_reservation_id = $self->data->get_parent_reservation_id();
 	my $computer_short_name = $self->data->get_computer_short_name();
-	my $image_OS_type       = $self->data->get_image_os_type();
-	my $is_cluster_parent	= $self->data->get_request_is_cluster_parent();
-	my $is_cluster_child		= $self->data->get_request_is_cluster_child();
-
-	my $cluster_info   = "/tmp/$computer_short_name.cluster_info";
-	my @cluster_string = "";
-
-	#Get all the request data
-	my $request_data      = $self->data->get_request_data();
-
-	my @reservation_ids = sort keys %{$request_data->{reservation}};
-
-	# parent reservation id lowest
-	my $parent_reservation_id = min @reservation_ids;
-	notify($ERRORS{'DEBUG'}, 0, "$computer_short_name is_cluster_parent = $is_cluster_parent ");
-	notify($ERRORS{'DEBUG'}, 0, "$computer_short_name is_cluster_child = $is_cluster_child ");
-	notify($ERRORS{'DEBUG'}, 0, "parent_reservation_id = $parent_reservation_id ");
-
-	foreach my $rid (keys %{$request_data->{reservation}}) {
-		if ($rid == $parent_reservation_id) {
-			push(@cluster_string, "parent= $request_data->{reservation}{$rid}{computer}{IPaddress}" . "\n");
-			notify($ERRORS{'DEBUG'}, 0, "writing parent=  $request_data->{reservation}{$rid}{computer}{IPaddress}");
+	
+	my $cluster_info_file_path = $self->get_cluster_info_file_path();
+	my $cluster_info_string = '';
+	
+	my @public_ip_addresses;
+	
+	for my $cluster_reservation_id (@reservation_ids) {
+		# Get a DataStructure object for each reservation
+		my $reservation_data;
+		if ($cluster_reservation_id eq $current_reservation_id) {
+			$reservation_data = $self->data();
 		}
 		else {
-			push(@cluster_string, "child= $request_data->{reservation}{$rid}{computer}{IPaddress}" . "\n");
-			notify($ERRORS{'DEBUG'}, 0, "writing child=  $request_data->{reservation}{$rid}{computer}{IPaddress}");
+			$reservation_data = $self->data->get_reservation_data($cluster_reservation_id);
+		}
+		if (!$reservation_data) {
+			notify($ERRORS{'WARNING'}, 0, "failed to update cluster request, data could not be retrieved for reservation $cluster_reservation_id");
+			return;
 		}
 		
-		#Create iptables rule for each node in cluster on the node being processed
-		# Could slow things down for large clusters, but they can communicate with each other
-		if ($self->can('enable_firewall_port')) {
-			if (!$self->enable_firewall_port("tcp", "any", $request_data->{reservation}{$rid}{computer}{IPaddress}, 0)) {
-				notify($ERRORS{'DEBUG'}, 0, "adding $request_data->{reservation}{$rid}{computer}{IPaddress} to iptables");
-			}
+		# Get the computer IP address
+		my $cluster_computer_public_ip_address = $reservation_data->get_computer_public_ip_address();
+		if (!$cluster_computer_public_ip_address) {
+			notify($ERRORS{'WARNING'}, 0, "failed to update cluster request, public IP address could not be retrieved for computer assigned to reservation $cluster_reservation_id");
+			return;
 		}
-	}
-
-	if (open(CLUSTERFILE, ">$cluster_info")) {
-		print CLUSTERFILE @cluster_string;
-		close(CLUSTERFILE);
-	}
-	else {
-		notify($ERRORS{'OK'}, 0, "could not write to $cluster_info");
-	}
-
-	my $identity;
-	#scp cluster file to each node
-	my $targetpath;
-	foreach my $resid (keys %{$request_data->{reservation}}) {
-		$identity = $request_data->{reservation}{$resid}{image}{IDENTITY};
-		my $node_name = $request_data->{reservation}{$resid}{computer}{SHORTNAME};
-		if ($image_OS_type =~ /linux/i) {
-			$targetpath = "$node_name:/etc/cluster_info";
+		
+		# Add the public IP address to the array for reservations not matching the reservation ID currently being processed
+		if ($cluster_reservation_id ne $current_reservation_id) {
+			push @public_ip_addresses, $cluster_computer_public_ip_address;
 		}
-		elsif ($image_OS_type =~ /windows/i) {
-			$targetpath = "$node_name:C:\/cluster_info";
+		
+		# Add a line to cluster_info string for each reservation
+		if ($cluster_reservation_id eq $parent_reservation_id) {
+			$cluster_info_string .= "parent= ";
 		}
 		else {
-			$targetpath = "$node_name:/etc/cluster_info";
+			$cluster_info_string .= "child= ";
 		}
-
-		if (run_scp_command($cluster_info, $targetpath, $identity)) {
-			notify($ERRORS{'OK'}, 0, " successfully copied cluster_info file to $node_name");
+		$cluster_info_string .= "$cluster_computer_public_ip_address\n";
+	}
+	
+	# Remove trailing newline
+	$cluster_info_string =~ s/\n$//;
+	
+	# Create the cluster_info file on the computer
+	if ($self->create_text_file($cluster_info_file_path, $cluster_info_string)) {
+		notify($ERRORS{'DEBUG'}, 0, "created $cluster_info_file_path on $computer_short_name:\n$cluster_info_string");
+		$self->set_text_file_line_endings($cluster_info_file_path);
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to create $cluster_info_file_path on $computer_short_name");
+		return;
+	}
+	
+	# Open the firewall allowing other cluster reservations computers access
+	if ($self->can('enable_firewall_port')) {
+		my $firewall_scope = join(",", @public_ip_addresses);
+		notify($ERRORS{'DEBUG'}, 0, "attempting to open the firewall on $computer_short_name to allow access from other cluster reservation computers: $firewall_scope");
+		
+		if (!$self->enable_firewall_port("tcp", "any", $firewall_scope, 0)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to open the firewall on $computer_short_name to allow access from other cluster reservation computers via TCP: $firewall_scope");
 		}
-	} ## end foreach my $resid (keys %{$request_data->{reservation...
-
-	unlink $cluster_info;
+		
+		if (!$self->enable_firewall_port("udp", "any", $firewall_scope, 0)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to open the firewall on $computer_short_name to allow access from other cluster reservation computers via UDP: $firewall_scope");
+		}
+	}
 
 	return 1;
-
 } ## end sub update_cluster_info
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_cluster_info_file_path
+
+ Parameters  : none
+ Returns     : string
+ Description : Returns the location where the cluster_info files resides on the
+               computer: /etc/cluster_info. OS modules such as Windows which use
+               a different location should override this subroutine.
+
+=cut
+
+sub get_cluster_info_file_path {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module::OS/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	return $self->{cluster_info_file_path} if $self->{cluster_info_file_path};
+	$self->{cluster_info_file_path} = '/etc/cluster_info';
+	notify($ERRORS{'DEBUG'}, 0, "determined cluster_info file path for " . ref($self) . " OS module: $self->{cluster_info_file_path}");
+	return $self->{cluster_info_file_path};
+}
 
 #///////////////////////////////////////////////////////////////////////////
 

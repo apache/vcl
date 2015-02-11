@@ -4027,7 +4027,7 @@ sub get_service_configuration {
 	
 	my $services_key = 'HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Services';
 	
-	my $cygwin_path = $self->get_cygwin_path();
+	my $cygwin_path = $self->get_cygwin_installation_directory_path();
 
 	my $node_reg_file_path = $cygwin_path . "/tmp/services_$computer_node_name.reg";
 	my $mn_reg_file_path = "/tmp/vcl/services_$computer_node_name.reg";
@@ -6731,7 +6731,11 @@ sub set_text_file_line_endings {
 	}
 	$line_ending = 'win' unless $line_ending;
 	
-	return $self->SUPER::set_text_file_line_endings($file_path, $line_ending);
+	# Convert the Windows-style path to a Cygwin/Unix-style path or else the sed command in OS.pm::set_text_file_line_endings will fail with this error:
+	# sed: couldn't open temporary file C:/sedxxxxxx: No such file or directory
+	my $unix_file_path = $self->get_cygwin_unix_file_path($file_path) || $file_path;
+	
+	return $self->SUPER::set_text_file_line_endings($unix_file_path, $line_ending);
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -6952,7 +6956,7 @@ sub clean_hard_drive {
 
 	my $computer_node_name   = $self->data->get_computer_node_name();
 	my $system32_path        = $self->get_system32_path() || return;
-	my $cygwin_path          = $self->get_cygwin_path();
+	my $cygwin_path          = $self->get_cygwin_installation_directory_path();
 	
 	# Run dism.exe
 	# The dism.exe file may not be present
@@ -12026,15 +12030,17 @@ sub notify_user_console {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 get_cygwin_path
+=head2 get_cygwin_installation_directory_path
 
- Parameters  : 
- Returns     : sets $self->{CYGWIN_PATH}
- Description :	sets CYGWIN_PATH, x86 and x86_64 use different paths, need to detect which path to use. 
+ Parameters  : none
+ Returns     : string
+ Description : Retrieves the directory path where Cygwin is installed on the
+               computer. 32-bit and 64-bit versions of Cygwin may use different
+               paths. 
 
 =cut
 
-sub get_cygwin_path {
+sub get_cygwin_installation_directory_path {
 	my $self = shift;
 	if (ref($self) !~ /Module/i) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
@@ -12044,27 +12050,111 @@ sub get_cygwin_path {
 	return $self->{CYGWIN_PATH} if $self->{CYGWIN_PATH};
 
 	my $computer_node_name = $self->data->get_computer_node_name();
-	my $command = "cygpath -d /";
-
-	my ($exit_status, $output) = $self->execute($command, 1);
 	
+	my $default_path = 'C:/cygwin';
+	
+	my $command = "cygpath.exe -m /";
+	my ($exit_status, $output) = $self->execute($command, 1);
 	if (!defined($output)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to run SSH command to delete files under command: $command");
-		#return default path
-		$self->{CYGWIN_PATH} = "C:/cygwin";
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to determine Cygwin installation directory path on $computer_node_name, returning default path: $default_path");
+		$self->{CYGWIN_PATH} = $default_path;
 		return $self->{CYGWIN_PATH};
 	}
-	elsif (@$output) {
-		$self->{CYGWIN_PATH} = @$output[0];
-		#fix path
-		$self->{CYGWIN_PATH} =~ tr/\\/\//;
-		notify($ERRORS{'DEBUG'}, 0, "command: $command cygwin_path: $self->{CYGWIN_PATH}");
-		if ($self->file_exists($self->{CYGWIN_PATH})) {
-			notify($ERRORS{'DEBUG'}, 0, " $self->{CYGWIN_PATH} exists");
-		}
+	elsif (grep(/^cygpath:/, @$output)) {
+		notify($ERRORS{'WARNING'}, 0, "error occurred determining Cygwin installation directory path on $computer_node_name, returning default path: $default_path, output:\n" . join("\n", @$output));
+		$self->{CYGWIN_PATH} = $default_path;
+		return $self->{CYGWIN_PATH};
+	}
+	
+	my ($directory_path) = grep(/^[a-z]/i, @$output);
+	if ($directory_path) {
+		notify($ERRORS{'DEBUG'}, 0, "determined Cygwin installation directory path on $computer_node_name: $directory_path");
+		$self->{CYGWIN_PATH} = $directory_path;
+		return $self->{CYGWIN_PATH};
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "error occurred determining Cygwin installation directory path on $computer_node_name, returning default path: $default_path, did not find a line beginning with a letter in the output:\n" . join("\n", @$output));
+		$self->{CYGWIN_PATH} = $default_path;
 		return $self->{CYGWIN_PATH};
 	}
 }
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_cygwin_unix_file_path
+
+ Parameters  : $file_path
+ Returns     : string
+ Description : Converts a Windows-style path to a Cygwin/Unix-style path.
+               Example: C:\Windows\file.txt --> /cygdrive/c/Windows/file.txt
+
+=cut
+
+sub get_cygwin_unix_file_path {
+	my $self = shift;
+	if (ref($self) !~ /Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $file_path_argument = shift;
+	if (!$file_path_argument) {
+		notify($ERRORS{'WARNING'}, 0, "file path argument was not specified");
+		return;
+	}
+	
+	if ($file_path_argument =~ /^\//) {
+		notify($ERRORS{'DEBUG'}, 0, "file path not converted because it begins with a forward slash: $file_path_argument");
+		return $file_path_argument;
+	}
+	
+	# Change backslashes to forward slashes
+	$file_path_argument =~ s/\\+/\//g;
+	
+	my $command = "cygpath.exe -u \"$file_path_argument\"";
+	my ($exit_status, $output) = $self->execute($command);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to determine Cygwin/Unix-style path, returning argument: $file_path_argument");
+		return $file_path_argument;
+	}
+	
+	my ($unix_file_path) = grep(/^\//, @$output);
+	if (!$unix_file_path || grep(/^cygpath:/, @$output)) {
+		notify($ERRORS{'WARNING'}, 0, "error occurred attempting to determine Cygwin/Unix-style path, returning argument: $file_path_argument, output:\n" . join("\n", @$output));
+		return $file_path_argument;
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "determined Cygwin/Unix-style path: $file_path_argument --> $unix_file_path");
+		return $unix_file_path;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_cluster_info_file_path
+
+ Parameters  : none
+ Returns     : string
+ Description : Returns the location where the cluster_info files resides on the
+               Windows computer, normally C:/cluster_info.
+
+=cut
+
+sub get_cluster_info_file_path {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	return $self->{cluster_info_file_path} if $self->{cluster_info_file_path};
+	
+	my $systemroot_value = $self->get_environment_variable_value('SYSTEMDRIVE') || 'C:';
+	$self->{cluster_info_file_path} = "$systemroot_value/cluster_info";
+	notify($ERRORS{'DEBUG'}, 0, "determined cluster_info file path for Windows: $self->{cluster_info_file_path}");
+	return $self->{cluster_info_file_path};
+}
+
 
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -12085,7 +12175,7 @@ sub disable_set_network_location_prompt {
 		return;
 	}
 	
-	my $registry_key = 	'HKLM\SYSTEM\CurrentControlSet\Control\Network\NewNetworkWindowOff';
+	my $registry_key = 'HKLM\SYSTEM\CurrentControlSet\Control\Network\NewNetworkWindowOff';
 	return $self->reg_add($registry_key);
 }
 
