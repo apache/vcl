@@ -38,7 +38,8 @@ setBrowser();
 function _(str) {
 	if(typeof usenls == 'undefined' ||
 	   typeof nlsmessages == 'undefined' ||
-	   ! (str in nlsmessages))
+	   ! (str in nlsmessages) ||
+	   nlsmessages[str] == '')
 		return str;
 	return nlsmessages[str];
 }
