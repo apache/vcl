@@ -30,9 +30,9 @@ Image.prototype.colformatter = function(value, rowIndex, obj) {
 	   obj.field == 'checkuser' ||
 	   obj.field == 'rootaccess') {
 		if(value == "0")
-			return '<span class="rederrormsg">false</span>';
+			return '<span class="rederrormsg">' + _('false') + '</span>';
 		if(value == "1")
-			return '<span class="ready">true</span>';
+			return '<span class="ready">' + _('true') + '</span>';
 	}
 	if(obj.field == 'maxinitialtime' && value == 0)
 		return '(unset)';
@@ -47,7 +47,7 @@ function inlineEditResourceCB(data, ioArgs) {
 			dijit.byId('advancedoptions').toggle();
 		dojo.byId('saveresourcecont').value = data.items.cont;
 		dijit.byId('addeditdlg').set('title', data.items.title);
-		dijit.byId('addeditbtn').set('label', 'Save Changes');
+		dijit.byId('addeditbtn').set('label', _('Save Changes'));
 		dojo.byId('editresid').value = data.items.resid;
 		dijit.byId('name').set('value', data.items.data.prettyname);
 		dijit.byId('owner').set('value', data.items.data.owner);
@@ -71,7 +71,7 @@ function inlineEditResourceCB(data, ioArgs) {
 		dijit.byId('addeditdlg').show();
 	}
 	else if(data.items.status == 'noaccess') {
-		alert('Access denied to edit this item');
+		alert(_('Access denied to edit this item'));
 	}
 }
 
@@ -172,37 +172,37 @@ function saveResource() {
 
 	data['networkspeed'] = parseInt(dijit.byId('networkspeed').get('value'));
 	if((+log10(data['networkspeed']).toFixed(2) % 1) != 0) { // log10(1000) -> 2.9999999999999996
-		errobj.innerHTML = 'Invalid network speed specified';
+		errobj.innerHTML = _('Invalid network speed specified');
 		return;
 	}
 	data['concurrent'] = dijit.byId('concurrent').get('value');
 	if(data['concurrent'] < 0 || data['concurrent'] == 1 || data['concurrent'] > 255) {
-		errobj.innerHTML = 'Max Concurrent Usage must be 0 or from 2 to 255';
+		errobj.innerHTML = _('Max Concurrent Usage must be 0 or from 2 to 255');
 		return;
 	}
 	data['checkout'] = parseInt(dijit.byId('checkout').get('value'));
 	if(data['checkout'] != 0 && data['checkout'] != 1) {
-		errobj.innerHTML = 'Invalid value specified for \'Available for checkout\'';
+		errobj.innerHTML = _('Invalid value specified for \'Available for checkout\'');
 		return;
 	}
 	data['checkuser'] = parseInt(dijit.byId('checkuser').get('value'));
 	if(data['checkuser'] != 0 && data['checkuser'] != 1) {
-		errobj.innerHTML = 'Invalid value specified for \'Check for logged in user\'';
+		errobj.innerHTML = _('Invalid value specified for \'Check for logged in user\'');
 		return;
 	}
 	data['rootaccess'] = parseInt(dijit.byId('rootaccess').get('value'));
 	if(data['rootaccess'] != 0 && data['rootaccess'] != 1) {
-		errobj.innerHTML = 'Invalid value specified for \'Users have administrative access\'';
+		errobj.innerHTML = _('Invalid value specified for \'Users have administrative access\'');
 		return;
 	}
 	if(dijit.byId('sysprep')) {
 		data['sysprep'] = parseInt(dijit.byId('sysprep').get('value'));
 		if(data['sysprep'] != 0 && data['sysprep'] != 1) {
-			errobj.innerHTML = 'Invalid value specified for \'Use sysprep\'';
+			errobj.innerHTML = _('Invalid value specified for \'Use sysprep\'');
 			return;
 		}
 		if(! /[0-9,]+/.test(dojo.byId('connectmethodids').value)) {
-			errobj.innerHTML = 'Invalid Connect Methods specified';
+			errobj.innerHTML = _('Invalid Connect Methods specified');
 			return;
 		}
 		data['connectmethodids'] = dojo.byId('connectmethodids').value;
@@ -328,7 +328,7 @@ function updateCurrentConMethods() {
 }
 
 function addSubimage() {
-	dijit.byId('addbtn').attr('label', 'Working...');
+	dijit.byId('addbtn').attr('label', _('Working...'));
 	var data = {continuation: dojo.byId('addsubimagecont').value,
 	            imageid: dijit.byId('addsubimagesel').value};
 	RPCwrapper(data, addSubimageCB, 1);
@@ -336,12 +336,12 @@ function addSubimage() {
 
 function addSubimageCB(data, ioArgs) {
 	if(data.items.error) {
-		dijit.byId('addbtn').attr('label', 'Add Subimage');
+		dijit.byId('addbtn').attr('label', _('Add Subimage'));
 		alert(data.items.msg);
 		return;
 	}
 	var obj = dojo.byId('cursubimagesel');
-	if(obj.options[0].text == '(None)') {
+	if(obj.options[0].text == _('(None)')) {
 		obj.disabled = false;
 		obj.remove(0);
 	}
@@ -351,7 +351,7 @@ function addSubimageCB(data, ioArgs) {
 	obj.options[index] = new Option(data.items.name, data.items.newid, false, false);
 	sortSelect(obj);
 	dojo.byId('subimgcnt').innerHTML = obj.options.length;
-	dijit.byId('addbtn').attr('label', 'Add Subimage');
+	dijit.byId('addbtn').attr('label', _('Add Subimage'));
 }
 
 function remSubimages() {
@@ -364,7 +364,7 @@ function remSubimages() {
 	if(! imgids.length)
 		return;
 	var ids = imgids.join(',');
-	dijit.byId('rembtn').attr('label', 'Working...');
+	dijit.byId('rembtn').attr('label', _('Working...'));
 	var data = {continuation: dojo.byId('remsubimagecont').value,
 	            imageids: ids};
 	RPCwrapper(data, remSubimagesCB, 1);
@@ -372,7 +372,7 @@ function remSubimages() {
 
 function remSubimagesCB(data, ioArgs) {
 	if(data.items.error) {
-		dijit.byId('rembtn').attr('label', 'Remove Selected Subimage(s)');
+		dijit.byId('rembtn').attr('label', _('Remove Selected Subimage(s)'));
 		alert(data.items.msg);
 		return;
 	}
@@ -383,14 +383,14 @@ function remSubimagesCB(data, ioArgs) {
 	}
 	if(! obj.options.length) {
 		obj.disabled = true;
-		obj.options[0] = new Option('(None)', 'none', false, false);
+		obj.options[0] = new Option(_('(None)'), 'none', false, false);
 		dojo.byId('subimgcnt').innerHTML = 0;
 	}
 	else
 		dojo.byId('subimgcnt').innerHTML = obj.options.length;
 	dojo.byId('addsubimagecont').value = data.items.addcont;
 	dojo.byId('remsubimagecont').value = data.items.remcont;
-	dijit.byId('rembtn').attr('label', 'Remove Selected Subimage(s)');
+	dijit.byId('rembtn').attr('label', _('Remove Selected Subimage(s)'));
 }
 
 function selectConMethodRevision(url) {
@@ -420,7 +420,7 @@ function addConnectMethod2(item) {
 
 function addConnectMethod3() {
 	dojo.byId('cmerror').innerHTML = '';
-	dijit.byId('addcmbtn').attr('label', 'Working...');
+	dijit.byId('addcmbtn').attr('label', _('Working...'));
 	var data = {continuation: dojo.byId('addcmcont').value,
 	            newid: dijit.byId('addcmsel').value};
 	if(dijit.byId('conmethodrevid'))
@@ -432,7 +432,7 @@ function addConnectMethod3() {
 
 function addConnectMethodCB(data, ioArgs) {
 	if(data.items.error) {
-		dijit.byId('addcmbtn').attr('label', 'Add Method');
+		dijit.byId('addcmbtn').attr('label', _('Add Method'));
 		alert(data.items.msg);
 		return;
 	}
@@ -445,7 +445,7 @@ function addConnectMethodCB(data, ioArgs) {
 	dijit.byId('addcmsel').setStore(cmstore, '', {query: {active: 0}});
 	dojo.byId('addcmcont').value = data.items.addcont;
 	dojo.byId('remcmcont').value = data.items.remcont;
-	dijit.byId('addcmbtn').attr('label', 'Add Method');
+	dijit.byId('addcmbtn').attr('label', _('Add Method'));
 }
 
 function remConnectMethod() {
@@ -458,12 +458,12 @@ function remConnectMethod() {
 	if(! cmids.length)
 		return;
 	if(cmids.length == obj.options.length) {
-		dojo.byId('cmerror').innerHTML = 'There must be at least one item in Current Methods';
+		dojo.byId('cmerror').innerHTML = _('There must be at least one item in Current Methods');
 		setTimeout(function() {dojo.byId('cmerror').innerHTML = '';}, 20000);
 		return;
 	}
 	var ids = cmids.join(',');
-	dijit.byId('remcmbtn').attr('label', 'Working...');
+	dijit.byId('remcmbtn').attr('label', _('Working...'));
 	var data = {continuation: dojo.byId('remcmcont').value,
 	            ids: ids};
 	if(dijit.byId('conmethodrevid'))
@@ -479,7 +479,7 @@ function remConnectMethodCB(data, ioArgs) {
 		dijit.byId('addcmbtn').set('disabled', false);
 	}
 	if(data.items.error) {
-		dijit.byId('rembtn').attr('label', 'Remove Selected Methods');
+		dijit.byId('rembtn').attr('label', _('Remove Selected Methods'));
 		alert(data.items.msg);
 		return;
 	}
@@ -499,7 +499,7 @@ function remConnectMethodCB(data, ioArgs) {
 	dojo.byId('addcmcont').value = data.items.addcont;
 	dojo.byId('remcmcont').value = data.items.remcont;
 	updateConnectionMethodList();
-	dijit.byId('remcmbtn').attr('label', 'Remove Selected Methods');
+	dijit.byId('remcmbtn').attr('label', _('Remove Selected Methods'));
 }
 
 function updateConnectionMethodList() {
@@ -546,7 +546,7 @@ function deleteRevisions(cont, idlist) {
 		var obj2 = document.getElementById('radrev' + id);
 		if(obj.checked) {
 			if(obj2.checked) {
-				alert('You cannot delete the production revision.');
+				alert(_('You cannot delete the production revision.'));
 				return;
 			}
 			checkedids.push(id);
@@ -628,7 +628,7 @@ function startImageCB(data, ioArgs) {
 		dojo.byId('updateimage').disabled = 'disabled';
 		dojo.addClass('updateimagelabel', 'disabledlabel');
 	}
-	dijit.byId('addeditbtn').set('label', 'Create Image');
+	dijit.byId('addeditbtn').set('label', _('Create Image'));
 	dijit.byId('addeditbtn').set('disabled', false);
 	dijit.byId('clickthroughDlgBtn').set('disabled', false);
 
@@ -682,7 +682,7 @@ function updateImageCB(data, ioArgs) {
 		}
 	}
 	else if(data.items.status == 'noaccess') {
-		alert('You must be the owner of the image to update it.');
+		alert(_('You must be the owner of the image to update it.'));
 		dijit.byId('updateimagedlg').hide();
 		return;
 	}
@@ -703,7 +703,7 @@ function submitUpdateImageClickthrough() {
 
 function submitUpdateImageClickthroughCB(data, ioArgs) {
 	if(data.items.status == 'noaccess') {
-		alert('You must be the owner of the image to update it.');
+		alert(_('You must be the owner of the image to update it.'));
 		dijit.byId('updateimagedlg').hide();
 		dijit.byId('clickthroughdlg').hide();
 		dijit.byId('clickthroughDlgBtn').set('disabled', false);

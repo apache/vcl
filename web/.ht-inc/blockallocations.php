@@ -46,20 +46,21 @@ function blockAllocations() {
 		print getUserCurrentBlockHTML();
 	}
 	else {
-		print "<h2>Manage Block Allocations</h2>\n";
+		print "<h2>" . _("Manage Block Allocations") . "</h2>\n";
 		$cont = addContinuationsEntry('viewBlockAllocatedMachines');
-		print "<a href=\"" . BASEURL . SCRIPT . "?continuation=$cont\">View Block Allocated Machines</a>\n";
+		print "<a href=\"" . BASEURL . SCRIPT . "?continuation=$cont\">";
+		print _("View Block Allocated Machines") . "</a>\n";
 		print "<div id=\"blocklist\">\n";
 		print getCurrentBlockHTML();
 		print "</div>\n";
 		print "<button dojoType=\"dijit.form.Button\" type=\"button\">\n";
-		print "  Create New Block Allocation\n";
+		print "  " . _("Create New Block Allocation") . "\n";
 		print "  <script type=\"dojo/method\" event=\"onClick\">\n";
 		$cont = addContinuationsEntry('newBlockAllocation');
 		print "    location.href = '" . BASEURL . SCRIPT . "?continuation=$cont';\n";
 		print "  </script>\n";
 		print "</button>\n";
-		print "<h2>Block Allocation Requests</h2>\n";
+		print "<h2>" . _("Block Allocation Requests") . "</h2>\n";
 		print "<div id=\"pendinglist\">\n";
 		print getPendingBlockHTML();
 		print "</div>\n";
@@ -102,10 +103,10 @@ function blockAllocationForm() {
 	if($mode == 'newBlockAllocation') {
 		$brname = '';
 		$imageid = '';
-		print "<h2>New Block Allocation</h2>\n";
+		print "<h2>" . _("New Block Allocation") . "</h2>\n";
 	}
 	elseif($mode == 'editBlockAllocation') {
-		print "<h2>Edit Block Allocation</h2>\n";
+		print "<h2>" . _("Edit Block Allocation") . "</h2>\n";
 	}
 	elseif($mode == 'requestBlockAllocation') {
 		print "<h2>" . _("Request New Block Allocation") . "</h2>\n";
@@ -117,23 +118,23 @@ function blockAllocationForm() {
 	print "<table summary=\"\">\n";
 	if($mode != 'requestBlockAllocation') {
 		print "  <tr>\n";
-		print "    <th align=right>Name:</th>\n";
+		print "    <th align=right>" . _("Name:") . "</th>\n";
 		print "    <td>\n";
 		print "      <input type=\"text\" value=\"{$data['name']}\" dojoType=\"dijit.form.ValidationTextBox\" ";
-		print "id=\"brname\" required=\"true\" invalidMessage=\"Name can only contain letters, numbers, ";
-		print "spaces, dashes(-), parenthesis, <br>and periods(.) and can be from 3 to 80 characters long\" ";
-		print "regExp=\"^([-a-zA-Z0-9\. \(\)]){3,80}$\" style=\"width: 300px\" ";
+		print "id=\"brname\" required=\"true\" invalidMessage=\"";
+		print _("Name can only contain letters, numbers, spaces, dashes(-), parenthesis, and periods(.) and can be from 3 to 80 characters long");
+		print "\" regExp=\"^([-a-zA-Z0-9\. \(\)]){3,80}$\" style=\"width: 300px\" ";
 		print "postCreate=\"dijit.byId('brname').focus();\">\n";
 		print "    </td>\n";
 		print "  </tr>\n";
 		print "  <tr>\n";
-		print "    <th align=right>Owner:</th>\n";
+		print "    <th align=right>" . _("Owner:") . "</th>\n";
 		print "    <td>\n";
 		$initval = $data['owner'];
 		if(empty($initval))
 			$initval = "{$user['unityid']}@{$user['affiliation']}";
 		print "      <input type=\"text\" value=\"$initval\" dojoType=\"dijit.form.ValidationTextBox\" ";
-		print "id=\"browner\" required=\"true\" invalidMessage=\"Unknown user\" style=\"width: 300px\" ";
+		print "id=\"browner\" required=\"true\" invalidMessage=\"" . _("Unknown user") . "\" style=\"width: 300px\" ";
 		print "validator=\"checkOwner\" onFocus=\"ownerFocus\">\n";
 		print "    </td>\n";
 		print "  </tr>\n";
@@ -213,7 +214,8 @@ function blockAllocationForm() {
 	print "     style=\"width:550px; height:240px; margin: 5px;\">\n";
 
 	# repeating weekly
-	print "<div id=\"weeklytab\" dojoType=\"dijit.layout.ContentPane\" title=\"Repeating Weekly\" {$data['type2']['weekly']}>\n";
+	print "<div id=\"weeklytab\" dojoType=\"dijit.layout.ContentPane\" ";
+	print "title=\"" . _("Repeating Weekly") . "\" {$data['type2']['weekly']}>\n";
 	print "<table summary=\"\">\n";
 	print "  <tr>\n";
 	print "    <th align=right>" . _("First Date of Usage") . ":</th>\n";
@@ -253,7 +255,7 @@ function blockAllocationForm() {
 	print "style=\"width: 78px\"></div>\n";
 	print "<button dojoType=\"dijit.form.Button\" type=\"button\" disabled=\"true\" ";
 	print "id=\"requestBlockWeeklyAddBtn\">\n";
-	print _(  "Add") . "\n";
+	print _("Add") . "\n";
 	print "  <script type=\"dojo/method\" event=\"onClick\">\n";
 	print "    blockFormAddWeeklyTime();\n";
 	print "  </script>\n";
@@ -279,7 +281,8 @@ function blockAllocationForm() {
 	print "</div>\n"; # repeating weekly
 
 	# repeating monthly
-	print "<div id=\"monthlytab\" dojoType=\"dijit.layout.ContentPane\" title=\"Repeating Monthly\" {$data['type2']['monthly']}>\n";
+	print "<div id=\"monthlytab\" dojoType=\"dijit.layout.ContentPane\" ";
+	print "title=\"" . _("Repeating Monthly") . "\" {$data['type2']['monthly']}>\n";
 	print "<table summary=\"\">\n";
 	print "  <tr>\n";
 	print "    <th align=right>" . _("First Date of Usage") . ":</th>\n";
@@ -310,10 +313,10 @@ function blockAllocationForm() {
 	                5 => _("Thursday"),
 	                6 => _("Friday"),
 	                7 => _("Saturday"));
-	print _("Repeat on the ");
+	print _("Repeat on the") . " ";
 	printSelectInput('weeknum', $weeknumArr, $data['mnweeknumid'], 0, 0, 'mnweeknum');
 	printSelectInput('day', $dayArr, $data['mndayid'], 0, 0, 'mnday');
-	print _(" of every month") . "<br><br>\n";
+	print " " . _("of every month") . "<br><br>\n";
 	print _("Start") . ":<div type=\"text\" id=\"monthlyaddstart\" dojoType=\"dijit.form.TimeTextBox\" ";
 	print "required=\"true\" onChange=\"blockFormMonthlyAddBtnCheck(1)\" style=\"width: 78px\"></div>\n";
 	print _("End") . ":<div type=\"text\" id=\"monthlyaddend\" dojoType=\"vcldojo.TimeTextBoxEnd\" ";
@@ -321,7 +324,7 @@ function blockAllocationForm() {
 	print "style=\"width: 78px\"></div>\n";
 	print "<button dojoType=\"dijit.form.Button\" type=\"button\" disabled=\"true\" ";
 	print "id=\"requestBlockMonthlyAddBtn\">\n";
-	print _(  "Add") . "\n";
+	print _("Add") . "\n";
 	print "  <script type=\"dojo/method\" event=\"onClick\">\n";
 	print "    blockFormAddMonthlyTime();\n";
 	print "  </script>\n";
@@ -344,7 +347,8 @@ function blockAllocationForm() {
 	print "</div>\n"; # repeating monthly
 
 	# list of times
-	print "<div id=\"listtab\" dojoType=\"dijit.layout.ContentPane\" title=\"List of Times\" {$data['type2']['list']}>\n";
+	print "<div id=\"listtab\" dojoType=\"dijit.layout.ContentPane\" ";
+	print "title=\"" . _("List of Times") . "\" {$data['type2']['list']}>\n";
 	print _("Date") . ":<div type=\"text\" id=\"listadddate\" dojoType=\"dijit.form.DateTextBox\" ";
 	print "required=\"true\" onChange=\"blockFormListAddBtnCheck\" style=\"width: 95px\"></div>\n";
 	print _("Start") . ":<input type=\"text\" id=\"listaddstart\" dojoType=\"dijit.form.TimeTextBox\" ";
@@ -353,7 +357,7 @@ function blockAllocationForm() {
 	print "required=\"true\" onChange=\"blockFormListAddBtnCheck\" startid=\"listaddstart\" />\n";
 	print "<button dojoType=\"dijit.form.Button\" type=\"button\" disabled=\"true\" ";
 	print "id=\"requestBlockListAddBtn\">\n";
-	print _(  "Add") . "\n";
+	print _("Add") . "\n";
 	print "  <script type=\"dojo/method\" event=\"onClick\">\n";
 	print "    blockFormAddListSlot();\n";
 	print "  </script>\n";
@@ -392,15 +396,15 @@ function blockAllocationForm() {
 	print "<button dojoType=\"dijit.form.Button\" type=\"button\" ";
 	print "id=\"requestBlockSubmitBtn\">\n";
 	if($mode == 'requestBlockAllocation') {
-		$btntxt = _("Submit Block Allocation Request\n");
+		$btntxt = _("Submit Block Allocation Request") . "\n";
 		$arg = 'request';
 	}
 	elseif($mode == 'newBlockAllocation') {
-		$btntxt = "Submit New Block Allocation\n";
+		$btntxt = _("Submit New Block Allocation") . "\n";
 		$arg = 'new';
 	}
 	elseif($mode == 'editBlockAllocation') {
-		$btntxt = "Submit Block Allocation Changes\n";
+		$btntxt = _("Submit Block Allocation Changes") . "\n";
 		$arg = 'edit';
 	}
 	print "  $btntxt\n";
@@ -417,8 +421,7 @@ function blockAllocationForm() {
 	if($mode == 'requestBlockAllocation')
 		print _("Please confirm the following values and then click <strong>Submit Block Allocation Request</strong>");
 	else {
-		print "Please confirm the following values and then<br>click <strong>";
-		print "$btntxt</strong>";
+		printf(_("Please confirm the following values and then click <strong>%s</strong>"), $btntxt);
 	}
 	print "<br><br>\n<table summary=\"\">\n";
 	print "  <tr>\n";
@@ -482,7 +485,7 @@ function blockAllocationForm() {
 	print "  </script>\n";
 	print "</button>\n";
 	print "<button dojoType=\"dijit.form.Button\" type=\"button\">\n";
-	print _(  "Cancel") . "\n";
+	print _("Cancel") . "\n";
 	print "  <script type=\"dojo/method\" event=\"onClick\">\n";
 	print "    clearHideConfirmForm();\n";
 	print "  </script>\n";
@@ -491,78 +494,67 @@ function blockAllocationForm() {
 
 	# tooltips
 	print "<div dojoType=\"dijit.Tooltip\" connectId=\"seathelp\">\n";
-	print _("This is the number of environments that<br>\n");
-	print _("will be loaded for the Block Allocation.\n");
-	print "</div>\n";
+	print "<div style=\"width: 440px;\">\n";
+	print _("This is the number of environments that will be loaded for the Block Allocation.");
+	print "</div></div>\n";
+
 	print "<div dojoType=\"dijit.Tooltip\" connectId=\"grouphelp\">\n";
-	print _("User in this user group will be able to make reservations<br>\n");
-	print _("for the computers set aside for this block allocation.<br>\n");
-	print _("If you do not see an applicable user group listed, please<br>\n");
-	print _("select \"<font color=\"blue\">(group not listed)</font>\" and describe the group you need<br>\n");
-	print _("in the <strong>Additional Comments</strong> section at the bottom of<br>\n");
-	print _("the page. If this is for a class, make sure to list the course<br>\n");
-	print _("and section number.\n");
-	print "</div>\n";
-	print "<div dojoType=\"dijit.Tooltip\" connectId=\"admingrouphelp\">\n";
-	print _("Users in this user group can modify this<br>\n");
-	print _("block allocation. Select None to keep<br>\n");
-	print _("anyone else from being able to modify it.\n");
-	print "</div>\n";
+	print "<div style=\"width: 440px;\">\n";
+	print _("User in this user group will be able to make reservations for the computers set aside for this block allocation.  If you do not see an applicable user group listed, please select \"<font color=\"blue\">(group not listed)</font>\" and describe the group you need in the <strong>Additional Comments</strong> section at the bottom of the page. If this is for a class, make sure to list the course and section number.");
+	print "</div></div>\n";
+
 	print "<div dojoType=\"dijit.Tooltip\" connectId=\"repeattypehelp\">\n";
-	print _("For repeating block allocations, there are three ways you can enter the dates and times:<br>\n");
+	print "<div style=\"width: 440px;\">\n";
+	print _("For repeating block allocations, there are three ways you can enter the dates and times:") . "<br>\n";
 	print "<ul>\n";
-	print _("<li>Repeating Weekly - Use this if the block allocation needs to occur every week.<br>\n");
-	print _("You can make it repeat on a single day each week or on multiple days.  The time(s)<br>\n");
-	print _("that it occurs will be the same on all days. You can list as many times as needed.</li>\n");
-	print _("<li>Repeating Monthly - Use this if the block allocation needs to occur on a certain<br>\n");
-	print _("day of the month (i.e. 2nd Tuesday each month). You can list as many times as<br>\n");
-	print _("needed for that day of the month.</li>\n");
-	print _("<li>List of Dates/Times - Use this to specify any other cases, including single<br>\n");
-	print _("events. You can specify as many date/time combinations as needed.</li>\n");
+	print "<li>" . _("Repeating Weekly - Use this if the block allocation needs to occur every week.") . " ";
+	print _("You can make it repeat on a single day each week or on multiple days.  The time(s) that it occurs will be the same on all days. You can list as many times as needed.") . "</li>\n";
+	print "<li>" . _("Repeating Monthly - Use this if the block allocation needs to occur on a certain day of the month (i.e. 2nd Tuesday each month). You can list as many times as needed for that day of the month.") . "</li>\n";
+	print "<li>" . _("List of Dates/Times - Use this to specify any other cases, including single events.") . " ";
+	print _("You can specify as many date/time combinations as needed.") . "</li>\n";
 	print "</ul>\n";
-	print "</div>\n";
+	print "</div></div>\n";
+
 	print "<div dojoType=\"dijit.Tooltip\" connectId=\"wkfdhelp\">\n";
 	print _("This is the first date the block allocation will be used.\n");
 	print "</div>\n";
+
 	print "<div dojoType=\"dijit.Tooltip\" connectId=\"wkldhelp\">\n";
 	print _("This is the last date the block allocation will be used.\n");
 	print "</div>\n";
+
 	print "<div dojoType=\"dijit.Tooltip\" connectId=\"wkdayshelp\">\n";
-	print _("Select the checkbox for each of the days you<br>\n");
-	print _("would like the block allocation to occur. For<br>\n");
-	print _("example, check Monday, Wednesday, and Friday<br>\n");
-	print _("for a class that meets on those days.\n");
-	print "</div>\n";
+	print "<div style=\"width: 340px;\">\n";
+	print _("Select the checkbox for each of the days you would like the block allocation to occur. For example, check Monday, Wednesday, and Friday for a class that meets on those days.");
+	print "</div></div>\n";
+
 	print "<div dojoType=\"dijit.Tooltip\" connectId=\"wktimeshelp\">\n";
-	print _("Here you specify the start and end times of the<br>\n");
-	print _("block allocation. The times will occur on each<br>\n");
-	print _("of the selected days. You might specify more than<br>\n");
-	print _("one start/end combination if you had multiple<br>\n");
-	print _("sections that met on the same day.\n");
-	print "</div>\n";
+	print "<div style=\"width: 340px;\">\n";
+	print _("Here you specify the start and end times of the block allocation. The times will occur on each of the selected days. You might specify more than one start/end combination if you had multiple sections that met on the same day.");
+	print "</div></div>\n";
+
 	print "<div dojoType=\"dijit.Tooltip\" connectId=\"mnfdhelp\">\n";
 	print _("This is the first date the block allocation will be used.\n");
 	print "</div>\n";
+
 	print "<div dojoType=\"dijit.Tooltip\" connectId=\"mnldhelp\">\n";
 	print _("This is the last date the block allocation will be used.\n");
 	print "</div>\n";
+
 	print "<div dojoType=\"dijit.Tooltip\" connectId=\"mntimeshelp\">\n";
-	print _("Here you specify the start and end times of the<br>\n");
-	print _("block allocation. You might specify more than<br>\n");
-	print _("one start/end combination if you had multiple<br>\n");
-	print _("sections that met on the same day.\n");
-	print "</div>\n";
+	print "<div style=\"width: 340px;\">\n";
+	print _("Here you specify the start and end times of the block allocation. You might specify more than one start/end combination if you had multiple sections that met on the same day.");
+	print "</div></div>\n";
+
 	print "<div dojoType=\"dijit.Tooltip\" connectId=\"listhelp\">\n";
-	print _("Specify individual dates and times during<br>\n");
-	print _("which the block allocation will occur.\n");
-	print "</div>\n";
+	print "<div style=\"width: 300px;\">\n";
+	print _("Specify individual dates and times during which the block allocation will occur.");
+	print "</div></div>\n";
+
 	print "<div dojoType=\"dijit.Tooltip\" connectId=\"commenthelp\">\n";
-	print _("Enter any additional information about this block allocation.<br>\n");
-	print _("&lt; and &gt; are not allowed.<br>\n");
-	print _("If you selected \"<font color=\"blue\">(group not listed)</font>\" as the User group, make sure<br>\n");
-	print _("to clearly describe the requirements of a new user group that<br>\n");
-	print _("will be created for this block allocation.\n");
-	print "</div>\n";
+	print "<div style=\"width: 340px;\">\n";
+	print _("Enter any additional information about this block allocation. &lt; and &gt; are not allowed. If you selected \"<font color=\"blue\">(group not listed)</font>\" as the User group, make sure to clearly describe the requirements of a new user group that will be created for this block allocation.");
+	print "</div></div>\n";
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -582,9 +574,8 @@ function AJblockAllocationSubmit() {
 	if($method == 'new') {
 		$managementnodes = getManagementNodes('future');
 		if(empty($managementnodes)) {
-			print "alert('Error encountered while trying to create block allocation:\\n";
-			print "no active management nodes were found. Please try\\n";
-			print "creating the block allocation at a later time.');";
+			print "alert('" . _("Error encountered while trying to create block allocation:") . "\\n";
+			print _("No active management nodes were found. Please try creating the block allocation at a later time.") . "');";
 			$data = array('extragroups' => getContinuationVar('extragroups'),
 			              'method' => $method);
 			if($method == 'edit')
@@ -819,17 +810,14 @@ function AJblockAllocationSubmit() {
 	if($method == 'request') {
 		print "clearHideConfirmForm();";
 		$txt  = "<h2>" . _("Request New Block Allocation") . "</h2>";
-		$txt .= _("Your request for a Block Allocation has been submitted for<br>")
-		     .  _("approval. ");
+		$txt .= _("Your request for a Block Allocation has been submitted for approval.") . " ";
 		if(! empty($user['email'])) {
-			$txt .= _("You should be notified within a few business days<br>")
-			     .  _("of its acceptance or rejection.");
+			$txt .= _("You should be notified within a few business days of its acceptance or rejection.");
 		}
 		else {
-			$txt .= _("<br><br><font color=\"red\"><b>Note:</b> You do not have an ")
-			     .  _("email address registered<br>with VCL. Therefore, you will ")
-			     .  _("not receive automatic<br>notification when this block ")
-			     .  _("allocation is accepted<br>or rejected.</font>");
+			$txt .= "<br><br><font color=\"red\"><strong>" . _("Note:") . "</strong> ";
+			$h = "      " . _("You do not have an email address registered with VCL. Therefore, you will not receive automatic notification when this block allocation is accepted or rejected.");
+			$txt .= preg_replace("/(.{1,50}([ \n]|$))/", '\1<br>', $h) . "</font>";
 		}
 		print "dojo.byId('content').innerHTML = '$txt';";
 		print "scroll(0, 0);";
@@ -1200,7 +1188,7 @@ function getCurrentBlockHTML($listonly=0) {
 				$blocks[$row['id']]['nextstartactive'] = 0;
 		}
 		else {
-			$blocks[$row['id']]['nextstart'] = "none found";
+			$blocks[$row['id']]['nextstart'] = _("none found");
 			$blocks[$row['id']]['nextstartactive'] = 0;
 		}
 	}
@@ -1313,18 +1301,18 @@ function getCurrentBlockHTML($listonly=0) {
 	$rt .= "<table summary=\"lists current block allocations\">\n";
 	$rt .= "  <TR align=center>\n";
 	$rt .= "    <TD colspan=3></TD>\n";
-	$rt .= "    <TH>Name</TH>\n";
-	$rt .= "    <TH>Environment</TH>\n";
-	$rt .= "    <TH>Reserved<br>Machines</TH>\n";
-	$rt .= "    <TH>Reserved<br>For</TH>\n";
-	$rt .= "    <TH>Repeating</TH>\n";
-	$rt .= "    <TH>Next Start Time</TH>\n";
+	$rt .= "    <TH>" . _("Name") . "</TH>\n";
+	$rt .= "    <TH>" . _("Environment") . "</TH>\n";
+	$rt .= "    <TH>" . _("Reserved<br>Machines") . "</TH>\n";
+	$rt .= "    <TH>" . _("Reserved<br>For") . "</TH>\n";
+	$rt .= "    <TH>" . _("Repeating") . "</TH>\n";
+	$rt .= "    <TH>" . _("Next Start Time") . "</TH>\n";
 	$rt .= "  </TR>\n";
 	foreach($blocks as $block) {
 		$rt .= "  <TR align=center>\n";
 		$rt .= "    <TD>\n";
 		$rt .= "      <button dojoType=\"dijit.form.Button\" type=\"button\">\n";
-		$rt .= "        Edit\n";
+		$rt .= _(      "Edit") . "\n";
 		$rt .= "        <script type=\"dojo/method\" event=\"onClick\">\n";
 		$cont = addContinuationsEntry('editBlockAllocation', array('blockid' => $block['id']));
 		$rt .= "          location.href = '" . BASEURL . SCRIPT . "?continuation=$cont';\n";
@@ -1333,7 +1321,7 @@ function getCurrentBlockHTML($listonly=0) {
 		$rt .= "    </TD>\n";
 		$rt .= "    <TD>\n";
 		$rt .= "      <button dojoType=\"dijit.form.Button\" type=\"button\">\n";
-		$rt .= "        Delete\n";
+		$rt .= _(      "Delete") . "\n";
 		$rt .= "        <script type=\"dojo/method\" event=\"onClick\">\n";
 		$cont = addContinuationsEntry('AJdeleteBlockAllocationConfirm', $block, SECINDAY);
 		$rt .= "          deleteBlockConfirm('$cont');\n";
@@ -1342,7 +1330,7 @@ function getCurrentBlockHTML($listonly=0) {
 		$rt .= "    </TD>\n";
 		$rt .= "    <TD>\n";
 		$rt .= "      <button dojoType=\"dijit.form.Button\" type=\"button\">\n";
-		$rt .= "        View Times\n";
+		$rt .= _(      "View Times") . "\n";
 		$rt .= "        <script type=\"dojo/method\" event=\"onClick\">\n";
 		$cont = addContinuationsEntry('AJviewBlockAllocationTimes', array('blockid' => $block['id']), SECINDAY);
 		$rt .= "          viewBlockTimes('$cont');\n";
@@ -1353,7 +1341,7 @@ function getCurrentBlockHTML($listonly=0) {
 		$rt .= "    <TD>{$block['image']}</TD>\n";
 		$rt .= "    <TD><a href=\"javascript:void(0)\" onclick=\"viewBlockUsage({$block['id']});\">{$block['machinecnt']}</a></TD>\n";
 		$rt .= "    <TD>{$block['group']}</TD>\n";
-		$rt .= "    <TD>{$block['available']}</TD>\n";
+		$rt .= "    <TD>" . _($block['available']) . "</TD>\n";
 		if($block['nextstartactive']) {
 			$cont = addContinuationsEntry('viewBlockStatus', array('id' => $block['id']));
 			$rt .= "    <TD><a href=\"" . BASEURL . SCRIPT . "?continuation=$cont\">";
@@ -1367,32 +1355,34 @@ function getCurrentBlockHTML($listonly=0) {
 	if($listonly)
 		return $rt;
 
-	$rt .= "<div id=\"confirmDialog\" dojoType=\"dijit.Dialog\" title=\"Confirm Delete Block Allocation\">\n";
-	$rt .= "<h2>Confirm Delete Block Allocation</h2>\n";
-	$rt .= "Please confirm the following values and then<br>click <strong>Delete Block Allocation</strong><br><br>\n";
+	$rt .= "<div id=\"confirmDialog\" dojoType=\"dijit.Dialog\" ";
+	$rt .= "title=\"" . _("Confirm Delete Block Allocation") . "\">\n";
+	$rt .= "<h2>" . _("Confirm Delete Block Allocation") . "</h2>\n";
+	$h = _("Please confirm the following values and then click <strong>Delete Block Allocation</strong>");
+	$rt .= preg_replace("/(.{1,50}([ \n]|$))/", '\1<br>', $h) . "<br>\n";
 	$rt .= "<table summary=\"\">\n";
 	$rt .= "  <tr>\n";
-	$rt .= "    <th align=\"right\">Name:</th>\n";
+	$rt .= "    <th align=\"right\">" . _("Name:") . "</th>\n";
 	$rt .= "    <td><span id=\"confname\"></span></td>\n";
 	$rt .= "  </tr>\n";
 	$rt .= "  <tr>\n";
-	$rt .= "    <th align=\"right\">Owner:</th>\n";
+	$rt .= "    <th align=\"right\">" . _("Owner:") . "</th>\n";
 	$rt .= "    <td><span id=\"confowner\"></span></td>\n";
 	$rt .= "  </tr>\n";
 	$rt .= "  <tr>\n";
-	$rt .= "    <th align=\"right\">Environment:</th>\n";
+	$rt .= "    <th align=\"right\">" . _("Environment:") . "</th>\n";
 	$rt .= "    <td><span id=\"confimage\"></span></td>\n";
 	$rt .= "  </tr>\n";
 	$rt .= "  <tr>\n";
-	$rt .= "    <th align=\"right\">User Group:</th>\n";
+	$rt .= "    <th align=\"right\">" . _("User Group:") . "</th>\n";
 	$rt .= "    <td><span id=\"confgroup\"></span></td>\n";
 	$rt .= "  </tr>\n";
 	$rt .= "  <tr>\n";
-	$rt .= "    <th align=\"right\">Seats:</th>\n";
+	$rt .= "    <th align=\"right\">" . _("Seats:") . "</th>\n";
 	$rt .= "    <td><span id=\"confseats\"></span></td>\n";
 	$rt .= "  </tr>\n";
 	$rt .= "  <tr>\n";
-	$rt .= "    <th align=\"right\">Repeating:</th>\n";
+	$rt .= "    <th align=\"right\">" . _("Repeating:") . "</th>\n";
 	$rt .= "    <td><span id=\"confrepeat\"></span></td>\n";
 	$rt .= "  </tr>\n";
 	$rt .= "  <tr valign=\"top\">\n";
@@ -1413,13 +1403,13 @@ function getCurrentBlockHTML($listonly=0) {
 	$rt .= "  </tr>\n";
 	$rt .= "</table>\n";
 	$rt .= "<button dojoType=\"dijit.form.Button\" type=\"button\">\n";
-	$rt .= "  Delete Block Allocation\n";
+	$rt .= _("Delete Block Allocation") . "\n";
 	$rt .= "  <script type=\"dojo/method\" event=\"onClick\">\n";
 	$rt .= "    deleteBlockSubmit();\n";
 	$rt .= "  </script>\n";
 	$rt .= "</button>\n";
 	$rt .= "<button dojoType=\"dijit.form.Button\" type=\"button\">\n";
-	$rt .= "  Cancel\n";
+	$rt .= _("Cancel") . "\n";
 	$rt .= "  <script type=\"dojo/method\" event=\"onClick\">\n";
 	$rt .= "    clearHideConfirmDelete();\n";
 	$rt .= "  </script>\n";
@@ -1427,8 +1417,9 @@ function getCurrentBlockHTML($listonly=0) {
 	$rt .= "<input type=hidden id=submitdeletecont>\n";
 	$rt .= "</div>\n"; # confirm dialog
 
-	$rt .= "<div id=\"viewtimesDialog\" dojoType=\"dijit.Dialog\" title=\"Block Allocation Times\">\n";
-	$rt .= "<h2>Block Allocation Times</h2>\n";
+	$rt .= "<div id=\"viewtimesDialog\" dojoType=\"dijit.Dialog\" ";
+	$rt .= "title=\"" . _("Block Allocation Times") . "\">\n";
+	$rt .= "<h2>" . _("Block Allocation Times") . "</h2>\n";
 	$rt .= "<table dojoType=\"dojox.grid.DataGrid\" jsId=\"blockTimesGrid\" sortInfo=1 ";
 	$rt .= "style=\"width: 278px; height: 200px;\">\n";
 	$rt .= "<script type=\"dojo/method\" event=\"onStyleRow\" args=\"row\">\n";
@@ -1436,16 +1427,16 @@ function getCurrentBlockHTML($listonly=0) {
 	$rt .= "</script>\n";
 	$rt .= "<thead>\n";
 	$rt .= "<tr>\n";
-	$rt .= "<th field=\"start\" width=\"60px\" formatter=\"blockTimesGridDate\">Date</th>\n";
-	$rt .= "<th field=\"start\" width=\"54px\" formatter=\"blockTimesGridStart\">Start</th>\n";
-	$rt .= "<th field=\"end\" width=\"54px\" formatter=\"blockTimesGridEnd\">End</th>\n";
-	$rt .= "<th field=\"delbtn\" width=\"60px\">Skip</th>\n";
+	$rt .= "<th field=\"start\" width=\"60px\" formatter=\"blockTimesGridDate\">" . _("Date") . "</th>\n";
+	$rt .= "<th field=\"start\" width=\"54px\" formatter=\"blockTimesGridStart\">" . _("Start") . "</th>\n";
+	$rt .= "<th field=\"end\" width=\"54px\" formatter=\"blockTimesGridEnd\">" . _("End") . "</th>\n";
+	$rt .= "<th field=\"delbtn\" width=\"60px\">" . _("Skip") . "</th>\n";
 	$rt .= "</tr>\n";
 	$rt .= "</thead>\n";
 	$rt .= "</table>\n";
 	$rt .= "<div align=\"center\">\n";
 	$rt .= "<button dojoType=\"dijit.form.Button\" type=\"button\">\n";
-	$rt .= "  Close\n";
+	$rt .= _("Close") . "\n";
 	$rt .= "  <script type=\"dojo/method\" event=\"onClick\">\n";
 	$rt .= "    dijit.byId('viewtimesDialog').hide();\n";
 	$rt .= "  </script>\n";
@@ -1454,12 +1445,14 @@ function getCurrentBlockHTML($listonly=0) {
 	$rt .= "<input type=hidden id=toggletimecont>\n";
 	$rt .= "</div>\n"; # times dialog
 
-	$rt .= "<div id=\"viewUsageDialog\" dojoType=\"dijit.Dialog\" title=\"Block Allocation Usage\">\n";
+	$rt .= "<div id=\"viewUsageDialog\" dojoType=\"dijit.Dialog\" ";
+	$rt .= "title=\"" . _("Block Allocation Usage") . "\">\n";
 	$rt .= "<div id=\"blockusagechartdiv\" class=\"hidden\"></div>\n";
-	$rt .= "<div id=\"blockusageemptydiv\" class=\"hidden\">This block allocation has never been used.</div>\n";
+	$rt .= "<div id=\"blockusageemptydiv\" class=\"hidden\">";
+	$rt .= _("This block allocation has never been used.") . "</div>\n";
 	$rt .= "<div align=\"center\">\n";
 	$rt .= "<button dojoType=\"dijit.form.Button\" type=\"button\">\n";
-	$rt .= "  Close\n";
+	$rt .= _("Close") . "\n";
 	$rt .= "  <script type=\"dojo/method\" event=\"onClick\">\n";
 	$rt .= "    dijit.byId('viewUsageDialog').hide();\n";
 	$rt .= "  </script>\n";
@@ -1794,12 +1787,12 @@ function getPendingBlockHTML($listonly=0) {
 	$h .= "  <tr align=center>\n";
 	$h .= "    <td></td>\n";
 	$h .= "    <td></td>\n";
-	$h .= "    <th>Environment</th>\n";
-	$h .= "    <th>Requested by</th>\n";
-	$h .= "    <th>Reserved Machines</th>\n";
-	$h .= "    <th>Repeating</th>\n";
-	$h .= "    <th>Start Date</th>\n";
-	$h .= "    <th>End Date</th>\n";
+	$h .= "    <th>" . _("Environment") . "</th>\n";
+	$h .= "    <th>" . _("Requested by") . "</th>\n";
+	$h .= "    <th>" . _("Reserved Machines") . "</th>\n";
+	$h .= "    <th>" . _("Repeating") . "</th>\n";
+	$h .= "    <th>" . _("Start Date") . "</th>\n";
+	$h .= "    <th>" . _("End Date") . "</th>\n";
 	$h .= "  </tr>\n";
 	$d = '';
 	$groups = getUserGroups(0, $user['affiliationid']);
@@ -1932,7 +1925,7 @@ function getPendingBlockHTML($listonly=0) {
 		$d .= "  <tr align=center>\n";
 		$d .= "    <td>\n";
 		$d .= "      <button dojoType=\"dijit.form.Button\" type=\"button\">\n";
-		$d .= "        Accept...\n";
+		$d .= _(      "Accept...") . "\n";
 		$d .= "        <script type=\"dojo/method\" event=\"onClick\">\n";
 		$cont = addContinuationsEntry('AJacceptBlockAllocationConfirm', $row);
 		$d .= "          acceptBlockConfirm('$cont');\n";
@@ -1941,7 +1934,7 @@ function getPendingBlockHTML($listonly=0) {
 		$d .= "    </td>\n";
 		$d .= "    <td>\n";
 		$d .= "      <button dojoType=\"dijit.form.Button\" type=\"button\">\n";
-		$d .= "        Reject...\n";
+		$d .= _(      "Reject...") . "\n";
 		$d .= "        <script type=\"dojo/method\" event=\"onClick\">\n";
 		$cont = addContinuationsEntry('AJrejectBlockAllocationConfirm', $row);
 		$d .= "          rejectBlockConfirm('$cont');\n";
@@ -1954,33 +1947,34 @@ function getPendingBlockHTML($listonly=0) {
 		else
 			$d .= "<td>{$row['unityid']}</td>\n";
 		$d .= "<td>{$row['numMachines']}</td>\n";
-		$d .= "<td>{$row['repeating']}</td>\n";
+		$d .= "<td>" . _($row['repeating']) . "</td>\n";
 		$d .= "<td>{$row2['start']}</td>\n";
 		$d .= "<td>{$row['lastdate']}</td>\n";
 		$d .= "  </tr>\n";
 	}
 	if(empty($d))
-		return 'There are currently no pending block allocation requests.';
+		return _("There are currently no pending block allocation requests.");
 	$rt = $h . $d . "</table>\n";
 
 	if($listonly)
 		return $rt;
 
-	$rt .= "<div id=\"acceptDialog\" dojoType=\"dijit.Dialog\" title=\"Accept Block Allocation\">\n";
-	$rt .= "<h2>Accept Block Allocation</h2>\n";
-	$rt .= "Please review the following information, fill in the additional fields,<br>\n";
-	$rt .= "and click <b>Accept Block Allocation</b>.<br><br>\n";
+	$rt .= "<div id=\"acceptDialog\" dojoType=\"dijit.Dialog\" ";
+	$rt .= "title=\"" . _("Accept Block Allocation") . "\">\n";
+	$rt .= "<h2>" . _("Accept Block Allocation") . "</h2>\n";
+	$h = _("Please review the following information, fill in the additional fields, and click <strong>Accept Block Allocation</strong>.");
+	$rt .= preg_replace("/(.{1,50}([ \n]|$))/", '\1<br>', $h) . "<br>";
 	$rt .= "<table summary=\"\">\n";
 	$rt .= "  <tr>\n";
-	$rt .= "    <th align=\"right\">Environment:</th>\n";
+	$rt .= "    <th align=\"right\">" . _("Environment:") . "</th>\n";
 	$rt .= "    <td><span id=\"acceptimage\"></span></td>\n";
 	$rt .= "  </tr>\n";
 	$rt .= "  <tr>\n";
-	$rt .= "    <th align=\"right\">Seats:</th>\n";
+	$rt .= "    <th align=\"right\">" . _("Seats:") . "</th>\n";
 	$rt .= "    <td><span id=\"acceptseats\"></span></td>\n";
 	$rt .= "  </tr>\n";
 	$rt .= "  <tr>\n";
-	$rt .= "    <th align=\"right\">Repeating:</th>\n";
+	$rt .= "    <th align=\"right\">" . _("Repeating:") . "</th>\n";
 	$rt .= "    <td><span id=\"acceptrepeat\"></span></td>\n";
 	$rt .= "  </tr>\n";
 	$rt .= "  <tr valign=\"top\">\n";
@@ -2004,7 +1998,7 @@ function getPendingBlockHTML($listonly=0) {
 	$rt .= "    <td><span id=\"acceptvalue5\"></span></td>\n";
 	$rt .= "  </tr>\n";
 	$rt .= "  <tr id=\"staticusergroup\">\n";
-	$rt .= "    <th align=\"right\">User Group:</th>\n";
+	$rt .= "    <th align=\"right\">" . _("User Group:") . "</th>\n";
 	$rt .= "    <td><span id=\"acceptgroup\"></span></td>\n";
 	$rt .= "  </tr>\n";
 	$rt .= "  <tr id=\"warnmsgtr\" class=\"hidden\">\n";
@@ -2014,7 +2008,7 @@ function getPendingBlockHTML($listonly=0) {
 	$rt .= "    <td colspan=2><hr></td>\n";
 	$rt .= "  </tr>\n";
 	$rt .= "  <tr id=\"editusergroup\" class=\"hidden\">\n";
-	$rt .= "    <th align=right>User Group:</th>\n";
+	$rt .= "    <th align=right>" . _("User Group:") . "</th>\n";
 	$rt .= "    <td>\n";
 	if(USEFILTERINGSELECT && count($groups) < FILTERINGSELECTTHRESHOLD) {
 		$rt .= "      <select dojoType=\"dijit.form.FilteringSelect\" id=groupsel ";
@@ -2032,33 +2026,35 @@ function getPendingBlockHTML($listonly=0) {
 	$rt .= "    </td>\n";
 	$rt .= "  </tr>\n";
 	$rt .= "  <tr>\n";
-	$rt .= "    <th align=\"right\">Name:</th>\n";
+	$rt .= "    <th align=\"right\">" . _("Name:") . "</th>\n";
 	$rt .= "    <td>\n";
 	$rt .= "      <input type=\"text\" dojoType=\"dijit.form.ValidationTextBox\" ";
-	$rt .= "id=\"brname\" required=\"true\" invalidMessage=\"Name can only contain letters, numbers, ";
-	$rt .= "spaces, dashes(-),<br>and periods(.) and can be from 3 to 80 characters long\" ";
-	$rt .= "regExp=\"^([-a-zA-Z0-9\. ]){3,80}$\">\n";
+	$rt .= "id=\"brname\" required=\"true\" invalidMessage=\"";
+	$h = _("Name can only contain letters, numbers, spaces, dashes(-), and periods(.) and can be from 3 to 80 characters long");
+	$rt .= preg_replace("/(.{1,50}([ \n]|$))/", '\1<br>', $h) . "<br>";
+	$rt .= "\" regExp=\"^([-a-zA-Z0-9\. ]){3,80}$\">\n";
 	$rt .= "    </td>\n";
 	$rt .= "  </tr>\n";
 	$rt .= "</table><br>\n";
 	$rt .= "<div id=\"acceptemailblock\">\n";
-	$rt .= "The following text will be emailed to <span id=\"acceptemailuser\"></span>:<br>\n";
-	$rt .= "<textarea id=\"acceptemailtext\" dojoType=\"dijit.form.Textarea\" style=\"width: 400px;\">\n";
+	$rt .= sprintf(_("The following text will be emailed to %s:"), "<span id=\"acceptemailuser\"></span>");
+	$rt .= "<br><textarea id=\"acceptemailtext\" dojoType=\"dijit.form.Textarea\" style=\"width: 400px;\">\n";
 	$rt .= "</textarea>\n";
 	$rt .= "</div>\n";
 	$rt .= "<div id=\"acceptemailwarning\" class=\"hidden\">\n";
-	$rt .= "<b>Note:</b> The requesting user does not have an email address registered<br>\n";
-	$rt .= "with VCL. Therefore, the user cannot be notified automatically.\n";
+	$rt .= "<strong>" . _("Note:") . "</strong> ";
+	$h = _("The requesting user does not have an email address registered with VCL. Therefore, the user cannot be notified automatically.");
+	$rt .= preg_replace("/(.{1,50}([ \n]|$))/", '\1<br>', $h) . "\n";
 	$rt .= "</div>\n";
 	$rt .= "<br>\n";
 	$rt .= "<button dojoType=\"dijit.form.Button\" type=\"button\">\n";
-	$rt .= "  Accept Block Allocation\n";
+	$rt .= _("Accept Block Allocation") . "\n";
 	$rt .= "  <script type=\"dojo/method\" event=\"onClick\">\n";
 	$rt .= "    acceptBlockSubmit();\n";
 	$rt .= "  </script>\n";
 	$rt .= "</button>\n";
 	$rt .= "<button dojoType=\"dijit.form.Button\" type=\"button\">\n";
-	$rt .= "  Cancel\n";
+	$rt .= _("Cancel") . "\n";
 	$rt .= "  <script type=\"dojo/method\" event=\"onClick\">\n";
 	$rt .= "    clearHideConfirmAccept();\n";
 	$rt .= "  </script>\n";
@@ -2067,25 +2063,26 @@ function getPendingBlockHTML($listonly=0) {
 	$rt .= "<input type=hidden id=submitacceptcont2>\n";
 	$rt .= "</div>\n"; # accept dialog
 
-	$rt .= "<div id=\"rejectDialog\" dojoType=\"dijit.Dialog\" title=\"Reject Block Allocation\">\n";
-	$rt .= "<h2>Reject Block Allocation</h2>\n";
-	$rt .= "Please review the following information, add a reason for rejecting<br>\n";
-	$rt .= "the block allocation, and click <b>Reject Block Allocation</b>.<br><br>\n";
+	$rt .= "<div id=\"rejectDialog\" dojoType=\"dijit.Dialog\" ";
+	$rt .= "title=\"" . _("Reject Block Allocation") . "\">\n";
+	$rt .= "<h2>" . _("Reject Block Allocation") . "</h2>\n";
+	$h = _("Please review the following information, add a reason for rejecting the block allocation, and click <strong>Reject Block Allocation</strong>.");
+	$rt .= preg_replace("/(.{1,50}([ \n]|$))/", '\1<br>', $h) . "<br>\n";
 	$rt .= "<table summary=\"\">\n";
 	$rt .= "  <tr>\n";
-	$rt .= "    <th align=\"right\">Environment:</th>\n";
+	$rt .= "    <th align=\"right\">" . _("Environment:") . "</th>\n";
 	$rt .= "    <td><span id=\"rejectimage\"></span></td>\n";
 	$rt .= "  </tr>\n";
 	$rt .= "  <tr id=\"editusergroup\" class=\"hidden\">\n";
-	$rt .= "    <th align=\"right\">User Group:</th>\n";
+	$rt .= "    <th align=\"right\">" . _("User Group:") . "</th>\n";
 	$rt .= "    <td><span id=\"rejectgroup\"></span></td>\n";
 	$rt .= "  </tr>\n";
 	$rt .= "  <tr>\n";
-	$rt .= "    <th align=\"right\">Seats:</th>\n";
+	$rt .= "    <th align=\"right\">" . _("Seats:") . "</th>\n";
 	$rt .= "    <td><span id=\"rejectseats\"></span></td>\n";
 	$rt .= "  </tr>\n";
 	$rt .= "  <tr>\n";
-	$rt .= "    <th align=\"right\">Repeating:</th>\n";
+	$rt .= "    <th align=\"right\">" . _("Repeating:") . "</th>\n";
 	$rt .= "    <td><span id=\"rejectrepeat\"></span></td>\n";
 	$rt .= "  </tr>\n";
 	$rt .= "  <tr valign=\"top\">\n";
@@ -2110,24 +2107,23 @@ function getPendingBlockHTML($listonly=0) {
 	$rt .= "  </tr>\n";
 	$rt .= "</table>\n";
 	$rt .= "<div id=\"rejectemailblock\">\n";
-	$rt .= "The following text will be emailed to <span id=\"rejectemailuser\"></span>:<br>\n";
-	$rt .= "</div>\n";
+	$rt .= sprintf(_("The following text will be emailed to %s:"), "<span id=\"rejectemailuser\"></span>");
+	$rt .= "<br></div>\n";
 	$rt .= "<div id=\"rejectemailwarning\" class=\"hidden\">\n";
-	$rt .= "The requesting user does not have an email address registered with VCL. Therefore,<br>\n";
-	$rt .= "the user cannot be notified automatically. However, for archival purposes, fill in a<br>\n";
-	$rt .= "reason for rejecting the request:\n";
-	$rt .= "</div><br>\n";
+	$h = _("The requesting user does not have an email address registered with VCL. Therefore, the user cannot be notified automatically. However, for archival purposes, fill in a reason for rejecting the request:");
+	$rt .= preg_replace("/(.{1,60}([ \n]|$))/", '\1<br>', $h);
+	$rt .= "\n</div><br>\n";
 	$rt .= "<textarea id=\"rejectemailtext\" dojoType=\"dijit.form.Textarea\" style=\"width: 400px;\">\n";
 	$rt .= "</textarea>\n";
 	$rt .= "<br>\n";
 	$rt .= "<button dojoType=\"dijit.form.Button\" type=\"button\">\n";
-	$rt .= "  Reject Block Allocation\n";
+	$rt .= _("Reject Block Allocation") . "\n";
 	$rt .= "  <script type=\"dojo/method\" event=\"onClick\">\n";
 	$rt .= "    rejectBlockSubmit();\n";
 	$rt .= "  </script>\n";
 	$rt .= "</button>\n";
 	$rt .= "<button dojoType=\"dijit.form.Button\" type=\"button\">\n";
-	$rt .= "  Cancel\n";
+	$rt .= _("Cancel") . "\n";
 	$rt .= "  <script type=\"dojo/method\" event=\"onClick\">\n";
 	$rt .= "    clearHideConfirmReject();\n";
 	$rt .= "  </script>\n";
@@ -2177,11 +2173,11 @@ function AJdeleteBlockAllocationConfirm() {
 		            'repeating' => $data['available'],
 		            'startdate' => $data['smdate'],
 		            'lastdate' => $data['emdate']);
-		$weeknumArr = array(1 => "1st",
-		                    2 => "2nd",
-		                    3 => "3rd",
-		                    4 => "4th",
-		                    5 => "5th");
+		$weeknumArr = array(1 => _("1st"),
+		                    2 => _("2nd"),
+		                    3 => _("3rd"),
+		                    4 => _("4th"),
+		                    5 => _("5th"));
 		$rt['date1'] = "{$weeknumArr[$data['weeknum']]} {$days[($data['day'] - 1)]}";
 		$rt['times'] = array();
 		foreach(array_keys($data['smhour']) as $key) {
@@ -2348,7 +2344,7 @@ function AJacceptBlockAllocationConfirm() {
 			                   $data['ewhour'][$key], $data['ewminute'][$key],
 			                   $data['ewmeridian'][$key]);
 		}
-		$rt['email'] = "The VCL Block Allocation you requested for {$data['numMachines']} seats of {$data['image']} repeating on a weekly schedule has been accepted.";
+		$rt['email'] = sprintf(_("The VCL Block Allocation you requested for %d seats of %s repeating on a weekly schedule has been accepted."), $data['numMachines'], $data['image']);
 	}
 	elseif($data['repeating'] == 'monthly') {
 		$rt = array('image' => $data['image'],
@@ -2357,11 +2353,11 @@ function AJacceptBlockAllocationConfirm() {
 		            'repeating' => $data['repeating'],
 		            'startdate' => $data['smdate'],
 		            'lastdate' => $data['emdate']);
-		$weeknumArr = array(1 => "1st",
-		                    2 => "2nd",
-		                    3 => "3rd",
-		                    4 => "4th",
-		                    5 => "5th");
+		$weeknumArr = array(1 => _("1st"),
+		                    2 => _("2nd"),
+		                    3 => _("3rd"),
+		                    4 => _("4th"),
+		                    5 => _("5th"));
 		$rt['date1'] = "{$weeknumArr[$data['weeknum']]} {$days[($data['day'] - 1)]}";
 		$rt['times'] = array();
 		foreach(array_keys($data['smhour']) as $key) {
@@ -2370,7 +2366,7 @@ function AJacceptBlockAllocationConfirm() {
 			                   $data['emhour'][$key], $data['emminute'][$key],
 			                   $data['emmeridian'][$key]);
 		}
-		$rt['email'] = "The VCL Block Allocation you requested for {$data['numMachines']} seats of {$data['image']} repeating on a monthly schedule has been accepted.";
+		$rt['email'] = sprintf(_("The VCL Block Allocation you requested for %d seats of %s repeating on a monthly schedule has been accepted."), $data['numMachines'], $data['image']);
 	}
 	elseif($data['repeating'] == 'list') {
 		$rt = array('image' => $data['image'],
@@ -2385,7 +2381,7 @@ function AJacceptBlockAllocationConfirm() {
 									 $data['elmeridian'][$key]);
 		}
 		$rt['slots'] = $slots;
-		$rt['email'] = "The VCL Block Allocation you requested for {$data['numMachines']} seats of {$data['image']} during the following time periods has been accepted:\n" . implode("\n", $slots) . "\n";
+		$rt['email'] = sprintf(_("The VCL Block Allocation you requested for %d seats of %s during the following time periods has been accepted:") . "\n" . implode("\n", $slots) . "\n", $data['numMachines'], $data['image']);
 	}
 	$rt['comments'] = preg_replace("/\n/", "<br>", $data['comments']);
 	if($rt['comments'] == '')
@@ -2402,7 +2398,7 @@ function AJacceptBlockAllocationConfirm() {
 		                                   array("available"), 0, 0, 0,
 		                                   $data['usergroupid']);
 		if(! array_key_exists($data['imageid'], $groupresources['image']))
-			$rt['warnmsg'] = "Warning: The requested user group does not currently have access to the requested image.";
+			$rt['warnmsg'] = _("Warning: The requested user group does not currently have access to the requested image.");
 	}
 	$cdata = array('blockid' => $data['id'],
 	               'imageid' => $data['imageid']);
@@ -2459,31 +2455,30 @@ function AJacceptBlockAllocationSubmit() {
 
 	$err = 0;
 	if(! preg_match('/^([-a-zA-Z0-9\. ]){3,80}$/', $name)) {
-	   $errmsg = "The name can only contain letters, numbers, spaces, dashes(-),\\nand periods(.) and can be from 3 to 80 characters long";
+	   $errmsg = _("The name can only contain letters, numbers, spaces, dashes(-), and periods(.) and can be from 3 to 80 characters long");
 		$err = 1;
 	}
 	if($validemail) {
 		if(get_magic_quotes_gpc())
 			$emailtext = stripslashes($emailtext);
 		if(! $err && preg_match('/[<>|]/', $emailtext)) {
-			$errmsg = "<>\'s and pipes (|) are not allowed in the email text.";
+			$errmsg = _("<>\'s and pipes (|) are not allowed in the email text.");
 			$err = 1;
 		}
 		if(! $err && ! preg_match('/[A-Za-z]{2,}/', $emailtext)) {
-			$errmsg = "Something must be filled in for the email text.";
+			$errmsg = _("Something must be filled in for the email text.");
 			$err = 1;
 		}
 	}
 	$groups = getUserGroups(0, $user['affiliationid']);
 	if(! $err && $setusergroup && ! array_key_exists($usergroupid, $groups)) {
-		$errmsg = "Invalid user group submitted.";
+		$errmsg = _("Invalid user group submitted.");
 		$err = 1;
 	}
 	$managementnodes = getManagementNodes('future');
 	if(! $err && empty($managementnodes)) {
-		$errmsg  = "Error encountered while trying to create block allocation:\\n\\n";
-		$errmsg .= "No active management nodes were found. Please try\\n";
-		$errmsg .= "accepting the block allocation at a later time.";
+		$errmsg  = _("Error encountered while trying to create block allocation:") . "\\n\\n";
+		$errmsg .= _("No active management nodes were found. Please try accepting the block allocation at a later time.");
 		$err = 1;
 	}
 	$dooverride = 0;
@@ -2492,7 +2487,7 @@ function AJacceptBlockAllocationSubmit() {
 		                                   array("available"), 0, 0, 0,
 		                                   $usergroupid);
 		if(! array_key_exists($imageid, $groupresources['image'])) {
-			$errmsg  = "Warning: The selected user group does not currently have access to the requested image. You can accept the Block Allocation again to ignore this warning.";
+			$errmsg  = _("Warning: The selected user group does not currently have access to the requested image. You can accept the Block Allocation again to ignore this warning.");
 			$err = 1;
 			$dooverride = 1;
 		}
@@ -2514,7 +2509,7 @@ function AJacceptBlockAllocationSubmit() {
 		       . "WHERE id = $blockid";
 		doQuery($query, 101);
 		if(! mysql_affected_rows($mysql_link_vcl)) {
-			$errmsg = "Error encountered while updating status of block allocation.";
+			$errmsg = _("Error encountered while updating status of block allocation.");
 			$err = 1;
 		}
 		else {
@@ -2559,7 +2554,7 @@ function AJacceptBlockAllocationSubmit() {
 	# send accept email to requestor
 	$message = $emailtext . "\n\nVCL Admins";
 	$mailParams = "-f" . ENVELOPESENDER;
-	mail($emailuser, "VCL Block Allocation Accepted", $message, '', $mailParams);
+	mail($emailuser, _("VCL Block Allocation Accepted"), $message, '', $mailParams);
 
 	print "clearHideConfirmAccept();";
 
@@ -2604,7 +2599,7 @@ function AJrejectBlockAllocationConfirm() {
 			                   $data['ewhour'][$key], $data['ewminute'][$key],
 			                   $data['ewmeridian'][$key]);
 		}
-		$rt['email'] = "The VCL Block Allocation you requested for {$data['numMachines']} seats of {$data['image']} repeating on a weekly schedule has been rejected. ";
+		$rt['email'] = sprintf(_("The VCL Block Allocation you requested for %d seats of %s repeating on a weekly schedule has been rejected.") . " ", $data['numMachines'], $data['image']);
 	}
 	elseif($data['repeating'] == 'monthly') {
 		$rt = array('image' => $data['image'],
@@ -2613,11 +2608,11 @@ function AJrejectBlockAllocationConfirm() {
 		            'repeating' => $data['repeating'],
 		            'startdate' => $data['smdate'],
 		            'lastdate' => $data['emdate']);
-		$weeknumArr = array(1 => "1st",
-		                    2 => "2nd",
-		                    3 => "3rd",
-		                    4 => "4th",
-		                    5 => "5th");
+		$weeknumArr = array(1 => _("1st"),
+		                    2 => _("2nd"),
+		                    3 => _("3rd"),
+		                    4 => _("4th"),
+		                    5 => _("5th"));
 		$rt['date1'] = "{$weeknumArr[$data['weeknum']]} {$days[($data['day'] - 1)]}";
 		$rt['times'] = array();
 		foreach(array_keys($data['smhour']) as $key) {
@@ -2626,7 +2621,7 @@ function AJrejectBlockAllocationConfirm() {
 			                   $data['emhour'][$key], $data['emminute'][$key],
 			                   $data['emmeridian'][$key]);
 		}
-		$rt['email'] = "The VCL Block Allocation you requested for {$data['numMachines']} seats of {$data['image']} repeating on a monthly schedule has been rejected.  ";
+		$rt['email'] = sprintf(_("The VCL Block Allocation you requested for %d seats of %s repeating on a monthly schedule has been rejected.") . " ", $data['numMachines'], $data['image']);
 	}
 	elseif($data['repeating'] == 'list') {
 		$rt = array('image' => $data['image'],
@@ -2641,7 +2636,7 @@ function AJrejectBlockAllocationConfirm() {
 									 $data['elmeridian'][$key]);
 		}
 		$rt['slots'] = $slots;
-		$rt['email'] = "The VCL Block Allocation you requested for {$data['numMachines']} seats of {$data['image']} during the following time periods has been rejected.\n" . implode("\n", $slots) . "\n\n";
+		$rt['email'] = sprintf(_("The VCL Block Allocation you requested for %d seats of %s during the following time periods has been rejected.") . "\n" . implode("\n", $slots) . "\n\n", $data['numMachines'], $data['image']);
 	}
 	$rt['comments'] = preg_replace("/\n/", "<br>", $data['comments']);
 	if($rt['comments'] == '')
@@ -2682,23 +2677,23 @@ function AJrejectBlockAllocationSubmit() {
 
 	$err = 0;
 	if($email == $emailtext) {
-		$errmsg = "Please include a reason for rejecting the block allocation in the email.";
+		$errmsg = _("Please include a reason for rejecting the block allocation in the email.");
 		$err = 1;
 	}
 	if(get_magic_quotes_gpc())
 		$emailtext = stripslashes($emailtext);
 	if(! $err && preg_match('/[<>|]/', $emailtext)) {
 		if($validemail)
-			$errmsg = "<>\'s and pipes (|) are not allowed in the email text.";
+			$errmsg = _("<>\'s and pipes (|) are not allowed in the email text.");
 		else
-			$errmsg = "<>\'s and pipes (|) are not allowed in the reject reason.";
+			$errmsg = _("<>\'s and pipes (|) are not allowed in the reject reason.");
 		$err = 1;
 	}
 	if(! $err && ! preg_match('/[A-Za-z]{2,}/', $emailtext)) {
 		if($validemail)
-			$errmsg = "Something must be filled in for the email text.";
+			$errmsg = _("Something must be filled in for the email text.");
 		else
-			$errmsg = "Something must be filled in for the reject reason.";
+			$errmsg = _("Something must be filled in for the reject reason.");
 		$err = 1;
 	}
 
@@ -2715,7 +2710,7 @@ function AJrejectBlockAllocationSubmit() {
 				 . "WHERE id = $blockid";
 		doQuery($query, 101);
 		if(! mysql_affected_rows($mysql_link_vcl)) {
-			$errmsg = "Error encountered while updating status of block allocation.";
+			$errmsg = _("Error encountered while updating status of block allocation.");
 			$err = 1;
 		}
 	}
@@ -2731,7 +2726,7 @@ function AJrejectBlockAllocationSubmit() {
 	# send reject email to requestor
 	$message = $emailtext . "\n\nVCL Admins";
 	$mailParams = "-f" . ENVELOPESENDER;
-	mail($emailuser, "VCL Block Allocation Rejected", $message, '', $mailParams);
+	mail($emailuser, _("VCL Block Allocation Rejected"), $message, '', $mailParams);
 
 	print "clearHideConfirmReject();";
 
@@ -2788,12 +2783,12 @@ function AJtoggleBlockTime() {
 	       . "WHERE id = $timeid";
 	$qh = doQuery($query, 101);
 	if(! ($row = mysql_fetch_assoc($qh)) || $row['blockRequestid'] != $blockid) {
-		$data['error'] = 'Invalid block time submitted';
+		$data['error'] = _("Invalid block time submitted");
 		sendJSON($data);
 		return;
 	}
 	if(datetimeToUnix($row['end']) <= time()) {
-		$data['error'] = "The end time for the submitted block allocation time\nhas passed. Therefore, it can no longer be modified.";
+		$data['error'] = _("The end time for the submitted block allocation time has passed. Therefore, it can no longer be modified.");
 		sendJSON($data);
 		return;
 	}
@@ -2916,7 +2911,7 @@ function viewBlockStatus() {
 				$available = $imgavailable[$id];
 		}
 		$reloading = $data['numMachines'] - $available - $used - $failed;
-		print "Current status of clusters:<br>\n";
+		print _("Current status of clusters:") . "<br>\n";
 	}
 	print "<table class=blockStatusData summary=\"lists status of block allocation\">\n";
 	print "  <tr>\n";
@@ -3053,17 +3048,17 @@ function processBlockAllocationInput() {
 	$type = processInputVar('type', ARG_STRING);
 	$err = 0;
 	if($method != 'request' && ! preg_match('/^([-a-zA-Z0-9\. \(\)]){3,80}$/', $return['name'])) {
-		$errmsg = "The name can only contain letters, numbers, spaces, dashes(-),<br>and periods(.) and can be from 3 to 80 characters long";
+		$errmsg = _("The name can only contain letters, numbers, spaces, dashes(-), and periods(.) and can be from 3 to 80 characters long");
 		$err = 1;
 	}
 	$resources = getUserResources(array("imageAdmin", "imageCheckOut"));
 	$resources["image"] = removeNoCheckout($resources["image"]);
 	if(! array_key_exists($return['imageid'], $resources['image'])) {
-		$errmsg = 'The submitted image is invalid.';
+		$errmsg = _("The submitted image is invalid.");
 		$err = 1;
 	}
 	if(! $err && $method != 'request' && ! validateUserid($return['owner'])) {
-		$errmsg = 'The submitted owner is invalid.';
+		$errmsg = _("The submitted owner is invalid.");
 		$err = 1;
 	}
 	else
@@ -3073,21 +3068,18 @@ function processBlockAllocationInput() {
 	if(! $err && ! array_key_exists($return['groupid'], $groups) &&
 	   ! array_key_exists($return['groupid'], $extragroups) &&
 	   $return['groupid'] != 0) {
-		$errmsg = 'The submitted user group is invalid.';
+		$errmsg = _("The submitted user group is invalid.");
 		$err = 1;
 	}
 	if(! $err && ($return['seats'] < MIN_BLOCK_MACHINES || $return['seats'] > MAX_BLOCK_MACHINES)) {
-		$errmsg = 'The submitted number of seats must be between ' . MIN_BLOCK_MACHINES
-		        . ' and ' . MAX_BLOCK_MACHINES . '.';
+		$errmsg = sprintf(_("The submitted number of seats must be between %d and %d."), MIN_BLOCK_MACHINES, MAX_BLOCK_MACHINES);
 		$err = 1;
 	}
 	if(! $err) {
 		$imgdata = getImages(0, $return['imageid']);
 		$concur = $imgdata[$return['imageid']]['maxconcurrent'];
 		if(! is_null($concur) && $concur != 0 && $return['seats'] > $concur) {
-			$errmsg = "The selected image can only have $concur concurrent "
-			        . "reservations. Please reduce the number of requested "
-			        . "seats to $concur or less.";
+			$errmsg = sprintf(_("The selected image can only have %d concurrent reservations. Please reduce the number of requested seats to %d or less."), $concur, $concur);
 			$err = 1;
 		}
 	}
@@ -3099,15 +3091,12 @@ function processBlockAllocationInput() {
 		                                   $return['groupid']);
 		if(! array_key_exists($return['imageid'], $groupresources['image'])) {
 			$dooverride = 1;
-			$errmsg = "WARNING - The selected user group does not currently have "
-			        . "access to the selected environment. You can submit the "
-			        . "Block Allocation again to ignore this warning.";
+			$errmsg = _("WARNING - The selected user group does not currently have access to the selected environment. You can submit the Block Allocation again to ignore this warning.");
 			$err = 1;
 		}
 	}
 	if(! $err && $type != 'weekly' && $type != 'monthly' && $type != 'list') {
-		$errmsg = 'You must select one of "Repeating Weekly", "Repeating Monthly", '
-		        . 'or "List of Dates/Times".';
+		$errmsg = _("You must select one of \"Repeating Weekly\", \"Repeating Monthly\", or \"List of Dates/Times\".");
 		$err = 1;
 	}
 	if(! $err) {
@@ -3119,7 +3108,7 @@ function processBlockAllocationInput() {
 			foreach($return['slots'] as $slot) {
 				$tmp = explode('|', $slot);
 				if(count($tmp) != 3) {
-					$errmsg = 'Invalid date/time submitted.';
+					$errmsg = _("Invalid date/time submitted.");
 					$err = 1;
 					break;
 				}
@@ -3127,7 +3116,7 @@ function processBlockAllocationInput() {
 				if(! $err) {
 					$datets = strtotime($date);
 					if($method != 'edit' && $datets < (time() - SECINDAY)) {
-						$errmsg = 'The date must be today or later.';
+						$errmsg = _("The date must be today or later.");
 						$err = 1;
 						break;
 					}
@@ -3151,11 +3140,11 @@ function processBlockAllocationInput() {
 			$return['startts'] = strtotime($return['startdate']);
 			$return['endts'] = strtotime($return['enddate']);
 			if($return['startts'] > $return['endts']) {
-				$errmsg = 'The Last Date of Usage must be the same or later than the First Date of Usage.';
+				$errmsg = _("The Last Date of Usage must be the same or later than the First Date of Usage.");
 				$err = 1;
 			}
 			elseif($method != 'edit' && $return['startts'] < (time() - SECINDAY)) {
-				$errmsg = 'The start date must be today or later.';
+				$errmsg = _("The start date must be today or later.");
 				$err = 1;
 			}
 			$expirets = strtotime("{$return['enddate']} 23:59:59");
@@ -3165,28 +3154,28 @@ function processBlockAllocationInput() {
 		foreach($return['times'] as $time) {
 			$tmp = explode('|', $time);
 			if(count($tmp) != 2) {
-				$errmsg = 'Invalid start/end time submitted';
+				$errmsg = _("Invalid start/end time submitted");
 				$err = 1;
 				break;
 			}
 			$start = explode(':', $tmp[0]);
 			if(count($start) != 2 || ! is_numeric($start[0]) || ! is_numeric($start[1]) ||
 			   $start[0] < 0 || $start[0] > 23 || $start[1] < 0 || $start[1] > 59) {
-				$errmsg = 'Invalid start time submitted';
+				$errmsg = _("Invalid start time submitted");
 				$err = 1;
 				break;
 			}
 			$end = explode(':', $tmp[1]);
 			if(count($end) != 2 || ! is_numeric($end[0]) || ! is_numeric($end[1]) ||
 			   $end[0] < 0 || $end[0] > 23 || $end[1] < 0 || $end[1] > 59) {
-				$errmsg = 'Invalid end time submitted';
+				$errmsg = _("Invalid end time submitted");
 				$err = 1;
 				break;
 			}
 			$start = minuteOfDay($start[0], $start[1]);
 			$end = minuteOfDay($end[0], $end[1]);
 			if($start >= $end) {
-				$errmsg = 'Each start time must be less than the corresponding end time.';
+				$errmsg = _("Each start time must be less than the corresponding end time.");
 				$err = 1;
 				break;
 			}
@@ -3208,7 +3197,7 @@ function processBlockAllocationInput() {
 			if(! $err) {
 				foreach(explode(',', $days) as $day) {
 					if($day == '' || $day < 0 || $day > 6) {
-						$errmsg = "Invalid day submitted.";
+						$errmsg = _("Invalid day submitted.");
 						$err = 1;
 						break;
 					}
@@ -3216,7 +3205,7 @@ function processBlockAllocationInput() {
 				}
 			}
 			if(! $err && ($return['daymask'] & $validdays) == 0) {
-				$errmsg = "No valid days submitted for the specified date range.";
+				$errmsg = _("No valid days submitted for the specified date range.");
 				$err = 1;
 			}
 		}
@@ -3224,17 +3213,17 @@ function processBlockAllocationInput() {
 			$return['weeknum'] = processInputVar('weeknum', ARG_NUMERIC);
 			$return['day'] = processInputVar('day', ARG_NUMERIC);
 			if(! $err && ($return['weeknum'] < 1 || $return['weeknum'] > 5)) {
-				$errmsg = "Invalid week number submitted.";
+				$errmsg = _("Invalid week number submitted.");
 				$err = 1;
 			}
 			if(! $err && ($return['day'] < 1 || $return['day'] > 7)) {
-				$errmsg = "Invalid day of week submitted.";
+				$errmsg = _("Invalid day of week submitted.");
 				$err = 1;
 			}
 			$times = getMonthlyBlockTimes('', $return['startts'], $return['endts'],
 			                 $return['day'], $return['weeknum'], $return['times']);
 			if(! $err && empty($times)) {
-				$errmsg = "Specified day of month not found in date range.";
+				$errmsg = _("Specified day of month not found in date range.");
 				$err = 1;
 			}
 		}
@@ -3244,7 +3233,7 @@ function processBlockAllocationInput() {
 		if(get_magic_quotes_gpc())
 			$return['comments'] = stripslashes($return['comments']);
 		if(! $err && preg_match('/[<>]/', $return['comments'])) {
-			$errmsg = "<>\'s are not allowed in the comments.";
+			$errmsg = _("<>\'s are not allowed in the comments.");
 			$err = 1;
 		}
 	}
@@ -3486,7 +3475,7 @@ function AJpopulateBlockStore() {
 	$query = "SELECT repeating FROM blockRequest WHERE id = $blockid";
 	$qh = doQuery($query, 101);
 	if(! ($row = mysql_fetch_assoc($qh))) {
-		sendJSON(array('error' => 'Error: Failed to fetch start/end times for block allocation.'));
+		sendJSON(array('error' => _("Error: Failed to fetch start/end times for block allocation.")));
 		return;
 	}
 	if($row['repeating'] == 'weekly' || $row['repeating'] == 'monthly') {
@@ -3579,8 +3568,8 @@ function AJpopulateBlockStore() {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function viewBlockAllocatedMachines() {
-	print "<h2>Block Allocated Bare Machines</h2>\n";
-	print "Start time: \n";
+	print "<h2>" . _("Block Allocated Machines") . "</h2>\n";
+	print _("Start time:") . " \n";
 	$start = unixToDatetime(unixFloor15(time() - 3600));
 	list($sdate, $stime) = explode(' ', $start);
 	print "<div type=\"text\" id=\"chartstartdate\" dojoType=\"dijit.form.DateTextBox\" ";
@@ -3589,15 +3578,15 @@ function viewBlockAllocatedMachines() {
 	print "required=\"true\" value=\"T$stime\" style=\"width: 78px\"></div>\n";
 	print "<button dojoType=\"dijit.form.Button\" type=\"button\" ";
 	print "id=\"updatechart\">\n";
-	print "  Update Charts\n";
+	print _("Update Charts") . "\n";
 	print "  <script type=\"dojo/method\" event=\"onClick\">\n";
 	print "    updateAllocatedMachines();\n";
 	print "  </script>\n";
 	print "</button>\n";
-	print "<h3>Bare Machines</h3>\n";
+	print "<h3>" . _("Bare Machines") . "</h3>\n";
 	print "<div id=\"totalbare\"></div>\n";
 	print getChartHTML('allocatedBareMachines');
-	print "<h3>Virtual Machines</h3>\n";
+	print "<h3>" . _("Virtual Machines") . "</h3>\n";
 	print "<div id=\"totalvirtual\"></div>\n";
 	print getChartHTML('allocatedVirtualMachines');
 	$cont = addContinuationsEntry('AJgetBlockAllocatedMachineData', array('val' => 0), SECINDAY, 1, 0);

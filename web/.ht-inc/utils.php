@@ -207,7 +207,7 @@ function initGlobals() {
 		if(! $user = getUserInfo($userid)) {
 			// if first call to getUserInfo fails, try calling with $noupdate set
 			if(! $user = getUserInfo($userid, 1)) {
-				$ERRORS[1] = _("Failed to get user info from database.  userid was ") . "$userid";
+				$ERRORS[1] = _("Failed to get user info from database. userid was ") . "$userid";
 				abort(1);
 			}
 		}
@@ -662,16 +662,16 @@ function maintenanceCheck() {
 		setVCLLocale();
 		require_once("themes/$skin/page.php");
 		printHTMLHeader();
-		print _("<h2>Site Currently Under Maintenance</h2>\n");
+		print "<h2>" . _("Site Currently Under Maintenance") . "</h2>\n";
 		if(! empty($msg)) {
 			$msg = htmlentities($msg);
 			$msg = preg_replace("/\n/", "<br>\n", $msg);
 			print "$msg<br>\n";
 		}
 		else
-			print _("This site is currently in maintenance.<br>\n");
+			print _("This site is currently in maintenance.") . "<br>\n";
 		$niceend = strftime('%A, %x, %l:%M %P', $end);
-		print _("The maintenance is scheduled to end <b>") . "$niceend" . _("</b>.<br><br><br>\n");
+		printf(_("The maintenance is scheduled to end <strong>%s</strong>."), $niceend) . "<br><br><br>\n";
 		printHTMLFooter();
 		exit;
 	}
@@ -703,18 +703,15 @@ function maintenanceNotice() {
 			$nicestart = strftime('%A, %x, %l:%M %P', $start);
 			$niceend = strftime('%A, %x, %l:%M %P', datetimeToUnix($item['end']));
 			print "<div id=\"maintenancenotice\">\n";
-			print _("<b>NOTICE</b>: This site will be down for maintenance during ");
-			print _("the following times:<br><br>\n");
-			print	_("Start") . ": $nicestart<br>\n";
-			print _("End") . ": $niceend.<br><br>\n";
+			print "<strong>" . _("NOTICE:") . "</strong> ";
+			print _("This site will be down for maintenance during the following times:") . "<br><br>\n";
+			print	_("Start:") . " $nicestart<br>\n";
+			print _("End:") . " $niceend.<br><br>\n";
 			if($item['allowreservations']) {
-				print _("You will be able to access your reserved machines during ");
-				print _("this maintenance. However, you will not be able to access ");
-				print _("information on how to connect to them.<br>\n");
+				print _("You will be able to access your reserved machines during this maintenance. However, you will not be able to access information on how to connect to them.") . "<br>\n";
 			}
 			else {
-				print _("You will not be able to access any of your reservations ");
-				print _("during this maintenance.<br>\n");
+				print _("You will not be able to access any of your reservations during this maintenance.") . "<br>\n";
 			}
 			print "</div>\n";
 			return;
@@ -817,12 +814,12 @@ function stopSession() {
 ////////////////////////////////////////////////////////////////////////////////
 function main() {
 	global $user, $authed, $mode;
-	print _("<H2>Welcome to the Virtual Computing Lab</H2>\n");
+	print "<H2>" . _("Welcome to the Virtual Computing Lab") . "</H2>\n";
 	if($authed) {
 		if(! empty($user['lastname']) && ! empty($user['preferredname']))
-			print _("Hello ") . "{$user["preferredname"]} {$user['lastname']}<br><br>\n";
+			print _("Hello") . " {$user["preferredname"]} {$user['lastname']}<br><br>\n";
 		elseif(! empty($user['lastname']) && ! empty($user['firstname']))
-			print _("Hello ") . "{$user["firstname"]} {$user['lastname']}<br><br>\n";
+			print _("Hello") . " {$user["firstname"]} {$user['lastname']}<br><br>\n";
 		$tmp = array_values($user['groups']);
 		if(count($tmp) == 1 && $tmp[0] == 'nodemo') {
 			print "Your account is a demo account that has expired. ";
@@ -833,21 +830,18 @@ function main() {
 		}
 		$requests = getUserRequests("all", $user["id"]);
 		if($num = count($requests)) {
-			if($num == 1) {
-				print _("You currently have ") . "$num" . _(" reservation</a>.<br>\n");
-			}
-			else {
-				print _("You currently have ") . "$num" . _(" reservations</a>.<br>\n");
-			}
+			if($num == 1)
+				print _("You currently have 1 reservation.") . "<br>\n";
+			else
+				printf(_("You currently have %d reservations."), $num ) . "<br>\n";
 		}
 		else {
-			print _("You do not have any current reservations.<br>\n");
+			print _("You do not have any current reservations.") . "<br>\n";
 		}
-		print _("Please make a selection from the menu to continue.<br>\n");
+		print _("Please make a selection from the menu to continue.") . "<br>\n";
 	}
 	else {
-		print "Click the <b>Log in to VCL</b> button at the top right part of ";
-		print "the page to start using the VCL system<br>\n";
+		print _("Please log in to start using the VCL system.") . "<br>\n";
 	}
 }
 
@@ -920,10 +914,9 @@ function abort($errcode, $query="") {
 		$mailParams = "-f" . ENVELOPESENDER;
 		error_log($message);
 		mail(ERROREMAIL, "Error with VCL pages ($errcode)", $message, '', $mailParams);
-		print _("An error has occurred.  If this problem persists, please email ");
-		print "<a href=\"mailto:" . HELPEMAIL . "?Subject=" . _("Problem%20With%20VCL") . "\">";
-		print HELPEMAIL . "</a> " . _("for further assistance.  Please include the ");
-		print _("steps you took that led up to this problem in your email message.");
+		$subj = rawurlencode(_("Problem With VCL"));
+		$href = "<a href=\"mailto:" . HELPEMAIL . "?Subject=$subj\">" . HELPEMAIL . "</a>";
+		printf(_("An error has occurred. If this problem persists, please email %s for further assistance. Please include the steps you took that led up to this problem in your email message."), $href);
 	}
 
 	// call clearPrivCache in case that helps clear up what caused the error
@@ -5447,11 +5440,9 @@ function getRequestInfo($id, $returnNULL=0) {
 		# FIXME handle XMLRPC cases
 		if(! $printedHTMLheader) 
 			print $HTMLheader;
-		print _("<h1>OOPS! - Reservation Has Expired</h1>\n");
-		print _("The selected reservation is no longer available.  Go to ");
-		print "<a href=\"" . BASEURL . SCRIPT . "?mode=viewRequests\">";
-		print _("Reservations</a><br>to request a new reservation or ");
-		print _("select another one that is available.");
+		print "<h1>" . _("OOPS! - Reservation Has Expired") . "</h1>\n";
+		$h = _("The selected reservation is no longer available. Go to <a>Reservations</a> to request a new reservation or select another one that is available.");
+		print preg_replace('|<a>(.+)</a>|', '<a href="' . BASEURL . SCRIPT . '?mode=viewRequests">\1</a>', $h);
 		printHTMLFooter();
 		dbDisconnect();
 		exit;
@@ -7337,7 +7328,7 @@ function showTimeTable($links) {
 	}
 
 	print "<DIV align=center>\n";
-	print _("<H2>Time Table</H2>\n");
+	print "<H2>" . _("Time Table") . "</H2>\n";
 	print "</DIV>\n";
 	$computeridrow = "";
 	$displayedids = array();
@@ -7374,17 +7365,15 @@ function showTimeTable($links) {
 	}
 	if(empty($displayedids)) {
 		if($links) {
-			print _("There are currently no computers available that can run the application you selected.\n");
+			print _("There are currently no computers available that can run the application you selected.") . "\n";
 		}
 		else {
-			print _("There are no computers that meet the specified criteria\n");
+			print _("There are no computers that meet the specified criteria") . "\n";
 		}
 		return;
 	}
 	if($showmessage) {
-		print _("The time you have requested to use the environment is not ");
-		print _("available. You may select from the green blocks of time to ");
-		print _("select an available time slot to make a reservation.<br>\n");
+		print _("The time you have requested to use the environment is not available. You may select from the green blocks of time to select an available time slot to make a reservation.") . "<br>\n";
 	}
 	print "<table summary=\"\">\n";
 	print "  <TR>\n";
@@ -7404,7 +7393,7 @@ function showTimeTable($links) {
 		               'imaging' => $imaging);
 		$cont = addContinuationsEntry($mode, $cdata, SECINDAY);
 		print "<INPUT type=hidden name=continuation value=\"$cont\">\n";
-		print _("<INPUT type=submit value=Previous>\n");
+		print "<INPUT type=submit value=" . _("Previous") . ">\n";
 		print "</FORM>\n";
 	}
 	print "</TD>\n";
@@ -7423,7 +7412,7 @@ function showTimeTable($links) {
 		               'imaging' => $imaging);
 		$cont = addContinuationsEntry($mode, $cdata, SECINDAY);
 		print "<INPUT type=hidden name=continuation value=\"$cont\">\n";
-		print _("<INPUT type=submit value=Next>\n");
+		print "<INPUT type=submit value=" . _("Next") . ">\n";
 		print "</FORM>\n";
 	}
 	print "</TD>\n";
@@ -7515,8 +7504,8 @@ function showTimeTable($links) {
 					print "          <TD bgcolor=\"#ff0000\"><font color=\"#ff0000\">used</font></TD>\n";
 				}
 				else {
-					$title = _("User: ") . $timeslots[$id][$stamp]["unityid"]
-					       . _(" Image: ") . $timeslots[$id][$stamp]["prettyimage"];
+					$title = _("User:") . " " . $timeslots[$id][$stamp]["unityid"]
+					       . " " . _("Image:") . " " . $timeslots[$id][$stamp]["prettyimage"];
 					$ttdata = array('start' => $argstart,
 					                'end' => $argend,
 					                'imageid' => $imageid,
@@ -7556,7 +7545,7 @@ function showTimeTable($links) {
 		               'imaging' => $imaging);
 		$cont = addContinuationsEntry($mode, $cdata, SECINDAY);
 		print "<INPUT type=hidden name=continuation value=\"$cont\">\n";
-		print _("<INPUT type=submit value=Previous>\n");
+		print "<INPUT type=submit value=" . _("Previous") . ">\n";
 		print "</FORM>\n";
 	}
 	print "</TD>\n";
@@ -7575,7 +7564,7 @@ function showTimeTable($links) {
 		               'imaging' => $imaging);
 		$cont = addContinuationsEntry($mode, $cdata, SECINDAY);
 		print "<INPUT type=hidden name=continuation value=\"$cont\">\n";
-		print _("<INPUT type=submit value=Next>\n");
+		print "<INPUT type=submit value=" . _("Next") . ">\n";
 		print "</FORM>\n";
 	}
 	print "</TD>\n";
@@ -9036,9 +9025,6 @@ function labeledFormItem($id, $label, $type, $constraints='', $required=1,
 	if($extra == '')
 		$extra = array();
 	$h = '';
-	$label = _($label);
-	$errmsg = _($errmsg);
-	$help = _($help);
 	if($required)
 		$required = 'true';
 	else
@@ -9302,7 +9288,7 @@ function prettyDatetime($stamp, $showyear=0) {
 ////////////////////////////////////////////////////////////////////////////////
 function minToHourMin($min) {
 	if($min < 60)
-		return $min . _(" minutes");
+		return $min . " " . _("minutes");
 	elseif($min == 60)
 		return _("1 hour");
 	elseif($min % 60 == 0)
@@ -9349,11 +9335,11 @@ function secToMinSec($sec) {
 ////////////////////////////////////////////////////////////////////////////////
 function prettyLength($minutes) {
 	if($minutes < 60)
-		return (int)$minutes . _(" minutes");
+		return (int)$minutes . " " . _("minutes");
 	elseif($minutes == 60)
 		return _("1 hour");
 	elseif($minutes % 60 == 0)
-		return $minutes / 60 . _(" hours");
+		return $minutes / 60 . " " . _("hours");
 	else {
 		$hours = (int)($minutes / 60);
 		$min = (int)($minutes % 60);
@@ -10169,9 +10155,9 @@ function getReservationLengths($max) {
 	if($max >= 60)
 		$lengths["60"] = _("1 hour");
 	for($i = 120; $i <= $max && $i < 2880; $i += 120)
-		$lengths[$i] = $i / 60 . _(" hours");
+		$lengths[$i] = $i / 60 . " " . _("hours");
 	for($i = 2880; $i <= $max; $i += 1440)
-		$lengths[$i] = $i / 1440 . _(" days");
+		$lengths[$i] = $i / 1440 . " " . _("days");
 	return $lengths;
 }
 
@@ -10188,12 +10174,12 @@ function getReservationLengths($max) {
 ////////////////////////////////////////////////////////////////////////////////
 function getReservationLength($length) {
 	if($length < 60)
-		return ($length % 60) - ($length % 60 % 15) . " minutes";
+		return ($length % 60) - ($length % 60 % 15) . " " . _("minutes");
 	if($length < 120)
 		return _("1 hour");
 	if($length < 2880)
-		return intval($length / 60) . _(" hours");
-	return intval($length / 1440) . _(" days");
+		return intval($length / 60) . " " . _("hours");
+	return intval($length / 1440) . " " . _("days");
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -10209,7 +10195,7 @@ function getReservationLength($length) {
 ////////////////////////////////////////////////////////////////////////////////
 function getReservationExtenstion($length) {
 	if($length < 60)
-		return ($length % 60) - ($length % 60 % 15) . _(" minutes");
+		return ($length % 60) - ($length % 60 % 15) . " " . _("minutes");
 	if($length < 75)
 		return _("1 hour");
 	if($length < 120) {
@@ -10217,8 +10203,8 @@ function getReservationExtenstion($length) {
 		return sprintf('%d:%02d ' . _('hours'), intval($length / 60), $min);
 	}
 	if($length < 2880)
-		return intval($length / 60) . _(" hours");
-	return intval($length / 1440) . _(" days");
+		return intval($length / 60) . " " . _("hours");
+	return intval($length / 1440) . " " . _("days");
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -11543,28 +11529,21 @@ function continuationsError() {
 	if(array_key_exists('error', $contdata)) {
 		print "<!-- continuationserror -->\n";
 		print "<div id=\"continuationserrormessage\">\n";
+		$subj = rawurlencode(_("Problem With VCL"));
+		$href = "<a href=\"mailto:" . HELPEMAIL . "?Subject=$subj\">" . HELPEMAIL . "</a>";
 		switch($contdata['error']) {
 		case 'invalid input':
-			print _("<h2>Error: Invalid Input</h2><br>\n");
-			print _("You submitted input invalid for this web site. If you have no ");
-			print _("idea why this happened and the problem persists, please email ");
-			print "<a href=\"mailto:" . HELPEMAIL . "?Subject=" . _("Problem%20With%20VCL\">");
-			print HELPEMAIL . "</a> " . _("for further assistance.  Please include the ");
-			print _("steps you took that led up to this problem in your email message.");
+			print "<h2>" . _("Error: Invalid Input") . "</h2><br>\n";
+			printf(_("You submitted input invalid for this web site. If you have no idea why this happened and the problem persists, please email %s for further assistance. Please include the steps you took that led up to this problem in your email message."), $href);
 			break;
 		case 'continuation does not exist':
 		case 'expired':
-			print _("<h2>Error: Invalid Input</h2><br>\n");
-			print _("You submitted expired data to this web site. Please restart the ");
-			print _("steps you were following without using your browser's <strong>");
-			print _("Back</strong> button.");
+			print "<h2>" . _("Error: Invalid Input") . "</h2><br>\n";
+			print _("You submitted expired data to this web site. Please restart the steps you were following without using your browser's <strong>Back</strong> button.");
 			break;
 		default:
-			print _("<h2>Error: Invalid Input</h2><br>\n");
-			print _("An error has occurred.  If this problem persists, please email ");
-			print "<a href=\"mailto:" . HELPEMAIL . "?Subject=" . _("Problem%20With%20VCL\">");
-			print HELPEMAIL . "</a> " . _("for further assistance.  Please include the ");
-			print _("steps you took that led up to this problem in your email message.");
+			print "<h2>" . _("Error: Invalid Input") . "</h2><br>\n";
+			printf(_("An error has occurred. If this problem persists, please email %s for further assistance. Please include the steps you took that led up to this problem in your email message."), $href);
 		}
 		print "</div>\n";
 	}
@@ -12537,42 +12516,42 @@ function getNavMenu($inclogout, $inchome, $homeurl=HOMEURL) {
 
 	$rt .= menulistLI('reservations');
 	$rt .= "<a href=\"" . BASEURL . SCRIPT . "?mode=viewRequests\">";
-	$rt .= _("Reservations</a></li>\n");
+	$rt .= _("Reservations") . "</a></li>\n";
 
 	#$rt .= menulistLI('config');
 	#$rt .= "<a href=\"" . BASEURL . SCRIPT . "?mode=config\">";
-	#$rt .= _("Manage Configs</a></li>\n");
+	#$rt .= _("Manage Configs") . "</a></li>\n";
 
 	$rt .= menulistLI('blockAllocations');
 	$rt .= "<a href=\"" . BASEURL . SCRIPT . "?mode=blockAllocations\">";
-	$rt .= _("Block Allocations</a></li>\n");
+	$rt .= _("Block Allocations") . "</a></li>\n";
 	$rt .= menulistLI('userPreferences');
 	$rt .= "<a href=\"" . BASEURL . SCRIPT . "?mode=userpreferences\">";
-	$rt .= _("User Preferences</a></li>\n");
+	$rt .= _("User Preferences") . "</a></li>\n";
 	if(in_array("groupAdmin", $user["privileges"])) {
 		$rt .= menulistLI('manageGroups');
 		$rt .= "<a href=\"" . BASEURL . SCRIPT . "?mode=viewGroups\">";
-		$rt .= _("Manage Groups</a></li>\n");
+		$rt .= _("Manage Groups") . "</a></li>\n";
 	}
 	if(in_array("imageAdmin", $user["privileges"])) {
 		$rt .= menulistLI('image');
 		$rt .= "<a href=\"" . BASEURL . SCRIPT . "?mode=image\">";
-		$rt .= _("Manage Images</a></li>\n");
+		$rt .= _("Manage Images") . "</a></li>\n";
 	}
 	if(in_array("scheduleAdmin", $user["privileges"])) {
 		$rt .= menulistLI('schedule');
 		$rt .= "<a href=\"" . BASEURL . SCRIPT . "?mode=schedule\">";
-		$rt .= _("Manage Schedules</a></li>\n");
+		$rt .= _("Manage Schedules") . "</a></li>\n";
 	}
 	if(in_array("computerAdmin", $user["privileges"])) {
 		$rt .= menulistLI('computer');
 		$rt .= "<a href=\"" . BASEURL . SCRIPT . "?mode=computer\">";
-		$rt .= _("Manage Computers</a></li>\n");
+		$rt .= _("Manage Computers") . "</a></li>\n";
 	}
 	if(in_array("mgmtNodeAdmin", $user["privileges"])) {
 		$rt .= menulistLI('managementnode');
 		$rt .= "<a href=\"" . BASEURL . SCRIPT . "?mode=managementnode\">";
-		$rt .= _("Management Nodes</a></li>\n");
+		$rt .= _("Management Nodes") . "</a></li>\n";
 	}
 	if(in_array("serverProfileAdmin", $user["privileges"]) ||
 	   in_array("serverCheckOut", $user["privileges"])) {
@@ -12584,34 +12563,34 @@ function getNavMenu($inclogout, $inchome, $homeurl=HOMEURL) {
 		count($computermetadata["schedules"])) {
 		$rt .= menulistLI('timeTable');
 		$rt .= "<a href=\"" . BASEURL . SCRIPT . "?mode=pickTimeTable\">";
-		$rt .= _("View Time Table</a></li>\n");
+		$rt .= _("View Time Table") . "</a></li>\n";
 	}
 	if(in_array("userGrant", $user["privileges"]) ||
 		in_array("resourceGrant", $user["privileges"]) ||
 		in_array("nodeAdmin", $user["privileges"])) {
 		$rt .= menulistLI('privileges');
 		$rt .= "<a href=\"" . BASEURL . SCRIPT . "?mode=viewNodes\">";
-		$rt .= _("Privileges</a></li>\n");
+		$rt .= _("Privileges") . "</a></li>\n";
 	}
 	if(checkUserHasPerm('User Lookup (global)') ||
 	   checkUserHasPerm('User Lookup (affiliation only)')) {
 		$rt .= menulistLI('userLookup');
 		$rt .= "<a href=\"" . BASEURL . SCRIPT . "?mode=userLookup\">";
-		$rt .= _("User Lookup</a></li>\n");
+		$rt .= _("User Lookup") . "</a></li>\n";
 	}
 	if(in_array("computerAdmin", $user["privileges"])) {
 		$rt .= menulistLI('vm');
 		$rt .= "<a href=\"" . BASEURL . SCRIPT . "?mode=editVMInfo\">";
-		$rt .= _("Virtual Hosts</a></li>\n");
+		$rt .= _("Virtual Hosts") . "</a></li>\n";
 	}
 	if(checkUserHasPerm('Schedule Site Maintenance')) {
 		$rt .= menulistLI('sitemaintenance');
 		$rt .= "<a href=\"" . BASEURL . SCRIPT . "?mode=siteMaintenance\">";
-		$rt .= _("Site Maintenance</a></li>\n");
+		$rt .= _("Site Maintenance") . "</a></li>\n";
 	}
 	$rt .= menulistLI('statistics');
 	$rt .= "<a href=\"" . BASEURL . SCRIPT . "?mode=selectstats\">";
-	$rt .= _("Statistics</a></li>\n");
+	$rt .= _("Statistics") . "</a></li>\n";
 	if(checkUserHasPerm('View Dashboard (global)') ||
 	   checkUserHasPerm('View Dashboard (affiliation only)')) {
 		$rt .= menulistLI('dashboard');
@@ -12626,11 +12605,11 @@ function getNavMenu($inclogout, $inchome, $homeurl=HOMEURL) {
 	}
 	$rt .= menulistLI('codeDocumentation');
 	$rt .= "<a href=\"" . DOCUMENTATIONURL . "\">";
-	$rt .= _("Documentation</a></li>\n");
+	$rt .= _("Documentation") . "</a></li>\n";
 	if($inclogout) {
 		$rt .= menulistLI('authentication');
 		$rt .= "<a href=\"" . BASEURL . SCRIPT . "?mode=logout\">";
-		$rt .= _("Logout</a></li>\n");
+		$rt .= _("Logout") . "</a></li>\n";
 	}
 	return $rt;
 }

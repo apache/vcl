@@ -292,13 +292,13 @@ class ManagementNode extends Resource {
 
 		#$h .= "<div style=\"width: 80%; margin-left: 10%;\">\n";
 		# name
-		$errmsg = "Name can only contain letters, numbers, dashes(-), periods(.), and underscores(_). It can be from 1 to 50 characters long.";
-		$h .= labeledFormItem('name', 'Name*', 'text', '^([a-zA-Z0-9_][-a-zA-Z0-9_\.]{1,49})$',
+		$errmsg = _("Name can only contain letters, numbers, dashes(-), periods(.), and underscores(_). It can be from 1 to 50 characters long.");
+		$h .= labeledFormItem('name', _('Name') . '*', 'text', '^([a-zA-Z0-9_][-a-zA-Z0-9_\.]{1,49})$',
 		                      1, '', $errmsg); 
 		# owner
 		$extra = array('onKeyPress' => 'setOwnerChecking');
-		$h .= labeledFormItem('owner', 'Owner*', 'text', '', 1,
-		                      "{$user['unityid']}@{$user['affiliation']}", 'Unknown user',
+		$h .= labeledFormItem('owner', _('Owner') . '*', 'text', '', 1,
+		                      "{$user['unityid']}@{$user['affiliation']}", _('Unknown user'),
 		                      'checkOwner', $extra);
 		$cont = addContinuationsEntry('AJvalidateUserid');
 		$h .= "<input type=\"hidden\" id=\"valuseridcont\" value=\"$cont\">\n";
@@ -306,77 +306,77 @@ class ManagementNode extends Resource {
 		# IP address
 		$ipreg = '(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)';
 		$ipreg1 = "^$ipreg$";
-		$errmsg = "Invalid IP address specified - must be a valid IPV4 address";
-		$h .= labeledFormItem('ipaddress', 'IP Address*', 'text', $ipreg1, 1, '', $errmsg); 
+		$errmsg = _("Invalid IP address specified - must be a valid IPV4 address");
+		$h .= labeledFormItem('ipaddress', _('IP Address') . '*', 'text', $ipreg1, 1, '', $errmsg); 
 
 		# State
 		$vals = array(2 => "available", 10 => "maintenance", 5 => "failed");
-		$h .= labeledFormItem('stateid', 'State', 'select', $vals);
+		$h .= labeledFormItem('stateid', _('State'), 'select', $vals);
 
 		# sysadmin email
 		$reg = '^([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,4},)*([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,4})$';
-		$errmsg = "Invalid email address(es) specified";
-		$h .= labeledFormItem('sysadminemail', "SysAdmin Email Address(es)", 'text', $reg, 0, '',
+		$errmsg = _("Invalid email address(es) specified");
+		$h .= labeledFormItem('sysadminemail', _("SysAdmin Email Address(es)"), 'text', $reg, 0, '',
 		                      $errmsg, '', '', '', helpIcon('sysadminemailhelp')); 
 
 		# shared mailbox
 		$reg = '^([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,4})$';
-		$errmsg = "Invalid email address specified";
-		$h .= labeledFormItem('sharedmailbox', 'Address for Shadow Emails', 'text', $reg, 0, '',
+		$errmsg = _("Invalid email address specified");
+		$h .= labeledFormItem('sharedmailbox', _('Address for Shadow Emails'), 'text', $reg, 0, '',
 		                      $errmsg, '', '', '', helpIcon('sharedmailboxhelp')); 
 
 		# checkininterval
 		$extra = array('smallDelta' => 1, 'largeDelta' => 2);
-		$h .= labeledFormItem('checkininterval', 'Check-in Interval (sec)', 'spinner', '{min:5,max:30,places:0}',
+		$h .= labeledFormItem('checkininterval', _('Check-in Interval (sec)'), 'spinner', '{min:5,max:30,places:0}',
 		                      1, '6', '', '', $extra, '', helpIcon('checkinhelp'));
 
 		# installpath
 		$reg = '^([-a-zA-Z0-9_\.\/]){2,100}$';
-		$errmsg = "Invalid install path specified";
-		$h .= labeledFormItem('installpath', 'Install Path', 'text', $reg, 0, '', $errmsg,
+		$errmsg = _("Invalid install path specified");
+		$h .= labeledFormItem('installpath', _('Install Path'), 'text', $reg, 0, '', $errmsg,
 		                      '', '', '', helpIcon('installpathhelp')); 
 
 		# timeserver list
 		$reg = '^(([a-zA-Z0-9_][-a-zA-Z0-9_\.]{1,49})(,?)){1,5}$';
-		$errmsg = "Invalid time server(s) specified. Must be comman delimited list of hostnames or IP addresses, with up to 5 allowed";
+		$errmsg = _("Invalid time server(s) specified. Must be comman delimited list of hostnames or IP addresses, with up to 5 allowed");
 		$val = getVariable('timesource|global');
-		$h .= labeledFormItem('timeservers', 'Time Server(s)', 'text', $reg, 0, $val, $errmsg,
+		$h .= labeledFormItem('timeservers', _('Time Server(s)'), 'text', $reg, 0, $val, $errmsg,
 		                      '', '', '', helpIcon('timeservershelp')); 
 
 		# keys
 		$reg = '^([-a-zA-Z0-9_\.\/,]){2,1024}$';
-		$errmsg = "Invalid path to identity key files";
-		$h .= labeledFormItem('keys', 'End Node SSH Identity Key Files', 'text', $reg, 0, '', $errmsg,
+		$errmsg = _("Invalid path to identity key files");
+		$h .= labeledFormItem('keys', _('End Node SSH Identity Key Files'), 'text', $reg, 0, '', $errmsg,
 		                      '', '', '', helpIcon('identityhelp')); 
 
 		# sshport
 		$extra = array('smallDelta' => 1, 'largeDelta' => 2);
-		$h .= labeledFormItem('sshport', 'SSH Port for this node', 'spinner', '{min:1,max:65535,places:0}',
+		$h .= labeledFormItem('sshport', _('SSH Port for this node'), 'spinner', '{min:1,max:65535,places:0}',
 		                      1, '22', '', '', $extra, '', helpIcon('sshporthelp'));
 
 		# image library
 		$h .= "<div class=\"boxedoptions\">\n";
 		# imagelibenable
 		$extra = array('onChange' => 'toggleImageLibrary();');
-		$h .= labeledFormItem('imagelibenable', 'Enable Image Library', 'check', '', '', '', '', '',
+		$h .= labeledFormItem('imagelibenable', _('Enable Image Library'), 'check', '', '', '', '', '',
 		                      $extra, '', helpIcon('imagelibhelp'));
 
 		# imagelibgroupid
 		$disabled = array('disabled' => 'true');
 		$vals = getUserResources(array('mgmtNodeAdmin'), array("manageGroup"), 1);
-		$h .= labeledFormItem('imagelibgroupid', 'Image Library Management Node Group', 'select',
+		$h .= labeledFormItem('imagelibgroupid', _('Image Library Management Node Group'), 'select',
 		                      $vals['managementnode'], '', '', '', '', $disabled, '', helpIcon('imagelibgrouphelp'));
 
 		# imagelibuser
 		$reg = '^([-a-zA-Z0-9_\.\/,]){2,20}$';
-		$errmsg = "Invalid image library user";
-		$h .= labeledFormItem('imagelibuser', 'Image Library User', 'text', $reg, 0, '', $errmsg,
+		$errmsg = _("Invalid image library user");
+		$h .= labeledFormItem('imagelibuser', _('Image Library User'), 'text', $reg, 0, '', $errmsg,
 		                      '', $disabled, '', helpIcon('imagelibuserhelp')); 
 
 		# imagelibkey
 		$reg = '^([-a-zA-Z0-9_\.\/,]){2,100}$';
-		$errmsg = "Invalid image library identity key";
-		$h .= labeledFormItem('imagelibkey', 'Image Library SSH Identity Key File', 'text', $reg, 0, '', $errmsg,
+		$errmsg = _("Invalid image library identity key");
+		$h .= labeledFormItem('imagelibkey', _('Image Library SSH Identity Key File'), 'text', $reg, 0, '', $errmsg,
 		                      '', $disabled, '', helpIcon('imagelibkeyhelp')); 
 		$h .= "</div>\n"; # image library
 
@@ -387,47 +387,47 @@ class ManagementNode extends Resource {
 		$vals = array('dynamicDHCP' => 'Dynamic DHCP',
 		              'manualDHCP' => 'Manual DHCP',
 		              'static' => 'Static');
-		$h .= labeledFormItem('publicIPconfig', 'Public NIC configuration method', 'select', $vals,
+		$h .= labeledFormItem('publicIPconfig', _('Public NIC configuration method'), 'select', $vals,
 		                      '', '', '', '', $extra, '', helpIcon('ipconfighelp'));
 
 		# netmask
-		$errmsg = "Invalid public netmask";
-		$h .= labeledFormItem('publicnetmask', 'Public Netmask', 'text', $ipreg1, 0, '', $errmsg,
+		$errmsg = _("Invalid public netmask");
+		$h .= labeledFormItem('publicnetmask', _('Public Netmask'), 'text', $ipreg1, 0, '', $errmsg,
 		                      '', $disabled, '', helpIcon('netmaskhelp')); 
 
 		# gateway
 		$reg = '^[a-zA-Z0-9_][-a-zA-Z0-9_\.]{1,56}$';
-		$errmsg = "Invalid public gateway";
-		$h .= labeledFormItem('publicgateway', 'Public Gateway', 'text', $reg, 0, '', $errmsg,
+		$errmsg = _("Invalid public gateway");
+		$h .= labeledFormItem('publicgateway', _('Public Gateway'), 'text', $reg, 0, '', $errmsg,
 		                      '', $disabled, '', helpIcon('gatewayhelp')); 
 
 		# dnsserver
 		$reg = "^($ipreg,)*($ipreg)$";
-		$errmsg = "Invalid public DNS server";
-		$h .= labeledFormItem('publicdnsserver', 'Public DNS Server', 'text', $reg, 0, '', $errmsg,
+		$errmsg = _("Invalid public DNS server");
+		$h .= labeledFormItem('publicdnsserver', _('Public DNS Server'), 'text', $reg, 0, '', $errmsg,
 		                      '', $disabled, '', helpIcon('dnsserverhelp')); 
 		$h .= "</div>\n"; # IP config method
 
 		# available public networks
-		$h .= labeledFormItem('availablenetworks', 'Available Public Networks', 'textarea', '', 1,
+		$h .= labeledFormItem('availablenetworks', _('Available Public Networks'), 'textarea', '', 1,
 		                      '', '', '', '', '', helpIcon('availnetshelp'));
 
 		# federated auth
-		$h .= labeledFormItem('federatedauth', 'Affiliations using Federated Authentication for Linux Images',
+		$h .= labeledFormItem('federatedauth', _('Affiliations using Federated Authentication for Linux Images'),
 		                      'textarea', '', 1, '', '', '', '', '', helpIcon('federatedauthhelp'));
 
 		# NAT Host
 		$h .= "<div id=\"nathost\" class=\"boxedoptions\">\n";
 		# use as NAT host
 		$extra = array('onChange' => "toggleNAThost();");
-		$h .= labeledFormItem('nathostenabled', 'Use as NAT Host', 'check', '', '', '1', '', '', $extra);
+		$h .= labeledFormItem('nathostenabled', _('Use as NAT Host'), 'check', '', '', '1', '', '', $extra);
 		# public IP
-		$errmsg = "Invalid NAT Public IP address specified - must be a valid IPV4 address";
-		$h .= labeledFormItem('natpublicipaddress', 'NAT Public IP Address', 'text', $ipreg1, 1, '', $errmsg,
+		$errmsg = _("Invalid NAT Public IP address specified - must be a valid IPV4 address");
+		$h .= labeledFormItem('natpublicipaddress', _('NAT Public IP Address'), 'text', $ipreg1, 1, '', $errmsg,
 		                      '', '', '', helpIcon('natpubliciphelp')); 
 		# internal IP
-		$errmsg = "Invalid NAT Internal IP address specified - must be a valid IPV4 address";
-		$h .= labeledFormItem('natinternalipaddress', 'NAT Internal IP Address', 'text', $ipreg1, 1, '', $errmsg,
+		$errmsg = _("Invalid NAT Internal IP address specified - must be a valid IPV4 address");
+		$h .= labeledFormItem('natinternalipaddress', _('NAT Internal IP Address'), 'text', $ipreg1, 1, '', $errmsg,
 		                      '', '', '', helpIcon('natinternaliphelp')); 
 		$h .= "</div>\n"; # NAT Host
 

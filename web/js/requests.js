@@ -53,8 +53,8 @@ function initViewRequests(imaging) {
 			});
 			var dlg = new dijit.Dialog({
 				id: 'noimageaccessdlg',
-				title: 'Create / Update an Image',
-				content: 'You do not have access to create or update any images.<br><br>',
+				title: _('Create / Update an Image'),
+				content: _('You do not have access to create or update any images.') + '<br><br>',
 				style: 'width: 300px; text-align: center;',
 				closable: false
 			});
@@ -214,7 +214,7 @@ function selectResType() {
 		dojo.removeClass('whentitleserver', 'hidden');
 		if(profilesstore._arrayOfAllItems.length != 0 &&
 		   (profilesstore._arrayOfAllItems.length != 1 ||
-		   profilesstore._arrayOfAllItems[0].name != '(New Profile)'))
+		   profilesstore._arrayOfAllItems[0].name != _('(New Profile)')))
 			dojo.removeClass('deployprofileslist', 'hidden');
 		dojo.removeClass('nrnamespan', 'hidden');
 		dojo.removeClass('nrservergroupspan', 'hidden');
@@ -1141,10 +1141,10 @@ function addRevisionSelection(item) {
 	var mstore = new dojo.store.Memory({data: item.imagerevision});
 	var wrapper = new dojo.data.ObjectStore({objectStore: mstore});
 	var layout = [
-		{field: 'revision', name: 'Revision', width: '60px'},
-		{field: 'user', name: 'User', width: '130px'},
-		{field: 'prettydate', name: 'Created', width: '110px'},
-		{field: 'production', name: 'Production', width: '60px'}
+		{field: 'revision', name: _('Revision'), width: '60px'},
+		{field: 'user', name: _('User'), width: '130px'},
+		{field: 'prettydate', name: _('Created'), width: '110px'},
+		{field: 'production', name: _('Production'), width: '60px'}
 	];
 	var div = document.createElement('div');
 	div.style.width = "100%";

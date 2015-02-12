@@ -616,7 +616,7 @@ function blockFormVerifyMonthly(mode) {
 	var date1 = obj.options[obj.selectedIndex].text;
 	obj = dojo.byId('mnday');
 	date1 += " " + obj.options[obj.selectedIndex].text;
-	dojo.byId('confvalue3').innerHTML = date1 + _(" of each month");
+	dojo.byId('confvalue3').innerHTML = date1 + ' ' + _("of each month");
 	var times = new Array();
 	var items = requestBlockAddMonthlyStore._getItemsArray();
 	for(var i = 0; i < len; i++) {
@@ -910,7 +910,7 @@ function deleteBlockConfirmCB(data, ioArgs) {
 		dojo.byId('conftitle2').innerHTML = _('Last Date:');
 		dojo.byId('confvalue2').innerHTML = data.items.lastdate;
 		dojo.byId('conftitle3').innerHTML = _('Repeat on:');
-		dojo.byId('confvalue3').innerHTML = data.items.date1 + _(" of each month");
+		dojo.byId('confvalue3').innerHTML = data.items.date1 + ' ' + _("of each month");
 		dojo.byId('conftitle4').innerHTML = _('During these times:');
 		dojo.byId('confvalue4').innerHTML = data.items.times.join('<br>');
 	}
@@ -971,7 +971,7 @@ function viewBlockAllocationCB(data, ioArgs) {
 		dojo.byId('conftitle2').innerHTML = _('Last Date:');
 		dojo.byId('confvalue2').innerHTML = data.items.lastdate;
 		dojo.byId('conftitle3').innerHTML = _('Repeat on:');
-		dojo.byId('confvalue3').innerHTML = data.items.date1 + _(" of each month");
+		dojo.byId('confvalue3').innerHTML = data.items.date1 + ' ' + _("of each month");
 		dojo.byId('conftitle4').innerHTML = _('During these times:');
 		dojo.byId('confvalue4').innerHTML = data.items.times.join('<br>');
 	}
@@ -1045,10 +1045,10 @@ function acceptBlockConfirmCB(data, ioArgs) {
 		dojo.byId('accepttitle2').innerHTML = _('Last Date:');
 		dojo.byId('acceptvalue2').innerHTML = data.items.lastdate;
 		dojo.byId('accepttitle3').innerHTML = _('Repeat on:');
-		dojo.byId('acceptvalue3').innerHTML = data.items.date1 + _(" of each month");
+		dojo.byId('acceptvalue3').innerHTML = data.items.date1 + ' ' + _("of each month");
 		dojo.byId('accepttitle4').innerHTML = _('During these times:');
 		dojo.byId('acceptvalue4').innerHTML = data.items.times.join('<br>');
-		dojo.byId('accepttitle5').innerHTML = 'User Submitted Comments:';
+		dojo.byId('accepttitle5').innerHTML = _('User Submitted Comments:');
 		dojo.byId('acceptvalue5').innerHTML = data.items.comments;
 	}
 	else if(data.items.repeating == 'list') {
@@ -1120,7 +1120,7 @@ function rejectBlockConfirmCB(data, ioArgs) {
 		dojo.byId('rejecttitle2').innerHTML = _('Last Date:');
 		dojo.byId('rejectvalue2').innerHTML = data.items.lastdate;
 		dojo.byId('rejecttitle3').innerHTML = _('Repeat on:');
-		dojo.byId('rejectvalue3').innerHTML = data.items.date1 + _(" of each month");
+		dojo.byId('rejectvalue3').innerHTML = data.items.date1 + ' ' + _("of each month");
 		dojo.byId('rejecttitle4').innerHTML = _('During these times:');
 		dojo.byId('rejectvalue4').innerHTML = data.items.times.join('<br>');
 		dojo.byId('rejecttitle5').innerHTML = _('User Submitted Comments:');
@@ -1331,11 +1331,11 @@ function updateAllocatedMachinesCB(data, ioArgs) {
 	graph.labeldata = data.items.virtual.points;
 	graph.render();
 	if(data.items.bare.total != 0)
-		dojo.byId('totalbare').innerHTML = _('Total online: ') + data.items.bare.total;
+		dojo.byId('totalbare').innerHTML = _('Total online:') + ' ' + data.items.bare.total;
 	else
 		dojo.byId('totalbare').innerHTML = '';
 	if(data.items.virtual.total != 0)
-		dojo.byId('totalvirtual').innerHTML = _('Total online: ') + data.items.virtual.total;
+		dojo.byId('totalvirtual').innerHTML = _('Total online:') + ' ' + data.items.virtual.total;
 	else
 		dojo.byId('totalvirtual').innerHTML = '';
 	dojo.byId('allocatedBareMachines').style.height = '320px';

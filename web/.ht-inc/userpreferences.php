@@ -52,10 +52,10 @@ function userpreferences() {
 			$data["resolution"] = $user["width"] . "x" . $user["height"];
 	}
 
-	print _("<H2 align=center>User Preferences</H2>\n");
+	print "<H2 align=center>" . _("User Preferences") . "</H2>\n";
 	print "<div align=center id=status class=visible>\n";
 	if($mode == "submituserprefs") {
-		print _("<font color=green>User preferences successfully updated</font><br>\n");
+		print "<font color=green>" . _("User preferences successfully updated") . "</font><br>\n";
 	}
 	print "</div>\n";
 	print "<table summary=\"\">\n";
@@ -68,14 +68,14 @@ function userpreferences() {
 	   $user['affiliation'] == 'Local') {
 		$showpersonal = 1;
 		print "      <li><a href=#personal onclick=\"";
-		print _("show('personal'); return false;\">Personal&nbsp;Information</a>");
+		print "show('personal'); return false;\">" . _("Personal Information") . "</a>";
 		print "</li>\n";
 	}
 	print "      <li><a href=#rdpfile onclick=\"";
-	print _("show('rdpfile'); return false;\">RDP&nbsp;Preferences</a>");
+	print "show('rdpfile'); return false;\">" . _("RDP Preferences") . "</a>";
 	print "</li>\n";
 	print "      <li><a href=#uiprefs onclick=\"javascript:show('uiprefs'); ";
-	print _("return false\">General&nbsp;Preferences</a></li>\n");
+	print "return false\">" . _("General Preferences") . "</a></li>\n";
 	print "      </ul>\n";
 	print "      </div>\n";
 	print "    </TD>\n";
@@ -83,20 +83,20 @@ function userpreferences() {
 	print "    <TD rowspan=2>\n";
 	if($showpersonal) {
 		print "      <fieldset id=personal class=shown>\n";
-		print _("      <legend>Personal</legend>\n");
+		print "      <legend>" . _("Personal") . "</legend>\n";
 		print "      <FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
 		print "      <table summary=\"displays your personal information\">\n";
 		$showsubmit = 0;
 		if(! empty($user['firstname'])) {
 			print "        <TR>\n";
-			print _("          <TH align=right>First Name<a href=#updateinfo>*</a>:</TH>\n");
+			print "          <TH align=right>" . _("First Name:") . "<a href=#updateinfo>*</a></TH>\n";
 			print "          <TD>" . $user["firstname"] . "</TD>\n";
 			print "          <TD></TD>\n";
 			print "        </TR>\n";
 		}
 		if(! empty($user['lastname'])) {
 			print "        <TR>\n";
-			print _("          <TH align=right>Last Name<a href=#updateinfo>*</a>:</TH>\n");
+			print "          <TH align=right>" . _("Last Name:") . "<a href=#updateinfo>*</a></TH>\n";
 			print "          <TD>" . $user["lastname"] . "</TD>\n";
 			print "          <TD></TD>\n";
 			print "        </TR>\n";
@@ -104,7 +104,7 @@ function userpreferences() {
 		# preferred name is stored locally; allow setting preferred name if a firstname is defined
 		if(! empty($user['firstname'])) {
 			print "        <TR>\n";
-			print _("          <TH align=right>Preferred Name:</TH>\n");
+			print "          <TH align=right>" . _("Preferred Name:") . "</TH>\n";
 			print "          <TD><label class=hidden for=preferredname>Preferred Name</label>\n";
 			print "              <INPUT type=text name=preferredname maxlength=100 ";
 			print "size=15 value=\"" . $data["preferredname"] . "\"></TD>\n";
@@ -116,17 +116,17 @@ function userpreferences() {
 		}
 		if(! empty($user['email'])) {
 			print "        <TR>\n";
-			print _("          <TH align=right>Email Address<a href=#updateinfo>*</a>:</TH>\n");
+			print "          <TH align=right>" . _("Email Address:") . "<a href=#updateinfo>*</a></TH>\n";
 			print "          <TD>" . $user["email"] . "</TD>\n";
 			print "          <TD></TD>\n";
 			print "        </TR>\n";
 		}
 		if($user['affiliation'] == 'Local') {
 			print "        <TR>\n";
-			print _("          <TD colspan=3 align=center><h3>Change Password</h3></TD>\n");
+			print "          <TD colspan=3 align=center><h3>" . _("Change Password") . "</h3></TD>\n";
 			print "        </TR>\n";
 			print "        <TR>\n";
-			print _("          <TH align=right>Current Password:</TH>\n");
+			print "          <TH align=right>" . _("Current Password:") . "</TH>\n";
 			print "          <TD>\n";
 			print "            <label class=hidden for=currentpassword>Current Password</label>\n";
 			print "            <INPUT type=password name=currentpassword maxlength=100 size=15>\n";
@@ -136,7 +136,7 @@ function userpreferences() {
 			print "</TD>\n";
 			print "        </TR>\n";
 			print "        <TR>\n";
-			print _("          <TH align=right>New Password:</TH>\n");
+			print "          <TH align=right>" . _("New Password:") . "</TH>\n";
 			print "          <TD>\n";
 			print "            <label class=hidden for=newpassword>New Password</label>\n";
 			print "            <INPUT type=password name=newpassword maxlength=100 ";
@@ -145,7 +145,7 @@ function userpreferences() {
 			print "          <TD></TD>\n";
 			print "        </TR>\n";
 			print "        <TR>\n";
-			print _("          <TH align=right>Confirm Password:</TH>\n");
+			print "          <TH align=right>" . _("Confirm Password:") . "</TH>\n";
 			print "          <TD>\n";
 			print "            <label class=hidden for=confirmpassword>Confirm Password</label>\n";
 			print "            <INPUT type=password name=confirmpassword maxlength=100 ";
@@ -164,7 +164,7 @@ function userpreferences() {
 			$cont = addContinuationsEntry('confirmpersonalprefs', array(), SECINDAY, 1, 1, 1);
 			print "      <INPUT type=hidden name=continuation value=\"$cont\">\n";
 			print "      <div align=center>\n";
-			print _("      <INPUT type=submit value=\"Submit Changes\">\n");
+			print "      <INPUT type=submit value=\"" . _("Submit Changes") . "\">\n";
 			print "      </div>\n";
 		}
 		print "      </FORM>\n";
@@ -172,18 +172,18 @@ function userpreferences() {
 	}
 
 	print "      <fieldset id=rdpfile class=shown>\n";
-	print _("      <legend>RDP</legend>\n");
+	print "      <legend>" . _("RDP") . "</legend>\n";
 	print "      <FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
 	print "      <table summary=\"lists adjustable preferences for the RDP ";
 	print "file that is sent when you click the Get RDP File button on the ";
 	print "Connect! page and the port on which RDP is listening\">\n";
 	print "        <TR>\n";
-	print _("          <TD colspan=3><small>Try decreasing <em>Resolution</em> or <em>");
-	print _("Color Depth</em> to<br>speed up your connection if things seem ");
-	print _("slow<br>when connected to a remote computer.</small></TD>\n");
+	print "          <TD colspan=3><div style=\"width: 300px;\"><small>";
+	print _("Try decreasing <em>Resolution</em> or <em>Color Depth</em> to speed up your connection if things seem slow when connected to a remote computer.");
+	print "</div></small></TD>\n";
 	print "        </TR>\n";
 	print "        <TR>\n";
-	print _("          <TH align=right>Resolution:</TH>\n");
+	print "          <TH align=right>" . _("Resolution:") . "</TH>\n";
 	$resolutionArray = array("Full Screen" => "Full Screen",
 	                         "1920x1440" => "1920x1440",
 	                         "1600x1200" => "1600x1200",
@@ -204,7 +204,7 @@ function userpreferences() {
 	print "          <TD></TD>\n";
 	print "        </TR>\n";
 	print "        <TR>\n";
-	print _("          <TH align=right>Color Depth:</TH>\n");
+	print "          <TH align=right>" . _("Color Depth:") . "</TH>\n";
 	print "          <TD>\n";
 	$colordepth = array("8" => "8", "16" => "16", "24" => "24", "32" => "32");
 	printSelectInput("bpp", $colordepth, $data["bpp"]);
@@ -212,7 +212,7 @@ function userpreferences() {
 	print "          <TD></TD>\n";
 	print "        </TR>\n";
 	print "        <TR>\n";
-	print _("          <TH align=right>Audio:</TH>\n");
+	print "          <TH align=right>" . _("Audio:") . "</TH>\n";
 	print "          <TD>\n";
 	$audio = array("none" => _("None"), "local" => _("Use my speakers"));
 	printSelectInput("audiomode", $audio, $data["audiomode"]);
@@ -220,7 +220,7 @@ function userpreferences() {
 	print "          <TD></TD>\n";
 	print "        </TR>\n";
 	print "        <TR>\n";
-	print _("          <TH align=right>Map Local Drives:</TH>\n");
+	print "          <TH align=right>" . _("Map Local Drives:") . "</TH>\n";
 	print "          <TD>\n";
 	$yesno = array(1 => _("Yes"), 0 => _("No"));
 	printSelectInput("mapdrives", $yesno, $data["mapdrives"]);
@@ -228,14 +228,14 @@ function userpreferences() {
 	print "          <TD></TD>\n";
 	print "        </TR>\n";
 	print "        <TR>\n";
-	print _("          <TH align=right>Map Local Printers:</TH>\n");
+	print "          <TH align=right>" . _("Map Local Printers:") . "</TH>\n";
 	print "          <TD>\n";
 	printSelectInput("mapprinters", $yesno, $data["mapprinters"]);
 	print "          </TD>\n";
 	print "          <TD></TD>\n";
 	print "        </TR>\n";
 	print "        <TR>\n";
-	print _("          <TH align=right>Map Local Serial Ports:</TH>\n");
+	print "          <TH align=right>" . _("Map Local Serial Ports:") . "</TH>\n";
 	print "          <TD>\n";
 	printSelectInput("mapserial", $yesno, $data["mapserial"]);
 	print "          </TD>\n";
@@ -255,14 +255,14 @@ function userpreferences() {
 	$cont = addContinuationsEntry('confirmrdpprefs', array(), SECINDAY, 1, 1, 1);
 	print "      <INPUT type=hidden name=continuation value=\"$cont\">\n";
 	print "      <div align=center>\n";
-	print _("      <INPUT type=submit value=\"Submit Changes\">\n");
+	print "      <INPUT type=submit value=\"" . _("Submit Changes") . "\">\n";
 	print "      </div>\n";
 	print "      </FORM>\n";
 	print "      </fieldset>\n";
 
 	print "      <div id=uiprefs class=shown>\n";
 	print "      <fieldset>\n";
-	print _("      <legend>General Preferences</legend>\n");
+	print "      <legend>" . _("General Preferences") . "</legend>\n";
 	print "      <FORM action=\"" . BASEURL . SCRIPT . "\" method=post ";
 	print "onsubmit=\"return validatePublicKeys();\">\n";
 	$cdata = array();
@@ -274,12 +274,12 @@ function userpreferences() {
 		$selected['affiliation'] = 'checked';
 		$selected['allgroups'] = '';
 	}
-	print _("      <p>View User Groups:<br>\n");
+	print "      <p>" . _("View User Groups:") . "<br>\n";
 	print "      <INPUT type=radio id=r1 name=groupview value=affiliation ";
-	print "{$selected['affiliation']}" . _("><label for=r1>matching my affiliation");
+	print "{$selected['affiliation']}" . "><label for=r1>" . _("matching my affiliation");
 	print "</label><br>\n";
 	print "      <INPUT type=radio id=r2 name=groupview value=allgroups ";
-	print "{$selected['allgroups']}" . _("><label for=r2>from all affiliations");
+	print "{$selected['allgroups']}" . "><label for=r2>" . _("from all affiliations");
 	print "</label></p>\n";
 	if($user['emailnotices']) {
 		$selected['enabled'] = 'checked';
@@ -289,12 +289,12 @@ function userpreferences() {
 		$selected['enabled'] = '';
 		$selected['disabled'] = 'checked';
 	}
-	print _("      <p>Send email notifications about reservations:<br>\n");
+	print "      <p>" . _("Send email notifications about reservations:") . "<br>\n";
 	print "      <INPUT type=radio id=r3 name=emailnotify value=2 ";
-	print "{$selected['enabled']}" . _("><label for=r3>Enabled");
+	print "{$selected['enabled']}" . "><label for=r3>" . _("Enabled");
 	print "</label><br>\n";
 	print "      <INPUT type=radio id=r4 name=emailnotify value=1 ";
-	print "{$selected['disabled']}" . _("><label for=r4>Disabled");
+	print "{$selected['disabled']}" . "><label for=r4>" . _("Disabled");
 	print "</label></p>\n";
 
 	###########################
@@ -333,17 +333,15 @@ function userpreferences() {
 	print "name=\"pubkeys\" style=\"width: 27em;\"";
 	if(! $user['usepublickeys'])
 		print " disabled=\"disabled\"";
-	print ">{$user['sshpublickeys']}</textarea><br>\n";
-	print "<strong>NOTE</strong>: Images using network storage (such as AFS) may not<br>\n";
-	print "work well with public key authentication. In some cases,<br>\n";
-	print "you may still be prompted for a password. In other cases,<br>\n";
-	print "you may need to run additional commands after logging in<br>\n";
-	print "to gain access to the network storage.<br>\n";
+	print ">{$user['sshpublickeys']}</textarea><br><br>\n";
+	print "<strong>" . _("NOTE:") . "</strong> ";
+	$h = "      " . _("Images using network storage (such as AFS) may not work well with public key authentication. In some cases, you may still be prompted for a password. In other cases, you may need to run additional commands after logging in to gain access to the network storage.");
+	print preg_replace("/(.{1,55}([ \n]|$))/", '\1<br>', $h) . "\n";
 	print "      </p>\n";
 
 	$cont = addContinuationsEntry('submitgeneralprefs', $cdata, SECINDAY, 1, 0);
 	print "      <INPUT type=hidden name=continuation value=\"$cont\">\n";
-	print _("      <INPUT type=submit value=\"Submit General Preferences\">\n");
+	print "      <INPUT type=submit value=\"" . _("Submit General Preferences") . "\">\n";
 	print "      </FORM>\n";
 	print "      </fieldset>\n";
 	print "      </div>\n";
@@ -391,46 +389,46 @@ function confirmUserPrefs($type) {
 
 	print "<div align=center>\n";
 	if($type == 0) {
-		print _("<H2>Personal Information</H2>\n");
-		print _("<H3>Submit the following changes?</H3>\n");
+		print "<H2>" . _("Personal Information") . "</H2>\n";
+		print "<H3>" . _("Submit the following changes?") . "</H3>\n";
 		print "<table>\n";
 		print "  <TR>\n";
-		print _("    <TH align=right>Preferred Name:</TH>\n");
+		print "    <TH align=right>" . _("Preferred Name:") . "</TH>\n";
 		print "    <TD>" . $data["preferredname"] . "</TD>\n";
 		print "  </TR>\n";
 		print "</table>\n";
 		if($user['affiliation'] == 'Local' &&
 		   ! empty($data['newpassword'])) {
-			print _("New password will be submitted<br>\n");
+			print _("New password will be submitted") . "<br>\n";
 		}
 	}
 	elseif($type == 1) {
-		print _("<H2>RDP Preferences</H2>\n");
-		print _("<H3>Submit the following changes?</H3>\n");
+		print "<H2>" . _("RDP Preferences") . "</H2>\n";
+		print "<H3>" . _("Submit the following changes?") . "</H3>\n";
 		print "<table>\n";
 		print "  <TR>\n";
-		print _("    <TH align=right>Resolution:</TH>\n");
+		print "    <TH align=right>" . _("Resolution:") . "</TH>\n";
 		print "    <TD>" . $data["resolution"] . "</TD>\n";
 		print "  </TR>\n";
 		print "  <TR>\n";
-		print _("    <TH align=right>Color Depth:</TH>\n");
+		print "    <TH align=right>" . _("Color Depth:") . "</TH>\n";
 		$colordepth = array("8" => "8", "16" => "16", "24" => "24", "32" => "32");
 		print "    <TD>" . $colordepth[$data["bpp"]] . "</TD>\n";
 		print "  </TR>\n";
 		print "  <TR>\n";
-		print _("    <TH align=right>Audio:</TH>\n");
+		print "    <TH align=right>" . _("Audio:") . "</TH>\n";
 		print "    <TD>$audio</TD>\n";
 		print "  </TR>\n";
 		print "  <TR>\n";
-		print _("    <TH align=right>Map Local Drives:</TH>\n");
+		print "    <TH align=right>" . _("Map Local Drives:") . "</TH>\n";
 		print "    <TD>$drives</TD>\n";
 		print "  </TR>\n";
 		print "  <TR>\n";
-		print _("    <TH align=right>Map Local Printers:</TH>\n");
+		print "    <TH align=right>" . _("Map Local Printers:") . "</TH>\n";
 		print "    <TD>$printers</TD>\n";
 		print "  </TR>\n";
 		print "  <TR>\n";
-		print _("    <TH align=right>Map Local Serial Ports:</TH>\n");
+		print "    <TH align=right>" . _("Map Local Serial Ports:") . "</TH>\n";
 		print "    <TD>$serial</TD>\n";
 		print "  </TR>\n";
 		print "  <TR>\n";
@@ -445,14 +443,14 @@ function confirmUserPrefs($type) {
 	print "      <FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
 	$cont = addContinuationsEntry('submituserprefs', $data, SECINWEEK, 0, 0);
 	print "      <INPUT type=hidden name=continuation value=\"$cont\">\n";
-	print _("      <INPUT type=submit value=Submit>\n");
+	print "      <INPUT type=submit value=" . _("Submit") . ">\n";
 	print "      </FORM>\n";
 	print "    </TD>\n";
 	print "    <TD>\n";
 	print "      <FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
 	$cont = addContinuationsEntry('userpreferences');
 	print "      <INPUT type=hidden name=continuation value=\"$cont\">\n";
-	print _("      <INPUT type=submit value=Cancel>\n");
+	print "      <INPUT type=submit value=" . _("Cancel") . ">\n";
 	print "      </FORM>\n";
 	print "    </TD>\n";
 	print "  </TR>\n";

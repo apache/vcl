@@ -155,23 +155,23 @@ class Resource {
 
 		$h = '';
 
-		$h .= "<H2>Manage {$this->restypename}s</H2>\n";
+		$h .= "<H2>" . _("Manage {$this->restypename}s") . "</H2>\n";
 		$h .= "<FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
 		$showsubmit = 0;
 		if(in_array("{$this->restype}Admin", $user["privileges"]) &&
 		   ($this->addable == 1 || $resAdminCnt)) {
 			$cont = addContinuationsEntry("viewResources", $this->basecdata);
 			$h .= "<INPUT type=radio name=continuation value=\"$cont\" checked ";
-			$h .= "id=\"{$this->restype}edit\"><label for=\"{$this->restype}edit\">Edit ";
-			$h .= "{$this->restypename} Profiles</label><br>\n";
+			$h .= "id=\"{$this->restype}edit\"><label for=\"{$this->restype}edit\">";
+			$h .= _("Edit {$this->restypename} Profiles") . "</label><br>\n";
 			$showsubmit = 1;
 		}
 
 		if(($resAdminCnt && $resGroupCnt) || ($resMapCnt && $maptypeMapCnt)) {
 			if($this->hasmapping)
-				$label = "Edit Grouping &amp; Mapping";
+				$label = _("Edit Grouping &amp; Mapping");
 			else
-				$label = "Edit Grouping";
+				$label = _("Edit Grouping");
 			$cont = addContinuationsEntry("groupMapHTML", $this->basecdata);
 			$h .= "<INPUT type=radio name=continuation value=\"$cont\" id=\"";
 			$h .= "resgroupmap\"><label for=\"resgroupmap\">$label</label><br>\n";
@@ -182,9 +182,9 @@ class Resource {
 			$h .= $this->extraSelectAdminOptions();
 
 		if($showsubmit)
-			$h .= "<br><INPUT type=submit value=Submit>\n";
+			$h .= "<br><INPUT type=submit value=" . _("Submit") . ">\n";
 		else
-			$h .= "You don't have access to manage any {$this->restype}s.<br>\n";
+			$h .= _("You don't have access to manage any {$this->restype}s.") . "<br>\n";
 		$h .= "</FORM>\n";
 
 		return $h;
@@ -200,7 +200,7 @@ class Resource {
 	function viewResources() {
 		global $user, $mode;
 		$h = '';
-		$h .= "<h2>{$this->restypename} Profiles</h2>\n";
+		$h .= "<h2>" . _("{$this->restypename} Profiles") . "</h2>\n";
 
 		$resdata = $this->getData($this->defaultGetDataArgs);
 		if(! empty($resdata)) {
@@ -238,10 +238,10 @@ class Resource {
 		}
 
 		if($this->addable)
-			$h .= dijitButton('', "Add New {$this->restypename}", "addNewResource('Add {$this->restypename}');");
+			$h .= dijitButton('', _("Add New {$this->restypename}"), "addNewResource('" . _("Add {$this->restypename}") . "');");
 
 		if(empty($resdata)) {
-			$h .= "<br><br>(No {$this->restypename}s found to which you have access.)\n";
+			$h .= "<br><br>(" . _("No {$this->restypename}s found to which you have access.") . ")\n";
 			$cont = addContinuationsEntry("viewResources", $this->basecdata);
 			$url = BASEURL . SCRIPT . "?continuation=$cont";
 			$h .= "<input type=\"hidden\" id=\"reloadpageurl\" value=\"$url\">\n";
@@ -269,25 +269,26 @@ class Resource {
 		}
 
 		# filters
-		$h .= "<div dojoType=\"dijit.TitlePane\" title=\"Filters (click to expand)\" ";
+		$h .= "<div dojoType=\"dijit.TitlePane\" title=\"" . _("Filters (click to expand)") . "\" ";
 		$h .= "open=\"false\">\n";
 		$h .= "<span id=\"namefilter\">\n";
-		$h .= "<strong>Name</strong>:\n";
+		$h .= "<strong>" . _("Name") . "</strong>:\n";
 		$h .= "<div dojoType=\"dijit.form.TextBox\" id=\"namefilter\" length=\"80\">";
 		$h .= "  <script type=\"dojo/connect\" event=\"onKeyUp\" args=\"event\">\n";
 		$h .= "    if(event.keyCode == 13) resource.GridFilter();\n";
 		$h .= "  </script>\n";
 		$h .= "</div>\n";
 
-		$h .= dijitButton('', "Apply Name Filter", "resource.GridFilter();");
+		$h .= dijitButton('', _("Apply Name Filter"), "resource.GridFilter();");
 		$h .= "<br>\n";
 
 		$h .= "</span>\n"; # namefilter
-		$h .= "<strong>Displayed Fields</strong>:<br>\n";
+		$h .= "<strong>" . _("Displayed Fields") . "</strong>:<br>\n";
 		$h .= $this->addDisplayCheckboxes($fields, $resdata[$testid], $selfields);
 		if($this->deletetoggled) {
-			$h .= "<label for=\"showdeleted\"><strong>Include Deleted ";
-			$h .= "{$this->restypename}s:</strong>:</label>\n";
+			$h .= "<label for=\"showdeleted\"><strong>";
+			$h .= _("Include Deleted {$this->restypename}s:");
+			$h .= "</strong>:</label>\n";
 			$h .= "<input type=\"checkbox\" dojoType=\"dijit.form.CheckBox\" ";
 			$h .= "id=\"showdeleted\" onChange=\"resource.GridFilter();\">\n";
 		}
@@ -311,7 +312,7 @@ class Resource {
 			$w = array('5em', '3em', '17em');
 		$h .= "<th field=\"id\" id=\"delcolth\" width=\"{$w[0]}\" formatter=\"resource.DeleteBtn\" styles=\"text-align: center;\">&nbsp;</th>\n";
 		$h .= "<th field=\"id\" width=\"{$w[1]}\" formatter=\"resource.EditBtn\" styles=\"text-align: center;\">&nbsp;</th>\n";
-		$h .= "<th field=\"name\" width=\"{$w[2]}\">Name</th>\n";
+		$h .= "<th field=\"name\" width=\"{$w[2]}\">" . _("Name") . "</th>\n";
 		if(! array_key_exists('owner', $selfields))
 			$selfields['owner'] = 1;
 		foreach($fields as $field)
@@ -341,8 +342,8 @@ class Resource {
 			$h .= "<h2 id=\"toggleDeleteHeading\"></h2>\n";
 			$h .= "<span id=\"toggleDeleteQuestion\"></span><br>\n";
 			$h .= "<div id=\"confdelrescontent\"></div>\n";
-			$h .= dijitButton('toggleDeleteBtn', "Delete {$this->restypename}", "submitToggleDeleteResource();");
-			$h .= dijitButton('', "Cancel", "clearHideConfirmDelete();");
+			$h .= dijitButton('toggleDeleteBtn', _("Delete {$this->restypename}"), "submitToggleDeleteResource();");
+			$h .= dijitButton('', _("Cancel"), "clearHideConfirmDelete();");
 			$h .= "<input type=hidden id=\"submitdeletecont\">\n";
 			$h .= "</div>\n";
 		}
@@ -618,7 +619,7 @@ class Resource {
 		if(! array_key_exists($rscid, $resources[$this->restype])) {
 			$type = strtolower($this->restypename);
 			$rt = array('status' => 'noaccess',
-			            'msg' => "You do not have access to delete the selected $type.",
+			            'msg' => _("You do not have access to delete the selected $type."),
 			            'rscid' => $rscid);
 			sendJSON($rt);
 			return;
@@ -632,9 +633,9 @@ class Resource {
 			sendJSON($rt);
 			return;
 		}
-		$rt = array('title' => "Confirm Delete {$this->restypename}",
-		            'question' => "Delete the following {$this->restype}?",
-		            'btntxt' => "Delete {$this->restypename}",
+		$rt = array('title' => _("Confirm Delete {$this->restypename}"),
+		            'question' => _("Delete the following {$this->restype}?"),
+		            'btntxt' => _("Delete {$this->restypename}"),
 		            'status' => 'success');
 		$args = $this->defaultGetDataArgs;
 		if($this->deletetoggled)
@@ -642,17 +643,17 @@ class Resource {
 		$args['rscid'] = $rscid;
 		$resdata = $this->getData($args);
 		if($this->deletetoggled && $resdata[$rscid]['deleted']) {
-			$rt['title'] = "Confirm Undelete {$this->restypename}";
-			$rt['question'] = "Undelete the following {$this->restype}?";
-			$rt['btntxt'] = "Undelete {$this->restypename}";
+			$rt['title'] = _("Confirm Undelete {$this->restypename}");
+			$rt['question'] = _("Undelete the following {$this->restype}?");
+			$rt['btntxt'] = _("Undelete {$this->restypename}");
 		}
 		$fields = array_keys($resdata[$rscid]);
 		$rt['fields'] = array();
 		$rt['fields'][] = array('field' => 'name',
-		                        'name' => 'Name',
+		                        'name' => _('Name'),
 		                        'value' => $resdata[$rscid][$this->namefield]);
 		$rt['fields'][] = array('field' => 'owner',
-		                        'name' => 'Owner',
+		                        'name' => _('Owner'),
 		                        'value' => $resdata[$rscid]['owner']);
 		foreach($fields as $field) {
 			if($field == $this->namefield ||
@@ -770,26 +771,26 @@ class Resource {
 		$resources = $tmp[$this->restype];
 		uasort($resources, 'sortKeepIndex');
 		$h = '';
-		$h .= "<div id=\"groupbyresourcediv\" dojoType=\"dijit.layout.ContentPane\" title=\"Group By {$this->restypename}\">\n";
+		$h .= "<div id=\"groupbyresourcediv\" dojoType=\"dijit.layout.ContentPane\" ";
+		$h .= "title=\"" . _("Group By {$this->restypename}") . "\">\n";
 		$h .= "<div id=\"groupbyresourcedesc\">\n";
-		$h .= "Select an item from the drop-down box and click \"Get Groups\" ";
-		$h .= "to see<br>all of the groups it is in. Then, select a group it ";
-		$h .= "is in and click the Remove<br>button to remove it from that group, ";
-		$h .= "or select a group it is not in and click<br>the Add button to ";
-		$h .= "add it to that group.<br><br>\n";
+		$h .= "<div style=\"width: 400px;\">\n";
+		$h .= _("Select an item from the drop-down box and click \"Get Groups\" to see all of the groups it is in. Then, select a group it is in and click the Remove button to remove it from that group, or select a group it is not in and click the Add button to add it to that group.");
+		$h .= "</div><br>\n";
 		$h .= "</div>\n"; # groupbyresourcedesc
 		$h .= "<div id=\"groupbyresourcesel\">\n";
-		$h .= "{$this->restypename}:<select id=\"resources\">\n";
+		$h .= _($this->restypename) . ":<select id=\"resources\">\n";
 		foreach($resources as $id => $res)
 			$h .= "<option value=$id>$res</option>\n";
 		$h .= "</select>\n";
-		$h .= dijitButton('fetchGrpsButton', "Get Groups",
+		$h .= dijitButton('fetchGrpsButton', _("Get Groups"),
 			               "populateLists('resources', 'ingroups', 'inresourcename', 'outresourcename', 'resgroupinggroupscont');");
 		$h .= "</div>\n"; # groupbyresourcesel
 		$h .= "<table><tbody><tr>\n";
 		# select for groups resource is in
 		$h .= "<td valign=top>\n";
-		$h .= "Groups <span style=\"font-weight: bold;\" id=\"inresourcename\"></span> is in:<br>\n";
+		$h .= sprintf(_("Groups %s is in:"), "<span style=\"font-weight: bold;\" id=\"inresourcename\"></span>");
+		$h .= "<br>\n";
 		$h .= "<table dojoType=\"dojox.grid.DataGrid\" jsId=\"ingroups\" ";
 		$h .= "store=\"resourcetogroupsstore\" style=\"width: 240px; height: 250px;\" query=\"{inout: 1}\" ";
 		$h .= "selectionMode=\"extended\">\n";
@@ -802,20 +803,23 @@ class Resource {
 		$h .= "</td>\n";
 		# transfer buttons
 		$h .= "<td style=\"vertical-align: middle;\">\n";
-		$h .= dijitButton('', "<div style=\"width: 50px;\">&lt;-Add</div>", "resource.addRemItem('addgrpcont', 'resources', 'outgroups');");
+		$h .= dijitButton('', "<div style=\"width: 50px;\">&lt;-" . _("Add") . "</div>",
+		                  "resource.addRemItem('addgrpcont', 'resources', 'outgroups');");
 		$cdata = $this->basecdata;
 		$cdata['mode'] = 'add';
 		$cont = addContinuationsEntry('AJaddRemGroupResource', $cdata);
 		$h .= "<input type=\"hidden\" id=\"addgrpcont\" value=\"$cont\">\n";
 		$h .= "<br><br><br>\n";
-		$h .= dijitButton('', "<div style=\"width: 50px;\">Remove-&gt;</div>", "resource.addRemItem('remgrpcont', 'resources', 'ingroups');");
+		$h .= dijitButton('', "<div style=\"width: 50px;\">" . _("Remove") . "-&gt;</div>",
+		                  "resource.addRemItem('remgrpcont', 'resources', 'ingroups');");
 		$cdata['mode'] = 'remove';
 		$cont = addContinuationsEntry('AJaddRemGroupResource', $cdata);
 		$h .= "<input type=\"hidden\" id=\"remgrpcont\" value=\"$cont\">\n";
 		$h .= "</td>\n";
 		# select for groups resource is not in
 		$h .= "<td valign=top>\n";
-		$h .= "Groups <span style=\"font-weight: bold;\" id=\"outresourcename\"></span> is not in:<br>\n";
+		$h .= sprintf(_("Groups %s is not in:"), "<span style=\"font-weight: bold;\" id=\"outresourcename\"></span>");
+		$h .= "<br>\n";
 		$h .= "<table dojoType=\"dojox.grid.DataGrid\" jsId=\"outgroups\" ";
 		$h .= "store=\"resourcetogroupsstore\" style=\"width: 240px; height: 250px;\" query=\"{inout: 1}\" ";
 		$h .= "selectionMode=\"extended\">\n";
@@ -945,12 +949,12 @@ class Resource {
 		if(empty($resources[$this->restype]))
 			return '';
 		$h = '';
-		$h .= "<div id=\"groupbygroupdiv\" dojoType=\"dijit.layout.ContentPane\" title=\"Group By Group\">\n";
-		$h .= "Select a group from the drop-down box and click \"Get {$this->restypename}s\"<br>";
-		$h .= "to see all of the resources in it. Then, select a resource in it and click the<br>";
-		$h .= "Remove button to remove it from that group, or select a resource that is not ";
-		$h .= "<br>in it and click the Add button to add it to that group.<br><br>\n";
-		$h .= "Group:<select id=\"resgroups\">\n";
+		$h .= "<div id=\"groupbygroupdiv\" dojoType=\"dijit.layout.ContentPane\" ";
+		$h .= "title=\"" . _("Group By Group") . "\">\n";
+		$h .= "<div style=\"width: 420px;\">\n";
+		$h .= _("Select a group from the drop-down box and click \"Get {$this->restypename}s\" to see all of the resources in it. Then, select a resource in it and click the Remove button to remove it from that group, or select a resource that is not in it and click the Add button to add it to that group.");
+		$h .= "</div><br>\n";
+		$h .= _("Group:") . "<select id=\"resgroups\">\n";
 		# build list of groups
 		$tmp = getUserResources(array($this->restype . "Admin"), array('manageGroup'), 1);
 		$groups = $tmp[$this->restype];
@@ -963,7 +967,8 @@ class Resource {
 		$h .= "<table><tbody><tr>\n";
 		# select for resources in group
 		$h .= "<td valign=top>\n";
-		$h .= "{$this->restypename}s in <span style=\"font-weight: bold;\" id=\"ingroupname\"></span>:<br>\n";
+		$h .= sprintf(_("{$this->restypename}s in %s:"), "<span style=\"font-weight: bold;\" id=\"ingroupname\"></span>");
+		$h .= "<br>\n";
 		$h .= "<table dojoType=\"dojox.grid.DataGrid\" jsId=\"inresources\" ";
 		$h .= "store=\"grouptoresourcesstore\" style=\"width: 240px; height: 250px;\" query=\"{inout: 1}\" ";
 		$h .= "selectionMode=\"extended\" sortInfo=\"1\">\n";
@@ -976,20 +981,23 @@ class Resource {
 		$h .= "</td>\n";
 		# transfer buttons
 		$h .= "<td style=\"vertical-align: middle;\">\n";
-		$h .= dijitButton('', "<div style=\"width: 50px;\">&lt;-Add</div>", "resource.addRemItem('additemcont', 'resgroups', 'outresources');");
+		$h .= dijitButton('', "<div style=\"width: 50px;\">&lt;-" . _("Add") . "</div>",
+		                  "resource.addRemItem('additemcont', 'resgroups', 'outresources');");
 		$cdata = $this->basecdata;
 		$cdata['mode'] = 'add';
 		$cont = addContinuationsEntry('AJaddRemResourceGroup', $cdata);
 		$h .= "<input type=\"hidden\" id=\"additemcont\" value=\"$cont\">\n";
 		$h .= "<br><br><br>\n";
-		$h .= dijitButton('', "<div style=\"width: 50px;\">Remove-&gt;</div>", "resource.addRemItem('remitemcont', 'resgroups', 'inresources');");
+		$h .= dijitButton('', "<div style=\"width: 50px;\">" . _("Remove") . "-&gt;</div>",
+		                  "resource.addRemItem('remitemcont', 'resgroups', 'inresources');");
 		$cdata['mode'] = 'remove';
 		$cont = addContinuationsEntry('AJaddRemResourceGroup', $cdata);
 		$h .= "<input type=\"hidden\" id=\"remitemcont\" value=\"$cont\">\n";
 		$h .= "</td>\n";
 		# select for groups resource is not in
 		$h .= "<td valign=top>\n";
-		$h .= "{$this->restypename}s not in <span style=\"font-weight: bold;\" id=\"outgroupname\"></span>:<br>\n";
+		$h .= sprintf(_("{$this->restypename}s not in %s:"), "<span style=\"font-weight: bold;\" id=\"outgroupname\"></span>");
+		$h .= "<br>\n";
 		$h .= "<table dojoType=\"dojox.grid.DataGrid\" jsId=\"outresources\" ";
 		$h .= "store=\"grouptoresourcesstore\" style=\"width: 240px; height: 250px;\" query=\"{inout: 1}\" ";
 		$h .= "selectionMode=\"extended\" sortInfo=\"1\">\n";
@@ -1141,27 +1149,26 @@ class Resource {
 		$h = '';
 
 		if(! count($groups) || ! count($mapgroups)) {
-			$h .= "You don't have access to manage any mappings for this resource ";
-			$h .= "type.<br>\n";
+			$h .= _("You don't have access to manage any mappings for this resource type.");
 			return $h;
 		}
 
-		$h .= "<div id=\"mapbyresgroupdiv\" dojoType=\"dijit.layout.ContentPane\" title=\"Map By {$this->restypename} Group\">\n";
-		$h .= "Select an item from the drop-down box and click \"Get {$this->maptypename} Groups\"<br>";
-		$h .= "to see all of the groups it maps to. Then, select a group ";
-		$h .= "it does not map<br>to and click the Add button to map it to that group, ";
-		$h .= "or select a group it<br>maps to and click the Remove ";
-		$h .= "button to unmap it from that group.<br><br>\n";
-		$h .= "{$this->restypename} Group:<select id=\"groups\">\n";
+		$h .= "<div id=\"mapbyresgroupdiv\" dojoType=\"dijit.layout.ContentPane\" ";
+		$h .= "title=\"" . _("Map By {$this->restypename} Group") . "\">\n";
+		$h .= "<div style=\"width: 390px;\">\n";
+		$h .= _("Select an item from the drop-down box and click \"Get {$this->maptypename} Groups\" to see all of the groups it maps to. Then, select a group it does not map to and click the Add button to map it to that group, or select a group it maps to and click the Remove button to unmap it from that group.");
+		$h .= "</div><br>\n";
+		$h .= _("{$this->restypename} Group:") . "<select id=\"groups\">\n";
 		foreach($groups as $id => $group)
 			$h .= "<option value=$id>$group</option>\n";
 		$h .= "</select>\n";
-		$h .= dijitButton('', "Get {$this->maptypename} Groups",
+		$h .= dijitButton('', _("Get {$this->maptypename} Groups"),
 		                  "populateLists('groups', 'inmapgroups', 'inmapgroupname', 'outmapgroupname', 'mapbyresgroupcont');");
 		$h .= "<table><tbody><tr>\n";
 		# select for groups mapped to
 		$h .= "<td valign=top>\n";
-		$h .= "{$this->maptypename} Groups <span style=\"font-weight: bold;\" id=\"inmapgroupname\"></span> maps to:<br>\n";
+		$h .= sprintf(_("{$this->maptypename} Groups %s maps to:"), "<span style=\"font-weight: bold;\" id=\"inmapgroupname\"></span>");
+		$h .= "<br>\n";
 		$h .= "<table dojoType=\"dojox.grid.DataGrid\" jsId=\"inmapgroups\" ";
 		$h .= "store=\"mapbyresgroupstore\" style=\"width: 240px; height: 250px;\" query=\"{inout: 1}\" ";
 		$h .= "selectionMode=\"extended\">\n";
@@ -1174,7 +1181,8 @@ class Resource {
 		$h .= "</td>\n";
 		# transfer buttons
 		$h .= "<td style=\"vertical-align: middle;\">\n";
-		$h .= dijitButton('', "<div style=\"width: 50px;\">&lt;-Add</div>", "resource.addRemItem('addmapgrpcont', 'groups', 'outmapgroups');");
+		$h .= dijitButton('', "<div style=\"width: 50px;\">&lt;-" . _("Add") . "</div>",
+		                  "resource.addRemItem('addmapgrpcont', 'groups', 'outmapgroups');");
 		$cdata = $this->basecdata;
 		$cdata['mode'] = 'add';
 		$cont = addContinuationsEntry('AJaddRemMapToGroup', $cdata);
@@ -1182,14 +1190,16 @@ class Resource {
 		$h .= "<br>\n";
 		$h .= "<br>\n";
 		$h .= "<br>\n";
-		$h .= dijitButton('', "<div style=\"width: 50px;\">Remove-&gt;</div>", "resource.addRemItem('remmapgrpcont', 'groups', 'inmapgroups');");
+		$h .= dijitButton('', "<div style=\"width: 50px;\">" . _("Remove") . "-&gt;</div>",
+		                  "resource.addRemItem('remmapgrpcont', 'groups', 'inmapgroups');");
 		$cdata['mode'] = 'remove';
 		$cont = addContinuationsEntry('AJaddRemMapToGroup', $cdata);
 		$h .= "<input type=\"hidden\" id=\"remmapgrpcont\" value=\"$cont\">\n";
 		$h .= "</td>\n";
 		# select for groups resource is not in
 		$h .= "<td valign=top>\n";
-		$h .= "{$this->maptypename} Groups <span style=\"font-weight: bold;\" id=\"outmapgroupname\"></span> does not map to:<br>\n";
+		$h .= sprintf(_("{$this->maptypename} Groups %s does not map to:"), "<span style=\"font-weight: bold;\" id=\"outmapgroupname\"></span>");
+		$h .= "<br>\n";
 		$h .= "<table dojoType=\"dojox.grid.DataGrid\" jsId=\"outmapgroups\" ";
 		$h .= "store=\"mapbyresgroupstore\" style=\"width: 240px; height: 250px;\" query=\"{inout: 1}\" ";
 		$h .= "selectionMode=\"extended\">\n";
@@ -1337,22 +1347,22 @@ class Resource {
 			return $h;
 		}
 
-		$h .= "<div id=\"mapbymaptogroupdiv\" dojoType=\"dijit.layout.ContentPane\" title=\"Map By {$this->maptypename} Group\">\n";
-		$h .= "Select an item from the drop-down box and click \"Get {$this->restypename} Groups\"<br>";
-		$h .= "to see all of the groups it maps to. Then, select a group ";
-		$h .= "it does not map<br>to and click the Add button to map it to that group, ";
-		$h .= "or select a group it<br>maps to and click the Remove ";
-		$h .= "button to unmap it from that group.<br><br>\n";
-		$h .= "{$this->maptypename} Group:<select id=\"maptogroups\">\n";
+		$h .= "<div id=\"mapbymaptogroupdiv\" dojoType=\"dijit.layout.ContentPane\" ";
+		$h .= "title=\"" . _("Map By {$this->maptypename} Group") . "\">\n";
+		$h .= "<div style=\"width: 410px;\">\n";
+		$h .= _("Select an item from the drop-down box and click \"Get {$this->restypename} Groups\" to see all of the groups it maps to. Then, select a group it does not map to and click the Add button to map it to that group, or select a group it maps to and click the Remove button to unmap it from that group.");
+		$h .= "</div><br>\n";
+		$h .= _("{$this->maptypename} Group:") . "<select id=\"maptogroups\">\n";
 		foreach($mapgroups as $id => $group)
 			$h .= "<option value=$id>$group</option>\n";
 		$h .= "</select>\n";
-		$h .= dijitButton('', "Get {$this->restypename} Groups",
+		$h .= dijitButton('', _("Get {$this->restypename} Groups"),
 		                  "populateLists('maptogroups', 'inmaptogroups', 'inmaptogroupname', 'outmaptogroupname', 'mapbymaptogroupcont');");
 		$h .= "<table><tbody><tr>\n";
 		# select for groups mapped to
 		$h .= "<td valign=top>\n";
-		$h .= "{$this->restypename} Groups <span style=\"font-weight: bold;\" id=\"inmaptogroupname\"></span> maps to:<br>\n";
+		$h .= sprintf(_("{$this->restypename} Groups %s maps to:"), "<span style=\"font-weight: bold;\" id=\"inmaptogroupname\"></span>");
+		$h .= "<br>\n";
 		$h .= "<table dojoType=\"dojox.grid.DataGrid\" jsId=\"inmaptogroups\" ";
 		$h .= "store=\"mapbymaptogroupstore\" style=\"width: 240px; height: 250px;\" query=\"{inout: 1}\" ";
 		$h .= "selectionMode=\"extended\">\n";
@@ -1365,14 +1375,14 @@ class Resource {
 		$h .= "</td>\n";
 		# transfer buttons
 		$h .= "<td style=\"vertical-align: middle;\">\n";
-		$h .= dijitButton('', "<div style=\"width: 50px;\">&lt;-Add</div>",
+		$h .= dijitButton('', "<div style=\"width: 50px;\">&lt;-" . _("Add") . "</div>",
 		                  "resource.addRemItem('addmaptogrpcont', 'maptogroups', 'outmaptogroups');");
 		$cdata = $this->basecdata;
 		$cdata['mode'] = 'add';
 		$cont = addContinuationsEntry('AJaddRemGroupMapTo', $cdata);
 		$h .= "<input type=\"hidden\" id=\"addmaptogrpcont\" value=\"$cont\">\n";
 		$h .= "<br><br><br>\n";
-		$h .= dijitButton('', "<div style=\"width: 50px;\">Remove-&gt;</div>",
+		$h .= dijitButton('', "<div style=\"width: 50px;\">" . _("Remove") . "-&gt;</div>",
 		                  "resource.addRemItem('remmaptogrpcont', 'maptogroups', 'inmaptogroups');");
 		$cdata['mode'] = 'remove';
 		$cont = addContinuationsEntry('AJaddRemGroupMapTo', $cdata);
@@ -1380,7 +1390,8 @@ class Resource {
 		$h .= "</td>\n";
 		# select for groups resource is not in
 		$h .= "<td valign=top>\n";
-		$h .= "{$this->restypename} Groups <span style=\"font-weight: bold;\" id=\"outmaptogroupname\"></span> does not map to:<br>\n";
+		$h .= sprintf(_("{$this->restypename} Groups %s does not map to:"), "<span style=\"font-weight: bold;\" id=\"outmaptogroupname\"></span>");
+		$h .= "<br>\n";
 		$h .= "<table dojoType=\"dojox.grid.DataGrid\" jsId=\"outmaptogroups\" ";
 		$h .= "store=\"mapbymaptogroupstore\" style=\"width: 240px; height: 250px;\" query=\"{inout: 1}\" ";
 		$h .= "selectionMode=\"extended\">\n";
@@ -1703,12 +1714,13 @@ function AJstartImage() {
 				$comments = '';
 		}
 		if(preg_match('/\w/', $comments)) {
-			$cmt  = "These are the comments from the previous revision ";
-			$cmt .= "({$revisions[$revid]['revision']}):<br>";
+			$cmt  = sprintf(_("These are the comments from the previous revision (%s):"),
+			                $revisions[$revid]['revision']);
+			$cmt .= "<br>";
 			$cmt .= "{$revisions[$revid]['comments']}<br><br>";
 		}
 		else
-			$cmt = "The previous revision did not have any comments.<br><br>";
+			$cmt = _("The previous revision did not have any comments.") . "<br><br>";
 		$arr['comments'] = $cmt;
 		$cdata = array('obj' => $obj,
 		               'requestid' => $requestid,

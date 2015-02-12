@@ -54,9 +54,9 @@ maintenanceCheck();
 
 dbConnect();
 
-initGlobals();
-
 setVCLLocale();
+
+initGlobals();
 
 $modes = array_keys($actions['mode']);
 $args = array_keys($actions['args']);
