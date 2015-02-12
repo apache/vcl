@@ -12,2584 +12,3201 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
 msgid ""
 msgstr ""
-"Project-Id-Version: VCL 2.3\n"
-"Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2011-02-24 15:16+0900\n"
-"PO-Revision-Date: 2012-04-13 15:40-0500\n"
-"Last-Translator: \n"
+"Project-Id-Version: Apache VCL 2.4\n"
+"POT-Creation-Date: 2015-02-12 10:20-0500\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: \n"
+"Language: \n"
 "MIME-Version: 1.0\n"
-"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Type: text/plain; charset=CHARSET\n"
 "Content-Transfer-Encoding: 8bit\n"
 
-#: authentication.php:165
-#: utils.php:779
-msgid "<H2>Welcome to the Virtual Computing Lab</H2>\n"
-msgstr ""
-
-#: authentication.php:169
-msgid "Please select an authentication method to use:<br><br>\n"
-msgstr ""
-
-#: authentication.php:171
-msgid "<font color=red>Selected method failed, please try again</font><br>\n"
-msgstr ""
-
-#: authentication.php:183
-msgid "<label for=remsel>Remember my selection</label><br>\n"
-msgstr ""
-
-#: authentication.php:184
-msgid "<INPUT type=submit value=\"Proceed to Login\" tabindex=3 name=userid>\n"
-msgstr ""
-
-#: authentication.php:188
-msgid "<h3>Explanation of authentication methods:</h3>\n"
-msgstr ""
-
-#: authentication.php:248
-msgid "Proceed to Login"
-msgstr ""
-
-#: authentication.php:257
-msgid " (unable to connect to authentication server)"
-msgstr ""
-
-#: authentication.php:295
-msgid "Userid"
-msgstr ""
-
-#: authentication.php:296
-msgid "Password"
-msgstr ""
-
-#: authentication.php:297
-msgid "Login with "
-msgstr ""
-
-#: authentication.php:303
-msgid "<font color=red>Login failed "
-msgstr ""
-
-#: authentication.php:318
-msgid "    <TD colspan=2 align=right><INPUT type=submit value=Login></TD>\n"
-msgstr ""
-
-#: requests.php:57
-msgid "<H2>New Reservation</H2><br>\n"
-msgstr ""
-
-#: requests.php:78
-msgid "You don't have access to any environments and, therefore, cannot "
-msgstr ""
-
-#: requests.php:79
-msgid "make any reservations.<br>\n"
-msgstr ""
-
-#: requests.php:87
-msgid "Please select the environment you want to use from the list:<br>\n"
-msgstr ""
-
-#: requests.php:149
-msgid "<strong>Image Description</strong>:<br>\n"
-msgstr ""
-
-#: requests.php:157
-msgid "<legend>When would you like to use the application?</legend>\n"
-msgstr ""
-
-#: requests.php:159
-msgid "<label for=\"timenow\">Now</label><br>\n"
-msgstr ""
-
-#: requests.php:161
-msgid "<label for=\"laterradio\">Later:</label>\n"
-msgstr ""
-
-#: requests.php:195
-msgid "<INPUT id=newsubmit type=submit value=\"Create Reservation\" "
-msgstr ""
-
-#: requests.php:236
-msgid "dojo.byId('imgdesc').innerHTML = '<strong>Image Description</strong>:<br>"
-msgstr ""
-
-#: requests.php:244
-#: requests.php:281
-msgid "if(dojo.byId('newsubmit')) dojo.byId('newsubmit').value = 'Create Reservation';"
-msgstr ""
-
-#: requests.php:259
-msgid "'<font color=red>Selection not currently available due to scheduled system downtime for maintenance</font>'; "
-msgstr ""
-
-#: requests.php:263
-msgid "'<font color=red>Selection not currently available</font>'; "
-msgstr ""
-
-#: requests.php:268
-msgid "'Estimated load time: &lt; 1 minute';"
-msgstr ""
-
-#: requests.php:273
-msgid "'Estimated load time: &lt; "
-msgstr ""
-
-#: requests.php:273
-msgid " minutes';"
-msgstr ""
-
-msgid "minutes"
-msgstr ""
-
-#: requests.php:275
-#, php-format
-msgid "'Estimated load time: &lt; %2.0f minutes';"
-msgstr ""
-
-#: requests.php:317
-#: requests.php:391
-#: requests.php:428
-#: requests.php:462
-#: requests.php:522
-#: requests.php:548
-msgid "<H2>New Reservation</H2>\n"
-msgstr ""
-
-#: requests.php:392
-msgid "<font color=\"#ff0000\">The time you requested is in the past."
-msgstr ""
-
-#: requests.php:393
-msgid " Please select \"Now\" or use a time in the future.</font><br>\n"
-msgstr ""
-
-#: requests.php:430
-#: requests.php:439
-#: requests.php:1794
-#: requests.php:1800
-msgid "<font color=\"#ff0000\">The time you requested overlaps with "
-msgstr ""
-
-#: requests.php:431
-#: requests.php:1795
-msgid "another reservation you currently have.  You are only allowed "
-msgstr ""
-
-#: requests.php:432
-#: requests.php:1796
-msgid "to have a single reservation at any given time. Please select "
-msgstr ""
-
-#: requests.php:433
-msgid "another time to use the application. If you are finished with "
-msgstr ""
-
-#: requests.php:434
-msgid "an active reservation, click \"Current Reservations\", "
-msgstr ""
-
-#: requests.php:435
-msgid "then click the \"End\" button of your active reservation."
-msgstr ""
-
-#: requests.php:440
-#: requests.php:1801
-msgid "another reservation you currently have.  You are allowed "
-msgstr ""
-
-#: requests.php:441
-#: requests.php:1802
-msgid "to have "
-msgstr ""
-
-#: requests.php:441
-#: requests.php:1802
-msgid " overlapping reservations at any given time. "
-msgstr ""
-
-#: requests.php:442
-msgid "Please select another time to use the application. If you are "
-msgstr ""
-
-#: requests.php:443
-msgid "finished with an active reservation, click \"Current "
-msgstr ""
-
-#: requests.php:444
-msgid "Reservations\", then click the \"End\" button of your active "
-msgstr ""
-
-#: requests.php:445
-msgid "reservation.</font><br><br>\n"
-msgstr ""
-
-#: comment
-msgid "The time you requested overlaps with another reservation<br>"
-msgstr ""
-
-#: comment
-msgid "you currently have. You are only allowed to have a single<br>"
-msgstr ""
-
-#: comment
-msgid "reservation at any given time. Please select another time<br>"
-msgstr ""
-
-#: comment
-msgid "for the reservation.<br><br>"
-msgstr ""
-
-#: comment
-msgid "you currently have. You are allowed to have "
-msgstr ""
-
-#: comment
-msgid "overlapping<br>"
-msgstr ""
-
-#: comment
-msgid "reservations at any given time. Please select another time<br>"
-msgstr ""
-
-#: requests.php:464
-msgid "This is a cluster environment. At least one image in the "
-msgstr ""
-
-#: requests.php:465
-msgid "cluster has more than one version available. Please select "
-msgstr ""
-
-#: requests.php:466
-msgid "the version you desire for each image listed below:<br>\n"
-msgstr ""
-
-#: requests.php:469
-msgid "There are multiple versions of this environment available.  Please "
-msgstr ""
-
-#: requests.php:470
-msgid "select the version you would like to check out:<br>\n"
-msgstr ""
-
-#: requests.php:481
-msgid "Version"
-msgstr ""
-
-#: requests.php:482
-msgid "Creator"
-msgstr ""
-
-#: requests.php:483
-msgid "Created"
-msgstr ""
-
-#: requests.php:484
-msgid "Currently in Production"
-msgstr ""
-
-#: requests.php:499
-msgid "    <TD align=center>Yes</TD>\n"
-msgstr ""
-
-#: requests.php:501
-msgid "    <TD align=center>No</TD>\n"
-msgstr ""
-
-#: requests.php:511
-msgid "<INPUT type=submit value=\"Create Reservation\">\n"
-msgstr ""
-
-#: requests.php:523
-#: requests.php:1813
-msgid "You have requested an environment that is limited in the number "
-msgstr ""
-
-#: requests.php:524
-#: requests.php:1814
-msgid "of concurrent reservations that can be made. No further "
-msgstr ""
-
-#: requests.php:525
-#: requests.php:1815
-msgid "reservations for the environment can be made for the time you "
-msgstr ""
-
-#: requests.php:526
-#: requests.php:1816
-msgid "have selected. Please select another time to use the "
-msgstr ""
-
-#: requests.php:527
-#: requests.php:1817
-msgid "environment.<br>"
-msgstr ""
-
-#: requests.php:552
-#: requests.php:842
-msgid "<font color=red>NOTE: The maximum allowed reservation "
-msgstr ""
-
-#: requests.php:553
-msgid "length for this environment is "
-msgstr ""
-
-#: requests.php:553
-msgid ", and the length of "
-msgstr ""
-
-#: requests.php:554
-msgid "this reservation has been adjusted accordingly.</font>\n"
-msgstr ""
-
-#: requests.php:557
-#: requests.php:562
-#: requests.php:1839
-msgid "Your request to use <b>"
-msgstr ""
-
-#: requests.php:558
-#: requests.php:1839
-msgid "</b> on "
-msgstr ""
-
-#: requests.php:558
-#: requests.php:1849
-msgid " for "
-msgstr ""
-
-#: requests.php:558
-msgid " has been "
-msgstr ""
-
-#: requests.php:559
-msgid "accepted.<br><br>\n"
-msgstr ""
-
-#: requests.php:563
-#: requests.php:1448
-#: requests.php:1696
-#: requests.php:1896
-#: requests.php:2018
-#: requests.php:2024
-msgid "</b> starting "
-msgstr ""
-
-#: requests.php:563
-msgid " and ending "
-msgstr ""
-
-#: requests.php:566
-msgid "When your reservation time has been reached, the <strong>"
-msgstr ""
-
-#: requests.php:567
-msgid "Current Reservations</strong> page will have further "
-msgstr ""
-
-#: requests.php:568
-msgid "instructions on connecting to the reserved computer.  If you "
-msgstr ""
-
-#: requests.php:569
-msgid "would like to modify your reservation, you can do that from "
-msgstr ""
-
-#: requests.php:570
-msgid "the <b>Current Reservations</b> page as well.<br>\n"
-msgstr ""
-
-#: requests.php:640
-msgid "Connect!"
-msgstr ""
-
-#: requests.php:664
-#: requests.php:1580
-#: requests.php:1745
-#: userpreferences.php:457
-msgid "      <INPUT type=submit value=Cancel>\n"
-msgstr ""
-
-#: requests.php:686
-msgid "Reservation failed"
-msgstr ""
-
-#: requests.php:750
-msgid "Pending..."
-msgstr ""
-
-#: requests.php:753
-msgid "<br>Est:&nbsp;"
-msgstr ""
-
-#: requests.php:753
-msgid "&nbsp;min remaining\n"
-msgstr ""
-
-#: requests.php:761
-#: requests.php:774
-msgid "      <INPUT type=submit value=Delete>\n"
-msgstr ""
-
-#: requests.php:785
-msgid "      <INPUT type=submit value=Edit>\n"
-msgstr ""
-
-#: requests.php:795
-msgid " (Testing)"
-msgstr ""
-
-#: requests.php:835
-msgid "<H2>Current Reservations</H2>"
-msgstr ""
-
-msgid "<H2>Current Reservations</H2>\n"
-msgstr ""
-
-#: requests.php:838
-msgid "You currently have the following <strong>normal</strong> reservations:<br>\n"
-msgstr ""
-
-#: requests.php:840
-msgid "You currently have the following normal reservations:<br>\n"
-msgstr ""
-
-#: requests.php:843
-msgid "length for one of these reservations was less than the "
-msgstr ""
-
-#: requests.php:844
-msgid "length you submitted, and the length of that reservation "
-msgstr ""
-
-#: requests.php:845
-msgid "has been adjusted accordingly.</font>\n"
-msgstr ""
-
-#: requests.php:850
-#: requests.php:874
-#: requests.php:899
-msgid "    <TH>Environment</TH>\n"
-msgstr ""
-
-#: requests.php:851
-#: requests.php:875
-#: requests.php:900
-msgid "    <TH>Starting</TH>\n"
-msgstr ""
-
-#: comment
-msgid "Starting"
-msgstr ""
-
-#: requests.php:852
-#: requests.php:876
-#: requests.php:901
-msgid "    <TH>Ending</TH>\n"
-msgstr ""
-
-#: comment
-msgid "Ending"
-msgstr ""
-
-#: requests.php:853
-#: requests.php:877
-#: requests.php:902
-msgid "    <TH>Initially requested</TH>\n"
-msgstr ""
-
-#: requests.php:855
-#: requests.php:880
-#: requests.php:905
-msgid "    <TH>Req ID</TH>\n"
-msgstr ""
-
-#: requests.php:870
-msgid "You currently have the following <strong>imaging</strong> reservations:<br>\n"
-msgstr ""
-
-#: requests.php:895
-msgid "You currently have the following <strong>long term</strong> reservations:<br>\n"
-msgstr ""
-
-#: requests.php:920
-msgid "<br><br>Click the <strong>"
-msgstr ""
-
-#: requests.php:921
-msgid "Connect!</strong> button to get further "
-msgstr ""
-
-#: requests.php:922
-msgid "information about connecting to the reserved system. You must "
-msgstr ""
-
-#: requests.php:923
-msgid "click the button from a web browser running on the same computer "
-msgstr ""
-
-#: requests.php:924
-msgid "from which you will be connecting to the remote computer; "
-msgstr ""
-
-#: requests.php:925
-msgid "otherwise, you may be denied access to the machine.\n"
-msgstr ""
-
-#: requests.php:929
-msgid "<br><br>This page will automatically update "
-msgstr ""
-
-#: requests.php:930
-msgid "every 20 seconds until the <font color=red><i>Pending...</i>"
-msgstr ""
-
-#: requests.php:932
-msgid "</font> reservation is ready.\n"
-msgstr ""
-
-#: requests.php:938
-msgid "<br><br>An error has occurred that has kept one of your reservations "
-msgstr ""
-
-#: requests.php:939
-msgid "from being processed. We apologize for any inconvenience "
-msgstr ""
-
-#: requests.php:940
-msgid "this may have caused.\n"
-msgstr ""
-
-#: requests.php:948
-msgid "You have no current reservations.<br>"
-msgstr ""
-
-#: requests.php:957
-msgid "Detailed Reservation Status"
-msgstr ""
-
-#: requests.php:1013
-#: utils.php:4194
-msgid "The selected reservation is no longer available.  Go to "
-msgstr ""
-
-#: requests.php:1015
-msgid "New Reservations</a><br>to request a new reservation or to "
-msgstr ""
-
-#: requests.php:1016
-msgid "Current Reservations</a> to select<br>another one that is available."
-msgstr ""
-
-#: requests.php:1027
-msgid "No detailed loading information is available for this "
-msgstr ""
-
-#: requests.php:1028
-#: requests.php:1179
-msgid "reservation."
-msgstr ""
-
-#: requests.php:1051
-msgid "<th align=right><br>State</th>"
-msgstr ""
-
-#: requests.php:1052
-msgid "<th>Est/Act<br>Time</th>"
-msgstr ""
-
-#: requests.php:1053
-msgid "<th>Total<br>Time</th>"
-msgstr ""
-
-#: requests.php:1077
-msgid "<td colspan=3><hr>problem at state "
-msgstr ""
-
-#: requests.php:1087
-msgid "<br>retrying at state \""
-msgstr ""
-
-#: requests.php:1178
-msgid "No detailed information is available for this "
-msgstr ""
-
-#: requests.php:1193
-msgid "<br><font color=red>failed: "
-msgstr ""
-
-#: requests.php:1409
-#: requests.php:1431
-msgid "The computer you are using has another reservation<br>"
-msgstr ""
-
-#: requests.php:1410
-#: requests.php:1432
-msgid "immediately following yours. Therefore, you cannot<br>extend "
-msgstr ""
-
-#: requests.php:1411
-#: requests.php:1433
-msgid "your reservation because it would overlap<br>with the next "
-msgstr ""
-
-#: requests.php:1412
-#: requests.php:1434
-msgid "one.<br>"
-msgstr ""
-
-#: requests.php:1425
-msgid "You can extend this reservation by up to "
-msgstr ""
-
-#: requests.php:1426
-msgid ", but not<br>exceeding "
-msgstr ""
-
-#: requests.php:1427
-msgid " for your total reservation time."
-msgstr ""
-
-#: requests.php:1441
-msgid "The computer you are using has another reservation following "
-msgstr ""
-
-#: requests.php:1442
-msgid "yours. Therefore, you can only extend this reservation for "
-msgstr ""
-
-#: requests.php:1443
-msgid "another "
-msgstr ""
-
-#: requests.php:1443
-msgid ".<br><br>\n"
-msgstr ""
-
-#: requests.php:1447
-msgid "Modify reservation for"
-msgstr ""
-
-#: requests.php:1474
-msgid "You are only allowed to extend your reservation such that it "
-msgstr ""
-
-#: requests.php:1475
-msgid "has a total length of "
-msgstr ""
-
-#: requests.php:1476
-msgid ". This reservation<br>already meets that length. Therefore, "
-msgstr ""
-
-#: requests.php:1477
-msgid "you are not allowed to extend your reservation any further.<br><br>"
-msgstr ""
-
-#: requests.php:1487
-#: requests.php:1498
-msgid "15 minutes"
-msgstr ""
-
-#: requests.php:1489
-#: requests.php:1500
-#: requests.php:2133
-msgid "30 minutes"
-msgstr ""
-
-#: requests.php:1491
-#: requests.php:1504
-#: requests.php:2135
-#: utils.php:6792
-#: utils.php:6839
-msgid "1 hour"
-msgstr ""
-
-#: requests.php:1493
-#: requests.php:1506
-#: requests.php:2137
-#: utils.php:6841
-msgid " hours"
-msgstr ""
-
-#: comment
-msgid "hours"
-msgstr ""
-
-#: requests.php:1536
-msgid "Change ending to:"
-msgstr ""
-
-#: requests.php:1545
-msgid "<br><font color=red><strong>NOTE:</strong> Due to an upcoming "
-msgstr ""
-
-#: requests.php:1546
-msgid "reservation on the same computer,<br>"
-msgstr ""
-
-#: requests.php:1547
-msgid "you can only extend this reservation until "
-msgstr ""
-
-#: requests.php:1547
-msgid ".</font>\n"
-msgstr ""
-
-#: requests.php:1573
-msgid "      <INPUT type=submit value=\"Confirm Changes\">\n"
-msgstr ""
-
-#: requests.php:1679
-msgid "to "
-msgstr ""
-
-#: requests.php:1683
-msgid "by "
-msgstr ""
-
-#: requests.php:1706
-msgid "start "
-msgstr ""
-
-#: requests.php:1706
-#: requests.php:1714
-msgid " at "
-msgstr ""
-
-#: requests.php:1711
-msgid " and end "
-msgstr ""
-
-#: requests.php:1723
-msgid "for "
-msgstr ""
-
-#: requests.php:1738
-#: userpreferences.php:450
-msgid "      <INPUT type=submit value=Submit>\n"
-msgstr ""
-
-#: requests.php:1827
-msgid "has been accepted.<br><br>\n"
-msgstr ""
-
-#: requests.php:1847
-msgid " until "
-msgstr ""
-
-#: requests.php:1860
-msgid "system downtime for maintenance. "
-msgstr ""
-
-#: requests.php:1894
-msgid "Delete Reservation"
-msgstr ""
-
-msgid "Delete Reservation\n"
-msgstr ""
-
-#: requests.php:1895
-msgid "Delete reservation for <b>"
-msgstr ""
-
-#: requests.php:1896
-#: requests.php:1922
-msgid "?<br>\n"
-msgstr ""
-
-#: requests.php:1904
-msgid "End Reservation"
-msgstr ""
-
-#: requests.php:1906
-msgid "Are you finished with your reservation for <strong>"
-msgstr ""
-
-#: requests.php:1907
-#: requests.php:1913
-msgid "</strong> that started "
-msgstr ""
-
-#: requests.php:1911
-msgid "Delete reservation by "
-msgstr ""
-
-#: requests.php:1912
-msgid " for <strong>"
-msgstr ""
-
-#: requests.php:2083
-msgid "&nbsp;At&nbsp;\n"
-msgstr ""
-
-#: requests.php:2105
-msgid "Duration"
-msgstr ""
-
-#: requests.php:2139
-msgid " days"
-msgstr ""
-
-#: requests.php:2145
-msgid "<label for=\"openend\">Until</label>\n"
-msgstr ""
-
-#: requests.php:2177
-msgid "<H2 align=center>Connect!</H2>\n"
-msgstr ""
-
-#: requests.php:2179
-msgid "<font color=red><big><strong>NOTICE:</strong> Later in this process, you must accept a "
-msgstr ""
-
-#: requests.php:2180
-msgid "click-through agreement</a> about software licensing.</big></font><br><br>\n"
-msgstr ""
-
-#: requests.php:2211
-#: requests.php:2266
-#: requests.php:2307
-#: requests.php:2337
-msgid "reservations.<br>\n"
-msgstr ""
-
-#: requests.php:2214
-#: requests.php:2269
-#: requests.php:2310
-#: requests.php:2340
-msgid "(use your campus password)"
-msgstr ""
-
-#: requests.php:2328
-msgid "Get RDP File"
-msgstr ""
-
-#: requests.php:2365
-msgid "<h3>Notes on using this environment:</h3>\n"
-msgstr ""
-
-#: requests.php:2502
-msgid "Please select a valid environment"
-msgstr ""
-
-#: requests.php:2513
-msgid "The submitted start date is invalid. "
-msgstr ""
-
-#: requests.php:2517
-msgid "The submitted hour must be from 1 to 12."
-msgstr ""
-
-#: requests.php:2574
-#: requests.php:2578
-msgid "The submitted date/time is invalid."
-msgstr ""
-
-#: utils.php:106
+#: ../.ht-inc/utils.php:110 ../.ht-inc/blockallocations.php:309
 msgid "Sunday"
 msgstr ""
 
-#: utils.php:106
+#: ../.ht-inc/utils.php:110 ../.ht-inc/blockallocations.php:310
 msgid "Monday"
 msgstr ""
 
-#: utils.php:106
+#: ../.ht-inc/utils.php:110 ../.ht-inc/blockallocations.php:311
 msgid "Tuesday"
 msgstr ""
 
-#: utils.php:106
+#: ../.ht-inc/utils.php:110 ../.ht-inc/blockallocations.php:312
 msgid "Wednesday"
 msgstr ""
 
-#: utils.php:106
+#: ../.ht-inc/utils.php:110 ../.ht-inc/blockallocations.php:313
 msgid "Thursday"
 msgstr ""
 
-#: utils.php:106
+#: ../.ht-inc/utils.php:110 ../.ht-inc/blockallocations.php:314
 msgid "Friday"
 msgstr ""
 
-#: utils.php:106
+#: ../.ht-inc/utils.php:110 ../.ht-inc/blockallocations.php:315
 msgid "Saturday"
 msgstr ""
 
-#: utils.php:215
-msgid "Failed to get user info from database.  userid was "
+#: ../.ht-inc/utils.php:226
+msgid "Failed to get user info from database. userid was "
 msgstr ""
 
-#: utils.php:594
-msgid "<h2>Site Currently Under Maintenance</h2>\n"
+#: ../.ht-inc/utils.php:696
+msgid "Site Currently Under Maintenance"
 msgstr ""
 
-#: utils.php:601
-msgid "This site is currently in maintenance.<br>\n"
+#: ../.ht-inc/utils.php:703
+msgid "This site is currently in maintenance."
 msgstr ""
 
-#: utils.php:603
-msgid "The maintenance is scheduled to end <b>"
+#: ../.ht-inc/utils.php:705
+#, php-format
+msgid "The maintenance is scheduled to end <strong>%s</strong>."
 msgstr ""
 
-#: utils.php:603
-msgid "</b>.<br><br><br>\n"
+#: ../.ht-inc/utils.php:737 ../.ht-inc/requests.php:4145
+msgid "NOTICE:"
 msgstr ""
 
-#: utils.php:635
-msgid "<b>NOTICE</b>: This site will be down for maintenance during "
+#: ../.ht-inc/utils.php:738
+msgid "This site will be down for maintenance during the following times:"
 msgstr ""
 
-#: utils.php:636
-msgid "the following times:<br><br>\n"
+#: ../.ht-inc/utils.php:739
+msgid "Start:"
 msgstr ""
 
-#: utils.php:637
-msgid "Start: "
+#: ../.ht-inc/utils.php:740 ../.ht-inc/requests.php:3207
+#: ../.ht-inc/requests.php:3375
+msgid "End:"
 msgstr ""
 
-#: utils.php:638
-msgid "End: "
+#: ../.ht-inc/utils.php:742
+msgid "You will be able to access your reserved machines during this maintenance. However, you will not be able to access information on how to connect to them."
 msgstr ""
 
-#: utils.php:640
-msgid "You will be able to access your reserved machines during "
+#: ../.ht-inc/utils.php:745
+msgid "You will not be able to access any of your reservations during this maintenance."
 msgstr ""
 
-#: utils.php:641
-msgid "this maintenance. However, you will not be able to access "
+#: ../.ht-inc/utils.php:848 ../.ht-inc/authentication.php:157
+msgid "Welcome to the Virtual Computing Lab"
 msgstr ""
 
-#: utils.php:642
-msgid "information on how to connect to them.<br>\n"
+#: ../.ht-inc/utils.php:851 ../.ht-inc/utils.php:853
+msgid "Hello"
 msgstr ""
 
-#: utils.php:645
-msgid "You will not be able to access any of your reservations "
+#: ../.ht-inc/utils.php:865
+msgid "You currently have 1 reservation."
 msgstr ""
 
-#: utils.php:646
-msgid "during this maintenance.<br>\n"
+#: ../.ht-inc/utils.php:867
+#, php-format
+msgid "You currently have %d reservations."
 msgstr ""
 
-#: utils.php:782
-#: utils.php:784
-msgid "Hello "
+#: ../.ht-inc/utils.php:870
+msgid "You do not have any current reservations."
 msgstr ""
 
-#: utils.php:796
-#: utils.php:799
-msgid "You currently have "
+#: ../.ht-inc/utils.php:872
+msgid "Please make a selection from the menu to continue."
 msgstr ""
 
-#: utils.php:796
-msgid " reservation</a>.<br>\n"
+#: ../.ht-inc/utils.php:875
+msgid "Please log in to start using the VCL system."
 msgstr ""
 
-#: utils.php:799
-msgid " reservations</a>.<br>\n"
+#: ../.ht-inc/utils.php:948 ../.ht-inc/utils.php:11585
+msgid "Problem With VCL"
 msgstr ""
 
-#: utils.php:803
-msgid "You do not have any current reservations.<br>\n"
+#: ../.ht-inc/utils.php:950 ../.ht-inc/utils.php:11599
+#, php-format
+msgid "An error has occurred. If this problem persists, please email %s for further assistance. Please include the steps you took that led up to this problem in your email message."
 msgstr ""
 
-#: utils.php:805
-msgid "Please make a selection from the menu to continue.<br>\n"
+#: ../.ht-inc/utils.php:5496
+msgid "OOPS! - Reservation Has Expired"
 msgstr ""
 
-#: utils.php:4193
-msgid "<h1>OOPS! - Reservation Has Expired</h1>\n"
+#: ../.ht-inc/utils.php:5497
+msgid "The selected reservation is no longer available. Go to <a>Reservations</a> to request a new reservation or select another one that is available."
 msgstr ""
 
-#: utils.php:4196
-msgid "Reservations</a><br>to request a new reservation or to "
+#: ../.ht-inc/utils.php:7384
+msgid "Time Table"
 msgstr ""
 
-#: utils.php:4198
-msgid "Reservations</a> to select<br>another one that is available."
+#: ../.ht-inc/utils.php:7421
+msgid "There are currently no computers available that can run the application you selected."
 msgstr ""
 
-#: utils.php:5570
-msgid "<H2>Time Table</H2>\n"
+#: ../.ht-inc/utils.php:7424
+msgid "There are no computers that meet the specified criteria"
 msgstr ""
 
-#: utils.php:5607
-msgid "There are currently no computers available that can run the application you selected.\n"
+#: ../.ht-inc/utils.php:7429
+msgid "The time you have requested to use the environment is not available. You may select from the green blocks of time to select an available time slot to make a reservation."
 msgstr ""
 
-#: utils.php:5610
-msgid "There are no computers that meet the specified criteria\n"
+#: ../.ht-inc/utils.php:7449 ../.ht-inc/utils.php:7601
+msgid "Previous"
 msgstr ""
 
-#: utils.php:5615
-msgid "The time you have requested to use the environment is not "
+#: ../.ht-inc/utils.php:7468 ../.ht-inc/utils.php:7620
+msgid "Next"
 msgstr ""
 
-#: utils.php:5616
-msgid "available. You may select from the green blocks of time to "
+#: ../.ht-inc/utils.php:7560
+msgid "User:"
 msgstr ""
 
-#: utils.php:5617
-msgid "select an available time slot to make a reservation.<br>\n"
+#: ../.ht-inc/utils.php:7561
+msgid "Image:"
 msgstr ""
 
-#: utils.php:5637
-#: utils.php:5940
-msgid "<INPUT type=submit value=Previous>\n"
+#: ../.ht-inc/utils.php:9344 ../.ht-inc/utils.php:9391
+#: ../.ht-inc/utils.php:9400 ../.ht-inc/utils.php:9402
+#: ../.ht-inc/utils.php:10205 ../.ht-inc/utils.php:10207
+#: ../.ht-inc/utils.php:10230 ../.ht-inc/utils.php:10251
+#: ../.ht-inc/requests.php:1943 ../.ht-inc/requests.php:3137
+#: ../.ht-inc/requests.php:3142 ../.ht-inc/requests.php:3285
+#: ../.ht-inc/requests.php:3287 ../.ht-inc/requests.php:3289
+#: ../.ht-inc/requests.php:3299 ../.ht-inc/requests.php:3301
+#: ../.ht-inc/requests.php:3303
+msgid "minutes"
 msgstr ""
 
-#: utils.php:5656
-#: utils.php:5959
-msgid "<INPUT type=submit value=Next>\n"
+#: ../.ht-inc/utils.php:9346 ../.ht-inc/utils.php:9393
+#: ../.ht-inc/utils.php:10209 ../.ht-inc/utils.php:10232
+#: ../.ht-inc/utils.php:10253 ../.ht-inc/requests.php:3291
+#: ../.ht-inc/requests.php:3305
+msgid "1 hour"
 msgstr ""
 
-#: utils.php:5900
-msgid "User: "
+#: ../.ht-inc/utils.php:9348 ../.ht-inc/utils.php:9350
+#: ../.ht-inc/utils.php:9352 ../.ht-inc/utils.php:9395
+#: ../.ht-inc/utils.php:9402 ../.ht-inc/utils.php:10211
+#: ../.ht-inc/utils.php:10234 ../.ht-inc/utils.php:10256
+#: ../.ht-inc/utils.php:10259 ../.ht-inc/requests.php:3152
+#: ../.ht-inc/requests.php:3293 ../.ht-inc/requests.php:3307
+#, php-format
+msgid "hours"
 msgstr ""
 
-#: utils.php:5901
-msgid " Image: "
+#: ../.ht-inc/utils.php:9400 ../.ht-inc/requests.php:3147
+msgid "hour"
 msgstr ""
 
-#: utils.php:6790
-#: utils.php:6837
-#: utils.php:6846
-#: utils.php:6848
-msgid " minutes"
+#: ../.ht-inc/utils.php:10213 ../.ht-inc/utils.php:10235
+#: ../.ht-inc/utils.php:10260 ../.ht-inc/requests.php:3157
+#: ../.ht-inc/requests.php:3295 ../.ht-inc/requests.php:3309
+msgid "days"
 msgstr ""
 
-#: utils.php:8869
+#: ../.ht-inc/utils.php:11589 ../.ht-inc/utils.php:11594
+#: ../.ht-inc/utils.php:11598
+msgid "Error: Invalid Input"
+msgstr ""
+
+#: ../.ht-inc/utils.php:11590
+#, php-format
+msgid "You submitted input invalid for this web site. If you have no idea why this happened and the problem persists, please email %s for further assistance. Please include the steps you took that led up to this problem in your email message."
+msgstr ""
+
+#: ../.ht-inc/utils.php:11595
+msgid "You submitted expired data to this web site. Please restart the steps you were following without using your browser's <strong>Back</strong> button."
+msgstr ""
+
+#: ../.ht-inc/utils.php:12597
 msgid "HOME"
 msgstr ""
 
-#: utils.php:8873
-msgid "New Reservation</a></li>\n"
+#: ../.ht-inc/utils.php:12602 ../.ht-inc/statistics.php:445
+msgid "Reservations"
 msgstr ""
 
-#: utils.php:8878
-msgid "Current Reservations</a></li>\n"
-msgstr ""
-
-#: utils.php:8901
-msgid "Block Allocations</a></li>\n"
-msgstr ""
-
-#: utils.php:8906
-msgid "User Preferences</a></li>\n"
-msgstr ""
-
-#: utils.php:8910
-msgid "Manage Groups</a></li>\n"
-msgstr ""
-
-#: utils.php:8915
-msgid "Manage Images</a></li>\n"
-msgstr ""
-
-#: utils.php:8920
-msgid "Manage Schedules</a></li>\n"
-msgstr ""
-
-#: utils.php:8925
-msgid "Manage Computers</a></li>\n"
-msgstr ""
-
-#: utils.php:8930
-msgid "?mode=selectMgmtnodeOption\">Management Nodes</a></li>\n"
-msgstr ""
-
-#: utils.php:8936
-msgid "View Time Table</a></li>\n"
-msgstr ""
-
-#: utils.php:8943
-msgid "Privileges</a></li>\n"
-msgstr ""
-
-#: utils.php:8949
-msgid "User Lookup</a></li>\n"
-msgstr ""
-
-#: utils.php:8954
-msgid "Virtual Hosts</a></li>\n"
-msgstr ""
-
-#: utils.php:8959
-msgid "Site Maintenance</a></li>\n"
-msgstr ""
-
-#: utils.php:8963
-msgid "Statistics</a></li>\n"
-msgstr ""
-
-#: utils.php:8966
-msgid "\">Help</a></li>\n"
-msgstr ""
-
-#: utils.php:8979
-msgid "Documentation</a></li>\n"
-msgstr ""
-
-#: utils.php:8984
-msgid "Logout</a></li>\n"
-msgstr ""
-
-#: statistics.php:59
-#: statistics.php:186
-msgid "<H2>Statistic Information</H2>\n"
-msgstr ""
-
-#: statistics.php:74
-msgid "Select a starting date:<br>\n"
-msgstr ""
-
-#: statistics.php:108
-msgid "Select an ending date:<br>\n"
-msgstr ""
-
-#: statistics.php:120
-msgid "Select an affiliation:\n"
-msgstr ""
-
-#: statistics.php:132
-msgid "<INPUT type=submit value=Submit>\n"
-msgstr ""
-
-#: statistics.php:166
-msgid "The selected start date is not valid. Please "
-msgstr ""
-
-#: statistics.php:167
-#: statistics.php:172
-msgid "select a valid date.<br>\n"
-msgstr ""
-
-#: statistics.php:171
-msgid "The selected end date is not valid. Please "
-msgstr ""
-
-#: statistics.php:176
-msgid "The selected end date is before the selected "
-msgstr ""
-
-#: statistics.php:177
-msgid "start date.  Please select an end date equal "
-msgstr ""
-
-#: statistics.php:178
-msgid "to or greater than the start date.<br>\n"
-msgstr ""
-
-#: statistics.php:187
-msgid "<H3>Reservation information between "
-msgstr ""
-
-#: statistics.php:187
-msgid " and "
-msgstr ""
-
-#: statistics.php:335
-msgid "    <TH align=right>Total Reservations:</TH>\n"
-msgstr ""
-
-#: statistics.php:339
-msgid "    <TH align=right>Total Hours Used:</TH>\n"
-msgstr ""
-
-#: statistics.php:343
-msgid "    <TH align=right>\"Now\" Reservations:</TH>\n"
-msgstr ""
-
-#: statistics.php:347
-msgid "    <TH align=right>\"Later\" Reservations:</TH>\n"
-msgstr ""
-
-#: statistics.php:351
-msgid "    <TH align=right>Unavailable:</TH>\n"
-msgstr ""
-
-#: statistics.php:356
-msgid "    <TH align=right>Load times &lt; 2 minutes:</TH>\n"
-msgstr ""
-
-#: statistics.php:360
-msgid "    <TH align=right>Load times &gt;= 2 minutes:</TH>\n"
-msgstr ""
-
-#: statistics.php:365
-msgid "    <TH align=right>Total Unique Users:</TH>\n"
-msgstr ""
-
-#: statistics.php:370
-msgid "    <TH align=right>Unique Users of "
-msgstr ""
-
-#: statistics.php:370
-msgid ":</TH>\n"
-msgstr ""
-
-#: statistics.php:390
-msgid "    <TH>Reservations</TH>\n"
-msgstr ""
-
-#: statistics.php:391
-msgid "    <TH>Unique Users</TH>\n"
-msgstr ""
-
-#: statistics.php:392
-msgid "    <TH>Hours Used</TH>\n"
-msgstr ""
-
-#: statistics.php:394
-msgid "    <TH>&lt; 2 min load time</TH>\n"
-msgstr ""
-
-#: statistics.php:395
-msgid "    <TH>&gt;= 2 min load time</TH>\n"
-msgstr ""
-
-#: statistics.php:395
-msgid "    <TH>Failures</TH>\n"
-msgstr ""
-
-#: statistics.php:439
-msgid "<H3>Durations:</H3>\n"
-msgstr ""
-
-#: statistics.php:444
-msgid "<H3>Ending information:</H3>\n"
-msgstr ""
-
-#: statistics.php:456
-msgid "    <TH align=right>0 - 30 Min:</TH>\n"
-msgstr ""
-
-#: statistics.php:460
-msgid "    <TH align=right>30 Min - 1 Hour:</TH>\n"
-msgstr ""
-
-#: statistics.php:464
-msgid "    <TH align=right>1 Hour - 2 Hours:</TH>\n"
-msgstr ""
-
-#: statistics.php:468
-msgid "    <TH align=right>2 Hours - 4 Hours:</TH>\n"
-msgstr ""
-
-#: statistics.php:472
-msgid "    <TH align=right>&gt; 4 Hours:</TH>\n"
-msgstr ""
-
-#: statistics.php:489
-msgid "    <TH align=right>Deleted:</TH>\n"
-msgstr ""
-
-#: statistics.php:495
-msgid "    <TD>(Future reservation deleted before start time reached)</TD>\n"
-msgstr ""
-
-#: statistics.php:498
-msgid "    <TH align=right>Released:</TH>\n"
-msgstr ""
-
-#: statistics.php:500
-msgid "    <TD>(Reservation released before end time reached)</TD>\n"
-msgstr ""
-
-#: statistics.php:503
-msgid "    <TH align=right>Not Acknowledged:</TH>\n"
-msgstr ""
-
-#: statistics.php:505
-msgid "    <TD>(\"Connect!\" button never clicked)</TD>\n"
-msgstr ""
-
-#: statistics.php:508
-msgid "    <TH align=right>No Login:</TH>\n"
-msgstr ""
-
-#: statistics.php:510
-msgid "    <TD>(User never logged in)</TD>\n"
-msgstr ""
-
-#: statistics.php:513
-msgid "    <TH align=right>End of Reservation:</TH>\n"
-msgstr ""
-
-#: statistics.php:515
-msgid "    <TD>(End of reservation reached)</TD>\n"
-msgstr ""
-
-#: statistics.php:518
-msgid "    <TH align=right>Timed Out:</TH>\n"
-msgstr ""
-
-#: statistics.php:520
-msgid "    <TD>(Disconnect and no reconnection within 15 minutes)</TD>\n"
-msgstr ""
-
-#: statistics.php:523
-msgid "    <TH align=right>Failed:</TH>\n"
-msgstr ""
-
-#: statistics.php:525
-msgid "    <TD>(Reserved computer failed to get prepared for user)</TD>\n"
-msgstr ""
-
-#: statistics.php:552
-msgid "<H2>Reservations by Day</H2>\n"
-msgstr ""
-
-#: statistics.php:564
-msgid "<H2>Max Concurrent Reservations By Day</H2>\n"
-msgstr ""
-
-#: statistics.php:607
-msgid "<H2>Max Concurrent Blade Reservations By Day</H2>\n"
-msgstr ""
-
-#: statistics.php:616
-msgid "<H2>Reservations by Hour</H2>\n"
-msgstr ""
-
-#: userpreferences.php:60
-msgid "<H2 align=center>User Preferences</H2>\n"
-msgstr ""
-
-#: userpreferences.php:63
-msgid "<font color=green>User preferences successfully updated</font><br>\n"
-msgstr ""
-
-#: userpreferences.php:76
-msgid "show('personal'); return false;\">Personal&nbsp;Information</a>"
-msgstr ""
-
-#: userpreferences.php:80
-msgid "show('rdpfile'); return false;\">RDP&nbsp;File&nbsp;Preferences</a>"
-msgstr ""
-
-#: userpreferences.php:83
-msgid "return false\">General&nbsp;Preferences</a></li>\n"
-msgstr ""
-
-#: userpreferences.php:95
-msgid "      <legend>Personal</legend>\n"
-msgstr ""
-
-#: userpreferences.php:101
-msgid "          <TH align=right>First Name<a href=#updateinfo>*</a>:</TH>\n"
-msgstr ""
-
-#: userpreferences.php:108
-msgid "          <TH align=right>Last Name<a href=#updateinfo>*</a>:</TH>\n"
-msgstr ""
-
-#: userpreferences.php:116
-msgid "          <TH align=right>Preferred Name:</TH>\n"
-msgstr ""
-
-#: userpreferences.php:128
-msgid "          <TH align=right>Email Address<a href=#updateinfo>*</a>:</TH>\n"
-msgstr ""
-
-#: userpreferences.php:135
-msgid "          <TD colspan=3 align=center><h3>Change Password</h3></TD>\n"
-msgstr ""
-
-#: userpreferences.php:138
-msgid "          <TH align=right>Current Password:</TH>\n"
-msgstr ""
-
-#: userpreferences.php:148
-msgid "          <TH align=right>New Password:</TH>\n"
-msgstr ""
-
-#: userpreferences.php:157
-msgid "          <TH align=right>Confirm Password:</TH>\n"
-msgstr ""
-
-#: userpreferences.php:176
-#: userpreferences.php:258
-msgid "      <INPUT type=submit value=\"Submit Changes\">\n"
-msgstr ""
-
-#: userpreferences.php:184
-msgid "      <legend>RDP</legend>\n"
-msgstr ""
-
-#: userpreferences.php:190
-msgid "          <TD colspan=3><small>Try decreasing <em>Resolution</em> or <em>"
-msgstr ""
-
-#: userpreferences.php:191
-msgid "Color Depth</em> to<br>speed up your connection if things seem "
-msgstr ""
-
-#: userpreferences.php:192
-msgid "slow<br>when connected to a remote computer.</small></TD>\n"
-msgstr ""
-
-#: userpreferences.php:195
-msgid "          <TH align=right>Resolution:</TH>\n"
-msgstr ""
-
-#: userpreferences.php:216
-msgid "          <TH align=right>Color Depth:</TH>\n"
-msgstr ""
-
-#: userpreferences.php:225
-msgid "          <TH align=right>Audio:</TH>\n"
-msgstr ""
-
-#: userpreferences.php:227
-#: userpreferences.php:382
-msgid "None"
-msgstr ""
-
-#: userpreferences.php:227
-#: userpreferences.php:384
-msgid "Use my speakers"
-msgstr ""
-
-#: userpreferences.php:233
-msgid "          <TH align=right>Map Local Drives:</TH>\n"
-msgstr ""
-
-#: userpreferences.php:235
-#: userpreferences.php:388
-#: userpreferences.php:392
-#: userpreferences.php:396
-msgid "Yes"
-msgstr ""
-
-#: userpreferences.php:235
-#: userpreferences.php:386
-#: userpreferences.php:390
-#: userpreferences.php:394
-msgid "No"
-msgstr ""
-
-#: userpreferences.php:241
-msgid "          <TH align=right>Map Local Printers:</TH>\n"
-msgstr ""
-
-#: userpreferences.php:248
-msgid "          <TH align=right>Map Local Serial Ports:</TH>\n"
-msgstr ""
-
-#: userpreferences.php:265
-msgid "      <legend>General Preferences</legend>\n"
-msgstr ""
-
-#: userpreferences.php:277
-msgid "      <p>View User Groups:<br>\n"
-msgstr ""
-
-#: userpreferences.php:279
-msgid "><label for=r1>matching my affiliation"
-msgstr ""
-
-#: userpreferences.php:282
-msgid "><label for=r2>from all affiliations"
-msgstr ""
-
-#: userpreferences.php:295
-msgid "      <p>Send email notifications about reservations:<br>\n"
-msgstr ""
-
-#: userpreferences.php:297
-msgid "><label for=r3>Enabled"
-msgstr ""
-
-#: userpreferences.php:300
-msgid "><label for=r4>Disabled"
-msgstr ""
-
-#: userpreferences.php:304
-msgid "      <INPUT type=submit value=\"Submit General Preferences\">\n"
-msgstr ""
-
-#: userpreferences.php:400
-msgid "<H2>Personal Information</H2>\n"
-msgstr ""
-
-#: userpreferences.php:401
-#: userpreferences.php:415
-msgid "<H3>Submit the following changes?</H3>\n"
-msgstr ""
-
-#: userpreferences.php:404
-msgid "    <TH align=right>Preferred Name:</TH>\n"
-msgstr ""
-
-#: userpreferences.php:410
-msgid "New password will be submitted<br>\n"
-msgstr ""
-
-#: userpreferences.php:414
-msgid "<H2>RDP File Preferences</H2>\n"
-msgstr ""
-
-#: userpreferences.php:418
-msgid "    <TH align=right>Resolution:</TH>\n"
-msgstr ""
-
-#: userpreferences.php:422
-msgid "    <TH align=right>Color Depth:</TH>\n"
-msgstr ""
-
-#: userpreferences.php:427
-msgid "    <TH align=right>Audio:</TH>\n"
-msgstr ""
-
-#: userpreferences.php:431
-msgid "    <TH align=right>Map Local Drives:</TH>\n"
-msgstr ""
-
-#: userpreferences.php:435
-msgid "    <TH align=right>Map Local Printers:</TH>\n"
-msgstr ""
-
-#: userpreferences.php:439
-msgid "    <TH align=right>Map Local Serial Ports:</TH>\n"
-msgstr ""
-
-#: userpreferences.php:593
-msgid "Preferred name can only be up to 25 characters"
-msgstr ""
-
-#: userpreferences.php:597
-msgid "Preferred name can only contain letters and spaces"
-msgstr ""
-
-#: userpreferences.php:616
-msgid "Password incorrect"
-msgstr ""
-
-#: userpreferences.php:622
-msgid "Passwords do not match"
-msgstr ""
-
-#: comment
-msgid "More Options"
-msgstr ""
-
-#: comment
-msgid "Edit"
-msgstr ""
-
-#: comment
-msgid "Reboot"
-msgstr ""
-
-#: comment
-msgid "Reinstall"
-msgstr ""
-
-#: comment
-msgid "End Reservation & Create Image"
-msgstr ""
-
-#: comment
+#: ../.ht-inc/utils.php:12610 ../.ht-inc/blockallocations.php:36
 msgid "Block Allocations"
 msgstr ""
 
-#: comment
-msgid "Request New Block Allocation"
+#: ../.ht-inc/utils.php:12613 ../.ht-inc/userpreferences.php:58
+msgid "User Preferences"
 msgstr ""
 
-#: comment
-msgid "Block Allocations are a way to have a set of machines preloaded with a particular environment at specified times and made available to a specific group of users. This is very useful for classroom use and for workshops. They can be made available on a repeating schedule such as when a course meets each week. Block Allocations only allocate machines for the group of users - they do not create the actual, end user reservations for the machines. All users still must log in to the VCL web site and make their own reservations DURING the period a block allocation is active. The forms here provide a way for you to submit a request for a Block Allocation for review by a sysadmin. If you just need to use a machine through VCL, use the New Reservation page for that."
+#: ../.ht-inc/utils.php:12617
+msgid "Manage Groups"
 msgstr ""
 
-#: comment
-msgid "Please submit Block Allocation requests at least one full business day in advance to allow time for them to be approved."
+#: ../.ht-inc/utils.php:12622
+msgid "Manage Images"
 msgstr ""
 
-#: comment
-msgid "Complete the following form to request a new block allocation. Your request will need to be approved by a VCL admin before it is created."
+#: ../.ht-inc/utils.php:12627
+msgid "Manage Schedules"
 msgstr ""
 
-#: comment
-msgid "Environment"
+#: ../.ht-inc/utils.php:12632
+msgid "Manage Computers"
 msgstr ""
 
-#: comment
-msgid "User group"
+#: ../.ht-inc/utils.php:12637
+msgid "Management Nodes"
 msgstr ""
 
-#: comment
-msgid "Number of seats"
-msgstr ""
-
-#: comment
-msgid "Specify dates/times by:\n"
-msgstr ""
-
-#: comment
-msgid "Repeating Weekly"
-msgstr ""
-
-#: comment
-msgid "Repeating Monthly"
-msgstr ""
-
-#: comment
-msgid "List of Dates/Times"
-msgstr ""
-
-#: comment
-msgid "First Date of Usage"
-msgstr ""
-
-#: comment
-msgid "Last Date of Usage"
-msgstr ""
-
-#: comment
-msgid "Days"
-msgstr ""
-
-#: comment
-msgid "Times"
-msgstr ""
-
-#: comment
-msgid "Start"
-msgstr ""
-
-#: comment
-msgid "End"
-msgstr ""
-
-#: comment
-msgid "Add"
-msgstr ""
-
-#: comment
-msgid "Remove"
-msgstr ""
-
-#: comment
-msgid "Additional comments"
-msgstr ""
-
-#: comment
-msgid "Repeat on the "
-msgstr ""
-
-#: comment
-msgid " of every month"
-msgstr ""
-
-#: comment
-msgid "Date"
-msgstr ""
-
-#: comment
-msgid "Confirm Block Allocation"
-msgstr ""
-
-#: comment
-msgid "Please confirm the following values and then click <strong>Submit Block Allocation Request</strong>"
-msgstr ""
-
-#: comment
-msgid "Seats"
-msgstr ""
-
-#: comment
-msgid "First Date"
-msgstr ""
-
-#: comment
-msgid "Last Date"
-msgstr ""
-
-#: comment
-msgid "Your additional comments will be submitted."
-msgstr ""
-
-#: comment
-msgid "Submit Block Allocation Request\n"
-msgstr ""
-
-#: comment
-msgid "Cancel"
-msgstr ""
-
-#: comment
-msgid "Manage Block Allocations"
-msgstr ""
-
-#: comment
-msgid "View"
-msgstr ""
-
-#: comment
-msgid "View Times"
-msgstr ""
-
-#: comment
-msgid "Name"
-msgstr ""
-
-#: comment
-msgid "Reserved<br>Machines"
-msgstr ""
-
-#: comment
-msgid "Reserved<br>For"
-msgstr ""
-
-#: comment
-msgid "Repeating"
-msgstr ""
-
-#: comment
-msgid "Owner"
-msgstr ""
-
-#: comment
-msgid "Block Allocation Times"
-msgstr ""
-
-#: comment
-msgid "Skip"
-msgstr ""
-
-#: comment
-msgid "Use"
-msgstr ""
-
-#: comment
-msgid "Close"
-msgstr ""
-
-#: comment
-msgid "Statistic Information for"
-msgstr ""
-
-#: comment
-msgid "(Reservations with start time on given day)"
-msgstr ""
-
-#: comment
-msgid "Max Concurrent Virtual Machine Reservations By Day"
-msgstr ""
-
-#: comment
-msgid "Active reservations during given hour averaged over selected dates"
-msgstr ""
-
-#: comment
-msgid "Block Allocation"
-msgstr ""
-
-#: comment
-msgid "group not listed"
-msgstr ""
-
-#: comment
-msgid "1st"
-msgstr ""
-
-#: comment
-msgid "2nd"
-msgstr ""
-
-#: comment
-msgid "3rd"
-msgstr ""
-
-#: comment
-msgid "4th"
-msgstr ""
-
-#: comment
-msgid "5th"
-msgstr ""
-
-#: comment
-msgid "Okay"
-msgstr ""
-
-#: comment
-msgid "Modify Reservation"
-msgstr ""
-
-#: comment
-msgid "View Available Times"
-msgstr ""
-
-#: comment
-msgid "Available Times"
-msgstr ""
-
-#: comment
-msgid "Loading..."
-msgstr ""
-
-#: comment
-msgid "The end time must be later than the start time."
-msgstr ""
-
-#: comment
-msgid "second"
-msgstr ""
-
-#: comment
-msgid "seconds"
-msgstr ""
-
-#: comment
-msgid "There are no available times that<br>the selected image can be used.<br><br>"
-msgstr ""
-
-#: comment
-msgid "Modify the end time for this reservation:<br><br>"
-msgstr ""
-
-#: comment
-msgid "Extend reservation by:"
-msgstr ""
-
-#: comment
-msgid "Start Time"
-msgstr ""
-
-#: comment
-msgid "Use Selected Time"
-msgstr ""
-
-#: comment
-msgid "You can extend this reservation by a selected amount or<br>"
-msgstr ""
-
-#: comment
-msgid "change the end time to a specified date and time.<br><br>"
-msgstr ""
-
-#: comment
-msgid "You can select either a "
-msgstr ""
-
-#: comment
-msgid "soft or a hard reboot. A soft reboot<br>issues a reboot "
-msgstr ""
-
-#: comment
-msgid "command to the operating system. A hard reboot<br>is akin to "
-msgstr ""
-
-#: comment
-msgid "toggling the power switch on a computer. After<br>issuing the "
-msgstr ""
-
-#: comment
-msgid "reboot, it may take several minutes before the<br>machine is "
-msgstr ""
-
-#: comment
-msgid "available again. It is also possible that it will<br>not come "
-msgstr ""
-
-#: comment
-msgid "back up at all. Are you sure you want to continue?"
-msgstr ""
-
-#: comment
-msgid "Reboot Reservation"
-msgstr ""
-
-#: comment
-msgid "Soft Reboot"
-msgstr ""
-
-#: comment
-msgid "Hard Reboot"
-msgstr ""
-
-#: comment
-msgid "Soft Rebooting"
-msgstr ""
-
-#: comment
-msgid "Hard Rebooting"
-msgstr ""
-
-#: comment
-msgid "Reinstall Reservation"
-msgstr ""
-
-#: comment
-msgid "This will cause the reserved machine to be reinstalled. "
-msgstr ""
-
-#: comment
-msgid "You may select which version"
-msgstr ""
-
-#: comment
-msgid "of the environment you would like to use for the reinstall. The currently installed"
-msgstr ""
-
-#: comment
-msgid "version what is selected."
-msgstr ""
-
-#: comment
-msgid "Any data saved only to the reserved machine "
-msgstr ""
-
-#: comment
-msgid "will be lost"
-msgstr ""
-
-#: comment
-msgid "Are you sure you want to continue?"
-msgstr ""
-
-#: comment
-msgid "NOTE"
-msgstr ""
-
-#: comment
+#: ../.ht-inc/utils.php:12643
 msgid "Server Profiles"
 msgstr ""
 
-#: comment
+#: ../.ht-inc/utils.php:12649
+msgid "View Time Table"
+msgstr ""
+
+#: ../.ht-inc/utils.php:12656
+msgid "Privileges"
+msgstr ""
+
+#: ../.ht-inc/utils.php:12662
+msgid "User Lookup"
+msgstr ""
+
+#: ../.ht-inc/utils.php:12667
+msgid "Virtual Hosts"
+msgstr ""
+
+#: ../.ht-inc/utils.php:12672
+msgid "Site Maintenance"
+msgstr ""
+
+#: ../.ht-inc/utils.php:12676
+msgid "Statistics"
+msgstr ""
+
+#: ../.ht-inc/utils.php:12681
 msgid "Dashboard"
 msgstr ""
 
-#: comment
-msgid "Connect to reservation using"
+#: ../.ht-inc/utils.php:12687
+msgid "Site Configuration"
 msgstr ""
 
-#: comment
-msgid "Reservation Timed Out"
+#: ../.ht-inc/utils.php:12691
+msgid "Documentation"
 msgstr ""
 
-#: comment
-msgid "The specified reservation no longer exists."
+#: ../.ht-inc/utils.php:12695
+msgid "Logout"
 msgstr ""
 
-#: comment
-msgid "The reservation is no longer failed or timed out."
+#: ../.ht-inc/requests.php:63 ../.ht-inc/requests.php:1328
+#: ../.ht-inc/requests.php:1351
+msgid "New Reservation"
 msgstr ""
 
-#: comment
-msgid "Remove timed out reservation from list of current reservations?"
+#: ../.ht-inc/requests.php:71
+msgid "Current Reservations"
 msgstr ""
 
-#: comment
-msgid "Remove failed reservation from list of current reservations?"
+#: ../.ht-inc/requests.php:77
+msgid "You have no current reservations and do not have access to create new ones."
 msgstr ""
 
-#: comment
-msgid "Remove Reservation"
+#: ../.ht-inc/requests.php:79
+msgid "You have no current reservations."
 msgstr ""
 
-#: comment
-msgid "Reservation has timed out"
+#: ../.ht-inc/requests.php:193
+msgid "<br>Est:&nbsp;"
 msgstr ""
 
-#: comment
-msgid "End Time"
+#: ../.ht-inc/requests.php:193
+msgid "&nbsp;min remaining\n"
 msgstr ""
 
-#: comment
-msgid "Extend By"
+#: ../.ht-inc/requests.php:371
+msgid "You currently have the following <strong>normal</strong> reservations:"
 msgstr ""
 
-#: comment
-msgid "Comp. ID"
+#: ../.ht-inc/requests.php:373
+msgid "You currently have the following normal reservations:"
 msgstr ""
 
-#: requests.php:838
-msgid "You currently have the following <strong>server</strong> reservations:<br>\n"
+#: ../.ht-inc/requests.php:376
+msgid "NOTE: The maximum allowed reservation length for one of these reservations was less than the length you submitted, and the length of that reservation has been adjusted accordingly."
 msgstr ""
 
-#: comment
-msgid "Details"
+#: ../.ht-inc/requests.php:382 ../.ht-inc/requests.php:399
+#: ../.ht-inc/requests.php:417 ../.ht-inc/blockallocations.php:143
+#: ../.ht-inc/blockallocations.php:436 ../.ht-inc/blockallocations.php:1305
+#: ../.ht-inc/blockallocations.php:1620 ../.ht-inc/blockallocations.php:1671
+#: ../.ht-inc/blockallocations.php:1790 ../.ht-inc/blockallocations.php:2845
+msgid "Environment"
 msgstr ""
 
-#: comment
+#: ../.ht-inc/requests.php:383 ../.ht-inc/requests.php:400
+#: ../.ht-inc/requests.php:418 ../.ht-inc/blockallocations.php:2856
+msgid "Starting"
+msgstr ""
+
+#: ../.ht-inc/requests.php:384 ../.ht-inc/requests.php:401
+#: ../.ht-inc/requests.php:419 ../.ht-inc/requests.php:436
+#: ../.ht-inc/blockallocations.php:2860
+msgid "Ending"
+msgstr ""
+
+#: ../.ht-inc/requests.php:385 ../.ht-inc/requests.php:402
+#: ../.ht-inc/requests.php:420
+msgid "Initially requested"
+msgstr ""
+
+#: ../.ht-inc/requests.php:387 ../.ht-inc/requests.php:440
 msgid "Req ID"
 msgstr ""
 
-#: comment
-msgid "Initially Requested"
+#: ../.ht-inc/requests.php:395
+msgid "You currently have the following <strong>imaging</strong> reservations:"
 msgstr ""
 
-#: comment
-msgid "Admin User Group"
+#: ../.ht-inc/requests.php:413
+msgid "You currently have the following <strong>long term</strong> reservations:"
 msgstr ""
 
-#: comment
-msgid "Access User Group"
+#: ../.ht-inc/requests.php:431
+msgid "You currently have the following <strong>server</strong> reservations:"
 msgstr ""
 
-#: comment
+#: ../.ht-inc/requests.php:435 ../.ht-inc/requests.php:3023
+#: ../.ht-inc/resource.php:275 ../.ht-inc/resource.php:315
+#: ../.ht-inc/resource.php:653 ../.ht-inc/image.php:335
+#: ../.ht-inc/blockallocations.php:1304 ../.ht-inc/blockallocations.php:1619
+#: ../.ht-inc/blockallocations.php:1663 ../.ht-inc/blockallocations.php:2841
+msgid "Name"
+msgstr ""
+
+#: ../.ht-inc/requests.php:438
+msgid "Details"
+msgstr ""
+
+#: ../.ht-inc/requests.php:449
+msgid "Click the <b>Connect!</b> button to get further information about connecting to the reserved system. You must click the button from a web browser running on the same computer from which you will be connecting to the remote computer; otherwise, you may be denied access to the machine."
+msgstr ""
+
+#: ../.ht-inc/requests.php:454
+msgid "This page will automatically update every 20 seconds until the <font color=red><i>Pending...</i></font> reservation is ready."
+msgstr ""
+
+#: ../.ht-inc/requests.php:459
+msgid "An error has occurred that has kept one of your reservations from being processed. We apologize for any inconvenience this may have caused."
+msgstr ""
+
+#: ../.ht-inc/requests.php:515
+msgid "Detailed Reservation Status"
+msgstr ""
+
+#: ../.ht-inc/requests.php:537 ../.ht-inc/requests.php:546
+#: ../.ht-inc/requests.php:953 ../.ht-inc/requests.php:2936
+#: ../.ht-inc/requests.php:2948 ../.ht-inc/requests.php:2956
+#: ../.ht-inc/requests.php:3822
+msgid "Delete Reservation"
+msgstr ""
+
+#: ../.ht-inc/requests.php:552 ../.ht-inc/requests.php:576
+#: ../.ht-inc/requests.php:605 ../.ht-inc/requests.php:641
+#: ../.ht-inc/requests.php:671 ../.ht-inc/requests.php:698
+#: ../.ht-inc/requests.php:703 ../.ht-inc/requests.php:747
+#: ../.ht-inc/requests.php:823 ../.ht-inc/requests.php:891
+#: ../.ht-inc/requests.php:1716 ../.ht-inc/requests.php:2962
+#: ../.ht-inc/userpreferences.php:476 ../.ht-inc/resource.php:346
+#: ../.ht-inc/image.php:458 ../.ht-inc/image.php:478
+#: ../.ht-inc/blockallocations.php:488 ../.ht-inc/blockallocations.php:1412
+#: ../.ht-inc/blockallocations.php:2057 ../.ht-inc/blockallocations.php:2126
+msgid "Cancel"
+msgstr ""
+
+#: ../.ht-inc/requests.php:563 ../.ht-inc/requests.php:570
+msgid "Remove Reservation"
+msgstr ""
+
+#: ../.ht-inc/requests.php:587 ../.ht-inc/requests.php:599
+msgid "Modify Reservation"
+msgstr ""
+
+#: ../.ht-inc/requests.php:615 ../.ht-inc/requests.php:635
+msgid "Reboot Reservation"
+msgstr ""
+
+#: ../.ht-inc/requests.php:622
+msgid "You can select either a soft or a hard reboot. A soft reboot issues a reboot command to the operating system. A hard reboot is akin to toggling the power switch on a computer. After issuing the reboot, it may take several minutes before the machine is available again. It is also possible that it will not come back up at all. Are you sure you want to continue?"
+msgstr ""
+
+#: ../.ht-inc/requests.php:627
+msgid "Soft Reboot"
+msgstr ""
+
+#: ../.ht-inc/requests.php:629
+msgid "Hard Reboot"
+msgstr ""
+
+#: ../.ht-inc/requests.php:651 ../.ht-inc/requests.php:665
+msgid "Reinstall Reservation"
+msgstr ""
+
+#: ../.ht-inc/requests.php:659 ../.ht-inc/requests.php:686
+msgid "Loading..."
+msgstr ""
+
+#: ../.ht-inc/requests.php:681
+msgid "Available Times"
+msgstr ""
+
+#: ../.ht-inc/requests.php:692
+msgid "Use Selected Time"
+msgstr ""
+
+#: ../.ht-inc/requests.php:713
+msgid "Create / Update Image"
+msgstr ""
+
+#: ../.ht-inc/requests.php:720 ../.ht-inc/image.php:301
+msgid "Create / Update an Image"
+msgstr ""
+
+#: ../.ht-inc/requests.php:723
+msgid "Keep Reservation &amp; Create / Update an Image"
+msgstr ""
+
+#: ../.ht-inc/requests.php:724
+msgid "This process will create a new image or new revision of the image while allowing you to keep your reservation. The node will be taken <strong>offline</strong> during the image capture process."
+msgstr ""
+
+#: ../.ht-inc/requests.php:726
+msgid "NOTE: The same sanitizing that occurs during normal image capture will take place. This includes things such as deleting temporary files, cleaning out firewall rules, removing user home space, and removing user accounts."
+msgstr ""
+
+#: ../.ht-inc/requests.php:728
+msgid "After the imaging occurs, you will be able to connect to the reservation again. The image will appear to you as if you had just made a new reservation for it."
+msgstr ""
+
+#: ../.ht-inc/requests.php:732
+msgid "Are you creating a new image or updating an existing image?"
+msgstr ""
+
+#: ../.ht-inc/requests.php:734
+msgid "Creating New Image"
+msgstr ""
+
+#: ../.ht-inc/requests.php:737 ../.ht-inc/requests.php:798
+msgid "Update Existing Image"
+msgstr ""
+
+#: ../.ht-inc/requests.php:741 ../.ht-inc/requests.php:817
+#: ../.ht-inc/requests.php:3861 ../.ht-inc/userpreferences.php:469
+#: ../.ht-inc/statistics.php:126 ../.ht-inc/resource.php:185
+msgid "Submit"
+msgstr ""
+
+#: ../.ht-inc/requests.php:757
+msgid "Connect"
+msgstr ""
+
+#: ../.ht-inc/requests.php:765 ../.ht-inc/requests.php:863
+#: ../.ht-inc/requests.php:1358 ../.ht-inc/requests.php:2560
+#: ../.ht-inc/requests.php:4880 ../.ht-inc/blockallocations.php:1439
+#: ../.ht-inc/blockallocations.php:1455 ../.ht-inc/blockallocations.php:1705
+#: ../.ht-inc/blockallocations.php:1735
+msgid "Close"
+msgstr ""
+
+#: ../.ht-inc/requests.php:776
+msgid "Reservation Timed Out"
+msgstr ""
+
+#: ../.ht-inc/requests.php:779
+msgid "This reservation has timed out and is no longer available."
+msgstr ""
+
+#: ../.ht-inc/requests.php:784
+msgid "Okay"
+msgstr ""
+
+#: ../.ht-inc/requests.php:805
+msgid "New Revision Comments"
+msgstr ""
+
+#: ../.ht-inc/requests.php:807
+msgid "Enter any notes for yourself and other admins about the current state of the image. These are optional and are not visible to end users:"
+msgstr ""
+
+#: ../.ht-inc/requests.php:812
+msgid "Previous Revision Comments"
+msgstr ""
+
+#: ../.ht-inc/requests.php:842
+msgid "I agree"
+msgstr ""
+
+#: ../.ht-inc/requests.php:848
+msgid "I do not agree"
+msgstr ""
+
+#: ../.ht-inc/requests.php:878
+msgid "WARNING: You are not the owner of this reservation. You have been granted access to manage this reservation by another user. Hover over the details icon to see who the owner is. You should not delete this reservation unless the owner is aware that you are deleting it."
+msgstr ""
+
+#: ../.ht-inc/requests.php:885
+msgid "Confirm Delete Reservation"
+msgstr ""
+
+#: ../.ht-inc/requests.php:946
+msgid "Connect!"
+msgstr ""
+
+#: ../.ht-inc/requests.php:966 ../.ht-inc/requests.php:971
+msgid "Reservation failed"
+msgstr ""
+
+#: ../.ht-inc/requests.php:980 ../.ht-inc/resource.php:813
+#: ../.ht-inc/resource.php:991 ../.ht-inc/resource.php:1193
+#: ../.ht-inc/resource.php:1385 ../.ht-inc/blockallocations.php:273
+#: ../.ht-inc/blockallocations.php:343 ../.ht-inc/blockallocations.php:379
+msgid "Remove"
+msgstr ""
+
+#: ../.ht-inc/requests.php:990
+msgid "Reservation has timed out"
+msgstr ""
+
+#: ../.ht-inc/requests.php:999 ../.ht-inc/requests.php:1004
+msgid "Pending..."
+msgstr ""
+
+#: ../.ht-inc/requests.php:1015
+msgid "More Options"
+msgstr ""
+
+#: ../.ht-inc/requests.php:1022 ../.ht-inc/blockallocations.php:1315
+msgid "Edit"
+msgstr ""
+
+#: ../.ht-inc/requests.php:1030 ../.ht-inc/requests.php:1038
+msgid "End Reservation & Create Image"
+msgstr ""
+
+#: ../.ht-inc/requests.php:1045 ../.ht-inc/requests.php:1053
+msgid "Keep Reservation & Create Image"
+msgstr ""
+
+#: ../.ht-inc/requests.php:1060 ../.ht-inc/requests.php:1070
+msgid "Reboot"
+msgstr ""
+
+#: ../.ht-inc/requests.php:1077 ../.ht-inc/requests.php:1087
+msgid "Reinstall"
+msgstr ""
+
+#: ../.ht-inc/requests.php:1094
+msgid "(Testing)"
+msgstr ""
+
+#: ../.ht-inc/requests.php:1107 ../.ht-inc/requests.php:1135
+msgid "(none)"
+msgstr ""
+
+#: ../.ht-inc/requests.php:1126 ../.ht-inc/blockallocations.php:131
+#: ../.ht-inc/blockallocations.php:1369
+msgid "Owner:"
+msgstr ""
+
+#: ../.ht-inc/requests.php:1127 ../.ht-inc/blockallocations.php:1373
+#: ../.ht-inc/blockallocations.php:1969 ../.ht-inc/blockallocations.php:2073
+msgid "Environment:"
+msgstr ""
+
+#: ../.ht-inc/requests.php:1128
+msgid "Start Time:"
+msgstr ""
+
+#: ../.ht-inc/requests.php:1129
+msgid "Initially Requested:"
+msgstr ""
+
+#: ../.ht-inc/requests.php:1131 ../.ht-inc/requests.php:1133
+#: ../.ht-inc/requests.php:1502
+msgid "Admin User Group:"
+msgstr ""
+
+#: ../.ht-inc/requests.php:1131
+msgid "none"
+msgstr ""
+
+#: ../.ht-inc/requests.php:1135 ../.ht-inc/requests.php:1137
+#: ../.ht-inc/requests.php:1521
+msgid "Access User Group:"
+msgstr ""
+
+#: ../.ht-inc/requests.php:1139 ../.ht-inc/requests.php:1141
+#: ../.ht-inc/requests.php:1143 ../.ht-inc/requests.php:1145
+#: ../.ht-inc/requests.php:1147 ../.ht-inc/requests.php:1149
+#: ../.ht-inc/requests.php:1151 ../.ht-inc/requests.php:1153
+#: ../.ht-inc/requests.php:1155 ../.ht-inc/requests.php:1157
+msgid "Status:"
+msgstr ""
+
+#: ../.ht-inc/requests.php:1139 ../.ht-inc/requests.php:1155
 msgid "In Use"
 msgstr ""
 
-#: comment
+#: ../.ht-inc/requests.php:1141
 msgid "Checkpointing"
 msgstr ""
 
-#: comment
+#: ../.ht-inc/requests.php:1143 ../.ht-inc/blockallocations.php:2930
 msgid "Failed"
 msgstr ""
 
-#: comment
+#: ../.ht-inc/requests.php:1145
+msgid "New"
+msgstr ""
+
+#: ../.ht-inc/requests.php:1147
+msgid "Hard Rebooting"
+msgstr ""
+
+#: ../.ht-inc/requests.php:1149
+msgid "Soft Rebooting"
+msgstr ""
+
+#: ../.ht-inc/requests.php:1151
 msgid "Reinstalling"
 msgstr ""
 
-#: comment
+#: ../.ht-inc/requests.php:1153
+msgid "Loading"
+msgstr ""
+
+#: ../.ht-inc/requests.php:1157
+msgid "Timed Out"
+msgstr ""
+
+#: ../.ht-inc/requests.php:1354
+msgid "You do not have access to any images."
+msgstr ""
+
+#: ../.ht-inc/requests.php:1381
+msgid "Reservation type:"
+msgstr ""
+
+#: ../.ht-inc/requests.php:1387
+msgid "Basic Reservation"
+msgstr ""
+
+#: ../.ht-inc/requests.php:1394
+msgid "Imaging Reservation"
+msgstr ""
+
+#: ../.ht-inc/requests.php:1401
+msgid "Server Reservation"
+msgstr ""
+
+#: ../.ht-inc/requests.php:1409
+msgid "Profile:"
+msgstr ""
+
+#: ../.ht-inc/requests.php:1413
+msgid "Description:"
+msgstr ""
+
+#: ../.ht-inc/requests.php:1418
+msgid "Apply Profile"
+msgstr ""
+
+#: ../.ht-inc/requests.php:1430
+msgid "Please select the environment you want to use from the list:"
+msgstr ""
+
+#: ../.ht-inc/requests.php:1479 ../.ht-inc/requests.php:1980
+#: ../.ht-inc/image.php:347
+msgid "Image Description"
+msgstr ""
+
+#: ../.ht-inc/requests.php:1487
+msgid "Reservation Name:"
+msgstr ""
+
+#: ../.ht-inc/requests.php:1492 ../.ht-inc/requests.php:4512
+msgid "The reservation name can only contain letters, numbers, spaces, dashes(-), underscores(_), and periods(.) and can be up to 255 characters long"
+msgstr ""
+
+#: ../.ht-inc/requests.php:1559
+msgid "Fixed IP Address:"
+msgstr ""
+
+#: ../.ht-inc/requests.php:1563
+msgid "(optional)"
+msgstr ""
+
+#: ../.ht-inc/requests.php:1565
+msgid "Netmask:"
+msgstr ""
+
+#: ../.ht-inc/requests.php:1572
+msgid "Router:"
+msgstr ""
+
+#: ../.ht-inc/requests.php:1578
+msgid "DNS Server(s):"
+msgstr ""
+
+#: ../.ht-inc/requests.php:1594 ../.ht-inc/requests.php:3080
+msgid "Disable timeout for disconnected users"
+msgstr ""
+
+#: ../.ht-inc/requests.php:1598
+msgid "When would you like to use the environment?"
+msgstr ""
+
+#: ../.ht-inc/requests.php:1601
+msgid "When would you like to start the imaging process?"
+msgstr ""
+
+#: ../.ht-inc/requests.php:1604
+msgid "When would you like to deploy the server?"
+msgstr ""
+
+#: ../.ht-inc/requests.php:1612
+msgid "Now"
+msgstr ""
+
+#: ../.ht-inc/requests.php:1616
+msgid "Later:"
+msgstr ""
+
+#: ../.ht-inc/requests.php:1622
+msgid "At"
+msgstr ""
+
+#: ../.ht-inc/requests.php:1651
+msgid "Ending:"
+msgstr ""
+
+#: ../.ht-inc/requests.php:1661 ../.ht-inc/requests.php:2093
+#: ../.ht-inc/requests.php:3172
+msgid "Duration"
+msgstr ""
+
+#: ../.ht-inc/requests.php:1678
+msgid "Indefinite"
+msgstr ""
+
+#: ../.ht-inc/requests.php:1691
+msgid "At this time:"
+msgstr ""
+
+#: ../.ht-inc/requests.php:1715
+msgid "Create Reservation"
+msgstr ""
+
+#: ../.ht-inc/requests.php:1812
+msgid "The end time must be later than the start time."
+msgstr ""
+
+#: ../.ht-inc/requests.php:1824
+msgid "Invalid IP address specified."
+msgstr ""
+
+#: ../.ht-inc/requests.php:1833 ../.ht-inc/requests.php:4574
+msgid "There are no management nodes that can deploy the selected image with the specified IP address."
+msgstr ""
+
+#: ../.ht-inc/requests.php:1868 ../.ht-inc/requests.php:2226
+msgid "The selected time overlaps with another reservation you have."
+msgstr ""
+
+#: ../.ht-inc/requests.php:1871 ../.ht-inc/requests.php:2229
+msgid "You cannot have any overlapping reservations."
+msgstr ""
+
+#: ../.ht-inc/requests.php:1873 ../.ht-inc/requests.php:2231
+#, php-format
+msgid "You can have up to %d overlapping reservations."
+msgstr ""
+
+#: ../.ht-inc/requests.php:1912
+msgid "Selection not currently available due to scheduled system downtime for maintenance"
+msgstr ""
+
+#: ../.ht-inc/requests.php:1914
+msgid "IP address not available for selected time"
+msgstr ""
+
+#: ../.ht-inc/requests.php:1916
+msgid "IP address not available"
+msgstr ""
+
+#: ../.ht-inc/requests.php:1920
+msgid "Selection not currently available. Times cannot be suggested for cluster reservations."
+msgstr ""
+
+#: ../.ht-inc/requests.php:1922
+msgid "Selection not currently available"
+msgstr ""
+
+#: ../.ht-inc/requests.php:1925 ../.ht-inc/requests.php:1934
+msgid "Estimated load time:"
+msgstr ""
+
+#: ../.ht-inc/requests.php:1928
+msgid "1 minute"
+msgstr ""
+
+#: ../.ht-inc/requests.php:1931 ../.ht-inc/requests.php:1948
+msgid "Ready at start of reservation"
+msgstr ""
+
+#: ../.ht-inc/requests.php:1946
+msgid "Ready at"
+msgstr ""
+
+#: ../.ht-inc/requests.php:1954
+msgid "WARNING: Current conflict with specified IP address. If the conflict is not resolved by the start of your reservation, the reservation will fail."
+msgstr ""
+
+#: ../.ht-inc/requests.php:2026
+msgid "There are no available times that the selected image can be used."
+msgstr ""
+
+#: ../.ht-inc/requests.php:2040
+msgid "This reservation can no longer be extended due to a reservation immediately following yours."
+msgstr ""
+
+#: ../.ht-inc/requests.php:2048
+msgid "End Time"
+msgstr ""
+
+#: ../.ht-inc/requests.php:2049
+msgid "Extend By"
+msgstr ""
+
+#: ../.ht-inc/requests.php:2092
+msgid "Start Time"
+msgstr ""
+
+#: ../.ht-inc/requests.php:2095
+msgid "Comp. ID"
+msgstr ""
+
+#: ../.ht-inc/requests.php:2245
+msgid "The IP address you specified is assigned to another VCL node and cannot be used at this time. Submitting a time in the future may allow you to make the reservation, but if the IP remains assigned to the other node, the reservation will fail at deploy time."
+msgstr ""
+
+#: ../.ht-inc/requests.php:2252
+msgid "The IP or MAC address you specified overlaps with another reservation using the same IP or MAC address you specified. Please use a different IP or MAC or select a different time to deploy the server."
+msgstr ""
+
+#: ../.ht-inc/requests.php:2259
+msgid "The time you requested overlaps with a maintenance window."
+msgstr ""
+
+#: ../.ht-inc/requests.php:2267
+msgid "You have requested an environment that is limited in the number of concurrent reservations that can be made. No further reservations for the environment can be made for the time you have selected."
+msgstr ""
+
+#: ../.ht-inc/requests.php:2444
+msgid "Configure System"
+msgstr ""
+
+#: ../.ht-inc/requests.php:2474 ../.ht-inc/resource.php:806
+#: ../.ht-inc/resource.php:984 ../.ht-inc/resource.php:1184
+#: ../.ht-inc/resource.php:1378 ../.ht-inc/blockallocations.php:258
+#: ../.ht-inc/blockallocations.php:327 ../.ht-inc/blockallocations.php:360
+msgid "Add"
+msgstr ""
+
+#: ../.ht-inc/requests.php:2499
+msgid "Type:"
+msgstr ""
+
+#: ../.ht-inc/requests.php:2500
+msgid "Apply this config:"
+msgstr ""
+
+#: ../.ht-inc/requests.php:2505
+msgid "View Config Data"
+msgstr ""
+
+#: ../.ht-inc/requests.php:2511
+msgid "Config variables:"
+msgstr ""
+
+#: ../.ht-inc/requests.php:2518
+msgid "Key:"
+msgstr ""
+
+#: ../.ht-inc/requests.php:2519
+msgid "Value:"
+msgstr ""
+
+#: ../.ht-inc/requests.php:2550
+msgid "Required:"
+msgstr ""
+
+#: ../.ht-inc/requests.php:2593
+msgid "The selected reservation is no longer available. You can request a new reservation or select another one that is available."
+msgstr ""
+
+#: ../.ht-inc/requests.php:2600
+msgid "The selected reservation has timed out and is no longer available."
+msgstr ""
+
+#: ../.ht-inc/requests.php:2617
+msgid "No detailed loading information is available for this reservation."
+msgstr ""
+
+#: ../.ht-inc/requests.php:2640
+msgid "State"
+msgstr ""
+
+#: ../.ht-inc/requests.php:2641 ../.ht-inc/requests.php:2642
+msgid "Time"
+msgstr ""
+
+#: ../.ht-inc/requests.php:2666
+msgid "problem at state"
+msgstr ""
+
+#: ../.ht-inc/requests.php:2676
+msgid "retrying at state"
+msgstr ""
+
+#: ../.ht-inc/requests.php:2767
+msgid "No detailed information is available for this reservation."
+msgstr ""
+
+#: ../.ht-inc/requests.php:2781
+msgid "failed:"
+msgstr ""
+
+#: ../.ht-inc/requests.php:3030
+msgid "Admin User Group"
+msgstr ""
+
+#: ../.ht-inc/requests.php:3046 ../.ht-inc/userpreferences.php:220
+#: ../.ht-inc/userpreferences.php:397
+msgid "None"
+msgstr ""
+
+#: ../.ht-inc/requests.php:3054
+msgid "Access User Group"
+msgstr ""
+
+#: ../.ht-inc/requests.php:3086
+msgid "Modify reservation for"
+msgstr ""
+
+#: ../.ht-inc/requests.php:3087
+msgid "starting"
+msgstr ""
+
+#: ../.ht-inc/requests.php:3098 ../.ht-inc/blockallocations.php:251
+#: ../.ht-inc/blockallocations.php:270 ../.ht-inc/blockallocations.php:320
+#: ../.ht-inc/blockallocations.php:340 ../.ht-inc/blockallocations.php:354
+#: ../.ht-inc/blockallocations.php:376 ../.ht-inc/blockallocations.php:1431
+#: ../.ht-inc/blockallocations.php:1726
+msgid "Start"
+msgstr ""
+
+#: ../.ht-inc/requests.php:3107
+msgid "&nbsp;At&nbsp;"
+msgstr ""
+
+#: ../.ht-inc/requests.php:3125 ../.ht-inc/requests.php:3346
+#: ../.ht-inc/requests.php:3354
 msgid "Indefinite Ending"
 msgstr ""
 
-#: comment
-msgid "Invalid start time submitted"
+#: ../.ht-inc/requests.php:3232
+#, php-format
+msgid "You are only allowed to extend your reservation such that it has a total length of %s. "
 msgstr ""
 
-#: comment
-msgid "Invalid duration submitted"
+#: ../.ht-inc/requests.php:3233
+msgid "This reservation already meets that length. Therefore, you are not allowed to extend your reservation any further."
 msgstr ""
 
-#: comment
-msgid "Invalid end date/time submitted"
+#: ../.ht-inc/requests.php:3268
+msgid "The computer you are using has another reservation immediately following yours. Therefore, you cannot extend your reservation because it would overlap with the next one."
 msgstr ""
 
-#: comment
-msgid "Invalid data submitted"
+#: ../.ht-inc/requests.php:3315
+msgid "You can extend this reservation by a selected amount or change the end time to a specified date and time."
 msgstr ""
 
-#: comment
-msgid "Invalid user group submitted"
+#: ../.ht-inc/requests.php:3319
+msgid "Modify the end time for this reservation:"
 msgstr ""
 
-#: comment
-msgid "The name can only contain letters, numbers, "
+#: ../.ht-inc/requests.php:3326
+#, php-format
+msgid "You can extend this reservation by up to %s but not exceeding %s for your total reservation time."
 msgstr ""
 
-#: comment
-msgid "spaces, dashes(-), and periods(.) and can "
+#: ../.ht-inc/requests.php:3332
+#, php-format
+msgid "The computer you are using has another reservation following yours. Therefore, you can only extend this reservation for another %s."
 msgstr ""
 
-#: comment
-msgid "be from 3 to 255 characters long"
+#: ../.ht-inc/requests.php:3364 ../.ht-inc/requests.php:3424
+msgid "Extend reservation by:"
 msgstr ""
 
-#: comment
-msgid "The reserved IP"
+#: ../.ht-inc/requests.php:3387
+msgid "Change ending to:"
 msgstr ""
 
-#: comment
-msgid "or MAC address"
+#: ../.ht-inc/requests.php:3404 ../.ht-inc/requests.php:3414
+#: ../.ht-inc/requests.php:4052 ../.ht-inc/userpreferences.php:340
+msgid "NOTE:"
 msgstr ""
 
-#: comment
-msgid "conflicts with another"
+#: ../.ht-inc/requests.php:3405
+msgid "Due to an upcoming reservation on the same computer, you cannot extend this reservation."
 msgstr ""
 
-#: comment
-msgid "reservation using the same IP or MAC address. Please"
+#: ../.ht-inc/requests.php:3415
+#, php-format
+msgid "Due to an upcoming reservation on the same computer, you can only extend this reservation until %s."
 msgstr ""
 
-#: comment
-msgid "select a different time to use the image."
+#: ../.ht-inc/requests.php:3465
+msgid "The selected reservation no longer exists."
 msgstr ""
 
-#: comment
-msgid "The time you requested overlaps with a maintenance window.<br>"
-msgstr ""
-
-#: comment
-msgid "Please select a different time to use the image.<br>"
-msgstr ""
-
-#: comment
-msgid "You have requested an environment that is limited in the<br>"
-msgstr ""
-
-#: comment
-msgid "number of concurrent reservations that can be made. No further<br>"
-msgstr ""
-
-#: comment
-msgid "reservations for the environment can be made for the time you<br>"
-msgstr ""
-
-#: comment
-msgid "have selected. Please select another time for the reservation.<br><br>"
-msgstr ""
-
-#: comment
-msgid "The time period you have requested is not available.<br>"
-msgstr ""
-
-#: comment
-msgid "Please select a different time."
-msgstr ""
-
-#: comment
-msgid "<big><strong>End Reservation/Make Production</strong></big><br><br>"
-msgstr ""
-
-#: comment
-msgid "Are you satisfied that this environment is ready to be made production"
-msgstr ""
-
-#: comment
-msgid "and replace the current production version, or would you just like to"
-msgstr ""
-
-#: comment
-msgid "end this reservation and test it again later?"
-msgstr ""
-
-#: comment
-msgid "<br><font color=\"red\">\nWARNING: This environment is part of "
-msgstr ""
-
-#: comment
-msgid "an active block allocation. Changing the production version of"
-msgstr ""
-
-#: comment
-msgid "the environment at this time will result in new reservations"
-msgstr ""
-
-#: comment
-msgid "under the block allocation to have full reload times instead of"
-msgstr ""
-
-#: comment
-msgid "a &lt; 1 minutes wait. You can change the production version"
-msgstr ""
-
-#: comment
-msgid "later by going to Manage Images-&gt;Edit Image Profiles and"
-msgstr ""
-
-#: comment
-msgid "clicking Edit for this environment.</font><br>"
-msgstr ""
-
-#: comment
-msgid "Make this the production version</label><br>"
-msgstr ""
-
-#: comment
-msgid "Just end the reservation</label><br><br>"
-msgstr ""
-
-#: comment
-msgid "(You must have javascript enabled to use the 'Until' option.)"
-msgstr ""
-
-#: comment
-msgid "This reservation has timed out due to lack of user activity and"
-msgstr ""
-
-#: comment
-msgid "is no longer available.<br>\n"
-msgstr ""
-
-#: comment
-msgid "<h2>Cluster Reservation</h2>\n"
-msgstr ""
-
-#: comment
-msgid "This is a cluster reservation. Depending on the makeup of the"
-msgstr ""
-
-#: comment
-msgid "cluster, you may need to use different methods to connect to the"
-msgstr ""
-
-#: comment
-msgid "different environments in your cluster.<br><br>\n"
-msgstr ""
-
-#: comment
-msgid "This reservation has timed out<br>and is no longer available."
-msgstr ""
-
-#: comment
-msgid "The submitted minute must be from 00 to 59."
-msgstr ""
-
-#: comment
-msgid "<h2>Error: Invalid Input</h2><br>\n"
-msgstr ""
-
-#: comment
-msgid "You submitted input invalid for this web site. If you have no"
-msgstr ""
-
-#: comment
-msgid "idea why this happened and the problem persists, please email"
-msgstr ""
-
-#: comment
-msgid "Problem%20With%20VCL"
-msgstr ""
-
-#: comment
-msgid "for further assistance.  Please include the "
-msgstr ""
-
-#: comment
-msgid "steps you took that led up to this problem in your email message."
-msgstr ""
-
-#: comment
-msgid "You submitted expired data to this web site. Please restart the"
-msgstr ""
-
-#: comment
-msgid "steps you were following without using your browser's <strong>"
-msgstr ""
-
-#: comment
-msgid "Back</strong> button."
-msgstr ""
-
-#: comment
-msgid "An error has occurred.  If this problem persists, please email "
-msgstr ""
-
-#: comment
-msgid "This reservation can no longer be extended due to<br>"
-msgstr ""
-
-#: comment
-msgid "a reservation immediately following yours.<br><br>"
-msgstr ""
-
-#: comment
-msgid "The selected reservation no longer exists.<br><br>"
-msgstr ""
-
-#: comment
+#: ../.ht-inc/requests.php:3476
 msgid "Invalid start day submitted"
 msgstr ""
 
-#: comment
-msgid "computer status check"
+#: ../.ht-inc/requests.php:3485 ../.ht-inc/blockallocations.php:3164
+msgid "Invalid start time submitted"
 msgstr ""
 
-#: comment
-msgid "starting install process"
+#: ../.ht-inc/requests.php:3504
+msgid "Invalid duration submitted"
 msgstr ""
 
-#: comment
-msgid "running post configuration"
+#: ../.ht-inc/requests.php:3523
+msgid "Invalid end date/time submitted"
 msgstr ""
 
-#: comment
-msgid "image loading"
+#: ../.ht-inc/requests.php:3538 ../.ht-inc/requests.php:4398
+#: ../.ht-inc/requests.php:4413
+msgid "Invalid data submitted"
 msgstr ""
 
-#: comment
-msgid "rebooting node for reinstall"
+#: ../.ht-inc/requests.php:3560
+msgid "Invalid user group submitted"
 msgstr ""
 
-#: comment
-msgid "ready for Connect"
+#: ../.ht-inc/requests.php:3578
+msgid "The name can only contain letters, numbers, spaces, dashes(-), and periods(.) and can be from 3 to 255 characters long"
 msgstr ""
 
-#: comment
-msgid "starting reload process"
+#: ../.ht-inc/requests.php:3592
+msgid "The time you requested overlaps with another reservation you currently have. You are only allowed to have a single reservation at any given time. Please select another time for the reservation."
 msgstr ""
 
-#: comment
-msgid "confirming image exists"
+#: ../.ht-inc/requests.php:3596
+#, php-format
+msgid "The time you requested overlaps with another reservation you currently have. You are allowed to have %s overlapping reservations at any given time. Please select another time for the reservation."
 msgstr ""
 
-#: comment
-msgid "transferring image files to host server"
+#: ../.ht-inc/requests.php:3647
+#, php-format
+msgid "The reserved IP (%s) or MAC address (%s) conflicts with another reservation using the same IP or MAC address. Please select a different time to use the image."
 msgstr ""
 
-#: comment
-msgid "creating configuration file"
+#: ../.ht-inc/requests.php:3658
+msgid "The time you requested overlaps with a maintenance window. Please select a different time to use the image."
 msgstr ""
 
-#: comment
-msgid "starting load process"
+#: ../.ht-inc/requests.php:3669
+msgid "The reservation you are modifying is for an environment limited in the number of concurrent reservations that can be made. The time or duration you have requested overlaps with too many other reservations for the same image. Please select another time or duration for the reservation."
 msgstr ""
 
-#: comment
-msgid "adding user account"
+#: ../.ht-inc/requests.php:3724
+msgid "The time period you have requested is not available. Please select a different time."
 msgstr ""
 
-#: comment
-msgid "resource ready"
+#: ../.ht-inc/requests.php:3754 ../.ht-inc/requests.php:3900
+msgid "The specified reservation no longer exists."
 msgstr ""
 
-#: comment
-msgid "machine booting"
+#: ../.ht-inc/requests.php:3763 ../.ht-inc/requests.php:4121
+msgid "This reservation has timed out due to lack of user activity and is no longer available."
 msgstr ""
 
-#: comment
-msgid "starting virtual machine"
+#: ../.ht-inc/requests.php:3783
+#, php-format
+msgid "Delete reservation for %s starting %s?"
 msgstr ""
 
-#: comment
-msgid "Your request for a Block Allocation has been submitted for<br>"
+#: ../.ht-inc/requests.php:3799
+#, php-format
+msgid "Are you finished with your reservation for %s that started %s?"
 msgstr ""
 
-#: comment
-msgid "approval. "
+#: ../.ht-inc/requests.php:3804
+#, php-format
+msgid "Delete reservation by %s for %s that started %s?"
 msgstr ""
 
-#: comment
-msgid "You should be notified within a few business days<br>"
+#: ../.ht-inc/requests.php:3839
+msgid "End Reservation/Make Production"
 msgstr ""
 
-#: comment
-msgid "of its acceptance or rejection."
+#: ../.ht-inc/requests.php:3840
+msgid "Are you satisfied that this environment is ready to be made production and replace the current production version, or would you just like to end this reservation and test it again later?"
 msgstr ""
 
-#: comment
-msgid "<br><br><font color=\"red\"><b>Note:</b> You do not have an "
+#: ../.ht-inc/requests.php:3844
+msgid "WARNING: This environment is part of an active block allocation. Changing the production version of the environment at this time will result in new reservations under the block allocation to have full reload times instead of a &lt; 1 minutes wait. You can change the production version later by going to Manage Images-&gt;Edit Image Profiles and clicking Edit for this environment."
 msgstr ""
 
-#: comment
-msgid "email address registered<br>with VCL. Therefore, you will "
+#: ../.ht-inc/requests.php:3852
+msgid "Make this the production version"
 msgstr ""
 
-#: comment
-msgid "not receive automatic<br>notification when this block "
+#: ../.ht-inc/requests.php:3857
+msgid "Just end the reservation"
 msgstr ""
 
-#: comment
-msgid "allocation is accepted<br>or rejected.</font>"
+#: ../.ht-inc/requests.php:3908
+msgid "The reservation is no longer failed or timed out."
 msgstr ""
 
-#: comment
-msgid "The selected Block Request no longer exists."
+#: ../.ht-inc/requests.php:3915
+msgid "Remove timed out reservation from list of current reservations?"
 msgstr ""
 
-#: comment
-msgid "This is the number of environments that<br>\n"
+#: ../.ht-inc/requests.php:3919
+msgid "Remove failed reservation from list of current reservations?"
 msgstr ""
 
-#: comment
-msgid "will be loaded for the Block Allocation.\n"
+#: ../.ht-inc/requests.php:4025
+msgid "This will cause the reserved machine to be reinstalled. You may select which version of the environment you would like to use for the reinstall. The currently installed version is initally selected."
 msgstr ""
 
-#: comment
-msgid "User in this user group will be able to make reservations<br>\n"
+#: ../.ht-inc/requests.php:4030
+msgid "Version"
 msgstr ""
 
-#: comment
-msgid "for the computers set aside for this block allocation.<br>\n"
+#: ../.ht-inc/requests.php:4031 ../.ht-inc/image.php:1248
+msgid "Creator"
 msgstr ""
 
-#: comment
-msgid "If you do not see an applicable user group listed, please<br>\n"
+#: ../.ht-inc/requests.php:4032 ../.ht-inc/image.php:1249
+msgid "Created"
 msgstr ""
 
-#: comment
-msgid "select \"<font color=\"blue\">(group not listed)</font>\" and describe the group you need<br>\n"
+#: ../.ht-inc/requests.php:4033
+msgid "Currently in Production"
 msgstr ""
 
-#: comment
-msgid "in the <strong>Additional Comments</strong> section at the bottom of<br>\n"
+#: ../.ht-inc/requests.php:4046 ../.ht-inc/userpreferences.php:228
+#: ../.ht-inc/userpreferences.php:403 ../.ht-inc/userpreferences.php:407
+#: ../.ht-inc/userpreferences.php:411
+msgid "Yes"
 msgstr ""
 
-#: comment
-msgid "the page. If this is for a class, make sure to list the course<br>\n"
+#: ../.ht-inc/requests.php:4048 ../.ht-inc/userpreferences.php:228
+#: ../.ht-inc/userpreferences.php:401 ../.ht-inc/userpreferences.php:405
+#: ../.ht-inc/userpreferences.php:409
+msgid "No"
 msgstr ""
 
-#: comment
-msgid "and section number.\n"
+#: ../.ht-inc/requests.php:4055
+msgid "This will cause the reserved machine to be reinstalled."
 msgstr ""
 
-#: comment
-msgid "Users in this user group can modify this<br>\n"
+#: ../.ht-inc/requests.php:4056
+msgid "Any data saved only to the reserved machine <strong>will be lost</strong>."
 msgstr ""
 
-#: comment
-msgid "block allocation. Select None to keep<br>\n"
+#: ../.ht-inc/requests.php:4057
+msgid "Are you sure you want to continue?"
 msgstr ""
 
-#: comment
-msgid "anyone else from being able to modify it.\n"
+#: ../.ht-inc/requests.php:4114
+msgid "This reservation is no longer available."
 msgstr ""
 
-#: comment
-msgid "For repeating block allocations, there are three ways you can enter the dates and times:<br>\n"
+#: ../.ht-inc/requests.php:4146
+msgid "Later in this process, you must accept a <a>click-through agreement</a> about software licensing."
 msgstr ""
 
-#: comment
-msgid "<li>Repeating Weekly - Use this if the block allocation needs to occur every week.<br>\n"
+#: ../.ht-inc/requests.php:4152
+msgid "Notes on using this environment:"
 msgstr ""
 
-#: comment
-msgid "You can make it repeat on a single day each week or on multiple days.  The time(s)<br>\n"
+#: ../.ht-inc/requests.php:4160
+msgid "Cluster Reservation"
 msgstr ""
 
-#: comment
-msgid "that it occurs will be the same on all days. You can list as many times as needed.</li>\n"
+#: ../.ht-inc/requests.php:4161
+msgid "This is a cluster reservation. Depending on the makeup of the cluster, you may need to use different methods to connect to the different environments in your cluster."
 msgstr ""
 
-#: comment
-msgid "<li>Repeating Monthly - Use this if the block allocation needs to occur on a certain<br>\n"
+#: ../.ht-inc/requests.php:4193
+msgid "(use your campus password)"
 msgstr ""
 
-#: comment
-msgid "day of the month (i.e. 2nd Tuesday each month). You can list as many times as<br>\n"
+#: ../.ht-inc/requests.php:4195 ../.ht-inc/requests.php:4197
+msgid "Connect to reservation using"
 msgstr ""
 
-#: comment
-msgid "needed for that day of the month.</li>\n"
+#: ../.ht-inc/requests.php:4243
+msgid "Get RDP File"
 msgstr ""
 
-#: comment
-msgid "<li>List of Dates/Times - Use this to specify any other cases, including single<br>\n"
+#: ../.ht-inc/requests.php:4405
+msgid "No access to submitted reservation type"
 msgstr ""
 
-#: comment
-msgid "events. You can specify as many date/time combinations as needed.</li>\n"
+#: ../.ht-inc/requests.php:4420
+msgid "No access to submitted end type"
 msgstr ""
 
-#: comment
-msgid "This is the first date the block allocation will be used.\n"
+#: ../.ht-inc/requests.php:4436
+msgid "No access to submitted environment"
 msgstr ""
 
-#: comment
-msgid "This is the last date the block allocation will be used.\n"
+#: ../.ht-inc/requests.php:4494
+msgid "The submitted start time is in the past."
 msgstr ""
 
-#: comment
-msgid "Select the checkbox for each of the days you<br>\n"
+#: ../.ht-inc/requests.php:4499
+msgid "The end time must be at least 15 minutes later than the start time."
 msgstr ""
 
-#: comment
-msgid "would like the block allocation to occur. For<br>\n"
+#: ../.ht-inc/requests.php:4522
+msgid "Invalid IP address. Must be w.x.y.z with each of w, x, y, and z being between 1 and 255 (inclusive)"
 msgstr ""
 
-#: comment
-msgid "example, check Monday, Wednesday, and Friday<br>\n"
+#: ../.ht-inc/requests.php:4530
+msgid "Invalid netmask specified"
 msgstr ""
 
-#: comment
-msgid "for a class that meets on those days.\n"
+#: ../.ht-inc/requests.php:4537
+msgid "Invalid router address. Must be w.x.y.z with each of w, x, y, and z being between 1 and 255 (inclusive)"
 msgstr ""
 
-#: comment
-msgid "Here you specify the start and end times of the<br>\n"
+#: ../.ht-inc/requests.php:4543
+msgid "IP address and router are not on the same subnet based on the specified netmask."
 msgstr ""
 
-#: comment
-msgid "block allocation. The times will occur on each<br>\n"
+#: ../.ht-inc/requests.php:4556
+msgid "Too many DNS servers specified - up to 3 are allowed."
 msgstr ""
 
-#: comment
-msgid "of the selected days. You might specify more than<br>\n"
+#: ../.ht-inc/requests.php:4561
+msgid "Invalid DNS server specified."
 msgstr ""
 
-#: comment
-msgid "one start/end combination if you had multiple<br>\n"
+#: ../.ht-inc/requests.php:4583
+msgid "Invalid MAC address. Must be XX:XX:XX:XX:XX:XX with each pair of XX being from 00 to FF (inclusive)"
 msgstr ""
 
-#: comment
-msgid "sections that met on the same day.\n"
+#: ../.ht-inc/requests.php:4608
+msgid "You do not have access to use the specified admin user group."
 msgstr ""
 
-#: comment
-msgid "block allocation. You might specify more than<br>\n"
+#: ../.ht-inc/requests.php:4616
+msgid "You do not have access to use the specified access user group."
 msgstr ""
 
-#: comment
-msgid "Specify individual dates and times during<br>\n"
+#: ../.ht-inc/requests.php:4841 ../.ht-inc/requests.php:4874
+msgid "Change Test Image to Production"
 msgstr ""
 
-#: comment
-msgid "which the block allocation will occur.\n"
+#: ../.ht-inc/requests.php:4842
+#, php-format
+msgid "This will update %s so that new reservations for it will be for the newly created revision. Are you sure it works correctly and is ready to be made the production revision?"
 msgstr ""
 
-#: comment
-msgid "Enter any additional information about this block allocation.<br>\n"
+#: ../.ht-inc/requests.php:4848
+msgid "Make Production"
 msgstr ""
 
-#: comment
-msgid "&lt; and &gt; are not allowed.<br>\n"
+#: ../.ht-inc/requests.php:4871
+#, php-format
+msgid "%s is now in the process of being updated to use the newly created revision."
 msgstr ""
 
-#: comment
-msgid "If you selected \"<font color=\"blue\">(group not listed)</font>\" as the User group, make sure<br>\n"
+#: ../.ht-inc/userpreferences.php:61
+msgid "User preferences successfully updated"
 msgstr ""
 
-#: comment
-msgid "to clearly describe the requirements of a new user group that<br>\n"
+#: ../.ht-inc/userpreferences.php:74 ../.ht-inc/userpreferences.php:415
+msgid "Personal Information"
 msgstr ""
 
-#: comment
-msgid "will be created for this block allocation.\n"
+#: ../.ht-inc/userpreferences.php:78 ../.ht-inc/userpreferences.php:429
+msgid "RDP Preferences"
 msgstr ""
 
-#: comment
-msgid "awaiting approval"
+#: ../.ht-inc/userpreferences.php:81 ../.ht-inc/userpreferences.php:268
+msgid "General Preferences"
 msgstr ""
 
-#: comment
-msgid "weekly"
+#: ../.ht-inc/userpreferences.php:89
+msgid "Personal"
 msgstr ""
 
-#: comment
-msgid "monthly"
+#: ../.ht-inc/userpreferences.php:95
+msgid "First Name:"
 msgstr ""
 
-#: comment
-msgid "list"
+#: ../.ht-inc/userpreferences.php:102
+msgid "Last Name:"
 msgstr ""
 
-#: comment
-msgid "(unspecified)"
+#: ../.ht-inc/userpreferences.php:110 ../.ht-inc/userpreferences.php:419
+msgid "Preferred Name:"
 msgstr ""
 
-#: comment
+#: ../.ht-inc/userpreferences.php:122
+msgid "Email Address:"
+msgstr ""
+
+#: ../.ht-inc/userpreferences.php:129
+msgid "Change Password"
+msgstr ""
+
+#: ../.ht-inc/userpreferences.php:132
+msgid "Current Password:"
+msgstr ""
+
+#: ../.ht-inc/userpreferences.php:142
+msgid "New Password:"
+msgstr ""
+
+#: ../.ht-inc/userpreferences.php:151
+msgid "Confirm Password:"
+msgstr ""
+
+#: ../.ht-inc/userpreferences.php:170 ../.ht-inc/userpreferences.php:261
+msgid "Submit Changes"
+msgstr ""
+
+#: ../.ht-inc/userpreferences.php:178
+msgid "RDP"
+msgstr ""
+
+#: ../.ht-inc/userpreferences.php:185
+msgid "Try decreasing <em>Resolution</em> or <em>Color Depth</em> to speed up your connection if things seem slow when connected to a remote computer."
+msgstr ""
+
+#: ../.ht-inc/userpreferences.php:189 ../.ht-inc/userpreferences.php:433
+msgid "Resolution:"
+msgstr ""
+
+#: ../.ht-inc/userpreferences.php:210 ../.ht-inc/userpreferences.php:437
+msgid "Color Depth:"
+msgstr ""
+
+#: ../.ht-inc/userpreferences.php:218 ../.ht-inc/userpreferences.php:442
+msgid "Audio:"
+msgstr ""
+
+#: ../.ht-inc/userpreferences.php:220 ../.ht-inc/userpreferences.php:399
+msgid "Use my speakers"
+msgstr ""
+
+#: ../.ht-inc/userpreferences.php:226 ../.ht-inc/userpreferences.php:446
+msgid "Map Local Drives:"
+msgstr ""
+
+#: ../.ht-inc/userpreferences.php:234 ../.ht-inc/userpreferences.php:450
+msgid "Map Local Printers:"
+msgstr ""
+
+#: ../.ht-inc/userpreferences.php:241 ../.ht-inc/userpreferences.php:454
+msgid "Map Local Serial Ports:"
+msgstr ""
+
+#: ../.ht-inc/userpreferences.php:248 ../.ht-inc/userpreferences.php:458
+msgid "RDP Port"
+msgstr ""
+
+#: ../.ht-inc/userpreferences.php:280
+msgid "View User Groups:"
+msgstr ""
+
+#: ../.ht-inc/userpreferences.php:282
+msgid "matching my affiliation"
+msgstr ""
+
+#: ../.ht-inc/userpreferences.php:285
+msgid "from all affiliations"
+msgstr ""
+
+#: ../.ht-inc/userpreferences.php:295
+msgid "Send email notifications about reservations:"
+msgstr ""
+
+#: ../.ht-inc/userpreferences.php:297 ../.ht-inc/userpreferences.php:325
+msgid "Enabled"
+msgstr ""
+
+#: ../.ht-inc/userpreferences.php:300 ../.ht-inc/userpreferences.php:328
+msgid "Disabled"
+msgstr ""
+
+#: ../.ht-inc/userpreferences.php:322
+msgid "Use public key authentication for SSH logins:"
+msgstr ""
+
+#: ../.ht-inc/userpreferences.php:329
+msgid "Public keys:"
+msgstr ""
+
+#: ../.ht-inc/userpreferences.php:333
+msgid "Public keys can only contain letters, numbers, spaces, and these characters: + / @ . ="
+msgstr ""
+
+#: ../.ht-inc/userpreferences.php:341
+msgid "Images using network storage (such as AFS) may not work well with public key authentication. In some cases, you may still be prompted for a password. In other cases, you may need to run additional commands after logging in to gain access to the network storage."
+msgstr ""
+
+#: ../.ht-inc/userpreferences.php:347
+msgid "Submit General Preferences"
+msgstr ""
+
+#: ../.ht-inc/userpreferences.php:416 ../.ht-inc/userpreferences.php:430
+msgid "Submit the following changes?"
+msgstr ""
+
+#: ../.ht-inc/userpreferences.php:425
+msgid "New password will be submitted"
+msgstr ""
+
+#: ../.ht-inc/userpreferences.php:637
+msgid "Preferred name can only be up to 25 characters"
+msgstr ""
+
+#: ../.ht-inc/userpreferences.php:641
+msgid "Preferred name can only contain letters and spaces"
+msgstr ""
+
+#: ../.ht-inc/userpreferences.php:655
+msgid "Password incorrect"
+msgstr ""
+
+#: ../.ht-inc/userpreferences.php:661
+msgid "Passwords do not match"
+msgstr ""
+
+#: ../.ht-inc/userpreferences.php:677
+msgid "RDP Port cannot be changed while you have active reservations"
+msgstr ""
+
+#: ../.ht-inc/userpreferences.php:683
+msgid "RDP Port must be between 1024 and 65535"
+msgstr ""
+
+#: ../.ht-inc/statistics.php:44
+msgid "Statistic Information"
+msgstr ""
+
+#: ../.ht-inc/statistics.php:59
+msgid "Select a starting date:"
+msgstr ""
+
+#: ../.ht-inc/statistics.php:83
+msgid "Select an ending date:"
+msgstr ""
+
+#: ../.ht-inc/statistics.php:96
+msgid "View General Statistics"
+msgstr ""
+
+#: ../.ht-inc/statistics.php:97
+msgid "Select an affiliation:"
+msgstr ""
+
+#: ../.ht-inc/statistics.php:119
+msgid "View Statistics by provisioning engine"
+msgstr ""
+
+#: ../.ht-inc/statistics.php:169
+msgid "All Affiliations"
+msgstr ""
+
+#: ../.ht-inc/statistics.php:177
+msgid "The selected start date is not valid. Please select a valid date."
+msgstr ""
+
+#: ../.ht-inc/statistics.php:181
+msgid "The selected end date is not valid. Please select a valid date."
+msgstr ""
+
+#: ../.ht-inc/statistics.php:185
+msgid "The selected end date is before the selected start date. Please select an end date equal to or greater than the start date."
+msgstr ""
+
+#: ../.ht-inc/statistics.php:194 ../.ht-inc/statistics.php:196
+msgid "Statistic Information for"
+msgstr ""
+
+#: ../.ht-inc/statistics.php:202
+#, php-format
+msgid "Reservation information between %s and %s:"
+msgstr ""
+
+#: ../.ht-inc/statistics.php:396
+msgid "Total Reservations:"
+msgstr ""
+
+#: ../.ht-inc/statistics.php:400
+msgid "Total Hours Used:"
+msgstr ""
+
+#: ../.ht-inc/statistics.php:404
+msgid "\"Now\" Reservations:"
+msgstr ""
+
+#: ../.ht-inc/statistics.php:408
+msgid "\"Later\" Reservations:"
+msgstr ""
+
+#: ../.ht-inc/statistics.php:412
+msgid "Unavailable:"
+msgstr ""
+
+#: ../.ht-inc/statistics.php:416
+msgid "Load times &lt; 2 minutes:"
+msgstr ""
+
+#: ../.ht-inc/statistics.php:419
+msgid "Load times 2-6 minutes:"
+msgstr ""
+
+#: ../.ht-inc/statistics.php:422
+msgid "Load times 6-8 minutes:"
+msgstr ""
+
+#: ../.ht-inc/statistics.php:425
+msgid "Load times &gt;= 8 minutes:"
+msgstr ""
+
+#: ../.ht-inc/statistics.php:429
+msgid "Total Unique Users:"
+msgstr ""
+
+#: ../.ht-inc/statistics.php:435
+#, php-format
+msgid "Unique Users of %s:"
+msgstr ""
+
+#: ../.ht-inc/statistics.php:446
+msgid "Unique Users"
+msgstr ""
+
+#: ../.ht-inc/statistics.php:447
+msgid "Hours Used"
+msgstr ""
+
+#: ../.ht-inc/statistics.php:448
+msgid "&lt; 2 min wait"
+msgstr ""
+
+#: ../.ht-inc/statistics.php:449
+msgid "2-6 min wait"
+msgstr ""
+
+#: ../.ht-inc/statistics.php:450
+msgid "6-8 min wait"
+msgstr ""
+
+#: ../.ht-inc/statistics.php:451
+msgid "&gt;= 8 min wait"
+msgstr ""
+
+#: ../.ht-inc/statistics.php:452
+msgid "Failures"
+msgstr ""
+
+#: ../.ht-inc/statistics.php:482
+msgid "Durations:"
+msgstr ""
+
+#: ../.ht-inc/statistics.php:485
+msgid "0 - 30 Min:"
+msgstr ""
+
+#: ../.ht-inc/statistics.php:489
+msgid "30 Min - 1 Hour:"
+msgstr ""
+
+#: ../.ht-inc/statistics.php:493
+msgid "1 Hour - 2 Hours:"
+msgstr ""
+
+#: ../.ht-inc/statistics.php:497
+msgid "2 Hours - 4 Hours:"
+msgstr ""
+
+#: ../.ht-inc/statistics.php:501
+msgid "4 Hours - 6 Hours:"
+msgstr ""
+
+#: ../.ht-inc/statistics.php:505
+msgid "6 Hours - 8 Hours:"
+msgstr ""
+
+#: ../.ht-inc/statistics.php:509
+msgid "8 Hours - 10 Hours:"
+msgstr ""
+
+#: ../.ht-inc/statistics.php:513
+msgid "&gt; 10 Hours:"
+msgstr ""
+
+#: ../.ht-inc/statistics.php:518
+msgid "Ending information:"
+msgstr ""
+
+#: ../.ht-inc/statistics.php:521
+msgid "Deleted:"
+msgstr ""
+
+#: ../.ht-inc/statistics.php:524
+msgid "(Future reservation deleted before start time reached)"
+msgstr ""
+
+#: ../.ht-inc/statistics.php:527
+msgid "Released:"
+msgstr ""
+
+#: ../.ht-inc/statistics.php:529
+msgid "(Reservation released before end time reached)"
+msgstr ""
+
+#: ../.ht-inc/statistics.php:532
+msgid "Not Acknowledged:"
+msgstr ""
+
+#: ../.ht-inc/statistics.php:534
+msgid "(\"Connect!\" button never clicked)"
+msgstr ""
+
+#: ../.ht-inc/statistics.php:537
+msgid "No Login:"
+msgstr ""
+
+#: ../.ht-inc/statistics.php:539
+msgid "(User never logged in)"
+msgstr ""
+
+#: ../.ht-inc/statistics.php:542
+msgid "End of Reservation:"
+msgstr ""
+
+#: ../.ht-inc/statistics.php:544
+msgid "(End of reservation reached)"
+msgstr ""
+
+#: ../.ht-inc/statistics.php:547
+msgid "Timed Out:"
+msgstr ""
+
+#: ../.ht-inc/statistics.php:549
+msgid "(Disconnect and no reconnection within 15 minutes)"
+msgstr ""
+
+#: ../.ht-inc/statistics.php:552
+msgid "Failed:"
+msgstr ""
+
+#: ../.ht-inc/statistics.php:554
+msgid "(Reserved computer failed to get prepared for user)"
+msgstr ""
+
+#: ../.ht-inc/statistics.php:569
+msgid "Reservations by Day"
+msgstr ""
+
+#: ../.ht-inc/statistics.php:570
+msgid "(Reservations with start time on given day)"
+msgstr ""
+
+#: ../.ht-inc/statistics.php:576
+msgid "Max Concurrent Reservations By Day"
+msgstr ""
+
+#: ../.ht-inc/statistics.php:582
+msgid "Max Concurrent Blade Reservations By Day"
+msgstr ""
+
+#: ../.ht-inc/statistics.php:588
+msgid "Max Concurrent Virtual Machine Reservations By Day"
+msgstr ""
+
+#: ../.ht-inc/statistics.php:594
+msgid "Reservations by Hour"
+msgstr ""
+
+#: ../.ht-inc/statistics.php:595
+msgid "Active reservations during given hour averaged over selected dates"
+msgstr ""
+
+#: ../.ht-inc/statistics.php:955 ../.ht-inc/statistics.php:1099
+#: ../.ht-inc/statistics.php:1277
 msgid "(too much computational time required to generate this graph)"
 msgstr ""
 
-#: comment
-msgid "Resources"
+#: ../.ht-inc/resource.php:172
+msgid "Edit Grouping &amp; Mapping"
 msgstr ""
 
-#: comment
-msgid "Current status of computers"
+#: ../.ht-inc/resource.php:174
+msgid "Edit Grouping"
 msgstr ""
 
-#: comment
-msgid "Available"
+#: ../.ht-inc/resource.php:272
+msgid "Filters (click to expand)"
 msgstr ""
 
-#: comment
-msgid "Reloading"
+#: ../.ht-inc/resource.php:282
+msgid "Apply Name Filter"
 msgstr ""
 
-#: comment
-msgid "Reserved/In use"
+#: ../.ht-inc/resource.php:286
+msgid "Displayed Fields"
 msgstr ""
 
-#: comment
+#: ../.ht-inc/resource.php:656 ../.ht-inc/image.php:339
+#: ../.ht-inc/blockallocations.php:1667
+msgid "Owner"
+msgstr ""
+
+#: ../.ht-inc/resource.php:778
+msgid "Select an item from the drop-down box and click \"Get Groups\" to see all of the groups it is in. Then, select a group it is in and click the Remove button to remove it from that group, or select a group it is not in and click the Add button to add it to that group."
+msgstr ""
+
+#: ../.ht-inc/resource.php:786
+msgid "Get Groups"
+msgstr ""
+
+#: ../.ht-inc/resource.php:792
+#, php-format
+msgid "Groups %s is in:"
+msgstr ""
+
+#: ../.ht-inc/resource.php:821
+#, php-format
+msgid "Groups %s is not in:"
+msgstr ""
+
+#: ../.ht-inc/resource.php:953
+msgid "Group By Group"
+msgstr ""
+
+#: ../.ht-inc/resource.php:957
+msgid "Group:"
+msgstr ""
+
+#: ../.ht-inc/resource.php:1152
+msgid "You don't have access to manage any mappings for this resource type."
+msgstr ""
+
+#: ../.ht-inc/resource.php:1649
+msgid "The reservation you selected to image has expired."
+msgstr ""
+
+#: ../.ht-inc/resource.php:1678
+msgid "There was an error in starting the imaging process. Please contact a system administrator."
+msgstr ""
+
+#: ../.ht-inc/resource.php:1717
+#, php-format
+msgid "These are the comments from the previous revision (%s):"
+msgstr ""
+
+#: ../.ht-inc/resource.php:1723
+msgid "The previous revision did not have any comments."
+msgstr ""
+
+#: ../.ht-inc/image.php:117
+msgid "OS"
+msgstr ""
+
+#: ../.ht-inc/image.php:119
+msgid "Install Type"
+msgstr ""
+
+#: ../.ht-inc/image.php:121
+msgid "OS Type"
+msgstr ""
+
+#: ../.ht-inc/image.php:123 ../.ht-inc/image.php:377
+msgid "Required RAM"
+msgstr ""
+
+#: ../.ht-inc/image.php:125 ../.ht-inc/image.php:381
+msgid "Required Cores"
+msgstr ""
+
+#: ../.ht-inc/image.php:127 ../.ht-inc/image.php:385
+msgid "Processor Speed"
+msgstr ""
+
+#: ../.ht-inc/image.php:129
+msgid "Min. Network Speed"
+msgstr ""
+
+#: ../.ht-inc/image.php:131 ../.ht-inc/image.php:396
+msgid "Max Concurrent Usage"
+msgstr ""
+
+#: ../.ht-inc/image.php:133
+msgid "Est. Reload Time"
+msgstr ""
+
+#: ../.ht-inc/image.php:135
+msgid "Last Updated"
+msgstr ""
+
+#: ../.ht-inc/image.php:137 ../.ht-inc/image.php:407
+msgid "Available for checkout"
+msgstr ""
+
+#: ../.ht-inc/image.php:139
+msgid "Max Initial Time"
+msgstr ""
+
+#: ../.ht-inc/image.php:141
+msgid "Check Logged in User"
+msgstr ""
+
+#: ../.ht-inc/image.php:143
+msgid "Admin. Access"
+msgstr ""
+
+#: ../.ht-inc/image.php:173
+#, php-format
+msgid "There is at least one <strong>reservation</strong> for this image. The latest end time is %s."
+msgstr ""
+
+#: ../.ht-inc/image.php:191
+#, php-format
+msgid "There is at least one <strong>Block Allocation</strong> with computers currently allocated with this image. Block Allocation %s has the latest end time which is %s."
+msgstr ""
+
+#: ../.ht-inc/image.php:207
+#, php-format
+msgid "There is at least one <strong>Block Allocation</strong> configured to use this image. Block Allocation %s has the latest end time which is %s."
+msgstr ""
+
+#: ../.ht-inc/image.php:218
+msgid "The following <strong>Server Profiles</strong> are configured to use this image:"
+msgstr ""
+
+#: ../.ht-inc/image.php:233
+msgid "The following <strong>images</strong> have the selected image assigned as a <strong>subimage</strong>:"
+msgstr ""
+
+#: ../.ht-inc/image.php:243
+msgid "The following <strong>VM Host Profiles</strong> have the this image selected:"
+msgstr ""
+
+#: ../.ht-inc/image.php:248
+msgid "The selected image is currently being used in the following ways and cannot be deleted at this time."
+msgstr ""
+
+#: ../.ht-inc/image.php:334
+msgid "Name cannot contain dashes (-), single (') or double (&quot;) quotes, less than (&lt;), or greater than (&gt;) and can be from 2 to 60 characters long"
+msgstr ""
+
+#: ../.ht-inc/image.php:339 ../.ht-inc/blockallocations.php:137
+msgid "Unknown user"
+msgstr ""
+
+#: ../.ht-inc/image.php:348
+msgid "Description of image (required - users will see this on the <strong>New Reservations</strong> page):"
+msgstr ""
+
+#: ../.ht-inc/image.php:355
+msgid "Usage Notes"
+msgstr ""
+
+#: ../.ht-inc/image.php:356
+msgid "Optional notes to the user explaining how to use the image (users will see this on the <strong>Connect!</strong> page):"
+msgstr ""
+
+#: ../.ht-inc/image.php:363
+msgid "Revision Comments"
+msgstr ""
+
+#: ../.ht-inc/image.php:364
+msgid "Notes for yourself and other admins about how the image was setup/installed. These are optional and are not visible to end users."
+msgstr ""
+
+#: ../.ht-inc/image.php:372
+msgid "Advanced Options - leave default values unless you really know what you are doing (click to expand)"
+msgstr ""
+
+#: ../.ht-inc/image.php:393
+msgid "Minimum Network Speed"
+msgstr ""
+
+#: ../.ht-inc/image.php:397
+msgid "(0 = unlimited)"
+msgstr ""
+
+#: ../.ht-inc/image.php:401
+msgid "Estimated Reload Time"
+msgstr ""
+
+#: ../.ht-inc/image.php:409
+msgid "Check for logged in user"
+msgstr ""
+
+#: ../.ht-inc/image.php:411
+msgid "Users have administrative access"
+msgstr ""
+
+#: ../.ht-inc/image.php:414
+msgid "Use sysprep"
+msgstr ""
+
+#: ../.ht-inc/image.php:416
+msgid "Connect methods:"
+msgstr ""
+
+#: ../.ht-inc/image.php:419 ../.ht-inc/image.php:499
+msgid "Modify Connection Methods"
+msgstr ""
+
+#: ../.ht-inc/image.php:433
+msgid "Manage Subimages"
+msgstr ""
+
+#: ../.ht-inc/image.php:455
+msgid "Confirm"
+msgstr ""
+
+#: ../.ht-inc/image.php:464
+msgid "Confirm Manual Install"
+msgstr ""
+
+#: ../.ht-inc/image.php:469
+msgid "This method cannot be automatically added to the image by VCL. The image must be created with the software for this method already installed. If this image already has software for this method installed in it, please click <strong>Software is Manually Installed</strong>. Otherwise, click cancel."
+msgstr ""
+
+#: ../.ht-inc/image.php:475
+msgid "Software is Manually Installed"
+msgstr ""
+
+#: ../.ht-inc/image.php:501
+msgid "Selected Revision ID:"
+msgstr ""
+
+#: ../.ht-inc/image.php:530
+msgid "Add Method"
+msgstr ""
+
+#: ../.ht-inc/image.php:532
+msgid "Current Methods"
+msgstr ""
+
+#: ../.ht-inc/image.php:535
+msgid "Remove Selected Methods(s)"
+msgstr ""
+
+#: ../.ht-inc/image.php:551
+msgid "NOTE: Connection Method changes take effect immediately; you do <strong>not</strong> need to click \"Submit Changes\" to submit them."
+msgstr ""
+
+#: ../.ht-inc/image.php:571
+msgid "You do not have access to add any subimages to this image."
+msgstr ""
+
+#: ../.ht-inc/image.php:575
+msgid "Add New Subimage"
+msgstr ""
+
+#: ../.ht-inc/image.php:583
+msgid "Add Subimage"
+msgstr ""
+
+#: ../.ht-inc/image.php:585
+msgid "Current Subimages"
+msgstr ""
+
+#: ../.ht-inc/image.php:602
+msgid "(None)"
+msgstr ""
+
+#: ../.ht-inc/image.php:605
+msgid "total subimages:"
+msgstr ""
+
+#: ../.ht-inc/image.php:606
+msgid "Remove Selected Subimage(s)"
+msgstr ""
+
+#: ../.ht-inc/image.php:621
+msgid "NOTE: Subimage changes take effect immediately; you do <strong>not</strong> need to click \"Submit Changes\" to submit them."
+msgstr ""
+
+#: ../.ht-inc/image.php:841
+msgid "Error encountered while trying to create new image.<br>Please contact an admin for assistance."
+msgstr ""
+
+#: ../.ht-inc/image.php:1236
+msgid "Revisions of this Image"
+msgstr ""
+
+#: ../.ht-inc/image.php:1240
+msgid "WARNING: This image is part of an active block allocation. Changing the production revision of the image at this time will result in new reservations under the block allocation to have full reload times instead of a &lt; 1 minutes wait."
+msgstr ""
+
+#: ../.ht-inc/image.php:1247
+msgid "Revision"
+msgstr ""
+
+#: ../.ht-inc/image.php:1250
+msgid "In Production"
+msgstr ""
+
+#: ../.ht-inc/image.php:1251
+msgid "Comments (click to edit)"
+msgstr ""
+
+#: ../.ht-inc/image.php:1295
+msgid "Delete selected revisions"
+msgstr ""
+
+#: ../.ht-inc/image.php:1316 ../.ht-inc/image.php:1383
+msgid "You do not have access to manage this image."
+msgstr ""
+
+#: ../.ht-inc/image.php:1323
+msgid "You do not have access to add this subimage."
+msgstr ""
+
+#: ../.ht-inc/image.php:1392
+msgid "Non-numeric data was submitted for an image id."
+msgstr ""
+
+#: ../.ht-inc/image.php:1399
+msgid "Invalid infomation id database. Contact your system administrator."
+msgstr ""
+
+#: ../.ht-inc/image.php:1535
+msgid "Name must be from 2 to 60 characters and cannot contain any dashes (-), single (') or double (\") quotes."
+msgstr ""
+
+#: ../.ht-inc/image.php:1539
+msgid "Name can only contain alphabets, numbers, signs, and spaces."
+msgstr ""
+
+#: ../.ht-inc/image.php:1548
+msgid "An image already exists with this name."
+msgstr ""
+
+#: ../.ht-inc/image.php:1553
+msgid "RAM must be between 0 and 8388607"
+msgstr ""
+
+#: ../.ht-inc/image.php:1557
+msgid "Cores must be between 0 and 255"
+msgstr ""
+
+#: ../.ht-inc/image.php:1561
+msgid "Processor Speed must be between 0 and 20000"
+msgstr ""
+
+#: ../.ht-inc/image.php:1566
+msgid "Invalid value submitted for network speed"
+msgstr ""
+
+#: ../.ht-inc/image.php:1571
+msgid "Max concurrent usage must be 0 or between 2 and 255"
+msgstr ""
+
+#: ../.ht-inc/image.php:1576
+msgid "Estimated Reload Time must be between 0 and 120"
+msgstr ""
+
+#: ../.ht-inc/image.php:1580
+msgid "Submitted ID is not valid"
+msgstr ""
+
+#: ../.ht-inc/image.php:1584
+msgid "Available for checkout must be Yes or No"
+msgstr ""
+
+#: ../.ht-inc/image.php:1588
+msgid "Check for logged in user must be Yes or No"
+msgstr ""
+
+#: ../.ht-inc/image.php:1592
+msgid "Users have administrative access must be Yes or No"
+msgstr ""
+
+#: ../.ht-inc/image.php:1597
+msgid "Use sysprep must be Yes or No"
+msgstr ""
+
+#: ../.ht-inc/image.php:1601
+msgid "You must include a description of the image"
+msgstr ""
+
+#: ../.ht-inc/image.php:1898
+msgid "Invalid method submitted."
+msgstr ""
+
+#: ../.ht-inc/image.php:1904 ../.ht-inc/image.php:1994
+msgid "Invalid revision id submitted."
+msgstr ""
+
+#: ../.ht-inc/image.php:1987
+msgid "Non-numeric data was submitted for a connection method id."
+msgstr ""
+
+#: ../.ht-inc/image.php:2135
+msgid "The following revisions are in use and cannot be deleted at this time:"
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:37
+msgid "Block Allocations are a way to have a set of machines preloaded with a particular environment at specified times and made available to a specific group of users. This is very useful for classroom use and for workshops. They can be made available on a repeating schedule such as when a course meets each week. Block Allocations only allocate machines for the group of users - they do not create the actual, end user reservations for the machines. All users still must log in to the VCL web site and make their own reservations DURING the period a block allocation is active. The forms here provide a way for you to submit a request for a Block Allocation for review by a sysadmin. If you just need to use a machine through VCL, use the New Reservation page for that."
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:39
+msgid "Please submit Block Allocation requests at least one full business day in advance to allow time for them to be approved."
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:41 ../.ht-inc/blockallocations.php:112
+#: ../.ht-inc/blockallocations.php:812
+msgid "Request New Block Allocation"
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:49 ../.ht-inc/blockallocations.php:1614
+msgid "Manage Block Allocations"
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:52
+msgid "View Block Allocated Machines"
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:57
+msgid "Create New Block Allocation"
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:63
+msgid "Block Allocation Requests"
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:81
 msgid "Your Active Block Allocations"
 msgstr ""
 
-#: comment
+#: ../.ht-inc/blockallocations.php:82
 msgid "You are currently a member of the following Block Allocations."
 msgstr ""
 
-#: comment
+#: ../.ht-inc/blockallocations.php:83
 msgid "Click an item to view its current status."
 msgstr ""
 
+#: ../.ht-inc/blockallocations.php:106
+msgid "New Block Allocation"
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:109
+msgid "Edit Block Allocation"
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:113
+msgid "Complete the following form to request a new block allocation. Your request will need to be approved by a VCL admin before it is created."
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:121 ../.ht-inc/blockallocations.php:1365
+#: ../.ht-inc/blockallocations.php:2029
+msgid "Name:"
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:125
+msgid "Name can only contain letters, numbers, spaces, dashes(-), parenthesis, and periods(.) and can be from 3 to 80 characters long"
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:162 ../.ht-inc/blockallocations.php:440
+#: ../.ht-inc/blockallocations.php:1675
+msgid "User group"
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:174
+msgid "group not listed"
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:193
+msgid "Number of seats"
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:203
+msgid "Specify dates/times by:\n"
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:206 ../.ht-inc/blockallocations.php:218
+msgid "Repeating Weekly"
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:208 ../.ht-inc/blockallocations.php:285
+msgid "Repeating Monthly"
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:210
+msgid "List of Dates/Times"
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:221 ../.ht-inc/blockallocations.php:288
+msgid "First Date of Usage"
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:229 ../.ht-inc/blockallocations.php:296
+msgid "Last Date of Usage"
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:239
+msgid "Days"
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:240
+msgid "Times"
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:253 ../.ht-inc/blockallocations.php:272
+#: ../.ht-inc/blockallocations.php:322 ../.ht-inc/blockallocations.php:342
+#: ../.ht-inc/blockallocations.php:356 ../.ht-inc/blockallocations.php:378
+#: ../.ht-inc/blockallocations.php:1432 ../.ht-inc/blockallocations.php:1728
+msgid "End"
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:304 ../.ht-inc/blockallocations.php:2176
+#: ../.ht-inc/blockallocations.php:2287 ../.ht-inc/blockallocations.php:2356
+#: ../.ht-inc/blockallocations.php:2611
+msgid "1st"
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:305 ../.ht-inc/blockallocations.php:2177
+#: ../.ht-inc/blockallocations.php:2288 ../.ht-inc/blockallocations.php:2357
+#: ../.ht-inc/blockallocations.php:2612
+msgid "2nd"
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:306 ../.ht-inc/blockallocations.php:2178
+#: ../.ht-inc/blockallocations.php:2289 ../.ht-inc/blockallocations.php:2358
+#: ../.ht-inc/blockallocations.php:2613
+msgid "3rd"
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:307 ../.ht-inc/blockallocations.php:2179
+#: ../.ht-inc/blockallocations.php:2290 ../.ht-inc/blockallocations.php:2359
+#: ../.ht-inc/blockallocations.php:2614
+msgid "4th"
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:308 ../.ht-inc/blockallocations.php:2180
+#: ../.ht-inc/blockallocations.php:2291 ../.ht-inc/blockallocations.php:2360
+#: ../.ht-inc/blockallocations.php:2615
+msgid "5th"
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:316
+msgid "Repeat on the"
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:319
+msgid "of every month"
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:351
+msgid "List of Times"
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:352 ../.ht-inc/blockallocations.php:374
+#: ../.ht-inc/blockallocations.php:1430 ../.ht-inc/blockallocations.php:1724
+msgid "Date"
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:390
+msgid "Additional comments"
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:399
+msgid "Submit Block Allocation Request"
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:403
+msgid "Submit New Block Allocation"
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:407
+msgid "Submit Block Allocation Changes"
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:419 ../.ht-inc/blockallocations.php:420
+msgid "Confirm Block Allocation"
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:422
+msgid "Please confirm the following values and then click <strong>Submit Block Allocation Request</strong>"
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:424
+#, php-format
+msgid "Please confirm the following values and then click <strong>%s</strong>"
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:444 ../.ht-inc/blockallocations.php:1679
+msgid "Seats"
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:448 ../.ht-inc/blockallocations.php:1308
+#: ../.ht-inc/blockallocations.php:1623 ../.ht-inc/blockallocations.php:1683
+#: ../.ht-inc/blockallocations.php:1793
+msgid "Repeating"
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:468
+msgid "Your additional comments will be submitted."
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:498
+msgid "This is the number of environments that will be loaded for the Block Allocation."
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:503
+msgid "User in this user group will be able to make reservations for the computers set aside for this block allocation.  If you do not see an applicable user group listed, please select \"<font color=\"blue\">(group not listed)</font>\" and describe the group you need in the <strong>Additional Comments</strong> section at the bottom of the page. If this is for a class, make sure to list the course and section number."
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:508
+msgid "For repeating block allocations, there are three ways you can enter the dates and times:"
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:510
+msgid "Repeating Weekly - Use this if the block allocation needs to occur every week."
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:511
+msgid "You can make it repeat on a single day each week or on multiple days.  The time(s) that it occurs will be the same on all days. You can list as many times as needed."
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:512
+msgid "Repeating Monthly - Use this if the block allocation needs to occur on a certain day of the month (i.e. 2nd Tuesday each month). You can list as many times as needed for that day of the month."
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:513
+msgid "List of Dates/Times - Use this to specify any other cases, including single events."
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:514
+msgid "You can specify as many date/time combinations as needed."
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:519 ../.ht-inc/blockallocations.php:537
+msgid "This is the first date the block allocation will be used.\n"
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:523 ../.ht-inc/blockallocations.php:541
+msgid "This is the last date the block allocation will be used.\n"
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:528
+msgid "Select the checkbox for each of the days you would like the block allocation to occur. For example, check Monday, Wednesday, and Friday for a class that meets on those days."
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:533
+msgid "Here you specify the start and end times of the block allocation. The times will occur on each of the selected days. You might specify more than one start/end combination if you had multiple sections that met on the same day."
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:546
+msgid "Here you specify the start and end times of the block allocation. You might specify more than one start/end combination if you had multiple sections that met on the same day."
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:551
+msgid "Specify individual dates and times during which the block allocation will occur."
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:556
+msgid "Enter any additional information about this block allocation. &lt; and &gt; are not allowed. If you selected \"<font color=\"blue\">(group not listed)</font>\" as the User group, make sure to clearly describe the requirements of a new user group that will be created for this block allocation."
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:577 ../.ht-inc/blockallocations.php:2480
+msgid "Error encountered while trying to create block allocation:"
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:578
+msgid "No active management nodes were found. Please try creating the block allocation at a later time."
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:667
+msgid "awaiting approval"
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:813
+msgid "Your request for a Block Allocation has been submitted for approval."
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:815
+msgid "You should be notified within a few business days of its acceptance or rejection."
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:818 ../.ht-inc/blockallocations.php:2045
+msgid "Note:"
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:819
+msgid "You do not have an email address registered with VCL. Therefore, you will not receive automatic notification when this block allocation is accepted or rejected."
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:1191
+msgid "none found"
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:1306 ../.ht-inc/blockallocations.php:1621
+msgid "Reserved<br>Machines"
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:1307 ../.ht-inc/blockallocations.php:1622
+msgid "Reserved<br>For"
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:1309
+msgid "Next Start Time"
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:1324
+msgid "Delete"
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:1333 ../.ht-inc/blockallocations.php:1639
+msgid "View Times"
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:1359 ../.ht-inc/blockallocations.php:1360
+msgid "Confirm Delete Block Allocation"
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:1361
+msgid "Please confirm the following values and then click <strong>Delete Block Allocation</strong>"
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:1377 ../.ht-inc/blockallocations.php:2001
+#: ../.ht-inc/blockallocations.php:2011 ../.ht-inc/blockallocations.php:2077
+msgid "User Group:"
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:1381 ../.ht-inc/blockallocations.php:1973
+#: ../.ht-inc/blockallocations.php:2081
+msgid "Seats:"
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:1385 ../.ht-inc/blockallocations.php:1977
+#: ../.ht-inc/blockallocations.php:2085
+msgid "Repeating:"
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:1406
+msgid "Delete Block Allocation"
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:1421 ../.ht-inc/blockallocations.php:1422
+#: ../.ht-inc/blockallocations.php:1714 ../.ht-inc/blockallocations.php:1715
+msgid "Block Allocation Times"
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:1433 ../.ht-inc/blockallocations.php:1729
+msgid "Skip"
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:1449
+msgid "Block Allocation Usage"
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:1452
+msgid "This block allocation has never been used."
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:1511
+msgid "(unspecified)"
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:1629
+msgid "View"
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:1660 ../.ht-inc/blockallocations.php:2828
+msgid "Block Allocation"
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:1791
+msgid "Requested by"
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:1792
+msgid "Reserved Machines"
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:1794
+msgid "Start Date"
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:1795
+msgid "End Date"
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:1928
+msgid "Accept..."
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:1937
+msgid "Reject..."
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:1956
+msgid "There are currently no pending block allocation requests."
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:1963 ../.ht-inc/blockallocations.php:1964
+#: ../.ht-inc/blockallocations.php:2051
+msgid "Accept Block Allocation"
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:1965
+msgid "Please review the following information, fill in the additional fields, and click <strong>Accept Block Allocation</strong>."
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:2033
+msgid "Name can only contain letters, numbers, spaces, dashes(-), and periods(.) and can be from 3 to 80 characters long"
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:2040 ../.ht-inc/blockallocations.php:2110
+#, php-format
+msgid "The following text will be emailed to %s:"
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:2046
+msgid "The requesting user does not have an email address registered with VCL. Therefore, the user cannot be notified automatically."
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:2067 ../.ht-inc/blockallocations.php:2068
+#: ../.ht-inc/blockallocations.php:2120
+msgid "Reject Block Allocation"
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:2069
+msgid "Please review the following information, add a reason for rejecting the block allocation, and click <strong>Reject Block Allocation</strong>."
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:2113
+msgid "The requesting user does not have an email address registered with VCL. Therefore, the user cannot be notified automatically. However, for archival purposes, fill in a reason for rejecting the request:"
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:2347
+#, php-format
+msgid "The VCL Block Allocation you requested for %d seats of %s repeating on a weekly schedule has been accepted."
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:2369
+#, php-format
+msgid "The VCL Block Allocation you requested for %d seats of %s repeating on a monthly schedule has been accepted."
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:2384
+#, php-format
+msgid "The VCL Block Allocation you requested for %d seats of %s during the following time periods has been accepted:"
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:2401
+msgid "Warning: The requested user group does not currently have access to the requested image."
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:2458 ../.ht-inc/blockallocations.php:3051
+msgid "The name can only contain letters, numbers, spaces, dashes(-), and periods(.) and can be from 3 to 80 characters long"
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:2465 ../.ht-inc/blockallocations.php:2687
+msgid "<>\\'s and pipes (|) are not allowed in the email text."
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:2469 ../.ht-inc/blockallocations.php:2694
+msgid "Something must be filled in for the email text."
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:2475
+msgid "Invalid user group submitted."
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:2481
+msgid "No active management nodes were found. Please try accepting the block allocation at a later time."
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:2490
+msgid "Warning: The selected user group does not currently have access to the requested image. You can accept the Block Allocation again to ignore this warning."
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:2512 ../.ht-inc/blockallocations.php:2713
+msgid "Error encountered while updating status of block allocation."
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:2557
+msgid "VCL Block Allocation Accepted"
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:2602
+#, php-format
+msgid "The VCL Block Allocation you requested for %d seats of %s repeating on a weekly schedule has been rejected."
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:2624
+#, php-format
+msgid "The VCL Block Allocation you requested for %d seats of %s repeating on a monthly schedule has been rejected."
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:2639
+#, php-format
+msgid "The VCL Block Allocation you requested for %d seats of %s during the following time periods has been rejected."
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:2680
+msgid "Please include a reason for rejecting the block allocation in the email."
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:2689
+msgid "<>\\'s and pipes (|) are not allowed in the reject reason."
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:2696
+msgid "Something must be filled in for the reject reason."
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:2729
+msgid "VCL Block Allocation Rejected"
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:2786
+msgid "Invalid block time submitted"
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:2791
+msgid "The end time for the submitted block allocation time has passed. Therefore, it can no longer be modified."
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:2849
+msgid "Resources"
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:2878
+msgid "Current status of computers"
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:2914
+msgid "Current status of clusters:"
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:2918
+msgid "Available"
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:2922
+msgid "Reloading"
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:2926
+msgid "Reserved/In use"
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:3057
+msgid "The submitted image is invalid."
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:3061
+msgid "The submitted owner is invalid."
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:3071
+msgid "The submitted user group is invalid."
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:3075
+#, php-format
+msgid "The submitted number of seats must be between %d and %d."
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:3082
+#, php-format
+msgid "The selected image can only have %d concurrent reservations. Please reduce the number of requested seats to %d or less."
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:3094
+msgid "WARNING - The selected user group does not currently have access to the selected environment. You can submit the Block Allocation again to ignore this warning."
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:3099
+msgid "You must select one of \"Repeating Weekly\", \"Repeating Monthly\", or \"List of Dates/Times\"."
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:3111
+msgid "Invalid date/time submitted."
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:3119
+msgid "The date must be today or later."
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:3143
+msgid "The Last Date of Usage must be the same or later than the First Date of Usage."
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:3147
+msgid "The start date must be today or later."
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:3157
+msgid "Invalid start/end time submitted"
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:3171
+msgid "Invalid end time submitted"
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:3178
+msgid "Each start time must be less than the corresponding end time."
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:3200
+msgid "Invalid day submitted."
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:3208
+msgid "No valid days submitted for the specified date range."
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:3216
+msgid "Invalid week number submitted."
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:3220
+msgid "Invalid day of week submitted."
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:3226
+msgid "Specified day of month not found in date range."
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:3236
+msgid "<>\\'s are not allowed in the comments."
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:3478
+msgid "Error: Failed to fetch start/end times for block allocation."
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:3571
+msgid "Block Allocated Machines"
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:3572
+msgid "Start time:"
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:3581
+msgid "Update Charts"
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:3586
+msgid "Bare Machines"
+msgstr ""
+
+#: ../.ht-inc/blockallocations.php:3589
+msgid "Virtual Machines"
+msgstr ""
+
+#: ../.ht-inc/authentication.php:161
+msgid "Please select an authentication method to use:"
+msgstr ""
+
+#: ../.ht-inc/authentication.php:163
+msgid "Selected method failed, please try again"
+msgstr ""
+
+#: ../.ht-inc/authentication.php:175
+msgid "Remember my selection"
+msgstr ""
+
+#: ../.ht-inc/authentication.php:176 ../.ht-inc/authentication.php:232
+msgid "Proceed to Login"
+msgstr ""
+
+#: ../.ht-inc/authentication.php:180
+msgid "Explanation of authentication methods:"
+msgstr ""
+
+#: ../.ht-inc/authentication.php:244
+msgid "(unable to connect to authentication server)"
+msgstr ""
+
+#: ../.ht-inc/authentication.php:282
+msgid "Userid"
+msgstr ""
+
+#: ../.ht-inc/authentication.php:283
+msgid "Password"
+msgstr ""
+
+#: ../.ht-inc/authentication.php:284
+msgid "Login with"
+msgstr ""
+
+#: ../.ht-inc/authentication.php:290
+msgid "Login failed"
+msgstr ""
+
+#: ../.ht-inc/authentication.php:301
+msgid "Login"
+msgstr ""
+
+msgid "Image Profiles"
+msgstr ""
+
+msgid "You don't have access to manage any images."
+msgstr ""
+
+msgid "Edit Image Profiles"
+msgstr ""
+
+msgid "Add New Image"
+msgstr ""
+
+msgid "Add Image"
+msgstr ""
+
+msgid "No Images found to which you have access."
+msgstr ""
+
+msgid "Include Deleted Images:"
+msgstr ""
+
+msgid "Delete Image"
+msgstr ""
+
+msgid "Confirm Delete Image"
+msgstr ""
+
+msgid "Delete the following image?"
+msgstr ""
+
+msgid "Confirm Undelete Image"
+msgstr ""
+
+msgid "Undelete the following image?"
+msgstr ""
+
+msgid "Undelete Image"
+msgstr ""
+
+msgid "Group By Image"
+msgstr ""
+
+msgid ""
+"Select a group from the drop-down box and click \"Get Images\" to see all of "
+"the resources in it. Then, select a resource in it and click the Remove "
+"button to remove it from that group, or select a resource that is not in it "
+"and click the Add button to add it to that group."
+msgstr ""
+
+msgid "Map By Image Group"
+msgstr ""
+
+msgid "Image Group:"
+msgstr ""
+
+msgid ""
+"Select an item from the drop-down box and click \"Get Image Groups\" to see "
+"all of the groups it maps to. Then, select a group it does not map to and "
+"click the Add button to map it to that group, or select a group it maps to "
+"and click the Remove button to unmap it from that group."
+msgstr ""
+
+msgid "Get Image Groups"
+msgstr ""
+
+msgid "Image Groups %s maps to:"
+msgstr ""
+
+msgid "Image Groups %s does not map to:"
+msgstr ""
+
+msgid "Edit Image"
+msgstr ""
+
+msgid "Computer:"
+msgstr ""
+
+msgid "Computer Profiles"
+msgstr ""
+
+msgid "You don't have access to manage any computers."
+msgstr ""
+
+msgid "Edit Computer Profiles"
+msgstr ""
+
+msgid "Add New Computer"
+msgstr ""
+
+msgid "Add Computer"
+msgstr ""
+
+msgid "No Computers found to which you have access."
+msgstr ""
+
+msgid "Include Deleted Computers:"
+msgstr ""
+
+msgid "Delete Computer"
+msgstr ""
+
+msgid "Confirm Delete Computer"
+msgstr ""
+
+msgid "Delete the following computer?"
+msgstr ""
+
+msgid "Confirm Undelete Computer"
+msgstr ""
+
+msgid "Undelete the following computer?"
+msgstr ""
+
+msgid "Undelete Computer"
+msgstr ""
+
+msgid "Group By Computer"
+msgstr ""
+
+msgid ""
+"Select a group from the drop-down box and click \"Get Computers\" to see all "
+"of the resources in it. Then, select a resource in it and click the Remove "
+"button to remove it from that group, or select a resource that is not in it "
+"and click the Add button to add it to that group."
+msgstr ""
+
+msgid "Map By Computer Group"
+msgstr ""
+
+msgid "Computer Group:"
+msgstr ""
+
+msgid ""
+"Select an item from the drop-down box and click \"Get Computer Groups\" to "
+"see all of the groups it maps to. Then, select a group it does not map to "
+"and click the Add button to map it to that group, or select a group it maps "
+"to and click the Remove button to unmap it from that group."
+msgstr ""
+
+msgid "Get Computer Groups"
+msgstr ""
+
+msgid "Computer Groups %s maps to:"
+msgstr ""
+
+msgid "Computer Groups %s does not map to:"
+msgstr ""
+
+msgid "Edit Computer"
+msgstr ""
+
+msgid "Management Node:"
+msgstr ""
+
+msgid "Management Node Profiles"
+msgstr ""
+
+msgid "You don't have access to manage any management nodes."
+msgstr ""
+
+msgid "Edit Management Node Profiles"
+msgstr ""
+
+msgid "Add New Management Node"
+msgstr ""
+
+msgid "Add Management Node"
+msgstr ""
+
+msgid "No Management Nodes found to which you have access."
+msgstr ""
+
+msgid "Include Deleted Management Nodes:"
+msgstr ""
+
+msgid "Delete Management Node"
+msgstr ""
+
+msgid "Confirm Delete Management Node"
+msgstr ""
+
+msgid "Delete the following management node?"
+msgstr ""
+
+msgid "Confirm Undelete Management Node"
+msgstr ""
+
+msgid "Undelete the following management node?"
+msgstr ""
+
+msgid "Undelete Management Node"
+msgstr ""
+
+msgid "Group By Management Node"
+msgstr ""
+
+msgid ""
+"Select a group from the drop-down box and click \"Get Management Nodes\" to "
+"see all of the resources in it. Then, select a resource in it and click the "
+"Remove button to remove it from that group, or select a resource that is not "
+"in it and click the Add button to add it to that group."
+msgstr ""
+
+msgid "Map By Management Node Group"
+msgstr ""
+
+msgid "Management Node Group:"
+msgstr ""
+
+msgid ""
+"Select an item from the drop-down box and click \"Get Management Node Groups"
+"\" to see all of the groups it maps to. Then, select a group it does not map "
+"to and click the Add button to map it to that group, or select a group it "
+"maps to and click the Remove button to unmap it from that group."
+msgstr ""
+
+msgid "Get Management Node Groups"
+msgstr ""
+
+msgid "Management Node Groups %s maps to:"
+msgstr ""
+
+msgid "Management Node Groups %s does not map to:"
+msgstr ""
+
+msgid "Edit Management Node"
+msgstr ""
+
+msgid "Schedule:"
+msgstr ""
+
+msgid "Schedule Profiles"
+msgstr ""
+
+msgid "You don't have access to manage any schedules."
+msgstr ""
+
+msgid "Edit Schedule Profiles"
+msgstr ""
+
+msgid "Add New Schedule"
+msgstr ""
+
+msgid "Add Schedule"
+msgstr ""
+
+msgid "No Schedules found to which you have access."
+msgstr ""
+
+msgid "Include Deleted Schedules:"
+msgstr ""
+
+msgid "Delete Schedule"
+msgstr ""
+
+msgid "Confirm Delete Schedule"
+msgstr ""
+
+msgid "Delete the following schedule?"
+msgstr ""
+
+msgid "Confirm Undelete Schedule"
+msgstr ""
+
+msgid "Undelete the following schedule?"
+msgstr ""
+
+msgid "Undelete Schedule"
+msgstr ""
+
+msgid "Group By Schedule"
+msgstr ""
+
+msgid ""
+"Select a group from the drop-down box and click \"Get Schedules\" to see all "
+"of the resources in it. Then, select a resource in it and click the Remove "
+"button to remove it from that group, or select a resource that is not in it "
+"and click the Add button to add it to that group."
+msgstr ""
+
+msgid "Map By Schedule Group"
+msgstr ""
+
+msgid "Schedule Group:"
+msgstr ""
+
+msgid ""
+"Select an item from the drop-down box and click \"Get Schedule Groups\" to "
+"see all of the groups it maps to. Then, select a group it does not map to "
+"and click the Add button to map it to that group, or select a group it maps "
+"to and click the Remove button to unmap it from that group."
+msgstr ""
+
+msgid "Get Schedule Groups"
+msgstr ""
+
+msgid "Schedule Groups %s maps to:"
+msgstr ""
+
+msgid "Schedule Groups %s does not map to:"
+msgstr ""
+
+msgid "Edit Schedule"
+msgstr ""
+
+msgid "Platform"
+msgstr ""
+
+msgid "Sysprep"
+msgstr ""
+
+msgid "Deleted"
+msgstr ""
+
+msgid "Test"
+msgstr ""
+
+msgid "list"
+msgstr "lista"
+
+msgid "weekly"
+msgstr "semanalmente"
+
+msgid "monthly"
+msgstr "mensualmente"
