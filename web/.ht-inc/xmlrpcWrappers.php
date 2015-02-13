@@ -243,7 +243,7 @@ function XMLRPCaddRequest($imageid, $start, $length, $foruser='',
 ////////////////////////////////////////////////////////////////////////////////
 ///
 /// \fn XMLRPCaddRequestWithEnding($imageid, $start, $end, $foruser,
-//                                 $nousercheck)
+///                                $nousercheck)
 ///
 /// \param $imageid - id of an image
 /// \param $start - "now" or unix timestamp for start of reservation; will
@@ -2305,22 +2305,22 @@ function _XMLRPCchangeResourceGroupPriv_sub($mode, $name, $type, $nodeid,
 /// \return an array with two indices, one named 'status' which will have a
 /// value of 'success', the other named 'groups' which will be an array of
 /// arrays, each one having the following keys:\n
-/// \li \b id\n
-/// \li \b name\n
-/// \li \b groupaffiliation\n
-/// \li \b groupaffiliationid\n
-/// \li \b ownerid\n
-/// \li \b owner\n
-/// \li \b affiliation\n
-/// \li \b editgroupid\n
-/// \li \b editgroup\n
-/// \li \b editgroupaffiliationid\n
-/// \li \b editgroupaffiliation\n
-/// \li \b custom\n
-/// \li \b courseroll\n
-/// \li \b initialmaxtime\n
-/// \li \b maxextendtime\n
-/// \li \b overlapResCount\n
+/// \li id\n
+/// \li name\n
+/// \li groupaffiliation\n
+/// \li groupaffiliationid\n
+/// \li ownerid\n
+/// \li owner\n
+/// \li affiliation\n
+/// \li editgroupid\n
+/// \li editgroup\n
+/// \li editgroupaffiliationid\n
+/// \li editgroupaffiliation\n
+/// \li custom\n
+/// \li courseroll\n
+/// \li initialmaxtime\n
+/// \li maxextendtime\n
+/// \li overlapResCount
 ///
 /// \brief builds a list of user groups
 ///
@@ -3660,8 +3660,7 @@ function XMLRPCprocessBlockTime($blockTimesid, $ignoreprivileges=0) {
 ///
 /// \fn XMLRPCfinishBaseImageCapture($ownerid, $resourceid, $virtual=1)
 ///
-/// \param $ownerdata - array of data returned from getUserInfo for the owner of
-/// the image
+/// \param $ownerid - id of owner of image
 /// \param $resourceid - id from resource table for the image
 /// \param $virtual - (bool) 0 if bare metal image, 1 if virtual
 ///
