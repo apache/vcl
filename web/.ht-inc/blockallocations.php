@@ -1963,7 +1963,7 @@ function getPendingBlockHTML($listonly=0) {
 	$rt .= "title=\"" . _("Accept Block Allocation") . "\">\n";
 	$rt .= "<h2>" . _("Accept Block Allocation") . "</h2>\n";
 	$h = _("Please review the following information, fill in the additional fields, and click <strong>Accept Block Allocation</strong>.");
-	$rt .= preg_replace("/(.{1,50}([ \n]|$))/", '\1<br>', $h) . "<br>";
+	$rt .= preg_replace("/(.{1,100}([ \n]|$))/", '\1<br>', $h) . "<br>";
 	$rt .= "<table summary=\"\">\n";
 	$rt .= "  <tr>\n";
 	$rt .= "    <th align=\"right\">" . _("Environment:") . "</th>\n";
@@ -2067,7 +2067,7 @@ function getPendingBlockHTML($listonly=0) {
 	$rt .= "title=\"" . _("Reject Block Allocation") . "\">\n";
 	$rt .= "<h2>" . _("Reject Block Allocation") . "</h2>\n";
 	$h = _("Please review the following information, add a reason for rejecting the block allocation, and click <strong>Reject Block Allocation</strong>.");
-	$rt .= preg_replace("/(.{1,50}([ \n]|$))/", '\1<br>', $h) . "<br>\n";
+	$rt .= preg_replace("/(.{1,100}([ \n]|$))/", '\1<br>', $h) . "<br>\n";
 	$rt .= "<table summary=\"\">\n";
 	$rt .= "  <tr>\n";
 	$rt .= "    <th align=\"right\">" . _("Environment:") . "</th>\n";
