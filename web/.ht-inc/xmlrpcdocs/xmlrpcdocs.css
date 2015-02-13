@@ -124,6 +124,12 @@ div.fragment {
 	border-radius: 8px;
 	padding: 8px;
 	background-color: #f8f8f8;
+	white-space: pre;
+	font-family: "Lucida Console", Monaco, monospace;
+}
+
+div.line {
+	display: inline;
 }
 
 .comment {
