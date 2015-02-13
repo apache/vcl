@@ -93,6 +93,7 @@ our @EXPORT = qw(
 	_pingnode
 	add_imageid_to_newimages
 	add_reservation_account
+	character_to_ascii_value
 	check_blockrequest_time
 	check_endtimenotice_interval
 	check_ssh
@@ -178,6 +179,7 @@ our @EXPORT = qw(
 	get_reservation_computerloadlog_entries
 	get_reservation_computerloadlog_time
 	get_reservation_management_node_hostname
+	get_reservation_vcld_process_name_regex
 	get_request_loadstate_names
 	get_resource_groups
 	get_user_group_member_info
@@ -207,7 +209,6 @@ our @EXPORT = qw(
 	is_valid_ip_address
 	is_variable_set
 	kill_child_processes
-	kill_reservation_process
 	known_hosts
 	mail
 	makedatestring
@@ -741,7 +742,7 @@ END
 				my $computer_name = $ENV{data}->get_computer_short_name(0);
 				$subject .= "|$computer_name" if (defined $computer_name);
 				
-				my $vmhost_hostname = $ENV{data}->get_vmhost_hostname(0);
+				my $vmhost_hostname = $ENV{data}->get_vmhost_short_name(0);
 				$subject .= ">$vmhost_hostname" if (defined $vmhost_hostname);
 				
 				my $image_name = $ENV{data}->get_image_name(0);
@@ -2772,59 +2773,6 @@ EOF
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 kill_reservation_process
-
- Parameters  : $request_state_name, $reservation_id
- Returns     : 0 or 1
- Description :
-
-=cut
-
-sub kill_reservation_process {
-	my ($reservation_id) = @_;
-	
-	# Sanity check, make sure reservation id is valid
-	if (!$reservation_id) {
-		notify($ERRORS{'WARNING'}, 0, "reservation id is not defined");
-		return;
-	}
-	if ($reservation_id !~ /^\d+$/) {
-		notify($ERRORS{'WARNING'}, 0, "reservation id is not valid: $reservation_id");
-		return;
-	}
-	
-	notify($ERRORS{'OK'}, 0, "attempting to kill process for reservation $reservation_id");
-	
-	# Use the pkill utility to find processes matching the reservation ID
-	# Do not use -9 or else DESTROY won't run
-	my $pkill_command = "pkill -f ':$reservation_id ' 2>&1";
-	notify($ERRORS{'DEBUG'}, 0, "executing pkill command: $pkill_command");
-	
-	my $pkill_output = `$pkill_command`;
-	my $pkill_exit_status = $? >> 8;
-	
-	# Check the pgrep exit status
-	if ($pkill_exit_status == 0) {
-		notify($ERRORS{'OK'}, 0, "reservation $reservation_id process was killed, returning 1");
-		return 1;
-	}
-	elsif ($? == -1) {
-		notify($ERRORS{'OK'}, 0, "\$? is set to -1, Perl bug likely encountered, assuming reservation $reservation_id process was killed, returning 1");
-		return 1;
-	}
-	elsif ($pkill_exit_status == 1) {
-		notify($ERRORS{'OK'}, 0, "process was not found for reservation $reservation_id, returning 1");
-		return 1;
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "pkill error occurred, returning undefined, output:\n$pkill_output");
-		return;
-	}
-	
-} ## end sub kill_reservation_process
-
-#/////////////////////////////////////////////////////////////////////////////
-
 =head2 database_select
 
  Parameters  : SQL select statement
@@ -3086,6 +3034,23 @@ EOF
 		my $computer_id = $request_info->{reservation}{$reservation_id}{computerid};
 		my $computer_info = get_computer_info($computer_id, $no_cache);
 		$request_info->{reservation}{$reservation_id}{computer} = $computer_info;
+		
+		# Populate natport table for reservation
+		# Make sure this wasn't called from populate_reservation_natport or else recursive loop will occur
+		if (defined $ENV{reservation_id} && $ENV{reservation_id} eq $reservation_id) {
+			my $caller_trace = get_caller_trace(5);
+			if ($caller_trace !~ /populate_reservation_natport/) {
+				my $request_state_name = $request_info->{state}{name};
+				if ($request_state_name =~ /(new|reserved|modified|test)/) {
+					if (!populate_reservation_natport($reservation_id)) {
+						notify($ERRORS{'CRITICAL'}, 0, "failed to populate natport table for reservation");
+					}
+					if (!update_reservation_natlog($reservation_id)) {
+						notify($ERRORS{'CRITICAL'}, 0, "failed to populate natlog table for reservation");
+					}
+				}
+			}
+		}
 		
 		# Add the connect method info to the hash
 		my $connect_method_info = get_connect_method_info($imagerevision_id, 0);
@@ -5979,9 +5944,9 @@ sub set_hash_process_id {
 =head2 rename_vcld_process
 
  Parameters  : hash - Reference to hash containing request data
- Returns     : 0 or 1
- Description : Renames running process based on request information.  Appends the state
-               name, request ID, and reservation ID to the process name.
+ Returns     : boolean
+ Description : Renames running process based on request information. Appends the
+               state name, request ID, and reservation ID to the process name.
                Sets PARENTIMAGE and SUBIMAGE in the hash depending on whether or
                reservation ID is the lowest for a request.
 
@@ -6028,12 +5993,15 @@ sub rename_vcld_process {
 			my $reservation_id        = $data_structure->get_reservation_id();
 			my $request_state_name    = $data_structure->get_request_state_name();
 			my $computer_short_name   = $data_structure->get_computer_short_name();
-			my $vmhost_hostname       = $data_structure->get_vmhost_hostname(0);
+			my $vmhost_hostname       = $data_structure->get_vmhost_short_name(0);
 			my $image_name            = $data_structure->get_image_name();
 			my $user_login_id         = $data_structure->get_user_login_id();
 			my $request_forimaging    = $data_structure->get_request_forimaging();
 			my $reservation_count     = $data_structure->get_reservation_count();
 			my $reservation_is_parent = $data_structure->is_parent_reservation();
+			
+			# !!! IMPORTANT !!!
+			# If the reservation naming scheme is changed, always check get_reservation_vcld_process_name_regex to make sure it matches the new name pattern
 			
 			# Append the request and reservation IDs if they are set
 			$new_process_name .= " '|$PID|$request_id|$reservation_id|";
@@ -7020,23 +6988,23 @@ computer
 LEFT JOIN (state) ON (state.id = computer.stateid)
 LEFT JOIN (platform) ON (platform.id = computer.platformid)
 LEFT JOIN (
-	provisioning,
-	module
+   provisioning,
+   module
 )
 ON (
-	provisioning.id = computer.provisioningid
-	AND module.id = provisioning.moduleid
+   provisioning.id = computer.provisioningid
+   AND module.id = provisioning.moduleid
 )
 LEFT JOIN (schedule) ON (schedule.id = computer.scheduleid)
 LEFT JOIN (module AS predictivemodule) ON (predictivemodule.id = computer.predictivemoduleid)
 LEFT JOIN (
    resource,
-	resourcetype
+   resourcetype
 )
 ON (
    resource.subid = computer.id
-	AND resource.resourcetypeid = resourcetype.id
-	AND resourcetype.name = 'computer'
+   AND resource.resourcetypeid = resourcetype.id
+   AND resourcetype.name = 'computer'
 )
 LEFT JOIN (nathostcomputermap) ON (nathostcomputermap.computerid = computer.id)
 
@@ -7095,7 +7063,7 @@ EOF
 			$computer_info->{resource}{$table}{$column} = $value;
 		}
 		elsif ($table eq 'nathostcomputermap') {
-			# Do not add, will retrieve later on
+			$computer_info->{nathost}{$table}{$column} = $value;
 		}
 		else {
 			$computer_info->{$table}{$column} = $value;
@@ -7163,7 +7131,7 @@ EOF
 	}
 	
 	# Check if the computer associated with this reservation is assigned a NAT host
-	if (my $nathost_id = $computer_info->{'nathostcomputermap-nathostid'}) {
+	if (my $nathost_id = $computer_info->{nathost}{nathostcomputermap}{nathostid}) {
 		my $nathost_info = get_computer_nathost_info($computer_id, $no_cache);
 		if ($nathost_info) {
 			$computer_info->{nathost} = $nathost_info;
@@ -8815,11 +8783,10 @@ EOF
 	# Call the database select subroutine
 	# This will return an array of one or more rows based on the select statement
 	my @computerloadlog_rows = database_select($select_statement);
-
+	
 	# Check if at least 1 row was returned
 	my $computerloadlog_exists = 0;
-	
-	my $parent_reservation_id;
+	my $parent_reservation_id = '<unknown>';
 	my $parent_computerloadlog_exists = 0;
 	
 	
@@ -8838,7 +8805,8 @@ EOF
 	}
 	
 	# Check if a vcld process is running matching for this reservation
-	my @processes_running = is_management_node_process_running("$PROCESSNAME .\\|[0-9]+\\|[0-9]+\\|$reservation_id\\|");
+	my $reservation_process_name_regex = get_reservation_vcld_process_name_regex($reservation_id);
+	my @processes_running = is_management_node_process_running($reservation_process_name_regex);
 	
 	my $info_string = "reservation ID: $reservation_id\n";
 	$info_string .= "parent reservation ID: $parent_reservation_id\n";
@@ -8849,32 +8817,32 @@ EOF
 	# Check the results and return
 	if ($computerloadlog_exists && @processes_running) {
 		#notify($ERRORS{'DEBUG'}, 0, "reservation $reservation_id is currently being processed, computerloadlog 'begin' entry exists and running process was found:\n$info_string");
-		return 1;
+		return (wantarray ? @processes_running : 1);
 	}
 	elsif (!$computerloadlog_exists && @processes_running) {
 		notify($ERRORS{'DEBUG'}, 0, "computerloadlog 'begin' entry does NOT exist but running process was found: @processes_running, assuming reservation $reservation_id is currently being processed\n$info_string");
-		return 1;
+		return (wantarray ? @processes_running : 1);
 	}
 	elsif ($computerloadlog_exists && !@processes_running) {
 		if ($reservation_id eq $parent_reservation_id) {
 			#notify($ERRORS{'WARNING'}, 0, "$reservation_id is the parent reservation, computerloadlog 'begin' entry exists but running process was NOT found, assuming reservation $reservation_id is NOT currently being processed\n$info_string");
-			return 0;
+			return (wantarray ? () : 0);
 		}
 		else {
 			# This is a child reservation, computerloadlog exists, no process running for this reservation
 			if ($parent_computerloadlog_exists) {
 				notify($ERRORS{'DEBUG'}, 0, "child reservation: $reservation_id, computerloadlog 'begin' entry exists but running process was NOT found, parent reservation $parent_reservation_id computerloadlog entry exists, assuming a process for this reservation already ran and parent reservation process is still running, returning true\n$info_string");
-				return 1;
+				return (wantarray ? () : 1);
 			}
 			else {
 				notify($ERRORS{'DEBUG'}, 0, "child reservation: $reservation_id, computerloadlog 'begin' entry exists but running process was NOT found, parent reservation $parent_reservation_id computerloadlog entry does not exist, assuming this reservation is NOT currently being processed and has not been processed yet, returning false\n$info_string");
-				return 0;
+				return (wantarray ? () : 0);
 			}
 		}
 	}
 	else {
 		notify($ERRORS{'DEBUG'}, 0, "reservation $reservation_id is NOT currently being processed\n$info_string");
-		return 0;
+		return (wantarray ? () : 0);
 	}
 }
 
@@ -8915,7 +8883,7 @@ sub run_command {
 	my @output = split(/[\r\n]+/, $output_string);
 	
 	if (!$no_output) {
-		notify($ERRORS{'DEBUG'}, 0, "executed command: $command, exit status: $exit_status, output:\n@output");
+		notify($ERRORS{'DEBUG'}, 0, "executed command: $command, exit status: $exit_status, output:\n" . join("\n", @output));
 	}
 	return ($exit_status, \@output);
 }
@@ -9014,6 +8982,75 @@ sub string_to_ascii {
 	}
 }
 
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 character_to_ascii_value
+
+ Parameters  : $character, $numeral_system (optional)
+ Returns     : hex number 
+ Description : Determines the ASCII value of a given character. A numeral system
+               argument may be specified. Valid values are 'decimal', 'hex', or
+               'oct'. By default, the decimal value is returned.
+
+=cut
+
+sub character_to_ascii_value {
+	my ($character, $numeral_system) = @_;
+	if (!defined($character)) {
+		notify($ERRORS{'WARNING'}, 0, "character argument was not supplied");
+		return;
+	}
+	elsif (length($character) != 1) {
+		notify($ERRORS{'WARNING'}, 0, "length of character argument is not 1: " . length($character));
+		return;
+	}
+	if (defined($numeral_system)) {
+		if ($numeral_system =~ /hex/i) {
+			$numeral_system = 'hexadecimal';
+		}
+		elsif ($numeral_system =~ /dec/i) {
+			$numeral_system = 'decimal';
+		}
+		elsif ($numeral_system =~ /oct/i) {
+			$numeral_system = 'octal';
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "numeral system specified by the argument is not supported: $numeral_system");
+			return;
+		}
+	}
+	else {
+		$numeral_system = 'decimal';
+	}
+	
+	if (defined($ENV{ascii_value}{$character}{$numeral_system})) {
+		return $ENV{ascii_value}{$character}{$numeral_system};
+	}
+	
+	my $decimal_value = unpack("C*", $character);
+	my $values = {
+		'decimal' => $decimal_value,
+		'hexadecimal' => sprintf("%X", $decimal_value),
+		'octal' => sprintf("%o", $decimal_value),
+	};
+	
+	# Store the results in %ENV to avoid repetitive messages in vcld.log
+	$ENV{ascii_value}{$character} = $values;
+	
+	my $string = "ASCII $numeral_system value of '$character': $values->{$numeral_system}";
+	if ($numeral_system ne 'decimal') {
+		$string .= " (decimal: $values->{decimal})";
+	}
+	if ($numeral_system ne 'hexadecimal') {
+		$string .= " (hexadecimal: $values->{hexadecimal})";
+	}
+	if ($numeral_system ne 'octal') {
+		$string .= " (octal: $values->{octal})";
+	}
+	
+	notify($ERRORS{'DEBUG'}, 0, $string);
+	return $values->{$numeral_system};
+}
 
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -9161,33 +9198,57 @@ sub xmlrpc_call {
 
 =head2 is_management_node_process_running
 
- Parameters  : $process_identifier
+ Parameters  : $process_regex
  Returns     : array or hash reference
- Description : Determines if any processes matching the $process_identifier
-               argument are running on the management node. The
-               $process_identifier must be a regular expression understood by
-               pgrep. The return value differs based on how this subroutine is
-               called.
+ Description : Determines if any processes matching the $process_regex
+               argument are running on the management node. The $process_regex
+               must be a valid Perl regular expression.
                
-               If called in scalar context, a hash reference is
-               returned. The hash keys are PIDs and the values are the full name
-               of the process.
+               The following command is used to determine if a process is
+               running:
+               ps -e -o pid,args | grep -P "$process_regex"
                
-               If called in list context, an array is returned containing the
-               PIDs.
+               The behavior is different than if the -P argument is not used.
+               The following characters must be escaped with a backslash in
+               order for a literal match to be found:
+               | ( ) [ ] . +
+               
+               If these are not escaped, grep will interpret them as the
+               corresponing regular expression operational character. For
+               example:
+               
+               To match this literal string:
+               |(foo)|
+               Pass this:
+               \|\(foo\)\|
+               
+               To match 'foo' or 'bar, pass this:
+               (foo|bar)
+               
+               To match a pipe character ('|'), followed by either 'foo' or
+               'bar, followed by another pipe character:
+               |foo|
+               Pass this:
+               \|(foo|bar)\|
+               
+               The return value differs based on how this subroutine is called.
+               If called in scalar context, a hash reference is returned. The
+               hash keys are PIDs and the values are the full name of the
+               process. If called in list context, an array is returned
+               containing the PIDs.
 
 =cut
 
 sub is_management_node_process_running {
-	my ($process_identifier) = @_;
+	my ($process_regex) = @_;
 	
 	# Check the arguments
-	unless ($process_identifier) {
-		notify($ERRORS{'WARNING'}, 0, "process PID or name argument was not specified");
+	unless ($process_regex) {
+		notify($ERRORS{'WARNING'}, 0, "process regex pattern argument was not specified");
 		return;
 	}
 	
-	my $command = "pgrep -fl '$process_identifier'";
+	my $command = "ps -e -o pid,args | grep -P \"$process_regex\"";
 	my ($exit_status, $output) = run_command($command, 0);
 	if (!defined($output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to run command to determine if process is running: $command");
@@ -9196,23 +9257,23 @@ sub is_management_node_process_running {
 	
 	my $processes_running = {};
 	for my $line (@$output) {
-		my ($pid, $process_name) = $line =~ /^(\d+)\s*(.*)/;
+		my ($pid, $process_name) = $line =~ /^\s*(\d+)\s*(.*)/g;
 		
 		if (!defined($pid)) {
-			notify($ERRORS{'DEBUG'}, 0, "ignoring pgrep output line, it does not begin with a number: $line");
+			notify($ERRORS{'DEBUG'}, 0, "ignoring line, it does not begin with a number: '$line'");
 			next;
 		}
 		elsif ($pid eq $PID) {
-			notify($ERRORS{'DEBUG'}, 0, "ignoring pgrep output line for the currently running process: $line");
+			notify($ERRORS{'DEBUG'}, 0, "ignoring line for the currently running process: $line");
 			next;
 		}
-		elsif ($line =~ /pgrep -fl/) {
-			notify($ERRORS{'DEBUG'}, 0, "ignoring pgrep output line containing for pgrep command: $line");
+		elsif ($line =~ /grep -P/) {
+			notify($ERRORS{'DEBUG'}, 0, "ignoring line containing for this command: $line");
 			next;
 		}
 		elsif ($line =~ /sh -c/) {
 			# Ignore lines containing 'sh -c', probably indicating a duplicate process of a command run remotely
-			notify($ERRORS{'DEBUG'}, 0, "ignoring pgrep output line containing 'sh -c': $line");
+			notify($ERRORS{'DEBUG'}, 0, "ignoring containing 'sh -c': $line");
 			next;
 		}
 		else {
@@ -9225,18 +9286,40 @@ sub is_management_node_process_running {
 	if ($process_count) {
 		if (wantarray) {
 			my @process_ids = sort keys %$processes_running;
-			notify($ERRORS{'DEBUG'}, 0, "process is running, identifier: '$process_identifier', returning array containing PIDs: @process_ids");
+			notify($ERRORS{'DEBUG'}, 0, "process is running, identifier: '$process_regex', returning array containing PIDs: @process_ids");
 			return @process_ids;
 		}
 		else {
-			notify($ERRORS{'DEBUG'}, 0, "process is running, identifier: '$process_identifier', returning hash reference:\n" . format_data($processes_running));
+			notify($ERRORS{'DEBUG'}, 0, "process is running, identifier: '$process_regex', returning hash reference:\n" . format_data($processes_running));
 			return $processes_running;
 		}
 	}
 	else {
-		notify($ERRORS{'DEBUG'}, 0, "process is NOT running, identifier: '$process_identifier'");
+		notify($ERRORS{'DEBUG'}, 0, "process is NOT running, identifier: '$process_regex'");
 		return;
 	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_reservation_vcld_process_name_regex
+
+ Parameters  : $reservation_id
+ Returns     : string
+ Description : Returns a string containing a regular expression which should
+               match a single reservation process. This regex is passed to
+               is_management_node_process_running.
+
+=cut
+
+sub get_reservation_vcld_process_name_regex {
+	my ($reservation_id) = @_;
+	if (!defined($reservation_id)) {
+		notify($ERRORS{'WARNING'}, 0, "reservation ID argument was not specified");
+		return;
+	}
+	
+	return "$PROCESSNAME .\\|[0-9]+\\|[0-9]+\\|$reservation_id\\|";
 }
 
 #/////////////////////////////////////////////////////////////////////////////

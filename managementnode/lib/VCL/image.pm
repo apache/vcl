@@ -983,6 +983,9 @@ EOF
 		return;
 	}
 	
+	my $process_regex = get_reservation_vcld_process_name_regex($reservation_id) || $reservation_id;
+	$process_regex =~ s/^\w+\s//;
+	
 	my $message = <<EOF;
 Inserted imaging request to the database:
 request ID: $request_id
@@ -992,7 +995,7 @@ This process will now display the contents of the vcld.log file if the vcld
 daemon is running. If you do not see many lines of additional output, exit this
 process, start the vcld daemon, and monitor the image capture process by running
 the command:
-tail -f $LOGFILE | grep '$request_id:$reservation_id'
+tail -f $LOGFILE | grep -P '$process_regex'
 
 EOF
 	

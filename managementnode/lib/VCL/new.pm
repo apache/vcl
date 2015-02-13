@@ -850,8 +850,8 @@ sub computer_not_being_used {
 					
 					# Kill competing process and update request state to complete
 					notify($ERRORS{'OK'}, 0, "attempting to kill process of competing reservation $competing_reservation_id assigned to $computer_short_name");
-					if (kill_reservation_process($competing_reservation_id)) {
-						notify($ERRORS{'OK'}, 0, "killed process for competing reservation $competing_reservation_id");
+					for my $competing_reservation_pid (@competing_reservation_pids) {
+						$self->mn_os->kill_process($competing_reservation_pid);
 					}
 					
 					# Wait for competing process to end before verifying that it was successfully killed

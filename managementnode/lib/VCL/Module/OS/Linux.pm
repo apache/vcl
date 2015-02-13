@@ -514,8 +514,8 @@ sub post_load {
 
 =head2 post_reserve
 
- Parameters  :
- Returns     :
+ Parameters  : none
+ Returns     : boolean
  Description :
 
 =cut
@@ -527,7 +527,7 @@ sub post_reserve {
 		return 0;
 	}
 	
-	my $image_name          = $self->data->get_image_name();
+	my $image_name = $self->data->get_image_name();
 	my $computer_short_name = $self->data->get_computer_short_name();
 	my @post_reserve_script_paths = ('/usr/local/vcl/vcl_post_reserve', '/etc/init.d/vcl_post_reserve');
 	
@@ -542,7 +542,6 @@ sub post_reserve {
 	# write contents to local temp file /tmp/resrvationid_post_reserve_userdata
 	# scp tmpfile to ‘/root/.vclcontrol/post_reserve_userdata’
 	# assumes the image has the call in vcl_post_reserve to import/read the user data file
-	#
 	
 	my $reservation_id = $self->data->get_reservation_id();
 	my $variable_name = "userdata|$reservation_id"; 
@@ -567,7 +566,7 @@ sub post_reserve {
 		}
 		#Clean variable from variable table
 		if (delete_variable($variable_name)) {
-			notify($ERRORS{'DEBUG'}, 0, "Deleted variable_name $variable_name from variable table");
+			notify($ERRORS{'DEBUG'}, 0, "deleted variable_name $variable_name from variable table");
 		}
 	}
 	
@@ -3762,7 +3761,7 @@ sub enable_firewall_port {
 			}
 		}
 	}
-
+	
 	my @new_scope_list = split(/,/,$new_scope);
 	
 	for my $scope_string (@new_scope_list) {
@@ -5046,6 +5045,10 @@ sub command_exists {
 		return;
 	}
 	
+	if ($self->{command_exists}{$shell_command}) {
+		return 1;
+	}
+	
 	my $computer_node_name = $self->data->get_computer_node_name();
 	
 	my ($exit_status, $output) = $self->execute("which $shell_command", 0);
@@ -5055,10 +5058,12 @@ sub command_exists {
 	}
 	elsif (my ($command_line) = grep(/\/$shell_command$/, @$output)) {
 		notify($ERRORS{'DEBUG'}, 0, "verified '$shell_command' command exists on $computer_node_name: $command_line");
+		$self->{command_exists}{$shell_command} = 1;
 		return 1;
 	}
 	else {
 		notify($ERRORS{'DEBUG'}, 0, "'$shell_command' command does NOT exist on $computer_node_name");
+		$self->{command_exists}{$shell_command} = 0;
 		return 0;
 	}
 }
@@ -5407,7 +5412,6 @@ sub should_set_user_password {
 	}
 }
 
-
 #/////////////////////////////////////////////////////////////////////////////
 
 =head2 grant_connect_method_access
@@ -5497,13 +5501,66 @@ sub grant_connect_method_access {
 		notify($ERRORS{'WARNING'}, 0, "failed to add line to $external_sshd_config_file_path: '$allow_users_line'");
 		return;
 	}
-
+	
 	$self->restart_service('ext_sshd') || return;
 
 	# If ssh_public_keys add to authorized_keys
 
 	return 1;
+}
 
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 kill_process
+
+ Parameters  : $pid, $signal (optional)
+ Returns     : boolean
+ Description : Kills a process on the computer.
+
+=cut
+
+sub kill_process {
+	my $self = shift;
+	if (ref($self) !~ /linux/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my ($pid_argument, $signal) = @_;
+	if (!defined($pid_argument)) {
+		notify($ERRORS{'WARNING'}, 0, "PID argument was not specified");
+		return;
+	}
+	
+	my $computer_node_name = $self->data->get_computer_node_name();
+	
+	# Suicide prevention
+	if ($pid_argument eq $PID) {
+		notify($ERRORS{'WARNING'}, 0, "process $pid_argument not killed, it is the currently running process");
+		return;
+	}
+	
+	$signal = '9' unless defined $signal;
+	$signal =~ s/^-+//g;
+	
+	my $command = "kill -$signal $pid_argument";
+	my ($exit_status, $output) = $self->execute($command);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to kill process $pid_argument on $computer_node_name");
+		return;
+	}
+	elsif ($exit_status == 1 || grep(/no such process/i, @$output)) {
+		notify($ERRORS{'DEBUG'}, 0, "process $pid_argument not running on $computer_node_name");
+		return 1;
+	}
+	elsif ($exit_status != 0 || grep(/^kill:/i, @$output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to kill process $pid_argument with signal $signal on $computer_node_name, command: '$command', exit status: $exit_status, output:\n" . join("\n", @$output));
+		return 0;
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "killed process $pid_argument with signal $signal on $computer_node_name");
+		return 1;
+	}
 }
 
 ##/////////////////////////////////////////////////////////////////////////////

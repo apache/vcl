@@ -114,16 +114,6 @@ sub initialize {
 		$self->data->set_reservation_lastcheck_time($reservation_lastcheck);
 	}
 	
-	# Populate natport table for reservation
-	if ($nathost_id && $request_state_name =~ /(new|reserved|modified|test)/) {
-		if (!populate_reservation_natport($reservation_id)) {
-			$self->reservation_failed("failed to populate natport table for reservation");
-		}
-		if (!update_reservation_natlog($reservation_id)) {
-			notify($ERRORS{'CRITICAL'}, 0, "failed to populate natlog table for reservation");
-		}
-	}
-	
 	# If this is a cluster request, wait for all reservations to begin before proceeding
 	if ($reservation_count > 1) {
 		if (!$self->wait_for_all_reservations_to_begin('begin', 300, 30)) {
