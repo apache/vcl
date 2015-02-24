@@ -175,24 +175,29 @@ sub _run_vim_cmd {
 	
 	my $attempt = 0;
 	my $attempt_limit = 5;
-	my $wait_seconds = 2;
+	my $wait_seconds = 5;
 	
 	my $connection_reset_errors = 0;
+	
 	ATTEMPT: while ($attempt++ < $attempt_limit) {
+		
+		my $semaphore;
 		if ($attempt > 1) {
 			# Wait before making next attempt
 			notify($ERRORS{'OK'}, 0, "sleeping $wait_seconds seconds before making attempt $attempt/$attempt_limit");
-			sleep $wait_seconds;
-			
-			my $semaphore_id = "$vmhost_computer_name-vmware_services_restart";
-			if ($self->does_semaphore_exist($semaphore_id)) {
-				$self->{services_restarted} = 1;
-				notify($ERRORS{'DEBUG'}, 0, "detected another process is restarting VMware services, sleeping for 10 seconds");
-				sleep_uninterrupted(10);
-				my $wait_message = "another process is restarting VMware services on $vmhost_computer_name";
-				$self->code_loop_timeout(sub{!$self->does_semaphore_exist(@_)}, [$semaphore_id], $wait_message, 140, 5);
-			}
+			sleep_uninterrupted($wait_seconds);
+			$semaphore = $self->get_semaphore($vmhost_computer_name, 120, 1) || next ATTEMPT;
 		}
+		
+		#	my $semaphore_id = "$vmhost_computer_name";
+		#	if ($self->does_semaphore_exist($semaphore_id)) {
+		#		
+		#		notify($ERRORS{'DEBUG'}, 0, "blocked by another process controlling $vmhost_computer_name, sleeping for 10 seconds");
+		#		sleep_uninterrupted(10);
+		#		my $wait_message = "blocked by another process controlling $vmhost_computer_name";
+		#		$self->code_loop_timeout(sub{!$self->does_semaphore_exist(@_)}, [$semaphore_id], $wait_message, 140, 5);
+		#	}
+		#}
 		
 		# The following error is somewhat common if several processes are adding/removing VMs at the same time:
 		# (vmodl.fault.ManagedObjectNotFound) {
@@ -252,13 +257,20 @@ sub _run_vim_cmd {
 			}
 			return;
 		}
+		elsif ($exit_status != 0 || grep(/^(vim-cmd:|Killed|terminate called|Aborted|what\()/i, @$output)) {
+			# terminate called after throwing an instance of 'std::bad_alloc'
+			# what():  std::bad_alloc
+			# Aborted
+			notify($ERRORS{'WARNING'}, 0, "attempt $attempt/$attempt_limit: failed to execute command on VM host $vmhost_computer_name: $command, exit status: $exit_status, output:\n" . join("\n", @$output));
+			next ATTEMPT;
+		}
 		else {
 			# VIM command command was executed
 			if ($attempt > 1) {
-				notify($ERRORS{'DEBUG'}, 0, "attempt $attempt/$attempt_limit: executed command on VM host $vmhost_computer_name: $command");
+				notify($ERRORS{'DEBUG'}, 0, "attempt $attempt/$attempt_limit: executed command on VM host $vmhost_computer_name: $command, exit status: $exit_status");
 			}
 			else {
-				notify($ERRORS{'DEBUG'}, 0, "executed command on VM host $vmhost_computer_name: $command");
+				notify($ERRORS{'DEBUG'}, 0, "executed command on VM host $vmhost_computer_name: $command, exit status: $exit_status");
 			}
 			return ($exit_status, $output);
 		}
@@ -739,7 +751,7 @@ sub _get_datastore_info {
 		# Check if the accessible value was retrieved and is not false
 		my $datastore_accessible = $datastore_info->{$datastore_name}{accessible};
 		if (!$datastore_accessible || $datastore_accessible =~ /false/i) {
-			notify($ERRORS{'WARNING'}, 0, "datastore '$datastore_name' is mounted on $vmhost_hostname but not accessible");
+			notify($ERRORS{'DEBUG'}, 0, "datastore '$datastore_name' is mounted on $vmhost_hostname but not accessible");
 			delete $datastore_info->{$datastore_name};
 			next;
 		}
@@ -1958,7 +1970,13 @@ sub get_network_names {
 	
 	# Convert the output line array to a string then split it by network sections
 	my ($network_info) = join("\n", @$output) =~ /(vim\.vm\.NetworkInfo[^\]]+)/;
-	notify($ERRORS{'DEBUG'}, 0, "network info:\n$network_info");
+	if ($network_info) {
+		notify($ERRORS{'DEBUG'}, 0, "network info:\n$network_info");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve network info, vim-cmd arguments: '$vim_cmd_arguments', $exit_status: $exit_status, output:\n" . join("\n", @$output));
+		return;
+	}
 	
 	my (@network_sections) = split(/vim.vm.NetworkInfo/, $network_info);
 	
@@ -2403,6 +2421,323 @@ sub get_license_info {
 	$self->{license_info} = $license_info;
 	notify($ERRORS{'DEBUG'}, 0, "retrieved VM host license info:\n" . format_data($license_info));
 	return $license_info;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_config_option_descriptor_info
+
+ Parameters  : none
+ Returns     : hash reference
+ Description : Retrieves information about the VM configuration options that are
+               supported on the host.
+               }
+                  "vmx-09" => {
+                    "createSupported" => "true",
+                    "defaultConfigOption" => "false",
+                    "description" => "ESXi 5.1 virtual machine",
+                    "dynamicType" => "<unset>",
+                    "key" => "vmx-09",
+                    "runSupported" => "true",
+                    "upgradeSupported" => "true"
+                  },
+                  "vmx-10" => {
+                    "createSupported" => "true",
+                    "defaultConfigOption" => "true",
+                    "description" => "ESXi 5.5 virtual machine",
+                    "dynamicType" => "<unset>",
+                    "key" => "vmx-10",
+                    "runSupported" => "true",
+                    "upgradeSupported" => "true"
+                  }
+               }
+
+=cut
+
+sub get_config_option_descriptor_info {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $vim_cmd_arguments = "solo/querycfgoptdesc";
+	my ($exit_status, $output) = $self->_run_vim_cmd($vim_cmd_arguments);
+	return if !$output;
+	
+	my $result = $self->_parse_vim_cmd_output($output);
+	if (!$result) {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve config option descriptor info");
+		return;
+	}
+	
+	my $type = ref($result);
+	if (!$type) {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve config option descriptor info, parsed result is not a reference:\n" . $result);
+		return;
+	}
+	
+	# If a single entry is returned a hash reference may be returned instead of an array, convert it to an array
+	if ($type eq 'HASH') {
+		$result = [$result];
+	}
+	
+	my $config_option_descriptor_info = {};
+	for my $config_option_descriptor (@$result) {
+		my $key = $config_option_descriptor->{key};
+		if (!defined($key)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to retrieve config option descriptor info, result does not contain a 'key' element:\n" . format_data($config_option_descriptor));
+			return;
+		}
+		$config_option_descriptor_info->{$key} = $config_option_descriptor;
+	}
+	
+	#notify($ERRORS{'DEBUG'}, 0, "retrieved config option descriptor info:\n" . format_data($config_option_descriptor_info));
+	return $config_option_descriptor_info;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_config_option_info
+
+ Parameters  : $key
+ Returns     : hash reference
+ Description : Retrieves info about the VM configuration options available for a
+               particular hardware version key (ex: vmx-09).
+
+=cut
+
+sub get_config_option_info {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my ($key) = @_;
+	if (!defined($key)) {
+		notify($ERRORS{'WARNING'}, 0, "key argument was not provided");
+		return;
+	}
+	
+	my $vim_cmd_arguments = "solo/querycfgopt $key";
+	my ($exit_status, $output) = $self->_run_vim_cmd($vim_cmd_arguments);
+	return if !$output;
+	
+	my $result = $self->_parse_vim_cmd_output($output);
+	if (!$result) {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve config option info for $key");
+		return;
+	}
+	
+	return $result;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_config_option_guest_os_info
+
+ Parameters  : $key
+ Returns     : hash reference
+ Description : Retrieves info about the guest OS's supported for the given key
+               (ex: vmx-09).
+					{
+					  "windows8_64Guest" => {
+						 "family" => "windowsGuest",
+						 "fullName" => "Microsoft Windows 8 (64-bit)",
+						 "id" => "windows8_64Guest",
+						 ...
+					  },
+					  "windows8Server64Guest" => {
+					  ...
+					  },
+					  ...
+					}
+
+=cut
+
+sub get_config_option_guest_os_info {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my ($key) = @_;
+	if (!defined($key)) {
+		notify($ERRORS{'WARNING'}, 0, "key argument was not provided");
+		return;
+	}
+	
+	my $config_option_info = $self->get_config_option_info($key) || return;
+	
+	my $guest_os_descriptor_array_ref = $config_option_info->{guestOSDescriptor};
+	if (!defined($guest_os_descriptor_array_ref)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve config option guest OS info, config option info does not contain a 'guestOSDescriptor' key:\n" . format_data($config_option_info));
+		return;
+	}
+	
+	my $type = ref($guest_os_descriptor_array_ref);
+	if (!$type || $type ne 'ARRAY') {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve config option guest OS info, guestOSDescriptor value is not an array reference:\n" . format_data($guest_os_descriptor_array_ref));
+		return;
+	}
+	
+	my $config_option_guest_os_info = {};
+	for my $guest_os_descriptor (@$guest_os_descriptor_array_ref) {
+		my $id = $guest_os_descriptor->{id};
+		if (!defined($id)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to retrieve config option guest OS info, guest OS descriptor does not contain an 'id' key:\n" . format_data($guest_os_descriptor));
+			return;
+		}
+		$config_option_guest_os_info->{$id} = $guest_os_descriptor;
+	}
+	
+	#notify($ERRORS{'DEBUG'}, 0, "retrieved config option guest OS info:\n" . format_data($config_option_guest_os_info));
+	return $config_option_guest_os_info;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 _print_compatible_guest_os_hardware_versions
+
+ Parameters  : $print_code (optional)
+ Returns     : true
+ Description : Used for development/testing only. Prints list of possible
+               guestOS values.
+
+=cut
+
+sub _print_compatible_guest_os_hardware_versions {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $print_code = shift;
+	
+	my $guest_os_info = {};
+	my $config_option_descriptor_info = $self->get_config_option_descriptor_info();
+	for my $version_key (sort keys %$config_option_descriptor_info) {
+		my $config_option_guest_os_info = $self->get_config_option_guest_os_info($version_key);
+		for my $guest_os (keys %$config_option_guest_os_info) {
+			$guest_os_info->{$guest_os}{$version_key} = 1;
+		}
+	}
+	
+	for my $guest_os (sort keys %$guest_os_info) {
+		if ($print_code) {
+			print "'$guest_os' => { ";
+			for my $version_key (sort keys %{$guest_os_info->{$guest_os}}) {
+				$version_key =~ s/vmx-0?//;
+				print "$version_key => 1, ";
+			}
+			print "},\n";
+		}
+		else {
+			my $length = length($guest_os);
+			print "$guest_os ";
+			print (' ' x (25-$length));
+			print (' ' x (50-scalar(@{$guest_os_info->{$guest_os}})*8));
+			print join(", ", sort keys %{$guest_os_info->{$guest_os}});
+			print "\n";
+		}
+	}
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 _parse_vim_cmd_output
+
+ Parameters  : $vim_cmd_output
+ Returns     : varies
+ Description : Parses the Data::Dumper-like output returned for some vim-cmd
+               commands and attempts to parse the output into a data structure.
+
+=cut
+
+sub _parse_vim_cmd_output {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my ($argument) = @_;
+	if (!defined($argument)) {
+		notify($ERRORS{'WARNING'}, 0, "vim-cmd output argument was not supplied");
+		return;
+	}
+	my @lines;
+	if (my $type = ref($argument)) {
+		if ($type eq 'ARRAY') {
+			@lines = @$argument;
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "argument is a $type reference, only an ARRAY reference or string are supported");
+			return;
+		}
+	}
+	elsif (scalar(@_) > 1) {
+		@lines = @_;
+	}
+	else {
+		@lines = split("\n", $argument);
+	}
+	
+	my $statement;
+	my $numbered_statement;
+	my $line_number = 0;
+	for my $line (@lines) {
+		# Skip blank lines
+		if ($line !~ /\S/) {
+			next;
+		}
+		
+		$line_number++;
+		
+		# Remove trailing newlines
+		$line =~ s/\n+$//g;
+		
+		# Remove class names at beginning of line surrounded by parenthesis
+		# '(vim.vm.device.VirtualPointingDevice) {' --> '{'
+		$line =~ s/^(\s*)\([^\)]*\)\s*/$1/g;
+		
+		# Remove class names after an equals sign
+		# 'backing = (vim.vm.device.VirtualDevice.BackingInfo) null,' --> 'backing = null'
+		$line =~ s/(=\s+)\([^\)]+\)\s*//g;
+		
+		# Surround values after equals sign in quotes
+		# 'value = xxx,' --> 'value = "xxx",'
+		$line =~ s/(=\s+)([^"].+),/$1"$2",/g;
+		
+		# Change 'null' to undef and add =>
+		# 'busSlotOption null,' --> 'busSlotOption => undef,'
+		$line =~ s/(\w\s+)null,/$1 => undef,/g;
+		
+		# Change = to =>
+		$line =~ s/=(\s+.+),/=>$1,/g;
+		
+		# Add => before array and hash references
+		# 'guestOSDescriptor [' --> 'guestOSDescriptor => ['
+		$line =~ s/(\w\s+)([\[{])/$1=>$2/g;
+		
+		$statement .= "$line\n";
+		$numbered_statement .= "$line_number:$line\n";
+	}
+	
+	# The statement variable should contain a valid definition
+	my $result = eval($statement);
+	if ($EVAL_ERROR) {
+		notify($ERRORS{'WARNING'}, 0, "failed to parse vim-cmd output, error:\n$EVAL_ERROR\n$numbered_statement");
+		return;
+	}
+	else {
+		#notify($ERRORS{'DEBUG'}, 0, "parsed vim-cmd output:\n" . format_data($result));
+		return $result;
+	}
 }
 
 #/////////////////////////////////////////////////////////////////////////////

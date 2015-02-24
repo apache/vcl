@@ -4086,7 +4086,7 @@ sub is_vmdk_file_shared {
 	#    *-00000*.vmdk        (vmwarewinxp-base234-v23-000001.vmdk)
 	#    *-00000*-delta.vmdk  (vmwarewinxp-base234-v23-000001-delta.vmdk)
 	
-	if (my @matching_os_names = map { $vmdk_file_name =~ /^($_)-/ } @os_names) {
+	if (my @matching_os_names = map { $vmdk_file_name =~ /^($_)-/ || "vmware$vmdk_file_name" =~ /^($_)-/ } @os_names) {
 		if ($vmdk_file_name =~ /-\d+(-delta|-s\d+)?\.vmdk$/i) {
 			notify($ERRORS{'DEBUG'}, 0, "vmdk file does NOT appear to be shared, it is a snapshot file: '$vmdk_file_name'");
 			return 0;
@@ -4144,12 +4144,13 @@ sub is_vmdk_directory_shared {
 	my $os_info = get_os_info();
 	my @os_names = sort(map { $os_info->{$_}{name} } keys %$os_info);
 	
-	if (my @matching_os_names = map { $vmdk_directory_name =~ /^($_)-/ } @os_names) {
+	
+	if (my @matching_os_names = map { $vmdk_directory_name =~ /^($_)-/ || "vmware$vmdk_directory_name" =~ /^($_)-/ } @os_names) {
 		notify($ERRORS{'DEBUG'}, 0, "vmdk directory appears to be shared: '$vmdk_directory_path', it begins with the name of an OS in the database: " . join(' ,', @matching_os_names));
 		return 1;
 	}
 	else {
-		notify($ERRORS{'DEBUG'}, 0, "vmdk directory does NOT appear to be shared: '$vmdk_directory_path', it does NOT begin with the name of an OS in the database");
+		notify($ERRORS{'DEBUG'}, 0, "vmdk directory does NOT appear to be shared: '$vmdk_directory_path', directory name '$vmdk_directory_name' does NOT begin with the name of an OS in the database:\n" . join("\n", @os_names));
 		return 0;
 	}
 }
