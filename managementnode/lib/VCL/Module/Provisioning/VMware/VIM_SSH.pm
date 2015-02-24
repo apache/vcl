@@ -56,6 +56,7 @@ use strict;
 use warnings;
 use diagnostics;
 
+use English '-no_match_vars';
 use VCL::utils;
 
 ##############################################################################
