@@ -2254,19 +2254,25 @@ STARTMODE=onboot
 ONBOOT=yes
 EOF
 		
-		# Create the ifcfg-eth* file and attempt to call ifup on the interface
-		my $echo_command = "echo \E \"$ifcfg_contents\" > $ifcfg_path && ifup $interface_name";
-		notify($ERRORS{'DEBUG'}, 0, "attempting to echo contents to $ifcfg_path:\n$ifcfg_contents");
-		my ($echo_exit_status, $echo_output) = $self->execute($echo_command, 1);
-		if (!defined($echo_output)) {
-			notify($ERRORS{'WARNING'}, 0, "failed to run command to echo contents to $ifcfg_path");
+		# Create the ifcfg file
+		if (!$self->create_text_file($ifcfg_path, $ifcfg_contents)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to create $ifcfg_path for interface: $interface_name");
 			return;
 		}
-		elsif (grep(/done\./, @$echo_output)) {
-			notify($ERRORS{'OK'}, 0, "created $ifcfg_path and enabled interface: $interface_name, output:\n" . join("\n", @$echo_output));
+		
+		# Call ifup on the interface
+		my $command = "ifup $interface_name";
+		my ($exit_status, $output) = $self->execute($command, 1);
+		if (!defined($output)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to execute command to activate $interface_name interface: $command");
+			return;
+		}
+		elsif ($exit_status eq '0' || grep(/done\./, @$output)) {
+			notify($ERRORS{'OK'}, 0, "activated $interface_name interface, output:\n" . join("\n", @$output));
 		}
 		else {
-			notify($ERRORS{'WARNING'}, 0, "failed to create $ifcfg_path and enable interface: $interface_name, output:\n" . join("\n", @$echo_output));
+			notify($ERRORS{'WARNING'}, 0, "failed to activate $interface_name interface, exit status: $exit_status, output:\n" . join("\n", @$output));
+			return;
 		}
 	}
 	

@@ -102,6 +102,7 @@ sub process {
 	my $computer_id                     = $self->data->get_computer_id();
 	my $computer_short_name             = $self->data->get_computer_short_name();
 	my $is_parent_reservation           = $self->data->is_parent_reservation();
+	my $parent_reservation_id           = $self->data->get_parent_reservation_id();
 	my $server_request_id               = $self->data->get_server_request_id();
 	my $imagemeta_checkuser             = $self->data->get_imagemeta_checkuser();
 	
@@ -136,8 +137,8 @@ sub process {
 	insertloadlog($reservation_id, $computer_id, "noinitialconnection", "user clicked Connect");
 	delete_computerloadlog_reservation($reservation_id, 'acknowledgetimeout');
 	
-	# The frontend should have inserted an 'initialconnecttimeout' computerloadlog entry, retrieve its timestamp
-	my $connection_check_start_epoch_seconds = get_reservation_computerloadlog_time($reservation_id, 'initialconnecttimeout');
+	# The frontend should have inserted an 'initialconnecttimeout' computerloadlog entry for the parent reservation, retrieve its timestamp
+	my $connection_check_start_epoch_seconds = get_reservation_computerloadlog_time($parent_reservation_id, 'initialconnecttimeout');
 	if ($connection_check_start_epoch_seconds) {
 		notify($ERRORS{'DEBUG'}, 0, "retrieved timestamp of computerloadlog 'initialconnecttimeout' entry inserted by web frontend: $connection_check_start_epoch_seconds");
 	}

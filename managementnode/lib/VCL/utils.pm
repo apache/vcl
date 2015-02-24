@@ -9264,20 +9264,20 @@ sub is_management_node_process_running {
 			next;
 		}
 		elsif ($pid eq $PID) {
-			notify($ERRORS{'DEBUG'}, 0, "ignoring line for the currently running process: $line");
+			#notify($ERRORS{'DEBUG'}, 0, "ignoring line for the currently running process: $line");
 			next;
 		}
 		elsif ($line =~ /grep -P/) {
-			notify($ERRORS{'DEBUG'}, 0, "ignoring line containing for this command: $line");
+			#notify($ERRORS{'DEBUG'}, 0, "ignoring line containing for this command: $line");
 			next;
 		}
 		elsif ($line =~ /sh -c/) {
 			# Ignore lines containing 'sh -c', probably indicating a duplicate process of a command run remotely
-			notify($ERRORS{'DEBUG'}, 0, "ignoring containing 'sh -c': $line");
+			#notify($ERRORS{'DEBUG'}, 0, "ignoring containing 'sh -c': $line");
 			next;
 		}
 		else {
-			notify($ERRORS{'DEBUG'}, 0, "found matching process: $line");
+			#notify($ERRORS{'DEBUG'}, 0, "found matching process: $line");
 			$processes_running->{$pid} = $process_name;
 		}
 	}

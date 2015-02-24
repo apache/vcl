@@ -154,7 +154,14 @@ sub insert_rule {
 				$value = "\"$value\"";
 			}
 			
-			$command .= " --$option $value";
+			if ($option =~ /^\!/) {
+				$command .= " !";
+				$option =~ s/^\!//;
+			}
+			
+			$command .= " ";
+			$command .= "--$option " if $option;
+			$command .= $value;
 		}
 	}
 	
@@ -163,7 +170,8 @@ sub insert_rule {
 		$command .= " --jump $target_extension";
 		for my $option (sort keys %{$arguments->{target_extensions}{$target_extension}}) {
 			my $value = $arguments->{target_extensions}{$target_extension}{$option};
-			$command .= " --$option $value";
+			$command .= " --$option " if $option;
+			$command .= $value;
 		}
 	}
 	
@@ -436,7 +444,8 @@ sub delete_chain_references {
 	
 	my $table_info = $self->get_table_info($table_name);
 	for my $referencing_chain_name (keys %$table_info) {
-		for my $rule_specification (@{$table_info->{$referencing_chain_name}{rules}}) {
+		for my $rule (@{$table_info->{$referencing_chain_name}{rules}}) {
+			my $rule_specification = $rule->{rule_specification};
 			if ($rule_specification =~ /-j $referenced_chain_name(\s|$)/) {
 				notify($ERRORS{'DEBUG'}, 0, "rule in '$table_name' table references '$referenced_chain_name' chain, referencing chain: $referencing_chain_name, rule specification: $rule_specification");
 				if (!$self->delete_rule($table_name, $referencing_chain_name, $rule_specification)) {
@@ -544,34 +553,238 @@ sub get_table_info {
 		notify($ERRORS{'WARNING'}, 0, "failed to list rules " . $chain_text . "from '$table_name' table on $computer_name, exit status: $exit_status, command:\n$command\noutput:\n" . join("\n", @$output));
 		return 0;
 	}
-	
+
 	my $table_info = {};
-	for my $line (@$output) {
-		my ($iptables_command, $chain_name, $specification) = $line =~ /^(-\w) ([^ ]+)\s*(.*)$/;
-		if (!defined($iptables_command) || !defined($chain_name)) {
-			notify($ERRORS{'WARNING'}, 0, "failed to parse line: '$line'\ncommand: $command");
-			next;
-		}
-		$specification = '' unless defined($specification);
+	LINE: for my $line (@$output) {
+		# Split the rule, samples:
+		#    -P OUTPUT ACCEPT
+		#    -N vcld-3115
+		#    -A PREROUTING -j vclark-3115
+		#    -A POSTROUTING ! -d 192.168.96.0/20 -o eth1
+		#    -A INPUT -d 192.168.96.0/32 -i eth1 -p udp -m multiport --dports 5700:6500,9696:9701,49152:65535 -m state --state NEW,RELATED,ESTABLISHED -j ACCEPT
+		my ($iptables_command, $chain_name, $rule_specification_string) = $line =~
+		/
+			^
+			(--?[a-z\-]+)	# command: -A, -N, etc
+			\s+				# space after command
+			([^ ]+)			# chain name
+			\s*				# space after chain name
+			(.*)				# remainder of rule
+			\s*				# trailing spaces
+			$
+		/ixg;
 		
-		if ($iptables_command eq '-P') {
-			# -P, --policy chain target (Set  the policy for the chain to the given target)
-			$table_info->{$chain_name}{policy} = $specification;
+		if (!defined($iptables_command)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to parse iptables rule, iptables command type (ex. '-A') could not be parsed from beginning of line:\n$line");
+			next LINE;
 		}
-		elsif ($iptables_command eq '-N') {
+		elsif (!defined($chain_name)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to parse iptables rule, iptables chain name could not be parsed from line:\n$line");
+			next LINE;
+		}
+		
+		# Make sure the rule specification isn't null to avoid warnings
+		$rule_specification_string = '' unless defined($rule_specification_string);
+		
+		# Remove spaces from end of rule specification
+		$rule_specification_string =~ s/\s+$//;
+		
+		if ($iptables_command =~ /^(-P|--policy)/) {
+			# -P, --policy chain target (Set  the policy for the chain to the given target)
+			$table_info->{$chain_name}{policy} = $rule_specification_string;
+		}
+		elsif ($iptables_command =~ /^(-N|--new-chain)/) {
 			# -N, --new-chain chain
 			$table_info->{$chain_name} = {} unless defined($table_info->{$chain_name});
 		}
-		elsif ($iptables_command eq '-A') {
+		elsif ($iptables_command =~ /^(-A|--append chain)/) {
 			# -A, --append chain rule-specification
-			push @{$table_info->{$chain_name}{rules}}, $specification;
+			notify($ERRORS{'DEBUG'}, 0, "parsing iptables append rule command:\n" .
+				"iptables command: $line\n" .
+				"iptables rule specification: $rule_specification_string"
+			);
+			
+			my $rule = {};
+			$rule->{rule_specification} = $rule_specification_string;
+			
+			# Parse the rule parameters
+			my $parameters = {
+				'protocol'      => '\s*(\!?)\s*(-p|--protocol)\s+([^\s]+)',
+				'source'        => '\s*(\!?)\s*(-s|--source)\s+([\d\.\/]+)',
+				'destination'   => '\s*(\!?)\s*(-d|--destination)\s+([\d\.\/]+)',
+				'in-interface'  => '\s*(\!?)\s*(-i|--in-interface)\s+([^\s]+)',
+				'out-interface' => '\s*(\!?)\s*(-o|--out-interface)\s+([^\s]+)',
+				'fragment'      => '\s*(\!?)\s*(-f|--fragment)',
+			};
+			
+			PARAMETER: for my $parameter (keys %$parameters) {
+				my $pattern = $parameters->{$parameter};
+				my ($inverted, $parameter_match, $value) = $rule_specification_string =~ /$pattern/ig;
+				next PARAMETER unless $parameter_match;
+				
+				if ($inverted) {
+					$rule->{parameters}{"!$parameter"} = $value;
+				}
+				else {
+					$rule->{parameters}{$parameter} = $value;
+				}
+				
+				# Remove the matching pattern from the rule specification string
+				# This is done to make it easier to parse the match extension parts of the specification later on
+				$rule_specification_string =~ s/(^\s+|$pattern|\s+$)//ig;
+			}
+			
+			# Parse the target rule parameters
+			my $target_parameters = {
+				'jump' => '\s*(-j|--jump)\s+([^\s]+)\s*(.*)',
+				'goto' => '\s*(-g|--goto)\s+([^\s]+)\s*(.*)',
+			};
+			
+			# Parse the parameters which specify targets
+			TARGET_PARAMETER: for my $target_parameter (keys %$target_parameters) {
+				my $pattern = $target_parameters->{$target_parameter};
+				my ($target_parameter_match, $target, $target_extension_option_string) = $rule_specification_string =~ /$pattern/ig;
+				next TARGET_PARAMETER unless $target_parameter_match;
+				
+				# Assemble a regex to remove the target specification from the overall specification
+				my $target_parameter_regex = "\\s*$target_parameter_match\\s+$target\\s*";
+				
+				$rule->{parameters}{$target_parameter}{target} = $target;
+				
+				my $target_extension_option_name;
+				my @target_extension_option_sections = split(/\s+/, $target_extension_option_string);
+				TARGET_OPTION_SECTION: for my $target_extension_option_section (@target_extension_option_sections) {
+					# Stop parsing if the start of a match extension specification if found
+					if ($target_extension_option_section =~ /^(-m|--match)$/) {
+						last TARGET_OPTION_SECTION;
+					}
+					
+					# Check if this is the beginning of a target extension option
+					if ($target_extension_option_section =~ /^[-]+(\w[\w-]+)/) {
+						$target_extension_option_name = $1;
+						notify($ERRORS{'DEBUG'}, 0, "located $target_parameter target extension option: $target_extension_option_name");
+						$rule->{parameters}{$target_parameter}{$target_extension_option_name} = undef;
+					}
+					elsif (!$target_extension_option_name) {
+						# If here, the section should be a target extension option value
+						notify($ERRORS{'WARNING'}, 0, "failed to parse iptables rule, target extension option name was not detected before this section: '$target_extension_option_section'\n" .
+							"iptables command: $line\n" .
+							"preceeding target parameter: $target_parameter --> $target"
+						);
+						next LINE;
+					}
+					else {
+						# Found target extension option value
+						$rule->{parameters}{$target_parameter}{$target_extension_option_name} = $target_extension_option_section;
+						$target_extension_option_name = undef;
+					}
+					
+					# Add the section to the regex so it will be removed
+					$target_parameter_regex .= "$target_extension_option_section\\s*";
+				}  # TARGET_OPTION_SECTION
+				
+				my $rule_specification_string_before = $rule_specification_string;
+				$rule_specification_string =~ s/$target_parameter_regex//g;
+				notify($ERRORS{'DEBUG'}, 0, "parsed iptables target parameter:\n" .
+					"target parameter: $target_parameter_match\n" .
+					"target: $target\n" .
+					"target specification removal regex: $target_parameter_regex\n" .
+					"rule specification before: $rule_specification_string_before\n" .
+					"rule specification after:  $rule_specification_string"
+				);
+			}  # TARGET_PARAMETER
+			
+			
+			# The only text remaining in $rule_specification_string should be match extension information
+			# Split the remaining string by spaces
+			my @match_extension_sections = split(/\s+/, $rule_specification_string);
+			
+			# Match extensions will be in the form:
+			# -m,--match <module> [!] -<x>,--<option> <value> [[!] -<x>,--<option> <value>...]
+			my $match_extension_module_name;
+			my $match_extension_option;
+			my $match_extension_option_inverted = 0;
+			my $comment;
+			
+			MATCH_EXTENSION_SECTION: for my $match_extension_section (@match_extension_sections) {
+				next MATCH_EXTENSION_SECTION if !$match_extension_section;
+				
+				# Check if the section is the beginning of a match extension specification
+				if ($match_extension_section =~ /^(-m|--match)$/) {
+					$match_extension_module_name = undef;
+					$match_extension_option = undef;
+					$match_extension_option_inverted = 0;
+					next MATCH_EXTENSION_SECTION;
+				}
+				
+				# Parse match extension module name
+				if (!$match_extension_module_name) {
+					# Haven't found module name for this match extension specification
+					# If section begins with a letter it should be the match extension module name
+					if ($match_extension_section =~ /^[a-z]/i) {
+						$match_extension_module_name = $match_extension_section;
+						notify($ERRORS{'DEBUG'}, 0, "located match extension module name: $match_extension_module_name");
+						next MATCH_EXTENSION_SECTION;
+					}
+					else {
+						notify($ERRORS{'WARNING'}, 0, "failed to parse iptables rule, match extension module name was not detected before this section: '$match_extension_section'\n" .
+							"iptables rule specification: $rule_specification_string\n" .
+							"iptables command: $line"
+						);
+						next LINE;
+					}
+				}
+				
+				# Check if this is the beginning of a match extension option
+				if ($match_extension_section =~ /^[-]+(\w[\w-]+)/) {
+					$match_extension_option = $1;
+					if ($match_extension_option_inverted) {
+						$match_extension_option = "!$match_extension_option";
+						$match_extension_option_inverted = 0;
+					}
+					notify($ERRORS{'DEBUG'}, 0, "match extension module name: $match_extension_module_name, located match extension option: $match_extension_option");
+					next MATCH_EXTENSION_SECTION;
+				}
+				elsif ($match_extension_section =~ /^!/) {
+					$match_extension_option_inverted = 1;
+					next MATCH_EXTENSION_SECTION;
+				}
+				
+				# If here, the section should be (part of) a match extension option value
+				if (!$match_extension_option) {
+					notify($ERRORS{'WARNING'}, 0, "failed to parse iptables rule, match extension option name was not detected before this section: '$match_extension_section'\n" .
+						"iptables command: $line\n" .
+						"iptables rule specification: $rule_specification_string\n" .
+						"preceeding match extension module name: $match_extension_module_name"
+					);
+					next LINE;
+				}
+				
+				# Check if this is part of a comment
+				if ($match_extension_module_name =~ /(comment)/) {
+					$comment .= "$match_extension_section ";
+					next MATCH_EXTENSION_SECTION;
+				}
+				
+				$rule->{match_extensions}{$match_extension_module_name}{$match_extension_option} = $match_extension_section;
+			}
+			
+			if ($comment) {
+				# Remove quotes from beginning and end of comment
+				$comment =~ s/(^[\\\"]+|[\s\\\"]+$)//g;
+				$rule->{match_extensions}{comment}{comment} = $comment;
+				$comment = undef;
+			}
+			
+			push @{$table_info->{$chain_name}{rules}}, $rule;
 		}
 		else {
-			notify($ERRORS{'WARNING'}, 0, "'$iptables_command' command is not supported: $line");
+			notify($ERRORS{'WARNING'}, 0, "iptables '$iptables_command' command is not supported: $line");
+			next LINE;
 		}
 	}
 	
-	notify($ERRORS{'DEBUG'}, 0, "retrieved rules " . $chain_text . "from '$table_name' table from $computer_name:\n" . format_data($table_info));
+	#notify($ERRORS{'DEBUG'}, 0, "retrieved rules " . $chain_text . "from iptables $table_name table from $computer_name:\n" . format_data($table_info));
 	return $table_info;
 }
 
@@ -626,9 +839,9 @@ sub configure_nat {
 	}
 	
 	# Check if NAT has previously been configured
-	for my $rule_specification (@{$nat_table_info->{POSTROUTING}{rules}}) {
-		if ($rule_specification =~ /MASQUERADE/) {
-			notify($ERRORS{'DEBUG'}, 0, "POSTROUTING chain in nat table contains a MASQUERADE rule, assuming NAT has already been configured: $rule_specification");
+	for my $rule (@{$nat_table_info->{POSTROUTING}{rules}}) {
+		if ($rule =~ /MASQUERADE/) {
+			notify($ERRORS{'DEBUG'}, 0, "POSTROUTING chain in nat table contains a MASQUERADE rule, assuming NAT has already been configured: $rule");
 			return 1;
 		}
 	}
@@ -809,19 +1022,21 @@ sub configure_nat_reservation {
 		return;
 	}
 	
+	my $chain_name = "$PROCESSNAME-$reservation_id";
+	
 	# Check if chain for reservation has already been created
-	if (defined($nat_table_info->{$reservation_id})) {
-		notify($ERRORS{'DEBUG'}, 0, "'$reservation_id' chain already exists in nat table on $computer_name");
+	if (defined($nat_table_info->{$chain_name})) {
+		notify($ERRORS{'DEBUG'}, 0, "'$chain_name' chain already exists in nat table on $computer_name");
 	}
-	elsif (!$self->create_chain('nat', $reservation_id)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to configure NAT host $computer_name for reservation, failed to add '$reservation_id' chain to nat table");
+	elsif (!$self->create_chain('nat', $chain_name)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to configure NAT host $computer_name for reservation, failed to add '$chain_name' chain to nat table");
 		return;
 	}
 	
 	# Check if rule to jump to reservation's chain already exists in the PREROUTING table
-	for my $rule_specification (@{$nat_table_info->{PREROUTING}{rules}}) {
-		if ($rule_specification =~ /-j $reservation_id(\s|$)/) {
-			notify($ERRORS{'DEBUG'}, 0, "PREROUTING chain in nat table on $computer_name already contains a rule to jump to '$reservation_id' chain: $rule_specification");
+	for my $rule (@{$nat_table_info->{PREROUTING}{rules}}) {
+		if ($rule =~ /-j $chain_name(\s|$)/) {
+			notify($ERRORS{'DEBUG'}, 0, "PREROUTING chain in nat table on $computer_name already contains a rule to jump to '$chain_name' chain: $rule");
 			return 1;;
 		}
 	}
@@ -831,10 +1046,10 @@ sub configure_nat_reservation {
 		'table' => 'nat',
 		'chain' => 'PREROUTING',
 		'parameters' => {
-			'jump' => $reservation_id,
+			'jump' => $chain_name,
 		},
 	})) {
-		notify($ERRORS{'WARNING'}, 0, "failed to configure NAT host $computer_name for reservation, failed to create rule in PREROUTING chain in nat table to jump to '$reservation_id' chain");
+		notify($ERRORS{'WARNING'}, 0, "failed to configure NAT host $computer_name for reservation, failed to create rule in PREROUTING chain in nat table to jump to '$chain_name' chain");
 		return;
 	}
 	
@@ -858,7 +1073,6 @@ sub add_nat_port_forward {
 		return 0;
 	}
 
-	my $reservation_id = $self->data->get_reservation_id();
 	my $computer_name = $self->data->get_computer_hostname();
 	
 	my ($protocol, $source_port, $destination_ip_address, $destination_port, $chain_name) = @_;
