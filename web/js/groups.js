@@ -18,6 +18,16 @@ var xhrobj;
 var blockHide = 0;
 var currentOver = '';
 
+function nocasesort(a, b) {
+	var al = a.toLowerCase();
+	var bl = b.toLowerCase();
+	if(al < bl)
+		return -1;
+	if(bl < al)
+		return 1;
+	return 0;
+}
+
 function getGroupInfo(groupid) {
 	var cont = dojo.byId('jsongroupinfocont').value;
 	var domid = 'listicon' + groupid;

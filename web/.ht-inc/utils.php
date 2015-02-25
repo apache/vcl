@@ -13127,6 +13127,12 @@ function getDojoHTML($refresh) {
 			$rt .= "   dojo.ready(function() {\n";
 			$rt .= "     buildUserFilterStores();\n";
 			$rt .= "     buildResourceFilterStores();\n";
+			$rt .= "     if(! usergroupstore.comparatorMap)\n";
+			$rt .= "       usergroupstore.comparatorMap = {};\n";
+			$rt .= "     usergroupstore.comparatorMap['name'] = nocasesort;\n";
+			$rt .= "     if(! resourcegroupstore.comparatorMap)\n";
+			$rt .= "       resourcegroupstore.comparatorMap = {};\n";
+			$rt .= "     resourcegroupstore.comparatorMap['name'] = nocasesort;\n";
 			$rt .= "   });\n";
 			if($mode == 'viewGroups')
 				$rt .= "  var firstscroll = 1;\n";
