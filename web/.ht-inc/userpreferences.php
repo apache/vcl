@@ -52,7 +52,7 @@ function userpreferences() {
 			$data["resolution"] = $user["width"] . "x" . $user["height"];
 	}
 
-	print "<H2 align=center>" . _("User Preferences") . "</H2>\n";
+	print _("<H2 align=center>User Preferences</H2>\n");
 	print "<div align=center id=status class=visible>\n";
 	if($mode == "submituserprefs") {
 		print "<font color=green>" . _("User preferences successfully updated") . "</font><br>\n";
