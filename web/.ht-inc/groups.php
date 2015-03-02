@@ -1036,6 +1036,8 @@ function processGroupInput($checks=1) {
 	   $submitErrMsg[GRPOWNER] = "Submitted ID is not valid";
 	}
 	if(($return["type"] == "user" &&
+	    $return["courseroll"] == 0 &&
+	    $return["custom"] == 1 &&
 		(($return['editgroupid'] == 0 && ! $groupwasnone) ||
 	   (! in_array($return['editgroupid'], $editgroupids)))) ||
 	   ($return['type'] == 'resource' && ! in_array($return['ownergroup'], $ownergroupids))) {
