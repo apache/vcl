@@ -12105,6 +12105,10 @@ sub get_cygwin_unix_file_path {
 		notify($ERRORS{'DEBUG'}, 0, "file path not converted because it begins with a forward slash: $file_path_argument");
 		return $file_path_argument;
 	}
+	elsif ($file_path_argument !~ /[\/\\:]/) {
+		notify($ERRORS{'DEBUG'}, 0, "file path not converted because it does not contain a forward slash, backslash, or colon: $file_path_argument");
+		return $file_path_argument;
+	}
 	
 	# Change backslashes to forward slashes
 	$file_path_argument =~ s/\\+/\//g;
@@ -12118,7 +12122,7 @@ sub get_cygwin_unix_file_path {
 	
 	my ($unix_file_path) = grep(/^\//, @$output);
 	if (!$unix_file_path || grep(/^cygpath:/, @$output)) {
-		notify($ERRORS{'WARNING'}, 0, "error occurred attempting to determine Cygwin/Unix-style path, returning argument: $file_path_argument, output:\n" . join("\n", @$output));
+		notify($ERRORS{'WARNING'}, 0, "error occurred attempting to determine Cygwin/Unix-style path, returning argument: $file_path_argument, command:\n$command\noutput:\n" . join("\n", @$output));
 		return $file_path_argument;
 	}
 	else {
