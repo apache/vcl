@@ -3606,6 +3606,8 @@ sub get_timings {
                -pre_capture
                -post_load
                -post_reserve
+               -post_initial_connection
+               -post_reservation
                
                Scripts are stored in various directories under tools matching
                the OS of the image being loaded. For example, scripts residing
@@ -3652,7 +3654,7 @@ sub run_management_node_tools_scripts {
 		notify($ERRORS{'WARNING'}, 0, "stage argument was not supplied");
 		return;
 	}
-	elsif ($stage !~ /(pre_capture|post_load|post_reserve)/) {
+	elsif ($stage !~ /(pre_capture|post_load|post_reserve|post_initial_connection|post_reservation)/) {
 		notify($ERRORS{'WARNING'}, 0, "invalid stage argument was supplied: $stage");
 		return;
 	}
