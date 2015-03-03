@@ -1010,8 +1010,8 @@ sub post_reserve {
 
  Parameters  : none
  Returns     : boolean
- Description : Runs $SYSTEMROOT/vcl_post_reservation.cmd if it exists in the image.
-               Does not check if the actual script succeeded or not.
+ Description : Executes $SYSTEMROOT/vcl_post_reservation.cmd if it exists in the
+               image. Does not check if the actual script succeeded or not.
 
 =cut
 
@@ -1022,8 +1022,9 @@ sub post_reservation {
 		return 0;
 	}
 	
-	my $image_name = $self->data->get_image_name();
-	my $computer_short_name = $self->data->get_computer_short_name();
+	# Run custom post_reservation scripts residing on the management node
+	$self->run_management_node_tools_scripts('post_reservation');
+	
 	my $script_path = '$SYSTEMROOT/vcl_post_reservation.cmd';
 	
 	# Check if script exists
@@ -1034,14 +1035,11 @@ sub post_reservation {
 	
 	# Run the vcl_post_reserve.cmd script if it exists in the image
 	my $result = $self->run_script($script_path);
-	if (!defined($result)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to run post_reservation script: $script_path");
-	}
-	elsif ($result == 0) {
-		notify($ERRORS{'DEBUG'}, 0, "$script_path does not exist in image: $image_name");
+	if (!$result) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute post_reservation script: $script_path");
 	}
 	else {
-		notify($ERRORS{'DEBUG'}, 0, "ran $script_path");
+		notify($ERRORS{'DEBUG'}, 0, "executed $script_path");
 	}
 	
 	return 1;

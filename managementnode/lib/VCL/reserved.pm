@@ -228,6 +228,9 @@ sub process {
 		notify($ERRORS{'CRITICAL'}, 0, "failed to process connect methods after user connected to computer");
 	}
 	
+	# Run custom post_initial_connection scripts residing on the management node
+	$self->os->run_management_node_tools_scripts('post_initial_connection');
+	
 	# For cluster reservations, the parent must wait until all child reserved processes have exited
 	# Otherwise, the state will change to inuse while the child processes are still finishing up the reserved state
 	# vcld will then fail to fork inuse processes for the child reservations
