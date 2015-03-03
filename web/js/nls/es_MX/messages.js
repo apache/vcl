@@ -62,7 +62,7 @@ nlsmessages = {
 'Save Changes':'',
 'Access denied to edit this item':'',
 'Invalid network speed specified':'',
-'Max Concurrent Usage must be 0 or from 2 to 255':'',
+'Max Concurrent Usage must be between 0 and 255':'',
 'Invalid value specified for \'Available for checkout\'':'',
 'Invalid value specified for \'Check for logged in user\'':'',
 'Invalid value specified for \'Users have administrative access\'':'',

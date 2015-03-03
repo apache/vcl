@@ -1568,7 +1568,7 @@ class Image extends Resource {
 		if((! is_numeric($return['concurrent']) && ! empty($return['concurrent'])) ||
 			(is_numeric($return['concurrent']) && ($return["concurrent"] < 0 || $return["concurrent"] > 255))) {
 			$return['error'] = 1;
-			$errormsg[] = _("Max concurrent usage must be 0 or between 2 and 255");
+			$errormsg[] = _("Max concurrent usage must be between 0 and 255");
 		}
 		if($return['mode'] == 'edit' && 
 		   ($return["reload"] < 0 || $return["reload"] > 120)) {

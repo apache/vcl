@@ -176,8 +176,8 @@ function saveResource() {
 		return;
 	}
 	data['concurrent'] = dijit.byId('concurrent').get('value');
-	if(data['concurrent'] < 0 || data['concurrent'] == 1 || data['concurrent'] > 255) {
-		errobj.innerHTML = _('Max Concurrent Usage must be 0 or from 2 to 255');
+	if(data['concurrent'] < 0 || data['concurrent'] > 255) {
+		errobj.innerHTML = _('Max Concurrent Usage must be between 0 and 255');
 		return;
 	}
 	data['checkout'] = parseInt(dijit.byId('checkout').get('value'));
