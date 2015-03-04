@@ -679,7 +679,7 @@ CREATE TABLE IF NOT EXISTS `natlog` (
   `nathostresourceid` mediumint(8) unsigned NOT NULL,
   `publicIPaddress` varchar(15) NOT NULL,
   `publicport` smallint(5) unsigned NOT NULL,
-  `internalIPaddress` varchar(15) NOT NULL,
+  `internalIPaddress` varchar(15) DEFAULT NULL,
   `internalport` smallint(5) unsigned NOT NULL,
   `protocol` enum('TCP','UDP') NOT NULL DEFAULT 'TCP',
   `timestamp` datetime NOT NULL,
