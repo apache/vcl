@@ -89,6 +89,7 @@ my @PERL_MODULES = (
 	'Time::HiRes',
 	'URI',
 	'YAML',
+	'Frontier::Client',
 );
 	
 # Store the command line options in hash
