@@ -1508,7 +1508,7 @@ sub get_public_interface_name {
 			notify($ERRORS{'DEBUG'}, 0, "interface '$check_interface_name' ignored because its name contains '$1'");
 			next INTERFACE;
 		}
-		elsif ($description =~ /(loopback|virtual|afs|tunnel|pseudo|6to4|isatap)/i) {
+		elsif ($description =~ /(loopback|afs|tunnel|pseudo|6to4|isatap)/i) {
 			notify($ERRORS{'DEBUG'}, 0, "interface '$check_interface_name' ignored because its description contains '$1'");
 			next INTERFACE;
 		}
