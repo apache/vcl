@@ -1567,7 +1567,7 @@ INSERT IGNORE INTO `module` (`name`, `prettyname`, `description`, `perlpackage`)
 INSERT IGNORE INTO `module` (`name`, `prettyname`, `description`, `perlpackage`) VALUES ('os_win2012', 'Windows Server 2012 OS Module', '', 'VCL::Module::OS::Windows::Version_6::2012');
 INSERT IGNORE INTO `module` (`name`, `prettyname`, `description`, `perlpackage`) VALUES ('predictive_level_2', 'Predictive Loading Module Level 2', 'Power off computer. If a virtual machine, it will be also destroyed.', 'VCL::Module::Predictive::Level_2');
 INSERT IGNORE INTO `module` (`name`, `prettyname`, `description`, `perlpackage`) VALUES ('provisioning_openstack', 'OpenStack Provisioning Module', '', 'VCL::Module::Provisioning::openstack');
-
+INSERT IGNORE INTO `module` (`name`, `prettyname`, `description`, `perlpackage`) VALUES ('provisioning_one', 'OpenNebula Provisioning Module', '', 'VCL::Module::Provisioning::one');
 -- --------------------------------------------------------
 
 -- 
@@ -1639,6 +1639,7 @@ INSERT IGNORE INTO `provisioning` (`name`, `prettyname`, `moduleid`) VALUES ('vb
 INSERT IGNORE INTO `provisioning` (`name`, `prettyname`, `moduleid`) VALUES ('libvirt','Libvirt Virtualization API', (SELECT `id` FROM `module` WHERE `name` LIKE 'provisioning_libvirt'));
 INSERT IGNORE INTO `provisioning` (`name`, `prettyname`, `moduleid`) VALUES ('none','None', (SELECT `id` FROM `module` WHERE `name` = 'base_module'));
 INSERT IGNORE INTO `provisioning` (`name`, `prettyname`, `moduleid`) VALUES ('openstack', 'OpenStack Provisioning', (SELECT `id` FROM `module` WHERE `name` LIKE 'provisioning_openstack'));
+INSERT IGNORE INTO `provisioning` (`name`, `prettyname`, `moduleid`) VALUES ('one', 'OpenNebula', (SELECT id FROM vcl.module where name='provisioning_one'));
 
 UPDATE IGNORE `provisioning` SET `name` = 'xcat', `prettyname` = 'xCAT' WHERE `name` = 'xcat_13'; 
 
@@ -1656,6 +1657,7 @@ INSERT IGNORE provisioningOSinstalltype (provisioningid, OSinstalltypeid) SELECT
 INSERT IGNORE provisioningOSinstalltype (provisioningid, OSinstalltypeid) SELECT provisioning.id, OSinstalltype.id FROM provisioning, OSinstalltype WHERE provisioning.name LIKE '%lab%' AND OSinstalltype.name = 'none';
 INSERT IGNORE provisioningOSinstalltype (provisioningid, OSinstalltypeid) SELECT provisioning.id, OSinstalltype.id FROM provisioning, OSinstalltype WHERE provisioning.name LIKE '%libvirt%' AND OSinstalltype.name = 'vmware';
 INSERT IGNORE provisioningOSinstalltype (provisioningid, OSinstalltypeid) SELECT provisioning.id, OSinstalltype.id FROM provisioning, OSinstalltype WHERE provisioning.name LIKE '%openstack%' AND OSinstalltype.name = 'openstack';
+INSERT IGNORE provisioningOSinstalltype (provisioningid, OSinstalltypeid) SELECT provisioning.id, OSinstalltype.id FROM provisioning, OSinstalltype WHERE provisioning.name='one' AND OSinstalltype.name = 'vmware';
 
 DELETE FROM provisioningOSinstalltype WHERE provisioningOSinstalltype.provisioningid IN (SELECT provisioning.id FROM provisioning WHERE provisioning.name LIKE '%xcat_2%');
 

@@ -1709,7 +1709,8 @@ INSERT IGNORE INTO `module` (`id`, `name`, `prettyname`, `description`, `perlpac
 (29, 'os_win8', 'Windows 8.x OS Module', '', 'VCL::Module::OS::Windows::Version_6::8'),
 (30, 'os_win2012', 'Windows Server 2012 OS Module', '', 'VCL::Module::OS::Windows::Version_6::2012'),
 (31, 'predictive_level_2', 'Predictive Loading Module Level 2', 'Power off computer. If a virtual machine, it will be also destroyed.', 'VCL::Module::Predictive::Level_2'),
-(32, 'provisioning_openstack', 'OpenStack Provisioning Module', '', 'VCL::Module::Provisioning::openstack');
+(32, 'provisioning_openstack', 'OpenStack Provisioning Module', '', 'VCL::Module::Provisioning::openstack'),
+(33, 'provisioning_one', 'OpenNebula Provisioning Module', '', 'VCL::Module::Provisioning::one');
 
 -- 
 -- Dumping data for table `OStype`
@@ -1825,7 +1826,8 @@ INSERT IGNORE INTO `provisioning` (`id`, `name`, `prettyname`, `moduleid`) VALUE
 (8, 'vbox', 'Virtual Box', 24),
 (9, 'libvirt', 'Libvirt Virtualization API', 27),
 (10, 'none', 'None', 23),
-(11, 'openstack', 'openstack', 32);
+(11, 'openstack', 'openstack', 32),
+(12, 'one', 'OpenNebula', 33);
 
 --
 -- Dumping data for table `provisioningOSinstalltype`
@@ -1839,6 +1841,8 @@ INSERT IGNORE provisioningOSinstalltype (provisioningid, OSinstalltypeid) SELECT
 INSERT IGNORE provisioningOSinstalltype (provisioningid, OSinstalltypeid) SELECT provisioning.id, OSinstalltype.id FROM provisioning, OSinstalltype WHERE provisioning.name LIKE '%lab%' AND OSinstalltype.name = 'none';
 INSERT IGNORE provisioningOSinstalltype (provisioningid, OSinstalltypeid) SELECT provisioning.id, OSinstalltype.id FROM provisioning, OSinstalltype WHERE provisioning.name LIKE '%libvirt%' AND OSinstalltype.name = 'vmware';
 INSERT IGNORE provisioningOSinstalltype (provisioningid, OSinstalltypeid) SELECT provisioning.id, OSinstalltype.id FROM provisioning, OSinstalltype WHERE provisioning.name LIKE '%openstack%' AND OSinstalltype.name = 'openstack';
+INSERT IGNORE provisioningOSinstalltype (provisioningid, OSinstalltypeid) SELECT provisioning.id, OSinstalltype.id FROM provisioning, OSinstalltype WHERE provisioning.name='one' AND OSinstalltype.name = 'vmware';
+
 
 -- 
 -- Dumping data for table `resourcetype`
