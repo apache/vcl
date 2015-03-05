@@ -131,12 +131,18 @@ sub process {
 	if ($self->nathost_os(0)) {
 		my $nathost_hostname = $self->data->get_nathost_hostname();
 		if ($self->nathost_os->firewall()) {
-			if (!$self->nathost_os->firewall->delete_chain('nat', $reservation_id)) {
-				notify($ERRORS{'CRITICAL'}, 0, "failed to delete '$reservation_id' chain from the nat table on NAT host $nathost_hostname");
+			if ($self->nathost_os->firewall->can('sanitize_reservation')) {
+				if (!$self->nathost_os->firewall->sanitize_reservation()) {
+					notify($ERRORS{'CRITICAL'}, 0, "failed to sanitize firewall for reservation on NAT host $nathost_hostname");
+				}
 			}
+			else {
+				notify($ERRORS{'WARNING'}, 0, "unable to sanitize firewall for reservation on NAT host $nathost_hostname, " . ref($self->nathost_os->firewall) . " does not implement a 'sanitize_reservation' subroutine");
+			}
+			
 		}
 		else {
-			notify($ERRORS{'CRITICAL'}, 0, "failed to delete '$reservation_id' chain from the nat table on NAT host $nathost_hostname, NAT host OS object is not available");
+			notify($ERRORS{'WARNING'}, 0, "unable to sanitize firewall for reservation on NAT host $nathost_hostname, NAT host OS firewall object is not available");
 		}
 	}
 	

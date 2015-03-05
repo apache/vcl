@@ -134,7 +134,6 @@ our @EXPORT = qw(
 	get_computer_nathost_info
 	get_computer_private_ip_address_info
 	get_computers_controlled_by_mn
-	get_connect_method_info
 	get_connectlog_info
 	get_connectlog_remote_ip_address_info
 	get_copy_speed_info_string
@@ -178,6 +177,7 @@ our @EXPORT = qw(
 	get_reservation_accounts
 	get_reservation_computerloadlog_entries
 	get_reservation_computerloadlog_time
+	get_reservation_connect_method_info
 	get_reservation_management_node_hostname
 	get_reservation_vcld_process_name_regex
 	get_request_loadstate_names
@@ -3053,7 +3053,7 @@ EOF
 		}
 		
 		# Add the connect method info to the hash
-		my $connect_method_info = get_connect_method_info($imagerevision_id, 0);
+		my $connect_method_info = get_reservation_connect_method_info($reservation_id, 0);
 		$request_info->{reservation}{$reservation_id}{connect_methods} = $connect_method_info;
 		
 		# Add the managementnode info to the hash
@@ -3314,9 +3314,9 @@ sub set_managementnode_state {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 get_requests
+=head2 get_management_node_requests
 
- Parameters  : management node id
+ Parameters  : $management_node_id
  Returns     : hash
  Description : gets request information for a particular management node
 
@@ -3835,7 +3835,7 @@ sub get_default_imagemeta_info {
 
 =head2  get_vmhost_info
 
- Parameters  : $vmhost_id, $no_cache (optional)
+ Parameters  : $vmhost_identifier, $no_cache (optional)
  Returns     : Hash reference
  Description : Retrieves info from the database for the vmhost, vmprofile, and
                repository and datastore imagetypes.
@@ -3844,15 +3844,15 @@ sub get_default_imagemeta_info {
 
 
 sub get_vmhost_info {
-	my ($vmhost_id, $no_cache) = @_;
+	my ($vmhost_identifier, $no_cache) = @_;
 	
 	# Check the passed parameter
-	if (!defined($vmhost_id)) {
-		notify($ERRORS{'WARNING'}, 0, "vmhost ID argument was not specified");
+	if (!defined($vmhost_identifier)) {
+		notify($ERRORS{'WARNING'}, 0, "VM host identifier argument was not specified");
 		return;
 	}
 	
-	return $ENV{vmhost_info}{$vmhost_id} if (!$no_cache && $ENV{vmhost_info}{$vmhost_id});
+	return $ENV{vmhost_info}{$vmhost_identifier} if (!$no_cache && $ENV{vmhost_info}{$vmhost_identifier});
 	
 	# Get a hash ref containing the database column names
 	my $database_table_columns = get_database_table_columns();
@@ -3885,15 +3885,24 @@ FROM
 vmhost,
 vmprofile,
 imagetype repositoryimagetype,
-imagetype datastoreimagetype
+imagetype datastoreimagetype,
+computer
 
 WHERE
-vmhost.id = '$vmhost_id'
-AND vmprofile.id = vmhost.vmprofileid
+vmprofile.id = vmhost.vmprofileid
 AND vmprofile.repositoryimagetypeid = repositoryimagetype.id
 AND vmprofile.datastoreimagetypeid = datastoreimagetype.id
+AND vmhost.computerid = computer.id
+AND 
 EOF
-
+	
+	if ($vmhost_identifier =~ /^\d+$/) {
+		$select_statement .= "vmhost.id = '$vmhost_identifier'";
+	}
+	else {
+		$select_statement .= "computer.hostname REGEXP '$vmhost_identifier(\\\\.|\$)'";
+	}
+	
 	# Call the database select subroutine
 	my @selected_rows = database_select($select_statement);
 
@@ -3985,9 +3994,15 @@ EOF
 	$vmhost_info->{vmprofile}{vmpath} = $vmhost_info->{vmprofile}{datastorepath} if !$vmhost_info->{vmprofile}{vmpath};
 	$vmhost_info->{vmprofile}{virtualdiskpath} = $vmhost_info->{vmprofile}{vmpath} if !$vmhost_info->{vmprofile}{virtualdiskpath};
 
-	notify($ERRORS{'DEBUG'}, 0, "retrieved VM host $vmhost_id info, computer: $vmhost_info->{computer}{hostname}");
-	$ENV{vmhost_info}{$vmhost_id} = $vmhost_info;
-	return $ENV{vmhost_info}{$vmhost_id};
+	notify($ERRORS{'DEBUG'}, 0, "retrieved VM host $vmhost_identifier info, computer: $vmhost_info->{computer}{hostname}");
+	$ENV{vmhost_info}{$vmhost_identifier} = $vmhost_info;
+	
+	my $vmhost_id = $vmhost_info->{id};
+	if ($vmhost_identifier ne $vmhost_id) {
+		$ENV{vmhost_info}{$vmhost_id} = $vmhost_info;
+	}
+	
+	return $ENV{vmhost_info}{$vmhost_identifier};
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -7141,7 +7156,7 @@ EOF
 		}
 	}
 	
-	notify($ERRORS{'DEBUG'}, 0, "retrieved info for computer: $computer_identifier");
+	notify($ERRORS{'DEBUG'}, 0, "retrieved info for computer: $computer_hostname ($computer_id)");
 	$ENV{computer_info}{$computer_identifier} = $computer_info;
 	$ENV{computer_info}{$computer_identifier}{RETRIEVAL_TIME} = time;
 	return $ENV{computer_info}{$computer_identifier};
@@ -7378,7 +7393,7 @@ sub get_natport_ranges {
 		push @natport_ranges, [$start_port, $end_port];
 	}
 	
-	notify($ERRORS{'DEBUG'}, 0, "parsed natport_ranges variable:\n" . format_data(\@natport_ranges));
+	notify($ERRORS{'DEBUG'}, 0, "parsed natport_ranges variable: " . join(', ', @natport_ranges));
 	$ENV{natport_ranges} = \@natport_ranges;
 	return @natport_ranges;
 }
@@ -7421,7 +7436,7 @@ sub populate_reservation_natport {
 	notify($ERRORS{'DEBUG'}, 0, "computer $computer_id is mapped to NAT host $nathost_hostname ($nathost_hostname)");
 	
 	# Retrieve the connect method info - do not use cached info
-	my $connect_method_info = get_connect_method_info($imagerevision_id, 1);
+	my $connect_method_info = get_reservation_connect_method_info($reservation_id, 1);
 	
 	# Retrieve the ports already assigned to the nathost
 	my @assigned_ports = get_nathost_assigned_public_ports($nathost_id);
@@ -7497,7 +7512,7 @@ sub populate_reservation_natport {
 	
 	# Get the connect method info again to verify all ports are assigned a NAT public port
 	my $info_string = "";
-	$connect_method_info = get_connect_method_info($imagerevision_id, 1);
+	$connect_method_info = get_reservation_connect_method_info($reservation_id, 1);
 	for my $connect_method_id (sort keys %$connect_method_info) {
 		my $connect_method = $connect_method_info->{$connect_method_id};
 		my $connect_method_name = $connect_method->{name};
@@ -10695,12 +10710,11 @@ sub kill_child_processes {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 get_connect_method_info
+=head2 get_reservation_connect_method_info
 
  Parameters  : $imagerevision_id, $no_cache (optional)
  Returns     : hash reference
- Description : Returns the connect methods for the image revision specified as
-               the argument. Example:
+ Description : Returns the connect methods for the reservation. Example:
                {
                 4 => {
                   "RETRIEVAL_TIME" => "1417709281",
@@ -10748,29 +10762,27 @@ sub kill_child_processes {
 
 =cut
 
-sub get_connect_method_info {
-	my ($imagerevision_id, $no_cache) = @_;
-	if (!defined($imagerevision_id)) {
-		notify($ERRORS{'WARNING'}, 0, "imagerevision ID argument was not supplied");
+sub get_reservation_connect_method_info {
+	my ($reservation_id, $no_cache) = @_;
+	if (!defined($reservation_id)) {
+		notify($ERRORS{'WARNING'}, 0, "reservation ID argument was not supplied");
 		return;
 	}
 	
-	# Check if cached image info exists
-	if (!$no_cache && defined($ENV{connect_method_info}{$imagerevision_id})) {
-		my $connect_method_id = (keys(%{$ENV{connect_method_info}{$imagerevision_id}}))[0];
+	# Check if cached info exists
+	if (!$no_cache && defined($ENV{connect_method_info}{$reservation_id})) {
+		my $connect_method_id = (keys(%{$ENV{connect_method_info}{$reservation_id}}))[0];
 		if ($connect_method_id) {
 			# Check the time the info was last retrieved
-			my $data_age_seconds = (time - $ENV{connect_method_info}{$imagerevision_id}{$connect_method_id}{RETRIEVAL_TIME});
+			my $data_age_seconds = (time - $ENV{connect_method_info}{$reservation_id}{$connect_method_id}{RETRIEVAL_TIME});
 			if ($data_age_seconds < 600) {
-				return $ENV{connect_method_info}{$imagerevision_id};
+				return $ENV{connect_method_info}{$reservation_id};
 			}
 			else {
-				notify($ERRORS{'DEBUG'}, 0, "retrieving current connect method info for imagerevision $imagerevision_id from database, cached data is stale: $data_age_seconds seconds old");
+				notify($ERRORS{'DEBUG'}, 0, "retrieving current connect method info for reservation $reservation_id from database, cached data is stale: $data_age_seconds seconds old");
 			}
 		}
 	}
-	
-	notify($ERRORS{'DEBUG'}, 0, "attempting to retrieve connect method info for image revision $imagerevision_id");
 	
 	# Get a hash ref containing the database column names
 	my $database_table_columns = get_database_table_columns();
@@ -10800,26 +10812,25 @@ sub get_connect_method_info {
 	$select_statement .= <<EOF;
 FROM
 connectmethod,
-
-connectmethodport
-LEFT JOIN natport ON (natport.connectmethodportid = connectmethodport.id),
-
 connectmethodmap,
 
-imagerevision
-LEFT JOIN image ON (image.id = imagerevision.imageid)
+reservation
+LEFT JOIN image ON (image.id = reservation.imageid)
 LEFT JOIN OS ON (OS.id = image.OSid)
-LEFT JOIN OStype ON (OStype.name = OS.type)
+LEFT JOIN OStype ON (OStype.name = OS.type),
+
+connectmethodport
+LEFT JOIN natport ON (natport.connectmethodportid = connectmethodport.id AND natport.reservationid = $reservation_id)
 
 WHERE
-connectmethodport.connectmethodid = connectmethod.id
+reservation.id = $reservation_id
+AND connectmethodport.connectmethodid = connectmethod.id
 AND connectmethodmap.connectmethodid = connectmethod.id
-AND imagerevision.id = $imagerevision_id
 AND connectmethodmap.autoprovisioned IS NULL
 AND (
 	connectmethodmap.OStypeid = OStype.id
 	OR connectmethodmap.OSid = OS.id 
-	OR connectmethodmap.imagerevisionid = imagerevision.id
+	OR connectmethodmap.imagerevisionid = reservation.imagerevisionid
 )
 
 ORDER BY
@@ -10869,9 +10880,9 @@ EOF
 		$connect_method_info->{$connectmethod_id}{RETRIEVAL_TIME} = $timestamp;
 	}
 
-	#notify($ERRORS{'DEBUG'}, 0, "retrieved connect method info:\n" . format_data($connect_method_info));
-	$ENV{connect_method_info}{$imagerevision_id} = $connect_method_info;
-	return $ENV{connect_method_info}{$imagerevision_id};
+	notify($ERRORS{'DEBUG'}, 0, "retrieved connect method info for reservation $reservation_id:\n" . format_data($connect_method_info));
+	$ENV{connect_method_info}{$reservation_id} = $connect_method_info;
+	return $ENV{connect_method_info}{$reservation_id};
 }
 
 #/////////////////////////////////////////////////////////////////////////////
