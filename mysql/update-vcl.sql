@@ -954,6 +954,7 @@ CALL AddIndexIfNotExists('image', 'basedoffrevisionid');
 --
 
 CALL DropColumnIfExists('imagemeta', 'usergroupid');
+CALL AddColumnIfNotExists('imagemeta', 'sethostname', "tinyint(1) unsigned default NULL AFTER rootaccess");
 
 -- --------------------------------------------------------
 
