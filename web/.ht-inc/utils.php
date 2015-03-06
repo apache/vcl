@@ -1244,6 +1244,7 @@ function getImages($includedeleted=0, $imageid=0) {
 	       .        "rootaccess, "
 	       .        "subimages, "
 	       .        "sysprep, "
+	       .        "sethostname, "
 	       .        "id "
 	       . "FROM imagemeta";
 	$qh = doQuery($query);
@@ -1329,12 +1330,18 @@ function getImages($includedeleted=0, $imageid=0) {
 		$imagelist[$includedeleted][$row["id"]] = $row;
 		$imagelist[$includedeleted][$row["id"]]['checkuser'] = 1;
 		$imagelist[$includedeleted][$row["id"]]['rootaccess'] = 1;
+		if($row['ostype'] == 'windows' || $row['ostype'] == 'osx')
+			$imagelist[$includedeleted][$row['id']]['sethostname'] = 0;
+		else
+			$imagelist[$includedeleted][$row['id']]['sethostname'] = 1;
 		if($row["imagemetaid"] != NULL) {
 			if(array_key_exists($row['imagemetaid'], $allmetadata)) {
 				$metaid = $row['imagemetaid'];
 				$imagelist[$includedeleted][$row['id']]['checkuser'] = $allmetadata[$metaid]['checkuser'];
 				$imagelist[$includedeleted][$row['id']]['rootaccess'] = $allmetadata[$metaid]['rootaccess'];
 				$imagelist[$includedeleted][$row['id']]['sysprep'] = $allmetadata[$metaid]['sysprep'];
+				if($allmetadata[$metaid]['sethostname'] != NULL)
+					$imagelist[$includedeleted][$row['id']]['sethostname'] = $allmetadata[$metaid]['sethostname'];
 				$imagelist[$includedeleted][$row["id"]]["subimages"] = array();
 				if($allmetadata[$metaid]["subimages"]) {
 					$query2 = "SELECT imageid "

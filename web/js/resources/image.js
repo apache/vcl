@@ -28,7 +28,8 @@ Image.prototype.colformatter = function(value, rowIndex, obj) {
 	   obj.field == 'test' ||
 	   obj.field == 'forcheckout' ||
 	   obj.field == 'checkuser' ||
-	   obj.field == 'rootaccess') {
+	   obj.field == 'rootaccess' ||
+	   obj.field == 'sethostname') {
 		if(value == "0")
 			return '<span class="rederrormsg">' + _('false') + '</span>';
 		if(value == "1")
@@ -62,6 +63,11 @@ function inlineEditResourceCB(data, ioArgs) {
 		dijit.byId('checkout').set('value', data.items.data.forcheckout);
 		dijit.byId('checkuser').set('value', data.items.data.checkuser);
 		dijit.byId('rootaccess').set('value', data.items.data.rootaccess);
+		dijit.byId('sethostname').set('value', data.items.data.sethostname);
+		if(data.items.data.ostype == 'windows' || data.items.data.ostype == 'linux')
+			dojo.removeClass('sethostnamediv', 'hidden');
+		else
+			dojo.addClass('sethostnamediv', 'hidden');
 		dojo.byId('connectmethodlist').innerHTML = data.items.data.connectmethods.join('<br>');
 		dijit.byId('connectmethodttd').set('href', data.items.data.connectmethodurl);
 		dijit.byId('subimagedlg').set('href', data.items.data.subimageurl);
@@ -95,6 +101,7 @@ function resetEditResource() {
 	dijit.byId('checkout').reset();
 	dijit.byId('checkuser').reset();
 	dijit.byId('rootaccess').reset();
+	dijit.byId('sethostname').reset();
 	if(dijit.byId('sysprep'))
 		dijit.byId('sysprep').reset();
 	if(dojo.byId('connectmethodids'))
@@ -195,6 +202,16 @@ function saveResource() {
 		errobj.innerHTML = _('Invalid value specified for \'Users have administrative access\'');
 		return;
 	}
+	data['sethostname'] = parseInt(dijit.byId('sethostname').get('value'));
+	if(data['sethostname'] != 0 && data['sethostname'] != 1) {
+		if(dojo.hasClass('sethoatnamediv', 'hidden')) {
+			data['sethostname'] = 0;
+		}
+		else {
+			errobj.innerHTML = _('Invalid value specified for \'Set computer hostname\'');
+			return;
+		}
+	}
 	if(dijit.byId('sysprep')) {
 		data['sysprep'] = parseInt(dijit.byId('sysprep').get('value'));
 		if(data['sysprep'] != 0 && data['sysprep'] != 1) {
@@ -268,6 +285,7 @@ function saveResourceCB(data, ioArgs) {
 					resourcegrid.store.setValue(item, 'forcheckout', data.items.data.forcheckout);
 					resourcegrid.store.setValue(item, 'checkuser', data.items.data.checkuser);
 					resourcegrid.store.setValue(item, 'rootaccess', parseInt(data.items.data.rootaccess));
+					resourcegrid.store.setValue(item, 'sethostname', parseInt(data.items.data.sethostname));
 					resourcegrid.store.setValue(item, 'reloadtime', data.items.data.reloadtime);
 				},
 				onComplete: function(items, result) {
@@ -283,6 +301,7 @@ function saveResourceCB(data, ioArgs) {
 		dijit.byId('checkout').reset();
 		dijit.byId('checkuser').reset();
 		dijit.byId('rootaccess').reset();
+		dijit.byId('sethostname').reset();
 		dijit.byId('description').reset();
 		dijit.byId('usage').reset();
 		if(dijit.byId('imgcomments')) {
@@ -631,6 +650,19 @@ function startImageCB(data, ioArgs) {
 	dijit.byId('addeditbtn').set('label', _('Create Image'));
 	dijit.byId('addeditbtn').set('disabled', false);
 	dijit.byId('clickthroughDlgBtn').set('disabled', false);
+	if(data.items.ostype == 'windows' || data.items.ostype == 'linux') {
+		dojo.removeClass('sethostnamediv', 'hidden');
+		if(data.items.ostype == 'windows')
+			dijit.byId('sethostname').set('value', 0);
+		else
+			dijit.byId('sethostname').set('value', 1);
+	}
+	else
+		dojo.addClass('sethostnamediv', 'hidden');
+	if(data.items.ostype == 'windows')
+		dojo.removeClass('sysprepdiv', 'hidden');
+	else
+		dojo.addClass('sysprepdiv', 'hidden');
 
 	if(data.items.checkpoint) {
 		dojo.addClass('imageendrescontent', 'hidden');

@@ -1665,6 +1665,7 @@ function AJstartImage() {
 			}
 		}
 	}
+	$ostype = 'windows';
 	if(! empty($imageid)) {
 		$imageData = getImages(0, $imageid);
 		if($imageData[$imageid]['ownerid'] == $user['id'])
@@ -1672,6 +1673,7 @@ function AJstartImage() {
 		if($imageData[$imageid]['installtype'] == 'none' ||
 		   $imageData[$imageid]['installtype'] == 'kickstart')
 			$disableUpdate = 1;
+		$ostype = $imageData[$imageid]['ostype'];
 	}
 	else {
 		$data['status'] = 'error';
@@ -1691,7 +1693,8 @@ function AJstartImage() {
 	             'enableupdate' => 0,
 	             'connectmethods' => $imageData[$imageid]['connectmethods'],
 	             'owner' => "{$user['unityid']}@{$user['affiliation']}",
-	             'checkpoint' => $checkpoint);
+	             'checkpoint' => $checkpoint,
+	             'ostype' => $ostype);
 
 	$cdata = array('obj' => $obj,
 	               'imageid' => $imageid,

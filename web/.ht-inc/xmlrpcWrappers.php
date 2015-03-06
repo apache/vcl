@@ -1335,6 +1335,8 @@ function XMLRPCautoCapture($requestid) {
 		              'basedoffrevisionid' => $reqData['reservations'][0]['imagerevisionid'],
 		              'platformid' => $imageData[$imageid]['platformid'],
 		              'osid' => $imageData[$imageid]["osid"],
+		              'ostype' => $imageData[$imageid]["ostype"],
+		              'sethostname' => $imageData[$imageid]["sethostname"],
 		              'reload' => 20,
 		              'comments' => $comments,
 		              'connectmethodids' => implode(',', array_keys($connectmethods)),

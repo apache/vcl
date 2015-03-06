@@ -141,6 +141,8 @@ class Image extends Resource {
 				return _("Check Logged in User");
 			case 'rootaccess':
 				return _("Admin. Access");
+			case 'sethostname':
+				return _("Set Hostname");
 		}
 		return _(ucfirst($field));
 	}
@@ -353,16 +355,16 @@ class Image extends Resource {
 		# usage notes
 		$h .= "<fieldset>\n";
 		$h .= "<legend>" . _("Usage Notes") . "</legend>\n";
-		$h .= _("Optional notes to the user explaining how to use the image (users will see this on the <strong>Connect!</strong> page):");
-		$h .= "<br>\n";
+		$msg = _("Optional notes to the user explaining how to use the image (users will see this on the <strong>Connect!</strong> page):");
+		$h .= preg_replace("/(.{1,100}([ \n]|$))/", '\1<br>', $msg);
 		$h .= "<textarea dojoType=\"dijit.form.Textarea\" id=\"usage\" ";
 		$h .= "style=\"width: 400px; text-align: left;\"></textarea>\n";
 		$h .= "</fieldset>\n";
 		if($add) {
 			$h .= "<fieldset>\n";
 			$h .= "<legend>" . _("Revision Comments") . "</legend>\n";
-			$h .= _("Notes for yourself and other admins about how the image was setup/installed. These are optional and are not visible to end users.");
-			$h .= "<br>\n";
+			$msg = _("Notes for yourself and other admins about how the image was setup/installed. These are optional and are not visible to end users.");
+			$h .= preg_replace("/(.{1,80}([ \n]|$))/", '\1<br>', $msg);
 			$h .= "<textarea dojoType=\"dijit.form.Textarea\" id=\"imgcomments\" ";
 			$h .= "style=\"width: 400px; text-align: left;\"></textarea>";
 			$h .= "</fieldset>\n";
@@ -409,9 +411,16 @@ class Image extends Resource {
 		$h .= labeledFormItem('checkuser', _('Check for logged in user'), 'select', $yesno);
 		# admin access
 		$h .= labeledFormItem('rootaccess', _('Users have administrative access'), 'select', $yesno);
+		# set hostname
+		$h .= "<div id=\"sethostnamediv\">\n";
+		$h .= labeledFormItem('sethostname', _('Set computer hostname'), 'select', $yesno);
+		$h .= "</div>\n";
 		# sysprep
-		if($add)
+		if($add) {
+			$h .= "<div id=\"sysprepdiv\">\n";
 			$h .= labeledFormItem('sysprep', _('Use sysprep'), 'select', $yesno);
+			$h .= "</div>\n";
+		}
 		# connect methods
 		$h .= "<label for=\"connectmethodlist\">" . _("Connect methods:") . "</label>\n";
 		$h .= "<div class=\"labeledform\"><span id=\"connectmethodlist\"></span><br>\n";
@@ -749,12 +758,20 @@ class Image extends Resource {
 			doQuery($query);
 		}
 		if(empty($olddata['imagemetaid']) &&
-		   ($data['checkuser'] == 0 || $data['rootaccess'] == 0)) {
+		   ($data['checkuser'] == 0 || $data['rootaccess'] == 0 ||
+		   ($olddata['ostype'] == 'windows' && $data['sethostname'] == 1) ||
+		   ($olddata['ostype'] == 'linux' && $data['sethostname'] == 0))) {
+			if(($olddata['ostype'] != 'windows' && $olddata['ostype'] != 'linux') ||
+			   ($olddata['ostype'] == 'windows' && $data['sethostname'] == 0) ||
+			   ($olddata['ostype'] == 'linux' && $data['sethostname'] == 1))
+				$data['sethostname'] = 'NULL';
 			$query = "INSERT INTO imagemeta "
 					 .        "(checkuser, "
-					 .        "rootaccess) "
+					 .        "rootaccess, "
+					 .        "sethostname) "
 					 . "VALUES ({$data['checkuser']}, "
-					 .        "{$data['rootaccess']})";
+					 .        "{$data['rootaccess']}, "
+					 .        "{$data['sethostname']})";
 			doQuery($query, 101);
 			$qh = doQuery("SELECT LAST_INSERT_ID() FROM imagemeta", 101);
 			if(! $row = mysql_fetch_row($qh))
@@ -767,10 +784,17 @@ class Image extends Resource {
 		}
 		elseif(! empty($olddata['imagemetaid'])) {
 			if($data['checkuser'] != $olddata['checkuser'] ||
-			   $data['rootaccess'] != $olddata['rootaccess']) {
+			   $data['rootaccess'] != $olddata['rootaccess'] ||
+			   (($olddata['ostype'] == 'windows' || $olddata['ostype'] == 'linux') &&
+			     $data['sethostname'] != $olddata['sethostname'])) {
+				if(($olddata['ostype'] != 'windows' && $olddata['ostype'] != 'linux') ||
+			      ($olddata['ostype'] == 'windows' && $data['sethostname'] == 0) ||
+			      ($olddata['ostype'] == 'linux' && $data['sethostname'] == 1))
+					$data['sethostname'] = 'NULL';
 				$query = "UPDATE imagemeta "
 						 . "SET checkuser = {$data['checkuser']}, "
-						 .     "rootaccess = {$data['rootaccess']} "
+						 .     "rootaccess = {$data['rootaccess']}, "
+						 .     "sethostname = {$data['sethostname']} "
 						 . "WHERE id = {$olddata['imagemetaid']}";
 				doQuery($query, 101);
 			}
@@ -831,6 +855,7 @@ class Image extends Resource {
 		$imagedata = getImages(0, $data["imageid"]);
 		$data["platformid"] = $imagedata[$data["imageid"]]["platformid"];
 		$data["osid"] = $imagedata[$data["imageid"]]["osid"];
+		$data["ostype"] = $imagedata[$data["imageid"]]["ostype"];
 		$data["basedoffrevisionid"] = $data["baserevisionid"];
 		$data["reload"] = 10;
 		$data["autocaptured"] = 0;
@@ -1127,15 +1152,23 @@ class Image extends Resource {
 		$imagemetaid = 0;
 		if($data['checkuser'] == 0 ||
 		   $data['rootaccess'] == 0 ||
-		   $data['sysprep'] == 0) {
+			$data['sysprep'] == 0 ||
+		   ($data['ostype'] == 'windows' && $data['sethostname'] == 1) ||
+		   ($data['ostype'] == 'linux' && $data['sethostname'] == 0)) {
+			if(($data['ostype'] != 'windows' && $data['ostype'] != 'linux') ||
+		      ($data['ostype'] == 'windows' && $data['sethostname'] == 0) ||
+		      ($data['ostype'] == 'linux' && $data['sethostname'] == 1))
+				$data['sethostname'] = 'NULL';
 			$query = "INSERT INTO imagemeta "
 			       .        "(checkuser, "
 			       .        "rootaccess, "
-			       .        "sysprep) "
+			       .        "sysprep, "
+			       .        "sethostname) "
 			       . "VALUES "
 			       .        "({$data['checkuser']}, "
 			       .        "{$data['rootaccess']}, "
-			       .        "{$data['sysprep']})";
+			       .        "{$data['sysprep']}, "
+			       .        "{$data['sethostname']})";
 			doQuery($query, 101);
 			$imagemetaid = dbLastInsertID();
 		}
@@ -1492,6 +1525,7 @@ class Image extends Resource {
 		$return["checkout"] = processInputVar("checkout", ARG_NUMERIC);
 		$return["checkuser"] = processInputVar("checkuser", ARG_NUMERIC);
 		$return["rootaccess"] = processInputVar("rootaccess", ARG_NUMERIC);
+		$return["sethostname"] = processInputVar("sethostname", ARG_NUMERIC);
 		$return["sysprep"] = processInputVar("sysprep", ARG_NUMERIC); # only in add
 		$return["connectmethodids"] = processInputVar("connectmethodids", ARG_STRING); # only in add
 
@@ -1590,6 +1624,10 @@ class Image extends Resource {
 		if($return['rootaccess'] != 0 && $return['rootaccess'] != 1) {
 			$return['error'] = 1;
 			$errormsg[] = _("Users have administrative access must be Yes or No");
+		}
+		if($return['sethostname'] != 0 && $return['sethostname'] != 1) {
+			$return['error'] = 1;
+			$errormsg[] = _("Set computer hostname must be Yes or No");
 		}
 		if($return['mode'] == 'add' && $return['sysprep'] != 0 &&
 		   $return['sysprep'] != 1) {
