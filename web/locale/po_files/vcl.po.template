@@ -1899,6 +1899,10 @@ msgstr ""
 msgid "Admin. Access"
 msgstr ""
 
+#: ../.ht-inc/image.php
+msgid "Set Hostname"
+msgstr ""
+
 #: ../.ht-inc/image.php:173
 #, php-format
 msgid "There is at least one <strong>reservation</strong> for this image. The latest end time is %s."
@@ -1980,6 +1984,10 @@ msgstr ""
 
 #: ../.ht-inc/image.php:411
 msgid "Users have administrative access"
+msgstr ""
+
+#: ../.ht-inc/image.php
+msgid "Set computer hostname"
 msgstr ""
 
 #: ../.ht-inc/image.php:414
@@ -2160,6 +2168,10 @@ msgstr ""
 
 #: ../.ht-inc/image.php:1592
 msgid "Users have administrative access must be Yes or No"
+msgstr ""
+
+#: ../.ht-inc/image.php
+msgid "Set computer hostname must be Yes or No"
 msgstr ""
 
 #: ../.ht-inc/image.php:1597

@@ -16,7 +16,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Apache VCL 2.4\n"
 "POT-Creation-Date: 2011-02-24 15:16+0900\n"
-"PO-Revision-Date: 2015-02-13 15:49-0500\n"
+"PO-Revision-Date: 2015-03-09 09:21-0500\n"
 "Last-Translator:  <jfthomps@apache.org>\n"
 "Language-Team: \n"
 "Language: fr_CA\n"
@@ -1899,6 +1899,10 @@ msgstr "Vérifiez utilisateur connecté"
 msgid "Admin. Access"
 msgstr "Administrateur. Accès"
 
+#: ../.ht-inc/image.php
+msgid "Set Hostname"
+msgstr "Définir le nom d'hôte"
+
 #: ../.ht-inc/image.php:173
 #, php-format
 msgid "There is at least one <strong>reservation</strong> for this image. The latest end time is %s."
@@ -1981,6 +1985,10 @@ msgstr "Vérifiez utilisateur connecté"
 #: ../.ht-inc/image.php:411
 msgid "Users have administrative access"
 msgstr "Les utilisateurs ont accès administratif"
+
+#: ../.ht-inc/image.php
+msgid "Set computer hostname"
+msgstr "Définir le nom d'hôte de l'ordinateur"
 
 #: ../.ht-inc/image.php:414
 msgid "Use sysprep"
@@ -2161,6 +2169,10 @@ msgstr "Vérifiez utilisateur connecté doit être Oui ou Non"
 #: ../.ht-inc/image.php:1592
 msgid "Users have administrative access must be Yes or No"
 msgstr "Les utilisateurs ont accès administrative doit être Oui ou Non"
+
+#: ../.ht-inc/image.php
+msgid "Set computer hostname must be Yes or No"
+msgstr "Définir le nom d'hôte de l'ordinateur doit être Oui ou Non"
 
 #: ../.ht-inc/image.php:1597
 msgid "Use sysprep must be Yes or No"
@@ -3210,4 +3222,3 @@ msgstr "semanalmente"
 
 msgid "monthly"
 msgstr "mensualmente"
-

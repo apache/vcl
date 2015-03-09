@@ -66,6 +66,7 @@ nlsmessages = {
 'Invalid value specified for \'Available for checkout\'':'Valeur non valide spécifiée pour \'Disponible pour la caisse \'',
 'Invalid value specified for \'Check for logged in user\'':'Valeur non valide spécifiée pour \'Vérifier connecté \' utilisateur',
 'Invalid value specified for \'Users have administrative access\'':'Valeur non valide spécifiée pour \'utilisateurs ne ont accès administratif \'',
+'Invalid value specified for \'Set computer hostname\'':'Définir le nom d\'hôte de l\'ordinateur',
 'Invalid value specified for \'Use sysprep\'':'Valeur non valide spécifiée pour \'utilisation sysprep \'',
 'Invalid Connect Methods specified':'Méthodes Connect invalides indiquées',
 'Add Subimage':'Ajouter sous-image',

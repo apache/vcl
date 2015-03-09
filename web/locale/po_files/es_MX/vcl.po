@@ -16,7 +16,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Apache VCL 2.4\n"
 "POT-Creation-Date: 2011-02-24 15:16+0900\n"
-"PO-Revision-Date: 2015-02-12 14:02-0500\n"
+"PO-Revision-Date: 2015-03-06 17:15-0500\n"
 "Last-Translator:  <jfthomps@apache.org>\n"
 "Language-Team: \n"
 "Language: es_MX\n"
@@ -2126,6 +2126,10 @@ msgstr ""
 msgid "Admin. Access"
 msgstr ""
 
+#: ../.ht-inc/image.php
+msgid "Set Hostname"
+msgstr ""
+
 #: ../.ht-inc/image.php:173
 #, php-format
 msgid ""
@@ -2231,6 +2235,10 @@ msgstr ""
 
 #: ../.ht-inc/image.php:411
 msgid "Users have administrative access"
+msgstr ""
+
+#: ../.ht-inc/image.php
+msgid "Set computer hostname"
 msgstr ""
 
 #: ../.ht-inc/image.php:414
@@ -2427,6 +2435,10 @@ msgstr ""
 
 #: ../.ht-inc/image.php:1592
 msgid "Users have administrative access must be Yes or No"
+msgstr ""
+
+#: ../.ht-inc/image.php
+msgid "Set computer hostname must be Yes or No"
 msgstr ""
 
 #: ../.ht-inc/image.php:1597
