@@ -79,6 +79,7 @@ my @PERL_MODULES = (
 	'CPAN',
 	'DBI',
 	'Digest::SHA1',
+	'Frontier::Client',
 	'LWP::Protocol::https',
 	'Mail::Mailer',
 	'Mo::builder',
@@ -89,7 +90,6 @@ my @PERL_MODULES = (
 	'Time::HiRes',
 	'URI',
 	'YAML',
-	'Frontier::Client',
 );
 	
 # Store the command line options in hash
