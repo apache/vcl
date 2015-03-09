@@ -599,6 +599,14 @@ sub pre_capture {
 
 =item *
 
+ Delete the 'VCL Update Cygwin' scheduled task if it exists. It could conflict with other post_load scripts.
+
+=cut
+
+	$self->delete_scheduled_task('VCL Update Cygwin');
+
+=item *
+
  Set the Cygwin SSHD service startup mode to manual
 
 =cut
@@ -643,7 +651,8 @@ sub post_load {
 		return;
 	}
 	
-	my $computer_node_name   = $self->data->get_computer_node_name();
+	my $computer_node_name = $self->data->get_computer_node_name();
+	my $node_configuration_directory = $self->get_node_configuration_directory();
 	
 	notify($ERRORS{'OK'}, 0, "beginning Windows post-load tasks on $computer_node_name");
 
@@ -854,6 +863,7 @@ sub post_load {
 =cut
 
 	my $root_random_password = getpw();
+	$self->{root_password} = $root_random_password;
 	if (!$self->set_password('root', $root_random_password)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to set random root password");
 		return 0;
@@ -893,15 +903,35 @@ sub post_load {
 
 =item *
 
+ Set the computer name if the imagemeta.sethostname flag is true
+
+=cut
+
+	if ($self->data->get_imagemeta_sethostname(0)) {
+		$self->set_computer_hostname();
+	}
+
+=item *
+
  Check if the imagemeta postoption is set to reboot, reboot if necessary
 
 =cut
 
 	if ($self->data->get_imagemeta_postoption() =~ /reboot/i) {
 		notify($ERRORS{'OK'}, 0, "imagemeta postoption reboot is set for image, rebooting computer");
-		if (!$self->reboot('', '', '', 0)) {
-			notify($ERRORS{'WARNING'}, 0, "failed to reboot the computer");
-			return 0;
+		
+		# Create a scheduled task to run post_load.cmd when the image boots
+		my $task_command = "$node_configuration_directory/Scripts/update_cygwin.cmd >> $node_configuration_directory/Logs/update_cygwin.log";
+		if ($self->create_startup_scheduled_task('VCL Update Cygwin', $task_command, 'root', $root_random_password)) {
+			if (!$self->reboot('', '', '', 0)) {
+				notify($ERRORS{'WARNING'}, 0, "failed to reboot the computer");
+				return 0;
+			}
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "computer not rebooted, failed to create startup scheduled task to executed update_cygwin.cmd, computer might not have responded after reboot");
+			$self->data->set_imagemeta_sethostname(0);
+			$self->data->set_imagemeta_postoption('');
 		}
 	}
 	
@@ -1422,7 +1452,7 @@ sub delete_files_by_pattern {
 	# Remove trailing slashes from base directory
 	$base_directory =~ s/[\/\\]*$/\//;
 
-	notify($ERRORS{'DEBUG'}, 0, "attempting to delete files under $base_directory matching pattern $pattern, max depth: $max_depth");
+	#notify($ERRORS{'DEBUG'}, 0, "attempting to delete files under $base_directory matching pattern $pattern, max depth: $max_depth");
 	
 	# Assemble command
 	# Use find to locate all the files under the base directory matching the pattern specified
@@ -1434,16 +1464,15 @@ sub delete_files_by_pattern {
 	# If the path begins with an environment variable, check if the variable is defined by passing it to cygpath.exe
 	# Unintended files will be deleted if the environment variable is not defined because the base directory would change from "$TEMP/" to "/"
 	if ($base_directory_variable) {
-		$command = "/bin/cygpath.exe \"$base_directory_variable\" && $command";
+		$command = "/bin/cygpath.exe \"$base_directory_variable\" 2>&1 && $command";
 	}
-	
-	my ($exit_status, $output) = $self->execute($command, 1);
-	
+
+	my ($exit_status, $output) = $self->execute($command, 0);
 	if (!defined($output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to run SSH command to delete files under $base_directory matching pattern $pattern, command: $command");
 		return;
 	}
-	elsif (grep(/cygpath:/i, @$output)) {
+	elsif ($base_directory_variable && grep(/cygpath:/i, @$output)) {
 		notify($ERRORS{'OK'}, 0, "files not deleted because environment variable is not set: $base_directory_variable");
 		return;
 	}
@@ -1458,8 +1487,8 @@ sub delete_files_by_pattern {
 	else {
 		my @deleted = grep(/removed /, @$output);
 		my @not_deleted = grep(/cannot remove/, @$output);
-		notify($ERRORS{'OK'}, 0, scalar @deleted . "/" . scalar @not_deleted . " files deleted deleted under '$base_directory' matching '$pattern'");
-		notify($ERRORS{'DEBUG'}, 0, "files/directories which were deleted:\n" . join("\n", @deleted)) if @deleted;
+		notify($ERRORS{'OK'}, 0, scalar @deleted . "/" . scalar @not_deleted . " files deleted deleted under '$base_directory' matching '$pattern'") if @deleted;
+		#notify($ERRORS{'DEBUG'}, 0, "files/directories which were deleted:\n" . join("\n", @deleted)) if @deleted;
 		notify($ERRORS{'DEBUG'}, 0, "files/directories which were NOT deleted:\n" . join("\n", @not_deleted)) if @not_deleted;
 	}
 	
@@ -3343,7 +3372,7 @@ sub delete_scheduled_task {
 
 =head2 create_startup_scheduled_task
 
- Parameters  :
+ Parameters  : $task_name, $task_command, $task_user, $task_password
  Returns     :
  Description :
 
@@ -6987,7 +7016,7 @@ sub clean_hard_drive {
 		'$SYSTEMDRIVE/RECYCLER,.*',
 		'$TEMP,.*',
 		'$TMP,.*',
-		'$cygwin_path/tmp,.*',
+		"$cygwin_path/tmp,.*",
 		'$SYSTEMDRIVE/Temp,.*',
 		'$SYSTEMROOT/Temp,.*',
 		'$SYSTEMROOT/ie7updates,.*',
@@ -7007,7 +7036,7 @@ sub clean_hard_drive {
 		'$SYSTEMDRIVE/Documents and Settings,.*Temp\\/.*,10',
 		'$SYSTEMDRIVE/Documents and Settings,.*Temporary Internet Files\\/Content.*\\/.*,10',
 		'$SYSTEMDRIVE,.*pagefile\\.sys,1',
-		'$cygwin_path/home/root,.*%USERPROFILE%,1',
+		$cygwin_path . '/home/root,.*%USERPROFILE%,1',
 		"$system32_path/GroupPolicy/User/Scripts,.*VCL.*cmd"
 	);
 	
@@ -12179,6 +12208,86 @@ sub disable_set_network_location_prompt {
 	
 	my $registry_key = 'HKLM\SYSTEM\CurrentControlSet\Control\Network\NewNetworkWindowOff';
 	return $self->reg_add($registry_key);
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 set_computer_hostname
+
+ Parameters  : $new_computer_name (optional)
+ Returns     : boolean
+ Description : Changes the computer name. If successful, the postoption flag is
+               set to 'reboot' which should trigger a reboot after post_load is
+               complete.
+
+=cut
+
+sub set_computer_hostname {
+	my $self = shift;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $database_computer_hostname = $self->data->get_computer_hostname();
+	my $system32_path = $self->get_system32_path() || return;
+	
+	my $new_computer_name = shift;
+	if ($new_computer_name) {
+		notify($ERRORS{'DEBUG'}, 0, "attempting to set computer hostname to specified value: $new_computer_name");
+	}
+	else {
+		# Computer name argument was not specified, get the IP address of the public adapter
+		my $public_ip_address = $self->get_public_ip_address();
+		if ($public_ip_address) {
+			# Get the hostname the public IP address resolves to
+			$new_computer_name = ip_address_to_hostname($public_ip_address);
+			if ($new_computer_name) {
+				notify($ERRORS{'DEBUG'}, 0, "resolved public IP address $public_ip_address, attempting to set computer hostname: $new_computer_name");
+			}
+			else {
+				$new_computer_name = $database_computer_hostname;
+				notify($ERRORS{'DEBUG'}, 0, "public IP address $public_ip_address does not resolve, attempting to set computer hostname to value specified in database: $new_computer_name");
+			}
+		}
+		else {
+			# IP address of the public adapter could not be determined, use the hostname in the database
+			$new_computer_name = $database_computer_hostname;
+			notify($ERRORS{'DEBUG'}, 0, "attempting to set computer hostname to value specified in database: $new_computer_name");
+		}
+	}
+	
+	# Check if the new computer name contains a period
+	# If so, split the computer name and DNS suffix
+	my $dns_suffix;
+	if ($new_computer_name =~ /^([^\.]+)\.(.+)$/) {
+		$new_computer_name = $1;
+		$dns_suffix = $2;
+	}
+	
+	# Assemble the command
+	my $command = "echo | cmd.exe /c \"$system32_path/Wbem/wmic.exe COMPUTERSYSTEM WHERE Name='%COMPUTERNAME%' Rename '$new_computer_name'\"";
+	my ($exit_status, $output) = $self->execute($command);
+	if (!defined($output)) {
+		notify($ERRORS{'DEBUG'}, 0, "failed to execute command to set computer name of $database_computer_hostname to $new_computer_name");
+		return;
+	}
+	elsif (grep(/ReturnValue = 0;/i, @$output)) {
+		notify($ERRORS{'OK'}, 0, "set computer name of $database_computer_hostname to $new_computer_name, exit status: $exit_status, command:\n$command\noutput:\n" . join("\n", @$output));
+		$self->data->set_imagemeta_postoption('reboot');
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to set computer name of $database_computer_hostname to $new_computer_name, exit status: $exit_status, command:\n$command\noutput:\n" . join("\n", @$output));
+		return 0;
+	}
+	
+	# Set the DNS suffix registry key
+	if ($dns_suffix) {
+		return $self->reg_add('HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\services\Tcpip\Parameters', 'NV Domain', 'REG_SZ', $dns_suffix);
+	}
+	else {
+		return 1;
+	}
 }
 
 #/////////////////////////////////////////////////////////////////////////////

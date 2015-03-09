@@ -479,8 +479,14 @@ sub post_load {
 	# Attempt to generate ifcfg-eth* files and ifup any interfaces which the file does not exist
 	$self->activate_interfaces();
 	
-	# Update Hostname to match Public assigned name
-	$self->update_public_hostname();
+	# Update computer hostname if imagemeta.sethostname is not set to 0
+	my $set_hostname = $self->data->get_imagemeta_sethostname(0);
+	if (defined($set_hostname) && $set_hostname =~ /0/) {
+		notify($ERRORS{'DEBUG'}, 0, "not setting computer hostname, imagemeta.sethostname = $set_hostname");
+	}
+	else {
+		$self->update_public_hostname();
+	}
 	
 	# Run custom post_load scripts residing on the management node
 	$self->run_management_node_tools_scripts('post_load');

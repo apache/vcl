@@ -392,6 +392,7 @@ $SUBROUTINE_MAPPINGS{imagemeta_postoption} = '$self->request_data->{reservation}
 $SUBROUTINE_MAPPINGS{imagemeta_subimages} = '$self->request_data->{reservation}{RESERVATION_ID}{image}{imagemeta}{subimages}';
 $SUBROUTINE_MAPPINGS{imagemeta_sysprep} = '$self->request_data->{reservation}{RESERVATION_ID}{image}{imagemeta}{sysprep}';
 $SUBROUTINE_MAPPINGS{imagemeta_rootaccess} = '$self->request_data->{reservation}{RESERVATION_ID}{image}{imagemeta}{rootaccess}';
+$SUBROUTINE_MAPPINGS{imagemeta_sethostname} = '$self->request_data->{reservation}{RESERVATION_ID}{image}{imagemeta}{sethostname}';
 
 $SUBROUTINE_MAPPINGS{image_os_name} = '$self->request_data->{reservation}{RESERVATION_ID}{image}{OS}{name}';
 $SUBROUTINE_MAPPINGS{image_os_prettyname} = '$self->request_data->{reservation}{RESERVATION_ID}{image}{OS}{prettyname}';
