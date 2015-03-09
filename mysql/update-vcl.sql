@@ -330,6 +330,8 @@ BEGIN
       SET @statement_array = CONCAT('ALTER TABLE `', Database(), '`.', tableName, ' ADD FOREIGN KEY (', columnName, ') REFERENCES `', Database(), '`.', referencedTableName, ' (', referencedColumnName, ') ON UPDATE ', constraintAction);
     ELSEIF constraintType = 'delete' THEN
       SET @statement_array = CONCAT('ALTER TABLE `', Database(), '`.', tableName, ' ADD FOREIGN KEY (', columnName, ') REFERENCES `', Database(), '`.', referencedTableName, ' (', referencedColumnName, ') ON DELETE ', constraintAction);
+    ELSEIF constraintType = 'both' AND constraintAction = 'nullCASCADE' THEN
+      SET @statement_array = CONCAT('ALTER TABLE `', Database(), '`.', tableName, ' ADD FOREIGN KEY (', columnName, ') REFERENCES `', Database(), '`.', referencedTableName, ' (', referencedColumnName, ') ON DELETE SET NULL ON UPDATE CASCADE');
     ELSEIF constraintType = 'both' THEN
       SET @statement_array = CONCAT('ALTER TABLE `', Database(), '`.', tableName, ' ADD FOREIGN KEY (', columnName, ') REFERENCES `', Database(), '`.', referencedTableName, ' (', referencedColumnName, ') ON DELETE ', constraintAction, ' ON UPDATE ', constraintAction);
     ELSE
@@ -2013,7 +2015,7 @@ CALL AddConstraintIfNotExists('connectlog', 'userid', 'user', 'id', 'both', 'CAS
 --
 
 CALL AddConstraintIfNotExists('image', 'imagetypeid', 'imagetype', 'id', 'update', 'CASCADE');
-CALL AddConstraintIfNotExists('image', 'imagemetaid', 'imagemeta', 'id', 'update', 'CASCADE');
+CALL AddConstraintIfNotExists('image', 'imagemetaid', 'imagemeta', 'id', 'both', 'nullCASCADE');
 
 -- --------------------------------------------------------
 
