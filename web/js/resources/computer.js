@@ -283,6 +283,14 @@ function initPage() {
 			dijit.byId('newnathostbtn').set('disabled', true);
 
 		clearTimeout(filterdelay);
+
+		if(! resourcestore.comparatorMap) {
+			resourcestore.comparatorMap = {};
+		}
+		resourcestore.comparatorMap['ram'] = resource.nocasesort;
+		resourcestore.comparatorMap['procnumber'] = resource.nocasesort;
+		resourcestore.comparatorMap['procspeed'] = resource.nocasesort;
+		resourcestore.comparatorMap['network'] = resource.nocasesort;
 	}
 }
 
@@ -1179,7 +1187,11 @@ function refreshcompdata(refreshcount) {
 	var url = resourcestore.url;
 	resourcestore.close();
 	resourcestore = new dojo.data.ItemFileWriteStore({url: url});
-	resourcestore.comparatorMap = {name: resource.nocasesort};
+	resourcestore.comparatorMap = {name: resource.nocasesort,
+	                               procnumber: resource.nocasesort,
+	                               procspeed: resource.nocasesort,
+	                               network: resource.nocasesort,
+	                               ram: resource.nocasesort};
 	resourcestore.fetch();
 	savescroll = resourcegrid.scrollTop;
 	resourcegrid.setStore(resourcestore, resourcegrid.query);
