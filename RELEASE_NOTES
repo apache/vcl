@@ -27,7 +27,7 @@ Added:
 
 * Scripted installation and upgrade
 * Ability to run multiple web servers
-* NAT
+* NAT support for connecting to reservations
 * Provisioning to OpenStack
 * Provisioning to OpenNebula
 * Provisioning to ESXi 5.5

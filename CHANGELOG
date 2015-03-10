@@ -49,6 +49,200 @@ Changes to Conditional Requirements
 * vSphere SDK - no longer needed for ESX/ESXi; still needed for vCenter
 * additional modules for Jabber no longer listed (assumed to be pulled in as dependencies)
 
+Release Notes - VCL - Version 2.4
+
+** New Feature
+    * [VCL-5] - multiple web servers
+    * [VCL-170] - option to power off blades after reservation - new reload module
+    * [VCL-174] - NAT Support
+    * [VCL-178] - enable checkuser flag for per reservation instead of image only
+    * [VCL-562] - Automatically disable user accounts known to be insecure stored in Windows images
+    * [VCL-564] - Run custom scripts during various reservation stages
+    * [VCL-580] - Add support for Fedora 16
+    * [VCL-590] - Openstack Module
+    * [VCL-593] - Documentation Links on VCL Home Page
+    * [VCL-617] - new XML-RPC methods
+    * [VCL-722] - OpenNebula module
+    * [VCL-770] - Windows 8.x and Server 2012 Support
+    * [VCL-771] - VMware ESXi 5.5 support
+    * [VCL-783] - Add support for 64-bit cygwin
+    * [VCL-810] - 2.4 install script
+
+** Improvement
+    * [VCL-16] - Enhance cluster reservation process
+    * [VCL-50] - Moving machines from  Maintenance to VMhost INuse
+    * [VCL-133] - poor flow of pages for new reservation that&#39;s not currently available for image owner with multiple revisions
+    * [VCL-179] - image creation - confirm node is on
+    * [VCL-229] - add something browser specific to continuations data
+    * [VCL-237] - improve wording in error message about extending a reservation to overlap with a concurrently limited image
+    * [VCL-280] - only fail computers for computer related failures
+    * [VCL-289] - Consolodate image retrieval subroutines for provisioning modules
+    * [VCL-291] - Move OS response checking from provisioning to OS modules
+    * [VCL-322] - Add code to check that the static public address is set for all new/reload reservations, even if computer is not reloaded
+    * [VCL-366] - as needed add throttling to new vmware modules
+    * [VCL-374] - Set password requirements before attempting to set passwords during image capture
+    * [VCL-392] - Add option to rename computer separate from Sysprep
+    * [VCL-409] - Improvements to vcld -setup
+    * [VCL-428] - Make get_*_info() subroutines consistent and improve queries
+    * [VCL-430] - reservation extension can allow an invalid time to be submited
+    * [VCL-442] - Reduce time between user clicking Connect and RDP being opened
+    * [VCL-503] - Add timeout to hung SSH processes
+    * [VCL-531] - additions to dashboard
+    * [VCL-538] - time server option per management node
+    * [VCL-552] - create an easy way to view deleted computers
+    * [VCL-555] - need a way to give users access to add management nodes
+    * [VCL-559] - convert pages with large tables to use dojo datagrids
+    * [VCL-568] - refresh current reservations page 15 minutes after a reservation becomes available
+    * [VCL-570] - Ubuntu support
+    * [VCL-581] - check for whitespace in image name during image creation
+    * [VCL-582] - Linux.pm remove rc.local dependence
+    * [VCL-584] - Extend features of Server loads
+    * [VCL-585] - Migrate time source variable to variable table
+    * [VCL-586] - Remove code using imagemeta.usergroupid
+    * [VCL-592] - honor user preference to only show user groups matching user&#39;s affiliation on server profile pages
+    * [VCL-596] - privilege tree - image list bubble/pop-up shows deleted images
+    * [VCL-604] - get_currentimage info - start using imageid and imagerevisionid instead of imagename
+    * [VCL-605] - change labels for advanced options for VM images
+    * [VCL-608] - XMLRPC interface inaccessible to Shibboleth-authenticated users
+    * [VCL-636] - Allow vCenter folder to be specified in VM profile
+    * [VCL-637] - linux updating hostname
+    * [VCL-638] - Add support for vSphere distributed switch
+    * [VCL-640] - block allocation fixes
+    * [VCL-655] - Manage groups - create a default or none user group
+    * [VCL-669] - ssh identity keys for end-users
+    * [VCL-678] - Reduce unnecessary output written to vcld.log
+    * [VCL-682] - Consolidate xCAT provisioning modules, retire xCAT 1.x support
+    * [VCL-683] - Retire utils.pm::_sshd_status
+    * [VCL-684] - Remove retrieve_user_data from DataStructure.pm
+    * [VCL-685] - VMware improvements for VCL 2.4
+    * [VCL-687] - Problems occur if /etc/issue.net is configured in Linux images
+    * [VCL-690] - There is no default selection on Manage computer
+    * [VCL-695] - Change newimages membership if image owner is changed via website
+    * [VCL-696] - Improve resource group deletion options and information
+    * [VCL-698] - Linux.pm delete_user may fail to detect network mounted home directory and to clean sudoers
+    * [VCL-702] - Rework code to use new subroutines and objects &amp; general code cleanup for VCL 2.4
+    * [VCL-703] - Delete home directory when Linux user is deleted
+    * [VCL-711] - Move check_image_os from State.pm to xCAT.pm
+    * [VCL-713] - Add ability to turn off certain types of logging in the database
+    * [VCL-714] - HTML cleanup
+    * [VCL-717] - Prevent multiple failed image creation messages being sent to user
+    * [VCL-726] - Child processes are not killed when a vcld state process is killed
+    * [VCL-727] - xCAT commands may timeout - make multiple attempts
+    * [VCL-732] - disable user_connected checks for request &gt;= 24 hr
+    * [VCL-734] - set requests to pending state earlier when processing
+    * [VCL-744] - image retrieval can fail in some cases to find image across different management node
+    * [VCL-748] - Linux.pm get_firewall_configuration  /etc/services
+    * [VCL-751] - Linux.pm reserve create_user
+    * [VCL-757] - partimageng script fails if computer has additional USB drive
+    * [VCL-758] - VCL timings - make various timings to be variables and edited by admin
+    * [VCL-759] - check user group access to image when creating block allocations
+    * [VCL-760] - user based post reservation script
+    * [VCL-763] - Add missing constraints to database tables
+    * [VCL-764] - Database changes for VCL 2.4
+    * [VCL-766] - Add message argument to image.pm&#39;s reservation_failed subroutine
+    * [VCL-767] - Allow dynamic private IP addresses, remove /etc/hosts requirement
+    * [VCL-769] - VMware vim-cmd fails if services fail
+    * [VCL-772] - remove node_status from provisioning sub-modules
+    * [VCL-773] - Dashboard View Update
+    * [VCL-774] - _get_file_info is unnecessarily slow for vSphere provisioning
+    * [VCL-776] - rework resource code to have a base class for all resources and inheriting classes for each resource type
+    * [VCL-778] - add graph for seeing historical usage of block allocations
+    * [VCL-779] - add method to dashboard for restarting failed imaging reservations
+    * [VCL-780] - combine new reservation and current reservations pages
+    * [VCL-781] - Add ability for provisioning modules to retrieve minimum hardware requirements for a particular OS
+    * [VCL-782] - utils.pm update_request_state generated unnecessary critical messages
+    * [VCL-797] - system admin setting for randomly generated passwords
+    * [VCL-799] - cluster reservations - update OS firewall to allow nodes of cluster to communicate
+    * [VCL-813] - Disable Windows &quot;Select a location for the network&quot; prompt
+    * [VCL-814] - Reservation ready email should be sent as close as possible to when the Connect button appears
+    * [VCL-816] - Nmap is very slow due to DNS
+    * [VCL-817] - pgrep command arguments have changed with RHEL/CentOS 7.x
+
+** Task
+    * [VCL-457] - VCL new provisioning module: CCMP module (Provisioning virtual machines inside IBM Cloud)
+    * [VCL-606] - viewdocs interface removal
+
+** Sub-task
+    * [VCL-122] - Reload reservations setting ending state for user request when it shouldn&#39;t
+    * [VCL-647] - Warning generated if vmprofile.rsakey is not defined
+    * [VCL-677] - xCAT2.pm displays &quot;Use of uninitialized value in concatenation&quot; warnings
+    * [VCL-686] - vSphere_SDK.pm::_get_file_info slow
+    * [VCL-798] - Password complexity
+
+** Bug
+    * [VCL-22] - run_ssh_command may produce unexpected results if invalid identity key path is specified
+    * [VCL-27] - SQL statement error Level_1.pm
+    * [VCL-60] - image copy lock file for shared image library
+    * [VCL-86] - reserved.pm does not correctly check for user connection for Linux imaging standalone reservations
+    * [VCL-144] - Imaging reservations may fail and not be put into maintenance if initialize() sub in State.pm fails
+    * [VCL-308] - Computer load log does not account for images that have to be transferred to another management node
+    * [VCL-560] - cleartext password stored in VMProfile table
+    * [VCL-594] - xCAT changes
+    * [VCL-607] - &#39;default&#39; skin hard-coded in initialization function when it should use the global DEFAULTTHEME
+    * [VCL-610] - minor HTML errors
+    * [VCL-613] - output from init.d startup scripts are slightly amiss
+    * [VCL-619] - usenls may be undefined in _() function in requests.js
+    * [VCL-623] - Invalid public IP address may be presented on Connect page
+    * [VCL-624] - getUserlistID should be passed a user&#39;s full login string, not just a unityid
+    * [VCL-627] - image type fields on VM Host Profile page do not get updated
+    * [VCL-628] - check for duplicate image name not correctly performed when specified name is the same as the base image
+    * [VCL-630] - currentimage.txt name may conflict with imagerevision name, causing unnecessary reloads
+    * [VCL-646] - Ubuntu.pm doesn&#39;t set userid when creating a user account
+    * [VCL-664] - hard coded references to &quot;Local Account&quot;
+    * [VCL-665] - nmap routine output missing variable
+    * [VCL-667] - Administrator is always passed as the userid in RDP files for imaging reservations, even if it is for xRDP
+    * [VCL-668] - VMware fails to copy image under ESXi 5.1
+    * [VCL-672] - privilege page does not handle user groups with the same name but different affiliations correctly
+    * [VCL-673] - imaging reservation for an image with subimages prompts for revisions for each subimage
+    * [VCL-676] - OS.pm::remove_lines_from_file not escaping characters correctly
+    * [VCL-679] - utils.pm:get_computer_info using image.name to retrieve imagerevision info
+    * [VCL-681] - Failure to detect if SSH is available on VMware - timed out during banner exchange
+    * [VCL-688] - Image retrieval may fail to detect image residing on another management node
+    * [VCL-691] - utils.pm::get_production_imagerevision_info fails if image name argument is not the production revision
+    * [VCL-692] - server request and vcl_post_reserve
+    * [VCL-693] - VCL Cluster Reinstall Fails
+    * [VCL-694] - problem with conditional in editOrAddComputer - $data[&#39;compid&#39;] can be used when adding a computer
+    * [VCL-697] - image capture state overwritten
+    * [VCL-699] - Process may die if $self-&gt;mn_os isn&#39;t defined and get_computer_private_ip_address is called
+    * [VCL-700] - tovmhostinuse requests may fail if automatic VM host provisioning isn&#39;t configured
+    * [VCL-701] - Fedora 18 support
+    * [VCL-704] - Changes in user preferences not applied until vcld is restarted
+    * [VCL-707] - Improve ability to parse vcld.log
+    * [VCL-712] - Ubuntu module checks for iptables service when it should be checking for ufw
+    * [VCL-719] - add/edit resource group when no user groups to be listed
+    * [VCL-723] - Chrome has problems with the Virtual Hosts-&gt;VM Host Profiles page
+    * [VCL-725] - utils.pm run_command does not consistently return exit status
+    * [VCL-729] - utils.pm::mail will display errors if $RETURNPATH is not defined
+    * [VCL-730] - cannot update image revision comments under Edit Image
+    * [VCL-731] - printSelectInput should match the image name instead of the id for the $skip argument
+    * [VCL-733] - editing a block allocation recreates past block time entries
+    * [VCL-735] - UnixLab.pm updates
+    * [VCL-736] - notify user on console
+    * [VCL-737] - reboot option can set reservation to failed
+    * [VCL-739] - predictive module Level 1 not using computer.nextimageid
+    * [VCL-740] - Deletion of Block allocations not removing reload reservations
+    * [VCL-741] - a tomaintenance reservation can be created right after another tomaintenance reservation
+    * [VCL-742] - server reservations cannot be modified if they cannot be extended
+    * [VCL-743] - run_ssh_command fails if SSH key permissions are incorrect
+    * [VCL-745] - Windows.pm user_logged_in does not check for imaging requests
+    * [VCL-746] - Windows.pm get_service_configuration may hang
+    * [VCL-747] - editOrAddGroup can have $ownerid undefined for add mode
+    * [VCL-752] - block allocated nodes count toward max concurrent usage of image even for users in that block allocation
+    * [VCL-754] - server reservation Admin access and User access user groups
+    * [VCL-755] - Add &#39;if defined&#39; checks for all get_management_node_info calls
+    * [VCL-756] - Run custom vcl_post_load scripts last
+    * [VCL-761] - Incorrect repository path used for images retrieved from another management node for a KVM hypervisor
+    * [VCL-765] - get_computer_ids may return deleted computers
+    * [VCL-768] - Linux.pm&#39;s logoff_user displays a warning if the user is not logged in
+    * [VCL-775] - Request may fail due to timing issue in computer_not_being_used and get_request_by_computerid
+    * [VCL-793] - Repeated vcld processes are forked for &#39;deleted&#39; processes which fail to initialize
+    * [VCL-794] - Make sure computer_not_being_used in new.pm always returns an explicit value
+    * [VCL-795] - Request processes are continuously created after end time is reached if request state is &#39;inuse&#39; and process initialization fails
+    * [VCL-800] - Reservations insert log.ending = failed when they shouldn&#39;t
+    * [VCL-811] - server requests for owned user groups show up in reservation list
+    * [VCL-812] - Windows is not always activated on load
+    * [VCL-815] - Problems with update_cluster in OS.pm
+
 ================================================================================
 
 ASF VCL 2.3.2
