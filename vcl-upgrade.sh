@@ -55,14 +55,14 @@ function help() {
 	exit 2
 }
 
-args=$(getopt -q -o dwmh -l database,web,managementnode,help,dbhost:,dbname:,dbadminuser:,dbadminpass: -n $0 -- "$@")
+args=$(getopt -q -o dwmh -l database,web,managementnode,help,dbhost:,dbname:,dbadminuser:,dbadminpass:,rc: -n $0 -- "$@")
 
 if [ $? -ne 0 ]; then help; fi
 
 eval set -- "$args"
 
 # ------------------------- variables -------------------------------
-VCL_VERSION=2.4-test
+VCL_VERSION=2.4
 OLD_VERSION=""
 DB_NAME=vcl
 WEB_PATH=/var/www/html/vcl
@@ -72,11 +72,8 @@ DB_ADMINPASS=""
 
 DB_HOST=localhost
 ARCHIVE=apache-VCL-$VCL_VERSION.tar.bz2
-#ARCHIVEURLPATH=http://vcl.apache.org/downloads/download.cgi?action=download&filename=%2Fvcl%2F
-ARCHIVEURLPATH=http://people.apache.org/~jfthomps/tmp/ # TODO
-#SIGPATH=http://www.apache.org/dist/vcl/
-SIGPATH=http://people.apache.org/~jfthomps/tmp/ # TODO
-
+ARCHIVEURLPATH="http://vcl.apache.org/downloads/download.cgi?action=download&filename=%2Fvcl%2F"
+SIGPATH="http://www.apache.org/dist/vcl/"
 
 DODB=0
 DOWEB=0
@@ -86,6 +83,7 @@ dbhostdefault=1
 dbnamedefault=1
 dbadminuserdefault=1
 dbadminpassdefault=1
+dorc=0
 
 while true; do
 	case "$1" in
@@ -124,6 +122,11 @@ while true; do
 			dbadminpassdefault=0
 			shift 2
 			;;
+		--rc)
+			RC=$2
+		   dorc=1
+			shift 2
+			;;
 		-h|--help)
 			help
 			exit 1
@@ -138,6 +141,19 @@ while true; do
 			;;
 	esac
 done
+
+if [[ $dorc -eq 1 ]]; then
+	if [[ ! $RC =~ ^[0-9]+$ ]]; then
+		echo ""
+		echo "Invalid value specified for --rc=, must be a number"
+		echo ""
+		exit 1
+	fi
+	VCL_VERSION=${VCL_VERSION}-RC$RC
+	ARCHIVE=apache-VCL-$VCL_VERSION.tar.bz2
+	ARCHIVEURLPATH="http://people.apache.org/~jfthomps/apache-VCL-${VCL_VERSION}/"
+	SIGPATH="http://people.apache.org/~jfthomps/apache-VCL-${VCL_VERSION}/"
+fi
 
 if [[ $DOALL -eq 1 ]]; then
 	DODB=1
