@@ -1479,6 +1479,7 @@ INSERT IGNORE INTO `computerloadstate` (`loadstatename`,`prettyname`) VALUES ('i
 INSERT IGNORE INTO `computerloadstate` (`loadstatename`,`prettyname`) VALUES ('reconnecttimeout','user reconnection timeout');
 INSERT IGNORE INTO `computerloadstate` (`loadstatename`,`prettyname`,`est`) VALUES ('copyfrompartnerMN','copy image from partner management node','20');
 INSERT IGNORE INTO `computerloadstate` (`loadstatename`,`prettyname`) VALUES ('postreserve','post reserve completed');
+INSERT IGNORE INTO `computerloadstate` (`loadstatename`,`prettyname`,`est`) VALUES ('exited', 'vcl process exited', 0);
 
 UPDATE `computerloadstate` SET loadstatename = 'machinebooted' WHERE loadstatename = 'vmstage4';
 UPDATE `computerloadstate` SET prettyname = 'confirming image exists locally' WHERE loadstatename = 'doesimageexists';
