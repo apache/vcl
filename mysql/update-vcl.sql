@@ -1572,13 +1572,6 @@ INSERT IGNORE INTO `module` (`name`, `prettyname`, `description`, `perlpackage`)
 INSERT IGNORE INTO `module` (`name`, `prettyname`, `description`, `perlpackage`) VALUES ('predictive_level_2', 'Predictive Loading Module Level 2', 'Power off computer. If a virtual machine, it will be also destroyed.', 'VCL::Module::Predictive::Level_2');
 INSERT IGNORE INTO `module` (`name`, `prettyname`, `description`, `perlpackage`) VALUES ('provisioning_openstack', 'OpenStack Provisioning Module', '', 'VCL::Module::Provisioning::openstack');
 INSERT IGNORE INTO `module` (`name`, `prettyname`, `description`, `perlpackage`) VALUES ('provisioning_one', 'OpenNebula Provisioning Module', '', 'VCL::Module::Provisioning::one');
--- --------------------------------------------------------
-
--- 
--- Inserts for table `nathost`
--- 
-
-INSERT IGNORE INTO nathost (resourceid, publicIPaddress) SELECT resource.id, managementnode.IPaddress FROM resource, managementnode WHERE resource.resourcetypeid = 16 AND resource.subid = managementnode.id AND managementnode.stateid != 1;
 
 -- --------------------------------------------------------
 
