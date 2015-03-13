@@ -1691,8 +1691,8 @@ INSERT IGNORE INTO `module` (`id`, `name`, `prettyname`, `description`, `perlpac
 (5, 'os_linux', 'Linux OS Module', '', 'VCL::Module::OS::Linux'),
 (6, 'os_unix', 'Unix OS Module', '', 'VCL::Module::OS'),
 (7, 'os_winvista', 'Windows Vista OS Module', '', 'VCL::Module::OS::Windows::Version_6::Vista'),
-(8, 'predictive_level_0', 'Predictive Loading Module Level 0', 'Selects an image to load based on upcoming reservations.', 'VCL::Module::Predictive::Level_0'),
-(9, 'predictive_level_1', 'Predictive Loading Module Level 1', 'Selects an image to load based on historical data. Loads the most popular image that can be run on the machine that is not currently loaded and available on another node.', 'VCL::Module::Predictive::Level_1'),
+(8, 'predictive_level_0', 'Reload with last image', 'Reloads node with same image as was just used on it.', 'VCL::Module::Predictive::Level_0'),
+(9, 'predictive_level_1', 'Reload image based on recent user demand', 'Selects an image to load based on historical data. Loads the most popular image that can be run on the machine that is not currently loaded and available on another node.', 'VCL::Module::Predictive::Level_1'),
 (12, 'os_winxp', 'Windows XP OS Module', '', 'VCL::Module::OS::Windows::Version_5::XP'),
 (13, 'os_win2003', 'Windows Server 2003 OS Module', '', 'VCL::Module::OS::Windows::Version_5::2003'),
 (14, 'os_linux_ubuntu', 'Ubuntu Linux OS Module', '', 'VCL::Module::OS::Linux::Ubuntu'),
@@ -1709,7 +1709,7 @@ INSERT IGNORE INTO `module` (`id`, `name`, `prettyname`, `description`, `perlpac
 (28, 'os_linux_managementnode', 'Management Node Linux OS Module', '', 'VCL::Module::OS::Linux::ManagementNode'),
 (29, 'os_win8', 'Windows 8.x OS Module', '', 'VCL::Module::OS::Windows::Version_6::8'),
 (30, 'os_win2012', 'Windows Server 2012 OS Module', '', 'VCL::Module::OS::Windows::Version_6::2012'),
-(31, 'predictive_level_2', 'Predictive Loading Module Level 2', 'Power off computer. If a virtual machine, it will be also destroyed.', 'VCL::Module::Predictive::Level_2'),
+(31, 'predictive_level_2', 'Unload/power off after reservation', 'Power off computer. If a virtual machine, it will be also destroyed.', 'VCL::Module::Predictive::Level_2'),
 (32, 'provisioning_openstack', 'OpenStack Provisioning Module', '', 'VCL::Module::Provisioning::openstack'),
 (33, 'provisioning_one', 'OpenNebula Provisioning Module', '', 'VCL::Module::Provisioning::one');
 
