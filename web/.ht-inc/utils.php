@@ -11255,7 +11255,7 @@ function generateString($length=8) {
 /// \b vmpath - path to where vm configuration files are stored\n
 /// \b virtualswitch0 - name of first virtual switch\n
 /// \b virtualswitch1 - name of second virtual switch\n
-/// \b vmdisk - "localdisk" or "networkdisk" - whether or not vm files are
+/// \b vmdisk - "dedicated" or "shared" - whether or not vm files are
 /// stored on local disk or network attached storage\n
 /// \b username - username associated with this profile\n
 /// \b password - password associated with this profile\n
