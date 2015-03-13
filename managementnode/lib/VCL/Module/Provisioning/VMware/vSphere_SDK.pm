@@ -4223,7 +4223,9 @@ sub DESTROY {
 		Util::disconnect();
 	};
 	if ($EVAL_ERROR) {
-		notify($ERRORS{'WARNING'}, 0, "error generated calling Util::disconnect:\n$EVAL_ERROR");
+		if ($EVAL_ERROR !~ /Undefined subroutine/i) {
+			notify($ERRORS{'WARNING'}, 0, "error generated calling Util::disconnect:\n$EVAL_ERROR");
+		}
 	}
 	else {
 		notify($ERRORS{'DEBUG'}, 0, "called Util::disconnect");
