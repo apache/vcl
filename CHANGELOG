@@ -242,6 +242,7 @@ Release Notes - VCL - Version 2.4
     * [VCL-811] - server requests for owned user groups show up in reservation list
     * [VCL-812] - Windows is not always activated on load
     * [VCL-815] - Problems with update_cluster in OS.pm
+    * [VCL-834] - Disable timeout for disconnected users is meaningless for imaging reservations
 
 ================================================================================
 
