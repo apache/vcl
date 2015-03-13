@@ -150,8 +150,6 @@ function selectResType() {
 		//dojo.addClass('nrmacaddrspan', 'hidden');
 		//dojo.addClass('nrmonitoredspan', 'hidden');
 		dojo.addClass('nrfixedipdiv2', 'hidden');
-		if(dijit.byId('nousercheck'))
-			dojo.removeClass('nousercheckspan', 'hidden');
 		dojo.addClass('anystart', 'hidden');
 		dojo.addClass('indefiniteend', 'hidden');
 		//hideDijitButton('newResDlgShowConfigBtn'); // finishconfigs
@@ -172,6 +170,8 @@ function selectResType() {
 	if(dojo.byId('basicrdo').checked) {
 		dijit.byId('deployimage').set('query', {basic: 1, checkout: 1});
 		checkSelectedInList();
+		if(dijit.byId('nousercheck'))
+			dojo.removeClass('nousercheckspan', 'hidden');
 		var imageid = getSelectValue('deployimage');
 		var item = dijit.byId('deployimage').get('item');
 		var max = imagestore.getValue(item, 'maxinitialtime');
@@ -190,6 +190,8 @@ function selectResType() {
 		setMaxRequestLength(maximaging);
 		dojo.removeClass('whentitleimaging', 'hidden');
 		dojo.addClass('whentitlebasic', 'hidden');
+		if(dijit.byId('nousercheck'))
+			dojo.addClass('nousercheckspan', 'hidden');
 		if(! durationchanged)
 			dojo.byId('reqlength').value = 480;
 	}
