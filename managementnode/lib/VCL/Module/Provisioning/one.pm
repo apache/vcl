@@ -91,7 +91,7 @@ sub initialize {
 	
 		$xml = XML::Simple->new();
 	
-		#notify($ERRORS{'DEBUG'}, 0, "Module ONE initialized with following parameters: \n one_server_url -> $one{'server_url'}, one_username:one_password -> $one{'auth'}\n");
+		notify($ERRORS{'DEBUG'}, 0, "Module ONE initialized with following parameters: \n one_server_url -> $one{'server_url'}, one_username:one_password -> $one{'auth'}\n");
 	
 		return 1;
 	} else {
@@ -159,7 +159,6 @@ sub load {
 			$template = $data->{TEMPLATE};
 			$template->{NAME} = $one_vm_name;
 			$template->{NIC}[0]{IP} = $eth0_ip;
-			#$template->{REQUIREMENTS} = "CLUSTER_ID=\"100\"";
 			
 			my $one_new_vmid = $self->_one_create_vm(XMLout($template,NoAttr => 1,RootName=>'TEMPLATE',));	
 			if ($one_new_vmid) {
@@ -201,25 +200,7 @@ sub load {
 		$template->{NIC}[0]{NETWORK_ID} = $one_network_0_id;
 		$template->{NIC}[0]{IP} = $eth0_ip;
 		$template->{NIC}[0]{MODEL} = "virtio" if ($virtio);
-		
-		if ($self->data->can("get_vNetwork")) {
-			my @vNetwork = $self->data->get_vNetwork();
-			if (@vNetwork) {
-				# yes, add custom network(s);
-				notify($ERRORS{'OK'}, 0, "Reservation will be loaded with addition Network(s):");
-				foreach (@vNetwork) {
-					my $one_net_id = $self->_one_get_object_id("network",'VLAN_ID='.$_);
-					$template->{NIC}[1]{NETWORK_ID} = $one_net_id;
-					}
-			} else { 
-				# no custom networks, add eth1 as default public;
-				$template->{NIC}[1]{NETWORK_ID} = $one_network_1_id;
-			}
-		} else {
-			# custom networking is not implemented, add eth1 as default public;
-			$template->{NIC}[1]{NETWORK_ID} = $one_network_1_id;
-		}
-		
+		$template->{NIC}[1]{NETWORK_ID} = $one_network_1_id;
 		$template->{NIC}[1]{MODEL} = "virtio" if ($virtio);
 			
 		# Check if SWAP disk needed. Does image have SWAP=<size_MB> attribute?
@@ -695,11 +676,27 @@ sub _one_get_template_id {
 	my @templatepool_info = $one{'server'}->call('one.templatepool.info',$one{'auth'},-1,-1,-1);
 	if ($templatepool_info[0][0]->value()) {
 		my $data = XMLin($templatepool_info[0][1]);
-		foreach (@{$data->{VMTEMPLATE}}) {
-		#notify($ERRORS{'OK'}, 0, "Looking for template $template_name in template ID ".$_->{ID}.", name ".$_->{NAME}."...");
-			if ($template_name eq $_->{NAME}) {
-				notify($ERRORS{'OK'}, 0, "Found template ".$_->{NAME}." with ID ".$_->{ID});
-				return $_->{ID};
+		
+		#print Dumper($data);
+		
+		if (ref($data->{VMTEMPLATE}) eq "ARRAY") {
+			foreach (@{$data->{VMTEMPLATE}}) {
+				notify($ERRORS{'OK'}, 0, "Looking for template $template_name in template ID ".$_->{ID}.", name ".$_->{NAME}."...");
+				if ($_->{NAME} eq $template_name) {
+					notify($ERRORS{'OK'}, 0, "Found template ".$template_name." with ID ".$_->{ID});
+					return $_->{ID};
+				}
+			}
+		} else { #HASH, single entry
+			
+			unless (defined($data->{VMTEMPLATE}{NAME})) {
+				notify($ERRORS{'WARNING'}, 0, "Template not found: $template_name");
+				return 0;
+			}
+			
+			if ($data->{VMTEMPLATE}{NAME} eq $template_name) {
+				notify($ERRORS{'OK'}, 0, "Found template ".$template_name." with ID ".$data->{VMTEMPLATE}{ID});
+				return $data->{VMTEMPLATE}{ID};
 			}
 		}
 	} else {
@@ -858,7 +855,7 @@ sub _one_get_object_id {
 			
 			my $data = $xml->XMLin($reply[0][1]);
 			
-			if ( (ref($data->{VM})) eq "ARRAY" ){
+			if ( (ref($data->{VM})) eq "ARRAY"){
 				foreach (@{$data->{VM}}) {
 					if ($_->{NAME} =~ /^$o_name\s/) {
 						notify($ERRORS{'OK'}, 0, "Found ".$_->{NAME}." matching $o_name in ARRAY");
@@ -866,6 +863,8 @@ sub _one_get_object_id {
 					}
 			  	}
 			} else { #HASH, found only one entry
+				unless ( defined($data->{VM}{NAME}) ) {return 0;}
+				
 				if ($data->{VM}{NAME} =~ /^$o_name\s/) {
 					notify($ERRORS{'OK'}, 0, "Found ".$data->{VM}{NAME}." matching $o_name in HASH");
 					return $data->{VM}{ID};
