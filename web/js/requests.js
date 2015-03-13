@@ -1761,3 +1761,4 @@ function previewClickThroughCB(data, ioArgs) {
 	dojo.byId('clickthroughPreviewDlgContent').innerHTML = data.items.text;
 	dijit.byId('clickthroughpreviewdlg').show();
 }
+
