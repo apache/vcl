@@ -1027,7 +1027,7 @@ class userPasswordSpecialChar extends GlobalSingleVariable {
 		$this->domidbase = 'userpasswordspchar';
 		$this->basecdata['obj'] = $this;
 		$this->jsname = 'userPasswordSpecialChar';
-		$this->defaultval = 1;
+		$this->defaultval = 0;
 		$this->type = 'boolean';
 	}
 }
