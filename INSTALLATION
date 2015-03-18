@@ -1,7 +1,7 @@
-Installing VCL 2.4
+Installing VCL 2.4.1
 
-VCL 2.4 is the first release to include an installation script. All you need to
-install VCL is the script. It will download and validate the VCL software and
+VCL 2.4.1 is the first release to include an installation script. All you need
+to install VCL is the script. It will download and validate the VCL software and
 then install it. The script can be used to install all three parts of VCL
 (database, web portal, and management node) or to install each part
 individually.

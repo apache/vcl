@@ -1,4 +1,4 @@
-VCL 2.4
+VCL 2.4.1
 
 I. Intro and Description
 
@@ -38,6 +38,10 @@ Added:
 Removed: 
 
 * xCAT 1.x no longer supported
+
+NOTE: The release process for 2.4 was completed, but a bug was found before it
+was ever announced. So, there never was a 2.4 release worth using. 2.4.1 was the
+first usable release of the 2.4 series.
 
 III. Getting Involved in the ASF VCL Community
 

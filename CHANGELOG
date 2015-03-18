@@ -1,3 +1,16 @@
+ASF VCL 2.4.1
+
+Dependency changes:
+
+No dependency changes for any components in this release.
+
+Release Notes - VCL - Version 2.4.1
+
+** Bug
+    * [VCL-836] - cluster_info file may contain incorrect IP addresses
+
+================================================================================
+
 ASF VCL 2.4
 
 Dependency changes:
