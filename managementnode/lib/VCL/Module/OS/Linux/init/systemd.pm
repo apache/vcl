@@ -42,7 +42,7 @@ use lib "$FindBin::Bin/../../../../..";
 use base qw(VCL::Module::OS::Linux::init);
 
 # Specify the version of this module
-our $VERSION = '2.4';
+our $VERSION = '2.4.1';
 
 # Specify the version of Perl to use
 use 5.008000;
