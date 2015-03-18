@@ -2924,7 +2924,7 @@ sub get_request_info {
 	
 	# Use cached info by default
 	if (!$no_cache) {
-		$no_cache = 0;
+		$no_cache = 1;
 	}
 	
 	# Get a hash ref containing the database column names
