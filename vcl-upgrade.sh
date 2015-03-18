@@ -614,7 +614,7 @@ if [[ $DODB -eq 1 ]]; then
 	if [[ $OLD_VERSION = "" ]]; then
 		mysqldump $DB_NAME > $WORKPATH/vcl-pre${VCL_VERSION}-backup.sql
 		if [ $? -ne 0 ]; then generic_error "Failed to create backup of $DB_NAME database"; exit 1; fi;
-		gzip $WORKPATH/vcl-pre2.4-backup.sql
+		gzip $WORKPATH/vcl-pre2.4.1-backup.sql
 	else
 		mysqldump $DB_NAME > $WORKPATH/vcl-${OLD_VERSION}-backup.sql
 		if [ $? -ne 0 ]; then generic_error "Failed to create backup of $DB_NAME database"; exit 1; fi;
