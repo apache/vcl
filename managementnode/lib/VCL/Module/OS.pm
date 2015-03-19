@@ -1882,6 +1882,44 @@ sub get_ip_address {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 get_ip_addresses
+
+ Parameters  : $no_cache (optional)
+ Returns     : array
+ Description : Returns all of the IP addresses of the computer.
+
+=cut
+
+sub get_ip_addresses {
+	my ($self, $no_cache) = @_;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $computer_name = $self->data->get_computer_short_name();
+	
+	# Get the network configuration hash reference
+	my $network_configuration = $self->get_network_configuration($no_cache);
+	if (!$network_configuration) {
+		notify($ERRORS{'WARNING'}, 0, "unable to retrieve IP addresses from $computer_name, failed to retrieve network configuration");
+		return;
+	}
+	
+	# Loop through all of the network interfaces found
+	my @ip_addresses;
+	for my $interface_name (sort keys %$network_configuration) {
+		if ($network_configuration->{$interface_name}{ip_address}) {
+			push @ip_addresses, keys %{$network_configuration->{$interface_name}{ip_address}};
+		}
+	}
+	
+	notify($ERRORS{'DEBUG'}, 0, "retrieved IP addresses bound on $computer_name:\n" . join("\n", @ip_addresses));
+	return @ip_addresses;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 =head2 get_private_ip_address
 
  Parameters  : $ignore_error (optional)
@@ -3733,6 +3771,7 @@ sub get_connect_method_remote_ip_addresses {
 	my $computer_node_name = $self->data->get_computer_node_name();
 	
 	# Get the management node's IP addresses - these will be ignored
+	# TODO: change to get_ip_addresses
 	my $mn_private_ip_address = $self->mn_os->get_private_ip_address();
 	my $mn_public_ip_address = $self->mn_os->get_public_ip_address();
 	

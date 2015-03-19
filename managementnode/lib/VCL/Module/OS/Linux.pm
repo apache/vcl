@@ -415,7 +415,6 @@ sub post_load {
 	my $image_name            = $self->data->get_image_name();
 	my $computer_node_name    = $self->data->get_computer_node_name();
 	my $image_os_install_type = $self->data->get_image_os_install_type();
-	my $mn_private_ip         = $self->mn_os->get_private_ip_address();
 	
 	notify($ERRORS{'OK'}, 0, "beginning Linux post_load tasks, image: $image_name, computer: $computer_node_name");
 
@@ -464,17 +463,9 @@ sub post_load {
 		notify($ERRORS{'WARNING'}, 0, "failed to clear known identity keys");
 	}
 	
-	# Allow all traffic from the management node's private IP address
-	# Remove existing rules which allow traffic from any IP address
-	if (!$self->enable_firewall_port("tcp", "any", $mn_private_ip, 1)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to allow all traffic from management node private IP address");
-	}
-	
-	# Allow all traffic on port 22 from the management node's private IP address
-	# Remove existing rules which allow traffic from any IP address
-	if (!$self->enable_firewall_port("tcp", 22, $mn_private_ip, 1)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to allow SSH traffic from management node private IP address");
-	}
+	# Disable access to TCP/22 from any IP address
+	# This causes grant_management_node_access to be called which allows access from any of the management node's IP addresses
+	$self->disable_firewall_port('tcp', 22);
 	
 	# Attempt to generate ifcfg-eth* files and ifup any interfaces which the file does not exist
 	$self->activate_interfaces();
@@ -1184,6 +1175,61 @@ sub grant_access {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 grant_management_node_access
+
+ Parameters  : $overwrite (optional)
+ Returns     : boolean
+ Description : Grants firewall access to all protocols and ports from all of the
+               management node's IP addresses.
+
+=cut
+
+sub grant_management_node_access {
+	my $self = shift;
+	if (ref($self) !~ /linux/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return 0;
+	}
+	
+	my $overwrite = shift;
+	
+	my $port = 'any';
+	my $protocol = 'tcp';
+	
+	my $computer_name = $self->data->get_computer_short_name();
+	my $management_node_name = $self->data->get_management_node_short_name();
+	
+	# Allow traffic to any port from any of the managment node's IP addresses
+	my @mn_ip_addresses = $self->mn_os->get_ip_addresses();
+	if (!@mn_ip_addresses) {
+		notify($ERRORS{'WARNING'}, 0, "unable to grant access to $computer_name from management node $management_node_name on " . ($port eq 'any' ? 'any port' : "port $port") . ", failed to retrieve management node IP addresses");
+		return;
+	}
+	
+	my $error_occurred = 0;
+	
+	my $mn_ip_address_1 = shift @mn_ip_addresses;
+	# Allow all traffic from the management node
+	# Set the overwrite flag, this removes existing rules which allow traffic from any IP address
+	if (!$self->enable_firewall_port($protocol, $port, $mn_ip_address_1, $overwrite)) {
+		$error_occurred = 1;
+		notify($ERRORS{'WARNING'}, 0, "failed to grant access to $computer_name from management node $management_node_name IP address: $mn_ip_address_1");
+	}
+	
+	for my $mn_ip_address (@mn_ip_addresses) {
+		# Allow all traffic from the management node's other IP addresses
+		# Don't specify the overwrite flag
+		if (!$self->enable_firewall_port($protocol, $port, $mn_ip_address, 0)) {
+			$error_occurred = 1;
+			notify($ERRORS{'WARNING'}, 0, "failed to grant access to $computer_name from management node $management_node_name IP address: $mn_ip_address");
+		}
+	}
+	
+	return !$error_occurred;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 =head2 synchronize_time
 
  Parameters  : none
@@ -1326,7 +1372,6 @@ sub sanitize {
 	}
 	
 	my $computer_node_name = $self->data->get_computer_node_name();
-	my $mn_private_ip      = $self->mn_os->get_private_ip_address();
 	
 	# Make sure user is not connected
 	if ($self->is_connected()) {
@@ -1335,11 +1380,12 @@ sub sanitize {
 		return 0;
 	}
 	
-	# Clean up connection methods
-	if ($self->process_connect_methods($mn_private_ip, 1)) {
-		notify($ERRORS{'OK'}, 0, "processed connection methods on $computer_node_name");
+	# Call process_connect_methods with the overwrite flag to remove firewall exceptions
+	if (!$self->process_connect_methods('127.0.0.1', 1)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to sanitize $computer_node_name, failed to overwrite existing connect method firewall exceptions");
+		return 0;
 	}
-	
+
 	# Delete all user associated with the reservation
 	if (!$self->delete_user_accounts()) {
 		notify($ERRORS{'WARNING'}, 0, "failed to delete all users from $computer_node_name");
@@ -3679,6 +3725,14 @@ sub enable_firewall_port {
 		return;
 	}
 	
+	# Make sure the management node is not cut off by overwriting port 22
+	if ($overwrite_existing && $port eq '22' && $parsed_scope_argument !~ /0\.0\.0\.0/) {
+		if (!$self->grant_management_node_access()) {
+			notify($ERRORS{'WARNING'}, 0, "firewall port $port not enabled because access could be cut off from the management node");
+			return;
+		}
+	}
+	
 	my $chain = "INPUT";
 	my @commands;
 	my $new_scope = '';
@@ -3888,9 +3942,10 @@ sub disable_firewall_port {
 		return;
 	}
 	elsif ($port eq '22') {
-		my $mn_private_ip = $self->mn_os->get_private_ip_address();
-		notify($ERRORS{'OK'}, 0, "disabling firewall port 22 is not allowed because it will cut off access from the management node, enabling port 22 to only the management node's private IP address: $mn_private_ip");
-		return $self->enable_firewall_port("tcp", 22, $mn_private_ip, 1);
+		if (!$self->grant_management_node_access()) {
+			notify($ERRORS{'WARNING'}, 0, "firewall port not disabled 22 because firewall could not be opened to any port from the management node");
+			return;
+		}
 	}
 	
 	my $chain = "INPUT";
