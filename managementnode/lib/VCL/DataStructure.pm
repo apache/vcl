@@ -891,7 +891,9 @@ sub _automethod : Automethod {
 		}
 
 		if (!defined $return_value) {
-			notify($ERRORS{'WARNING'}, 0, "corresponding data is undefined for $method_name: $hash_path", $self->request_data) if $show_warnings;
+			if ($show_warnings && $method_name !~ /^(get_management_node_keys)$/) {
+				notify($ERRORS{'WARNING'}, 0, "corresponding data is undefined for $method_name: $hash_path");
+			}
 			return sub { };
 		}
 
@@ -1615,7 +1617,7 @@ sub set_computer_private_ip_address {
 	}
 	
 	# Update the database
-	if (!update_computer_private_ip_address($computer_id, $private_ip_address_argument)) {
+	if ($computer_id && !update_computer_private_ip_address($computer_id, $private_ip_address_argument)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to update private IP address of $computer_hostname to $private_ip_address_argument, unable to update the database");
 		return;
 	}
