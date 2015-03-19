@@ -378,7 +378,7 @@ sub initialize {
 	if ($request_state_name eq 'timeout' && (!$vmhost_lastcheck_time || (time - convert_to_epoch_seconds($vmhost_lastcheck_time)) > (60 * 60 * 24 * 30))) {
 		# Configure the SSH authorized_keys file to persist through reboots if the VM host is running VMware ESXi
 		# This shouldn't need to be done more than once, only call this if the state is 'reclaim'
-		if (ref($self->vmhost_os) =~ /Linux/i && $vmhost_product_name =~ /ESXi/) {
+		if (ref($self->vmhost_os) =~ /Linux/i && $vmhost_product_name =~ /ESXi 4/) {
 			$self->configure_vmhost_dedicated_ssh_key();
 		}
 		
