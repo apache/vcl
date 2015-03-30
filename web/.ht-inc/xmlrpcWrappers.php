@@ -3270,7 +3270,6 @@ function XMLRPCblockAllocation($imageid, $start, $end, $numMachines,
 	       .        "groupid, "
 	       .        "repeating, "
 	       .        "ownerid, "
-	       .        "admingroupid, "
 	       .        "managementnodeid, "
 	       .        "expireTime, "
 	       .        "status) "
@@ -3281,7 +3280,6 @@ function XMLRPCblockAllocation($imageid, $start, $end, $numMachines,
 	       .        "$usergroupid, "
 	       .        "'list', "
 	       .        "$ownerid, "
-	       .        "0, "
 	       .        "$mnid, "
 	       .        "'$end', "
 	       .        "'accepted')";

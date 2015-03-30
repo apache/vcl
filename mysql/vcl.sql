@@ -87,8 +87,7 @@ CREATE TABLE IF NOT EXISTS `blockRequest` (
   `groupid` smallint(5) unsigned NOT NULL,
   `repeating` enum('weekly','monthly','list') NOT NULL default 'weekly',
   `ownerid` mediumint(8) unsigned NOT NULL,
-  `admingroupid` smallint(5) unsigned NOT NULL,
-  `managementnodeid` smallint(5) unsigned NOT NULL,
+  `managementnodeid` smallint(5) unsigned default NULL,
   `expireTime` datetime NOT NULL,
   `processing` tinyint(1) unsigned NOT NULL,
   `status` enum('requested','accepted','completed','rejected','deleted') NOT NULL DEFAULT 'accepted',
@@ -2180,7 +2179,6 @@ ALTER TABLE `blockComputers` ADD CONSTRAINT FOREIGN KEY (`imageid`) REFERENCES `
 ALTER TABLE `blockRequest` ADD CONSTRAINT FOREIGN KEY (`imageid`) REFERENCES `image` (`id`);
 ALTER TABLE `blockRequest` ADD CONSTRAINT FOREIGN KEY (`groupid`) REFERENCES `usergroup` (`id`);
 ALTER TABLE `blockRequest` ADD CONSTRAINT FOREIGN KEY (`ownerid`) REFERENCES `user` (`id`);
-ALTER TABLE `blockRequest` ADD CONSTRAINT FOREIGN KEY (`admingroupid`) REFERENCES `usergroup` (`id`);
 ALTER TABLE `blockRequest` ADD CONSTRAINT FOREIGN KEY (`managementnodeid`) REFERENCES `managementnode` (`id`);
 
 -- 

@@ -1274,8 +1274,7 @@ function checkForGroupUsage($groupid, $type, &$msg='') {
 		# blockRequest.groupid
 		$query = "SELECT name "
 		       . "FROM blockRequest "
-		       . "WHERE (groupid = $groupid "
-		       .    "OR admingroupid = $groupid) "
+		       . "WHERE groupid = $groupid "
 		       .   "AND status IN ('requested', 'accepted')";
 		$qh = doQuery($query, 311);
 		$usedby = array();

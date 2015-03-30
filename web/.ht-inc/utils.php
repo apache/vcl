@@ -8768,7 +8768,6 @@ function getNATports($resid) {
 /// \b groupid - user group associated with allocation\n
 /// \b repeating - weekly, monthly, or list\n
 /// \b ownerid - id from user table of the owner\n
-/// \b admingroupid - admin user group associated with allocation\n
 /// \b managementnodeid - id of management node handling allocation\n
 /// \b expireTime - time at which the allocation will be completely finished\n
 /// \b timeid - id of blockTimes entry\n
@@ -8791,7 +8790,6 @@ function getBlockTimeData($start="", $end="") {
 	       .        "r.groupid, "
 	       .        "r.repeating, "
 	       .        "r.ownerid, "
-	       .        "r.admingroupid, "
 	       .        "r.managementnodeid, "
 	       .        "r.expireTime, "
 	       .        "t.id AS timeid, "

@@ -783,7 +783,7 @@ CALL AddColumnIfNotExists('blockComputers', 'reloadrequestid', "mediumint(8) uns
 CALL AddColumnIfNotExists('blockRequest', 'status', "enum('requested','accepted','completed','rejected','deleted') NOT NULL DEFAULT 'accepted'");
 CALL AddColumnIfNotExists('blockRequest', 'comments', "text");
 
-ALTER TABLE `blockRequest` CHANGE `admingroupid` `admingroupid` smallint(5) unsigned NOT NULL;
+CALL DropColumnIfExists('blockRequest', 'admingroupid');
 -- --------------------------------------------------------
 
 --
@@ -1896,7 +1896,6 @@ CALL DropExistingConstraints('blockRequest', 'ownerid');
 CALL AddConstraintIfNotExists('blockRequest', 'imageid', 'image', 'id', 'update', 'CASCADE');
 CALL AddConstraintIfNotExists('blockRequest', 'groupid', 'usergroup', 'id', 'update', 'CASCADE');
 CALL AddConstraintIfNotExists('blockRequest', 'ownerid', 'user', 'id', 'update', 'CASCADE');
-CALL AddConstraintIfNotExists('blockRequest', 'admingroupid', 'usergroup', 'id', 'update', 'CASCADE');
 CALL AddConstraintIfNotExists('blockRequest', 'managementnodeid', 'managementnode', 'id', 'update', 'CASCADE');
 
 -- --------------------------------------------------------
