@@ -3247,9 +3247,13 @@ function AJeditRequest() {
 			# get semaphore on each existing node in cluster so that nothing 
 			# can get moved to the nodes during this process
 
+			$resources = getUserResources(array("imageAdmin", "imageCheckOut"));
+			$tmp = array_keys($resources['image']);
+			$semimageid = $tmp[0];
+			$semrevid = getProductionRevisionid($semimageid);
 			$checkend = unixToDatetime($unixend + 900);
 			foreach($request["reservations"] as $res) {
-				if(! retryGetSemaphore(1, 1, $res['managementnodeid'], $res['computerid'], $request['start'], $checkend, $requestid)) {
+				if(! retryGetSemaphore($semimageid, $semrevid, $res['managementnodeid'], $res['computerid'], $request['start'], $checkend, $requestid)) {
 					$lockedall = 0;
 					break;
 				}

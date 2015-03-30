@@ -967,14 +967,18 @@ function XMLRPCextendRequest($requestid, $extendtime) {
 	// check for computer being available for extended time?
 	$timeToNext = timeToNextReservation($request);
 	$movedall = 1;
+	$resources = getUserResources(array("imageAdmin", "imageCheckOut"));
+	$tmp = array_keys($resources['image']);
+	$semimageid = $tmp[0];
+	$semrevid = getProductionRevisionid($semimageid);
 	if($timeToNext > -1) {
 		$lockedall = 1;
 		if(count($request['reservations']) > 1) {
 			# get semaphore on each existing node in cluster so that nothing 
 			# can get moved to the nodes during this process
-			$checkend = unixToDatetime($unixend + 900);
+			$checkend = unixToDatetime($endts + 900);
 			foreach($request["reservations"] as $res) {
-				if(! retryGetSemaphore(1, 1, $res['managementnodeid'], $res['computerid'], $request['start'], $checkend, $requestid)) {
+				if(! retryGetSemaphore($semimageid, $semrevid, $res['managementnodeid'], $res['computerid'], $request['start'], $checkend, $requestid)) {
 					$lockedall = 0;
 					break;
 				}
@@ -1132,9 +1136,14 @@ function XMLRPCsetRequestEnding($requestid, $end) {
 		if(count($request['reservations']) > 1) {
 			# get semaphore on each existing node in cluster so that nothing 
 			# can get moved to the nodes during this process
+			$unixend = datetimeToUnix($request['end']);
 			$checkend = unixToDatetime($unixend + 900);
+			$resources = getUserResources(array("imageAdmin", "imageCheckOut"));
+			$tmp = array_keys($resources['image']);
+			$semimageid = $tmp[0];
+			$semrevid = getProductionRevisionid($semimageid);
 			foreach($request["reservations"] as $res) {
-				if(! retryGetSemaphore(1, 1, $res['managementnodeid'], $res['computerid'], $request['start'], $checkend, $requestid)) {
+				if(! retryGetSemaphore($semimageid, $semrevid, $res['managementnodeid'], $res['computerid'], $request['start'], $checkend, $requestid)) {
 					$lockedall = 0;
 					break;
 				}
