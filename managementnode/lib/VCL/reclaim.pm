@@ -212,10 +212,10 @@ sub process {
 	# Set the computer state to available if it isn't in the maintenance or reloading state
 	if ($computer_state_name =~ /maintenance|reloading/) {
 		notify($ERRORS{'OK'}, 0, "$computer_shortname in $computer_state_name state, skipping state update to available");
-		switch_state($request_data, 'complete', '', '', '1');
+		$self->state_exit('complete');
 	}
 	else {
-		switch_state($request_data, 'complete', 'available', '', '1');
+		$self->state_exit('complete', 'available');
 	}
 	
 	notify($ERRORS{'DEBUG'}, 0, "exiting");
@@ -245,8 +245,10 @@ sub insert_reload_and_exit {
 	
 	# Run any vcl_post_reservation scripts (if exists)
 	if ($self->os->can("post_reservation")) {
-		if ($self->os->post_reservation()) {
-			notify($ERRORS{'OK'}, 0, "post_reservation script has been executed on $computer_shortname prior to reloading");
+		if ($self->os->is_ssh_responding()) {
+			if ($self->os->post_reservation()) {
+				notify($ERRORS{'OK'}, 0, "post_reservation script has been executed on $computer_shortname prior to reloading");
+			}
 		}
 	}
 	
@@ -259,11 +261,9 @@ sub insert_reload_and_exit {
 				if (update_computer_imagename($computer_id, 'noimage')) {
 					notify($ERRORS{'DEBUG'}, 0, "set computer $computer_shortname current image to 'noimage'");
 				}
-				
-				switch_state($request_data, 'complete', 'available', '', '1');
+				$self->state_exit('complete', 'available');
 			}
 		}
-
 	}
 	else {
 	#elsif ( $action =~ /reload/i ) {
@@ -285,13 +285,13 @@ sub insert_reload_and_exit {
 			notify($ERRORS{'OK'}, 0, "inserted reload request into database for computer id=$computer_id, image=$next_image_name");
 
 			# Switch the request state to complete, the computer state to reload
-			switch_state($request_data, 'complete', 'reload', '', '1');
+			$self->state_exit('complete', 'reload');
 		}
 		else {
 			notify($ERRORS{'CRITICAL'}, 0, "failed to insert reload request into database for computer id=$computer_id image=$next_image_name");
 
 			# Switch the request and computer states to failed
-			switch_state($request_data, 'failed', 'failed', '', '1');
+			$self->state_exit('failed', 'failed');
 		}
 	}
 

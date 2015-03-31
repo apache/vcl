@@ -642,7 +642,7 @@ sub notify {
 	if ($string !~ /[\'\"]/gs && $string !~ /\s:\s/gs) {
 		$string =~ s/[ \t]+/ /gs;
 	}
-
+	
 	# Assemble the process identifier string
 	my $process_identifier;
 	$process_identifier .= "|$PID|";
@@ -6296,7 +6296,6 @@ sub get_management_node_blockrequests {
 	blockRequest.groupid AS blockRequest_groupid,
 	blockRequest.repeating AS blockRequest_repeating,
 	blockRequest.ownerid AS blockRequest_ownerid,
-	blockRequest.admingroupid AS blockRequest_admingroupid,
 	blockRequest.managementnodeid AS blockRequest_managementnodeid,
 	blockRequest.expireTime AS blockRequest_expireTime,
 	blockRequest.processing AS blockRequest_processing,
@@ -6340,7 +6339,6 @@ sub get_management_node_blockrequests {
 			blockRequest.groupid AS blockRequest_groupid,
 			blockRequest.repeating AS blockRequest_repeating,
 			blockRequest.ownerid AS blockRequest_ownerid,
-			blockRequest.admingroupid AS blockRequest_admingroupid,
 			blockRequest.managementnodeid AS blockRequest_managementnodeid,
 			blockRequest.expireTime AS blockRequest_expireTime,
 			blockRequest.processing AS blockRequest_processing,
@@ -8801,7 +8799,7 @@ EOF
 	
 	# Check if at least 1 row was returned
 	my $computerloadlog_exists = 0;
-	my $parent_reservation_id = '<unknown>';
+	my $parent_reservation_id;
 	my $parent_computerloadlog_exists = 0;
 	
 	
@@ -8818,6 +8816,8 @@ EOF
 			$parent_computerloadlog_exists = 1 if (!$parent_computerloadlog_exists);
 		}
 	}
+	
+	$parent_reservation_id = '<unknown>' if !defined($parent_reservation_id);
 	
 	# Check if a vcld process is running matching for this reservation
 	my $reservation_process_name_regex = get_reservation_vcld_process_name_regex($reservation_id);

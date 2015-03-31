@@ -108,7 +108,6 @@ $SUBROUTINE_MAPPINGS{blockrequest_group_id} = '$self->blockrequest_data->{BLOCKR
 $SUBROUTINE_MAPPINGS{blockrequest_group_name} = '$self->blockrequest_data->{BLOCKREQUEST_ID}{groupname}';
 $SUBROUTINE_MAPPINGS{blockrequest_repeating} = '$self->blockrequest_data->{BLOCKREQUEST_ID}{repeating}';
 $SUBROUTINE_MAPPINGS{blockrequest_owner_id} = '$self->blockrequest_data->{BLOCKREQUEST_ID}{ownerid}';
-$SUBROUTINE_MAPPINGS{blockrequest_admin_group_id} = '$self->blockrequest_data->{BLOCKREQUEST_ID}{admingroupid}';
 $SUBROUTINE_MAPPINGS{blockrequest_management_node_id} = '$self->blockrequest_data->{BLOCKREQUEST_ID}{managementnodeid}';
 $SUBROUTINE_MAPPINGS{blockrequest_expire} = '$self->blockrequest_data->{BLOCKREQUEST_ID}{expireTime}';
 $SUBROUTINE_MAPPINGS{blockrequest_processing} = '$self->blockrequest_data->{BLOCKREQUEST_ID}{processing}';

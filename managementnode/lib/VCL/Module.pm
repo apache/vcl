@@ -1316,7 +1316,7 @@ sub code_loop_timeout {
 		$attempt_delay_seconds = 15;
 	}
 	elsif (defined($attempt_delay_seconds) && $attempt_delay_seconds !~ /^\d+$/) {
-		notify($ERRORS{'WARNING'}, 0, "5th argument (attempt delay) was not passed correctly");
+		notify($ERRORS{'WARNING'}, 0, "5th argument (attempt delay) was not passed correctly: $attempt_delay_seconds");
 		return;
 	}
 	

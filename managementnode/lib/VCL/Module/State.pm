@@ -116,7 +116,7 @@ sub initialize {
 	
 	# If this is a cluster request, wait for all reservations to begin before proceeding
 	if ($reservation_count > 1) {
-		if (!$self->wait_for_all_reservations_to_begin('begin', 300, 30)) {
+		if (!$self->wait_for_all_reservations_to_begin('begin', 300, 5)) {
 			$self->reservation_failed("failed to detect start of processing for all reservation processes", 'available');
 		}
 	}
@@ -712,6 +712,61 @@ sub wait_for_all_reservations_to_begin {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 wait_for_reservation_loadstate
+
+ Parameters  : $reservation_id, $loadstate_name, $total_wait_seconds (optional), $attempt_delay_seconds (optional)
+ Returns     : boolean
+ Description : Waits for a computerloadlog entry to exist for a particular
+               reservation.
+
+=cut
+
+sub wait_for_reservation_loadstate {
+	my $self = shift;
+	if (ref($self) !~ /VCL/) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine can only be called as a class method of a VCL object");
+		return;
+	}
+	
+	my ($reservation_id, $loadstate_name, $total_wait_seconds, $attempt_delay_seconds) = @_;
+	if (!$reservation_id) {
+		notify($ERRORS{'WARNING'}, 0, "computerloadlog loadstate name argument was not supplied");
+		return;
+	}
+	elsif (!$loadstate_name) {
+		notify($ERRORS{'WARNING'}, 0, "computerloadlog loadstate name argument was not supplied");
+		return;
+	}
+	
+	$total_wait_seconds = 300 unless defined($total_wait_seconds);
+	$attempt_delay_seconds = 30 unless defined($attempt_delay_seconds);
+	
+	my $request_id = $self->data->get_request_id();
+	my $request_state_name = $self->data->get_request_state_name();
+	
+	my $result = $self->code_loop_timeout(
+		sub {
+			if ($request_state_name ne 'deleted' && is_request_deleted($request_id)) {
+				notify($ERRORS{'OK'}, 0, "request has been deleted, exiting");
+				exit;
+			}
+			return get_reservation_computerloadlog_time($reservation_id, $loadstate_name);
+		},
+		[],
+		"waiting for reservation $reservation_id to generate a $loadstate_name computerloadlog entry", $total_wait_seconds, $attempt_delay_seconds
+	);
+	
+	if ($result) {
+		return $result;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "computerloadlog '$loadstate_name' entry does not exist for reservation $reservation_id, waited $total_wait_seconds seconds");
+		return;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 =head2 wait_for_child_reservations_to_exit
 
  Parameters  : $total_wait_seconds (optional), $attempt_delay_seconds (optional)
@@ -732,7 +787,7 @@ sub wait_for_child_reservations_to_exit {
 	}
 	
 	my $total_wait_seconds = shift || 300;
-	my $attempt_delay_seconds = shift || 30;
+	my $attempt_delay_seconds = shift || 15;
 	
 	my $request_id = $self->data->get_request_id();
 	my $request_state_name = $self->data->get_request_state_name();
@@ -741,10 +796,18 @@ sub wait_for_child_reservations_to_exit {
 	
 	return $self->code_loop_timeout(
 		sub {
-			if (is_request_deleted($request_id)) {
-				notify($ERRORS{'OK'}, 0, "request has been deleted, exiting");
-				exit;
-			}
+			# Commented out - causes problems for cluster requests
+			# Example: request deleted while in pending/reserved, waiting for acknowledgement
+			# Parent sees state=deleted, and doesn't wait for child reserved processes to exit
+			# Parent's deleted/reclaim.pm process starts up
+			#   -Parent sees 'begin' entries for the child reservations
+			#   -Sets request state to pending/deleted
+			#   -reclaim.pm processes are never created for children
+			# Child computer state gets left in 'reserved'
+			#if (is_request_deleted($request_id)) {
+			#	notify($ERRORS{'OK'}, 0, "request has been deleted, exiting");
+			#	exit;
+			#}
 			
 			my ($exited, $not_exited) = $self->does_loadstate_exist_all_reservations('exited', 1);
 			# If no reservations are missing an 'exited' entry return true
@@ -794,7 +857,11 @@ sub state_exit {
 	
 	my ($request_state_name_new, $computer_state_name_new, $request_log_ending) = @_;
 	
-	notify($ERRORS{'DEBUG'}, 0, "beginning state module exit tasks");
+	my $string = "beginning state module exit tasks\n";
+	$string .= "request state argument: " . ($request_state_name_new ? $request_state_name_new : '<not specified>') . "\n";
+	$string .= "computer state argument: " . ($computer_state_name_new ? $computer_state_name_new : '<not specified>') . "\n";
+	$string .= "log ending argument: " . ($request_log_ending ? $request_log_ending : '<not specified>');
+	notify($ERRORS{'DEBUG'}, 0, $string);
 	
 	my $calling_sub = get_calling_subroutine();
 	
@@ -812,7 +879,13 @@ sub state_exit {
 	if ($is_parent_reservation) {
 		# If parent of a cluster request, wait for child processes to exit before switching the state
 		if ($reservation_count > 1) {
-			$self->wait_for_child_reservations_to_exit();
+			# Check frequently if reservation timed out to cause Reservations page to remove the Connect button ASAP
+			if ($request_state_name_new && $request_state_name_new =~ /(timeout)/) {
+				$self->wait_for_child_reservations_to_exit(300, 3);
+			}
+			else {
+				$self->wait_for_child_reservations_to_exit();
+			}
 			
 			# Check if any reservations failed
 			my @failed_reservation_ids = $self->does_loadstate_exist_any_reservation('failed');
@@ -868,18 +941,34 @@ sub state_exit {
 			}
 			
 			# Update the request state
-			if ($request_state_name_old ne 'deleted' && !is_request_deleted($request_id)) {
-				# Check if the request state has already been updated
-				# This can occur if another reservation in a cluster failed
-				my ($request_state_name_current, $request_laststate_name_current) = get_request_current_state_name($request_id);
-				if ($request_state_name_current eq $request_state_name_new && $request_laststate_name_current eq $request_state_name_old) {
-					notify($ERRORS{'OK'}, 0, "request has NOT been deleted, current state already set to: $request_state_name_current/$request_laststate_name_current");
+			if ($request_state_name_old ne 'deleted') {
+				if (is_request_deleted($request_id)) {
+					notify($ERRORS{'OK'}, 0, "request has been deleted, request state not updated: $request_state_name_old --> $request_state_name_new");
 				}
 				else {
-					notify($ERRORS{'OK'}, 0, "request has NOT been deleted, updating request state: $request_state_name_old/$request_laststate_name_old --> $request_state_name_new/$request_state_name_old");
+					# Check if the request state has already been updated
+					# This can occur if another reservation in a cluster failed
+					my ($request_state_name_current, $request_laststate_name_current) = get_request_current_state_name($request_id);
+					if ($request_state_name_current eq $request_state_name_new && $request_laststate_name_current eq $request_state_name_old) {
+						notify($ERRORS{'OK'}, 0, "request has NOT been deleted, current state already set to: $request_state_name_current/$request_laststate_name_current");
+					}
+					else {
+						notify($ERRORS{'OK'}, 0, "request has NOT been deleted, updating request state: $request_state_name_old/$request_laststate_name_old --> $request_state_name_new/$request_state_name_old");
+						if (!update_request_state($request_id, $request_state_name_new, $request_state_name_old)) {
+							notify($ERRORS{'WARNING'}, 0, "failed to change request state: $request_state_name_old/$request_laststate_name_old --> $request_state_name_new/$request_state_name_old");
+						}
+					}
+				}
+			}
+			else {
+				# Current request state = 'deleted'
+				if ($request_state_name_new =~ /(complete)/) {
 					if (!update_request_state($request_id, $request_state_name_new, $request_state_name_old)) {
 						notify($ERRORS{'WARNING'}, 0, "failed to change request state: $request_state_name_old/$request_laststate_name_old --> $request_state_name_new/$request_state_name_old");
 					}
+				}
+				else {
+					notify($ERRORS{'WARNING'}, 0, "request state not updated: $request_state_name_old --> $request_state_name_new");
 				}
 			}
 		}

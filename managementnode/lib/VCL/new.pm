@@ -1078,7 +1078,16 @@ sub wait_for_child_reservations {
 		
 		$previous_request_loadstate_names = $current_request_loadstate_names;
 		$previous_lastcheck_info = $current_lastcheck_info;
-		sleep $monitor_delay_seconds;
+		
+		if ($total_elapsed_seconds <= 30) {
+			sleep_uninterrupted(3);
+		}
+		elsif ($total_elapsed_seconds <= 60) {
+			sleep_uninterrupted(5);
+		}
+		else {
+			sleep_uninterrupted($monitor_delay_seconds);
+		}
 	}
 	
 	# If out of main loop, waited maximum amount of time

@@ -117,20 +117,52 @@ sub process {
 	update_computer_state($computer_id, 'reserved');
 	insertloadlog($reservation_id, $computer_id, "reserved", "$computer_short_name successfully reserved");
 	
-	# Send an email and/or IM to the user
-	# Do this after updating the computer state to reserved because this is when the Connect button appears
-	$self->_notify_user_ready();
 	
-	# Insert acknowledgetimeout immediately before beginning to check user clicked Connect
-	# Web uses timestamp of this to determine when next to refresh the page
-	# Important because page should refresh as soon as possible to reservation timing out
-	insertloadlog($reservation_id, $computer_id, "acknowledgetimeout", "begin acknowledge timeout ($acknowledge_timeout_seconds seconds)");
+	if ($is_parent_reservation) {
+		# Send an email and/or IM to the user
+		# Do this after updating the computer state to reserved because this is when the Connect button appears
+		$self->_notify_user_ready();
+		
+		# Insert acknowledgetimeout immediately before beginning to check user clicked Connect
+		# Web uses timestamp of this to determine when next to refresh the page
+		# Important because page should refresh as soon as possible to reservation timing out
+		insertloadlog($reservation_id, $computer_id, "acknowledgetimeout", "begin acknowledge timeout ($acknowledge_timeout_seconds seconds)");
+	}
+	
+	my $acknowledge_check_start_epoch_seconds = $self->wait_for_reservation_loadstate($parent_reservation_id, "acknowledgetimeout", $acknowledge_timeout_seconds, 5);
+	if (!$acknowledge_check_start_epoch_seconds) {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve timestamp of parent reservation $parent_reservation_id 'acknowledgetimeout' computerloadlog entry");
+		return;
+	}
+	
+	# Get the current time
+	my $now_epoch_seconds = time;
+	
+	# Calculate the exact time when connection checking should end
+	my $acknowledge_check_end_epoch_seconds = ($acknowledge_check_start_epoch_seconds + $acknowledge_timeout_seconds);
+	my $acknowledge_timeout_remaining_seconds = ($acknowledge_check_end_epoch_seconds - $now_epoch_seconds);
+	
+	my $now_string                           = strftime('%H:%M:%S', localtime($now_epoch_seconds));
+	my $acknowledge_check_start_string       = strftime('%H:%M:%S', localtime($acknowledge_check_start_epoch_seconds));
+	my $acknowledge_check_end_string         = strftime('%H:%M:%S', localtime($acknowledge_check_end_epoch_seconds));
+	my $acknowledge_timeout_string           = strftime('%H:%M:%S', gmtime($acknowledge_timeout_seconds));
+	my $acknowledge_timeout_remaining_string = strftime('%H:%M:%S', gmtime($acknowledge_timeout_remaining_seconds));
+	
+	notify($ERRORS{'DEBUG'}, 0, "beginning to check for user acknowledgement:\n" .
+		"acknowledge check start   :   $acknowledge_check_start_string\n" .
+		"acknowledge timeout total : + $acknowledge_timeout_string\n" .
+		"--------------------------------------\n" .
+		"acknowledge check end     : = $acknowledge_check_end_string\n" .
+		"current time              : - $now_string\n" .
+		"--------------------------------------\n" .
+		"acknowledge timeout remaining : = $acknowledge_timeout_remaining_string ($acknowledge_timeout_remaining_seconds seconds)\n"
+	);
 	
 	# Wait for the user to acknowledge the request by clicking Connect button or from API
-	my $user_acknowledged = $self->code_loop_timeout(sub{$self->user_acknowledged()}, [], 'waiting for user acknowledgement', $acknowledge_timeout_seconds, 1, 10);
+	my $user_acknowledged = $self->code_loop_timeout(sub{$self->user_acknowledged()}, [], 'waiting for user acknowledgement', $acknowledge_timeout_remaining_seconds, 1, 10);
 	if (!$user_acknowledged) {
 		$self->_notify_user_timeout($request_data);
-		$self->state_exit('timeout', 'reserved', 'noack');
+		$self->state_exit('timeout', 'available', 'noack');
 	}
 	
 	# Add noinitialconnection and then delete acknowledgetimeout
@@ -174,13 +206,13 @@ sub process {
 	insertloadlog($reservation_id, $computer_id, "postreserve", "$computer_short_name post reserve successful");
 	
 	# Get the current time
-	my $now_epoch_seconds = time;
+	$now_epoch_seconds = time;
 	
 	# Calculate the exact time when connection checking should end
 	my $connection_check_end_epoch_seconds = ($connection_check_start_epoch_seconds + $initial_connect_timeout_seconds);
 	my $connect_timeout_remaining_seconds = ($connection_check_end_epoch_seconds - $now_epoch_seconds);
 	
-	my $now_string                       = strftime('%H:%M:%S', localtime($now_epoch_seconds));
+	$now_string                       = strftime('%H:%M:%S', localtime($now_epoch_seconds));
 	my $connection_check_start_string    = strftime('%H:%M:%S', localtime($connection_check_start_epoch_seconds));
 	my $connection_check_end_string      = strftime('%H:%M:%S', localtime($connection_check_end_epoch_seconds));
 	my $connect_timeout_string           = strftime('%H:%M:%S', gmtime($initial_connect_timeout_seconds));
@@ -336,7 +368,7 @@ sub user_acknowledged {
 	# Check if user deleted the request
 	if (is_request_deleted($request_id)) {
 		notify($ERRORS{'DEBUG'}, 0, "request deleted, exiting");
-		exit;
+		$self->state_exit();
 	}
 	
 	my $remote_ip = $self->data->get_reservation_remote_ip();
