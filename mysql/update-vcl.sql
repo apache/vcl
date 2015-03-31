@@ -784,6 +784,10 @@ CALL AddColumnIfNotExists('blockRequest', 'status', "enum('requested','accepted'
 CALL AddColumnIfNotExists('blockRequest', 'comments', "text");
 
 CALL DropColumnIfExists('blockRequest', 'admingroupid');
+ALTER TABLE `blockRequest` CHANGE `groupid` `groupid` smallint(5) unsigned DEFAULT NULL;
+UPDATE blockRequest SET groupid = NULL WHERE groupid = 0;
+ALTER TABLE `blockRequest` CHANGE `managementnodeid` `managementnodeid` smallint(5) unsigned DEFAULT NULL;
+UPDATE blockRequest SET managementnodeid = NULL WHERE managementnodeid = 0;
 -- --------------------------------------------------------
 
 --
@@ -1267,9 +1271,9 @@ CREATE TABLE IF NOT EXISTS `sitemaintenance` (
 CREATE TABLE IF NOT EXISTS `statgraphcache` (
   `graphtype` enum('totalres','concurres','concurblade','concurvm') NOT NULL,
   `statdate` date NOT NULL,
-  `affiliationid` mediumint(8) unsigned NOT NULL,
+  `affiliationid` mediumint(8) unsigned default NULL,
   `value` mediumint(8) unsigned NOT NULL,
-  `provisioningid` smallint(5) unsigned NOT NULL,
+  `provisioningid` smallint(5) unsigned default NULL,
   KEY `graphtype` (`graphtype`),
   KEY `statdate` (`statdate`),
   KEY `affiliationid` (`affiliationid`),
@@ -1278,6 +1282,13 @@ CREATE TABLE IF NOT EXISTS `statgraphcache` (
 
 CALL AddColumnIfNotExists('statgraphcache', 'provisioningid', "smallint(5) unsigned default NULL");
 CALL AddIndexIfNotExists('statgraphcache', 'provisioningid');
+
+ALTER TABLE `statgraphcache` CHANGE `affiliationid` `affiliationid` mediumint(8) unsigned default NULL;
+ALTER TABLE `statgraphcache` CHANGE `provisioningid` `provisioningid` smallint(5) unsigned default NULL;
+UPDATE statgraphcache SET affiliationid = NULL WHERE affiliationid = 0;
+UPDATE statgraphcache SET provisioningid = NULL WHERE provisioningid = 0;
+DELETE FROM statgraphcache WHERE affiliationid IS NOT NULL AND affiliationid NOT IN (SELECT id FROM affiliation);
+DELETE FROM statgraphcache WHERE provisioningid IS NOT NULL AND provisioningid NOT IN (SELECT id FROM provisioning);
 
 -- --------------------------------------------------------
 
@@ -1892,11 +1903,12 @@ CALL AddConstraintIfNotExists('blockComputers', 'imageid', 'image', 'id', 'UPDAT
 CALL DropExistingConstraints('blockRequest', 'imageid');
 CALL DropExistingConstraints('blockRequest', 'groupid');
 CALL DropExistingConstraints('blockRequest', 'ownerid');
+CALL DropExistingConstraints('blockRequest', 'managementnodeid');
 
 CALL AddConstraintIfNotExists('blockRequest', 'imageid', 'image', 'id', 'update', 'CASCADE');
-CALL AddConstraintIfNotExists('blockRequest', 'groupid', 'usergroup', 'id', 'update', 'CASCADE');
+CALL AddConstraintIfNotExists('blockRequest', 'groupid', 'usergroup', 'id', 'both', 'nullCASCADE');
 CALL AddConstraintIfNotExists('blockRequest', 'ownerid', 'user', 'id', 'update', 'CASCADE');
-CALL AddConstraintIfNotExists('blockRequest', 'managementnodeid', 'managementnode', 'id', 'update', 'CASCADE');
+CALL AddConstraintIfNotExists('blockRequest', 'managementnodeid', 'managementnode', 'id', 'both', 'nullCASCADE');
 
 -- --------------------------------------------------------
 
@@ -2183,8 +2195,10 @@ CALL AddConstraintIfNotExists('shibauth', 'userid', 'user', 'id', 'update', 'CAS
 -- Constraints for table `statgraphcache`
 --
 
-CALL AddConstraintIfNotExists('statgraphcache', 'affiliationid', 'affiliation', 'id', 'update', 'CASCADE');
-CALL AddConstraintIfNotExists('statgraphcache', 'provisioningid', 'provisioning', 'id', 'update', 'CASCADE');
+CALL DropExistingConstraints('statgraphcache', 'affiliationid');
+CALL DropExistingConstraints('statgraphcache', 'provisioningid');
+CALL AddConstraintIfNotExists('statgraphcache', 'affiliationid', 'affiliation', 'id', 'both', 'CASCADE');
+CALL AddConstraintIfNotExists('statgraphcache', 'provisioningid', 'provisioning', 'id', 'both', 'CASCADE');
 
 -- --------------------------------------------------------
 
