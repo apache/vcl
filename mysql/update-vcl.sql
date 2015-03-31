@@ -1649,7 +1649,7 @@ INSERT IGNORE INTO `provisioning` (`name`, `prettyname`, `moduleid`) VALUES ('vb
 INSERT IGNORE INTO `provisioning` (`name`, `prettyname`, `moduleid`) VALUES ('libvirt','Libvirt Virtualization API', (SELECT `id` FROM `module` WHERE `name` LIKE 'provisioning_libvirt'));
 INSERT IGNORE INTO `provisioning` (`name`, `prettyname`, `moduleid`) VALUES ('none','None', (SELECT `id` FROM `module` WHERE `name` = 'base_module'));
 INSERT IGNORE INTO `provisioning` (`name`, `prettyname`, `moduleid`) VALUES ('openstack', 'OpenStack Provisioning', (SELECT `id` FROM `module` WHERE `name` LIKE 'provisioning_openstack'));
-INSERT IGNORE INTO `provisioning` (`name`, `prettyname`, `moduleid`) VALUES ('one', 'OpenNebula', (SELECT id FROM vcl.module where name='provisioning_one'));
+INSERT IGNORE INTO `provisioning` (`name`, `prettyname`, `moduleid`) VALUES ('one', 'OpenNebula', (SELECT id FROM module where name='provisioning_one'));
 
 UPDATE IGNORE `provisioning` SET `name` = 'xcat', `prettyname` = 'xCAT' WHERE `name` = 'xcat_13'; 
 
