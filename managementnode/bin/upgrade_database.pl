@@ -41,7 +41,7 @@ use FindBin;
 use lib "$FindBin::Bin/../lib";
 
 # Specify the version of this module
-our $VERSION = '2.4.1';
+our $VERSION = '2.4.2';
 
 # Specify the version of Perl to use
 use 5.008000;

@@ -15,7 +15,7 @@
   limitations under the License.
 */
 
--- Apache VCL version 2.3.2 to 2.4.1 database schema changes
+-- Apache VCL version 2.3.2 to 2.4.2 database schema changes
 
 -- --------------------------------------------------------
 

@@ -1,6 +1,6 @@
-Upgrading to VCL 2.4.1
+Upgrading to VCL 2.4.2
 
-VCL 2.4.1 is the first release to include an upgrade script. All you need to
+VCL 2.4.2 is the first release to include an upgrade script. All you need to
 upgrade VCL is the script. It will download and validate the VCL software and
 then upgrade your system. The script can be used to upgrade all three parts of
 VCL (database, web portal, and management node) or to upgrade each part
