@@ -1396,6 +1396,10 @@ function getStatGraphConVMUserData($start, $end, $affilid, $mode, $provid) {
 function addToStatGraphCache($type, $addcache, $affilid, $provid) {
 	$nosave = time() - SECINDAY;
 	$values = array();
+	if($affilid == 0)
+		$affilid = 'NULL';
+	if($provid == 0)
+		$provid = 'NULL';
 	foreach($addcache as $date => $value) {
 		$startts = datetimeToUnix($date);
 		if($startts < $nosave) {
