@@ -3789,7 +3789,7 @@ function AJconfirmDeleteRequest() {
 		                prettyDatetime($request["start"]));
 	}
 	else {
-		if($notbyowner == 0 && ! $reservation["production"]) {
+		if($notbyowner == 0 && ! $reservation["production"] && count($request['reservations']) == 1) {
 			AJconfirmDeleteRequestProduction($request);
 			return;
 		}
