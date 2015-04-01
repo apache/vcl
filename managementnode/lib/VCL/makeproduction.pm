@@ -78,113 +78,39 @@ use VCL::utils;
 
 =head2 process
 
- Parameters  : 
- Returns     : exits with status 0 if successful, 1 if failed
+ Parameters  : none
+ Returns     : boolean
  Description : Processes a reservation in the makeproduction state.
  
 =cut
 
 sub process {
 	my $self = shift;
-	my $request_data                    = $self->data->get_request_data();
-	my $image_name                      = $self->data->get_image_name();
-
-	# Update the image and imagerevision tables:
-	#    image.name = imagename of new production revision
-	#    image.test = 0
-	#    image.lastupdate = now
-	#    imagerevision.production = 1 for revision specified in hash
-	#    imagerevision.production = 0 for all other revisions associated with this image
-	if ($self->set_imagerevision_to_production()) {
-		notify($ERRORS{'OK'}, 0, "successfully updated image and imagerevision tables");
+	my $image_name = $self->data->get_image_name();
+	my $imagerevision_id = $self->data->get_imagerevision_id();
+	my $request_laststate_name = $self->data->get_request_laststate_name();
+	
+	if (!set_production_imagerevision($imagerevision_id)) {
+		$self->reservation_failed("failed to set imagerevision ID $imagerevision_id to production for image $image_name");
 	}
-	else {
-		$self->reservation_failed("unable to update the image and imagerevision tables");
-	}
-
-	# Notify owner that image is in production mode
-	if ($self->notify_imagerevision_to_production()) {
-		notify($ERRORS{'OK'}, 0, "successfully notified owner that $image_name is in production mode");
-	}
-	else {
+	
+	# Notify owner that image revision is production
+	if (!$self->notify_imagerevision_to_production()) {
 		$self->reservation_failed("failed to notify owner that $image_name is in production mode");
 	}
-
-	# Update the request state to deleted, leave the computer state alone, exit
-	switch_state($request_data, 'deleted', '', 'EOR', '1');
-
+	
+	my $log_ending;
+	my $computer_state;
+	if ($request_laststate_name =~ /(new|reserved)/) {
+		$log_ending = 'deleted';
+		$computer_state = 'available';
+	}
+	elsif ($request_laststate_name =~ /(inuse)/) {
+		$log_ending = 'released';
+	}
+	
+	$self->state_exit('deleted', $computer_state, $log_ending);
 } ## end sub process
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 set_imagerevision_to_production
-
- Parameters  : None, uses image and image revision set in DataStructure
- Returns     : 1 if successful, 0 if failed
- Description : Changes the production image revision for a given image.
-               It sets the imagerevision.production column to 1 for the
-					imagerevision specified in the DataStructure, and all other
-					image revisions to 0 for the same image.
- 
-=cut
-
-sub set_imagerevision_to_production {
-	my $self = shift;
-	my $image_id                        = $self->data->get_image_id();
-	my $image_name                      = $self->data->get_image_name();
-	my $imagerevision_id                = $self->data->get_imagerevision_id();
-	
-	# Check the variables necessary to update the database
-	if (!defined $image_id) {
-		notify($ERRORS{'WARNING'}, 0, "unable to change production imagerevision, image id is not defined");
-		return 0;
-	}
-	elsif ($image_id <= 0) {
-		notify($ERRORS{'WARNING'}, 0, "unable to change production imagerevision, image id is $image_id");
-		return 0;
-	}
-	if (!defined $imagerevision_id) {
-		notify($ERRORS{'WARNING'}, 0, "unable to change production imagerevision, imagerevision id is not defined");
-		return 0;
-	}
-	elsif ($imagerevision_id <= 0) {
-		notify($ERRORS{'WARNING'}, 0, "unable to change production imagerevision, imagerevision id is $image_id");
-		return 0;
-	}
-
-	# Clear production flag for all image revisions
-	# Set the correct image revision to production
-	# Update the image name, set test = 0, and lastupdate to now
-	my $sql_statement = "
-	UPDATE
-	image,
-	imagerevision imagerevision_production,
-	imagerevision imagerevision_others
-	SET
-	image.name = imagerevision_production.imagename,
-	image.test = 0,
-	image.lastupdate = NOW(),
-	imagerevision_production.production = 1,
-	imagerevision_others.production = 0
-	WHERE
-	image.id = '$image_id'
-	AND imagerevision_production.imageid = image.id
-	AND imagerevision_others.imageid = image.id
-	AND imagerevision_production.id = '$imagerevision_id'
-	AND imagerevision_others.id != imagerevision_production.id
-	";
-	
-	# Call the database execute subroutine
-	if (database_execute($sql_statement)) {
-		notify($ERRORS{'OK'}, 0, "imagerevision $imagerevision_id set to production for image $image_name");
-		return 1;
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to set imagerevision $imagerevision_id to production for image $image_name");
-		return 0;
-	}
-
-} ## end sub _update_flags
 
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -227,7 +153,6 @@ END
 		notify($ERRORS{'WARNING'}, 0, "failed to send email message to $user_email");
 		return 0;
 	}
-
 } ## end sub _notify_owner
 
 #/////////////////////////////////////////////////////////////////////////////

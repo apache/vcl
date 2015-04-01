@@ -245,6 +245,7 @@ our @EXPORT = qw(
 	setup_print_ok
 	setup_print_warning
 	setup_print_wrap
+	set_production_imagerevision
 	sleep_uninterrupted
 	sort_by_file_name
 	stopwatch
@@ -1660,61 +1661,32 @@ sub update_reservation_password {
 =head2 is_request_deleted
 
  Parameters  : $request_id
- Returns     : return 1 if request state or laststate is set to deleted or if request does not exist
-               return 0 if request exists and neither request state nor laststate is set to deleted1 success 0 failure
- Description : checks if request has been deleted
+ Returns     : boolean
+ Description : Checks if the request state or laststate is deleted.
 
 =cut
 
 sub is_request_deleted {
-
 	my ($request_id) = @_;
-	my ($package, $filename, $line, $sub) = caller(0);
-
-	# Check the passed parameter
-	if (!(defined($request_id))) {
-		notify($ERRORS{'WARNING'}, 0, "request ID was not specified");
-		return 0;
-	}
-
-	# Create the select statement
-	my $select_statement = "
-	SELECT
-	request.stateid AS currentstate_id,
-	request.laststateid AS laststate_id,
-	currentstate.name AS currentstate_name,
-	laststate.name AS laststate_name
-	FROM
-	request, state currentstate, state laststate
-	WHERE
-	request.id = $request_id
-	AND request.stateid = currentstate.id
-	AND request.laststateid = laststate.id
-	";
-
-	# Call the database select subroutine
-	# This will return an array of one or more rows based on the select statement
-	my @selected_rows = database_select($select_statement);
-
-	# Check to make sure 1 row was returned
-	if (scalar @selected_rows == 0) {
-		return 1;
-	}
-	elsif (scalar @selected_rows > 1) {
-		notify($ERRORS{'WARNING'}, 0, "" . scalar @selected_rows . " rows were returned from database select");
-		return 0;
+	if (!defined($request_id)) {
+		notify($ERRORS{'WARNING'}, 0, "request ID argument was not specified");
+		return;
 	}
 	
-	my $state_name     = $selected_rows[0]{currentstate_name};
-	my $laststate_name = $selected_rows[0]{laststate_name};
-
-	#notify($ERRORS{'DEBUG'}, 0,"state=$state_name, laststate=$laststate_name");
-	
-	if ($state_name =~ /(deleted|makeproduction)/ || $laststate_name =~ /(deleted|makeproduction)/) {
+	my ($state_name, $laststate_name) = get_request_current_state_name($request_id);
+	if (!$state_name || !$laststate_name) {
+		notify($ERRORS{'WARNING'}, 0, "request $request_id state data could not be retrieved, assuming request is deleted and was removed from the database, returning true");
 		return 1;
 	}
-
-	return 0;
+	
+	if ($state_name =~ /(deleted)/ || $laststate_name =~ /(deleted)/) {
+		notify($ERRORS{'DEBUG'}, 0, "request $request_id state: $state_name/$laststate_name, returning true");
+		return 1;
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "request $request_id state: $state_name/$laststate_name, returning false");
+		return 0;
+	}
 } ## end sub is_request_deleted
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -3722,6 +3694,58 @@ EOF
 	return $ENV{production_imagerevision_info}{$image_identifier};
 	
 } ## end sub get_production_imagerevision_info
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 set_production_imagerevision
+
+ Parameters  : $imagerevision_id
+ Returns     : boolean
+ Description : Sets the production flag to 1 for the image revision specified by
+               the argument. Sets production to 0 for all other revisions of the
+               image. Sets image.name to imagerevision.imagename of the
+               production revision. Sets the image.test flag to 0.
+ 
+=cut
+
+sub set_production_imagerevision {
+	my ($imagerevision_id) = @_;
+	if (!defined($imagerevision_id)) {
+		notify($ERRORS{'WARNING'}, 0, "imagerevision ID argument was not supplied");
+		return;
+	}
+	
+	# Delete cached data
+	delete $ENV{production_imagerevision_info};
+	
+	my $sql_statement = <<EOF;
+UPDATE
+image,
+imagerevision imagerevision_production,
+imagerevision imagerevision_others
+SET
+image.name = imagerevision_production.imagename,
+image.test = 0,
+image.lastupdate = NOW(),
+imagerevision_production.production = 1,
+imagerevision_others.production = 0
+WHERE
+imagerevision_production.id = $imagerevision_id
+AND imagerevision_production.imageid = image.id
+AND imagerevision_others.imageid = imagerevision_production.imageid
+AND imagerevision_others.id != imagerevision_production.id
+EOF
+	
+	# Call the database execute subroutine
+	if (database_execute($sql_statement)) {
+		notify($ERRORS{'OK'}, 0, "imagerevision $imagerevision_id set to production");
+		return 1;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to set imagerevision $imagerevision_id to production");
+		return 0;
+	}
+}
 
 #/////////////////////////////////////////////////////////////////////////////
 
