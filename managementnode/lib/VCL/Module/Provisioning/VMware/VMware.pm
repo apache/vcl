@@ -1577,7 +1577,7 @@ sub prepare_vmx {
 		"monitor.virtual_exec" => "hardware",
 		"mem.hotadd" => "TRUE",
 		"msg.autoAnswer" => "TRUE",	# tries to automatically answer all questions that may occur at boot-time.
-		"mks.enable3d" => "TRUE",
+		#"mks.enable3d" => "TRUE",
 		"numvcpus" => "$vm_cpu_count",
 		"powerType.powerOff" => "soft",
 		"powerType.powerOn" => "hard",
@@ -1586,7 +1586,7 @@ sub prepare_vmx {
 		"sched.swap.dir" => "$vmx_directory_path/",
 		"snapshot.redoNotWithParent" => "TRUE",
 		"svga.autodetect" => "TRUE",
-		"svga.yes3d" => "TRUE",
+		#"svga.yes3d" => "TRUE",
 		"tools.remindInstall" => "FALSE",
 		"tools.syncTime" => "FALSE",
 		"toolScripts.afterPowerOn" => "FALSE",
