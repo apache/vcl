@@ -4519,8 +4519,8 @@ class Computer extends Resource {
 		doQuery($query);
 		if($natenabled) {
 			$query = "INSERT INTO nathostcomputermap "
-			       . "SELECT id, "
-			       .        "$nathostid "
+			       . "SELECT $nathostid, "
+			       .        "id "
 			       . "FROM computer "
 			       . "WHERE id IN ($allids)";
 			doQuery($query);

@@ -1053,8 +1053,6 @@ CREATE TABLE IF NOT EXISTS `nathost` (
   `resourceid` mediumint(8) unsigned NOT NULL,
   `publicIPaddress` varchar(15) NOT NULL,
   `internalIPaddress` varchar(15) DEFAULT NULL,
-  `deleted` tinyint(1) unsigned NOT NULL default '0',
-  `datedeleted` DATETIME DEFAULT NULL,
   PRIMARY KEY  (`id`),
   UNIQUE KEY `resourceid` (`resourceid`)
 ) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
