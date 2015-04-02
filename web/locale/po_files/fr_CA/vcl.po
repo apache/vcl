@@ -2115,8 +2115,8 @@ msgid "Non-numeric data was submitted for an image id."
 msgstr "Les données non-numérique a été soumis à un identifiant d'image."
 
 #: ../.ht-inc/image.php:1399
-msgid "Invalid infomation id database. Contact your system administrator."
-msgstr "Base de données non valide infomation id. Contactez votre administrateur système."
+msgid "Invalid infomation in database. Contact your system administrator."
+msgstr "Infomation non valide dans la base de donn�es. Contactez votre administrateur syst�me."
 
 #: ../.ht-inc/image.php:1535
 msgid "Name must be from 2 to 60 characters and cannot contain any dashes (-), single (') or double (\") quotes."

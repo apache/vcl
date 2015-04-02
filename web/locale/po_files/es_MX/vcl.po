@@ -2380,7 +2380,7 @@ msgid "Non-numeric data was submitted for an image id."
 msgstr ""
 
 #: ../.ht-inc/image.php:1399
-msgid "Invalid infomation id database. Contact your system administrator."
+msgid "Invalid infomation in database. Contact your system administrator."
 msgstr ""
 
 #: ../.ht-inc/image.php:1535
