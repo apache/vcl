@@ -1429,7 +1429,7 @@ class Image extends Resource {
 		}
 		if(is_null($imagemetaid)) {
 			$arr = array('error' => 'nullimagemetaid',
-		                'msg' => _("Invalid infomation id database. Contact your system administrator."));
+		                'msg' => _("Invalid infomation in database. Contact your system administrator."));
 			sendJSON($arr);
 			return;
 		}
