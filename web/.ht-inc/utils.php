@@ -1764,6 +1764,10 @@ function checkClearImageMeta($imagemetaid, $imageid, $ignorefield='') {
 	$qh = doQuery($query, 101);
 	$row = mysql_fetch_assoc($qh);
 	$alldefaults = 1;
+	if(mysql_num_rows($qh) == 0)
+		# it is possible that the imagemeta record could have been deleted before
+		#   this was submitted
+		return 1;
 	foreach($row as $field => $val) {
 		if($field == 'id' || $field == $ignorefield)
 			continue;

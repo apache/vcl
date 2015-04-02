@@ -2808,8 +2808,10 @@ function AJtoggleBlockTime() {
 
 	$skip = $row['skip'] ^ 1;
 	$query = "UPDATE blockTimes "
-	       . "SET skip = $skip "
-	       . "WHERE id = $timeid";
+	       . "SET skip = $skip ";
+	if($skip == 0)
+		$query .= ", processed = 0 ";
+	$query .= "WHERE id = $timeid";
 	doQuery($query, 101);
 	$data['newval'] = $skip;
 	$data['timeid'] = $timeid;
@@ -3071,6 +3073,8 @@ function processBlockAllocationInput() {
 		$errmsg = _("The submitted user group is invalid.");
 		$err = 1;
 	}
+	if(! $err && $return['groupid'] == 0)
+		$return['groupid'] = 'NULL';
 	if(! $err && ($return['seats'] < MIN_BLOCK_MACHINES || $return['seats'] > MAX_BLOCK_MACHINES)) {
 		$errmsg = sprintf(_("The submitted number of seats must be between %d and %d."), MIN_BLOCK_MACHINES, MAX_BLOCK_MACHINES);
 		$err = 1;
