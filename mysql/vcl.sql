@@ -2317,7 +2317,7 @@ ALTER TABLE `natlog` ADD CONSTRAINT FOREIGN KEY (`nathostresourceid`) REFERENCES
 -- 
 -- Constraints for table `nathostcomputermap`
 -- 
-ALTER TABLE `nathostcomputermap` ADD CONSTRAINT FOREIGN KEY (`nathostid`) REFERENCES `nathost` (`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `nathostcomputermap` ADD CONSTRAINT FOREIGN KEY (`nathostid`) REFERENCES `nathost` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 ALTER TABLE `nathostcomputermap` ADD CONSTRAINT FOREIGN KEY (`computerid`) REFERENCES `computer` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- 

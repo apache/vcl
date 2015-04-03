@@ -2069,7 +2069,7 @@ CALL AddConstraintIfNotExists('natlog', 'nathostresourceid', 'resource', 'id', '
 -- Constraints for table `nathostcomputermap`
 --
 
-CALL AddConstraintIfNotExists('nathostcomputermap', 'nathostid', 'nathost', 'id', 'both', 'nullCASCADE');
+CALL AddConstraintIfNotExists('nathostcomputermap', 'nathostid', 'nathost', 'id', 'both', 'CASCADE');
 CALL AddConstraintIfNotExists('nathostcomputermap', 'computerid', 'computer', 'id', 'both', 'CASCADE');
 
 -- --------------------------------------------------------
