@@ -63,6 +63,7 @@ my @LINUX_PACKAGES = (
 	'perl-DBI',
 	'perl-Digest-SHA1',
 	'perl-IO-String',
+	'perl-JSON',
 	'perl-MailTools',
 	'perl-Net-Jabber',
 	'perl-Net-Netmask',
