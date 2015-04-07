@@ -3040,10 +3040,6 @@ EOF
 		
 		my $imagemeta_root_access = $request_info->{reservation}{$reservation_id}{image}{imagemeta}{rootaccess};
 		
-		# Add the request user to the hash, set ROOTACCESS to the value configured in imagemeta
-		$request_info->{reservation}{$reservation_id}{users}{$user_id} = $user_info;
-		$request_info->{reservation}{$reservation_id}{users}{$user_id}{ROOTACCESS} = $imagemeta_root_access;
-		
 		# If server request and logingroupid is set, add user group members to hash, set ROOTACCESS to 0
 		if (my $login_group_id = $request_info->{reservation}{$reservation_id}{serverrequest}{logingroupid}) {
 			my $login_group_member_info = get_user_group_member_info($login_group_id);
@@ -3053,12 +3049,37 @@ EOF
 			}
 		}
 		
-		# If server request and admingroupid is set, add user group members to hash, set ROOTACCESS to 1
+		# If server request and admingroupid is set, add user group members to hash, set ROOTACCESS to the value configured in imagemeta
 		if (my $admin_group_id = $request_info->{reservation}{$reservation_id}{serverrequest}{admingroupid}) {
 			my $admin_group_member_info = get_user_group_member_info($admin_group_id);
 			for my $admin_user_id (keys %$admin_group_member_info, $user_id) {
 				$request_info->{reservation}{$reservation_id}{users}{$admin_user_id} = get_user_info($admin_user_id, 0, 1);
-				$request_info->{reservation}{$reservation_id}{users}{$admin_user_id}{ROOTACCESS} = 1;
+				$request_info->{reservation}{$reservation_id}{users}{$admin_user_id}{ROOTACCESS} = $imagemeta_root_access;
+			}
+		}
+		
+		# Add the request user to the hash, set ROOTACCESS to the value configured in imagemeta
+		$request_info->{reservation}{$reservation_id}{users}{$user_id} = $user_info;
+		$request_info->{reservation}{$reservation_id}{users}{$user_id}{ROOTACCESS} = $imagemeta_root_access;
+		
+		# For imaging reservations if imagemeta.rootaccess = 0, make sure the reservation user has root access ONLY IF the user is the image owner
+		# The web frontend should not allow an image capture by anyone but the image owner if imagemeta.rootaccess = 0
+		my $image_owner_id = $image_info->{ownerid};
+		my $request_forimaging = $request_info->{forimaging};
+		if ($request_forimaging && !$imagemeta_root_access) {
+			my $image_name = $imagerevision_info->{imagename};
+			my $image_owner_login_name = $image_info->{unityid};
+			if ($user_id eq $image_owner_id) {
+				notify($ERRORS{'OK'}, 0, "user $user_id is the owner of image $image_name, overriding imagemeta.rootaccess: $imagemeta_root_access --> 1");
+				$request_info->{reservation}{$reservation_id}{users}{$user_id}{ROOTACCESS} = 1;
+			}
+			else {
+				notify($ERRORS{'CRITICAL'}, 0, "capture attempted for image with root access disabled by a user other than the image owner\n" .
+					"image: $image_name\n" .
+					"imagemeta.rootaccess: $imagemeta_root_access\n" .
+					"image owner ID: $image_owner_id\n" .
+					"request user ID: $user_id"
+				);
 			}
 		}
 		
