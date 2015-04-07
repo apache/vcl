@@ -2778,7 +2778,7 @@ sub grant_root_access {
 	}
 	else {
 		notify($ERRORS{'OK'}, 0, "root access for user $username was not allowed root_access = $root_access ");
-      return;
+      return 1;
 	}
 
 }

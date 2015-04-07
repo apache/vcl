@@ -1684,7 +1684,7 @@ sub is_request_deleted {
 		return 1;
 	}
 	else {
-		notify($ERRORS{'DEBUG'}, 0, "request $request_id state: $state_name/$laststate_name, returning false");
+		#notify($ERRORS{'DEBUG'}, 0, "request $request_id state: $state_name/$laststate_name, returning false");
 		return 0;
 	}
 } ## end sub is_request_deleted
@@ -5272,7 +5272,7 @@ EOF
 	my $row = $selected_rows[0];
 	my $state_name = $row->{state_name};
 	my $laststate_name = $row->{laststate_name};
-	notify($ERRORS{'DEBUG'}, 0, "retrieved current state of request $request_id: $state_name/$laststate_name");
+	#notify($ERRORS{'DEBUG'}, 0, "retrieved current state of request $request_id: $state_name/$laststate_name");
 	
 	if (wantarray) {
 		return ($state_name, $laststate_name);
