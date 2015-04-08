@@ -1348,6 +1348,10 @@ msgstr "Assurez-production"
 msgid "%s is now in the process of being updated to use the newly created revision."
 msgstr "%s est maintenant dans le processus de mise à jour afin d'utiliser la révision nouvellement créé."
 
+#: ../.ht-inc/requests.php:4848
+msgid "Administrative access has been disabled for this image. Users in the Admin User Group will have control of the reservaion on the Reservations page but will not have administrative access within the reservation."
+msgstr "Accès administratif a été désactivé pour cette image. Les utilisateurs du groupe d'utilisateur admin auront le contrôle de la reservaion sur la page de réservation, mais ne auront pas accès administratif au sein de la réserve."
+
 #: ../.ht-inc/userpreferences.php:61
 msgid "User preferences successfully updated"
 msgstr "les préférences de l'utilisateur mis à jour avec succès"
@@ -2116,7 +2120,7 @@ msgstr "Les données non-numérique a été soumis à un identifiant d'image."
 
 #: ../.ht-inc/image.php:1399
 msgid "Invalid infomation in database. Contact your system administrator."
-msgstr "Infomation non valide dans la base de donn�es. Contactez votre administrateur syst�me."
+msgstr "Infomation non valide dans la base de données. Contactez votre administrateur système."
 
 #: ../.ht-inc/image.php:1535
 msgid "Name must be from 2 to 60 characters and cannot contain any dashes (-), single (') or double (\") quotes."

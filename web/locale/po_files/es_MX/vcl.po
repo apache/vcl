@@ -1554,6 +1554,10 @@ msgid ""
 "%s is now in the process of being updated to use the newly created revision."
 msgstr ""
 
+#: ../.ht-inc/requests.php
+msgid "Administrative access has been disabled for this image. Users in the Admin User Group will have control of the reservaion on the Reservations page but will not have administrative access within the reservation."
+msgstr ""
+
 #: ../.ht-inc/userpreferences.php:61
 msgid "User preferences successfully updated"
 msgstr "Han sido actualizadas las preferencias del usuario"

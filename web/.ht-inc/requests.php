@@ -1515,6 +1515,11 @@ function newReservationHTML() {
 	}
 	$h .= "</select></span><br>\n";
 
+	$h .= "<div id=\"admingrpnote\" class=\"hidden\" ";
+	$h .= "style=\"width: 400px; margin: 3px 0 3px 10.5em; padding: 1px; border: 1px solid;\">";
+	$h .= _("Administrative access has been disabled for this image. Users in the Admin User Group will have control of the reservaion on the Reservations page but will not have administrative access within the reservation.");
+	$h .= "</div>\n";
+
 	# login group
 	$logingroups = $admingroups;
 	$h .= "<label for=\"deploylogingroup\">";
@@ -1860,6 +1865,11 @@ function AJupdateWaitTime() {
 			$images[$imageid]['subimages'] = array();
 		}
 	}*/
+
+	if($images[$imageid]['rootaccess'])
+		print "dojo.addClass('admingrpnote', 'hidden');";
+	else
+		print "dojo.removeClass('admingrpnote', 'hidden');";
 
 	# check for exceeding max overlaps
 	$max = getMaxOverlap($user['id']);
@@ -3027,7 +3037,11 @@ function AJeditRequest() {
 			$groups = getUserGroups();
 		else
 			$groups = getUserGroups(0, $user['affiliationid']);
+		$h .= "<div style=\"display: table-row;\">\n";
+		$h .= "<div style=\"display: table-cell;\">\n";
 		$h .= _("Admin User Group") . ": ";
+		$h .= "</div>\n";
+		$h .= "<div style=\"display: table-cell;\">\n";
 		$disabled = '';
 		if($request['stateid'] == 14 && $request['laststateid'] == 24)
 			$disabled = "disabled=\"true\"";
@@ -3051,6 +3065,16 @@ function AJeditRequest() {
 				$h .= "<option value=\"$id\">{$group['name']}</option>";
 		}
 		$h .= "</select><br>";
+
+		$imageinfo = getImages(0, $request['reservations'][0]['imageid']);
+		if($imageinfo[$request['reservations'][0]['imageid']]['rootaccess'] == 0) {
+			$h .= "<div style=\"width: 240px; margin: 3px 0 3px 0; padding: 1px; border: 1px solid;\">";
+			$h .= _("Administrative access has been disabled for this image. Users in the Admin User Group will have control of the reservaion on the Reservations page but will not have administrative access within the reservation.");
+			$h .= "</div>\n";
+		}
+		$h .= "</div>\n";
+		$h .= "</div>\n";
+
 		$h .= _("Access User Group") . ": ";
 		if(USEFILTERINGSELECT && count($groups) < FILTERINGSELECTTHRESHOLD) {
 			$h .= "<select dojoType=\"dijit.form.FilteringSelect\" id=\"logingrpsel\" ";
