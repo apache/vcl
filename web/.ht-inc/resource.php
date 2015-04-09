@@ -1681,6 +1681,14 @@ function AJstartImage() {
 		sendJSON($data);
 		return;
 	}
+
+	# check for root access being disabled
+	if($imageData[$imageid]['rootaccess'] == 0 && $imageData[$imageid]['ownerid'] != $user['id']) {
+		$ret = array('status' => 'rootaccessnoimage');
+		sendJSON($ret);
+		return;
+	}
+
 	$obj = new Image();
 	$cdata = array('obj' => $obj,
 	               'requestid' => $requestid,

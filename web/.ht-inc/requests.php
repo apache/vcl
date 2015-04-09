@@ -81,7 +81,7 @@ function viewRequests() {
 		print $newbtnh;
 	}
 
-	if($newbtnh == '')
+	if($newbtnh == '' && count($requests) == 0)
 		return;
 
 	if($mode != 'AJviewRequests')
@@ -753,6 +753,25 @@ function viewRequests() {
 		$text .= "</div>\n";
 
 		$text .= "<div dojoType=dijit.Dialog\n";
+		$text .= "      id=\"startimagedisableddlg\"\n";
+		$text .= "      title=\"" . _("Create / Update Image") . "\"\n";
+		$text .= "      duration=250\n";
+		$text .= "      style=\"width: 30%;\"\n";
+		$text .= "      draggable=true>\n";
+		$text .=   "<H2>" . _("Create / Update an Image") . "</H2>\n";
+		$text .= _("You cannot create new images from this image because the owner of the image has set \"Users have administrative access\" to No under the Advanced Options of the image.");
+		$text .= "<br><br>\n";
+		$text .= "   <div align=\"center\">\n";
+		$text .= "   <button dojoType=\"dijit.form.Button\">\n";
+		$text .= "     " . _("Close") . "\n";
+		$text .= "     <script type=\"dojo/method\" event=\"onClick\">\n";
+		$text .= "       dijit.byId('startimagedisableddlg').hide();\n";
+		$text .= "     </script>\n";
+		$text .= "   </button>\n";
+		$text .= "   </div>\n";
+		$text .= "</div>\n";
+
+		$text .= "<div dojoType=dijit.Dialog\n";
 		$text .= "      id=\"connectDlg\"\n";
 		$text .= "      title=\"" . _("Connect") . "\"\n";
 		$text .= "      duration=250\n";
@@ -1202,6 +1221,7 @@ function newReservationHTML() {
 	$imagingaccess = 0;
 	$serveraccess = 0;
 	$images = array();
+	$noimaging = array();
 	$serverimages = array();
 	$dorevisionscont = 0;
 	if(in_array('imageAdmin', $user['privileges']) &&
@@ -1222,8 +1242,12 @@ function newReservationHTML() {
 			if(array_key_exists($id, $imagedata) &&
 			   ! $imagedata[$id]["forcheckout"])
 				$images[$id]['checkout'] = 0;
-			if($imagingaccess && array_key_exists($id, $imaging['image']))
-				$images[$id]['imaging'] = 1;
+			if($imagingaccess && array_key_exists($id, $imaging['image'])) {
+			   if($imagedata[$id]['rootaccess'] == 1 || $imagedata[$id]['ownerid'] == $user['id'])
+					$images[$id]['imaging'] = 1;
+				else
+					$noimaging[$id] = 1;
+			}
 			if(array_key_exists($id, $imagedata) &&
 			   $imagedata[$id]["maxinitialtime"] != 0)
 				$images[$id]['maxinitialtime'] = $imagedata[$id]['maxinitialtime'];
@@ -1317,7 +1341,8 @@ function newReservationHTML() {
 	               'serveraccess' => $serveraccess,
 	               'openend' => $openend,
 	               'nousercheck' => $nousercheck,
-	               'imaging' => $forimaging);
+	               'imaging' => $forimaging,
+	               'noimaging' => $noimaging);
 	$debug = processInputVar('debug', ARG_NUMERIC, 0);
 	if($debug && checkUserHasPerm('View Debug Information'))
 		$cdata['debug'] = 1;
@@ -4416,6 +4441,7 @@ function processRequestInput() {
 	$nousercheck = getContinuationVar('nousercheck', 0);
 	$return['imaging'] = getContinuationVar('imaging', 0);
 	$maxinitial = getContinuationVar('maxinitial', 0);
+	$noimaging = getContinuationVar('noimaging', array());
 
 	$return = array('err' => 0);
 
@@ -4455,11 +4481,13 @@ function processRequestInput() {
 	$withnocheckout = $resources['image'];
 	$images = removeNoCheckout($resources["image"]);
 	$extraimages = getServerProfileImages($user['id']);
-	if(! array_key_exists($return['imageid'], $images) &&
+	if((! array_key_exists($return['imageid'], $images) &&
 	   ($return['type'] != 'server' || 
 	   ! array_key_exists($return['imageid'], $extraimages)) &&
 	   ($return['type'] != 'imaging' ||
-	   ! array_key_exists($return['imageid'], $withnocheckout))) {
+	   ! array_key_exists($return['imageid'], $withnocheckout))) ||
+	   ($return['type'] == 'imaging' &&
+	   array_key_exists($return['imageid'], $noimaging)))	{
 		$return['err'] = 1;
 		$return['errmsg'] = _('No access to submitted environment');
 		return $return;

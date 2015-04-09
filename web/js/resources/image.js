@@ -622,6 +622,10 @@ function startImageCB(data, ioArgs) {
 		resRefresh();
 		return;
 	}
+	if(data.items.status == 'rootaccessnoimage') {
+		dijit.byId('startimagedisableddlg').show();
+		return;
+	}
 	// configure add image dialog, extra work, but saves an AJAX call after selection
 	resetEditResource();
 	var methodids = new Array();
