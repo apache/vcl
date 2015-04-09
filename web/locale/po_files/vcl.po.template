@@ -1352,6 +1352,10 @@ msgstr ""
 msgid "Administrative access has been disabled for this image. Users in the Admin User Group will have control of the reservaion on the Reservations page but will not have administrative access within the reservation."
 msgstr ""
 
+#: ../.ht-inc/requests.php
+msgid "You cannot create new images from this image because the owner of the image has set \"Users have administrative access\" to No under the Advanced Options of the image."
+msgstr ""
+
 #: ../.ht-inc/userpreferences.php:61
 msgid "User preferences successfully updated"
 msgstr ""
