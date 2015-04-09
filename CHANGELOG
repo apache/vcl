@@ -8,12 +8,15 @@ Release Notes - VCL - Version 2.4.2
 
 ** Improvement
     * [VCL-850] - Prevent 3D video from being enabled by default in VMware .vmx files
+    * [VCL-859] - disable image creation for images with root access disabled
 
 ** Bug
     * [VCL-847] - Computer left in reserved state if user deletes cluster request
     * [VCL-849] - makeproduction state not processed correctly for cluster requests
     * [VCL-855] - JSON Perl module missing from install_perl_libs.pl
     * [VCL-856] - iptables.pm generates an error under old versions of Perl
+    * [VCL-857] - admin access not granted if owner of server reservation in access user group
+    * [VCL-858] - Image owner should have root access for imaging reservations
 
 ** Task
     * [VCL-845] - Remove blockRequest.admingroupid column
