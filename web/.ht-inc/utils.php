@@ -671,7 +671,7 @@ function maintenanceCheck() {
 		else
 			print _("This site is currently in maintenance.") . "<br>\n";
 		$niceend = strftime('%A, %x, %l:%M %P', $end);
-		printf(_("The maintenance is scheduled to end <strong>%s</strong>."), $niceend) . "<br><br><br>\n";
+		printf(_("The maintenance is scheduled to end <strong>%s</strong>.") . "<br><br><br>\n", $niceend);
 		printHTMLFooter();
 		exit;
 	}
@@ -833,7 +833,7 @@ function main() {
 			if($num == 1)
 				print _("You currently have 1 reservation.") . "<br>\n";
 			else
-				printf(_("You currently have %d reservations."), $num ) . "<br>\n";
+				printf(_("You currently have %d reservations.") . "<br>\n", $num);
 		}
 		else {
 			print _("You do not have any current reservations.") . "<br>\n";
