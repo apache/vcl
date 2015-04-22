@@ -1068,7 +1068,7 @@ sub get_registered_vms {
 	}
 	
 	# Get the vmx path values for each VM
-	my @vmx_paths = values(%$vm_list);
+	my @vmx_paths = sort { lc($a) cmp lc($b) } values(%$vm_list);
 	
 	notify($ERRORS{'DEBUG'}, 0, "found " . scalar(@vmx_paths) . " registered VMs");
 	return @vmx_paths;
@@ -1302,7 +1302,7 @@ sub vm_power_off {
 
  Parameters  : $vmx_file_path
  Returns     : boolean
- Description : Powers off the VM indicated by the vmx file path argument.
+ Description : Suspends the VM indicated by the vmx file path argument.
 
 =cut
 
@@ -1340,6 +1340,8 @@ sub vm_suspend {
 		return;
 	}
 	
+	notify($ERRORS{'DEBUG'}, 0, "suspending VM: $vmx_file_path ($vm_id)");
+	my $start_time = time;
 	my $vim_cmd_arguments = "vmsvc/power.suspend $vm_id";
 	my ($exit_status, $output) = $self->_run_vim_cmd($vim_cmd_arguments, 400);
 	return if !$output;
@@ -1365,7 +1367,8 @@ sub vm_suspend {
 	
 	# Wait for the task to complete
 	if ($self->_wait_for_task($task_ids[0])) {
-		notify($ERRORS{'OK'}, 0, "suspended VM: $vmx_file_path");
+		my $duration = (time - $start_time);
+		notify($ERRORS{'OK'}, 0, "suspended VM: $vmx_file_path, took $duration seconds");
 		return 1;
 	}
 	else {
@@ -2702,9 +2705,17 @@ sub _parse_vim_cmd_output {
 		# Remove trailing newlines
 		$line =~ s/\n+$//g;
 		
-		# Remove class names at beginning of line surrounded by parenthesis
+		# Remove class names in parenthesis from beginning class name of indented lines
+		# '   (vim.vm.device.xxx) {' --> '   {'
+		$line =~ s/^(\s+)\([^\)]*\)\s*/$1/g;
+		
+		# Remove class names at beginning of a line surrounded by parenthesis
 		# '(vim.vm.device.VirtualPointingDevice) {' --> '{'
-		$line =~ s/^(\s*)\([^\)]*\)\s*/$1/g;
+		$line =~ s/^\(([^\)]+)\)\s*{/'$1' => {/gx;
+		
+		# Add comma to lines containing a closing curly bracket
+		# '   }' --> '   },'
+		$line =~ s/^(\s*)}\s*$/$1},/g;
 		
 		# Remove class names after an equals sign
 		# 'backing = (vim.vm.device.VirtualDevice.BackingInfo) null,' --> 'backing = null'
@@ -2729,6 +2740,9 @@ sub _parse_vim_cmd_output {
 		$numbered_statement .= "$line_number:$line\n";
 	}
 	
+	# Enclose the entire statement in curly brackets
+	$statement = "{\n$statement\n}";
+
 	# The statement variable should contain a valid definition
 	my $result = eval($statement);
 	if ($EVAL_ERROR) {
@@ -2740,6 +2754,169 @@ sub _parse_vim_cmd_output {
 		return $result;
 	}
 }
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 _get_vm_virtual_disk_file_layout
+
+ Parameters  : $vmx_file_path
+ Returns     : hash reference
+ Description : Retrieves a VM's virtual disk file layout as reported by:
+               vim-cmd vmsvc/get.filelayout <VM ID>
+               A hash reference is returned:
+               {
+                 "vim.vm.FileInfo" => {
+                   "dynamicType" => "<unset>",
+                   "ftMetadataDirectory" => "<unset>",
+                   "logDirectory" => "[blade1e1-10-vmpath] arkvmm160_3868-v0",
+                   "snapshotDirectory" => "[blade1e1-10-vmpath] arkvmm160_3868-v0",
+                   "suspendDirectory" => "[blade1e1-10-vmpath] arkvmm160_3868-v0",
+                   "vmPathName" => "[blade1e1-10-vmpath] arkvmm160_3868-v0/arkvmm160_3868-v0.vmx"
+                 },
+                 "vim.vm.FileLayout" => {
+                   "configFile" => [
+                     "arkvmm160_3868-v0.vmxf",
+                     "nvram",
+                     "arkvmm160_3868-v0.vmsd"
+                   ],
+                   "disk" => [
+                     {
+                       "diskFile" => [
+                         "[datastore-compressed] vmwarewinxp-xpsp33868-v0/vmwarewinxp-xpsp33868-v0.vmdk",
+                         "[blade1e1-10-vmpath] arkvmm160_3868-v0/vmwarewinxp-xpsp33868-v0-000001.vmdk"
+                       ],
+                       "dynamicType" => "<unset>",
+                       "key" => 3000
+                     },
+                     {
+                       "diskFile" => [
+                         "[blade1e1-10-vmpath] arkvmm160_3868-v0/arkvmm160_3868-v0.vmdk"
+                       ],
+                       "dynamicType" => "<unset>",
+                       "key" => 2000
+                     }
+                   ],
+                   "dynamicType" => "<unset>",
+                   "logFile" => [
+                     "vmware-1.log",
+                     "vmware-2.log",
+                     "vmware-3.log",
+                     "vmware.log"
+                   ],
+                   "snapshot" => [
+                     {
+                       "dynamicType" => "<unset>",
+                       "key" => "'vim.vm.Snapshot:576-snapshot-1'",
+                       "snapshotFile" => [
+                         "[blade1e1-10-vmpath] arkvmm160_3868-v0/arkvmm160_3868-v0-Snapshot1.vmsn",
+                         "[datastore-compressed] vmwarewinxp-xpsp33868-v0/vmwarewinxp-xpsp33868-v0.vmdk"
+                       ]
+                     }
+                   ],
+                   "swapFile" => "<unset>"
+                 }
+               }
+
+=cut
+
+sub _get_vm_virtual_disk_file_layout {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $vmx_file_path = shift;
+	if (!$vmx_file_path) {
+		notify($ERRORS{'WARNING'}, 0, "vmx file path argument was not specified");
+		return;
+	}
+	
+	# Get the VM ID
+	my $vm_id = $self->_get_vm_id($vmx_file_path);
+	if (!defined($vm_id)) {
+		notify($ERRORS{'WARNING'}, 0, "unable to power off VM because VM ID could not be determined");
+		return;
+	}
+	
+	my $vim_cmd_arguments = "vmsvc/get.filelayout $vm_id";
+	my ($exit_status, $output) = $self->_run_vim_cmd($vim_cmd_arguments);
+	return if !$output;
+	
+	my $virtual_disk_file_layout = $self->_parse_vim_cmd_output($output);
+	if ($virtual_disk_file_layout) {
+		notify($ERRORS{'DEBUG'}, 0, "retrieved virtual disk file layout for VM $vm_id ($vmx_file_path)\n" . format_data($virtual_disk_file_layout));
+		return $virtual_disk_file_layout;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve virtual disk file layout for VM $vm_id ($vmx_file_path)");
+		return;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_vm_virtual_disk_file_paths
+
+ Parameters  : $vmx_file_path
+ Returns     : array reference
+ Description : Retrieves a VM's virtual disk file layout and returns an array
+               reference. Each top-level array element represent entire virtual
+               disk and contains an array reference containing the virtual
+               disk's files:
+               [
+                 [
+                   "/vmfs/volumes/datastore/vmwarewin7-bare3844-v1/vmwarewin7-bare3844-v1.vmdk",
+                   "/vmfs/volumes/blade-vmpath/vm170_3844-v1/vmwarewin7-bare3844-v1-000001.vmdk",
+                   "/vmfs/volumes/blade-vmpath/vm170_3844-v1/vmwarewin7-bare3844-v1-000002.vmdk",
+                   "/vmfs/volumes/blade-vmpath/vm170_3844-v1/vmwarewin7-bare3844-v1-000003.vmdk"
+                 ],
+                 [
+                   "/vmfs/volumes/blade-vmpath/vm170_3844-v1/vm170_3844-v1.vmdk"
+                 ]
+               ]
+
+=cut
+
+sub get_vm_virtual_disk_file_paths {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $vmx_file_path = shift;
+	if (!$vmx_file_path) {
+		notify($ERRORS{'WARNING'}, 0, "vmx file path argument was not specified");
+		return;
+	}
+	
+	my $virtual_disk_file_layout = $self->_get_vm_virtual_disk_file_layout($vmx_file_path) || return;
+	
+	my $virtual_disk_array_ref = $virtual_disk_file_layout->{'vim.vm.FileLayout'}{'disk'};
+	if (!$virtual_disk_array_ref) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine virtual disk file paths, failed to retrieve {'vim.vm.FileLayout'}{'disk'} array reference from virtual disk file layout:\n" . format_data($virtual_disk_file_layout));
+		return;
+	}
+	elsif (!ref($virtual_disk_array_ref) || ref($virtual_disk_array_ref) ne 'ARRAY') {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine virtual disk file paths, virtual disk file layout {'vim.vm.FileLayout'}{'disk'} key does not contain an array reference:\n" . format_data($virtual_disk_array_ref));
+		return;
+	}
+	
+	my @virtual_disks;
+	for my $virtual_disk_ref (@$virtual_disk_array_ref) {
+		my $disk_file_array_ref = $virtual_disk_ref->{'diskFile'};
+		my @virtual_disk_file_paths;
+		for my $virtual_disk_file_path (@$disk_file_array_ref) {
+			push @virtual_disk_file_paths, $self->_get_normal_path($virtual_disk_file_path);
+		}
+		push @virtual_disks, \@virtual_disk_file_paths;
+	}
+	
+	notify($ERRORS{'DEBUG'}, 0, "retrieved virtual disk file paths for $vmx_file_path:\n" . format_data(\@virtual_disks));
+	return @virtual_disks;
+}
+
 
 #/////////////////////////////////////////////////////////////////////////////
 

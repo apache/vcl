@@ -178,26 +178,28 @@ sub new {
 	# Get the memory address of this newly created object - useful for debugging object creation problems
 	my $address = sprintf('%x', $self);
 	
+	my $type = ref($self);
+	
 	# Display a message based on the type of object created
 	if ($self->isa('VCL::Module::State')) {
 		my $request_state_name = $self->data->get_request_state_name(0) || '<not set>';
-		notify($ERRORS{'DEBUG'}, 0, ref($self) . " object created for state $request_state_name, address: $address");
+		notify($ERRORS{'DEBUG'}, 0, "$type object created for state $request_state_name, address: $address");
 	}
 	elsif ($self->isa('VCL::Module::OS') && !$self->isa('VCL::Module::OS::Linux::ManagementNode')) {
 		my $image_name = $self->data->get_image_name(0) || '<not set>';
-		notify($ERRORS{'DEBUG'}, 0, ref($self) . " object created for image $image_name, address: $address");
+		notify($ERRORS{'DEBUG'}, 0, "$type object created for image $image_name, address: $address");
 	}
 	elsif ($self->isa('VCL::Module::Provisioning')) {
 		my $computer_name = $self->data->get_computer_short_name(0) || '<not set>';
-		notify($ERRORS{'DEBUG'}, 0, ref($self) . " object created for computer $computer_name, address: $address");
+		notify($ERRORS{'DEBUG'}, 0, "$type object created for computer $computer_name, address: $address");
 	}
 	else {
-		notify($ERRORS{'DEBUG'}, 0, ref($self) . " object created, address: $address");
+		notify($ERRORS{'DEBUG'}, 0, "$type object created, address: $address");
 	}
 	
 	# Create a management node OS object
 	# Check to make sure the object currently being created is not a MN OS object to avoid endless loop
-	if (!$self->isa('VCL::Module::OS::Linux::ManagementNode')) {
+	if (!$self->isa('VCL::Module::OS::Linux::ManagementNode') && !$self->isa('VCL::Module::State')) {
 		my $mn_os;
 		# Check if the mn_os argument was provided
 		if ($args->{mn_os}) {
@@ -221,10 +223,15 @@ sub new {
 	}
 	
 	# Check if not running in setup mode and if initialize() subroutine is defined for this module
-	if (!$SETUP_MODE && $self->can("initialize")) {
-		# Call the initialize() subroutine, if it returns 0, return 0
-		# If it doesn't return 0, return the object reference
-		return if (!$self->initialize($args));
+	if (!$SETUP_MODE || $self->isa('VCL::Module::OS::Linux::ManagementNode')) {
+		if ($self->can("initialize")) {
+			# Call the initialize() subroutine, if it returns 0, return 0
+			# If it doesn't return 0, return the object reference
+			return if (!$self->initialize($args));
+		}
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "initialize not called for $type object ($address) because \$SETUP_MODE is true");
 	}
 
 	return $self;
@@ -289,7 +296,7 @@ sub create_datastructure_object {
 
 =head2 create_object
 
- Parameters  : $perl_package, $data_structure_arguments (optional)
+ Parameters  : $perl_package, $data_structure_arguments (optional), $object_argument_hashref (optional)
  Returns     : VCL::Module object reference
  Description : This is a general constructor to create VCL::Module objects. It
                contains the code to call 'use $perl_package', instantiate an
@@ -321,8 +328,14 @@ sub create_object {
 	my $data;
 	my $data_structure_arguments = shift;
 	if ($data_structure_arguments) {
-		notify($ERRORS{'DEBUG'}, 0, "new DataStructure object will be created for the $perl_package object, data structure arguments passed:\n" . format_data($data_structure_arguments));
-		$data = create_datastructure_object($data_structure_arguments);
+		if (ref($data_structure_arguments) && ref($data_structure_arguments) =~ /DataStructure/) {
+			notify($ERRORS{'DEBUG'}, 0, "DataStructure object argument will be passed to the new $perl_package object");
+			$data = $data_structure_arguments;
+		}
+		else {
+			notify($ERRORS{'DEBUG'}, 0, "new DataStructure object will be created for the $perl_package object, data structure arguments passed:\n" . format_data($data_structure_arguments));
+			$data = create_datastructure_object($data_structure_arguments);
+		}
 	}
 	elsif (!$self) {
 		notify($ERRORS{'DEBUG'}, 0, "new DataStructure object will be created for the $perl_package object, data structure arguments not passed and not called as an object reference");
@@ -332,6 +345,20 @@ sub create_object {
 		notify($ERRORS{'DEBUG'}, 0, "existing DataStructure object will be passed to the new $perl_package object");
 		$data = $self->data;
 	}
+	
+	my $object_argument_hashref = shift;
+	if ($object_argument_hashref) {
+		my $type = ref($object_argument_hashref);
+		if (!$type) {
+			notify($ERRORS{'WARNING'}, 0, "3rd argument is not a reference, it must be a hash reference: $object_argument_hashref");
+			return;
+		}
+		elsif ($type ne 'HASH') {
+			notify($ERRORS{'WARNING'}, 0, "3rd argument is a $type reference, it must be a hash reference");
+			return;
+		}
+	}
+	$object_argument_hashref->{data_structure} = $data;
 
 	# Attempt to load the module
 	eval "use $perl_package";
@@ -344,7 +371,7 @@ sub create_object {
 	# Attempt to create the object
 	my $object;
 	eval {
-		$object = ($perl_package)->new({data_structure => $data})
+		$object = ($perl_package)->new($object_argument_hashref)
 	};
 	
 	if ($EVAL_ERROR) {
@@ -500,7 +527,7 @@ sub create_mn_os_object {
 
 =head2 create_vmhost_os_object
 
- Parameters  : none
+ Parameters  : $vmhost_identifier (optional)
  Returns     : boolean
  Description : Creates an OS object for the VM host.
 
@@ -513,9 +540,15 @@ sub create_vmhost_os_object {
 		return;
 	}
 	
-	# Check if an OS object has already been stored in the calling object
-	if (my $vmhost_os = $self->vmhost_os(0)) {
-		return $vmhost_os;
+	my $vmhost_identifier = shift;
+	
+	if (!$vmhost_identifier) {
+		# Check if an OS object has already been stored in the calling object
+		if (my $vmhost_os = $self->vmhost_os(0)) {
+			my $address = sprintf('%x', $vmhost_os);
+			notify($ERRORS{'DEBUG'}, 0, "returning existing VM host OS object ($address)");
+			return $vmhost_os;
+		}
 	}
 	
 	# Make sure calling object isn't an OS module to avoid an infinite loop
@@ -526,20 +559,56 @@ sub create_vmhost_os_object {
 	
 	my $request_data = $self->data->get_request_data();
 	my $reservation_id = $self->data->get_reservation_id();
-	my $vmhost_computer_id = $self->data->get_vmhost_computer_id();
-	my $vmhost_hostname = $self->data->get_vmhost_hostname();
-	my $vmhost_profile_image_id = $self->data->get_vmhost_profile_image_id();
+	
+	my $vmhost_computer_id;
+	my $vmhost_hostname;
+	my $vmhost_profile_image_id;
+	if ($vmhost_identifier) {
+		my $vmhost_info = get_vmhost_info($vmhost_identifier);
+		if (!$vmhost_info) {
+			notify($ERRORS{'WARNING'}, 0, "unable to create VM host OS object for host specified by argument: $vmhost_identifier, VM host info could not be retrieved");
+			return;
+		}
+		
+		$vmhost_computer_id = $vmhost_info->{computerid};
+		if (!$vmhost_computer_id) {
+			notify($ERRORS{'WARNING'}, 0, "unable to create VM host OS object for host specified by argument: $vmhost_identifier, VM host computer ID could not be determined from VM host info:\n" . format_data($vmhost_info));
+			return;
+		}
+		
+		$vmhost_hostname = $vmhost_info->{computer}{hostname};
+		if (!$vmhost_hostname) {
+			notify($ERRORS{'WARNING'}, 0, "unable to create VM host OS object for host specified by argument: $vmhost_identifier, VM host computer hostname could not be determined from VM host info:\n" . format_data($vmhost_info));
+			return;
+		}
+		
+		$vmhost_profile_image_id = $vmhost_info->{vmprofile}{imageid};
+		if (!$vmhost_profile_image_id) {
+			notify($ERRORS{'WARNING'}, 0, "unable to create VM host OS object for host specified by argument: $vmhost_identifier, VM host profile image ID could not be determined from VM host info:\n" . format_data($vmhost_info));
+			return;
+		}
+	}
+	else {
+		# Argument was not supplied, use reservation data
+		$vmhost_computer_id = $self->data->get_vmhost_computer_id();
+		$vmhost_hostname = $self->data->get_vmhost_hostname();
+		$vmhost_profile_image_id = $self->data->get_vmhost_profile_image_id();
+		if (!$vmhost_computer_id || !$vmhost_hostname || !defined($vmhost_profile_image_id)) {
+			notify($ERRORS{'WARNING'}, 0, "unable to create VM host OS object, VM host computer ID, hostname, and profile image ID could not be determined from reservation data");
+			return;
+		}
+	}
 	
 	# Create a DataStructure object containing computer data for the VM host
 	my $vmhost_data;
 	eval {
 		$vmhost_data = new VCL::DataStructure({
-															request_data => $request_data,
-															reservation_id => $reservation_id,
-															computer_identifier => $vmhost_computer_id,
-															image_identifier => $vmhost_profile_image_id
-															}
-														);
+			request_data => $request_data,
+			reservation_id => $reservation_id,
+			computer_identifier => $vmhost_computer_id,
+			image_identifier => $vmhost_profile_image_id
+			}
+		);
 	};
 	
 	if ($EVAL_ERROR) {

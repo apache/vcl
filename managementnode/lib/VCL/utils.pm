@@ -63,7 +63,7 @@ use Fcntl qw(:DEFAULT :flock);
 use FindBin;
 use Getopt::Long;
 use Carp;
-use Term::ANSIColor;
+use Term::ANSIColor 2.00 qw(:constants :pushpop color colored);
 use Text::Wrap;
 use English;
 use List::Util qw(min max);
@@ -237,6 +237,7 @@ our @EXPORT = qw(
 	setup_confirm
 	setup_get_array_choice
 	setup_get_hash_choice
+	setup_get_hash_multiple_choice
 	setup_get_input_file_path
 	setup_get_input_string
 	setup_get_menu_choice
@@ -264,6 +265,7 @@ our @EXPORT = qw(
 	update_computer_public_ip_address
 	update_computer_ram
 	update_computer_state
+	update_computer_vmhost_id
 	update_connectlog
 	update_currentimage
 	update_image_name
@@ -2894,7 +2896,7 @@ sub get_request_info {
 		return;
 	}
 	
-	# Use cached info by default
+	# Don't use cached info by default
 	if (!$no_cache) {
 		$no_cache = 1;
 	}
@@ -3957,7 +3959,15 @@ EOF
 		return;
 	}
 	elsif (scalar @selected_rows > 1) {
-		notify($ERRORS{'WARNING'}, 0, scalar @selected_rows . " rows were returned from database select statement:\n$select_statement");
+		my $vmhost_string;
+		for my $row (@selected_rows) {
+			$vmhost_string .= "VM host ID: " . $row->{'vmhost-id'};
+			$vmhost_string .= ", computer ID: " . $row->{'vmhost-computerid'};
+			$vmhost_string .= ", VM profile ID: " . $row->{'vmprofile-id'};
+			$vmhost_string .= ", VM profile name: " . $row->{'vmprofile-profilename'};
+			$vmhost_string .= "\n";
+		}
+		notify($ERRORS{'WARNING'}, 0, scalar @selected_rows . " rows were returned from database select statement:\n$select_statement\nrows:\n$vmhost_string");
 		return;
 	}
 
@@ -5079,6 +5089,50 @@ EOF
 	}
 	else {
 		notify($ERRORS{'WARNING'}, 0, "failed to update public IP address of computer $computer_id in database: $public_ip_address");
+		return;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 update_computer_vmhost_id
+
+ Parameters  : $computer_id, $vmhost_id
+ Returns     : boolean
+ Description : Updates the computer.vmhostid value of the computer specified by
+               the argument.
+
+=cut
+
+sub update_computer_vmhost_id {
+	my ($computer_id, $vmhost_id) = @_;
+	
+	if (!defined($computer_id)) {
+		notify($ERRORS{'WARNING'}, 0, "computer ID argument was not specified");
+		return;
+	}
+	if (!defined($vmhost_id)) {
+		notify($ERRORS{'WARNING'}, 0, "VM host ID argument was not specified");
+		return;
+	}
+
+	# Construct the update statement
+	my $update_statement = <<EOF;
+UPDATE
+computer
+SET
+vmhostid = '$vmhost_id'
+WHERE
+id = $computer_id
+EOF
+
+	# Call the database execute subroutine
+	if (database_execute($update_statement)) {
+		notify($ERRORS{'OK'}, 0, "updated VM host ID of computer $computer_id in database: $vmhost_id");
+		return 1;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to update VM host ID of of computer $computer_id in database: $vmhost_id");
 		return;
 	}
 }
@@ -10242,9 +10296,245 @@ sub setup_get_hash_choice {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 setup_get_hash_multiple_choice
+
+ Parameters  : $hash_ref, $argument_hash_ref (optional)
+ Returns     : $hash_key
+ Description : Given a hash reference structure, constructs a menu and retrieves
+               user input.
+               
+               An optional hash reference can be supplied containing information
+               to control how the menu is displayed. The hash may contain the
+               following keys:
+               * title - A string which will be displayed above the menu.
+               * display_keys - An array reference containing strings. Each
+                 array element may be a string enclosed in curly brackets. This
+                 allows the menu items to be composed from any data elements
+                 contained within the hash reference.
+               
+               Example:
+               {
+                  'title' => "Select VMs to be migrated off of $source_vmhost_computer_name",
+                  'display_keys' => ['{SHORTNAME}', ' - ', '{currentimagerevision}{imagename}'],
+               }
+               
+               This would result in menu entry names being assembled from:
+               $hash_ref->{SHORTNAME} - $hash_ref->{currentimagerevision}{imagename}
+
+=cut
+
+sub setup_get_hash_multiple_choice {
+	my $hash_ref = shift;
+	if (!defined($hash_ref)) {
+		notify($ERRORS{'WARNING'}, 0, "hash reference argument was not supplied");
+		return;
+	}
+	elsif (!ref($hash_ref)) {
+		notify($ERRORS{'WARNING'}, 0, "1st argument is not a reference, it must be a hash reference:\n$hash_ref");
+		return;
+	}
+	elsif (ref($hash_ref) ne 'HASH') {
+		notify($ERRORS{'WARNING'}, 0, "1st argument is a " . ref($hash_ref) . " reference, it must be a hash reference:\n" . format_data($hash_ref));
+		return;
+	}
+	
+	my $arguments = shift;
+	if (defined($arguments)) {
+		if (!ref($arguments)) {
+			notify($ERRORS{'WARNING'}, 0, "2nd argument is not a reference, it must be a hash reference:\n$arguments");
+			return;
+		}
+		elsif (ref($arguments) ne 'HASH') {
+			notify($ERRORS{'WARNING'}, 0, "2nd argument is a " . ref($arguments) . " reference, it must be a hash reference:\n" . format_data($arguments));
+			return;
+		}
+	}
+	else {
+		$arguments = {};
+	}
+	
+	my $title = $arguments->{title};
+	my @display_keys = (defined($arguments->{display_keys}) ? @{$arguments->{display_keys}} : ());
+	
+	my $entry_hash = {};
+	my $max_entry_length = 0;
+	for my $key (sort keys %$hash_ref) {
+		my $entry_display_name;
+		
+		for my $display_key (@display_keys) {
+			if ($display_key =~ /^{.+}$/) {
+				my $hash_path = "\$hash_ref->{$key}$display_key";
+				notify($ERRORS{'DEBUG'}, 0, "retrieving hash value: $hash_path");
+				my $value = eval $hash_path;
+				if ($EVAL_ERROR) {
+					notify($ERRORS{'WARNING'}, 0, "error encountered evaluating hash path: '$hash_path'\n$EVAL_ERROR");
+					return;
+				}
+				elsif (!defined($value)) {
+					notify($ERRORS{'WARNING'}, 0, "unable to determine entry display name, hash does not contain key: '$hash_path'\," . format_data($hash_ref->{$key}));
+					return;
+				}
+				else {
+					notify($ERRORS{'DEBUG'}, 0, "retrieved entry display name component: $hash_path = '$value'");
+					$entry_display_name .= $value;
+				}
+			}
+			else {
+				notify($ERRORS{'DEBUG'}, 0, "adding text to entry display name: '$display_key'");
+				$entry_display_name .= $display_key;
+			}
+		}
+		
+		if (defined($entry_hash->{$entry_display_name})) {
+			notify($ERRORS{'WARNING'}, 0, "duplicate entry display names: '$entry_display_name', appending hash key: '$entry_display_name {$key}'");
+			$entry_display_name = "$entry_display_name {$key}";
+		}
+		else {
+			notify($ERRORS{'DEBUG'}, 0, "choice entry name for hash key $key: '$entry_display_name'");
+		}
+		
+		$entry_hash->{$entry_display_name}{key} = $key;
+		$entry_hash->{$entry_display_name}{selected} = 0;
+		$entry_hash->{$entry_display_name}{entry_display_name} = $entry_display_name;
+		
+		my $entry_display_name_length = length($entry_display_name);
+		$max_entry_length = $entry_display_name_length if ($entry_display_name_length > $max_entry_length);
+	}
+	
+	my $entry_index_hash = {};
+	my $i = 1;
+	for my $entry_display_name (sort keys %$entry_hash) {
+		$entry_index_hash->{$i} = $entry_hash->{$entry_display_name};
+		$entry_index_hash->{$i}{entry_index} = $i;
+		$i++;
+	}
+
+	my $entry_count = scalar(keys %$entry_hash);
+	my $entry_count_length = length($entry_count);
+	my $no_print_entries = 0;
+	
+	# Adjust $max_entry_length to include:
+	# [_]_x._
+	$max_entry_length = $max_entry_length + 6 + $entry_count_length;
+	
+	while (1) {
+		print "\n";
+		if (defined($title)) {
+			my $title_length = length($title);
+			my $title_pad_string = '';
+			if ($max_entry_length > $title_length) {
+				$title_pad_string = ' ' x ($max_entry_length - $title_length);
+			}
+			print colored("$title$title_pad_string", 'BOLD UNDERLINE');
+			print "\n";
+		}
+		my $selection_made = 0;
+		#if (!$no_print_entries) {
+			for my $entry_index (sort {$a<=>$b} keys %$entry_index_hash) {
+				my $entry_display_name = $entry_index_hash->{$entry_index}{entry_display_name};
+				my $selected = $entry_index_hash->{$entry_index}{selected};
+				$selection_made = 1 if $selected;
+				
+				my $selection_string = '[';
+				if ($selected) {
+					$selection_string .= '*';
+				}
+				else {
+					$selection_string .= ' ';
+				}
+				$selection_string .= '] ';
+				
+				my $entry_index_length = length($entry_index);
+				my $entry_pad_length = ($entry_count_length - $entry_index_length);
+				my $entry_pad_string = ' ' x $entry_pad_length;
+				
+				$selection_string .= "$entry_index. $entry_pad_string";
+				$selection_string .= "$entry_display_name";
+				if ($selected) {
+					print colored($selection_string, 'BOLD');
+				}
+				else {
+					print $selection_string;
+				}
+				print "\n";
+			}
+		#}
+		
+		#print "\n[" . join("/", @{$ENV{setup_path}}) . "]\n" if defined($ENV{setup_path});
+		my $option_pad_string = ' ' x ($entry_count_length - 1);
+		
+		print "\n";
+		print "[1";
+		print "-$entry_count" if ($entry_count > 1);
+		print "] - toggle selection (mutiple may be entered)\n";
+		print "  $option_pad_string\[a] - select all\n";
+		print "  $option_pad_string\[n] - select none\n";
+		print "  $option_pad_string\[i] - invert selected\n";
+		print "  $option_pad_string\[d] - done making selections\n";
+		print "  $option_pad_string\[c] - cancel\n";
+		print "Make a selection";
+		print " [d]" if $selection_made;
+		print ": ";
+		my $choice = <STDIN>;
+		chomp $choice;
+		
+		$no_print_entries = 0;
+		
+		if ($choice =~ /^c$/i) {
+			return;
+		}
+		elsif ($choice =~ /^d$/i || $selection_made && !length($choice)) {
+			last;
+		}
+		elsif ($choice =~ /^a$/i) {
+			for my $entry_index (keys %$entry_index_hash) {
+				$entry_index_hash->{$entry_index}{selected} = 1;
+			}
+			next;
+		}
+		elsif ($choice =~ /^n$/i) {
+			for my $entry_index (keys %$entry_index_hash) {
+				$entry_index_hash->{$entry_index}{selected} = 0;
+			}
+			next;
+		}
+		elsif ($choice =~ /^i$/i) {
+			for my $entry_index (keys %$entry_index_hash) {
+				$entry_index_hash->{$entry_index}{selected} = !$entry_index_hash->{$entry_index}{selected};
+			}
+			next;
+		}
+		else {
+			my @selected_entry_indexes = split(/[\s,]+/, $choice);
+			for my $selected_entry_index (@selected_entry_indexes) {
+				if ($selected_entry_index !~ /^\d+$/ || $selected_entry_index < 1 || $selected_entry_index > $entry_count) {
+					print colored("*** Choice ignored: $selected_entry_index, it must be an integer between 1 and $entry_count ***", 'YELLOW ON_RED');
+					print "\n";
+					$no_print_entries = 1;
+					next;
+				}
+				else {
+					$entry_index_hash->{$selected_entry_index}{selected} = !$entry_index_hash->{$selected_entry_index}{selected};
+				}
+			}
+		}
+	}
+	
+	my @selected_keys;
+	for my $entry_index (sort {$a<=>$b} keys %$entry_index_hash) {
+		if ($entry_index_hash->{$entry_index}{selected}) {
+			push @selected_keys, $entry_index_hash->{$entry_index}{key};
+		}
+	}
+	
+	return @selected_keys;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 =head2 setup_get_array_choice
 
- Parameters  : @choices, $print_choices
+ Parameters  : @choices
  Returns     : integer
  Description : Lists the elements in the @choices argument as a menu and accepts
                user input to select one of the elements. The array index
@@ -10253,7 +10543,7 @@ sub setup_get_hash_choice {
 =cut
 
 sub setup_get_array_choice {
-	my (@choices, $print_choices) = @_;
+	my (@choices) = @_;
 	
 	if (@choices) {
 		notify($ERRORS{'DEBUG'}, 0, "choices argument:\n" . join("\n", @choices));
@@ -10264,12 +10554,15 @@ sub setup_get_array_choice {
 	}
 	
 	my $choice_count = scalar(@choices);
+	my $choice_count_length = length($choice_count);
 	
 	while (1) {
-		if (!defined($print_choices) || $print_choices) {
-			for (my $i=1; $i<=$choice_count; $i++) {
-				print "$i. $choices[$i-1]\n";
-			}
+		for (my $i=1; $i<=$choice_count; $i++) {
+			my $choice_length = length($i);
+			my $pad = ($choice_count_length - $choice_length);
+			print "$i. ";
+			print " " x $pad;
+			print "$choices[$i-1]\n";
 		}
 		
 		print "\n[" . join("/", @{$ENV{setup_path}}) . "]\n" if defined($ENV{setup_path});
@@ -10313,6 +10606,10 @@ sub setup_get_choice {
 		print ", 'c' to cancel): ";
 		
 		my $choice = <STDIN>;
+		if (!defined($choice)) {
+			return;
+		}
+		
 		chomp $choice;
 		
 		if ($choice =~ /^c$/i) {
