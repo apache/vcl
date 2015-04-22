@@ -9954,6 +9954,57 @@ sub set_device_path_key {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 enable_hibernation
+
+ Parameters  : none
+ Returns     : boolean
+ Description : Enables the hibernation feature.
+
+=cut
+
+sub enable_hibernation {
+	my $self = shift;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine can only be called as a VCL::Module module object method");
+		return;
+	}
+	
+	my $computer_node_name = $self->data->get_computer_node_name();
+	my $system32_path = $self->get_system32_path() || return;
+	
+	# Rename disableGuestHibernate.dll if it exists, this can prevent hibernation from working as expected
+	my $disable_hibernate_file_path = 'C:\Program Files\VMware\VMware Tools\plugins\vmsvc\disableGuestHibernate.dll';
+	if ($self->file_exists($disable_hibernate_file_path)) {
+		$self->move_file($disable_hibernate_file_path, "$disable_hibernate_file_path.disabled");
+	}
+	
+	# Run powercfg.exe to enable hibernation
+	my $command = "$system32_path/powercfg.exe -HIBERNATE ON";
+	my ($exit_status, $output) = $self->execute($command);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to enable hibernation on $computer_node_name");
+		return;
+	}
+	elsif ($exit_status == 0) {
+		notify($ERRORS{'OK'}, 0, "enabled hibernation on $computer_node_name" . (scalar(@$output) ? ", output:\n" . join("\n", @$output) : ''));
+	}
+	elsif (grep(/PAE mode/i, @$output)) {
+		# The following may be displayed:
+		#    Hibernation failed with the following error: The request is not supported.
+		#    The following items are preventing hibernation on this system.
+		#    The system is running in PAE mode, and hibernation is not allowed in PAE mode.
+		notify($ERRORS{'OK'}, 0, "hibernation NOT enabled because $computer_node_name is running in PAE mode");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to enable hibernation on $computer_node_name, exit status: $exit_status, output:\n" . join("\n", @$output));
+		return;
+	}
+	
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 =head2 disable_hibernation
 
  Parameters  : None
@@ -9970,28 +10021,34 @@ sub disable_hibernation {
 		return;
 	}
 	
-	my $computer_node_name   = $self->data->get_computer_node_name();
-	my $system32_path        = $self->get_system32_path() || return;
-
-	# Run powercfg.exe to disable hibernation
-	my $powercfg_command = "$system32_path/powercfg.exe -HIBERNATE OFF";
-	my ($powercfg_exit_status, $powercfg_output) = $self->execute($powercfg_command, 1);
-	if (defined($powercfg_exit_status) && $powercfg_exit_status == 0) {
-		notify($ERRORS{'OK'}, 0, "disabled hibernation");
+	my $computer_node_name = $self->data->get_computer_node_name();
+	my $system32_path = $self->get_system32_path() || return;
+	
+	# Rename disableGuestHibernate.dll if it exists, this can prevent hibernation from working as expected
+	my $disable_hibernate_file_path = 'C:\Program Files\VMware\VMware Tools\plugins\vmsvc\disableGuestHibernate.dll';
+	if ($self->file_exists($disable_hibernate_file_path)) {
+		$self->move_file($disable_hibernate_file_path, "$disable_hibernate_file_path.disabled");
 	}
-	elsif (grep(/PAE mode/i, @$powercfg_output)) {
+	
+	# Run powercfg.exe to disable hibernation
+	my $command = "$system32_path/powercfg.exe -HIBERNATE OFF";
+	my ($exit_status, $output) = $self->execute($command);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to disable hibernation on $computer_node_name");
+		return;
+	}
+	elsif ($exit_status == 0) {
+		notify($ERRORS{'OK'}, 0, "disabled hibernation on $computer_node_name" . (scalar(@$output) ? ", output:\n" . join("\n", @$output) : ''));
+	}
+	elsif (grep(/PAE mode/i, @$output)) {
 		# The following may be displayed:
 		#    Hibernation failed with the following error: The request is not supported.
 		#    The following items are preventing hibernation on this system.
 		#    The system is running in PAE mode, and hibernation is not allowed in PAE mode.
 		notify($ERRORS{'OK'}, 0, "hibernation NOT disabled because $computer_node_name is running in PAE mode");
 	}
-	elsif ($powercfg_exit_status) {
-		notify($ERRORS{'WARNING'}, 0, "failed to disable hibernation, exit status: $powercfg_exit_status, output:\n" . join("\n", @$powercfg_output));
-		return;
-	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to run SSH command to disable hibernation");
+		notify($ERRORS{'WARNING'}, 0, "failed to disable hibernation on $computer_node_name, exit status: $exit_status, output:\n" . join("\n", @$output));
 		return;
 	}
 	
@@ -10002,6 +10059,60 @@ sub disable_hibernation {
 	}
 	
 	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 hibernate
+
+ Parameters  : none
+ Returns     : boolean
+ Description : Hibernate the computer.
+
+=cut
+
+sub hibernate {
+	my $self = shift;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine can only be called as a VCL::Module module object method");
+		return;
+	}
+	
+	my $computer_node_name = $self->data->get_computer_node_name();
+	my $system32_path = $self->get_system32_path() || return;
+	
+	if (!$self->enable_hibernation()) {
+		notify($ERRORS{'WARNING'}, 0, "failed to hibernate $computer_node_name, hibernation could not be enabled");
+		return;
+	}
+	
+	# Run powercfg.exe to enable hibernation
+	my $command = "/bin/cygstart.exe \$SYSTEMROOT/system32/cmd.exe /c \"$system32_path/shutdown.exe -h -f\"";
+	my $start_time = time;
+	my ($exit_status, $output) = $self->execute($command);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to hibernate $computer_node_name");
+		return;
+	}
+	elsif ($exit_status eq 0) {
+		notify($ERRORS{'OK'}, 0, "executed command to hibernate $computer_node_name: $command" . (scalar(@$output) ? "\noutput:\n" . join("\n", @$output) : ''));
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to hibernate $computer_node_name, exit status: $exit_status, command:\n$command\noutput:\n" . join("\n", @$output));
+		return;
+	}
+	
+	# Wait for the computer to stop responding
+	my $wait_seconds = 300;
+	if ($self->provisioner->wait_for_power_off($wait_seconds, 3)) {
+		my $duration = (time - $start_time);
+		notify($ERRORS{'DEBUG'}, 0, "hibernate successful, $computer_node_name stopped responding after $duration seconds");
+		return 1;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to hibernate $computer_node_name, still responding to ping after $wait_seconds seconds");
+		return;
+	}
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -12288,6 +12399,43 @@ sub set_computer_hostname {
 	else {
 		return 1;
 	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 _get_os_perl_package
+
+ Parameters  : $windows_os
+ Returns     : string
+ Description : 
+
+=cut
+
+sub _get_os_perl_package {
+	my $windows_os = shift;
+	unless (ref($windows_os) && $windows_os->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+
+	my $product_name = $windows_os->get_product_name();
+	my $perl_package;
+	if (!$product_name) {
+		return;
+	}
+	elsif ($product_name =~ /(XP|2003)/i) {
+		$perl_package = "VCL::Module::OS::Windows::Version_5::$1";
+	}
+	elsif ($product_name =~ /(Vista|2008|2012|7|8)/ig) {
+		$perl_package = "VCL::Module::OS::Windows::Version_6::$1";
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to determine OS installed on computer, unsupported Windows product name: $product_name");
+		return;
+	}
+	
+	notify($ERRORS{'DEBUG'}, 0, "perl package to use for '$product_name': $perl_package");
+	return $perl_package;
 }
 
 #/////////////////////////////////////////////////////////////////////////////

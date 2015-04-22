@@ -518,7 +518,7 @@ sub get_currentimage_txt_contents {
 		return;
 	}
 
-	my $computer_node_name   = $self->data->get_computer_node_name();
+	my $computer_node_name = $self->data->get_computer_node_name();
 
 	# Attempt to retrieve the contents of currentimage.txt
 	my $cat_command = "cat ~/currentimage.txt";
@@ -2783,7 +2783,7 @@ sub execute_new {
  Returns     : If successful: string
                If failed: false
  Description : Determines the OS type currently installed on the computer. It
-               returns 'windows' or 'linux'.
+               returns 'windows', 'linux', or 'linux-ubuntu'.
 
 =cut
 
@@ -2807,6 +2807,10 @@ sub get_os_type {
 		notify($ERRORS{'WARNING'}, 0, "error occurred attempting to determine OS type currently installed on $computer_node_name\ncommand: '$command'\noutput:\n" . join("\n", @$output));
 		return;
 	}
+	elsif (grep(/ubuntu/i, @$output)) {
+		notify($ERRORS{'DEBUG'}, 0, "Ubuntu Linux OS is currently installed on $computer_node_name, output:\n" . join("\n", @$output));
+		return 'linux-ubuntu';
+	}
 	elsif (grep(/linux/i, @$output)) {
 		notify($ERRORS{'DEBUG'}, 0, "Linux OS is currently installed on $computer_node_name, output:\n" . join("\n", @$output));
 		return 'linux';
@@ -2817,6 +2821,62 @@ sub get_os_type {
 	}
 	else {
 		notify($ERRORS{'WARNING'}, 0, "unable to determine OS type currently installed on $computer_node_name, the '$command' output does not contain 'win' or 'linux':\n" . join("\n", @$output));
+		return;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_os_perl_package
+
+ Parameters  : $computer_name
+ Returns     : string
+ Description : Attempts to determine the Perl package which should be used to
+               control the computer.
+
+=cut
+
+sub get_os_perl_package {
+	my $computer_identifier = shift;
+	if (ref($computer_identifier)) {
+		$computer_identifier = shift
+	}
+	if (!$computer_identifier) {
+		notify($ERRORS{'WARNING'}, 0, "computer identifier argument not specified");
+		return;
+	}
+	
+	my $os = VCL::Module::create_object('VCL::Module::OS', { computer_identifier => $computer_identifier});
+	if (!$os) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine perl package to use for OS installed on $computer_identifier, OS object could not be created");
+		return;
+	}
+	
+	
+	my $command = "uname -a";
+	my ($exit_status, $output) = $os->execute($command);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to determine OS installed on $computer_identifier");
+		return;
+	}
+	
+	my $os_perl_package;
+	if (grep(/Cygwin/i, @$output)) {
+		my $windows_os = VCL::Module::create_object('VCL::Module::OS::Windows', { computer_identifier => $computer_identifier});
+		if (!$windows_os) {
+			notify($ERRORS{'WARNING'}, 0, "unable to determine perl package to use for OS installed on $computer_identifier, Windows OS object could not be created");
+			return;
+		}
+		return $windows_os->_get_os_perl_package($os);
+	}
+	elsif (grep(/Ubuntu/i, @$output)) {
+		return "VCL::Module::OS::Linux::Ubuntu"
+	}
+	elsif (grep(/Linux/i, @$output)) {
+		return "VCL::Module::OS::Linux"
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to determine OS installed on $computer_identifier, unsupported output returned from '$command':\n" . join("\n", @$output));
 		return;
 	}
 }
@@ -4033,6 +4093,182 @@ sub get_cluster_info_file_path {
 	$self->{cluster_info_file_path} = '/etc/cluster_info';
 	notify($ERRORS{'DEBUG'}, 0, "determined cluster_info file path for " . ref($self) . " OS module: $self->{cluster_info_file_path}");
 	return $self->{cluster_info_file_path};
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 generate_ssh_key_files
+
+ Parameters  : $private_key_file_path, $type (optional), $bits (optional), $comment (optional), $passphrase, $options (optional)
+ Returns     : boolean
+ Description : Calls ssh-keygen to generate an SSH private key file.
+
+=cut
+
+sub generate_ssh_key_files {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module::OS/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my ($private_key_file_path, $type, $bits, $comment, $passphrase, $options) = @_;
+	if (!$private_key_file_path) {
+		notify($ERRORS{'WARNING'}, 0, "private key file path argument was not specified");
+		return;
+	}
+	$type = 'rsa' unless $type;
+	$passphrase = '' unless $passphrase;
+	
+	my $computer_name = $self->data->get_computer_short_name();
+	
+	# Make sure the file does not already exist
+	if ($self->file_exists($private_key_file_path)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to generate SSH key, file already exists on $computer_name: $private_key_file_path");
+		return;
+	}
+	
+	my $command = "ssh-keygen -t $type -f \"$private_key_file_path\" -N \"$passphrase\"";
+	$command .= " -b $bits" if defined($bits);
+	$comment .= " $options" if defined($options);
+	
+	if (defined($comment)) {
+		$comment =~ s/\\*(["])/\\"$1/g;
+		$command .= " -C \"$comment\"";;
+	}
+	
+	my ($exit_status, $output) = $self->mn_os->execute($command);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to generate SSH key on $computer_name: $command");
+		return;
+	}
+	elsif ($exit_status ne '0') {
+		notify($ERRORS{'WARNING'}, 0, "failed to generate SSH key on $computer_name, exit status: $exit_status, command:\n$command\noutput:\n" . join("\n", @$output));
+		return;
+	}
+	else {
+		notify($ERRORS{'OK'}, 0, "generated SSH key on $computer_name: $private_key_file_path, command: $command");
+		return 1;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 generate_ssh_public_key_string
+
+ Parameters  : $private_key_file_path, $comment (optional)
+ Returns     : boolean
+ Description : Calls ssh-keygen to retrieve the corresponding SSH public key
+               from a private key file.
+
+=cut
+
+sub generate_ssh_public_key_string {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module::OS/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my ($private_key_file_path, $comment) = @_;
+	if (!$private_key_file_path) {
+		notify($ERRORS{'WARNING'}, 0, "private key file path argument was not specified");
+		return;
+	}
+	
+	my $computer_name = $self->data->get_computer_short_name();
+	
+	# Make sure the private key file exists
+	if (!$self->file_exists($private_key_file_path)) {
+		notify($ERRORS{'WARNING'}, 0, "unable to generate SSH public key, private key file does not exist on $computer_name: $private_key_file_path");
+		return;
+	}
+	
+	my $command = "ssh-keygen -y -f \"$private_key_file_path\"";
+	my ($exit_status, $output) = $self->mn_os->execute($command);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to generate SSH public key string from $private_key_file_path on $computer_name");
+		return;
+	}
+	elsif ($exit_status ne '0') {
+		notify($ERRORS{'WARNING'}, 0, "failed to generate SSH public key string from $private_key_file_path on $computer_name, exit status: $exit_status, command:\n$command\noutput:\n" . join("\n", @$output));
+		return;
+	}
+	
+	my ($ssh_public_key_string) = grep(/^ssh-.*/, @$output);
+	if ($ssh_public_key_string) {
+		if ($comment) {
+			if ($ssh_public_key_string !~ /=/) {
+				$ssh_public_key_string .= "==";
+			}
+			$ssh_public_key_string .= " $comment";
+		}
+		notify($ERRORS{'OK'}, 0, "generated SSH public key string from $private_key_file_path on $computer_name: $ssh_public_key_string");
+		return $ssh_public_key_string;
+	}
+	else {
+		notify($ERRORS{'OK'}, 0, "failed to generate SSH public key string from $private_key_file_path on $computer_name, output does not contain a line beginning with 'ssh-', command:\n$command\noutput:\n" . join("\n", @$output));
+		return;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 create_ssh_public_key_file
+
+ Parameters  : $private_key_file_path, $public_key_file_path, $comment (optional)
+ Returns     : boolean
+ Description : Calls ssh-keygen to retrieve the corresponding SSH public key
+               from a private key file and generates a file containing the
+               public key.
+
+=cut
+
+sub create_ssh_public_key_file {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module::OS/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my ($private_key_file_path, $public_key_file_path, $comment) = @_;
+	if (!$private_key_file_path) {
+		notify($ERRORS{'WARNING'}, 0, "private key file path argument was not specified");
+		return;
+	}
+	if (!$public_key_file_path) {
+		notify($ERRORS{'WARNING'}, 0, "public key file path argument was not specified");
+		return;
+	}
+	
+	my $computer_name = $self->data->get_computer_short_name();
+	
+	# Make sure the private key file exists
+	if (!$self->file_exists($private_key_file_path)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to generate SSH public key file, private key file does not exist on $computer_name: $private_key_file_path");
+		return;
+	}
+	
+	# Make sure the public key file does not exist
+	if ($self->file_exists($public_key_file_path)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to create SSH public key file, public key file already exists on $computer_name: $public_key_file_path");
+		return;
+	}
+	
+	my $public_key_string = $self->generate_ssh_public_key_string($private_key_file_path, $comment);
+	if (!$public_key_string) {
+		notify($ERRORS{'WARNING'}, 0, "failed to create SSH public key file: $public_key_file_path, public key string could not be retrieved from private key file: $private_key_file_path");
+		return;
+	}
+	
+	if ($self->create_text_file($public_key_file_path, $public_key_string)) {
+		notify($ERRORS{'DEBUG'}, 0, "created SSH public key file: $public_key_file_path");
+		return 1;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to create SSH public key file: $public_key_file_path");
+		return;
+	}
 }
 
 #///////////////////////////////////////////////////////////////////////////

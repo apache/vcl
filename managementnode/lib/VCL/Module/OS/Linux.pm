@@ -2608,11 +2608,70 @@ sub shutdown {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 hibernate
+
+ Parameters  : none
+ Returns     : boolean
+ Description : Hibernates the computer.
+
+=cut
+
+sub hibernate {
+	my $self = shift;
+	if (ref($self) !~ /linux/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $computer_node_name = $self->data->get_computer_node_name();
+	
+	my $command = 'echo disk > /sys/power/state &';
+	my ($exit_status, $output) = $self->execute($command);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to hibernate $computer_node_name");
+		return;
+	}
+	elsif ($exit_status eq 0) {
+		notify($ERRORS{'OK'}, 0, "executed command to hibernate $computer_node_name: $command" . (scalar(@$output) ? "\noutput:\n" . join("\n", @$output) : ''));
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to hibernate $computer_node_name, exit status: $exit_status, command:\n$command\noutput:\n" . join("\n", @$output));
+		return;
+	}
+	
+	# Wait for computer to power off
+	my $power_off = $self->provisioner->wait_for_power_off(300, 5);
+	if (!defined($power_off)) {
+		# wait_for_power_off result will be undefined if the provisioning module doesn't implement a power_status subroutine
+		notify($ERRORS{'OK'}, 0, "unable to determine power status of $computer_node_name from provisioning module, sleeping 1 minute to allow computer time to hibernate");
+		sleep 60;
+		return 1;
+	}
+	elsif (!$power_off) {
+		notify($ERRORS{'WARNING'}, 0, "$computer_node_name never powered off after executing hibernate command: $command");
+		return;
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "$computer_node_name powered off after executing hibernate command");
+		return 1;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 =head2 create_user
 
- Parameters  : 
+ Parameters  : $argument_hash_ref
  Returns     : boolean
- Description : 
+ Description : Creates a user on the computer. The argument hash reference
+               should be constructed as follows:
+					{
+						username => $username,
+						password => $password, (optional)
+						root_access => $root_access,
+						uid => $uid, (optional)
+						ssh_public_keys => $ssh_public_keys, (optional)
+					});
 
 =cut
 
@@ -2679,11 +2738,11 @@ sub create_user {
 				notify($ERRORS{'WARNING'}, 0, "failed to execute command to add user '$username' to $computer_node_name: '$useradd_command'");
 				return;
 			}
-			elsif (grep(/^useradd: warning/, @$useradd_output)) {
+			elsif (grep(/^useradd: /, @$useradd_output)) {
 				notify($ERRORS{'WARNING'}, 0, "warning detected on add user '$username' to $computer_node_name\ncommand: '$useradd_command'\noutput:\n" . join("\n", @$useradd_output));
 			}
 			else {
-				notify($ERRORS{'OK'}, 0, "added user '$username' to $computer_node_name");
+				notify($ERRORS{'OK'}, 0, "added user '$username' to $computer_node_name, output:" . (scalar(@$useradd_output) ? "\n" . join("\n", @$useradd_output) : ' <none>'));
 			}
 		}
 		else {
@@ -5624,6 +5683,173 @@ sub kill_process {
 	else {
 		notify($ERRORS{'DEBUG'}, 0, "killed process $pid_argument with signal $signal on $computer_node_name");
 		return 1;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 is_process_running
+
+ Parameters  : $process_regex
+ Returns     : array or hash reference
+ Description : Determines if any processes matching the $process_regex
+               argument are running on the computer. The $process_regex must be
+               a valid Perl regular expression.
+               
+               The following command is used to determine if a process is
+               running:
+               ps -e -o pid,args | grep -P "$process_regex"
+               
+               The behavior is different than if the -P argument is not used.
+               The following characters must be escaped with a backslash in
+               order for a literal match to be found:
+               | ( ) [ ] . +
+               
+               If these are not escaped, grep will interpret them as the
+               corresponing regular expression operational character. For
+               example:
+               
+               To match this literal string:
+               |(foo)|
+               Pass this:
+               \|\(foo\)\|
+               
+               To match 'foo' or 'bar, pass this:
+               (foo|bar)
+               
+               To match a pipe character ('|'), followed by either 'foo' or
+               'bar, followed by another pipe character:
+               |foo|
+               Pass this:
+               \|(foo|bar)\|
+               
+               The return value differs based on how this subroutine is called.
+               If called in scalar context, a hash reference is returned. The
+               hash keys are PIDs and the values are the full name of the
+               process. If called in list context, an array is returned
+               containing the PIDs.
+
+=cut
+
+sub is_process_running {
+	my $self = shift;
+	if (ref($self) !~ /linux/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Check the arguments
+	my ($process_regex) = @_;
+	if (!defined($process_regex)) {
+		notify($ERRORS{'WARNING'}, 0, "process regex pattern argument was not specified");
+		return;
+	}
+	
+	my $computer_name = $self->data->get_computer_short_name();
+	
+	my $command = "ps -e -o pid,args | grep -P \"$process_regex\"";
+	my ($exit_status, $output) = $self->execute($command, 0);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command on $computer_name to determine if process is running: $command");
+		return;
+	}
+	
+	my $processes_running = {};
+	for my $line (@$output) {
+		my ($pid, $process_name) = $line =~ /^\s*(\d+)\s*(.*[^\s])\s*/g;
+		
+		if (!defined($pid)) {
+			notify($ERRORS{'DEBUG'}, 0, "ignoring line, it does not begin with a number: '$line'");
+			next;
+		}
+		elsif ($pid eq $PID) {
+			#notify($ERRORS{'DEBUG'}, 0, "ignoring line for the currently running process: $line");
+			next;
+		}
+		elsif ($line =~ /grep -P/) {
+			#notify($ERRORS{'DEBUG'}, 0, "ignoring line containing for this command: $line");
+			next;
+		}
+		elsif ($line =~ /sh -c/) {
+			# Ignore lines containing 'sh -c', probably indicating a duplicate process of a command run remotely
+			#notify($ERRORS{'DEBUG'}, 0, "ignoring containing 'sh -c': $line");
+			next;
+		}
+		else {
+			#notify($ERRORS{'DEBUG'}, 0, "found matching process: $line");
+			$processes_running->{$pid} = $process_name;
+		}
+	}
+	
+	my $process_count = scalar(keys %$processes_running);
+	if ($process_count) {
+		if (wantarray) {
+			my @process_ids = sort keys %$processes_running;
+			notify($ERRORS{'DEBUG'}, 0, "process is running on $computer_name, identifier: '$process_regex', returning array containing PIDs: @process_ids");
+			return @process_ids;
+		}
+		else {
+			notify($ERRORS{'DEBUG'}, 0, "process is running on $computer_name, identifier: '$process_regex', returning hash reference:\n" . format_data($processes_running));
+			return $processes_running;
+		}
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "process is NOT running on $computer_name, identifier: '$process_regex', command: $command");
+		return;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 is_display_manager_running
+
+ Parameters  : none
+ Returns     : boolean
+ Description : Checks if a display manager (GUI) is running on the computer.
+
+=cut
+
+sub is_display_manager_running {
+	my $self = shift;
+	if (ref($self) !~ /linux/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $computer_name = $self->data->get_computer_short_name();
+	
+	# Note: runlevel isn't reliable for all distros
+	# On Ubuntu, it displays 2 even if the GUI is running
+	
+	my $process_pattern;
+	
+	# CentOS "Welcome" screen
+	#  1700 /usr/bin/Xorg :9 -ac -nolisten tcp vt6 -br
+	
+	# ' 416 lightdm'
+	# '2955 lightdm --session-child 12 21'
+	$process_pattern .= '^\s*\d+\s+(kdm|lightdm)(\s|$)';
+	
+	# Gnome
+	# 1870 /usr/sbin/gdm-binary -nodaemon
+	# 1898 /usr/libexec/gdm-simple-slave --display-id /org/gnome/DisplayManager/Display1
+	# 1901 /usr/bin/Xorg :0 -br -verbose -audit 4 -auth /var/run/gdm/auth-for-gdm-laIZj5/database -nolisten tcp vt1
+	# 1989 /usr/bin/gnome-session --autostart=/usr/share/gdm/autostart/LoginWindow/
+	$process_pattern .= '|(gnome-session|gdm-binary)';
+	
+	# ' 2891 /usr/bin/X -core :0 -seat seat0 -auth /var/run/lightdm/root/:0 -nolisten tcp vt7 -novtswitch'
+	$process_pattern .= '|bin\/X';
+	
+	$process_pattern = "($process_pattern)";
+	
+	my $process_info = $self->is_process_running($process_pattern);
+	if ($process_info) {
+		notify($ERRORS{'DEBUG'}, 0, "display manager is running on $computer_name:\n" . format_data($process_info));
+		return 1;
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "display manager is not running on $computer_name");
+		return 0
 	}
 }
 

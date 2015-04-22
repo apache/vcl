@@ -894,6 +894,477 @@ sub activate_interfaces {
 }
 
 #/////////////////////////////////////////////////////////////////////////////
+
+=head2 hibernate
+
+ Parameters  : none
+ Returns     : boolean
+ Description : Hibernates the computer.
+
+=cut
+
+sub hibernate {
+	my $self = shift;
+	if (ref($self) !~ /linux/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Notes (ARK): Ubuntu 14+ seems to have issues hibernating. The machine's
+	# console may turn into a black screen with a blinking cursor if the GUI
+	# isn't running and SSH access may become unavailable. I haven't found a way
+	# to recover from this when it happens without a hard reset.
+
+	my $computer_name = $self->data->get_computer_node_name();
+	
+	# Make sure pm-hibernate command exists
+	if (!$self->command_exists('pm-hibernate')) {
+		if (!$self->install_package('pm-utils')) {
+			notify($ERRORS{'WARNING'}, 0, "failed to hibernate $computer_name, pm-hibernate command does not exist and pm-utils could not be installed");
+			return;
+		}
+	}
+	
+	# Ubuntu seems to have problems hibernating if a display manager isn't running
+	# If it is not running, attempt to install and start lightdm
+	if (!$self->is_display_manager_running()) {
+		#if (!$self->install_package('xfce4')) {
+		#	notify($ERRORS{'WARNING'}, 0, "hibernation of $computer_name not attempted, display manager/GUI is not running, failed to install xfce4");
+		#	return;
+		#}
+		if (!$self->install_package('lightdm')) {
+			notify($ERRORS{'WARNING'}, 0, "hibernation of $computer_name not attempted, display manager/GUI is not running, failed to install xfce4");
+			return;
+		}
+		if (!$self->start_service('lightdm')) {
+			notify($ERRORS{'WARNING'}, 0, "hibernation of $computer_name not attempted, display manager/GUI is not running, failed to start lightdm service");
+			return;
+		}
+		if (!$self->is_display_manager_running()) {
+			notify($ERRORS{'WARNING'}, 0, "hibernation of $computer_name not attempted, unable to verify display manager/GUI is running, hibernate may fail to shut down the computer unless GUI is running");
+			return;
+		}
+	}
+	
+	# Delete old log files
+	$self->delete_file('/var/log/pm-*');
+	
+	# Try to determine if NetworkManager or network service is being used
+	my $network_service_name = 'network';
+	if ($self->service_exists('network-manager')) {
+		$network_service_name = 'network-manager';
+	}
+	
+	my $private_interface_name = $self->get_private_interface_name() || 'eth0';
+	my $public_interface_name = $self->get_public_interface_name() || 'eth1';
+	
+	# Some versions of Ubuntu fail to respond after resuming from hibernation
+	# Networking is up but not responding
+	# Add script to restart networking service
+	my $fix_network_script_path = '/etc/pm/sleep.d/50_restart_networking';
+	my $fix_network_log_path = '/var/log/50_restart_networking.log';
+	
+	$self->delete_file($fix_network_log_path);
+	
+	my $fix_network_script_contents = <<"EOF";
+#!/bin/sh
+echo >> /var/log/50_restart_networking.log
+date -R >> /var/log/50_restart_networking.log
+echo "\$1: begin" >> /var/log/50_restart_networking.log
+
+case "\$1" in
+   hibernate)
+      ifdown $private_interface_name 2>&1 >> /var/log/50_restart_networking.log
+      ifdown $public_interface_name 2>&1 >> /var/log/50_restart_networking.log
+      initctl stop $network_service_name 2>&1 >> /var/log/50_restart_networking.log
+      modprobe -r vmxnet3 2>&1 >> /var/log/50_restart_networking.log
+      ;;
+   thaw)
+      modprobe vmxnet3 2>&1 >> /var/log/50_restart_networking.log
+      initctl restart $network_service_name 2>&1 >> /var/log/50_restart_networking.log
+      ifup $private_interface_name 2>&1 >> /var/log/50_restart_networking.log
+      ifup $public_interface_name 2>&1 >> /var/log/50_restart_networking.log
+      ;;
+esac
+
+echo "\$1: done" >> $fix_network_log_path
+date -R >> /var/log/50_restart_networking.log
+EOF
+	if (!$self->create_text_file($fix_network_script_path, $fix_network_script_contents)) {
+		notify($ERRORS{'WARNING'}, 0, "hibernate not attempted, failed to create $fix_network_script_path on $computer_name in order to prevent networking problems after computer is powered back on");
+		return;
+	}
+	if (!$self->set_file_permissions($fix_network_script_path, '755')) {
+		notify($ERRORS{'WARNING'}, 0, "hibernate not attempted, failed to set file permissions on $fix_network_script_path on $computer_name, networking problems may occur after computer is powered back on");
+		return;
+	}
+	
+	# Make sure the grubenv recordfail flag is not set
+	if (!$self->unset_grubenv_recordfail()) {
+		notify($ERRORS{'WARNING'}, 0, "hibernate not attempted, failed to unset grubenv recordfail flag, computer may hang on grub boot screen after it is powered back on");
+		return;
+	}
+	
+	my $command = 'pm-hibernate';
+	#$command .= ' --quirk-dpms-on' 				if ($computer_name =~ /32$/);
+	#$command .= ' --quirk-dpms-suspend' 		if ($computer_name =~ /33$/);
+	#$command .= ' --quirk-radeon-off' 			if ($computer_name =~ /34$/);
+	#$command .= ' --quirk-s3-bios' 				if ($computer_name =~ /35$/);
+	#$command .= ' --quirk-s3-mode' 				if ($computer_name =~ /36$/);
+	#$command .= ' --quirk-vbe-post' 				if ($computer_name =~ /37$/);
+	#$command .= ' --quirk-vbemode-restore' 	if ($computer_name =~ /38$/);
+	#$command .= ' --quirk-vbestate-restore' 	if ($computer_name =~ /39$/);
+	#$command .= ' --quirk-vga-mode-3' 			if ($computer_name =~ /40$/);
+	#$command .= ' --quirk-save-pci' 				if ($computer_name =~ /41$/);
+	#$command .= ' --store-quirks-as-lkw' 		if ($computer_name =~ /42$/);
+	$command .= ' &';
+	
+	my ($exit_status, $output) = $self->execute($command);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to hibernate $computer_name");
+		return;
+	}
+	elsif ($exit_status eq 0) {
+		notify($ERRORS{'OK'}, 0, "executed command to hibernate $computer_name: $command" . (scalar(@$output) ? "\noutput:\n" . join("\n", @$output) : ''));
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to hibernate $computer_name, exit status: $exit_status, command:\n$command\noutput:\n" . join("\n", @$output));
+		return;
+	}
+	
+	# Wait for computer to power off
+	my $power_off = $self->provisioner->wait_for_power_off(300, 5);
+	if (!defined($power_off)) {
+		# wait_for_power_off result will be undefined if the provisioning module doesn't implement a power_status subroutine
+		notify($ERRORS{'OK'}, 0, "unable to determine power status of $computer_name from provisioning module, sleeping 1 minute to allow computer time to hibernate");
+		sleep 60;
+		return 1;
+	}
+	elsif (!$power_off) {
+		notify($ERRORS{'WARNING'}, 0, "$computer_name never powered off after executing hibernate command: $command");
+		return;
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "$computer_name powered off after executing hibernate command");
+		return 1;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 grubenv_unset_recordfail
+
+ Parameters  : none
+ Returns     : boolean
+ Description : Unsets the grub "recordfail" flag. If this is set, the computer
+               may hang at the grub boot screen when rebooted.
+
+=cut
+
+sub unset_grubenv_recordfail {
+	my $self = shift;
+	if (ref($self) !~ /linux/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $computer_name = $self->data->get_computer_node_name();
+	
+	if (!$self->command_exists('grub-editenv')) {
+		return 1;
+	}
+	
+	my $command = "grub-editenv /boot/grub/grubenv unset recordfail";
+	my ($exit_status, $output) = $self->execute($command);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to unset grubenv recordfail on $computer_name");
+		return;
+	}
+	elsif ($exit_status eq 0) {
+		notify($ERRORS{'OK'}, 0, "unset grubenv recordfail on $computer_name, command: '$command'" . (scalar(@$output) ? "\noutput:\n" . join("\n", @$output) : ''));
+		return 1;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to unset grubenv recordfail on $computer_name, exit status: $exit_status, command:\n$command\noutput:\n" . join("\n", @$output));
+		return;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 install_package
+
+ Parameters  : $package_name
+ Returns     : boolean
+ Description : Installs a Linux package using apt-get.
+
+=cut
+
+sub install_package {
+	my $self = shift;
+	if (ref($self) !~ /linux/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my ($package_name) = @_;
+	if (!$package_name) {
+		notify($ERRORS{'WARNING'}, 0, "package name argument was not supplied");
+		return;
+	}
+	
+	my $computer_name = $self->data->get_computer_node_name();
+	
+	# Run apt-get update before installing package - only do this once
+	$self->apt_get_update();
+	
+	# Some packages are known to cause debconf database errors
+	# Check if package being installed will also install/update a package with known problems
+	# Attempt to fix the debconf database if any are found
+	my @simulate_lines = $self->simulate_install_package($package_name);
+	if (@simulate_lines) {
+		my @problematic_packages = grep { $_ =~ /(dictionaries-common)/; $_ = $1; } @simulate_lines;
+		if (@problematic_packages) {
+			@problematic_packages = remove_array_duplicates(@problematic_packages);
+			notify($ERRORS{'DEBUG'}, 0, "installing $package_name requires the following packages to be installed which are known to have problems with the debconf database, attempting to fix the debconf database first:\n" . join("\n", @problematic_packages));
+			for my $problematic_package (@problematic_packages) {
+				$self->fix_debconf_db();
+				$self->_install_package_helper($problematic_package);
+			}
+			$self->fix_debconf_db();
+		}
+	}
+	
+	my $attempt = 0;
+	my $attempt_limit = 2;
+	for (my $attempt = 1; $attempt <= $attempt_limit; $attempt++) {
+		my $attempt_string = ($attempt > 1 ? "attempt $attempt/$attempt_limit: " : '');
+		if ($self->_install_package_helper($package_name, $attempt_string)) {
+			return 1;
+		}
+	}
+	
+	notify($ERRORS{'WARNING'}, 0, "failed to install $package_name on $computer_name, made $attempt_limit attempts");
+	return;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 _install_package_helper
+
+ Parameters  : $package_name, $attempt_string (optional)
+ Returns     : boolean
+ Description : Helper subroutine to install_package. Executes command to
+               installs a Linux package using apt-get.
+
+=cut
+
+sub _install_package_helper {
+	my $self = shift;
+	if (ref($self) !~ /linux/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my ($package_name, $attempt_string) = @_;
+	if (!$package_name) {
+		notify($ERRORS{'WARNING'}, 0, "package name argument was not supplied");
+		return;
+	}
+	$attempt_string = '' unless defined($attempt_string);
+	
+	my $computer_name = $self->data->get_computer_node_name();
+	
+	my $command = "apt-get -qq -y install $package_name";
+	notify($ERRORS{'DEBUG'}, 0, $attempt_string . "installing package on $computer_name: $package_name");
+	my ($exit_status, $output) = $self->execute($command, 0, 300);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, $attempt_string . "failed to execute command to install $package_name on $computer_name");
+		return;
+	}
+	elsif ($exit_status eq 0) {
+		if (grep(/$package_name is already/, @$output)) {
+			notify($ERRORS{'OK'}, 0, $attempt_string . "$package_name is already installed on $computer_name");
+		}
+		else {
+			notify($ERRORS{'OK'}, 0, $attempt_string . "installed $package_name on $computer_name");
+		}
+		return 1;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, $attempt_string . "failed to install $package_name on $computer_name, exit status: $exit_status, command:\n$command\noutput:\n" . join("\n", @$output));
+		return 0;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 simulate_install_package
+
+ Parameters  : $package_name
+ Returns     : array
+ Description : Simulates the installation of a Linux package using apt-get.
+               Returns the output lines as an array.
+
+=cut
+
+sub simulate_install_package {
+	my $self = shift;
+	if (ref($self) !~ /linux/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my ($package_name) = @_;
+	if (!$package_name) {
+		notify($ERRORS{'WARNING'}, 0, "package name argument was not supplied");
+		return;
+	}
+	
+	my $computer_name = $self->data->get_computer_node_name();
+	
+	my $command = "apt-get -s install $package_name";
+	notify($ERRORS{'DEBUG'}, 0, "attempting to simulate the installation of $package_name on $computer_name");
+	my ($exit_status, $output) = $self->execute($command, 0, 300);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to simulate the installation of $package_name on $computer_name");
+		return;
+	}
+	elsif ($exit_status eq 0) {
+		#notify($ERRORS{'DEBUG'}, 0, "simulated the installation of $package_name on $computer_name, output:\n" . join("\n", @$output));
+		return @$output;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to simulate the installation of $package_name on $computer_name, exit status: $exit_status, command:\n$command\noutput:\n" . join("\n", @$output));
+		return;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 apt_get_update
+
+ Parameters  : $force (optional)
+ Returns     : boolean
+ Description : Runs 'apt-get update' to resynchronize package index files from
+               their sources. By default, this will only be executed once. The
+               $force argument will cause apt-get update to be executed even if
+               it was previously executed.
+
+=cut
+
+sub apt_get_update {
+	my $self = shift;
+	if (ref($self) !~ /linux/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my ($force) = @_;
+	
+	return 1 if (!$force && $self->{apt_get_update});
+	
+	my $computer_name = $self->data->get_computer_node_name();
+	
+	# Clear out the files under lists to try to avoid these errors:
+	#    W: Failed to fetch http://us.archive.ubuntu.com/ubuntu/dists/trusty-updates/universe/i18n/Translation-en  Hash Sum mismatch
+	#    E: Some index files failed to download. They have been ignored, or old ones used instead.
+	$self->delete_file('/var/lib/apt/lists/*');
+	
+	notify($ERRORS{'DEBUG'}, 0, "executing 'apt-get update' on $computer_name");
+	my $command = "apt-get -qq update";
+	my ($exit_status, $output) = $self->execute($command, 0, 300);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute 'apt-get update' on $computer_name");
+		return;
+	}
+	elsif ($exit_status eq 0) {
+		notify($ERRORS{'OK'}, 0, "executed 'apt-get update' on $computer_name");
+		$self->{apt_get_update} = 1;
+		return 1;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute 'apt-get update' on $computer_name, exit status: $exit_status, command:\n$command\noutput:\n" . join("\n", @$output));
+		return;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 fix_debconf_db
+
+ Parameters  : none
+ Returns     : boolean
+ Description : Executes /usr/share/debconf/fix_db.pl to attempt to fix problems
+               installing packages via apt-get.
+
+=cut
+
+sub fix_debconf_db {
+	my $self = shift;
+	if (ref($self) !~ /linux/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $computer_name = $self->data->get_computer_node_name();
+
+	# Setting up dictionaries-common (1.20.5) ...
+	# debconf: unable to initialize frontend: Dialog
+	# debconf: (TERM is not set, so the dialog frontend is not usable.)
+	# debconf: falling back to frontend: Readline
+	# debconf: unable to initialize frontend: Readline
+	# debconf: (This frontend requires a controlling tty.)
+	# debconf: falling back to frontend: Teletype
+	# update-default-wordlist: Question empty but elements installed for class "wordlist"
+	# dictionaries-common/default-wordlist: return code: "0", value: ""
+	# Choices: , Manual symlink setting
+	# shared/packages-wordlist: return code: "10" owners/error: "shared/packages-wordlist doesn't exist"
+	# Installed elements: english (Webster's Second International English wordlist)
+	# Please see "/usr/share/doc/dictionaries-common/README.problems", section
+	# "Debconf database corruption" for recovery info.
+	# update-default-wordlist: Selected wordlist ""
+	# does not correspond to any installed package in the system
+	# and no alternative wordlist could be selected.
+	# dpkg: error processing package dictionaries-common (--configure):
+	# subprocess installed post-installation script returned error exit status 255
+
+	my $command = "/usr/share/debconf/fix_db.pl";
+	my $attempt = 0;
+	my $attempt_limit = 5;
+	while ($attempt < $attempt_limit) {
+		$attempt++;
+		
+		my ($exit_status, $output) = $self->execute($command, 0, 60);
+		if (!defined($output)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to execute command to attempt to fix debconf database on $computer_name: $command");
+			return;
+		}
+		
+		# This command occasionally needs to be run multiple times to fix all problems
+		# If output contains a line such as the following, run it again:
+		#    debconf: template "base-passwd/user-change-uid" has no owners; removing it.
+		if ($exit_status == 0) {
+			my @lines = grep(/^debconf: /, @$output);
+			my $line_count = scalar(@lines);
+			if ($line_count) {
+				notify($ERRORS{'DEBUG'}, 0, "attempt $attempt/$attempt_limit: executed command to fix debconf database on $computer_name, $line_count problems were detected and/or fixed, another attempt will be made");
+				next;
+			}
+			else {
+				notify($ERRORS{'DEBUG'}, 0, "attempt $attempt/$attempt_limit: no debconf database problems were detected on $computer_name");
+				return 1;
+			}
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "attempt $attempt/$attempt_limit: failed to execute command to fix debconf database on $computer_name, exit status: $exit_status, command:\n$command\noutput:\n" . join("\n", @$output));
+			return;
+		}
+	}
+	
+}
+
+#/////////////////////////////////////////////////////////////////////////////
 1;
 __END__
 

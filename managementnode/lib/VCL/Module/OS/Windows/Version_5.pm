@@ -757,6 +757,60 @@ sub disable_sleep {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 hibernate
+
+ Parameters  : none
+ Returns     : boolean
+ Description : Hibernate the computer.
+
+=cut
+
+sub hibernate {
+	my $self = shift;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine can only be called as a VCL::Module module object method");
+		return;
+	}
+	
+	my $computer_node_name = $self->data->get_computer_node_name();
+	my $system32_path = $self->get_system32_path() || return;
+	
+	if (!$self->enable_hibernation()) {
+		notify($ERRORS{'WARNING'}, 0, "failed to hibernate $computer_node_name, hibernation could not be enabled");
+		return;
+	}
+	
+	# Run powercfg.exe to enable hibernation
+	my $command = "/bin/cygstart.exe \$SYSTEMROOT/system32/cmd.exe /c \"$system32_path/rundll32.exe powrprof.dll,SetSuspendState\"";
+	my $start_time = time;
+	my ($exit_status, $output) = $self->execute($command);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to hibernate $computer_node_name");
+		return;
+	}
+	elsif ($exit_status eq 0) {
+		notify($ERRORS{'OK'}, 0, "executed command to hibernate $computer_node_name:\n$command" . (scalar(@$output) ? "\noutput:\n" . join("\n", @$output) : ''));
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to hibernate $computer_node_name, exit status: $exit_status, output:\n" . join("\n", @$output));
+		return;
+	}
+	
+	# Wait for the computer to stop responding
+	my $wait_seconds = 300;
+	if ($self->provisioner->wait_for_power_off($wait_seconds, 3)) {
+		my $duration = (time - $start_time);
+		notify($ERRORS{'DEBUG'}, 0, "hibernate successful, $computer_node_name stopped responding after $duration seconds");
+		return 1;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to hibernate $computer_node_name, still responding to ping after $wait_seconds seconds");
+		return;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 1;
 __END__
 
