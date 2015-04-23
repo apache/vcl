@@ -9286,7 +9286,10 @@ sub migrate_vm {
 	# Copy the parent vmdk to the correct location on the destination
 	# This may fail if vmdk doesn't exist on destination datastore or repository
 	notify($ERRORS{'DEBUG'}, 0, "copying destination master vmdk if necessary: $destination_vmdk_file_path");
-	$destination->prepare_vmdk() || return;
+	if (!$destination->prepare_vmdk()) {
+		notify($ERRORS{'WARNING'}, 0, "failed to copy destination master vmdk: $destination_vmdk_file_path");
+		return;
+	}
 	
 	# Create the destination directory
 	if ($same_vmx_directory) {
@@ -9344,7 +9347,14 @@ sub migrate_vm {
 				next;
 			}
 			
-			notify($ERRORS{'DEBUG'}, 0, "copying file to destination: $destination_vmhost_computer_name:$destination_file_path");
+			# Attempt to retrieve the source file size - useful info to present because copy may take a long time
+			my $source_file_size_bytes = $source->vmhost_os->get_file_size($source_file_path);
+			my $file_size_string = '';
+			if ($source_file_size_bytes) {
+				$file_size_string = ' (' . get_file_size_info_string($source_file_size_bytes) . ')';
+			}
+			
+			notify($ERRORS{'DEBUG'}, 0, "copying file to destination: $destination_vmhost_computer_name:$destination_file_path" . $file_size_string);
 			if ($source->copy_file_to_another_host($source_file_path, $destination, $destination_file_path)) {
 				#notify($ERRORS{'OK'}, 0, "copied file to destination: $destination_vmhost_computer_name:$destination_file_path");
 			}
@@ -9428,7 +9438,7 @@ sub migrate_vm {
 		next if ($source_pattern eq $destination_pattern);
 		notify($ERRORS{'DEBUG'}, 0, "updating files on destination VM host $destination_vmhost_computer_name, pattern: $source_pattern --> $destination_pattern");
 		for my $destination_file_path (@destination_edit_file_paths) {
-			my $sed_command = "sed -i -e \"s|$source_vmx_base_directory_path|$destination_vmx_base_directory_path|g\" $destination_file_path";
+			my $sed_command = "sed -i -e \"s|$source_vmx_base_directory_path/|$destination_vmx_base_directory_path/|g\" $destination_file_path";
 			my ($sed_exit_status, $sed_output) = $destination->vmhost_os->execute($sed_command);
 			if (!defined($sed_output)) {
 				notify($ERRORS{'WARNING'}, 0, "failed to migrate $vm_computer_name, failed to execute command on destination VM host $destination_vmhost_computer_name: $sed_command");
