@@ -2183,29 +2183,44 @@ sub nmap_port {
 
 =head2 _pingnode
 
- Parameters  : $hostname
- Returns     : 1 pingable 0 not-pingable
- Description : using Net::Ping to check if node is pingable
-               assumes icmp echo is allowed
+ Parameters  : $node
+ Returns     : boolean
+ Description : Uses Net::Ping to check if a node is responding to ICMP echo
+               ping.
 
 =cut
 
 sub _pingnode {
-	my ($hostname) = $_[0];
-	if (!$hostname) {
-		notify($ERRORS{'WARNING'}, 0, "hostname argument was not supplied");
+	my ($node) = @_;
+	if (!$node) {
+		notify($ERRORS{'WARNING'}, 0, "node argument was not supplied");
 		return;
 	}
-
-	my $p = Net::Ping->new("icmp");
-	my $result = $p->ping($hostname, 1);
-	$p->close();
-
-	if (!$result) {
-		return 0;
+	
+	my $node_string = $node;
+	my $remote_connection_target;
+	if (is_valid_ip_address($node, 0)) {
+		$remote_connection_target = $node;
 	}
 	else {
+		$remote_connection_target = determine_remote_connection_target($node);
+		if ($remote_connection_target) {
+			$node_string .= " ($remote_connection_target)";
+			$node = $remote_connection_target;
+		}
+	}
+	
+	my $p = Net::Ping->new("icmp");
+	my $result = $p->ping($remote_connection_target, 1);
+	$p->close();
+
+	if ($result) {
+		#notify($ERRORS{'DEBUG'}, 0, "$node_string is responding to ping");
 		return 1;
+	}
+	else {
+		#notify($ERRORS{'DEBUG'}, 0, "$node_string is NOT responding to ping");
+		return 0;
 	}
 } ## end sub _pingnode
 
