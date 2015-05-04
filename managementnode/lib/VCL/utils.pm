@@ -3898,9 +3898,11 @@ sub get_default_imagemeta_info {
 =head2  get_vmhost_info
 
  Parameters  : $vmhost_identifier, $no_cache (optional)
- Returns     : Hash reference
+ Returns     : hash reference
  Description : Retrieves info from the database for the vmhost, vmprofile, and
-               repository and datastore imagetypes.
+               repository and datastore imagetypes. The $vmhost_identifier
+               argument may be used to match vmhost.id, vmprofile.profilename,
+               or computer.hostname.
 
 =cut
 
@@ -3959,10 +3961,13 @@ AND
 EOF
 	
 	if ($vmhost_identifier =~ /^\d+$/) {
-		$select_statement .= "vmhost.id = '$vmhost_identifier'";
+		$select_statement .= "vmhost.id = '$vmhost_identifier'\n";
 	}
 	else {
-		$select_statement .= "computer.hostname REGEXP '$vmhost_identifier(\\\\.|\$)'";
+		$select_statement .= "(\n";
+		$select_statement .= "   computer.hostname REGEXP '$vmhost_identifier(\\\\.|\$)'\n";
+		$select_statement .= "   OR vmprofile.profilename = '$vmhost_identifier'\n";
+		$select_statement .= ")";
 	}
 	
 	# Call the database select subroutine
@@ -3973,21 +3978,31 @@ EOF
 		notify($ERRORS{'WARNING'}, 0, "zero rows were returned from database select statement:\n$select_statement");
 		return;
 	}
-	elsif (scalar @selected_rows > 1) {
+	
+	my $row;
+	if (scalar @selected_rows > 1) {
 		my $vmhost_string;
-		for my $row (@selected_rows) {
-			$vmhost_string .= "VM host ID: " . $row->{'vmhost-id'};
-			$vmhost_string .= ", computer ID: " . $row->{'vmhost-computerid'};
-			$vmhost_string .= ", VM profile ID: " . $row->{'vmprofile-id'};
-			$vmhost_string .= ", VM profile name: " . $row->{'vmprofile-profilename'};
+		for my $selected_row (@selected_rows) {
+			# Check if the vmprofile.profilename exactly matches the VM host identifier argument
+			if ($selected_row->{'vmprofile-profilename'} eq $vmhost_identifier) {
+				$row = $selected_row;
+				last;
+			}
+			$vmhost_string .= "VM host ID: " . $selected_row->{'vmhost-id'};
+			$vmhost_string .= ", computer ID: " . $selected_row->{'vmhost-computerid'};
+			$vmhost_string .= ", VM profile ID: " . $selected_row->{'vmprofile-id'};
+			$vmhost_string .= ", VM profile name: " . $selected_row->{'vmprofile-profilename'};
 			$vmhost_string .= "\n";
 		}
-		notify($ERRORS{'WARNING'}, 0, scalar @selected_rows . " rows were returned from database select statement:\n$select_statement\nrows:\n$vmhost_string");
-		return;
+		if (!$row) {
+			notify($ERRORS{'WARNING'}, 0, "unable to determine VM host from ambiguous argument: $vmhost_identifier, " . scalar @selected_rows . " rows were returned from database select statement:\n$select_statement\nrows:\n$vmhost_string");
+			return;
+		}
 	}
-
-	# Get the single row returned from the select statement
-	my $row = $selected_rows[0];
+	else {
+		# Get the single row returned from the select statement
+		$row = $selected_rows[0];
+	}
 	
 	# Construct a hash with all of the vmhost info
 	my $vmhost_info;
