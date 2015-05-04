@@ -88,6 +88,7 @@ my @PERL_MODULES = (
 	'Object::InsideOut',
 	'RPC::XML',
 	'Scalar::Util',
+	'Term::ANSIColor',
 	'Time::HiRes',
 	'URI',
 	'YAML',
