@@ -93,13 +93,6 @@ sub initialize {
 	# Override the die handler because process will die if VMware Perl libraries aren't installed
 	local $SIG{__DIE__} = sub{};
 	
-	eval "use VMware::VIRuntime; use VMware::VILib; use VMware::VIExt";
-	if ($EVAL_ERROR) {
-		notify($ERRORS{'DEBUG'}, 0, "vSphere SDK for Perl does not appear to be installed on this managment node, unable to load VMware vSphere SDK Perl modules, error:\n$EVAL_ERROR");
-		return 0;
-	}
-	notify($ERRORS{'DEBUG'}, 0, "loaded VMware vSphere SDK modules");
-	
 	my $vmhost_hostname = $self->data->get_vmhost_hostname();
 	my $vmhost_username = $self->data->get_vmhost_profile_username();
 	my $vmhost_password = $self->data->get_vmhost_profile_password();
@@ -118,24 +111,40 @@ sub initialize {
 		return;
 	}
 	
+	eval "use VMware::VIRuntime; use VMware::VILib; use VMware::VIExt";
+	if ($EVAL_ERROR) {
+		notify($ERRORS{'DEBUG'}, 0, "vSphere SDK for Perl does not appear to be installed on this managment node, unable to load VMware vSphere SDK Perl modules, error:\n$EVAL_ERROR");
+		return 0;
+	}
+	notify($ERRORS{'DEBUG'}, 0, "loaded VMware vSphere SDK modules");
+	
 	Opts::set_option('username', $vmhost_username);
 	Opts::set_option('password', $vmhost_password);
 	
 	# Override the die handler
 	local $SIG{__DIE__} = sub{};
-
-	# Assemble the URLs to try, URL will vary based on the VMware product
-	my @possible_vmhost_urls = (
-		"https://$vmhost_hostname/sdk",
-		"https://$vmhost_hostname:8333/sdk",
-	);
 	
-	# Also add URLs containing the short host name if the VM hostname is a full DNS name
+	my @possible_vmhost_urls;
+	
+	# Determine the VM host's IP address
+	require VCL::utils;
+	my $remote_connection_target = determine_remote_connection_target($vmhost_hostname);
+	if ($remote_connection_target) {
+		push @possible_vmhost_urls, "https://$remote_connection_target/sdk";
+	}
+	
+	push @possible_vmhost_urls, "https://$vmhost_hostname/sdk";
 	if ($vmhost_hostname =~ /[a-z]\./i) {
 		my ($vmhost_short_name) = $vmhost_hostname =~ /^([^\.]+)/;
 		push @possible_vmhost_urls, "https://$vmhost_short_name/sdk";
-		push @possible_vmhost_urls, "https://$vmhost_short_name:8333/sdk";
 	}
+	
+	my @possible_vmhost_urls_with_port;
+	for my $host_url (@possible_vmhost_urls) {
+		(my $host_url_with_port = $host_url) =~ s/^(.+)(\/sdk)$/$1:8333$2/g;
+		push @possible_vmhost_urls_with_port, $host_url_with_port;
+	}
+	push @possible_vmhost_urls, @possible_vmhost_urls_with_port;
 	
 	# Call HostConnect, check how long it takes to connect
 	my $vim;
@@ -1986,7 +1995,9 @@ sub file_exists {
 	}
 	
 	# Get and check the file path argument
-	my $file_path_argument = shift;
+	my ($file_path_argument, $type) = @_;
+	
+	$type = '*' unless defined($type);
 	
 	my $file_path = $self->_get_datastore_path($file_path_argument);
 	if (!$file_path) {
@@ -2013,7 +2024,7 @@ sub file_exists {
 	my $base_directory_path = $self->_get_parent_directory_datastore_path($file_path) || return;
 	my $file_name = $self->_get_file_name($file_path) || return;
 	
-	my $result = $self->find_files($base_directory_path, $file_name);
+	my $result = $self->find_files($base_directory_path, $file_name, 0, $type);
 	if ($result) {
 		notify($ERRORS{'DEBUG'}, 0, "file exists: $file_path");
 		return 1;
@@ -2095,7 +2106,7 @@ sub get_file_size {
 
 =head2 find_files
 
- Parameters  : $base_directory_path, $search_pattern, $search_subdirectories (optional)
+ Parameters  : $base_directory_path, $search_pattern, $search_subdirectories (optional), $type (optional)
  Returns     : array
  Description : Finds files in a datastore on the VM host stored under the base
                directory path argument. The search pattern may contain
@@ -2112,7 +2123,7 @@ sub find_files {
 	}
 	
 	# Get the arguments
-	my ($base_directory_path, $search_pattern, $search_subdirectories) = @_;
+	my ($base_directory_path, $search_pattern, $search_subdirectories, $type) = @_;
 	if (!$base_directory_path || !$search_pattern) {
 		notify($ERRORS{'WARNING'}, 0, "base directory path and search pattern arguments were not specified");
 		return;
@@ -2120,18 +2131,46 @@ sub find_files {
 	
 	$search_subdirectories = 1 if !defined($search_subdirectories);
 	
+	my $type_string;
+	$type = 'f' unless defined $type;
+	if ($type =~ /^f$/i) {
+		$type = 'f';
+		$type_string = 'files';
+	}
+	elsif ($type =~ /^d$/i) {
+		$type = 'd';
+		$type_string = 'directories';
+	}
+	elsif ($type =~ /^\*$/i) {
+		$type = '*';
+		$type_string = 'files and directories';
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "unsupported type argument: '$type'");
+		return;
+	}
+	
 	$base_directory_path = $self->_get_normal_path($base_directory_path) || return;
 	
 	# Get the file info
-	my $file_info = $self->_get_file_info("$base_directory_path/$search_pattern", $search_subdirectories);
+	my $file_info = $self->_get_file_info("$base_directory_path/$search_pattern", $search_subdirectories, 1);
 	if (!defined($file_info)) {
-		notify($ERRORS{'WARNING'}, 0, "unable to find files, failed to get file info for: $base_directory_path/$search_pattern");
+		notify($ERRORS{'WARNING'}, 0, "unable to find $type_string, failed to get file info for: $base_directory_path/$search_pattern");
 		return;
 	}
 	
 	# Loop through the keys of the file info hash
 	my @file_paths;
 	for my $file_path (keys(%{$file_info})) {
+		my $file_type = $file_info->{$file_path}{type};
+		
+		if ($type eq 'f' && $file_type =~ /Folder/i) {
+			next;
+		}
+		elsif ($type eq 'd' && $file_type !~ /Folder/i) {
+			next;
+		}
+		
 		# Add the file path to the return array
 		push @file_paths, $self->_get_normal_path($file_path);
 		
@@ -2147,7 +2186,7 @@ sub find_files {
 	}
 	
 	@file_paths = sort @file_paths;
-	notify($ERRORS{'DEBUG'}, 0, "matching file count: " . scalar(@file_paths));
+	notify($ERRORS{'DEBUG'}, 0, "$type_string found under $base_directory_path matching pattern '$search_pattern': " . scalar(@file_paths));
 	return @file_paths;
 }
 
@@ -2790,7 +2829,7 @@ sub _get_file_info {
 	}
 	
 	# Get the arguments
-	my ($path_argument, $search_subfolders) = @_;
+	my ($path_argument, $search_subfolders, $include_directories) = @_;
 	if (!$path_argument) {
 		notify($ERRORS{'WARNING'}, 0, "file path argument was not specified");
 		return;
@@ -2898,7 +2937,7 @@ sub _get_file_info {
 				my $file_path = $self->_get_datastore_path("$directory_normal_path/" . $file->path);
 				
 				# Check the file type
-				if (ref($file) eq 'FolderFileInfo') {
+				if (ref($file) eq 'FolderFileInfo' && !$include_directories) {
 					# Don't include folders in the results
 					next;
 				}
@@ -2910,7 +2949,8 @@ sub _get_file_info {
 	}
 	
 	$self->{_get_file_info}{"$base_directory_path/$search_pattern"} = \%file_info;
-	notify($ERRORS{'DEBUG'}, 0, "retrieved info for " . scalar(keys(%file_info)) . " matching files:\n" . format_data(\%file_info));
+	#notify($ERRORS{'DEBUG'}, 0, "retrieved info for " . scalar(keys(%file_info)) . " matching files:\n" . format_data(\%file_info));
+	notify($ERRORS{'DEBUG'}, 0, "retrieved info for " . scalar(keys(%file_info)) . " matching files");
 	return \%file_info;
 }
 
@@ -3139,7 +3179,7 @@ sub _get_resource_pool_view {
 	}
 	
 	my $resource_pools;
-	
+	my $root_resource_pool_path;
 	for my $resource_pool_view (@resource_pool_views) {
 		# Assemble the full path to the resource view - including Datacenters, folders, clusters...
 		my $resource_pool_path = $self->_get_managed_object_path($resource_pool_view->{mo_ref});
@@ -3152,6 +3192,11 @@ sub _get_resource_pool_view {
 		$resource_pool_path_fixed =~ s/\/host\//\//g;
 		$resource_pool_path_fixed =~ s/\/Resources($|\/?)/$1/g;	
 		$resource_pools->{$resource_pool_path_fixed} = $resource_pool_view;
+		
+		# Save the top-level default resource pool path - use this if resource path is not configured
+		if ($resource_pool_path =~ /\/Resources$/) {
+			$root_resource_pool_path = $resource_pool_path_fixed;
+		}
 	}
 	
 	if (!$resource_pools) {
@@ -3160,8 +3205,16 @@ sub _get_resource_pool_view {
 	}
 	elsif (!$vmhost_profile_resource_path) {
 		if (scalar(keys %$resource_pools) > 1) {
-			notify($ERRORS{'WARNING'}, 0, "unable to determine which resource pool to use, resource path not configured in VM profile and multiple resource paths exist on host $vmhost_name:\n" . join("\n", sort keys %$resource_pools));
-			return;
+			if ($root_resource_pool_path) {
+				notify($ERRORS{'DEBUG'}, 0, "resource path not configured in VM profile, using root resource pool: $root_resource_pool_path");
+				my $resource_pool = $resource_pools->{$root_resource_pool_path};
+				$self->{resource_pool_view_object} = $resource_pool;
+				return $resource_pool;
+			}
+			else {
+				notify($ERRORS{'WARNING'}, 0, "unable to determine which resource pool to use, resource path not configured in VM profile and multiple resource paths exist on host $vmhost_name:\n" . join("\n", sort keys %$resource_pools));
+				return;
+			}
 		}
 		else {
 			my $resource_pool_name = (keys %$resource_pools)[0];
@@ -4205,6 +4258,60 @@ sub is_multiextent_disabled {
 		notify($ERRORS{'DEBUG'}, 0, "multiextent kernel module is not disabled:\n" . format_data($multiextent_info));
 		return 0;
 	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_vm_virtual_disk_file_paths
+
+ Parameters  : $vmx_file_path
+ Returns     : array
+ Description : Retrieves a VM's virtual disk file layout and returns an array
+               reference. Each top-level array element represent entire virtual
+               disk and contains an array reference containing the virtual
+               disk's files:
+               [
+                 [
+                   "/vmfs/volumes/datastore/vmwarewin7-bare3844-v1/vmwarewin7-bare3844-v1.vmdk",
+                   "/vmfs/volumes/blade-vmpath/vm170_3844-v1/vmwarewin7-bare3844-v1-000001.vmdk",
+                   "/vmfs/volumes/blade-vmpath/vm170_3844-v1/vmwarewin7-bare3844-v1-000002.vmdk",
+                   "/vmfs/volumes/blade-vmpath/vm170_3844-v1/vmwarewin7-bare3844-v1-000003.vmdk"
+                 ],
+                 [
+                   "/vmfs/volumes/blade-vmpath/vm170_3844-v1/vm170_3844-v1.vmdk"
+                 ]
+               ]
+
+=cut
+
+sub get_vm_virtual_disk_file_paths {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Get the vmx path argument and convert it to a datastore path
+	my $vmx_file_path = $self->_get_datastore_path(shift) || return;
+	
+	# Override the die handler
+	local $SIG{__DIE__} = sub{};
+	
+	my $vm = $self->_get_vm_view($vmx_file_path) || return;
+	
+	my $virtual_disk_array_ref = $vm->{layout}->{disk};
+	my @virtual_disks;
+	for my $virtual_disk_ref (@$virtual_disk_array_ref) {
+		my $disk_file_array_ref = $virtual_disk_ref->{'diskFile'};
+		my @virtual_disk_file_paths;
+		for my $virtual_disk_file_path (@$disk_file_array_ref) {
+			push @virtual_disk_file_paths, $self->_get_normal_path($virtual_disk_file_path);
+		}
+		push @virtual_disks, \@virtual_disk_file_paths;
+	}
+	
+	notify($ERRORS{'DEBUG'}, 0, "retrieved virtual disk file paths for $vmx_file_path:\n" . format_data(\@virtual_disks));
+	return @virtual_disks;
 }
 
 #/////////////////////////////////////////////////////////////////////////////

@@ -1410,7 +1410,7 @@ sub remove_existing_vms {
 		}
 		
 		# Check if the vmx directory name matches the naming convention VCL would use for the computer
-		my $vmx_file_path_computer_name = $self->_get_vmx_file_path_computer_name($vmx_file_path);
+		my $vmx_file_path_computer_name = $self->_get_file_path_computer_name($vmx_file_path);
 		if (!$vmx_file_path_computer_name) {
 			#notify($ERRORS{'DEBUG'}, 0, "ignoring existing vmx file $vmx_file_name, the computer name could not be determined from the directory name");
 			next;
@@ -1436,7 +1436,7 @@ sub remove_existing_vms {
 	# Check if any of the paths match the format of a directory VCL would have created for the computer
 	for my $orphaned_vmx_file_path (@orphaned_vmx_file_paths) {
 		# Check if the directory name matches the naming convention VCL would use for the computer
-		my $orphaned_computer_name = $self->_get_vmx_file_path_computer_name($orphaned_vmx_file_path);
+		my $orphaned_computer_name = $self->_get_file_path_computer_name($orphaned_vmx_file_path);
 		if (!$orphaned_computer_name) {
 			#notify($ERRORS{'DEBUG'}, 0, "ignoring existing file path '$orphaned_vmx_file_path', the computer name could not be determined from the directory name");
 			next;
@@ -2326,16 +2326,13 @@ sub reclaim_vmhost_disk_space {
 	my $total_deletable_vmdk_size = 0;
 	
 	# Retrieve a list of existing vmdk directories matching the VCL naming convention
-	# Get a list of the files and directories under the vmdk base directory
-	my @vmdk_base_directory_contents = $self->vmhost_os->find_files($vmdk_base_directory_path, '*');
-	for my $vmdk_base_directory_entry (@vmdk_base_directory_contents) {
-		if ($vmdk_base_directory_entry =~ /^$vmdk_base_directory_path\/(vmware\w+-[^\/]+\d+-v\d+)$/) {
-			my $vmdk_directory_name = $1;
-			notify($ERRORS{'DEBUG'}, 0, "found existing vmdk directory: '$vmdk_directory_name'");
-			$vmdk_directories->{$vmdk_base_directory_entry} = {}
-		}
+	my @vmdk_base_directory_contents = $self->get_datastore_imagerevision_names($vmdk_base_directory_path);
+	for my $vmdk_directory_name (@vmdk_base_directory_contents) {
+		$vmdk_directories->{"$vmdk_base_directory_path/$vmdk_directory_name"} = {}
 	}
-	notify($ERRORS{'DEBUG'}, 0, "retrieved list of existing vmdk directories under '$vmdk_base_directory_path':\n" . join("\n", sort keys %$vmdk_directories));
+	
+	my $vmdk_directory_count = scalar(keys %$vmdk_directories);
+	notify($ERRORS{'DEBUG'}, 0, "retrieved list of existing vmdk directories under '$vmdk_base_directory_path' ($vmdk_directory_count):\n" . join("\n", sort keys %$vmdk_directories));
 	
 	# Find VMs that can can be deleted
 	my @vmx_file_paths = $self->get_vmx_file_paths();
@@ -4267,8 +4264,17 @@ sub is_vmdk_directory_shared {
 		return 1;
 	}
 	else {
-		notify($ERRORS{'DEBUG'}, 0, "vmdk directory does NOT appear to be shared: '$vmdk_directory_path', directory name '$vmdk_directory_name' does NOT begin with the name of an OS in the database:\n" . join("\n", @os_names));
+		notify($ERRORS{'DEBUG'}, 0, "vmdk directory name '$vmdk_directory_name' does NOT begin with the name of an OS in the database");
+	}
+	
+	my $file_path_computer_name = $self->_get_file_path_computer_name($vmdk_directory_path);
+	if ($file_path_computer_name) {
+		notify($ERRORS{'DEBUG'}, 0, "vmdk directory does NOT appear to be shared: '$vmdk_directory_path', it contains a computer name: $file_path_computer_name");
 		return 0;
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "vmdk directory may be shared: '$vmdk_directory_path', it does NOT appear to contain a computer name");
+		return 1;
 	}
 }
 
@@ -5271,7 +5277,7 @@ sub get_vmx_info {
 	if (!defined($vmx_info{computer_id})) {
 		notify($ERRORS{'DEBUG'}, 0, "vmx file does not contain a computer_id value, attempting to determine matching computer");
 		
-		my $computer_name = $self->_get_vmx_file_path_computer_name($vmx_file_path);
+		my $computer_name = $self->_get_file_path_computer_name($vmx_file_path);
 		if ($computer_name) {
 			my @computer_ids = get_computer_ids($computer_name);
 			if ((scalar(@computer_ids) == 1)) {
@@ -5450,51 +5456,30 @@ sub delete_vm {
 		return;
 	}
 	
-	my $vmdk_base_directory_path_shared = $self->get_vmdk_base_directory_path_shared();
+	my $vmx_file_base_name = $self->_get_file_base_name($vmx_file_path);
+	my $vmx_directory_path = $self->_get_parent_directory_normal_path($vmx_file_path);
 	
 	notify($ERRORS{'DEBUG'}, 0, "attempting to delete VM: $vmx_file_path");
-	delete $self->{vmx_info}{$vmx_file_path};
 	
+	
+	my $vmx_info;
+	if ($self->vmhost_os->file_exists($vmx_file_path)) {
+		$vmx_info = $self->get_vmx_info($vmx_file_path);
+	}
+	
+	my @virtual_disks;
 	if ($self->is_vm_registered($vmx_file_path)) {
-		# Make sure the VM is powered off
-		$self->api->power_off($vmx_file_path);
+		# The VM needs to be registered for get_vm_virtual_disk_file_paths to work
+		@virtual_disks = $self->api->get_vm_virtual_disk_file_paths($vmx_file_path);
 		
-		# Unregister the VM
 		if (!$self->api->vm_unregister($vmx_file_path)) {
 			notify($ERRORS{'WARNING'}, 0, "failed to unregister VM: $vmx_file_path, VM not deleted");
 			return;
 		}
 	}
 	
-	# Get the vmx info
-	my $vmx_info = $self->get_vmx_info($vmx_file_path);
-	my $vmx_directory_path;
-	if ($vmx_info) {
-		$vmx_directory_path = $vmx_info->{vmx_directory_path};
-	}
-	else {
-		# Failed to retrieve vmx info
-		# VM may have been registered but the vmx file/directory was deleted
-		# Check if the vmx file exists
-		# Display a warning and return false if it does exist
-		# Return true if it doesn't exist
-		if ($self->vmhost_os->file_exists($vmx_file_path)) {
-			notify($ERRORS{'WARNING'}, 0, "failed to delete VM, vmx info could not be retrieved: $vmx_file_path");
-			return;
-		}
-		
-		# Check if the vmx parent directory is named after the vmx file
-		# If so, it's safe to delete the directory
-		my $vmx_file_base_name = $self->_get_file_base_name($vmx_file_path);
-		$vmx_directory_path = $self->_get_parent_directory_normal_path($vmx_file_path) || '';
-		if ($vmx_directory_path && $vmx_directory_path =~ /\/$vmx_file_base_name$/) {
-			notify($ERRORS{'OK'}, 0, "deleted VM, successfully unregistered VM, vmx file does not exist: $vmx_file_path, deleting vmx parent directory: $vmx_directory_path, directory name matches the vmx file base name: $vmx_file_base_name");
-		}
-		else {
-			notify($ERRORS{'OK'}, 0, "deleted VM, successfully unregistered VM but it vmx directory was not deleted because the vmx file does not exist: $vmx_file_path, vmx parent directory name ($vmx_directory_path) does not match the vmx file base name: $vmx_file_base_name");
-			return 1;
-		}
-	}
+	delete $self->{vmx_info}{$vmx_file_path};
+	my $deleted_directories = {};
 	
 	# Delete the vmx directory
 	my $attempt = 0;
@@ -5511,6 +5496,7 @@ sub delete_vm {
 		
 		if ($self->vmhost_os->delete_file($vmx_directory_path)) {
 			notify($ERRORS{'DEBUG'}, 0, "deleted vmx directory: $vmx_directory_path");
+			$deleted_directories->{$vmx_directory_path} = 1;
 			last DELETE_VMX_ATTEMPT;
 		}
 		else {
@@ -5521,51 +5507,45 @@ sub delete_vm {
 		}
 	}
 	
-	# Delete the vmdk files belonging to the VM
-	for my $storage_identifier (keys %{$vmx_info->{vmdk}}) {
-		my $vmdk_directory_path = $vmx_info->{vmdk}{$storage_identifier}{vmdk_directory_path};
-		if ($vmdk_directory_path eq $vmx_directory_path) {
-			notify($ERRORS{'DEBUG'}, 0, "vmdk directory matches the vmx directory path which has already been deleted: $vmdk_directory_path");
+	my $vmdk_file_paths = {};
+	for my $virtual_disk_array_ref (@virtual_disks) {
+		for my $vmdk_file_path (@$virtual_disk_array_ref) {
+			$vmdk_file_paths->{$self->_get_normal_path($vmdk_file_path)} = 1;
+		}
+	}
+	for my $controller (keys %{$vmx_info->{vmdk}}) {
+		my $vmdk_file_path = $vmx_info->{vmdk}{$controller}{vmdk_file_path} || next;
+		$vmdk_file_paths->{$self->_get_normal_path($vmdk_file_path)} = 1;
+	}
+	
+	for my $vmdk_file_path (keys %$vmdk_file_paths) {
+		my $vmdk_directory_path = $self->_get_parent_directory_normal_path($vmdk_file_path) || next;
+		if ($deleted_directories->{$vmdk_directory_path}) {
+			notify($ERRORS{'DEBUG'}, 0, "directory containing vmdk file was already deleted: $vmdk_file_path");
 			next;
 		}
 		
 		# Check if the directory containing the vmdk is shared among different VMs or dedicated to the VM being deleted
 		my $vmdk_directory_shared = $self->is_vmdk_directory_shared($vmdk_directory_path);
 		if (!defined($vmdk_directory_shared)) {
-			notify($ERRORS{'DEBUG'}, 0, "vmdk directory will NOT be deleted, unable to determine if vmdk appears to be shared: $vmdk_directory_path");
+			notify($ERRORS{'DEBUG'}, 0, "vmdk directory will NOT be deleted, unable to determine if vmdk directory is shared: $vmdk_directory_path");
+			next;
 		}
 		elsif ($vmdk_directory_shared) {
-			# Directory is shared, entire directory can't be deleted
-			notify($ERRORS{'DEBUG'}, 0, "vmdk directory will NOT be deleted because the vmdk appears to be shared: $vmdk_directory_path");
-			
-			# Directory can't be deleted, check if individual files can be deleted
-			my $vmdk_file_path = $vmx_info->{vmdk}{$storage_identifier}{vmdk_file_path};
-			if ($self->is_vmdk_file_shared($vmdk_file_path)) {
-				notify($ERRORS{'DEBUG'}, 0, "vmdk file will NOT be deleted because the vmdk appears to be shared: $vmdk_file_path");
-			}
-			else {
-				# vmdk file not shared, can be deleted
-				# Find all files matching pattern in order to remove all files
-				# For snapshots, the vmdk will in the format:
-				#    vmwarewin7-Windows764bit1846-v3-000001.vmdk
-				# Also have to delete the delta file:
-				#    vmwarewin7-Windows764bit1846-v3-000001-delta.vmd
-				my $vmdk_file_base_name = $vmx_info->{vmdk}{$storage_identifier}{vmdk_file_base_name};
-				my $vmdk_search_path = "$vmdk_directory_path/$vmdk_file_base_name*.vmdk";
-				if (!$self->vmhost_os->delete_file($vmdk_search_path)) {
-					notify($ERRORS{'WARNING'}, 0, "failed to delete vmdk files: $vmdk_search_path");
-					return;
-				}
-			}
+			notify($ERRORS{'DEBUG'}, 0, "vmdk directory will NOT be deleted because it may be shared with other VMs: $vmdk_directory_path");
+			next;
+		}
+		
+		if ($self->vmhost_os->delete_file($vmdk_directory_path)) {
+			notify($ERRORS{'OK'}, 0, "directory containing vmdk file deleted: $vmdk_file_path");
+			$deleted_directories->{$vmdk_directory_path} = 1;
 		}
 		else {
-			notify($ERRORS{'DEBUG'}, 0, "vmdk directory does NOT appear to be shared, attempting to delete directory: $vmdk_directory_path");
-			if (!$self->vmhost_os->delete_file($vmdk_directory_path)) {
-				notify($ERRORS{'WARNING'}, 0, "failed to delete vmdk directory: $vmdk_directory_path");
-				return;
-			}
+			notify($ERRORS{'WARNING'}, 0, "failed to delete directory containing vmdk file: $vmdk_file_path");
 		}
 	}
+	
+	# TODO: delete orphaned directories named after the VM
 	
 	notify($ERRORS{'OK'}, 0, "deleted VM: $vmx_file_path");
 	return 1;
@@ -7340,7 +7320,7 @@ sub _get_parent_directory_name {
 		notify($ERRORS{'WARNING'}, 0, "unable to determine parent directory name, path argument could not be converted to a datastore path: '$path_argument'");
 		return;
 	}
-
+	
 	if ($datastore_path =~ /^\[.+\]$/) {
 		notify($ERRORS{'WARNING'}, 0, "unable to determine parent directory name, path argument is the root path of a datastore: '$path_argument'");
 		return;
@@ -7348,7 +7328,7 @@ sub _get_parent_directory_name {
 	
 	my ($parent_directory_name) = $datastore_path =~ /[\s\/]([^\/]+)\/[^\/]+$/g;
 	if (!$parent_directory_name) {
-		notify($ERRORS{'WARNING'}, 0, "unable to determine parent directory name from path: '$path_argument'");
+		notify($ERRORS{'WARNING'}, 0, "unable to determine parent directory name from path: '$path_argument' ($datastore_path)");
 		return;
 	}
 	
@@ -7496,19 +7476,18 @@ sub _get_relative_datastore_path {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 _get_vmx_file_path_computer_name
+=head2 _get_file_path_computer_name
 
- Parameters  : $vmx_file_path
+ Parameters  : $file_path
  Returns     : string
- Description : Attempts to determine the computer name from the vmx file path
-               argument. Undefined is returned if the computer name cannot be
-               determined.
-               '/vmfs/volumes/vmpath/vmwarewinxp-ArcGIS93Desktop1301-v15ve1-71/vmwarewinxp-ArcGIS93Desktop1301-v15ve1-72.vmx' --> 've1-72'
+ Description : Attempts to determine the computer name from the path argument.
+               Undefined is returned if the computer name cannot be determined.
                '/vmfs/volumes/vmpath/ve1-72_1036-v2/ve1-72_1036-v2.vmx' --> 've1-72'
+               '/vmfs/volumes/vmpath/ve1-72_1036-v2' --> 've1-72'
 
 =cut
 
-sub _get_vmx_file_path_computer_name {
+sub _get_file_path_computer_name {
 	my $self = shift;
 	if (ref($self) !~ /module/i) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
@@ -7522,29 +7501,36 @@ sub _get_vmx_file_path_computer_name {
 		return;
 	}
 	
-	my $directory_name = $self->_get_parent_directory_name($path_argument);
-	if (!$directory_name) {
-		notify($ERRORS{'WARNING'}, 0, "unable to determine computer name from path '$path_argument', directory name could not be determined from path");
-		return;
-	}
+	my $computer_name;
+	my $regex_pattern = '^([\w\-]+)\_\d+-v\d+([_]|$)';
 	
 	my $file_name = $self->_get_file_name($path_argument);
-	if (!$directory_name) {
+	if (!$file_name) {
 		notify($ERRORS{'WARNING'}, 0, "unable to determine computer name from path '$path_argument', file name could not be determined from path");
 		return;
 	}
 	
-	my ($computer_name) = $directory_name =~ /^([\w\-]+)\_\d+-v\d+$/;
-	if (!$computer_name) {
-		($computer_name) = $directory_name =~ /^vmware.*\d+-v\d+([\w\-]+)$/i;
+	if ($file_name =~ /\./) {
+		my $directory_name = $self->_get_parent_directory_name($path_argument);
+		if ($directory_name) {
+			($computer_name) = $directory_name =~ /$regex_pattern/;
+			if ($computer_name) {
+				notify($ERRORS{'DEBUG'}, 0, "determined computer name '$computer_name' from directory name: $directory_name, argument: $path_argument");
+				return $computer_name;
+			}
+			else {
+				notify($ERRORS{'DEBUG'}, 0, "directory name '$directory_name' does not appear to contain a computer name, argument: $path_argument");
+			}
+		}
 	}
 	
+	($computer_name) = $file_name =~ /$regex_pattern/;
 	if ($computer_name) {
-		#notify($ERRORS{'DEBUG'}, 0, "determined computer name '$computer_name' from directory name: '$directory_name'");
+		notify($ERRORS{'DEBUG'}, 0, "determined computer name '$computer_name' from file/directory name: $file_name, argument: $path_argument");
 		return $computer_name;
 	}
 	else {
-		notify($ERRORS{'DEBUG'}, 0, "computer name could not be determined from directory name: '$directory_name'");
+		notify($ERRORS{'DEBUG'}, 0, "computer name could not be determined from path: $path_argument");
 		return;
 	}
 }
@@ -8586,45 +8572,41 @@ sub get_datastore_imagerevision_names {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 configure_vmhost_ssh_keys
+=head2 configure_root_ssh_key
 
  Parameters  : none
  Returns     : boolean
  Description : Creates SSH private and public key files on the VM host to allow
-               the root account on the host to authenticate to other hosts. This
-               subroutine does not configure SSH keys related to the management
-               node. It is used to configure SSH for VM host to VM host
-               communication.
+					the root account on the host to authenticate to other hosts. This
+					subroutine does not configure SSH keys related to the management
+					node. It is used to configure SSH for VM host to VM host
+					communication.
 
 =cut
 
-sub configure_vmhost_ssh_keys {
+sub configure_root_ssh_key {
 	my $self = shift;
 	if (ref($self) !~ /VMware/i) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return;
 	}
 	
-	my $management_node_name = $self->data->get_management_node_short_name();
 	my $vmhost_name = $self->data->get_vmhost_short_name();
-	
-	my $local_private_key_file_path = "/tmp/$vmhost_name.key";
-	my $local_public_key_file_path = "$local_private_key_file_path.pub";
 	
 	my $vmhost_private_key_file_path = "/.ssh/id_rsa";
 	my $vmhost_public_key_file_path = "$vmhost_private_key_file_path.pub";
 	
-	# Delete local files previously created
-	$self->mn_os->delete_file("$local_private_key_file_path*");
-	
 	my $vmware_product_name = $self->get_vmhost_product_name();
-	
-	if ($self->vmhost_os->file_exists($vmhost_private_key_file_path)) {
-		notify($ERRORS{'DEBUG'}, 0, "private key file already exists on $vmhost_name: $vmhost_private_key_file_path");
+	my $bits;
+	if ($vmware_product_name =~ /4\./) {
+		$bits = 768;
 	}
 	else {
-		notify($ERRORS{'DEBUG'}, 0, "private key file does not already exist on $vmhost_name: $vmhost_private_key_file_path");
-		
+		$bits = 1024;
+	}
+	
+	# Check if the private key already exists
+	if (!$self->vmhost_os->file_exists($vmhost_private_key_file_path)) {
 		# Private key does not exist on VM host
 		if ($self->vmhost_os->file_exists($vmhost_public_key_file_path)) {
 			notify($ERRORS{'WARNING'}, 0, "public key file exists on $vmhost_name but private key file does not, deleting public key file: $vmhost_public_key_file_path");
@@ -8634,198 +8616,206 @@ sub configure_vmhost_ssh_keys {
 			}
 		}
 		
-		if ($vmware_product_name =~ /4\./) {
-			# Create the private key
-			my $command = "/bin/dropbearkey -t rsa -f $vmhost_private_key_file_path -s 768";
-			my ($exit_status, $output) = $self->vmhost_os->execute($command);
-			if (!defined($output)) {
-				notify($ERRORS{'WARNING'}, 0, "failed to execute command to create SSH private key on VM host $vmhost_name: $command");
-				return;
-			}
-			elsif ($exit_status ne 0) {
-				notify($ERRORS{'WARNING'}, 0, "failed to create SSH private key on VM host, exit status: $exit_status, command: $command, output:\n" . join("\n", @$output));
-				return;
-			}
-			# Make sure the newly created file exists
-			if (!$self->vmhost_os->file_exists($vmhost_private_key_file_path)) {
-				notify($ERRORS{'WARNING'}, 0, "attempted to create SSH private key file on VM host $vmhost_name but file still does not exist: $vmhost_private_key_file_path, command: $command, output:\n" . join("\n", @$output));
-				return;
-			}
-		}
-		else {
-			# Generate a new SSH key for the VM host
-			if (!$self->mn_os->generate_ssh_key_files($local_private_key_file_path, 'rsa', 1024, $vmhost_name)) {
-				notify($ERRORS{'WARNING'}, 0, "failed to generate private SSH key file for VM host $vmhost_name");
-				$self->mn_os->delete_file("$local_private_key_file_path*");
-				return;
-			}
-			
-			# Copy files to the VM host
-			if (!$self->vmhost_os->copy_file_to($local_private_key_file_path, $vmhost_private_key_file_path)) {
-				notify($ERRORS{'WARNING'}, 0, "failed to copy private key file from $management_node_name to VM host $vmhost_name: $local_private_key_file_path --> $vmhost_private_key_file_path");
-				$self->mn_os->delete_file("$local_private_key_file_path*");
-				return;
-			}
-			if (!$self->vmhost_os->copy_file_to($local_public_key_file_path, $vmhost_public_key_file_path)) {
-				notify($ERRORS{'WARNING'}, 0, "failed to copy public key file from $management_node_name to VM host $vmhost_name: $local_public_key_file_path --> $vmhost_public_key_file_path");
-				$self->mn_os->delete_file("$local_private_key_file_path*");
-				return;
-			}
-		}
-		
-		notify($ERRORS{'DEBUG'}, 0, "created SSH private key file on VM host $vmhost_name: $vmhost_private_key_file_path");
-		$self->mn_os->delete_file("$local_private_key_file_path*");
-	}
-	
-	# Check if the public key exists
-	if ($self->vmhost_os->file_exists($vmhost_public_key_file_path)) {
-		notify($ERRORS{'DEBUG'}, 0, "private and public SSH key files already exist on VM host $vmhost_name");
-		return 1;
-	}
-	
-	# Attempt to retrieve the private key file from the VM host
-	notify($ERRORS{'DEBUG'}, 0, "public key file does not exist on VM host $vmhost_name: $vmhost_public_key_file_path");
-	
-	my $public_key_string;
-	if ($vmware_product_name =~ /4\./) {
-		# Retrieve the public key from the private key
-		my $command = "/bin/dropbearkey -f $vmhost_private_key_file_path -y";
-		my ($exit_status, $output) = $self->vmhost_os->execute($command);
-		if (!defined($output)) {
-			notify($ERRORS{'WARNING'}, 0, "failed to execute command to retrieve SSH public key from VM host $vmhost_name: $command");
-			return;
-		}
-		elsif ($exit_status ne 0) {
-			notify($ERRORS{'WARNING'}, 0, "failed to retrieve SSH public key from VM host $vmhost_name, exit status: $exit_status, command: $command, output:\n" . join("\n", @$output));
-			return;
-		}
-		
-		# Locate the output line beginning with 'ssh-'
-		($public_key_string) = grep(/^ssh-/, @$output);
-		if ($public_key_string) {
-			notify($ERRORS{'DEBUG'}, 0, "retrieved SSH public key from VM host $vmhost_name: $public_key_string");
-		}
-		else {
-			notify($ERRORS{'WARNING'}, 0, "failed to retrieve SSH public key from VM host $vmhost_name, command: $command, output does not contain a line beginning with 'ssh-':\n" . join("\n", @$output));
-			return;
-		}
-		
-		if ($self->vmhost_os->create_text_file($vmhost_public_key_file_path, $public_key_string)) {
-			notify($ERRORS{'OK'}, 0, "created SSH public key file on VM host $vmhost_name: $vmhost_public_key_file_path");
-		}
-		else {
-			notify($ERRORS{'WARNING'}, 0, "failed to create SSH public key file on VM host $vmhost_name: $vmhost_public_key_file_path");
+		# Create the private key file
+		if (!$self->vmhost_os->generate_ssh_private_key_file($vmhost_private_key_file_path, 'rsa', $bits, $vmhost_name)) {
 			return;
 		}
 	}
-	else {
-		if (!$self->vmhost_os->copy_file_from($vmhost_private_key_file_path, $local_private_key_file_path)) {
-			notify($ERRORS{'WARNING'}, 0, "failed to retrieve private key file from VM host $vmhost_name: $vmhost_private_key_file_path");
+	
+	# Create the public key file if it wasn't created when the private key was created
+	if (!$self->vmhost_os->file_exists($vmhost_public_key_file_path)) {
+		if (!$self->vmhost_os->generate_ssh_public_key_file($vmhost_private_key_file_path, $vmhost_public_key_file_path, $vmhost_name)) {
 			return;
 		}
-		
-		# Generate local public key file from private key retrieved from VM host
-		if (!$self->mn_os->create_ssh_public_key_file($local_private_key_file_path, $local_public_key_file_path, $vmhost_name)) {
-			notify($ERRORS{'WARNING'}, 0, "failed to create public key file on $management_node_name from VM host $vmhost_name private key file: $local_public_key_file_path");
-			$self->mn_os->delete_file("$local_private_key_file_path*");
-			return;
-		}
-		
-		# Copy the public key file to the VM host
-		if (!$self->vmhost_os->copy_file_to($local_public_key_file_path, $vmhost_public_key_file_path)) {
-			notify($ERRORS{'WARNING'}, 0, "failed to copy newly created public key file from $management_node_name to VM host $vmhost_name: $local_public_key_file_path --> $vmhost_public_key_file_path");
-			$self->mn_os->delete_file("$local_private_key_file_path*");
-			return;
-		}
-		
-		$self->mn_os->delete_file("$local_private_key_file_path*");
 	}
 	
-	notify($ERRORS{'OK'}, 0, "configured SSH keys on VM host $vmhost_name");
+	notify($ERRORS{'OK'}, 0, "configured SSH key for the root user on VM host $vmhost_name");
 	return 1;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 copy_vmhost_ssh_public_key_to_another_host
+=head2 add_ssh_root_key_to_authorized_keys
 
- Parameters  : $destination_vmhost_os
+ Parameters  : $destination_vmware_object
  Returns     : boolean
- Description : Retrieves the public key from the VM host (/.ssh/id_rsa.pub) and
-               adds it to the authorized_keys file on the destination VM host.
+ Description : Retrieves the root user's public SSH key from the VM host
+               represented by the object which this subroutine is called from
+               ($self) and adds it to the authorized_keys file on the
+               destination VM host.
+               
+               "Destination" means the remote VM host which the source will SSH
+               into or send a file to via SCP.
 
 =cut
 
-sub copy_vmhost_ssh_public_key_to_another_host {
-	my ($self, $destination) = @_;
-	if (ref($self) !~ /VMware/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+sub add_ssh_root_key_to_authorized_keys {
+	my ($source, $destination) = @_;
+	if (!$source) {
+		notify($ERRORS{'WARNING'}, 0, "no arguments were provided");
+		return;
+	}
+	elsif (!ref($source) || ref($source) !~ /VMware/i) {
+		notify($ERRORS{'WARNING'}, 0, "1st argument is not a reference to a VMware provisioning object");
 		return;
 	}
 	elsif (!$destination) {
-		notify($ERRORS{'WARNING'}, 0, "destination VM host OS object argument was not supplied");
+		notify($ERRORS{'WARNING'}, 0, "2nd destination VMware provisioning object argument was not supplied");
 		return;
 	}
-	elsif (ref($destination) !~ /VMware/i) {
-		notify($ERRORS{'WARNING'}, 0, "destination VM host OS object is not a VMware module: " . ref($destination));
+	elsif (!ref($destination) || ref($destination) !~ /VMware/i) {
+		notify($ERRORS{'WARNING'}, 0, "2nd argument is not a reference to a VMware provisioning object");
 		return;
 	}
 	
-	my $management_node_name = $self->data->get_management_node_short_name();
-	my $vmhost_computer_name = $self->data->get_vmhost_short_name();
+	my $source_vmhost_computer_name = $source->data->get_vmhost_short_name();
 	my $destination_vmhost_computer_name = $destination->vmhost_os->data->get_computer_short_name();
 	
+	my $source_private_key_file_path = "/.ssh/id_rsa";
+	
+	# Determine the authorized_keys file location based on the VMware version
 	my $destination_vmware_product_name = $destination->get_vmhost_product_name();
-	my $vmhost_authorized_keys_file_path;
+	my $destination_authorized_keys_file_path;
 	if ($destination_vmware_product_name =~ /4\./) {
-		$vmhost_authorized_keys_file_path = "/.ssh/authorized_keys";
+		$destination_authorized_keys_file_path = "/.ssh/authorized_keys";
 	}
 	else {
-		$vmhost_authorized_keys_file_path = "/etc/ssh/keys-root/authorized_keys";
+		$destination_authorized_keys_file_path = "/etc/ssh/keys-root/authorized_keys";
 	}
 	
-	my $public_key_file_path = "/.ssh/id_rsa.pub";
-	
-	# Get the VM host's public key
-	my $public_key_string = $self->vmhost_os->get_file_contents($public_key_file_path);
-	if ($public_key_string) {
-		notify($ERRORS{'DEBUG'}, 0, "retrieved VM host $vmhost_computer_name public SSH key:\n$public_key_string");
+	# Get the source VM host's public key string
+	my $source_public_key_string = $source->vmhost_os->get_ssh_public_key_string($source_private_key_file_path, $source_vmhost_computer_name);
+	if ($source_public_key_string) {
+		notify($ERRORS{'DEBUG'}, 0, "retrieved source VM host $source_vmhost_computer_name public SSH key:\n$source_public_key_string");
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to retrieve contents of public SSH key file from VM host $vmhost_computer_name");
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve contents of public SSH key file from source VM host $source_vmhost_computer_name");
 		return;
 	}
 	
 	# Get the contents of the destination VM host's authorized_keys file
-	my $destination_authorized_keys_file_contents = $destination->vmhost_os->get_file_contents($vmhost_authorized_keys_file_path);
+	my $destination_authorized_keys_file_contents = $destination->vmhost_os->get_file_contents($destination_authorized_keys_file_path);
 	if ($destination_authorized_keys_file_contents) {
-		notify($ERRORS{'DEBUG'}, 0, "retrieved contents of $vmhost_authorized_keys_file_path from destination VM host $destination_vmhost_computer_name:\n$destination_authorized_keys_file_contents");
+		#notify($ERRORS{'DEBUG'}, 0, "retrieved contents of $destination_authorized_keys_file_path from destination VM host $destination_vmhost_computer_name:\n$destination_authorized_keys_file_contents");
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to retrieve contents of $vmhost_authorized_keys_file_path from destination VM host $destination_vmhost_computer_name");
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve contents of $destination_authorized_keys_file_path from destination VM host $destination_vmhost_computer_name");
 		return;
 	}
 	
 	# Remove comments from public key for comparison
-	my $public_key_string_cleaned = $public_key_string;
-	$public_key_string_cleaned =~ s/^\s*(ssh-\w+\s+[^\s=]+).*/$1/g;
+	my $source_public_key_string_cleaned = $source_public_key_string;
+	$source_public_key_string_cleaned =~ s/^\s*(ssh-\w+\s+[^\s=]+).*/$1/g;
 	my @destination_authorized_keys_file_lines = split(/\n+/, $destination_authorized_keys_file_contents);
 	for my $destination_authorized_keys_file_line (@destination_authorized_keys_file_lines) {
 		$destination_authorized_keys_file_line =~ s/^(ssh-\w+\s+[^\s=]+).*/$1/g;
-		if ($destination_authorized_keys_file_line eq $public_key_string_cleaned) {
-			notify($ERRORS{'DEBUG'}, 0, "$vmhost_authorized_keys_file_path on destination VM host $destination_vmhost_computer_name already contains the VM host's $vmhost_computer_name public SSH key:\n$public_key_string");
+		if ($destination_authorized_keys_file_line eq $source_public_key_string_cleaned) {
+			notify($ERRORS{'DEBUG'}, 0, "$destination_authorized_keys_file_path on destination VM host $destination_vmhost_computer_name already contains the VM host's $source_vmhost_computer_name public SSH key:\n$source_public_key_string");
 			return 1;
 		}
 	}
 	
 	# Public key was not found in destination's authorized_keys file, attempt to add it
-	if ($destination->vmhost_os->append_text_file($vmhost_authorized_keys_file_path, $public_key_string)) {
-		notify($ERRORS{'OK'}, 0, "added VM host $vmhost_computer_name public SSH key to $vmhost_authorized_keys_file_path on destination VM host $destination_vmhost_computer_name:\n$public_key_string");
+	if ($destination->vmhost_os->append_text_file($destination_authorized_keys_file_path, $source_public_key_string)) {
+		notify($ERRORS{'OK'}, 0, "added VM host $source_vmhost_computer_name public SSH key to $destination_authorized_keys_file_path on destination VM host $destination_vmhost_computer_name:\n$source_public_key_string");
 		return 1;
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to add VM host $vmhost_computer_name public SSH key to $vmhost_authorized_keys_file_path on destination VM host $destination_vmhost_computer_name");
+		notify($ERRORS{'WARNING'}, 0, "failed to add VM host $source_vmhost_computer_name public SSH key to $destination_authorized_keys_file_path on destination VM host $destination_vmhost_computer_name");
 		return;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 add_ssh_host_key_to_known_hosts
+
+ Parameters  : $destination_vmware_object
+ Returns     : boolean
+ Description : Retrieves the public SSH host key from the destination VMware
+               host and adds and entry to known_hosts on the VM host represented
+               by the object which this subroutine is called from ($self).
+               
+               "Destination" means the remote VM host which the source will SSH
+               into or send a file to via SCP. "Destination" does not mean the
+               VM host whose known_hosts file will be modified.
+
+=cut
+
+sub add_ssh_host_key_to_known_hosts {
+	my ($source, $destination) = @_;
+	if (!$source) {
+		notify($ERRORS{'WARNING'}, 0, "no arguments were provided");
+		return;
+	}
+	elsif (!ref($source) || ref($source) !~ /VMware/i) {
+		notify($ERRORS{'WARNING'}, 0, "1st argument is not a reference to a VMware provisioning object");
+		return;
+	}
+	elsif (!$destination) {
+		notify($ERRORS{'WARNING'}, 0, "2nd destination VMware provisioning object argument was not supplied");
+		return;
+	}
+	elsif (!ref($destination) || ref($destination) !~ /VMware/i) {
+		notify($ERRORS{'WARNING'}, 0, "2nd argument is not a reference to a VMware provisioning object");
+		return;
+	}
+	
+	my $source_vmhost_computer_name = $source->vmhost_os->data->get_computer_hostname();
+	my $destination_vmhost_computer_name = $destination->vmhost_os->data->get_computer_hostname();
+	
+	# Add extra checking here - easy for objects to not be created correctly
+	if (!$source_vmhost_computer_name) {
+		notify($ERRORS{'WARNING'}, 0, "failed to add host SSH key to known_hosts, source VM host computer name could not be determined");
+		return;
+	}
+	if (!$destination_vmhost_computer_name) {
+		notify($ERRORS{'WARNING'}, 0, "failed to add host SSH key to known_hosts on $source_vmhost_computer_name, destination VM host computer name could not be determined");
+		return;
+	}
+	
+	my $source_known_hosts_file_path = "/.ssh/known_hosts";
+	
+	# Figure out the IP address to use to connect to the destination
+	my $destination_remote_connection_target = determine_remote_connection_target($destination_vmhost_computer_name);
+	if (!$destination_remote_connection_target) {
+		notify($ERRORS{'WARNING'}, 0, "failed to add host SSH key from $destination_vmhost_computer_name to known_hosts on $source_vmhost_computer_name, failed to determine the remote connection target (IP address) to use for connecting to $destination_vmhost_computer_name");
+		return;
+	}
+	
+	# Determine the host SSH key file path based on the VMware version
+	my $destination_vmware_product_name = $destination->get_vmhost_product_name();
+	my $destination_private_host_key_file_path;
+	if ($destination_vmware_product_name =~ /4\./) {
+		$destination_private_host_key_file_path = "/etc/dropbear/dropbear_rsa_host_key";
+	}
+	else {
+		$destination_private_host_key_file_path = "/etc/ssh/ssh_host_rsa_key";
+	}
+	
+	# Extract the public key from the destination's private SSH host key
+	my $destination_public_key_string = $destination->vmhost_os->get_ssh_public_key_string($destination_private_host_key_file_path);
+	if (!$destination_public_key_string) {
+		notify($ERRORS{'WARNING'}, 0, "failed to add host SSH key from $destination_vmhost_computer_name to known_hosts on $source_vmhost_computer_name, failed to determine public SSH key from $destination_private_host_key_file_path on $destination_vmhost_computer_name");
+		return;
+	}
+	
+	# Make sure there is no comment in the public key or things won't work
+	$destination_public_key_string =~ s/(ssh-\w+\s+[^=\s]+).*/$1/;
+	
+	# Remove any existing entries from the known_hosts file on the source
+	$source->vmhost_os->execute("sed -i -e \"/^$destination_remote_connection_target /d\" $source_known_hosts_file_path");
+	
+	# Assemble the known_hosts line
+	my $source_known_hosts_string = "$destination_remote_connection_target $destination_public_key_string";
+	
+	if ($source->vmhost_os->append_text_file($source_known_hosts_file_path, $source_known_hosts_string)) {
+		notify($ERRORS{'OK'}, 0, "added host SSH key from $destination_vmhost_computer_name to known_hosts on $source_vmhost_computer_name:\n$source_known_hosts_string");
+		return 1;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to append known_hosts on $source_vmhost_computer_name:\n$source_known_hosts_string");
+		return 0;
 	}
 }
 
@@ -8902,6 +8892,10 @@ sub setup_migrate_vm {
 	my $source_vmhost_id = $self->data->get_vmhost_id();
 	
 	my $source_assigned_vm_info = get_vmhost_assigned_vm_info($source_vmhost_id);
+	if (!keys %$source_assigned_vm_info) {
+		print "No VMs are assigned to $source_vmhost_computer_name\n";
+		return;
+	}
 	
 	#print "\nSelect VMs to be migrated off of $source_vmhost_computer_name:\n";
 	#my $vm_computer_id = setup_get_hash_multiple_choice($source_assigned_vm_info, 'SHORTNAME', 'currentimagerevision-imagename') || return;
@@ -8949,10 +8943,15 @@ sub setup_migrate_vm {
 
 =head2 migrate_vm
 
- Parameters  : $vm_identifier, $destination_vmhost_identifier
+ Parameters  : $vm_identifier, $destination_vmhost_identifier, $options (optional)
  Returns     : boolean
  Description : Migrates a VM from the host the VM is assigned to to another
-               host.
+               host. An optional $options hash reference may be supplied which
+               may contain the following keys:
+               * revert_destination_on_error - Used for development and
+                 troubleshooting. If a migration fails, the destination VM is
+                 removed by default. If this is set to true the destination VM
+                 will be left on the VM host and powered off.
 
 =cut
 
@@ -8962,7 +8961,7 @@ sub migrate_vm {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return;
 	}
-	my ($vm_identifier, $destination_vmhost_identifier) = @_;
+	my ($vm_identifier, $destination_vmhost_identifier, $options) = @_;
 	if (!defined($vm_identifier)) {
 		notify($ERRORS{'WARNING'}, 0, "VM identifier argument was not supplied");
 		return;
@@ -8970,6 +8969,11 @@ sub migrate_vm {
 	elsif (!defined($destination_vmhost_identifier)) {
 		notify($ERRORS{'WARNING'}, 0, "destination VM host identifier argument was not supplied");
 		return;
+	}
+	
+	my $revert_destination_on_error = 1;
+	if (defined($options->{revert_destination_on_error})) {
+		$revert_destination_on_error = $options->{revert_destination_on_error};
 	}
 	
 	if ($SETUP_MODE) {
@@ -9150,9 +9154,10 @@ sub migrate_vm {
 	}
 	
 	# Configure host to host SSH
-	$source->configure_vmhost_ssh_keys() || return;
-	$source->copy_vmhost_ssh_public_key_to_another_host($destination) || return;
-	
+	if (!($source->configure_root_ssh_key() && $source->add_ssh_root_key_to_authorized_keys($destination) && $source->add_ssh_host_key_to_known_hosts($destination))) {
+		notify($ERRORS{'WARNING'}, 0, "unable to migrate VM: $vm_computer_name, failed to configure SSH access between $source_vmhost_computer_name and $destination_vmhost_computer_name");
+		return;
+	}
 	
 	# Find the .vmx file on the source VM host
 	my @source_vmx_file_paths = $source->api->get_registered_vms();
@@ -9168,6 +9173,14 @@ sub migrate_vm {
 	my $source_vmx_file_path = $matching_source_vmx_file_paths[0];
 	notify($ERRORS{'DEBUG'}, 0, "found matching .vmx file on source VM host $source_vmhost_computer_name: $source_vmx_file_path");
 	$source->set_vmx_file_path($source_vmx_file_path);
+	
+	my $source_vmx_file_name = $source->get_vmx_file_name();
+	my $source_vmx_directory_name = $source->get_vmx_directory_name();
+	my $source_vmx_directory_path = $source->get_vmx_directory_path();
+	my $source_vmx_directory_url_path = $source->_get_url_path($source_vmx_directory_path);
+	my $source_vmx_base_directory_path = $source->get_vmx_base_directory_path();
+	my $source_vmx_base_directory_url_path = $source->_get_url_path($source_vmx_base_directory_path);
+	
 	
 	# Possible TODO: if problems occur using VMware's suspend/resume, try OS's hibernate
 	# Figure out if VMware's suspend or the guest OS's hibernate should be used
@@ -9194,7 +9207,6 @@ sub migrate_vm {
 	#		last;
 	#	}
 	#}
-	
 	## Perform additional checks if VMware's suspend/resume can't be used
 	#if ($suspend_method eq 'os') {
 	#	# Check if the VM OS object implements a hibernate subroutine
@@ -9205,36 +9217,46 @@ sub migrate_vm {
 	#}
 	#notify($ERRORS{'DEBUG'}, 0, "source VM suspend/hibernate method: " . ($suspend_method eq 'vmware' ? 'VMware suspend' : 'guest OS hibernate'));
 	
-	# Construct destination vmx file path
-	my $source_vmx_directory_name = $source->get_vmx_directory_name();
-	my $source_vmx_file_name = $source->get_vmx_file_name();
-	my $destination_vmx_base_directory_path = $destination->get_vmx_base_directory_path();
-	my $destination_vmx_file_path = "$destination_vmx_base_directory_path/$source_vmx_directory_name/$source_vmx_file_name";
-	$destination->set_vmx_file_path($destination_vmx_file_path);
 	
-	# Needed for search/replace
-	my $source_vmx_base_directory_path = $source->get_vmx_base_directory_path();
-	my $source_vmx_base_directory_url_path = $source->_get_url_path($source_vmx_base_directory_path);
+	# Figure out the destination vmx file path
+	my $destination_vmx_directory_name = $source_vmx_directory_name;
+	my $destination_vmx_base_directory_path = $destination->get_vmx_base_directory_path();
 	my $destination_vmx_base_directory_url_path = $destination->_get_url_path($destination_vmx_base_directory_path);
 	
-	# Needed to locate files to copy
-	my $source_vmx_directory_path = $source->get_vmx_directory_path();
+	# Check if source and destination were to use the same vmx directory
+	# This causes problems where the destination VM won't power on - not sure why
+	# The vmware.log file will contain information related to the VM hosts having different CPU features
+	# For some reason, using a different directory seems to solve the problem
+	#    015-04-29T18:32:21.581Z| vmx| I120: evcMasksInCpt = 0
+	#    015-04-29T18:32:21.581Z| vmx| I120: evcCompatibilityMode = 0
+	#    015-04-29T18:32:21.581Z| vmx| I120: Error: This host has a usermode feature set incompatible with the host on which it was suspended.
+	#    015-04-29T18:32:21.581Z| vmx| I120: Host: 0x02982203, Checkpoint: 0x00982201
+	#    015-04-29T18:32:21.581Z| vmx| I120: CPUID test failed: 1.ecx.
+	#    015-04-29T18:32:21.582Z| vmx| I120: Msg_Question:
+	#    015-04-29T18:32:21.582Z| vmx| I120: [msg.checkpoint.cpucheck.fail.feature] The features supported by the processors in this machine are different from the features supported by the processors in the machine on which the virtual machine state was saved.
+	#    015-04-29T18:32:21.582Z| vmx| I120: [msg.checkpoint.cpucheck.fail.hard] Resume on a machine with similar processors.
+	#    015-04-29T18:32:21.582Z| vmx| I120: [msg.checkpoint.restore.cpufail] An error occurred while restoring the CPU state from file "/vmfs/volumes/55410273-6261f90c-8568-00053348d88e/shared/arkvmm194_3081-v5/arkvmm194_3081-v5-9478be0b.vmss".
+	#    015-04-29T18:32:21.582Z| vmx| I120: [msg.checkpoint.resume.softError] Your virtual machine did not resume because of a correctable error. Preserve the suspended state and correct the error, or discard the suspended state.
+	if ($source_vmx_directory_url_path eq "$destination_vmx_base_directory_url_path/$source_vmx_directory_name") {
+		$destination_vmx_directory_name .= "_$destination_vmhost_computer_name";
+		notify($ERRORS{'DEBUG'}, 0, "source and destination VM use the same vmx directory: $source_vmx_directory_url_path, changing destination vmx directory name to avoid problems powering on the destination VM: $destination_vmx_directory_name");
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "source and destination VM use different vmx directories:\nsource: $source_vmx_directory_url_path\ndestination: $destination_vmx_base_directory_url_path/$source_vmx_directory_name");
+	}
 	
-	# Needed to verify destination VM doesn't exist 
+	# Construct destination vmx file path
+	my $destination_vmx_file_path = "$destination_vmx_base_directory_path/$destination_vmx_directory_name/$source_vmx_file_name";
+	$destination->set_vmx_file_path($destination_vmx_file_path);
+	
 	my $destination_vmx_directory_path = $destination->get_vmx_directory_path();
-	
-	# Check if sure source and destination directories are different
-	my $source_vmx_directory_url_path = $source->_get_url_path($source_vmx_directory_path);
 	my $destination_vmx_directory_url_path = $destination->_get_url_path($destination_vmx_directory_path);
-	my $same_vmx_directory = ($source_vmx_directory_url_path eq $destination_vmx_directory_url_path ? 1 : 0);
 	
 	# Create a snapshot of the source
 	# This is to reduce the amount of data to copy while the VM is hibernating
-	if (!$same_vmx_directory) {
-		notify($ERRORS{'DEBUG'}, 0, "attempting to create snapshot of $vm_computer_name on $source_vmhost_computer_name");
-		$source->snapshot() || return;
-		notify($ERRORS{'OK'}, 0, "created snapshot of $vm_computer_name on $source_vmhost_computer_name");
-	}
+	notify($ERRORS{'DEBUG'}, 0, "attempting to create snapshot of $vm_computer_name on $source_vmhost_computer_name");
+	$source->snapshot() || return;
+	notify($ERRORS{'OK'}, 0, "created snapshot of $vm_computer_name on $source_vmhost_computer_name");
 	
 	# Figure out the parent .vmdk file being used by the source VM
 	my @source_vmdk_file_paths = $self->api->get_vm_virtual_disk_file_paths($source_vmx_file_path);
@@ -9256,6 +9278,7 @@ sub migrate_vm {
 	
 	# Set the vmdk file path in the source VMware object
 	$source->set_vmdk_file_path($source_master_vmdk_file_path);
+	my $source_vmdk_file_path = $source->get_vmdk_file_path();
 	
 	# The last file path is actively being used by the VM
 	my $source_active_vmdk_file_path = $source_primary_vmdk_file_paths[-1];
@@ -9283,6 +9306,31 @@ sub migrate_vm {
 	my $destination_vmdk_directory_url_path = $destination->_get_url_path($destination_vmdk_directory_path);
 	my $same_vmdk_directory = ($source_vmdk_directory_url_path eq $destination_vmdk_directory_url_path ? 1 : 0);
 	
+	# If the source and destination are using the same vmdk directory, check if the vmdk is dedicated
+	if ($same_vmdk_directory) {
+		notify($ERRORS{'DEBUG'}, 0, "source and destination VMs use the same vmdk directory: $source_vmdk_directory_url_path");
+		my $source_vmdk_directory_path_dedicated = $source->get_vmdk_directory_path_dedicated();
+		my $source_vmdk_directory_url_path_dedicated = $source->_get_url_path($source_vmdk_directory_path_dedicated);
+		if ($source_vmdk_directory_url_path_dedicated eq $destination_vmdk_directory_url_path) {
+			notify($ERRORS{'DEBUG'}, 0, "vmdk directory is dedicated: $source_vmdk_directory_url_path_dedicated");
+			
+			# Override the destination vmdk file path
+			$destination->set_vmdk_file_path($destination->get_vmdk_file_path_dedicated());
+			$destination_vmdk_file_path = $destination->get_vmdk_file_path();
+			$destination_vmdk_directory_path = $destination->get_vmdk_directory_path();
+			$destination_vmdk_directory_url_path = $destination->_get_url_path($destination_vmdk_directory_path);
+			$destination->{vm_dedicated} = 1;
+			$same_vmdk_directory = 0;
+		}
+		else {
+			notify($ERRORS{'DEBUG'}, 0, "vmdk directory is NOT dedicated: $source_vmdk_directory_url_path_dedicated");
+		}
+	}
+	
+	my $source_vmdk_file_url_path = $source->_get_url_path($source_vmdk_file_path);
+	my $destination_vmdk_file_url_path = $destination->_get_url_path($destination_vmdk_file_path);
+	
+
 	# Copy the parent vmdk to the correct location on the destination
 	# This may fail if vmdk doesn't exist on destination datastore or repository
 	notify($ERRORS{'DEBUG'}, 0, "copying destination master vmdk if necessary: $destination_vmdk_file_path");
@@ -9292,22 +9340,17 @@ sub migrate_vm {
 	}
 	
 	# Create the destination directory
-	if ($same_vmx_directory) {
-		notify($ERRORS{'DEBUG'}, 0, "directory does not need to be created on destination VM host $destination_vmhost_computer_name because source VM host is using the same directory: $destination_vmx_directory_path");
+	if ($destination->vmhost_os->file_exists($destination_vmx_directory_path)) {
+		notify($ERRORS{'WARNING'}, 0, "directory already exists on destination VM host $destination_vmhost_computer_name: $destination_vmx_directory_path, attempting to delete directory");
+		$destination->vmhost_os->delete_file($destination_vmx_directory_path) || return;
+	}
+	
+	if ($destination->vmhost_os->create_directory($destination_vmx_directory_path)) {
+		notify($ERRORS{'OK'}, 0, "created directory on destination VM host $destination_vmhost_computer_name: $destination_vmx_directory_path");
 	}
 	else {
-		if ($destination->vmhost_os->file_exists($destination_vmx_directory_path)) {
-			notify($ERRORS{'WARNING'}, 0, "directory already exists on destination VM host $destination_vmhost_computer_name: $destination_vmx_directory_path, attempting to delete directory");
-			$destination->vmhost_os->delete_file($destination_vmx_directory_path) || return;
-		}
-		
-		if ($destination->vmhost_os->create_directory($destination_vmx_directory_path)) {
-			notify($ERRORS{'OK'}, 0, "created directory on destination VM host $destination_vmhost_computer_name: $destination_vmx_directory_path");
-		}
-		else {
-			notify($ERRORS{'WARNING'}, 0, "failed to create directory on destination VM host $destination_vmhost_computer_name: $destination_vmx_directory_path");
-			return;
-		}
+		notify($ERRORS{'WARNING'}, 0, "failed to create directory on destination VM host $destination_vmhost_computer_name: $destination_vmx_directory_path");
+		return;
 	}
 	
 	# Get a list of all files in the source VM directory
@@ -9319,7 +9362,7 @@ sub migrate_vm {
 	my @destination_edit_file_paths;
 	if (!@source_vmx_directory_file_paths) {
 		notify($ERRORS{'WARNING'}, 0, "failed to migrate $vm_computer_name, no files were found in source vmx directory on $source_vmhost_computer_name: $source_vmx_directory_path");
-		$destination->vmhost_os->delete_file($destination_vmx_directory_path) if (!$same_vmx_directory);
+		$destination->vmhost_os->delete_file($destination_vmx_directory_path);
 		return;
 	}
 	for my $source_file_path (@source_vmx_directory_file_paths) {
@@ -9338,31 +9381,29 @@ sub migrate_vm {
 			push @destination_edit_file_paths, $destination_file_path;
 		}
 		
-		if (!$same_vmx_directory) {
-			# Keep list of files in use by the source VM which is still running
-			# These will be copied after the VM hibernates
-			if ($source_file_path =~ /$source_active_vmdk_file_base_name[\.-].*vmdk$/) {
-				push @source_active_file_paths, $source_file_path;
-				notify($ERRORS{'DEBUG'}, 0, "file is actively being used by the source VM, will be copied after source VM is suspended: $source_file_name");
-				next;
-			}
-			
-			# Attempt to retrieve the source file size - useful info to present because copy may take a long time
-			my $source_file_size_bytes = $source->vmhost_os->get_file_size($source_file_path);
-			my $file_size_string = '';
-			if ($source_file_size_bytes) {
-				$file_size_string = ' (' . get_file_size_info_string($source_file_size_bytes) . ')';
-			}
-			
-			notify($ERRORS{'DEBUG'}, 0, "copying file to destination: $destination_vmhost_computer_name:$destination_file_path" . $file_size_string);
-			if ($source->copy_file_to_another_host($source_file_path, $destination, $destination_file_path)) {
-				#notify($ERRORS{'OK'}, 0, "copied file to destination: $destination_vmhost_computer_name:$destination_file_path");
-			}
-			else {
-				notify($ERRORS{'WARNING'}, 0, "failed to migrate $vm_computer_name, failed to copy file from source to destination VM host: $source_vmhost_computer_name:$source_file_path --> $destination_vmhost_computer_name:$destination_file_path");
-				$destination->vmhost_os->delete_file($destination_vmx_directory_path);
-				return;
-			}
+		# Keep list of files in use by the source VM which is still running
+		# These will be copied after the VM hibernates
+		if ($source_file_path =~ /$source_active_vmdk_file_base_name[\.-].*vmdk$/) {
+			push @source_active_file_paths, $source_file_path;
+			notify($ERRORS{'DEBUG'}, 0, "file is actively being used by the source VM, will be copied after source VM is suspended: $source_file_name");
+			next;
+		}
+		
+		# Attempt to retrieve the source file size - useful info to present because copy may take a long time
+		my $source_file_size_bytes = $source->vmhost_os->get_file_size($source_file_path);
+		my $file_size_string = '';
+		if ($source_file_size_bytes) {
+			$file_size_string = ' (' . get_file_size_info_string($source_file_size_bytes) . ')';
+		}
+		
+		notify($ERRORS{'DEBUG'}, 0, "copying file to destination: $destination_vmhost_computer_name:$destination_file_path" . $file_size_string);
+		if ($source->copy_file_to_another_host($source_file_path, $destination, $destination_file_path)) {
+			#notify($ERRORS{'OK'}, 0, "copied file to destination: $destination_vmhost_computer_name:$destination_file_path");
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "failed to migrate $vm_computer_name, failed to copy file from source to destination VM host: $source_vmhost_computer_name:$source_file_path --> $destination_vmhost_computer_name:$destination_file_path");
+			$destination->vmhost_os->delete_file($destination_vmx_directory_path);
+			return;
 		}
 	}
 	
@@ -9378,7 +9419,7 @@ sub migrate_vm {
 		}
 		else {
 			notify($ERRORS{'WARNING'}, 0, "failed to migrate $vm_computer_name, failed to suspend source VM");
-			$destination->vmhost_os->delete_file($destination_vmx_directory_path) if (!$same_vmx_directory);
+			$destination->vmhost_os->delete_file($destination_vmx_directory_path);
 			return;
 		}
 	}
@@ -9389,7 +9430,7 @@ sub migrate_vm {
 		}
 		else {
 			notify($ERRORS{'WARNING'}, 0, "failed to migrate $vm_computer_name, failed to hibernate VM's guest OS");
-			$destination->vmhost_os->delete_file($destination_vmx_directory_path) if (!$same_vmx_directory);
+			$destination->vmhost_os->delete_file($destination_vmx_directory_path);
 			return;
 		}
 	}
@@ -9407,53 +9448,59 @@ sub migrate_vm {
 	}
 	
 	# Copy the files that were actively being used by the source VM
-	if (!$same_vmx_directory) {
-		for my $source_file_path (@source_active_file_paths) {
-			my $file_name = $self->_get_file_name($source_file_path);
-			my $destination_file_path = "$destination_vmx_directory_path/$file_name";
-			if ($source->copy_file_to_another_host($source_file_path, $destination, $destination_file_path)) {
-				notify($ERRORS{'OK'}, 0, "copied file to destination VM host: $destination_vmhost_computer_name:$destination_file_path");
-			}
-			else {
-				notify($ERRORS{'WARNING'}, 0, "failed to migrate $vm_computer_name, failed to copy file which was actively being used by the VM from source to destination VM host after the VM hibernated: $source_vmhost_computer_name:$source_file_path --> $destination_vmhost_computer_name:$destination_file_path");
-				migrate_revert_source($source, $vm_os);
-				$destination->vmhost_os->delete_file($destination_vmx_directory_path);
-				return;
-			}
+	for my $source_file_path (@source_active_file_paths) {
+		my $file_name = $self->_get_file_name($source_file_path);
+		my $destination_file_path = "$destination_vmx_directory_path/$file_name";
+		if ($source->copy_file_to_another_host($source_file_path, $destination, $destination_file_path)) {
+			notify($ERRORS{'OK'}, 0, "copied file to destination VM host: $destination_vmhost_computer_name:$destination_file_path");
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "failed to migrate $vm_computer_name, failed to copy file which was actively being used by the VM from source to destination VM host after the VM hibernated: $source_vmhost_computer_name:$source_file_path --> $destination_vmhost_computer_name:$destination_file_path");
+			migrate_revert_source($source, $vm_os);
+			$destination->vmhost_os->delete_file($destination_vmx_directory_path);
+			return;
 		}
 	}
 	
 	# Update files on destination which have paths specific to the source VM host
-	my $file_replacements = {};
-	if (!$same_vmx_directory) {
-		$file_replacements->{$source_vmx_base_directory_path} = $destination_vmx_base_directory_path;
-		$file_replacements->{$source_vmx_base_directory_url_path} = $destination_vmx_base_directory_url_path;
-	}
-	if (!$same_vmdk_directory) {
-		$file_replacements->{$source_vmdk_base_directory_path} = $destination_vmdk_base_directory_path;
-		$file_replacements->{$source_vmdk_base_directory_url_path} = $destination_vmdk_base_directory_url_path;
-	};
-	SOURCE_PATTERN: for my $source_pattern (sort keys %$file_replacements) {
-		my $destination_pattern = $file_replacements->{$source_pattern};
-		next if ($source_pattern eq $destination_pattern);
-		notify($ERRORS{'DEBUG'}, 0, "updating files on destination VM host $destination_vmhost_computer_name, pattern: $source_pattern --> $destination_pattern");
-		for my $destination_file_path (@destination_edit_file_paths) {
-			my $sed_command = "sed -i -e \"s|$source_vmx_base_directory_path/|$destination_vmx_base_directory_path/|g\" $destination_file_path";
-			my ($sed_exit_status, $sed_output) = $destination->vmhost_os->execute($sed_command);
+	my @file_replacements;
+	
+	push @file_replacements, [$source_vmdk_file_path, $destination_vmdk_file_path];
+	push @file_replacements, [$source_vmdk_file_url_path, $destination_vmdk_file_url_path];
+	
+	push @file_replacements, ["$source_vmx_directory_path/", "$destination_vmx_directory_path/"];
+	push @file_replacements, ["$source_vmx_directory_url_path/", "$destination_vmx_directory_url_path/"];
+	
+	push @file_replacements, ["$source_vmdk_directory_path/", "$destination_vmdk_directory_path/"];
+	push @file_replacements, ["$source_vmdk_directory_url_path/", "$destination_vmdk_directory_url_path/"];
+	
+	push @file_replacements, ["$source_vmx_base_directory_path/", "$destination_vmx_base_directory_path/"];
+	push @file_replacements, ["$source_vmx_base_directory_url_path/", "$destination_vmx_base_directory_url_path/"];
+	
+	push @file_replacements, ["$source_vmdk_base_directory_path/", "$destination_vmdk_base_directory_path/"];
+	push @file_replacements, ["$source_vmdk_base_directory_url_path/", "$destination_vmdk_base_directory_url_path/"];
+
+	for my $destination_file_path (@destination_edit_file_paths) {
+		SOURCE_PATTERN: for my $file_replacement (@file_replacements) {
+			my ($source_pattern, $destination_pattern) = @$file_replacement;
+			next if ($source_pattern eq $destination_pattern);
+			
+			my $sed_command = "sed -i -e \"s|$source_pattern|$destination_pattern|g\" $destination_file_path";
+			my ($sed_exit_status, $sed_output) = $destination->vmhost_os->execute($sed_command, 0);
 			if (!defined($sed_output)) {
 				notify($ERRORS{'WARNING'}, 0, "failed to migrate $vm_computer_name, failed to execute command on destination VM host $destination_vmhost_computer_name: $sed_command");
 				migrate_revert_source($source, $vm_os);
-				$destination->vmhost_os->delete_file($destination_vmx_directory_path) if (!$same_vmx_directory);
+				$destination->vmhost_os->delete_file($destination_vmx_directory_path);
 				return;
 			}
 			elsif (grep(/sed:/, @$sed_output)) {
 				notify($ERRORS{'WARNING'}, 0, "failed to migrate $vm_computer_name, failed to update file on destination VM host $destination_vmhost_computer_name, exit status: $sed_exit_status\ncommand:\n$sed_command\noutput:\n" . join("\n", @$sed_output));
 				migrate_revert_source($source, $vm_os);
-				$destination->vmhost_os->delete_file($destination_vmx_directory_path) if (!$same_vmx_directory);
+				$destination->vmhost_os->delete_file($destination_vmx_directory_path);
 				return;
 			}
 			else {
-				#notify($ERRORS{'OK'}, 0, "updated file on $destination_vmhost_computer_name: $destination_file_path");
+				notify($ERRORS{'OK'}, 0, "updated file on $destination_vmhost_computer_name: $destination_file_path, pattern: $source_pattern --> $destination_pattern");
 			}
 		}
 	}
@@ -9466,7 +9513,9 @@ sub migrate_vm {
 	else {
 		notify($ERRORS{'WARNING'}, 0, "failed to migrate $vm_computer_name, failed to register VM on destination VM host $destination_vmhost_computer_name: $destination_vmx_file_path");
 		migrate_revert_source($source, $vm_os);
-		$destination->vmhost_os->delete_file($destination_vmx_directory_path) if (!$same_vmx_directory);
+		if ($revert_destination_on_error) {
+			$destination->vmhost_os->delete_file($destination_vmx_directory_path);
+		}
 		return;
 	}
 	
@@ -9478,8 +9527,10 @@ sub migrate_vm {
 	else {
 		notify($ERRORS{'WARNING'}, 0, "failed to migrate $vm_computer_name, failed to power on VM on destination VM host $destination_vmhost_computer_name: $destination_vmx_file_path");
 		migrate_revert_source($source, $vm_os);
-		$destination->api->vm_unregister($destination_vmx_file_path);
-		$destination->vmhost_os->delete_file($destination_vmx_directory_path) if (!$same_vmx_directory);
+		if ($revert_destination_on_error) {
+			$destination->api->vm_unregister($destination_vmx_file_path);
+			$destination->vmhost_os->delete_file($destination_vmx_directory_path);
+		}
 		return;
 	}
 	
@@ -9491,22 +9542,19 @@ sub migrate_vm {
 	else {
 		notify($ERRORS{'WARNING'}, 0, "failed to migrate $vm_computer_name, VM never responded on destination VM host $destination_vmhost_computer_name");
 		migrate_revert_source($source, $vm_os);
-		$destination->api->vm_unregister($destination_vmx_file_path);
-		$destination->vmhost_os->delete_file($destination_vmx_directory_path) if (!$same_vmx_directory);
+		if ($revert_destination_on_error) {
+			$destination->api->vm_unregister($destination_vmx_file_path);
+			$destination->vmhost_os->delete_file($destination_vmx_directory_path);
+		}
 		return;
 	}
 	
 	my $hibernate_duration = (time - $hibernate_start_time);
 	
 	# Remove the original VM from the source VM host
-	if ($same_vmx_directory) {
-		$source->api->vm_unregister($source_vmx_file_path);
-	}
-	else {
-		notify($ERRORS{'DEBUG'}, 0, "deleting original VM from $source_vmhost_computer_name: $source_vmx_file_path");
-		$source->delete_vm($source_vmx_file_path);
-		notify($ERRORS{'OK'}, 0, "deleted original VM from $source_vmhost_computer_name: $source_vmx_file_path");
-	}
+	notify($ERRORS{'DEBUG'}, 0, "deleting original VM from $source_vmhost_computer_name: $source_vmx_file_path");
+	$source->delete_vm($source_vmx_file_path);
+	notify($ERRORS{'OK'}, 0, "deleted original VM from $source_vmhost_computer_name: $source_vmx_file_path");
 	
 	notify($ERRORS{'OK'}, 0, "migration of $vm_computer_name complete: $source_vmhost_computer_name --> $destination_vmhost_computer_name, hibernation duration: $hibernate_duration seconds");
 	return 1;

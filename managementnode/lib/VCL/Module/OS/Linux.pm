@@ -57,6 +57,7 @@ use VCL::utils;
 use English qw( -no_match_vars );
 use Net::Netmask;
 use File::Basename;
+use File::Temp qw( tempfile mktemp );
 
 ##############################################################################
 
@@ -5174,7 +5175,8 @@ sub command_exists {
 	
 	my $computer_node_name = $self->data->get_computer_node_name();
 	
-	my ($exit_status, $output) = $self->execute("which $shell_command", 0);
+	my $command = "which $shell_command";
+	my ($exit_status, $output) = $self->execute($command, 0);
 	if (!defined($output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to execute command to determine if the '$shell_command' shell command exists on $computer_node_name");
 		return;
@@ -5185,7 +5187,7 @@ sub command_exists {
 		return 1;
 	}
 	else {
-		notify($ERRORS{'DEBUG'}, 0, "'$shell_command' command does NOT exist on $computer_node_name");
+		notify($ERRORS{'DEBUG'}, 0, "'$shell_command' command does NOT exist on $computer_node_name, command: $command\noutput:\n" . join("\n", @$output));
 		$self->{command_exists}{$shell_command} = 0;
 		return 0;
 	}
@@ -5850,6 +5852,324 @@ sub is_display_manager_running {
 	else {
 		notify($ERRORS{'DEBUG'}, 0, "display manager is not running on $computer_name");
 		return 0
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 generate_ssh_private_key_file
+
+ Parameters  : $private_key_file_path, $type (optional), $bits (optional), $comment (optional), $passphrase, $options (optional)
+ Returns     : boolean
+ Description : Calls ssh-keygen or dropbearkey to generate an SSH private key
+               file.
+
+=cut
+
+sub generate_ssh_private_key_file {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module::OS/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my ($private_key_file_path, $type, $bits, $comment, $passphrase, $options) = @_;
+	if (!$private_key_file_path) {
+		notify($ERRORS{'WARNING'}, 0, "private key file path argument was not specified");
+		return;
+	}
+	$type = 'rsa' unless $type;
+	$passphrase = '' unless $passphrase;
+	
+	if (defined($comment)) {
+		$comment =~ s/\\*(["])/\\"$1/g;
+	}
+	
+	my $computer_name = $self->data->get_computer_short_name();
+	
+	# Make sure the file does not already exist
+	if ($self->file_exists($private_key_file_path)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to generate SSH key, file already exists on $computer_name: $private_key_file_path");
+		return;
+	}
+	
+	if ($self->command_exists('ssh-keygen')) {
+		if ($self->_generate_ssh_private_key_file_helper($private_key_file_path, $type, $bits, $comment, $passphrase, $options, 'ssh-keygen')) {
+			return 1;
+		}
+	}
+	if ($self->command_exists('dropbearkey')) {
+		if ($self->_generate_ssh_private_key_file_helper($private_key_file_path, $type, $bits, $comment, $passphrase, $options, 'dropbearkey')) {
+			return 1;
+		}
+	}
+	
+	if (ref($self) =~ /ManagementNode/) {
+		notify($ERRORS{'WARNING'}, 0, "failed to generate SSH key on $computer_name: $private_key_file_path");
+		return;
+	}
+	
+	my $mn_temp_file_path = mktemp($computer_name . 'XXXXXX');
+	notify($ERRORS{'DEBUG'}, 0, "attempting to create SSH private key file on this management node ($mn_temp_file_path) and copy it to $computer_name ($private_key_file_path)");
+	my $result = $self->mn_os->generate_ssh_private_key_file($mn_temp_file_path, $type, $bits, $comment, $passphrase, $options);
+	if (!$result) {
+		notify($ERRORS{'WARNING'}, 0, "failed to create SSH private key file on this management node and copy it to $private_key_file_path on $computer_name");
+		$self->mn_os->delete_file($mn_temp_file_path);
+		return;
+	}
+	
+	if (!$self->copy_file_to($mn_temp_file_path, $private_key_file_path)) {
+		notify($ERRORS{'WARNING'}, 0, "create SSH private key file on this management node but failed to copy it to $private_key_file_path on $computer_name");
+		$self->mn_os->delete_file($mn_temp_file_path);
+		return;
+	}
+	else {
+		$self->mn_os->delete_file($mn_temp_file_path);
+		notify($ERRORS{'OK'}, 0, "created SSH private key file on this management and copied it to $private_key_file_path on $computer_name");
+		return 1;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 _generate_ssh_private_key_file_helper
+
+ Parameters  : $private_key_file_path, $type, $bits, $comment, $passphrase, $options, $utility
+ Returns     : boolean
+ Description : Calls ssh-keygen to generate an SSH private key file.
+
+=cut
+
+sub _generate_ssh_private_key_file_helper {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module::OS/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my ($private_key_file_path, $type, $bits, $comment, $passphrase, $options, $utility) = @_;
+	if (!defined($utility)) {
+		notify($ERRORS{'WARNING'}, 0, "utility argument was not supplied");
+		return;
+	}
+	
+	my $computer_name = $self->data->get_computer_short_name();
+	
+	my $command;
+	if ($utility eq 'ssh-keygen') {
+		$command = "ssh-keygen -t $type -f \"$private_key_file_path\" -N \"$passphrase\"";
+		$command .= " -b $bits" if (defined($bits) && length($bits));
+		$comment .= " $options" if (defined($options) && length($options));
+		$command .= " -C \"$comment\"" if (defined($comment) && length($comment));
+	}
+	elsif ($utility eq 'dropbearkey') {
+		$command = "dropbearkey -t $type -f \"$private_key_file_path\"";
+		$command .= " -s $bits" if (defined($bits) && length($bits));
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "invalid utility argument provided: '$utility', it must either be 'ssh-keygen' or 'dropbearkey'");
+		return;
+	}
+	
+	my ($exit_status, $output) = $self->execute($command);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to generate SSH key using $utility on $computer_name: $command");
+		return;
+	}
+	elsif ($exit_status ne '0') {
+		notify($ERRORS{'WARNING'}, 0, "failed to generate SSH key using $utility on $computer_name, exit status: $exit_status, command:\n$command\noutput:\n" . join("\n", @$output));
+		return;
+	}
+	else {
+		notify($ERRORS{'OK'}, 0, "generated SSH key using $utility on $computer_name: $private_key_file_path, command: $command");
+		return 1;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 generate_ssh_public_key_file
+
+ Parameters  : $private_key_file_path, $public_key_file_path, $comment (optional)
+ Returns     : boolean
+ Description : Calls ssh-keygen to retrieve the corresponding SSH public key
+               from a private key file and generates a file containing the
+               public key.
+
+=cut
+
+sub generate_ssh_public_key_file {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module::OS/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my ($private_key_file_path, $public_key_file_path, $comment) = @_;
+	if (!$private_key_file_path) {
+		notify($ERRORS{'WARNING'}, 0, "private key file path argument was not specified");
+		return;
+	}
+	if (!$public_key_file_path) {
+		notify($ERRORS{'WARNING'}, 0, "public key file path argument was not specified");
+		return;
+	}
+	
+	my $computer_name = $self->data->get_computer_short_name();
+	
+	# Make sure the private key file exists
+	if (!$self->file_exists($private_key_file_path)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to generate SSH public key file, private key file does not exist on $computer_name: $private_key_file_path");
+		return;
+	}
+	
+	# Make sure the public key file does not exist
+	if ($self->file_exists($public_key_file_path)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to create SSH public key file, public key file already exists on $computer_name: $public_key_file_path");
+		return;
+	}
+	
+	my $public_key_string = $self->get_ssh_public_key_string($private_key_file_path, $comment);
+	if (!$public_key_string) {
+		notify($ERRORS{'WARNING'}, 0, "failed to create SSH public key file: $public_key_file_path, public key string could not be retrieved from private key file: $private_key_file_path");
+		return;
+	}
+	
+	if ($self->create_text_file($public_key_file_path, $public_key_string)) {
+		notify($ERRORS{'DEBUG'}, 0, "created SSH public key file: $public_key_file_path");
+		return 1;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to create SSH public key file: $public_key_file_path");
+		return;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_ssh_public_key_string
+
+ Parameters  : $private_key_file_path, $comment (optional)
+ Returns     : boolean
+ Description : Extracts the SSH public key from a private key file.
+
+=cut
+
+sub get_ssh_public_key_string {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module::OS/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my ($private_key_file_path, $comment) = @_;
+	if (!$private_key_file_path) {
+		notify($ERRORS{'WARNING'}, 0, "private key file path argument was not specified");
+		return;
+	}
+	
+	my $computer_name = $self->data->get_computer_short_name();
+	
+	# Make sure the private key file exists
+	if (!$self->file_exists($private_key_file_path)) {
+		notify($ERRORS{'WARNING'}, 0, "unable to retrieve SSH public key, private key file does not exist on $computer_name: $private_key_file_path");
+		return;
+	}
+	
+	my $public_key_string;
+	if ($self->command_exists('ssh-keygen')) {
+		$public_key_string = $self->_get_ssh_public_key_string_helper($private_key_file_path, 'ssh-keygen');
+	}
+	if (!$public_key_string && $self->command_exists('dropbearkey')) {
+		$public_key_string = $self->_get_ssh_public_key_string_helper($private_key_file_path, 'dropbearkey');
+	}
+	if ($public_key_string) {
+		if ($comment) {
+			$public_key_string =~ s/(ssh-[^\s]+\s[^\s=]+).*$/$1== $comment/g;
+		}
+		return $public_key_string;
+	}
+	
+	if (ref($self) =~ /ManagementNode/) {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve SSH public key from private key file on $computer_name: $private_key_file_path");
+		return;
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "attempting to copy SSH private key file $private_key_file_path from $computer_name and extract the public key on this management node");
+	}
+	
+	my ($mn_temp_file_handle, $mn_temp_file_path) = tempfile(SUFFIX => '.key', UNLINK => 1);
+	if (!$self->copy_file_from($private_key_file_path, $mn_temp_file_path)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve SSH public key from private key file on $computer_name: $private_key_file_path, failed to copy temp file to management node");
+		$self->mn_os->delete_file($mn_temp_file_path);
+		return;
+	}
+	$self->mn_os->set_file_permissions($mn_temp_file_path, '0400');
+	
+	$public_key_string = $self->mn_os->get_ssh_public_key_string($mn_temp_file_path, $comment);
+	$self->mn_os->delete_file($mn_temp_file_path);
+	return $public_key_string;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 _get_ssh_public_key_string_helper
+
+ Parameters  : $private_key_file_path, $utility
+ Returns     : boolean
+ Description : 
+
+=cut
+
+sub _get_ssh_public_key_string_helper {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module::OS/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my ($private_key_file_path, $utility) = @_;
+	if (!$private_key_file_path) {
+		notify($ERRORS{'WARNING'}, 0, "private key file path argument was not specified");
+		return;
+	}
+	elsif (!$utility) {
+		notify($ERRORS{'WARNING'}, 0, "utility argument (ssh-keygen or dropbearkey) was not specified");
+		return;
+	}
+	
+	my $computer_name = $self->data->get_computer_short_name();
+	
+	my $command;
+	if ($utility eq 'ssh-keygen') {
+		$command = "ssh-keygen -y -f \"$private_key_file_path\"";
+	}
+	elsif ($utility eq 'dropbearkey') {
+		$command = "/bin/dropbearkey -f \"$private_key_file_path\" -y";
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "invalid utility argument provided: '$utility', it must either be 'ssh-keygen' or 'dropbearkey'");
+		return;
+	}
+	
+	my ($exit_status, $output) = $self->execute($command);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to retrieve SSH public key string using $utility from $private_key_file_path on $computer_name");
+		return;
+	}
+	elsif ($exit_status ne 0) {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve SSH public key string using $utility from $private_key_file_path on $computer_name, exit status: $exit_status, command:\n$command\noutput:\n" . join("\n", @$output));
+		return;
+	}
+	
+	my ($ssh_public_key_string) = grep(/^ssh-.*/, @$output);
+	if ($ssh_public_key_string) {
+		notify($ERRORS{'OK'}, 0, "retrieved SSH public key string using $utility from $private_key_file_path on $computer_name:\n$ssh_public_key_string");
+		return $ssh_public_key_string;
+	}
+	else {
+		notify($ERRORS{'OK'}, 0, "failed to retrieved SSH public key string using $utility from $private_key_file_path on $computer_name, output does not contain a line beginning with 'ssh-', command:\n$command\noutput:\n" . join("\n", @$output));
+		return;
 	}
 }
 

@@ -532,6 +532,8 @@ sub _get_vm_id {
 		return;
 	}
 	
+	return $self->{vm_id}{$vmx_file_path} if $self->{vm_id}{$vmx_file_path};
+	
 	# Get the VM IDs and vmx paths
 	my $vm_list = $self->_get_vm_list();
 	if (!defined($vm_list)) {
@@ -540,7 +542,10 @@ sub _get_vm_id {
 	}
 	
 	for my $vm_id (keys %$vm_list) {
-		return $vm_id if ($vm_list->{$vm_id} && $vmx_file_path eq $vm_list->{$vm_id});
+		if ($vm_list->{$vm_id} && $vmx_file_path eq $vm_list->{$vm_id}) {
+			$self->{vm_id}{$vmx_file_path} = $vm_id;
+			return $vm_id;
+		}
 	}
 	
 	notify($ERRORS{'WARNING'}, 0, "unable to determine VM ID, vmx file is not registered: $vmx_file_path, registered VMs:\n" . format_data($vm_list));
@@ -1484,6 +1489,10 @@ sub vm_unregister {
 	
 	my $vim_cmd_arguments = "vmsvc/unregister $vm_id";
 	my ($exit_status, $output) = $self->_run_vim_cmd($vim_cmd_arguments);
+	
+	# Delete cached .vmx - VM ID mapping if previously retrieved
+	delete $self->{vm_id}{$vmx_file_path};
+	
 	return if !$output;
 	
 	# Expected output if the VM is not registered:
@@ -2845,7 +2854,7 @@ sub _get_vm_virtual_disk_file_layout {
 	
 	my $virtual_disk_file_layout = $self->_parse_vim_cmd_output($output);
 	if ($virtual_disk_file_layout) {
-		notify($ERRORS{'DEBUG'}, 0, "retrieved virtual disk file layout for VM $vm_id ($vmx_file_path)\n" . format_data($virtual_disk_file_layout));
+		#notify($ERRORS{'DEBUG'}, 0, "retrieved virtual disk file layout for VM $vm_id ($vmx_file_path)\n" . format_data($virtual_disk_file_layout));
 		return $virtual_disk_file_layout;
 	}
 	else {
@@ -2859,7 +2868,7 @@ sub _get_vm_virtual_disk_file_layout {
 =head2 get_vm_virtual_disk_file_paths
 
  Parameters  : $vmx_file_path
- Returns     : array reference
+ Returns     : array
  Description : Retrieves a VM's virtual disk file layout and returns an array
                reference. Each top-level array element represent entire virtual
                disk and contains an array reference containing the virtual

@@ -3319,11 +3319,20 @@ sub copy_file_from {
 
 =head2 find_files
 
- Parameters  : $base_directory_path, $file_pattern, $search_subdirectories (optional)
+ Parameters  : $base_directory_path, $file_pattern, $search_subdirectories (optional), $type (optional)
  Returns     : array
  Description : Finds files under the base directory and any subdirectories path
                matching the file pattern. The search is not case sensitive. An
                array is returned containing matching file paths.
+               
+               Subdirectories will be searched if the $search_subdirectories
+               argument is true or not supplied.
+               
+               If the $type argument is supplied, it must be one of the
+               following:
+                  f - Only search for files (default behavior)
+                  d - Only search for directories
+                  * - Search for files and directories
 
 =cut
 
@@ -3335,13 +3344,32 @@ sub find_files {
 	}
 	
 	# Get the arguments
-	my ($base_directory_path, $file_pattern, $search_subdirectories) = @_;
+	my ($base_directory_path, $file_pattern, $search_subdirectories, $type) = @_;
 	if (!$base_directory_path || !$file_pattern) {
 		notify($ERRORS{'WARNING'}, 0, "base directory path and file pattern arguments were not specified");
 		return;
 	}
 	
 	$search_subdirectories = 1 if !defined($search_subdirectories);
+	
+	my $type_string;
+	$type = 'f' unless defined $type;
+	if ($type =~ /^f$/i) {
+		$type = 'f';
+		$type_string = 'files';
+	}
+	elsif ($type =~ /^d$/i) {
+		$type = 'd';
+		$type_string = 'directories';
+	}
+	elsif ($type =~ /^\*$/i) {
+		$type = undef;
+		$type_string = 'files and directories';
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "unsupported type argument: '$type'");
+		return;
+	}
 	
 	# Normalize the arguments
 	$base_directory_path = normalize_file_path($base_directory_path);
@@ -3360,17 +3388,17 @@ sub find_files {
 	
 	COMMAND: for my $find_command (@find_commands) {
 		# Run the find command
-		my $command = "$find_command \"$base_directory_path\" -iname \"$file_pattern\" -type f";
+		my $command = "$find_command \"$base_directory_path\" -iname \"$file_pattern\"";
+		$command .= " -type $type" if $type;
 		
 		if (!$search_subdirectories) {
 			$command .= " -maxdepth 1";
 		}
 		
-		#notify($ERRORS{'DEBUG'}, 0, "attempting to find files on $computer_node_name, base directory path: '$base_directory_path', pattern: $file_pattern, command: $command");
-		
+		#notify($ERRORS{'DEBUG'}, 0, "attempting to find $type_string on $computer_node_name, base directory path: '$base_directory_path', pattern: $file_pattern, command: $command");
 		my ($exit_status, $output) = $self->execute($command, 0);
 		if (!defined($output)) {
-			notify($ERRORS{'WARNING'}, 0, "failed to run command to find files on $computer_node_name, base directory path: '$base_directory_path', pattern: $file_pattern, command:\n$command");
+			notify($ERRORS{'WARNING'}, 0, "failed to run command to find $type_string on $computer_node_name, base directory path: '$base_directory_path', pattern: $file_pattern, command:\n$command");
 			return;
 		}
 		elsif (grep(/find:.*No such file or directory/i, @$output)) {
@@ -3383,7 +3411,7 @@ sub find_files {
 			next;
 		}
 		elsif (grep(/find: /i, @$output)) {
-			notify($ERRORS{'WARNING'}, 0, "error occurred attempting to find files on $computer_node_name\nbase directory path: $base_directory_path\npattern: $file_pattern\ncommand: $command\noutput:\n" . join("\n", @$output));
+			notify($ERRORS{'WARNING'}, 0, "error occurred attempting to find $type_string on $computer_node_name\nbase directory path: $base_directory_path\npattern: $file_pattern\ncommand: $command\noutput:\n" . join("\n", @$output));
 			return;
 		}
 		
@@ -3394,8 +3422,8 @@ sub find_files {
 		
 		my $file_count = scalar(@files);
 		
-		notify($ERRORS{'DEBUG'}, 0, "files found under $base_directory_path matching '$file_pattern': $file_count");
-		#notify($ERRORS{'DEBUG'}, 0, "files found: $file_count, base directory: '$base_directory_path', pattern: '$file_pattern'\ncommand: '$command', output:\n" . join("\n", @$output));
+		notify($ERRORS{'DEBUG'}, 0, "$type_string found under $base_directory_path matching pattern '$file_pattern': $file_count");
+		#notify($ERRORS{'DEBUG'}, 0, "$type_string found: $file_count, base directory: '$base_directory_path', pattern: '$file_pattern'\ncommand: '$command', output:\n" . join("\n", @$output));
 		return @files;
 	}
 	
@@ -3450,7 +3478,7 @@ sub get_file_checksum {
 
 =head2 get_tools_file_paths
 
- Parameters  : $pattern
+ Parameters  : $pattern (optional)
  Returns     : boolean
  Description : Scans the tools directory on the management node for any files
                which are intended for the OS of the reservation image. The OS
@@ -4093,182 +4121,6 @@ sub get_cluster_info_file_path {
 	$self->{cluster_info_file_path} = '/etc/cluster_info';
 	notify($ERRORS{'DEBUG'}, 0, "determined cluster_info file path for " . ref($self) . " OS module: $self->{cluster_info_file_path}");
 	return $self->{cluster_info_file_path};
-}
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 generate_ssh_key_files
-
- Parameters  : $private_key_file_path, $type (optional), $bits (optional), $comment (optional), $passphrase, $options (optional)
- Returns     : boolean
- Description : Calls ssh-keygen to generate an SSH private key file.
-
-=cut
-
-sub generate_ssh_key_files {
-	my $self = shift;
-	if (ref($self) !~ /VCL::Module::OS/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return;
-	}
-	
-	my ($private_key_file_path, $type, $bits, $comment, $passphrase, $options) = @_;
-	if (!$private_key_file_path) {
-		notify($ERRORS{'WARNING'}, 0, "private key file path argument was not specified");
-		return;
-	}
-	$type = 'rsa' unless $type;
-	$passphrase = '' unless $passphrase;
-	
-	my $computer_name = $self->data->get_computer_short_name();
-	
-	# Make sure the file does not already exist
-	if ($self->file_exists($private_key_file_path)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to generate SSH key, file already exists on $computer_name: $private_key_file_path");
-		return;
-	}
-	
-	my $command = "ssh-keygen -t $type -f \"$private_key_file_path\" -N \"$passphrase\"";
-	$command .= " -b $bits" if defined($bits);
-	$comment .= " $options" if defined($options);
-	
-	if (defined($comment)) {
-		$comment =~ s/\\*(["])/\\"$1/g;
-		$command .= " -C \"$comment\"";;
-	}
-	
-	my ($exit_status, $output) = $self->mn_os->execute($command);
-	if (!defined($output)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to execute command to generate SSH key on $computer_name: $command");
-		return;
-	}
-	elsif ($exit_status ne '0') {
-		notify($ERRORS{'WARNING'}, 0, "failed to generate SSH key on $computer_name, exit status: $exit_status, command:\n$command\noutput:\n" . join("\n", @$output));
-		return;
-	}
-	else {
-		notify($ERRORS{'OK'}, 0, "generated SSH key on $computer_name: $private_key_file_path, command: $command");
-		return 1;
-	}
-}
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 generate_ssh_public_key_string
-
- Parameters  : $private_key_file_path, $comment (optional)
- Returns     : boolean
- Description : Calls ssh-keygen to retrieve the corresponding SSH public key
-               from a private key file.
-
-=cut
-
-sub generate_ssh_public_key_string {
-	my $self = shift;
-	if (ref($self) !~ /VCL::Module::OS/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return;
-	}
-	
-	my ($private_key_file_path, $comment) = @_;
-	if (!$private_key_file_path) {
-		notify($ERRORS{'WARNING'}, 0, "private key file path argument was not specified");
-		return;
-	}
-	
-	my $computer_name = $self->data->get_computer_short_name();
-	
-	# Make sure the private key file exists
-	if (!$self->file_exists($private_key_file_path)) {
-		notify($ERRORS{'WARNING'}, 0, "unable to generate SSH public key, private key file does not exist on $computer_name: $private_key_file_path");
-		return;
-	}
-	
-	my $command = "ssh-keygen -y -f \"$private_key_file_path\"";
-	my ($exit_status, $output) = $self->mn_os->execute($command);
-	if (!defined($output)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to execute command to generate SSH public key string from $private_key_file_path on $computer_name");
-		return;
-	}
-	elsif ($exit_status ne '0') {
-		notify($ERRORS{'WARNING'}, 0, "failed to generate SSH public key string from $private_key_file_path on $computer_name, exit status: $exit_status, command:\n$command\noutput:\n" . join("\n", @$output));
-		return;
-	}
-	
-	my ($ssh_public_key_string) = grep(/^ssh-.*/, @$output);
-	if ($ssh_public_key_string) {
-		if ($comment) {
-			if ($ssh_public_key_string !~ /=/) {
-				$ssh_public_key_string .= "==";
-			}
-			$ssh_public_key_string .= " $comment";
-		}
-		notify($ERRORS{'OK'}, 0, "generated SSH public key string from $private_key_file_path on $computer_name: $ssh_public_key_string");
-		return $ssh_public_key_string;
-	}
-	else {
-		notify($ERRORS{'OK'}, 0, "failed to generate SSH public key string from $private_key_file_path on $computer_name, output does not contain a line beginning with 'ssh-', command:\n$command\noutput:\n" . join("\n", @$output));
-		return;
-	}
-}
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 create_ssh_public_key_file
-
- Parameters  : $private_key_file_path, $public_key_file_path, $comment (optional)
- Returns     : boolean
- Description : Calls ssh-keygen to retrieve the corresponding SSH public key
-               from a private key file and generates a file containing the
-               public key.
-
-=cut
-
-sub create_ssh_public_key_file {
-	my $self = shift;
-	if (ref($self) !~ /VCL::Module::OS/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return;
-	}
-	
-	my ($private_key_file_path, $public_key_file_path, $comment) = @_;
-	if (!$private_key_file_path) {
-		notify($ERRORS{'WARNING'}, 0, "private key file path argument was not specified");
-		return;
-	}
-	if (!$public_key_file_path) {
-		notify($ERRORS{'WARNING'}, 0, "public key file path argument was not specified");
-		return;
-	}
-	
-	my $computer_name = $self->data->get_computer_short_name();
-	
-	# Make sure the private key file exists
-	if (!$self->file_exists($private_key_file_path)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to generate SSH public key file, private key file does not exist on $computer_name: $private_key_file_path");
-		return;
-	}
-	
-	# Make sure the public key file does not exist
-	if ($self->file_exists($public_key_file_path)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to create SSH public key file, public key file already exists on $computer_name: $public_key_file_path");
-		return;
-	}
-	
-	my $public_key_string = $self->generate_ssh_public_key_string($private_key_file_path, $comment);
-	if (!$public_key_string) {
-		notify($ERRORS{'WARNING'}, 0, "failed to create SSH public key file: $public_key_file_path, public key string could not be retrieved from private key file: $private_key_file_path");
-		return;
-	}
-	
-	if ($self->create_text_file($public_key_file_path, $public_key_string)) {
-		notify($ERRORS{'DEBUG'}, 0, "created SSH public key file: $public_key_file_path");
-		return 1;
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to create SSH public key file: $public_key_file_path");
-		return;
-	}
 }
 
 #///////////////////////////////////////////////////////////////////////////
