@@ -9320,11 +9320,13 @@ sub migrate_vm {
 			$destination_vmdk_directory_path = $destination->get_vmdk_directory_path();
 			$destination_vmdk_directory_url_path = $destination->_get_url_path($destination_vmdk_directory_path);
 			$destination->{vm_dedicated} = 1;
-			$same_vmdk_directory = 0;
 		}
 		else {
 			notify($ERRORS{'DEBUG'}, 0, "vmdk directory is NOT dedicated: $source_vmdk_directory_url_path_dedicated");
 		}
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "source and destination VMs use different vmdk directories:\nsource: $source_vmdk_directory_url_path\ndestination: $destination_vmdk_directory_url_path");
 	}
 	
 	my $source_vmdk_file_url_path = $source->_get_url_path($source_vmdk_file_path);
@@ -9333,10 +9335,15 @@ sub migrate_vm {
 
 	# Copy the parent vmdk to the correct location on the destination
 	# This may fail if vmdk doesn't exist on destination datastore or repository
-	notify($ERRORS{'DEBUG'}, 0, "copying destination master vmdk if necessary: $destination_vmdk_file_path");
-	if (!$destination->prepare_vmdk()) {
-		notify($ERRORS{'WARNING'}, 0, "failed to copy destination master vmdk: $destination_vmdk_file_path");
-		return;
+	if (!$same_vmdk_directory) {
+		notify($ERRORS{'DEBUG'}, 0, "copying destination master vmdk if necessary: $destination_vmdk_file_path");
+		if (!$destination->prepare_vmdk()) {
+			notify($ERRORS{'WARNING'}, 0, "failed to copy destination master vmdk: $destination_vmdk_file_path");
+			return;
+		}
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "copying destination master vmdk not necessary, source and destination VMs will use the same vmdk path");
 	}
 	
 	# Create the destination directory
