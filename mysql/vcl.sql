@@ -49,7 +49,7 @@ CREATE TABLE IF NOT EXISTS `affiliation` (
   `name` varchar(40) NOT NULL,
   `shibname` varchar(60) default NULL,
   `dataUpdateText` text NOT NULL,
-  `sitewwwaddress` varchar(56) default NULL,
+  `sitewwwaddress` varchar(128) default NULL,
   `helpaddress` varchar(32) default NULL,
   `shibonly` tinyint(1) unsigned NOT NULL default '0',
   `theme` varchar(50) NOT NULL default 'default',
@@ -394,7 +394,8 @@ CREATE TABLE IF NOT EXISTS `continuations` (
   PRIMARY KEY  (`id`),
   KEY `parentid` (`parentid`),
   KEY `userid` (`userid`),
-  KEY `expiretime` (`expiretime`)
+  KEY `expiretime` (`expiretime`),
+  KEY `deletefromid` (`deletefromid`)
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
 
@@ -420,7 +421,7 @@ CREATE TABLE IF NOT EXISTS `documentation` (
 CREATE TABLE IF NOT EXISTS `image` (
   `id` smallint(5) unsigned NOT NULL auto_increment,
   `name` varchar(70) NOT NULL default '',
-  `prettyname` varchar(60) NOT NULL default '',
+  `prettyname` varchar(80) NOT NULL default '',
   `ownerid` mediumint(8) unsigned default '1',
   `imagetypeid` smallint(5) unsigned NOT NULL default '1',
   `platformid` tinyint(3) unsigned NOT NULL default '1',
@@ -442,7 +443,7 @@ CREATE TABLE IF NOT EXISTS `image` (
   `architecture` enum('x86','x86_64') NOT NULL default 'x86',
   `description` text,
   `usage` text,
-  `basedoffrevisionid` mediumint(8) unsigned NOT NULL default '1',
+  `basedoffrevisionid` mediumint(8) unsigned default NULL,
   PRIMARY KEY  (`id`),
   UNIQUE KEY `name` (`name`),
   UNIQUE KEY `prettyname` (`prettyname`),
@@ -596,7 +597,10 @@ CREATE TABLE IF NOT EXISTS `loginlog` (
   `remoteIP` varchar(15) NOT NULL,
   `code` enum('none','invalid credentials') NOT NULL DEFAULT 'none',
   KEY `user` (`user`),
-  KEY `affiliationid` (`affiliationid`)
+  KEY `affiliationid` (`affiliationid`),
+  KEY `timestamp` (`timestamp`),
+  KEY `authmech` (`authmech`),
+  KEY `code` (`code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
@@ -629,6 +633,7 @@ CREATE TABLE IF NOT EXISTS `managementnode` (
   `NOT_STANDALONE` varchar(128) default NULL,
   `availablenetworks` text NOT NULL,
   PRIMARY KEY  (`id`),
+  UNIQUE KEY `hostname` (`hostname`),
   KEY `stateid` (`stateid`),
   KEY `ownerid` (`ownerid`),
   KEY `imagelibgroupid` (`imagelibgroupid`),
@@ -1215,9 +1220,9 @@ CREATE TABLE IF NOT EXISTS `sublog` (
   `managementnodeid` smallint(5) unsigned NOT NULL default '0',
   `predictivemoduleid` smallint(5) unsigned NOT NULL default '8',
   `hostcomputerid` smallint(5) unsigned default NULL,
-  `blockRequestid` mediumint(8) unsigned NOT NULL,
-  `blockStart` datetime NOT NULL,
-  `blockEnd` datetime NOT NULL,
+  `blockRequestid` mediumint(8) unsigned default NULL,
+  `blockStart` datetime default NULL,
+  `blockEnd` datetime default NULL,
   PRIMARY KEY (`id`),
   KEY `logid` (`logid`),
   KEY `imageid` (`imageid`),
@@ -1245,7 +1250,7 @@ CREATE TABLE IF NOT EXISTS `user` (
   `preferredname` varchar(25) default NULL,
   `email` varchar(80) NOT NULL,
   `emailnotices` tinyint(1) unsigned NOT NULL default '1',
-  `IMtypeid` tinyint(3) unsigned NOT NULL default '1',
+  `IMtypeid` tinyint(3) unsigned default NULL,
   `IMid` varchar(80) default NULL,
   `adminlevelid` tinyint(3) unsigned NOT NULL default '1',
   `width` smallint(4) unsigned NOT NULL default '1024',
@@ -1282,9 +1287,9 @@ CREATE TABLE IF NOT EXISTS `usergroup` (
   `editusergroupid` smallint(5) unsigned default NULL,
   `custom` tinyint(1) unsigned NOT NULL default '0',
   `courseroll` tinyint(1) unsigned NOT NULL default '0',
-  `initialmaxtime` smallint(5) unsigned NOT NULL default '240',
-  `totalmaxtime` smallint(5) unsigned NOT NULL default '360',
-  `maxextendtime` smallint(5) unsigned NOT NULL default '30',
+  `initialmaxtime` mediumint(8) unsigned NOT NULL default '240',
+  `totalmaxtime` mediumint(8) unsigned NOT NULL default '360',
+  `maxextendtime` mediumint(8) unsigned NOT NULL default '60',
   `overlapResCount` smallint(5) unsigned NOT NULL default '0',
   PRIMARY KEY  (`id`),
   UNIQUE KEY `name` (`name`,`affiliationid`),
@@ -1390,10 +1395,10 @@ CREATE TABLE IF NOT EXISTS `variable` (
 CREATE TABLE IF NOT EXISTS `vmhost` (
   `id` smallint(5) unsigned NOT NULL auto_increment,
   `computerid` smallint(5) unsigned NOT NULL,
-  `vmlimit` tinyint(3) unsigned NOT NULL,
+  `vmlimit` smallint(5) unsigned NOT NULL,
   `vmprofileid` smallint(5) unsigned NOT NULL,
   PRIMARY KEY  (`id`),
-  UNIQUE KEY `computerid` (`computerid`),
+  UNIQUE KEY `computerid_vmprofileid` (`computerid`,`vmprofileid`),
   KEY `vmprofileid` (`vmprofileid`)
 ) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
 
@@ -1442,7 +1447,8 @@ CREATE TABLE IF NOT EXISTS `vmprofile` (
 CREATE TABLE IF NOT EXISTS `vmtype` (
   `id` tinyint(3) unsigned NOT NULL auto_increment,
   `name` varchar(30) NOT NULL,
-  PRIMARY KEY  (`id`)
+  PRIMARY KEY  (`id`),
+  UNIQUE KEY `name` (`name`)
 ) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
@@ -1478,13 +1484,14 @@ CREATE TABLE IF NOT EXISTS `winProductKey` (
 -- 
 
 CREATE TABLE IF NOT EXISTS `xmlrpcLog` (
-  `xmlrpcKeyid` smallint(5) unsigned NOT NULL default '0' COMMENT 'this is the userid if apiversion greater than 1',
+  `xmlrpcKeyid` mediumint(8) unsigned NOT NULL default '0' COMMENT 'this is the userid if apiversion greater than 1',
   `timestamp` datetime NOT NULL default '0000-00-00 00:00:00',
   `IPaddress` varchar(15) default NULL,
   `method` varchar(60) default NULL,
   `apiversion` tinyint(3) unsigned NOT NULL default '1',
   `comments` text,
-  KEY `xmlrpcKeyid` (`xmlrpcKeyid`)
+  KEY `xmlrpcKeyid` (`xmlrpcKeyid`),
+  KEY `timestamp` (`timestamp`)
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
 -- =========================================================
@@ -1653,7 +1660,7 @@ INSERT IGNORE INTO `imagerevision` (`id`, `imageid`, `revision`, `userid`, `date
 -- 
 
 INSERT IGNORE INTO `image` (`id`, `name`, `prettyname`, `ownerid`, `imagetypeid`, `platformid`, `OSid`, `imagemetaid`, `minram`, `minprocnumber`, `minprocspeed`, `minnetwork`, `maxconcurrent`, `reloadtime`, `deleted`, `test`, `lastupdate`, `forcheckout`, `maxinitialtime`, `project`, `size`, `basedoffrevisionid`) VALUES 
-(1, 'noimage', 'No Image', 1, 1, 1, 2, NULL, 0, 1, 0, 10, NULL, 0, 0, 0, NULL, 0, 0, 'vcl', 0, 1);
+(1, 'noimage', 'No Image', 1, 1, 1, 2, NULL, 0, 1, 0, 10, NULL, 0, 0, 0, NULL, 0, 0, 'vcl', 0, NULL);
 
 --
 -- Dumping data for table `imagetype`
@@ -1985,9 +1992,9 @@ INSERT IGNORE INTO `state` (`id`, `name`) VALUES
 -- 
 
 INSERT IGNORE INTO `user` (`id`, `uid`, `unityid`, `affiliationid`, `firstname`, `lastname`, `preferredname`, `email`, `emailnotices`, `IMtypeid`, `IMid`, `adminlevelid`, `width`, `height`, `bpp`, `audiomode`, `mapdrives`, `mapprinters`, `mapserial`, `showallgroups`, `lastupdated`) VALUES 
-(1, 101, 'admin', 1, 'vcl', 'admin', '', 'root@localhost', 0, 1, NULL, 3, 1024, 768, 16, 'local', 1, 1, 1, 1, '2007-05-17 09:58:39'),
-(2, NULL, 'vclreload', 1, 'vcl', 'reload', NULL, '', 0, 1, NULL, 1, 1024, 768, 16, 'local', 1, 1, 0, 0, '0000-00-00 00:00:00'),
-(3, NULL, 'vclsystem', 1, 'vcl', 'system', NULL, '', 0, 1, NULL, 1, 1024, 768, 16, 'local', 1, 1, 0, 0, '0000-00-00 00:00:00');
+(1, 101, 'admin', 1, 'vcl', 'admin', '', 'root@localhost', 0, NULL, NULL, 3, 1024, 768, 16, 'local', 1, 1, 1, 1, '2007-05-17 09:58:39'),
+(2, NULL, 'vclreload', 1, 'vcl', 'reload', NULL, '', 0, NULL, NULL, 1, 1024, 768, 16, 'local', 1, 1, 0, 0, '0000-00-00 00:00:00'),
+(3, NULL, 'vclsystem', 1, 'vcl', 'system', NULL, '', 0, NULL, NULL, 1, 1024, 768, 16, 'local', 1, 1, 0, 0, '0000-00-00 00:00:00');
 
 -- 
 -- Dumping data for table `localauth`
@@ -2160,6 +2167,14 @@ INSERT IGNORE INTO `vmtype` (`id`, `name`) VALUES
 
 -- =========================================================
 
+-- Guidelines on constraints
+-- * ids for individual resource tables (computer, image, etc) must not be updated; so, no ON UPDATE CASCADE based on them
+-- * ON DELETE CASCADE should not be used for relating to resources that get marked as deleted
+-- * ids for request and reservation tables must not be updated; so, no ON UPDATE CASCADE based on them
+-- * ON DELETE SET NULL should not be used for foreign keys on request.id and reservation.id so values are retained
+-- * ON UPDATE CASCADE should be used for dependencies on tables where records should not be deleted
+-- * users must not be deleted; so, no ON DELETE CASCADE based on them
+
 -- 
 -- Constraints for dumped tables
 -- 
@@ -2170,56 +2185,58 @@ INSERT IGNORE INTO `vmtype` (`id`, `name`) VALUES
 ALTER TABLE `blockComputers` ADD CONSTRAINT FOREIGN KEY (`blockTimeid`) REFERENCES `blockTimes` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 ALTER TABLE `blockComputers` ADD CONSTRAINT FOREIGN KEY (`computerid`) REFERENCES `computer` (`id`);
 ALTER TABLE `blockComputers` ADD CONSTRAINT FOREIGN KEY (`imageid`) REFERENCES `image` (`id`);
+-- do not want foreign key on reloadrequestid so that the request entry can be deleted but request id is retained for each entry
 
 -- 
 -- Constraints for table `blockRequest`
 -- 
 ALTER TABLE `blockRequest` ADD CONSTRAINT FOREIGN KEY (`imageid`) REFERENCES `image` (`id`);
-ALTER TABLE `blockRequest` ADD CONSTRAINT FOREIGN KEY (`groupid`) REFERENCES `usergroup` (`id`);
-ALTER TABLE `blockRequest` ADD CONSTRAINT FOREIGN KEY (`ownerid`) REFERENCES `user` (`id`);
+ALTER TABLE `blockRequest` ADD CONSTRAINT FOREIGN KEY (`groupid`) REFERENCES `usergroup` (`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `blockRequest` ADD CONSTRAINT FOREIGN KEY (`ownerid`) REFERENCES `user` (`id`) ON UPDATE CASCADE;
 ALTER TABLE `blockRequest` ADD CONSTRAINT FOREIGN KEY (`managementnodeid`) REFERENCES `managementnode` (`id`);
 
 -- 
 -- Constraints for table `blockTimes`
 -- 
-ALTER TABLE `blockTimes` ADD CONSTRAINT FOREIGN KEY (`blockRequestid`) REFERENCES `blockRequest` (`id`) ON DELETE CASCADE;
+ALTER TABLE `blockTimes` ADD CONSTRAINT FOREIGN KEY (`blockRequestid`) REFERENCES `blockRequest` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- 
 -- Constraints for table `blockWebDate`
 -- 
-ALTER TABLE `blockWebDate` ADD CONSTRAINT FOREIGN KEY (`blockRequestid`) REFERENCES `blockRequest` (`id`) ON DELETE CASCADE;
+ALTER TABLE `blockWebDate` ADD CONSTRAINT FOREIGN KEY (`blockRequestid`) REFERENCES `blockRequest` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- 
 -- Constraints for table `blockWebTime`
 -- 
-ALTER TABLE `blockWebTime` ADD CONSTRAINT FOREIGN KEY (`blockRequestid`) REFERENCES `blockRequest` (`id`) ON DELETE CASCADE;
+ALTER TABLE `blockWebTime` ADD CONSTRAINT FOREIGN KEY (`blockRequestid`) REFERENCES `blockRequest` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- 
 -- Constraints for table `changelog`
 --
-ALTER TABLE `changelog` ADD CONSTRAINT FOREIGN KEY (`logid`) REFERENCES `log` (`id`) ON DELETE CASCADE;
-ALTER TABLE `changelog` ADD CONSTRAINT FOREIGN KEY (`userid`) REFERENCES `user` (`id`);
+ALTER TABLE `changelog` ADD CONSTRAINT FOREIGN KEY (`logid`) REFERENCES `log` (`id`) ON UPDATE CASCADE;
+ALTER TABLE `changelog` ADD CONSTRAINT FOREIGN KEY (`userid`) REFERENCES `user` (`id`) ON UPDATE CASCADE;
 ALTER TABLE `changelog` ADD CONSTRAINT FOREIGN KEY (`computerid`) REFERENCES `computer` (`id`);
+-- do not want foreign key on reservationid so that the reservation entry can be deleted but reservation id is retained for each entry
 
 -- 
 -- Constraints for table `clickThroughs`
 --
-ALTER TABLE `clickThroughs` ADD CONSTRAINT FOREIGN KEY (`userid`) REFERENCES `user` (`id`);
+ALTER TABLE `clickThroughs` ADD CONSTRAINT FOREIGN KEY (`userid`) REFERENCES `user` (`id`) ON UPDATE CASCADE;
 ALTER TABLE `clickThroughs` ADD CONSTRAINT FOREIGN KEY (`imageid`) REFERENCES `image` (`id`);
-ALTER TABLE `clickThroughs` ADD CONSTRAINT FOREIGN KEY (`imagerevisionid`) REFERENCES `imagerevision` (`id`);
+ALTER TABLE `clickThroughs` ADD CONSTRAINT FOREIGN KEY (`imagerevisionid`) REFERENCES `imagerevision` (`id`) ON UPDATE CASCADE;
 
 -- 
 -- Constraints for table `computer`
 -- 
-ALTER TABLE `computer` ADD CONSTRAINT FOREIGN KEY (vmhostid) REFERENCES `vmhost` (`id`) ON UPDATE CASCADE;
-ALTER TABLE `computer` ADD CONSTRAINT FOREIGN KEY (`ownerid`) REFERENCES `user` (`id`) ON DELETE SET NULL ON UPDATE CASCADE;
-ALTER TABLE `computer` ADD CONSTRAINT FOREIGN KEY (`scheduleid`) REFERENCES `schedule` (`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `computer` ADD CONSTRAINT FOREIGN KEY (vmhostid) REFERENCES `vmhost` (`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `computer` ADD CONSTRAINT FOREIGN KEY (`ownerid`) REFERENCES `user` (`id`) ON UPDATE CASCADE;
+ALTER TABLE `computer` ADD CONSTRAINT FOREIGN KEY (`scheduleid`) REFERENCES `schedule` (`id`) ON DELETE SET NULL;
 ALTER TABLE `computer` ADD CONSTRAINT FOREIGN KEY (`stateid`) REFERENCES `state` (`id`) ON UPDATE CASCADE;
 ALTER TABLE `computer` ADD CONSTRAINT FOREIGN KEY (`platformid`) REFERENCES `platform` (`id`) ON UPDATE CASCADE;
-ALTER TABLE `computer` ADD CONSTRAINT FOREIGN KEY (`currentimageid`) REFERENCES `image` (`id`) ON UPDATE CASCADE;
+ALTER TABLE `computer` ADD CONSTRAINT FOREIGN KEY (`currentimageid`) REFERENCES `image` (`id`);
 ALTER TABLE `computer` ADD CONSTRAINT FOREIGN KEY (`provisioningid`) REFERENCES `provisioning` (`id`) ON UPDATE CASCADE;
 ALTER TABLE `computer` ADD CONSTRAINT FOREIGN KEY (`imagerevisionid`) REFERENCES `imagerevision` (`id`) ON UPDATE CASCADE;
-ALTER TABLE `computer` ADD CONSTRAINT FOREIGN KEY (`nextimageid`) REFERENCES `image` (`id`) ON UPDATE CASCADE;
+ALTER TABLE `computer` ADD CONSTRAINT FOREIGN KEY (`nextimageid`) REFERENCES `image` (`id`);
 ALTER TABLE `computer` ADD CONSTRAINT FOREIGN KEY (`predictivemoduleid`) REFERENCES `module` (`id`) ON UPDATE CASCADE;
 
 -- 
@@ -2232,64 +2249,68 @@ ALTER TABLE `computerloadflow` ADD CONSTRAINT FOREIGN KEY (nextstateid) REFERENC
 -- Constraints for table `computerloadlog` 
 -- 
 ALTER TABLE `computerloadlog` ADD CONSTRAINT FOREIGN KEY (`reservationid`) REFERENCES `reservation` (`id`) ON DELETE CASCADE;
-ALTER TABLE `computerloadlog` ADD CONSTRAINT FOREIGN KEY (`loadstateid`) REFERENCES `computerloadstate` (`id`);
+ALTER TABLE `computerloadlog` ADD CONSTRAINT FOREIGN KEY (`loadstateid`) REFERENCES `computerloadstate` (`id`) ON UPDATE CASCADE;
 ALTER TABLE `computerloadlog` ADD CONSTRAINT FOREIGN KEY (`computerid`) REFERENCES `computer` (`id`);
+
+--
+-- Constraints for table `connectlog`
+--
+ALTER TABLE `connectlog` ADD CONSTRAINT FOREIGN KEY (`logid`) REFERENCES `log` (`id`) ON UPDATE CASCADE;
+ALTER TABLE `connectlog` ADD CONSTRAINT FOREIGN KEY (`userid`) REFERENCES `user` (`id`) ON UPDATE CASCADE;
+-- do not want foreign key on reservationid so that the reservation entry can be deleted but reservation id is retained for each entry
 
 --
 -- Constraints for table `connectmethodmap`
 --
 ALTER TABLE `connectmethodmap` ADD CONSTRAINT FOREIGN KEY (`connectmethodid`) REFERENCES `connectmethod` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
-ALTER TABLE `connectmethodmap` ADD CONSTRAINT FOREIGN KEY (`OStypeid`) REFERENCES `OStype` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
-ALTER TABLE `connectmethodmap` ADD CONSTRAINT FOREIGN KEY (`OSid`) REFERENCES `OS` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
-ALTER TABLE `connectmethodmap` ADD CONSTRAINT FOREIGN KEY (`imagerevisionid`) REFERENCES `imagerevision` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `connectmethodmap` ADD CONSTRAINT FOREIGN KEY (`OStypeid`) REFERENCES `OStype` (`id`) ON UPDATE CASCADE;
+ALTER TABLE `connectmethodmap` ADD CONSTRAINT FOREIGN KEY (`OSid`) REFERENCES `OS` (`id`) ON UPDATE CASCADE;
+ALTER TABLE `connectmethodmap` ADD CONSTRAINT FOREIGN KEY (`imagerevisionid`) REFERENCES `imagerevision` (`id`) ON UPDATE CASCADE;
 
 --
 -- Constraints for table `connectmethodport`
 --
 ALTER TABLE `connectmethodport` ADD CONSTRAINT FOREIGN KEY (`connectmethodid`) REFERENCES `connectmethod` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
---
--- Constraints for table `connectlog`
---
-ALTER TABLE `connectlog` ADD CONSTRAINT FOREIGN KEY (`logid`) REFERENCES `log` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
-ALTER TABLE `connectlog` ADD CONSTRAINT FOREIGN KEY (`userid`) REFERENCES `user` (`id`) ON UPDATE CASCADE;
-
 -- 
 -- Constraints for table `continuations`
 -- 
+ALTER TABLE `continuations` ADD CONSTRAINT FOREIGN KEY (`userid`) REFERENCES `user` (`id`) ON UPDATE CASCADE;
 ALTER TABLE `continuations` ADD CONSTRAINT FOREIGN KEY (`parentid`) REFERENCES `continuations` (`id`) ON DELETE CASCADE;
 
 -- 
 -- Constraints for table `image`
 -- 
-ALTER TABLE `image` ADD CONSTRAINT FOREIGN KEY (`ownerid`) REFERENCES `user` (`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `image` ADD CONSTRAINT FOREIGN KEY (`ownerid`) REFERENCES `user` (`id`) ON UPDATE CASCADE;
 ALTER TABLE `image` ADD CONSTRAINT FOREIGN KEY (`platformid`) REFERENCES `platform` (`id`) ON UPDATE CASCADE;
 ALTER TABLE `image` ADD CONSTRAINT FOREIGN KEY (`OSid`) REFERENCES `OS` (`id`) ON UPDATE CASCADE;
 ALTER TABLE `image` ADD CONSTRAINT FOREIGN KEY (`imagetypeid`) REFERENCES `imagetype` (`id`) ON UPDATE CASCADE;
 ALTER TABLE `image` ADD CONSTRAINT FOREIGN KEY (`imagemetaid`) REFERENCES `imagemeta` (`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `image` ADD CONSTRAINT FOREIGN KEY (`basedoffrevisionid`) REFERENCES `imagerevision` (`id`) ON UPDATE CASCADE;
 
 -- 
 -- Constraints for table `imagerevision`
 -- 
-ALTER TABLE `imagerevision` ADD CONSTRAINT FOREIGN KEY (`imageid`) REFERENCES `image` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `imagerevision` ADD CONSTRAINT FOREIGN KEY (`imageid`) REFERENCES `image` (`id`);
 ALTER TABLE `imagerevision` ADD CONSTRAINT FOREIGN KEY (`userid`) REFERENCES `user` (`id`) ON UPDATE CASCADE;
 
 -- 
 -- Constraints for table `imagerevisioninfo`
 -- 
-ALTER TABLE `imagerevisioninfo` ADD CONSTRAINT FOREIGN KEY (`imagerevisionid`) REFERENCES `imagerevision` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `imagerevisioninfo` ADD CONSTRAINT FOREIGN KEY (`imagerevisionid`) REFERENCES `imagerevision` (`id`) ON UPDATE CASCADE;
 
 -- 
 -- Constraints for table `localauth`
 -- 
-ALTER TABLE `localauth` ADD CONSTRAINT FOREIGN KEY (`userid`) REFERENCES `user` (`id`) ON DELETE CASCADE;
+ALTER TABLE `localauth` ADD CONSTRAINT FOREIGN KEY (`userid`) REFERENCES `user` (`id`) ON UPDATE CASCADE;
 
 -- 
 -- Constraints for table `log`
 -- 
 ALTER TABLE `log` ADD CONSTRAINT FOREIGN KEY (`userid`) REFERENCES `user` (`id`) ON UPDATE CASCADE;
-ALTER TABLE `log` ADD CONSTRAINT FOREIGN KEY (`imageid`) REFERENCES `image` (`id`) ON UPDATE CASCADE;
-ALTER TABLE `log` ADD CONSTRAINT FOREIGN KEY (`computerid`) REFERENCES `computer` (`id`) ON UPDATE CASCADE;
+ALTER TABLE `log` ADD CONSTRAINT FOREIGN KEY (`imageid`) REFERENCES `image` (`id`);
+ALTER TABLE `log` ADD CONSTRAINT FOREIGN KEY (`computerid`) REFERENCES `computer` (`id`);
+-- do not want foreign key on requestid so that the request entry can be deleted but request id is retained for each entry
 
 -- 
 -- Constraints for table `loginlog`
@@ -2299,43 +2320,43 @@ ALTER TABLE `loginlog` ADD CONSTRAINT FOREIGN KEY (`affiliationid`) REFERENCES `
 -- 
 -- Constraints for table `managementnode`
 -- 
-ALTER TABLE `managementnode` ADD CONSTRAINT FOREIGN KEY (`imagelibgroupid`) REFERENCES `resourcegroup` (`id`) ON UPDATE CASCADE;
+ALTER TABLE `managementnode` ADD CONSTRAINT FOREIGN KEY (`imagelibgroupid`) REFERENCES `resourcegroup` (`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 ALTER TABLE `managementnode` ADD CONSTRAINT FOREIGN KEY (`ownerid`) REFERENCES `user` (`id`) ON UPDATE CASCADE;
 ALTER TABLE `managementnode` ADD CONSTRAINT FOREIGN KEY (`stateid`) REFERENCES `state` (`id`) ON UPDATE CASCADE;
 
 -- 
 -- Constraints for table `nathost`
 -- 
-ALTER TABLE `nathost` ADD CONSTRAINT FOREIGN KEY (`resourceid`) REFERENCES `resource` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `nathost` ADD CONSTRAINT FOREIGN KEY (`resourceid`) REFERENCES `resource` (`id`) ON UPDATE CASCADE;
 
--- 
--- Constraints for table `natlog`
---
-ALTER TABLE `natlog` ADD CONSTRAINT FOREIGN KEY (`sublogid`) REFERENCES `sublog` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
-ALTER TABLE `natlog` ADD CONSTRAINT FOREIGN KEY (`nathostresourceid`) REFERENCES `resource` (`id`) ON UPDATE CASCADE;
-  
 -- 
 -- Constraints for table `nathostcomputermap`
 -- 
 ALTER TABLE `nathostcomputermap` ADD CONSTRAINT FOREIGN KEY (`nathostid`) REFERENCES `nathost` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
-ALTER TABLE `nathostcomputermap` ADD CONSTRAINT FOREIGN KEY (`computerid`) REFERENCES `computer` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `nathostcomputermap` ADD CONSTRAINT FOREIGN KEY (`computerid`) REFERENCES `computer` (`id`);
+
+-- 
+-- Constraints for table `natlog`
+--
+ALTER TABLE `natlog` ADD CONSTRAINT FOREIGN KEY (`sublogid`) REFERENCES `sublog` (`id`) ON UPDATE CASCADE;
+ALTER TABLE `natlog` ADD CONSTRAINT FOREIGN KEY (`nathostresourceid`) REFERENCES `resource` (`id`) ON UPDATE CASCADE;
 
 -- 
 -- Constraints for table `natport`
 -- 
-ALTER TABLE `natport` ADD CONSTRAINT FOREIGN KEY (`connectmethodportid`) REFERENCES `connectmethodport` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
-ALTER TABLE `natport` ADD CONSTRAINT FOREIGN KEY (`reservationid`) REFERENCES `reservation` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
-ALTER TABLE `natport` ADD CONSTRAINT FOREIGN KEY (`nathostid`) REFERENCES `nathost` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `natport` ADD CONSTRAINT FOREIGN KEY (`connectmethodportid`) REFERENCES `connectmethodport` (`id`) ON UPDATE CASCADE;
+ALTER TABLE `natport` ADD CONSTRAINT FOREIGN KEY (`reservationid`) REFERENCES `reservation` (`id`) ON DELETE CASCADE;
+ALTER TABLE `natport` ADD CONSTRAINT FOREIGN KEY (`nathostid`) REFERENCES `nathost` (`id`) ON UPDATE CASCADE;
 
 -- 
 -- Constraints for table `openstackcomputermap`
 --
-ALTER TABLE `openstackcomputermap` ADD CONSTRAINT FOREIGN KEY (`computerid`) REFERENCES `computer` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `openstackcomputermap` ADD CONSTRAINT FOREIGN KEY (`computerid`) REFERENCES `computer` (`id`);
 
 -- 
 -- Constraints for table `openstackimagerevision`
 --
-ALTER TABLE `openstackimagerevision` ADD CONSTRAINT FOREIGN KEY (`imagerevisionid`) REFERENCES `imagerevision` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `openstackimagerevision` ADD CONSTRAINT FOREIGN KEY (`imagerevisionid`) REFERENCES `imagerevision` (`id`) ON UPDATE CASCADE;
 
 -- 
 -- Constraints for table `OS`
@@ -2363,29 +2384,30 @@ ALTER TABLE `provisioningOSinstalltype` ADD CONSTRAINT FOREIGN KEY (`provisionin
 -- 
 -- Constraints for table `querylog`
 -- 
-ALTER TABLE `querylog` ADD CONSTRAINT FOREIGN KEY (`userid`) REFERENCES `user` (`id`);
+ALTER TABLE `querylog` ADD CONSTRAINT FOREIGN KEY (`userid`) REFERENCES `user` (`id`) ON UPDATE CASCADE;
 
 -- 
 -- Constraints for table `request`
 -- 
 ALTER TABLE `request` ADD CONSTRAINT FOREIGN KEY (`stateid`) REFERENCES `state` (`id`) ON UPDATE CASCADE;
 ALTER TABLE `request` ADD CONSTRAINT FOREIGN KEY (`laststateid`) REFERENCES `state` (`id`) ON UPDATE CASCADE;
-ALTER TABLE `request` ADD CONSTRAINT FOREIGN KEY (`userid`) REFERENCES `user` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `request` ADD CONSTRAINT FOREIGN KEY (`userid`) REFERENCES `user` (`id`) ON UPDATE CASCADE;
+ALTER TABLE `request` ADD CONSTRAINT FOREIGN KEY (`logid`) REFERENCES `log` (`id`) ON UPDATE CASCADE;
 
 -- 
 -- Constraints for table `reservation`
 -- 
 ALTER TABLE `reservation` ADD CONSTRAINT FOREIGN KEY (`requestid`) REFERENCES `request` (`id`) ON DELETE CASCADE;
 ALTER TABLE `reservation` ADD CONSTRAINT FOREIGN KEY (`managementnodeid`) REFERENCES `managementnode` (`id`);
-ALTER TABLE `reservation` ADD CONSTRAINT FOREIGN KEY (`computerid`) REFERENCES `computer` (`id`) ON UPDATE CASCADE;
+ALTER TABLE `reservation` ADD CONSTRAINT FOREIGN KEY (`computerid`) REFERENCES `computer` (`id`);
 ALTER TABLE `reservation` ADD CONSTRAINT FOREIGN KEY (`imagerevisionid`) REFERENCES `imagerevision` (`id`) ON UPDATE CASCADE;
-ALTER TABLE `reservation` ADD CONSTRAINT FOREIGN KEY (`imageid`) REFERENCES `image` (`id`) ON UPDATE CASCADE;
+ALTER TABLE `reservation` ADD CONSTRAINT FOREIGN KEY (`imageid`) REFERENCES `image` (`id`);
 
 --
 -- Constraints for table `reservationaccounts`
 --
-ALTER TABLE `reservationaccounts` ADD CONSTRAINT FOREIGN KEY (`userid`) REFERENCES `user` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
-ALTER TABLE `reservationaccounts` ADD CONSTRAINT FOREIGN KEY (`reservationid`) REFERENCES `reservation` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `reservationaccounts` ADD CONSTRAINT FOREIGN KEY (`userid`) REFERENCES `user` (`id`) ON UPDATE CASCADE;
+ALTER TABLE `reservationaccounts` ADD CONSTRAINT FOREIGN KEY (`reservationid`) REFERENCES `reservation` (`id`) ON DELETE CASCADE;
 
 -- 
 -- Constraints for table `resource`
@@ -2395,6 +2417,7 @@ ALTER TABLE `resource` ADD CONSTRAINT FOREIGN KEY (`resourcetypeid`) REFERENCES 
 -- 
 -- Constraints for table `resourcegroup`
 -- 
+-- TODO should we allow ON DELETE CASCADE for ownerusergroupid?
 ALTER TABLE `resourcegroup` ADD CONSTRAINT FOREIGN KEY (`ownerusergroupid`) REFERENCES `usergroup` (`id`) ON UPDATE CASCADE;
 ALTER TABLE `resourcegroup` ADD CONSTRAINT FOREIGN KEY (`resourcetypeid`) REFERENCES `resourcetype` (`id`) ON UPDATE CASCADE;
 
@@ -2407,10 +2430,10 @@ ALTER TABLE `resourcegroupmembers` ADD CONSTRAINT FOREIGN KEY (`resourcegroupid`
 -- 
 -- Constraints for table `resourcemap`
 -- 
-ALTER TABLE `resourcemap` ADD CONSTRAINT FOREIGN KEY (`resourcegroupid1`) REFERENCES `resourcegroup` (`id`) ON DELETE CASCADE;
-ALTER TABLE `resourcemap` ADD CONSTRAINT FOREIGN KEY (`resourcegroupid2`) REFERENCES `resourcegroup` (`id`) ON DELETE CASCADE;
-ALTER TABLE `resourcemap` ADD CONSTRAINT FOREIGN KEY (`resourcetypeid1`) REFERENCES `resourcetype` (`id`) ON DELETE CASCADE;
-ALTER TABLE `resourcemap` ADD CONSTRAINT FOREIGN KEY (`resourcetypeid2`) REFERENCES `resourcetype` (`id`) ON DELETE CASCADE;
+ALTER TABLE `resourcemap` ADD CONSTRAINT FOREIGN KEY (`resourcegroupid1`) REFERENCES `resourcegroup` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `resourcemap` ADD CONSTRAINT FOREIGN KEY (`resourcegroupid2`) REFERENCES `resourcegroup` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `resourcemap` ADD CONSTRAINT FOREIGN KEY (`resourcetypeid1`) REFERENCES `resourcetype` (`id`) ON UPDATE CASCADE;
+ALTER TABLE `resourcemap` ADD CONSTRAINT FOREIGN KEY (`resourcetypeid2`) REFERENCES `resourcetype` (`id`) ON UPDATE CASCADE;
 
 -- 
 -- Constraints for table `resourcepriv`
@@ -2426,22 +2449,22 @@ ALTER TABLE `schedule` ADD CONSTRAINT FOREIGN KEY (`ownerid`) REFERENCES `user` 
 -- 
 -- Constraints for table `scheduletimes`
 -- 
-ALTER TABLE `scheduletimes` ADD CONSTRAINT FOREIGN KEY (`scheduleid`) REFERENCES `schedule` (`id`) ON UPDATE CASCADE;
+ALTER TABLE `scheduletimes` ADD CONSTRAINT FOREIGN KEY (`scheduleid`) REFERENCES `schedule` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- 
 -- Constraints for table `semaphore`
 -- 
-ALTER TABLE `semaphore` ADD CONSTRAINT FOREIGN KEY (`managementnodeid`) REFERENCES `managementnode` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
-ALTER TABLE `semaphore` ADD CONSTRAINT FOREIGN KEY (`computerid`) REFERENCES `computer` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
-ALTER TABLE `semaphore` ADD CONSTRAINT FOREIGN KEY (`imageid`) REFERENCES `image` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
-ALTER TABLE `semaphore` ADD CONSTRAINT FOREIGN KEY (`imagerevisionid`) REFERENCES `imagerevision` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `semaphore` ADD CONSTRAINT FOREIGN KEY (`managementnodeid`) REFERENCES `managementnode` (`id`);
+ALTER TABLE `semaphore` ADD CONSTRAINT FOREIGN KEY (`computerid`) REFERENCES `computer` (`id`);
+ALTER TABLE `semaphore` ADD CONSTRAINT FOREIGN KEY (`imageid`) REFERENCES `image` (`id`);
+ALTER TABLE `semaphore` ADD CONSTRAINT FOREIGN KEY (`imagerevisionid`) REFERENCES `imagerevision` (`id`) ON UPDATE CASCADE;
 
 --
 -- Constraints for table `serverprofile`
 --
-ALTER TABLE `serverprofile` ADD CONSTRAINT FOREIGN KEY (`ownerid`) REFERENCES `user` (`id`);
-ALTER TABLE `serverprofile` ADD CONSTRAINT FOREIGN KEY (`admingroupid`) REFERENCES `usergroup` (`id`);
-ALTER TABLE `serverprofile` ADD CONSTRAINT FOREIGN KEY (`logingroupid`) REFERENCES `usergroup` (`id`);
+ALTER TABLE `serverprofile` ADD CONSTRAINT FOREIGN KEY (`ownerid`) REFERENCES `user` (`id`) ON UPDATE CASCADE;
+ALTER TABLE `serverprofile` ADD CONSTRAINT FOREIGN KEY (`admingroupid`) REFERENCES `usergroup` (`id`) ON UPDATE CASCADE;
+ALTER TABLE `serverprofile` ADD CONSTRAINT FOREIGN KEY (`logingroupid`) REFERENCES `usergroup` (`id`) ON UPDATE CASCADE;
 ALTER TABLE `serverprofile` ADD CONSTRAINT FOREIGN KEY (`imageid`) REFERENCES `image` (`id`);
 
 --
@@ -2454,74 +2477,75 @@ ALTER TABLE `serverrequest` ADD CONSTRAINT FOREIGN KEY (`logingroupid`) REFERENC
 --
 -- Constraints for table `shibauth`
 --
-ALTER TABLE `shibauth` ADD CONSTRAINT FOREIGN KEY (`userid`) REFERENCES `user` (`id`);
+ALTER TABLE `shibauth` ADD CONSTRAINT FOREIGN KEY (`userid`) REFERENCES `user` (`id`) ON UPDATE CASCADE;
 
 --
 -- Constraints for table `statgraphcache`
 --
-ALTER TABLE `statgraphcache` ADD CONSTRAINT FOREIGN KEY (`affiliationid`) REFERENCES `affiliation` (`id`);
-ALTER TABLE `statgraphcache` ADD CONSTRAINT FOREIGN KEY (`provisioningid`) REFERENCES `provisioning` (`id`);
+ALTER TABLE `statgraphcache` ADD CONSTRAINT FOREIGN KEY (`affiliationid`) REFERENCES `affiliation` (`id`) ON UPDATE CASCADE;
+ALTER TABLE `statgraphcache` ADD CONSTRAINT FOREIGN KEY (`provisioningid`) REFERENCES `provisioning` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 --
 -- Constraints for table `subimages`
 --
-ALTER TABLE `subimages` ADD CONSTRAINT FOREIGN KEY (`imagemetaid`) REFERENCES `imagemeta` (`id`);
+ALTER TABLE `subimages` ADD CONSTRAINT FOREIGN KEY (`imagemetaid`) REFERENCES `imagemeta` (`id`) ON UPDATE CASCADE;
 ALTER TABLE `subimages` ADD CONSTRAINT FOREIGN KEY (`imageid`) REFERENCES `image` (`id`);
 
 --
 -- Constraints for table `sublog`
 --
-ALTER TABLE `sublog` ADD CONSTRAINT FOREIGN KEY (`logid`) REFERENCES `log` (`id`);
+ALTER TABLE `sublog` ADD CONSTRAINT FOREIGN KEY (`logid`) REFERENCES `log` (`id`) ON UPDATE CASCADE;
 ALTER TABLE `sublog` ADD CONSTRAINT FOREIGN KEY (`imageid`) REFERENCES `image` (`id`);
-ALTER TABLE `sublog` ADD CONSTRAINT FOREIGN KEY (`imagerevisionid`) REFERENCES `imagerevision` (`id`);
+ALTER TABLE `sublog` ADD CONSTRAINT FOREIGN KEY (`imagerevisionid`) REFERENCES `imagerevision` (`id`) ON UPDATE CASCADE;
 ALTER TABLE `sublog` ADD CONSTRAINT FOREIGN KEY (`computerid`) REFERENCES `computer` (`id`);
 ALTER TABLE `sublog` ADD CONSTRAINT FOREIGN KEY (`managementnodeid`) REFERENCES `managementnode` (`id`);
-ALTER TABLE `sublog` ADD CONSTRAINT FOREIGN KEY (`predictivemoduleid`) REFERENCES `module` (`id`);
+ALTER TABLE `sublog` ADD CONSTRAINT FOREIGN KEY (`predictivemoduleid`) REFERENCES `module` (`id`) ON UPDATE CASCADE;
 ALTER TABLE `sublog` ADD CONSTRAINT FOREIGN KEY (`hostcomputerid`) REFERENCES `computer` (`id`);
+ALTER TABLE `sublog` ADD CONSTRAINT FOREIGN KEY (`blockRequestid`) REFERENCES `blockRequest` (`id`) ON UPDATE CASCADE;
 
 -- 
 -- Constraints for table `user`
 -- 
-ALTER TABLE `user` ADD CONSTRAINT FOREIGN KEY (`affiliationid`) REFERENCES `affiliation` (`id`);
-ALTER TABLE `user` ADD CONSTRAINT FOREIGN KEY (`IMtypeid`) REFERENCES `IMtype` (`id`) ON UPDATE CASCADE;
+ALTER TABLE `user` ADD CONSTRAINT FOREIGN KEY (`affiliationid`) REFERENCES `affiliation` (`id`) ON UPDATE CASCADE;
+ALTER TABLE `user` ADD CONSTRAINT FOREIGN KEY (`IMtypeid`) REFERENCES `IMtype` (`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- 
 -- Constraints for table `usergroup`
 -- 
-ALTER TABLE `usergroup` ADD CONSTRAINT FOREIGN KEY (`ownerid`) REFERENCES `user` (`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `usergroup` ADD CONSTRAINT FOREIGN KEY (`ownerid`) REFERENCES `user` (`id`) ON UPDATE CASCADE;
 ALTER TABLE `usergroup` ADD CONSTRAINT FOREIGN KEY (`editusergroupid`) REFERENCES `usergroup` (`id`) ON DELETE SET NULL ON UPDATE CASCADE;
-ALTER TABLE `usergroup` ADD CONSTRAINT FOREIGN KEY (`affiliationid`) REFERENCES `affiliation` (`id`);
+ALTER TABLE `usergroup` ADD CONSTRAINT FOREIGN KEY (`affiliationid`) REFERENCES `affiliation` (`id`) ON UPDATE CASCADE;
 
 -- 
 -- Constraints for table `usergroupmembers`
 -- 
-ALTER TABLE `usergroupmembers` ADD CONSTRAINT FOREIGN KEY (`userid`) REFERENCES `user` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `usergroupmembers` ADD CONSTRAINT FOREIGN KEY (`userid`) REFERENCES `user` (`id`) ON UPDATE CASCADE;
 ALTER TABLE `usergroupmembers` ADD CONSTRAINT FOREIGN KEY (`usergroupid`) REFERENCES `usergroup` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 --
 -- Constraints for table `usergrouppriv`
 --
-ALTER TABLE `usergrouppriv` ADD CONSTRAINT FOREIGN KEY (`userprivtypeid`) REFERENCES `usergroupprivtype` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `usergrouppriv` ADD CONSTRAINT FOREIGN KEY (`userprivtypeid`) REFERENCES `usergroupprivtype` (`id`) ON UPDATE CASCADE;
 ALTER TABLE `usergrouppriv` ADD CONSTRAINT FOREIGN KEY (`usergroupid`) REFERENCES `usergroup` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- 
 -- Constraints for table `userpriv`
 -- 
-ALTER TABLE `userpriv` ADD CONSTRAINT FOREIGN KEY (`userid`) REFERENCES `user` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `userpriv` ADD CONSTRAINT FOREIGN KEY (`userid`) REFERENCES `user` (`id`) ON UPDATE CASCADE;
 ALTER TABLE `userpriv` ADD CONSTRAINT FOREIGN KEY (`usergroupid`) REFERENCES `usergroup` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 ALTER TABLE `userpriv` ADD CONSTRAINT FOREIGN KEY (`privnodeid`) REFERENCES `privnode` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
-ALTER TABLE `userpriv` ADD CONSTRAINT FOREIGN KEY (`userprivtypeid`) REFERENCES `userprivtype` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `userpriv` ADD CONSTRAINT FOREIGN KEY (`userprivtypeid`) REFERENCES `userprivtype` (`id`) ON UPDATE CASCADE;
 
 --
 -- Constraints for table `vmhost`
 --
 ALTER TABLE `vmhost` ADD CONSTRAINT FOREIGN KEY (`vmprofileid`) REFERENCES `vmprofile` (`id`) ON UPDATE CASCADE;
-ALTER TABLE `vmhost` ADD CONSTRAINT FOREIGN KEY (`computerid`) REFERENCES `computer` (`id`) ON UPDATE CASCADE;
+ALTER TABLE `vmhost` ADD CONSTRAINT FOREIGN KEY (`computerid`) REFERENCES `computer` (`id`);
 
 --
 -- Constraints for table `vmprofile`
 --
-ALTER TABLE `vmprofile` ADD CONSTRAINT FOREIGN KEY (`imageid`) REFERENCES `image` (`id`) ON UPDATE CASCADE;
+ALTER TABLE `vmprofile` ADD CONSTRAINT FOREIGN KEY (`imageid`) REFERENCES `image` (`id`);
 ALTER TABLE `vmprofile` ADD CONSTRAINT FOREIGN KEY (`repositoryimagetypeid`) REFERENCES `imagetype` (`id`) ON UPDATE CASCADE;
 ALTER TABLE `vmprofile` ADD CONSTRAINT FOREIGN KEY (`datastoreimagetypeid`) REFERENCES `imagetype` (`id`) ON UPDATE CASCADE;
 
