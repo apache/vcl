@@ -763,6 +763,7 @@ END $$
 --  Table structure for table `affiliation`
 --
 
+ALTER TABLE `affiliation` CHANGE `sitewwwaddress` `sitewwwaddress` varchar(128) DEFAULT NULL;
 CALL AddUniqueIndex('affiliation', 'name');
 CALL AddColumnIfNotExists('affiliation', 'theme', "varchar(50) NOT NULL default 'default'");
 
@@ -808,7 +809,7 @@ CALL AddColumnIfNotExists('changelog', 'other', "varchar(255) default NULL AFTER
 CALL AddIndexIfNotExists('changelog', 'userid');
 CALL AddIndexIfNotExists('changelog', 'reservationid');
 
-CALL Add3ColUniqueIndexIfNotExist('changelog', 'reservationid', 'userid', 'remoteIP', 0);
+CALL Add3ColUniqueIndexIfNotExist('changelog', 'userid', 'reservationid', 'remoteIP', 0);
 
 -- --------------------------------------------------------
 
@@ -939,10 +940,19 @@ CREATE TABLE IF NOT EXISTS connectlog (
 
 -- --------------------------------------------------------
 
+--
+-- Table structure for table 'continuations'
+--
+
+CALL AddIndexIfNotExists('continuations', 'deletefromid');
+
+-- --------------------------------------------------------
+
 -- 
 --  Table structure for table `image`
 --
 
+ALTER TABLE `image` CHANGE `prettyname` `prettyname` varchar(80) NOT NULL default '';
 ALTER TABLE `image` CHANGE `minram` `minram` MEDIUMINT UNSIGNED NOT NULL DEFAULT '0';
 ALTER TABLE `image` CHANGE `platformid` `platformid` tinyint(3) unsigned NOT NULL default '1';
 ALTER TABLE `image` CHANGE `size` `size` smallint(5) unsigned NOT NULL default '0';
@@ -950,7 +960,7 @@ ALTER TABLE `image` CHANGE `size` `size` smallint(5) unsigned NOT NULL default '
 CALL AddColumnIfNotExists('image', 'imagetypeid', "smallint(5) unsigned NOT NULL default '1' AFTER ownerid");
 CALL AddIndexIfNotExists('image', 'imagetypeid');
 
-ALTER TABLE `image` CHANGE `basedoffrevisionid` `basedoffrevisionid` mediumint(8) unsigned NOT NULL default '1';
+ALTER TABLE `image` CHANGE `basedoffrevisionid` `basedoffrevisionid` mediumint(8) unsigned default NULL;
 CALL AddIndexIfNotExists('image', 'basedoffrevisionid');
 
 -- --------------------------------------------------------
@@ -1013,10 +1023,16 @@ CREATE TABLE IF NOT EXISTS `loginlog` (
   `remoteIP` varchar(15) NOT NULL,
   `code` enum('none','invalid credentials') NOT NULL DEFAULT 'none',
   KEY `user` (`user`),
-  KEY `affiliationid` (`affiliationid`)
+  KEY `affiliationid` (`affiliationid`),
+  KEY `timestamp` (`timestamp`),
+  KEY `authmech` (`authmech`),
+  KEY `code` (`code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
 CALL AddColumnIfNotExists('loginlog', 'code', "enum('none','invalid credentials') NOT NULL DEFAULT 'none'");
+CALL AddIndexIfNotExists('loginlog', 'timestamp');
+CALL AddIndexIfNotExists('loginlog', 'authmech');
+CALL AddIndexIfNotExists('loginlog', 'code');
 
 -- --------------------------------------------------------
 
@@ -1033,6 +1049,7 @@ CALL AddColumnIfNotExists('managementnode', 'sharedMailBox', "varchar(128) defau
 CALL AddColumnIfNotExists('managementnode', 'NOT_STANDALONE', "varchar(128) default NULL");
 CALL AddColumnIfNotExists('managementnode', 'availablenetworks', "text NOT NULL");
 CALL DropColumnIfExists('managementnode', 'predictivemoduleid');
+CALL AddUniqueIndex('managementnode', 'hostname');
 
 -- --------------------------------------------------------
 
@@ -1116,6 +1133,32 @@ CREATE TABLE IF NOT EXISTS `natport` (
 
 ALTER TABLE `OS` CHANGE `prettyname` `prettyname` varchar(64) NOT NULL default '';
 CALL AddColumnIfNotExists('OS', 'minram', "MEDIUMINT UNSIGNED NOT NULL DEFAULT '512' AFTER installtype");
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `openstackcomputermap`
+--
+
+CREATE TABLE IF NOT EXISTS `openstackcomputermap` (
+  `instanceid` varchar(50) NOT NULL,
+  `computerid` smallint(5) unsigned DEFAULT NULL,
+  PRIMARY KEY (`instanceid`),
+  UNIQUE KEY `computerid` (`computerid`)
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `openstackimagerevision`
+--
+
+CREATE TABLE IF NOT EXISTS `openstackimagerevision` (
+  `imagerevisionid` mediumint(8) unsigned NOT NULL,
+  `imagedetails` text NOT NULL,
+  `flavordetails` text NOT NULL,
+  PRIMARY KEY (`imagerevisionid`)
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
 
@@ -1296,9 +1339,13 @@ DELETE FROM statgraphcache WHERE provisioningid IS NOT NULL AND provisioningid N
 
 CALL AddColumnIfNotExists('sublog', 'id', "int(10) unsigned NOT NULL AUTO_INCREMENT PRIMARY KEY FIRST");
 CALL AddColumnIfNotExists('sublog', 'hostcomputerid', "smallint(5) unsigned default NULL");
-CALL AddColumnIfNotExists('sublog', 'blockRequestid', "mediumint(8) unsigned NOT NULL");
-CALL AddColumnIfNotExists('sublog', 'blockStart', "datetime NOT NULL");
-CALL AddColumnIfNotExists('sublog', 'blockEnd', "datetime NOT NULL");
+CALL AddColumnIfNotExists('sublog', 'blockRequestid', "mediumint(8) unsigned default NULL");
+CALL AddColumnIfNotExists('sublog', 'blockStart', "datetime default NULL");
+CALL AddColumnIfNotExists('sublog', 'blockEnd', "datetime default NULL");
+ALTER TABLE `sublog` CHANGE `blockRequestid` `blockRequestid` mediumint(8) unsigned default NULL;
+ALTER TABLE `sublog` CHANGE `blockStart` `blockStart` datetime default NULL;
+ALTER TABLE `sublog` CHANGE `blockEnd` `blockEnd` datetime default NULL;
+CALL AddIndexIfNotExists('sublog', 'blockRequestid');
 
 -- --------------------------------------------------------
 
@@ -1314,12 +1361,38 @@ CALL AddColumnIfNotExists('request', 'checkuser', "tinyint(1) unsigned NOT NULL 
 -- Table structure change for table `user`
 --
 
--- --------------------------------------------------------
-
 CALL AddColumnIfNotExists('user', 'validated', "tinyint(1) unsigned NOT NULL default '1'");
 CALL AddColumnIfNotExists('user', 'usepublickeys', "tinyint(1) unsigned NOT NULL default '0'");
 CALL AddColumnIfNotExists('user', 'sshpublickeys', "text");
 CALL AddColumnIfNotExists('user', 'rdpport', "SMALLINT UNSIGNED NULL AFTER `mapserial`");
+ALTER TABLE `user` CHANGE `IMtypeid` `IMtypeid` tinyint(3) unsigned default NULL;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure change for table `usergroup`
+--
+
+ALTER TABLE `usergroup` CHANGE `initialmaxtime` `initialmaxtime` mediumint(8) unsigned NOT NULL default '240';
+ALTER TABLE `usergroup` CHANGE `totalmaxtime` `totalmaxtime` mediumint(8) unsigned NOT NULL default '360';
+ALTER TABLE `usergroup` CHANGE `maxextendtime` `maxextendtime` mediumint(8) unsigned NOT NULL default '60';
+
+-- --------------------------------------------------------
+
+--
+-- Table structure change for table `userpriv`
+--
+
+-- have to drop constraint before dropping index
+CALL DropExistingConstraints('userpriv', 'userid');
+CALL DropExistingConstraints('userpriv', 'usergroupid');
+
+CALL DropExistingIndices('userpriv', 'userid');
+CALL DropExistingIndices('userpriv', 'usergroupid');
+CALL Add3ColUniqueIndexIfNotExist('userpriv', 'userid', 'privnodeid', 'userprivtypeid', 1);
+CALL Add3ColUniqueIndexIfNotExist('userpriv', 'usergroupid', 'privnodeid', 'userprivtypeid', 1);
+
+-- --------------------------------------------------------
 
 --
 -- Table structure for table `usergrouppriv`
@@ -1369,10 +1442,15 @@ CREATE TABLE IF NOT EXISTS `variable` (
 -- Table structure change for table `vmhost`
 -- 
 
-ALTER TABLE `vmhost` CHANGE `vmprofileid` `vmprofileid` SMALLINT(5) UNSIGNED NOT NULL DEFAULT '1';
+ALTER TABLE `vmhost` CHANGE `vmlimit` `vmlimit` smallint(5) unsigned NOT NULL;
+ALTER TABLE `vmhost` CHANGE `vmprofileid` `vmprofileid` smallint(5) unsigned NOT NULL;
 CALL AddIndexIfNotExists('vmhost', 'vmprofileid');
 CALL DropColumnIfExists('vmhost', 'vmkernalnic');
 CALL DropColumnIfExists('vmhost', 'vmwaredisk');
+-- have to drop constraint before dropping index
+CALL DropExistingConstraints('vmhost', 'computerid');
+CALL DropExistingIndices('vmhost', 'computerid');
+CALL Add2ColUniqueIndexIfNotExist('vmhost', 'computerid', 'vmprofileid');
 
 -- --------------------------------------------------------
 
@@ -1406,6 +1484,14 @@ CALL AddIndexIfNotExists('vmprofile', 'datastoreimagetypeid');
 
 -- --------------------------------------------------------
 
+-- 
+-- Table structure change for table `vmtype`
+-- 
+
+CALL AddUniqueIndex('vmtype', 'name');
+
+-- --------------------------------------------------------
+
 --
 -- Table structure for table `winKMS`
 --
@@ -1428,34 +1514,15 @@ CREATE TABLE IF NOT EXISTS `winProductKey` (
   `productkey` varchar(100) NOT NULL,
   UNIQUE KEY `affiliationid_productname` (`affiliationid`,`productname`)
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1;
-
+ 
 -- --------------------------------------------------------
 
 --
--- Table structure for table `openstackcomputermap`
---
+-- Table structure for table `xmlrpcLog`
+-- 
 
-CREATE TABLE IF NOT EXISTS `openstackcomputermap` (
-  `instanceid` varchar(50) NOT NULL,
-  `computerid` smallint(5) unsigned DEFAULT NULL,
-  PRIMARY KEY (`instanceid`),
-  UNIQUE KEY `computerid` (`computerid`)
-) ENGINE=InnoDB DEFAULT CHARSET=latin1;
-
-
-
--- --------------------------------------------------------
-
---
--- Table structure for table `openstackimagerevision`
---
-
-CREATE TABLE IF NOT EXISTS `openstackimagerevision` (
-  `imagerevisionid` mediumint(8) unsigned NOT NULL,
-  `imagedetails` text NOT NULL,
-  `flavordetails` text NOT NULL,
-  PRIMARY KEY (`imagerevisionid`)
-) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+ALTER TABLE `xmlrpcLog` CHANGE `xmlrpcKeyid` `xmlrpcKeyid` mediumint(8) unsigned NOT NULL default '0' COMMENT 'this is the userid if apiversion greater than 1';
+CALL AddIndexIfNotExists('xmlrpcLog', 'timestamp');
 
 -- --------------------------------------------------------
 
@@ -1763,6 +1830,14 @@ INSERT IGNORE INTO state (id, name) VALUES (24, 'checkpoint'), (25, 'serverinuse
 -- --------------------------------------------------------
 
 -- 
+-- changes for table `user`
+--
+
+UPDATE user SET IMtypeid = NULL WHERE IMtypeid NOT IN (SELECT id FROM IMtype);
+
+-- --------------------------------------------------------
+
+-- 
 -- Inserts for table `usergroup`
 --
 
@@ -1829,18 +1904,6 @@ INSERT IGNORE INTO userprivtype (id, name) VALUES (9, 'serverProfileAdmin');
 -- --------------------------------------------------------
 
 -- 
--- UNIQUE KEY changes for userpriv table
---
-
-CALL DropExistingConstraints('userpriv', 'userid');
-CALL DropExistingIndices('userpriv', 'userid');
-CALL Add3ColUniqueIndexIfNotExist('userpriv', 'userid', 'privnodeid', 'userprivtypeid', 1);
-CALL Add3ColUniqueIndexIfNotExist('userpriv', 'usergroupid', 'privnodeid', 'userprivtypeid', 1);
-CALL AddConstraintIfNotExists('userpriv', 'userid', 'user', 'id', 'both', 'CASCADE');
-
--- --------------------------------------------------------
-
--- 
 -- Inserts for table `userpriv`
 --
 
@@ -1871,7 +1934,7 @@ INSERT IGNORE INTO `variable` (`name`, `serialization`, `value`) VALUES ('natpor
 INSERT IGNORE INTO `variable` (`name`, `serialization`, `value`) VALUES ('windows_ignore_users', 'none', 'Administrator,cyg_server,root,sshd,Guest');
 INSERT IGNORE INTO `variable` (`name`, `serialization`, `value`) VALUES ('windows_disable_users', 'none', '');
 
--- 
+-- --------------------------------------------------------
 
 -- 
 -- Inserts for table `vmprofile`
@@ -1887,10 +1950,11 @@ UPDATE vmprofile SET vmprofile.datastoreimagetypeid = (SELECT `id` FROM `imagety
 --
 
 CALL DropExistingConstraints('blockComputers', 'computerid');
+CALL DropExistingConstraints('blockComputers', 'imageid');
 
 CALL AddConstraintIfNotExists('blockComputers', 'blockTimeid', 'blockTimes', 'id', 'both', 'CASCADE');
-CALL AddConstraintIfNotExists('blockComputers', 'computerid', 'computer', 'id', 'UPDATE', 'CASCADE');
-CALL AddConstraintIfNotExists('blockComputers', 'imageid', 'image', 'id', 'UPDATE', 'CASCADE');
+CALL AddConstraintIfNotExists('blockComputers', 'computerid', 'computer', 'id', 'none', '');
+CALL AddConstraintIfNotExists('blockComputers', 'imageid', 'image', 'id', 'none', '');
 
 -- --------------------------------------------------------
 
@@ -1903,10 +1967,10 @@ CALL DropExistingConstraints('blockRequest', 'groupid');
 CALL DropExistingConstraints('blockRequest', 'ownerid');
 CALL DropExistingConstraints('blockRequest', 'managementnodeid');
 
-CALL AddConstraintIfNotExists('blockRequest', 'imageid', 'image', 'id', 'update', 'CASCADE');
+CALL AddConstraintIfNotExists('blockRequest', 'imageid', 'image', 'id', 'none', '');
 CALL AddConstraintIfNotExists('blockRequest', 'groupid', 'usergroup', 'id', 'both', 'nullCASCADE');
 CALL AddConstraintIfNotExists('blockRequest', 'ownerid', 'user', 'id', 'update', 'CASCADE');
-CALL AddConstraintIfNotExists('blockRequest', 'managementnodeid', 'managementnode', 'id', 'both', 'nullCASCADE');
+CALL AddConstraintIfNotExists('blockRequest', 'managementnodeid', 'managementnode', 'id', 'none', '');
 
 -- --------------------------------------------------------
 
@@ -1915,6 +1979,7 @@ CALL AddConstraintIfNotExists('blockRequest', 'managementnodeid', 'managementnod
 --
 
 CALL DropExistingConstraints('blockTimes', 'blockRequestid');
+
 CALL AddConstraintIfNotExists('blockTimes', 'blockRequestid', 'blockRequest', 'id', 'both', 'CASCADE');
 
 -- --------------------------------------------------------
@@ -1924,6 +1989,7 @@ CALL AddConstraintIfNotExists('blockTimes', 'blockRequestid', 'blockRequest', 'i
 --
 
 CALL DropExistingConstraints('blockWebDate', 'blockRequestid');
+
 CALL AddConstraintIfNotExists('blockWebDate', 'blockRequestid', 'blockRequest', 'id', 'both', 'CASCADE');
 
 -- --------------------------------------------------------
@@ -1933,6 +1999,7 @@ CALL AddConstraintIfNotExists('blockWebDate', 'blockRequestid', 'blockRequest', 
 --
 
 CALL DropExistingConstraints('blockWebTime', 'blockRequestid');
+
 CALL AddConstraintIfNotExists('blockWebTime', 'blockRequestid', 'blockRequest', 'id', 'both', 'CASCADE');
 
 -- --------------------------------------------------------
@@ -1941,7 +2008,11 @@ CALL AddConstraintIfNotExists('blockWebTime', 'blockRequestid', 'blockRequest', 
 -- Constraints for table `changelog`
 --
 
-CALL AddConstraintIfNotExists('changelog', 'computerid', 'computer', 'id', 'update', 'CASCADE');
+CALL DropExistingConstraints('changelog', 'logid');
+CALL DropExistingConstraints('changelog', 'userid');
+CALL DropExistingConstraints('changelog', 'computerid');
+
+CALL AddConstraintIfNotExists('changelog', 'computerid', 'computer', 'id', 'none', '');
 CALL AddConstraintIfNotExists('changelog', 'logid', 'log', 'id', 'update', 'CASCADE');
 CALL AddConstraintIfNotExists('changelog', 'userid', 'user', 'id', 'update', 'CASCADE');
 
@@ -1951,8 +2022,12 @@ CALL AddConstraintIfNotExists('changelog', 'userid', 'user', 'id', 'update', 'CA
 -- Constraints for table `clickThroughs`
 --
 
+CALL DropExistingConstraints('clickThroughs', 'userid');
+CALL DropExistingConstraints('clickThroughs', 'imageid');
+CALL DropExistingConstraints('clickThroughs', 'imagerevisionid');
+
 CALL AddConstraintIfNotExists('clickThroughs', 'userid', 'user', 'id', 'update', 'CASCADE');
-CALL AddConstraintIfNotExists('clickThroughs', 'imageid', 'image', 'id', 'update', 'CASCADE');
+CALL AddConstraintIfNotExists('clickThroughs', 'imageid', 'image', 'id', 'none', '');
 CALL AddConstraintIfNotExists('clickThroughs', 'imagerevisionid', 'imagerevision', 'id', 'update', 'CASCADE');
 
 -- --------------------------------------------------------
@@ -1961,10 +2036,18 @@ CALL AddConstraintIfNotExists('clickThroughs', 'imagerevisionid', 'imagerevision
 -- Constraints for table `computer`
 --
 
-CALL AddConstraintIfNotExists('computer', 'currentimageid', 'image', 'id', 'update', 'CASCADE');
-CALL AddConstraintIfNotExists('computer', 'vmhostid', 'vmhost', 'id', 'update', 'CASCADE');
+CALL DropExistingConstraints('computer', 'vmhostid');
+CALL DropExistingConstraints('computer', 'ownerid');
+CALL DropExistingConstraints('computer', 'scheduleid');
+CALL DropExistingConstraints('computer', 'currentimageid');
+CALL DropExistingConstraints('computer', 'nextimageid');
+
+CALL AddConstraintIfNotExists('computer', 'vmhostid', 'vmhost', 'id', 'both', 'nullCASCADE');
+CALL AddConstraintIfNotExists('computer', 'ownerid', 'user', 'id', 'update', 'CASCADE');
+CALL AddConstraintIfNotExists('computer', 'scheduleid', 'schedule', 'id', 'delete', 'SET NULL');
+CALL AddConstraintIfNotExists('computer', 'currentimageid', 'image', 'id', 'none', '');
 CALL AddConstraintIfNotExists('computer', 'imagerevisionid', 'imagerevision', 'id', 'update', 'CASCADE');
-CALL AddConstraintIfNotExists('computer', 'nextimageid', 'image', 'id', 'update', 'CASCADE');
+CALL AddConstraintIfNotExists('computer', 'nextimageid', 'image', 'id', 'none', '');
 CALL AddConstraintIfNotExists('computer', 'predictivemoduleid', 'module', 'id', 'update', 'CASCADE');
 
 -- --------------------------------------------------------
@@ -1982,8 +2065,23 @@ CALL AddConstraintIfNotExists('computerloadflow', 'nextstateid', 'computerloadst
 -- Constraints for table `computerloadlog`
 --
 
-CALL AddConstraintIfNotExists('computerloadlog', 'computerid', 'computer', 'id', 'both', 'RESTRICT');
-CALL AddConstraintIfNotExists('computerloadlog', 'loadstateid', 'computerloadstate', 'id', 'both', 'RESTRICT');
+CALL DropExistingConstraints('computerloadlog', 'loadstateid');
+
+CALL AddConstraintIfNotExists('computerloadlog', 'computerid', 'computer', 'id', 'none', '');
+CALL AddConstraintIfNotExists('computerloadlog', 'loadstateid', 'computerloadstate', 'id', 'update', 'CASCADE');
+CALL AddConstraintIfNotExists('computerloadlog', 'reservationid', 'reservation', 'id', 'delete', 'CASCADE');
+
+-- --------------------------------------------------------
+
+--
+-- Constraints for table `connectlog`
+--
+
+CALL DropExistingConstraints('connectlog', 'logid');
+CALL DropExistingConstraints('connectlog', 'userid');
+
+CALL AddConstraintIfNotExists('connectlog', 'logid', 'log', 'id', 'update', 'CASCADE');
+CALL AddConstraintIfNotExists('connectlog', 'userid', 'user', 'id', 'update', 'CASCADE');
 
 -- --------------------------------------------------------
 
@@ -1991,10 +2089,14 @@ CALL AddConstraintIfNotExists('computerloadlog', 'loadstateid', 'computerloadsta
 -- Constraints for table `connectmethodmap`
 --
 
+CALL DropExistingConstraints('connectmethodmap', 'OStypeid');
+CALL DropExistingConstraints('connectmethodmap', 'OSid');
+CALL DropExistingConstraints('connectmethodmap', 'imagerevisionid');
+
 CALL AddConstraintIfNotExists('connectmethodmap', 'connectmethodid', 'connectmethod', 'id', 'both', 'CASCADE');
-CALL AddConstraintIfNotExists('connectmethodmap', 'OStypeid', 'OStype', 'id', 'both', 'CASCADE');
-CALL AddConstraintIfNotExists('connectmethodmap', 'OSid', 'OS', 'id', 'both', 'CASCADE');
-CALL AddConstraintIfNotExists('connectmethodmap', 'imagerevisionid', 'imagerevision', 'id', 'both', 'CASCADE');
+CALL AddConstraintIfNotExists('connectmethodmap', 'OStypeid', 'OStype', 'id', 'update', 'CASCADE');
+CALL AddConstraintIfNotExists('connectmethodmap', 'OSid', 'OS', 'id', 'update', 'CASCADE');
+CALL AddConstraintIfNotExists('connectmethodmap', 'imagerevisionid', 'imagerevision', 'id', 'update', 'CASCADE');
 
 -- --------------------------------------------------------
 
@@ -2007,11 +2109,10 @@ CALL AddConstraintIfNotExists('connectmethodport', 'connectmethodid', 'connectme
 -- --------------------------------------------------------
 
 --
--- Constraints for table `connectlog`
+-- Constraints for table `continuations`
 --
 
-CALL AddConstraintIfNotExists('connectlog', 'logid', 'log', 'id', 'both', 'CASCADE');
-CALL AddConstraintIfNotExists('connectlog', 'userid', 'user', 'id', 'both', 'CASCADE');
+CALL AddConstraintIfNotExists('continuations', 'userid', 'user', 'id', 'update', 'CASCADE');
 
 -- --------------------------------------------------------
 
@@ -2019,8 +2120,23 @@ CALL AddConstraintIfNotExists('connectlog', 'userid', 'user', 'id', 'both', 'CAS
 -- Constraints for table `image`
 --
 
+CALL DropExistingConstraints('image', 'ownerid');
+
+CALL AddConstraintIfNotExists('image', 'ownerid', 'user', 'id', 'update', 'CASCADE');
 CALL AddConstraintIfNotExists('image', 'imagetypeid', 'imagetype', 'id', 'update', 'CASCADE');
 CALL AddConstraintIfNotExists('image', 'imagemetaid', 'imagemeta', 'id', 'both', 'nullCASCADE');
+UPDATE image SET basedoffrevisionid = NULL WHERE basedoffrevisionid NOT IN (SELECT id FROM imagerevision);
+CALL AddConstraintIfNotExists('image', 'basedoffrevisionid', 'imagerevision', 'id', 'update', 'CASCADE');
+
+-- --------------------------------------------------------
+
+--
+-- Constraints for table `imagerevision`
+--
+
+CALL DropExistingConstraints('imagerevision', 'imageid');
+
+CALL AddConstraintIfNotExists('imagerevision', 'imageid', 'image', 'id', 'none', '');
 
 -- --------------------------------------------------------
 
@@ -2028,7 +2144,19 @@ CALL AddConstraintIfNotExists('image', 'imagemetaid', 'imagemeta', 'id', 'both',
 -- Constraints for table `imagerevisioninfo`
 --
 
-CALL AddConstraintIfNotExists('imagerevisioninfo', 'imagerevisionid', 'imagerevision', 'id', 'both', 'CASCADE');
+CALL DropExistingConstraints('imagerevisioninfo', 'imagerevisionid');
+
+CALL AddConstraintIfNotExists('imagerevisioninfo', 'imagerevisionid', 'imagerevision', 'id', 'update', 'CASCADE');
+
+-- --------------------------------------------------------
+
+--
+-- Constraints for table `localauth`
+--
+
+CALL DropExistingConstraints('localauth', 'userid');
+
+CALL AddConstraintIfNotExists('localauth', 'userid', 'user', 'id', 'update', 'CASCADE');
 
 -- --------------------------------------------------------
 
@@ -2036,7 +2164,11 @@ CALL AddConstraintIfNotExists('imagerevisioninfo', 'imagerevisionid', 'imagerevi
 -- Constraints for table `log`
 --
 
-CALL AddConstraintIfNotExists('log', 'computerid', 'computer', 'id', 'update', 'CASCADE');
+CALL DropExistingConstraints('log', 'imageid');
+CALL DropExistingConstraints('log', 'computerid');
+
+CALL AddConstraintIfNotExists('log', 'imageid', 'image', 'id', 'none', '');
+CALL AddConstraintIfNotExists('log', 'computerid', 'computer', 'id', 'none', '');
 
 -- --------------------------------------------------------
 
@@ -2049,19 +2181,22 @@ CALL AddConstraintIfNotExists('loginlog', 'affiliationid', 'affiliation', 'id', 
 -- --------------------------------------------------------
 
 --
--- Constraints for table `nathost`
+-- Constraints for table `managementnode`
 --
 
-CALL AddConstraintIfNotExists('nathost', 'resourceid', 'resource', 'id', 'both', 'CASCADE');
+CALL DropExistingConstraints('managementnode', 'imagelibgroupid');
+
+CALL AddConstraintIfNotExists('managementnode', 'imagelibgroupid', 'resourcegroup', 'id', 'both', 'nullCASCADE');
 
 -- --------------------------------------------------------
 
 --
--- Constraints for table `natlog`
+-- Constraints for table `nathost`
 --
 
-CALL AddConstraintIfNotExists('natlog', 'sublogid', 'sublog', 'id', 'both', 'CASCADE');
-CALL AddConstraintIfNotExists('natlog', 'nathostresourceid', 'resource', 'id', 'update', 'CASCADE');
+CALL DropExistingConstraints('nathost', 'resourceid');
+
+CALL AddConstraintIfNotExists('nathost', 'resourceid', 'resource', 'id', 'update', 'CASCADE');
 
 -- --------------------------------------------------------
 
@@ -2069,8 +2204,21 @@ CALL AddConstraintIfNotExists('natlog', 'nathostresourceid', 'resource', 'id', '
 -- Constraints for table `nathostcomputermap`
 --
 
+CALL DropExistingConstraints('nathostcomputermap', 'computerid');
+
 CALL AddConstraintIfNotExists('nathostcomputermap', 'nathostid', 'nathost', 'id', 'both', 'CASCADE');
-CALL AddConstraintIfNotExists('nathostcomputermap', 'computerid', 'computer', 'id', 'both', 'CASCADE');
+CALL AddConstraintIfNotExists('nathostcomputermap', 'computerid', 'computer', 'id', 'none', '');
+
+-- --------------------------------------------------------
+
+--
+-- Constraints for table `natlog`
+--
+
+CALL DropExistingConstraints('natlog', 'sublogid');
+
+CALL AddConstraintIfNotExists('natlog', 'sublogid', 'sublog', 'id', 'update', 'CASCADE');
+CALL AddConstraintIfNotExists('natlog', 'nathostresourceid', 'resource', 'id', 'update', 'CASCADE');
 
 -- --------------------------------------------------------
 
@@ -2078,9 +2226,13 @@ CALL AddConstraintIfNotExists('nathostcomputermap', 'computerid', 'computer', 'i
 -- Constraints for table `natport`
 --
 
-CALL AddConstraintIfNotExists('natport', 'connectmethodportid', 'connectmethodport', 'id', 'both', 'CASCADE');
-CALL AddConstraintIfNotExists('natport', 'reservationid', 'reservation', 'id', 'both', 'CASCADE');
-CALL AddConstraintIfNotExists('natport', 'nathostid', 'nathost', 'id', 'both', 'CASCADE');
+CALL DropExistingConstraints('natport', 'connectmethodportid');
+CALL DropExistingConstraints('natport', 'reservationid');
+CALL DropExistingConstraints('natport', 'nathostid');
+
+CALL AddConstraintIfNotExists('natport', 'connectmethodportid', 'connectmethodport', 'id', 'update', 'CASCADE');
+CALL AddConstraintIfNotExists('natport', 'reservationid', 'reservation', 'id', 'delete', 'CASCADE');
+CALL AddConstraintIfNotExists('natport', 'nathostid', 'nathost', 'id', 'update', 'CASCADE');
 
 -- --------------------------------------------------------
 
@@ -2088,7 +2240,9 @@ CALL AddConstraintIfNotExists('natport', 'nathostid', 'nathost', 'id', 'both', '
 -- Constraints for table `openstackcomputermap`
 --
 
-CALL AddConstraintIfNotExists('openstackcomputermap', 'computerid', 'computer', 'id', 'both', 'CASCADE');
+CALL DropExistingConstraints('openstackcomputermap', 'computerid');
+
+CALL AddConstraintIfNotExists('openstackcomputermap', 'computerid', 'computer', 'id', 'none', '');
 
 -- --------------------------------------------------------
 
@@ -2096,13 +2250,18 @@ CALL AddConstraintIfNotExists('openstackcomputermap', 'computerid', 'computer', 
 -- Constraints for table `openstackimagerevision`
 --
 
-CALL AddConstraintIfNotExists('openstackimagerevision', 'imagerevisionid', 'imagerevision', 'id', 'both', 'CASCADE');
+CALL DropExistingConstraints('openstackimagerevision', 'imagerevisionid');
+
+CALL AddConstraintIfNotExists('openstackimagerevision', 'imagerevisionid', 'imagerevision', 'id', 'update', 'CASCADE');
   
 -- --------------------------------------------------------
 
 --
 -- Constraints for table `provisioningOSinstalltype`
 --
+
+CALL DropExistingConstraints('provisioningOSinstalltype', 'provisioningid');
+CALL DropExistingConstraints('provisioningOSinstalltype', 'OSinstalltypeid');
  
 CALL AddConstraintIfNotExists('provisioningOSinstalltype', 'provisioningid', 'provisioning', 'id', 'both', 'CASCADE');
 CALL AddConstraintIfNotExists('provisioningOSinstalltype', 'OSinstalltypeid', 'OSinstalltype', 'id', 'both', 'CASCADE');
@@ -2110,10 +2269,35 @@ CALL AddConstraintIfNotExists('provisioningOSinstalltype', 'OSinstalltypeid', 'O
 -- --------------------------------------------------------
 
 --
+-- Constraints for table `querylog`
+--
+
+CALL DropExistingConstraints('querylog', 'userid');
+
+CALL AddConstraintIfNotExists('querylog', 'userid', 'user', 'id', 'update', 'CASCADE');
+
+-- --------------------------------------------------------
+
+--
+-- Constraints for table `request`
+--
+
+CALL DropExistingConstraints('request', 'userid');
+
+CALL AddConstraintIfNotExists('request', 'userid', 'user', 'id', 'update', 'CASCADE');
+CALL AddConstraintIfNotExists('request', 'logid', 'log', 'id', 'update', 'CASCADE');
+
+-- --------------------------------------------------------
+
+--
 -- Constraints for table `reservation`
 --
 
-CALL AddConstraintIfNotExists('reservation', 'imageid', 'image', 'id', 'update', 'CASCADE');
+CALL DropExistingConstraints('reservation', 'computerid');
+CALL DropExistingConstraints('reservation', 'imageid');
+
+CALL AddConstraintIfNotExists('reservation', 'computerid', 'computer', 'id', 'none', '');
+CALL AddConstraintIfNotExists('reservation', 'imageid', 'image', 'id', 'none', '');
 CALL AddConstraintIfNotExists('reservation', 'imagerevisionid', 'imagerevision', 'id', 'update', 'CASCADE');
 
 -- --------------------------------------------------------
@@ -2122,8 +2306,11 @@ CALL AddConstraintIfNotExists('reservation', 'imagerevisionid', 'imagerevision',
 -- Constraints for table `reservationaccounts`
 --
 
-CALL AddConstraintIfNotExists('reservationaccounts', 'reservationid', 'reservation', 'id', 'both', 'CASCADE');
-CALL AddConstraintIfNotExists('reservationaccounts', 'userid', 'user', 'id', 'both', 'CASCADE');
+CALL DropExistingConstraints('reservationaccounts', 'reservationid');
+CALL DropExistingConstraints('reservationaccounts', 'userid');
+
+CALL AddConstraintIfNotExists('reservationaccounts', 'reservationid', 'reservation', 'id', 'delete', 'CASCADE');
+CALL AddConstraintIfNotExists('reservationaccounts', 'userid', 'user', 'id', 'update', 'CASCADE');
 
 -- --------------------------------------------------------
 
@@ -2133,6 +2320,8 @@ CALL AddConstraintIfNotExists('reservationaccounts', 'userid', 'user', 'id', 'bo
 
 CALL DropExistingConstraints('resourcemap', 'resourcegroupid1');
 CALL DropExistingConstraints('resourcemap', 'resourcegroupid2');
+CALL DropExistingConstraints('resourcemap', 'resourcetypeid1');
+CALL DropExistingConstraints('resourcemap', 'resourcetypeid2');
 
 CALL AddConstraintIfNotExists('resourcemap', 'resourcegroupid1', 'resourcegroup', 'id', 'both', 'CASCADE');
 CALL AddConstraintIfNotExists('resourcemap', 'resourcegroupid2', 'resourcegroup', 'id', 'both', 'CASCADE');
@@ -2145,7 +2334,9 @@ CALL AddConstraintIfNotExists('resourcemap', 'resourcetypeid2', 'resourcetype', 
 -- Constraints for table `scheduletimes`
 --
 
-CALL AddConstraintIfNotExists('scheduletimes', 'scheduleid', 'schedule', 'id', 'update', 'CASCADE');
+CALL DropExistingConstraints('scheduletimes', 'scheduleid');
+
+CALL AddConstraintIfNotExists('scheduletimes', 'scheduleid', 'schedule', 'id', 'both', 'CASCADE');
 
 -- --------------------------------------------------------
 
@@ -2153,10 +2344,15 @@ CALL AddConstraintIfNotExists('scheduletimes', 'scheduleid', 'schedule', 'id', '
 -- Constraints for table `semaphore`
 --
 
-CALL AddConstraintIfNotExists('semaphore', 'computerid', 'computer', 'id', 'update', 'CASCADE');
-CALL AddConstraintIfNotExists('semaphore', 'imageid', 'image', 'id', 'update', 'CASCADE');
+CALL DropExistingConstraints('semaphore', 'computerid');
+CALL DropExistingConstraints('semaphore', 'imageid');
+CALL DropExistingConstraints('semaphore', 'imagerevisionid');
+CALL DropExistingConstraints('semaphore', 'managementnodeid');
+
+CALL AddConstraintIfNotExists('semaphore', 'computerid', 'computer', 'id', 'none', '');
+CALL AddConstraintIfNotExists('semaphore', 'imageid', 'image', 'id', 'none', '');
 CALL AddConstraintIfNotExists('semaphore', 'imagerevisionid', 'imagerevision', 'id', 'update', 'CASCADE');
-CALL AddConstraintIfNotExists('semaphore', 'managementnodeid', 'managementnode', 'id', 'update', 'CASCADE');
+CALL AddConstraintIfNotExists('semaphore', 'managementnodeid', 'managementnode', 'id', 'none', '');
 
 -- --------------------------------------------------------
 
@@ -2164,9 +2360,13 @@ CALL AddConstraintIfNotExists('semaphore', 'managementnodeid', 'managementnode',
 -- Constraints for table `serverprofile`
 --
 
-CALL AddConstraintIfNotExists('serverprofile', 'ownerid', 'user', 'id', 'none', '');
-CALL AddConstraintIfNotExists('serverprofile', 'admingroupid', 'usergroup', 'id', 'none', '');
-CALL AddConstraintIfNotExists('serverprofile', 'logingroupid', 'usergroup', 'id', 'none', '');
+CALL DropExistingConstraints('serverprofile', 'ownerid');
+CALL DropExistingConstraints('serverprofile', 'admingroupid');
+CALL DropExistingConstraints('serverprofile', 'logingroupid');
+
+CALL AddConstraintIfNotExists('serverprofile', 'ownerid', 'user', 'id', 'update', 'CASCADE');
+CALL AddConstraintIfNotExists('serverprofile', 'admingroupid', 'usergroup', 'id', 'update', 'CASCADE');
+CALL AddConstraintIfNotExists('serverprofile', 'logingroupid', 'usergroup', 'id', 'update', 'CASCADE');
 CALL AddConstraintIfNotExists('serverprofile', 'imageid', 'image', 'id', 'none', '');
 
 -- --------------------------------------------------------
@@ -2185,6 +2385,8 @@ CALL AddConstraintIfNotExists('serverrequest', 'logingroupid', 'usergroup', 'id'
 -- Constraints for table `shibauth`
 --
 
+CALL DropExistingConstraints('shibauth', 'userid');
+
 CALL AddConstraintIfNotExists('shibauth', 'userid', 'user', 'id', 'update', 'CASCADE');
 
 -- --------------------------------------------------------
@@ -2195,7 +2397,8 @@ CALL AddConstraintIfNotExists('shibauth', 'userid', 'user', 'id', 'update', 'CAS
 
 CALL DropExistingConstraints('statgraphcache', 'affiliationid');
 CALL DropExistingConstraints('statgraphcache', 'provisioningid');
-CALL AddConstraintIfNotExists('statgraphcache', 'affiliationid', 'affiliation', 'id', 'both', 'CASCADE');
+
+CALL AddConstraintIfNotExists('statgraphcache', 'affiliationid', 'affiliation', 'id', 'update', 'CASCADE');
 CALL AddConstraintIfNotExists('statgraphcache', 'provisioningid', 'provisioning', 'id', 'both', 'CASCADE');
 
 -- --------------------------------------------------------
@@ -2204,7 +2407,10 @@ CALL AddConstraintIfNotExists('statgraphcache', 'provisioningid', 'provisioning'
 -- Constraints for table `subimages`
 --
 
-CALL AddConstraintIfNotExists('subimages', 'imageid', 'image', 'id', 'update', 'CASCADE');
+CALL DropExistingConstraints('subimages', 'imageid');
+CALL DropExistingConstraints('subimages', 'imagemetaid');
+
+CALL AddConstraintIfNotExists('subimages', 'imageid', 'image', 'id', 'none', '');
 CALL AddConstraintIfNotExists('subimages', 'imagemetaid', 'imagemeta', 'id', 'update', 'CASCADE');
 
 -- --------------------------------------------------------
@@ -2213,15 +2419,35 @@ CALL AddConstraintIfNotExists('subimages', 'imagemetaid', 'imagemeta', 'id', 'up
 -- Constraints for table `sublog`
 --
 
+CALL DropExistingConstraints('sublog', 'logid');
 CALL DropExistingConstraints('sublog', 'blockRequestid');
+CALL DropExistingConstraints('sublog', 'imageid');
+CALL DropExistingConstraints('sublog', 'imagerevisionid');
+CALL DropExistingConstraints('sublog', 'computerid');
+CALL DropExistingConstraints('sublog', 'managementnodeid');
+CALL DropExistingConstraints('sublog', 'predictivemoduleid');
+CALL DropExistingConstraints('sublog', 'hostcomputerid');
 
 CALL AddConstraintIfNotExists('sublog', 'logid', 'log', 'id', 'UPDATE', 'CASCADE');
-CALL AddConstraintIfNotExists('sublog', 'imageid', 'image', 'id', 'UPDATE', 'CASCADE');
+CALL AddConstraintIfNotExists('sublog', 'imageid', 'image', 'id', 'none', '');
 CALL AddConstraintIfNotExists('sublog', 'imagerevisionid', 'imagerevision', 'id', 'UPDATE', 'CASCADE');
-CALL AddConstraintIfNotExists('sublog', 'computerid', 'computer', 'id', 'UPDATE', 'CASCADE');
-CALL AddConstraintIfNotExists('sublog', 'managementnodeid', 'managementnode', 'id', 'UPDATE', 'CASCADE');
+CALL AddConstraintIfNotExists('sublog', 'computerid', 'computer', 'id', 'none', '');
+CALL AddConstraintIfNotExists('sublog', 'managementnodeid', 'managementnode', 'id', 'none', '');
 CALL AddConstraintIfNotExists('sublog', 'predictivemoduleid', 'module', 'id', 'UPDATE', 'CASCADE');
-CALL AddConstraintIfNotExists('sublog', 'hostcomputerid', 'computer', 'id', 'UPDATE', 'CASCADE');
+CALL AddConstraintIfNotExists('sublog', 'hostcomputerid', 'computer', 'id', 'none', '');
+CALL AddConstraintIfNotExists('sublog', 'blockRequestid', 'blockRequest', 'id', 'update', 'CASCADE');
+
+-- --------------------------------------------------------
+
+--
+-- Constraints for table `user`
+--
+
+CALL DropExistingConstraints('user', 'affiliationid');
+CALL DropExistingConstraints('user', 'IMtypeid');
+
+CALL AddConstraintIfNotExists('user', 'affiliationid', 'affiliation', 'id', 'update', 'CASCADE');
+CALL AddConstraintIfNotExists('user', 'IMtypeid', 'IMtype', 'id', 'both', 'nullCASCADE');
 
 -- --------------------------------------------------------
 
@@ -2229,7 +2455,21 @@ CALL AddConstraintIfNotExists('sublog', 'hostcomputerid', 'computer', 'id', 'UPD
 -- Constraints for table `usergroup`
 --
 
+CALL DropExistingConstraints('usergroup', 'ownerid');
+CALL DropExistingConstraints('usergroup', 'affiliationid');
+
+CALL AddConstraintIfNotExists('usergroup', 'ownerid', 'user', 'id', 'update', 'CASCADE');
 CALL AddConstraintIfNotExists('usergroup', 'affiliationid', 'affiliation', 'id', 'update', 'CASCADE');
+
+-- --------------------------------------------------------
+
+--
+-- Constraints for table `usergroupmembers`
+--
+
+CALL DropExistingConstraints('usergroupmembers', 'userid');
+
+CALL AddConstraintIfNotExists('usergroupmembers', 'userid', 'user', 'id', 'update', 'CASCADE');
 
 -- --------------------------------------------------------
 
@@ -2237,17 +2477,34 @@ CALL AddConstraintIfNotExists('usergroup', 'affiliationid', 'affiliation', 'id',
 -- Constraints for table `usergrouppriv`
 --
 
+CALL DropExistingConstraints('usergrouppriv', 'userprivtypeid');
+
+CALL AddConstraintIfNotExists('usergrouppriv', 'userprivtypeid', 'usergroupprivtype', 'id', 'update', 'CASCADE');
 CALL AddConstraintIfNotExists('usergrouppriv', 'usergroupid', 'usergroup', 'id', 'both', 'CASCADE');
-CALL AddConstraintIfNotExists('usergrouppriv', 'userprivtypeid', 'usergroupprivtype', 'id', 'both', 'CASCADE');
+
+-- --------------------------------------------------------
+
+-- 
+-- Constraints for table `userpriv`
+--
+
+CALL DropExistingConstraints('userpriv', 'userid');
+CALL DropExistingConstraints('userpriv', 'userprivtypeid');
+
+CALL AddConstraintIfNotExists('userpriv', 'userid', 'user', 'id', 'update', 'CASCADE');
+CALL AddConstraintIfNotExists('userpriv', 'userprivtypeid', 'userprivtype', 'id', 'update', 'CASCADE');
+CALL AddConstraintIfNotExists('userpriv', 'usergroupid', 'usergroup', 'id', 'both', 'CASCADE');
 
 -- --------------------------------------------------------
 
 --
 -- Constraints for table `vmhost`
 --
+
+CALL DropExistingConstraints('vmhost', 'computerid');
  
 CALL AddConstraintIfNotExists('vmhost', 'vmprofileid', 'vmprofile', 'id', 'update', 'CASCADE');
-CALL AddConstraintIfNotExists('vmhost', 'computerid', 'computer', 'id', 'update', 'CASCADE');
+CALL AddConstraintIfNotExists('vmhost', 'computerid', 'computer', 'id', 'none', '');
 
 -- --------------------------------------------------------
 
@@ -2255,6 +2512,9 @@ CALL AddConstraintIfNotExists('vmhost', 'computerid', 'computer', 'id', 'update'
 -- Constraints for table `vmprofile`
 --
 
+CALL DropExistingConstraints('vmprofile', 'imageid');
+
+CALL AddConstraintIfNotExists('vmprofile', 'imageid', 'image', 'id', 'none', '');
 CALL AddConstraintIfNotExists('vmprofile', 'repositoryimagetypeid', 'imagetype', 'id', 'update', 'CASCADE');
 CALL AddConstraintIfNotExists('vmprofile', 'datastoreimagetypeid', 'imagetype', 'id', 'update', 'CASCADE');
 
