@@ -1951,10 +1951,19 @@ sub prepare_vmdk {
 	
 	# If the VM is dedicated, check if the dedicated vmdk already exists on the host, delete it if necessary
 	if ($is_vm_dedicated && $self->vmhost_os->file_exists($host_vmdk_directory_path)) {
-		notify($ERRORS{'WARNING'}, 0, "VM is dedicated and vmdk directory already exists on VM host $vmhost_name: $host_vmdk_directory_path, existing directory will be deleted");
-		if (!$self->vmhost_os->delete_file($host_vmdk_directory_path)) {
-			notify($ERRORS{'WARNING'}, 0, "failed to delete existing dedicated vmdk directory on VM host $vmhost_name: $host_vmdk_directory_path");
-			return;
+		my $request_state_name = $self->data->get_request_state_name(0);
+		if ($request_state_name && $request_state_name =~ /(new|reload)/) {
+			notify($ERRORS{'WARNING'}, 0, "VM is dedicated and vmdk directory already exists on VM host $vmhost_name: $host_vmdk_directory_path, existing directory will be deleted");
+			if (!$self->vmhost_os->delete_file($host_vmdk_directory_path)) {
+				notify($ERRORS{'WARNING'}, 0, "failed to delete existing dedicated vmdk directory on VM host $vmhost_name: $host_vmdk_directory_path");
+				return;
+			}
+		}
+		else {
+			# Don't delete the directory, it may be in use by a VM
+			# Attempting to delete it will likely delete some files but not all, leaving a mess to reconstruct
+			notify($ERRORS{'OK'}, 0, "VM is dedicated and vmdk directory already exists on VM host $vmhost_name: $host_vmdk_directory_path, request state is not new or reload, directory will not be deleted, returning true");
+			return 1;
 		}
 	}
 	
@@ -9263,6 +9272,12 @@ sub migrate_vm {
 	if (!@source_vmdk_file_paths) {
 		notify($ERRORS{'WARNING'}, 0, "failed to migrate VM, source vmdk file paths could not be retrieved");
 		return;
+	}
+	elsif (scalar(@source_vmdk_file_paths) > 1) {
+		# Don't allow multiple vmdk's for now
+		# TODO: add support for this, need to check if destination has enough space
+		# Also need to check if disks are affected by snapshots. If not, need to copy while VM is suspended
+		notify($ERRORS{'DEBUG'}, 0, "$vm_computer_name contains multiple virtual disks, only the migration of single virtual disk VMs is currently supported");
 	}
 	
 	# VM may have multiple virtual disks
