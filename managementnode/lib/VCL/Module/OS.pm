@@ -2191,33 +2191,55 @@ sub create_text_file {
 		$file_path = "\"$file_path\"";
 	}
 	
-	# Create a command to echo the hex string to the file
-	# Use -e to enable interpretation of backslash escapes
-	my $command .= "echo -e \"$hex_string\"";
+	# Create a command to echo the string and another to echo the hex string to the file, use -e to enable interpretation of backslash escapes
+	# The hex string command is preferred because it will handle special characters
+	# However, the command may become very long and fail
+	my $command .= "echo \"$file_contents_string\"";
+	my $hex_command .= "echo -e \"$hex_string\"";
 	if ($concatenate) {
 		$command .= " >> $file_path";
+		$hex_command .= " >> $file_path";
 	}
 	else {
 		$command .= " > $file_path";
+		$hex_command .= " > $file_path";
 	}
 	
-	my ($exit_status, $output) = $self->execute($command, 0);
+	# Try to create/append the file using the hex string first
+	my ($hex_exit_status, $hex_output) = $self->execute($hex_command, 0, 15, 1);
+	if (!defined($hex_output)) {
+		notify($ERRORS{'DEBUG'}, 0, "failed to execute command to create file on $computer_node_name using hex values of characters, attempting to use regular characters");
+	}
+	elsif ($hex_exit_status != 0 || grep(/^\w+:/i, @$hex_output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to create a file on $computer_node_name using hex values of characters, command: '$hex_command', exit status: $hex_exit_status, output:\n" . join("\n", @$hex_output));
+	}
+	elsif ($concatenate) {
+		notify($ERRORS{'DEBUG'}, 0, "appended text file on $computer_node_name using hex values of characters: $file_path");
+		return 1;
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "created text file on $computer_node_name using hex values of characters: $file_path");
+		return 1;
+	}
+	
+	my ($exit_status, $output) = $self->execute($command, 0, 15, 1);
 	if (!defined($output)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to execute ssh command to create file on $computer_node_name: $file_path");
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to create file on $computer_node_name: $file_path, command:\n$command");
 		return;
 	}
 	elsif ($exit_status != 0 || grep(/^\w+:/i, @$output)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to execute command to create a file on $computer_node_name:\ncommand: '$command', exit status: $exit_status, output:\n" . join("\n", @$output));
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to create a file on $computer_node_name, command: '$command', exit status: $exit_status, output:\n" . join("\n", @$output));
 		return;
 	}
 	elsif ($concatenate) {
 		notify($ERRORS{'DEBUG'}, 0, "appended text file on $computer_node_name: $file_path");
+		return 1;
 	}
 	else {
 		notify($ERRORS{'DEBUG'}, 0, "created text file on $computer_node_name: $file_path");
+		return 1;
 	}
 	
-	return 1;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
