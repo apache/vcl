@@ -93,6 +93,31 @@ sub initialize {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 get_iptables_semaphore
+
+ Parameters  : none
+ Returns     : VCL::Semaphore object reference
+ Description : Obtains and returns a VCL::Semaphore object. This should be
+               called prior to executing iptables commands which must be run
+               individually. Otherwise, the following error is generated:
+               iptables: Resource temporarily unavailable.
+
+=cut
+
+sub get_iptables_semaphore {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return 0;
+	}
+	
+	my $computer_id = $self->data->get_computer_id();
+	
+	return $self->get_semaphore("iptables-$computer_id", 120, 1);
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 =head2 insert_rule
 
  Parameters  : hash reference
@@ -225,6 +250,7 @@ sub insert_rule {
 		}
 	}
 	
+	my $semaphore = $self->get_iptables_semaphore();
 	my ($exit_status, $output) = $self->os->execute($command, 0);
 	if (!defined($output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to execute command $computer_name: $command");
@@ -327,6 +353,7 @@ sub delete_rule {
 		$command .= " -D $chain_name -t $table_name $specification";
 	}
 	
+	my $semaphore = $self->get_iptables_semaphore();
 	my ($exit_status, $output) = $self->os->execute($command, 0);
 	if (!defined($output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to execute command $computer_name: $command");
@@ -373,6 +400,8 @@ sub create_chain {
 	my $computer_name = $self->data->get_computer_hostname();
 	
 	my $command = "/sbin/iptables --new-chain $chain_name --table $table_name";
+	
+	my $semaphore = $self->get_iptables_semaphore();
 	my ($exit_status, $output) = $self->os->execute($command, 0);
 	if (!defined($output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to execute command $computer_name: $command");
@@ -442,6 +471,8 @@ sub delete_chain {
 	}
 	
 	my $command = "/sbin/iptables --delete-chain $chain_name --table $table_name";
+	
+	my $semaphore = $self->get_iptables_semaphore();
 	my ($exit_status, $output) = $self->os->execute($command, 0);
 	if (!defined($output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to execute command $computer_name: $command");
@@ -575,6 +606,7 @@ sub flush_chain {
 	}
 	$command .= " --table $table_name";
 	
+	my $semaphore = $self->get_iptables_semaphore();
 	my ($exit_status, $output) = $self->os->execute($command, 0);
 	if (!defined($output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to execute command $computer_name: $command");
