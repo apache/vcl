@@ -385,6 +385,7 @@ sub reservation_failed {
 	
 	my $request_id                 = $self->data->get_request_id();
 	my $reservation_id             = $self->data->get_reservation_id();
+	my $request_state_name         = $self->data->get_request_state_name();
 	my $user_id                    = $self->data->get_user_id();
 	my $user_unityid               = $self->data->get_user_login_id();
 	my $user_email                 = $self->data->get_user_email();
@@ -493,8 +494,8 @@ END
 	}
 	
 	# Update the request state to maintenance, laststate to image
-	if (update_request_state($request_id, "maintenance", "image")) {
-		notify($ERRORS{'OK'}, 0, "request state set to maintenance, laststate to image");
+	if (update_request_state($request_id, "maintenance", $request_state_name)) {
+		notify($ERRORS{'OK'}, 0, "request state set to maintenance, laststate to $request_state_name");
 	}
 	else {
 		notify($ERRORS{'CRITICAL'}, 0, "unable to set request state to maintenance, laststate to image");

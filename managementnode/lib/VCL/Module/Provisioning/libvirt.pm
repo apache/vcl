@@ -930,7 +930,7 @@ sub get_domain_name {
 	
 	# If request state is image the domain name will be that of the image used as the base image, not the image being created
 	# Must find existing loaded domain on node in order to determine name
-	if ($request_state_name eq 'image') {
+	if ($request_state_name =~ /image|checkpoint/) {
 		if (my $active_domain_name = $self->get_active_domain_name()) {
 			notify($ERRORS{'DEBUG'}, 0, "retrieved name of domain being captured: '$active_domain_name'");
 			$self->{domain_name} = $active_domain_name;
