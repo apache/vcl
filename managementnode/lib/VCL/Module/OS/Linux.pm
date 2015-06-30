@@ -4490,7 +4490,7 @@ sub clean_iptables {
 	my $chain = "INPUT";
 	my @commands;
 	my $firewall_configuration = $self->get_firewall_configuration() || return;
-	RULE: for my $rule_number (reverse sort keys %{$firewall_configuration->{$chain}}) {
+	RULE: for my $rule_number (reverse sort {$a<=>$b} keys %{$firewall_configuration->{$chain}}) {
 		my $rule = $firewall_configuration->{$chain}{$rule_number};
 		
 		for my $protocol (keys %$rule) {
