@@ -3822,6 +3822,8 @@ sub enable_firewall_port {
 		# Existing rules will be replaced with new rules which consolidate overlapping scopes
 		# This helps reduce duplicate rules and the number of individual rules
 		push @commands, "iptables -D $chain $rule_number";
+		
+		notify($ERRORS{'DEBUG'}, 0, "existing $chain chain rule $rule_number matches:\n" . format_data($firewall_configuration->{$chain}{$rule_number}));
 	}
 	
 	# Combine all of the existing scopes matching the protocol/port
@@ -4283,6 +4285,14 @@ sub get_firewall_configuration {
 			
 			# Check if line was parsed properly
 			if (!$destination) {
+				next LINE;
+			}
+			
+			# Ignore multiport rules - VCL code does not configure any such rules
+			# This can cause the management node to be locked out
+			# See https://issues.apache.org/jira/browse/VCL-875
+			if ($other_parameters =~ /(multiport|dpts:)/) {
+				notify($ERRORS{'DEBUG'}, 0, "ignoring multiport rule: $line");
 				next LINE;
 			}
 			
