@@ -581,6 +581,8 @@ class Resource {
 				return 0;
 		}
 		else {
+			$this->submitToggleDeleteResourceExtra($rscid);
+
 			$query = "DELETE r "
 			       . "FROM resource r, "
 			       .      "resourcetype rt "
@@ -591,8 +593,6 @@ class Resource {
 			$query = "DELETE FROM `{$this->restype}` "
 			       . "WHERE id = $rscid";
 			doQuery($query);
-
-			$this->submitToggleDeleteResourceExtra($rscid);
 		}
 
 		# clear user resource cache for this type
