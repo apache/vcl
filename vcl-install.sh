@@ -77,7 +77,7 @@ WEB_HOST=localhost
 CRYPTKEY=`random_string 20`
 PEMKEY=`random_string 20`
 ARCHIVE=apache-VCL-$VCL_VERSION.tar.bz2
-ARCHIVEURLPATH="http://vcl.apache.org/downloads/download.cgi?action=download&filename=%2Fvcl%2F"
+ARCHIVEURLPATH="http://vcl.apache.org/downloads/download.cgi?action=download&filename=%2Fvcl%2F$VCL_VERSION%2F"
 SIGPATH="http://www.apache.org/dist/vcl/"
 
 DODB=0
