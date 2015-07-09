@@ -18,7 +18,7 @@
 nlsmessages = {
 'Create / Update an Image':'Créer / Mettre à jour une image',
 'You do not have access to create or update any images.':'Vous ne avez pas accès à créer ou à mettre à jour les images.',
-'(New Profile)':'(New Profile)',
+'(New Profile)':'',
 'The start day and time must be in the future.':'Le jour et l\'heure de début doivent être à l\'avenir.',
 'The end time must be at least 30 minutes in the future.':'L\'heure de fin doit être d\'au moins 30 minutes à l\'avenir.',
 'The end time must be after the start time.':'L\'heure de fin doit être postérieure à l\'heure de début.',
@@ -96,14 +96,14 @@ nlsmessages = {
 'Thursday':'Jeudi',
 'Friday':'Vendredi',
 'Saturday':'Samedi',
-'At least one day must be checked when using \'Repeating Weekly\'':'Au moins un jour doit être vérifié lors de l\'utilisation \'Répétition hebdomadaire \'',
-'At least one start/end combination must be entered when using \'Repeating Weekly\'':'Au moins une combinaison de début / fin doit être saisi lors de l\'utilisation \'Répétition hebdomadaire \'',
+'At least one day must be checked when using "Repeating Weekly"':'Au moins un jour doit être vérifié lors de l\'utilisation "Répétition hebdomadaire"',
+'At least one start/end combination must be entered when using "Repeating Weekly"':'Au moins une combinaison de début / fin doit être saisi lors de l\'utilisation "Répétition hebdomadaire"',
 'When submitting "(group not listed)" as the user group, information must be included in the comments about what group needs to be created.':'Lors de la présentation "(groupe ne figure pas)" comme le groupe d\'utilisateurs, l\'information doit être incluse dans les commentaires au sujet de ce groupe doit être créé.',
 'Name:':'Nom:',
 'Owner:':'Propriétaire:',
 'specified in comments':'spécifiée dans les commentaires',
 'Weekly':'Hebdomadaire',
-'First Date:':'First Date:',
+'First Date:':'Premi&egrave;re Date:',
 'Last Date:':'Dernière Date:',
 'Repeating on these days:':'Répétition sur ces jours:',
 'During these times:':'Pendant ces périodes:',
@@ -116,5 +116,9 @@ nlsmessages = {
 'User Submitted Comments:':'Soumis utilisateur Commentaires:',
 'Skip':'Sauter',
 'Use':'Utilisation',
-'Total online:':'Total en ligne:'
+'Total online:':'Total en ligne:',
+'match':'',
+'no match':'',
+'Error encountered:':'',
+'Please try again later':''
 }
