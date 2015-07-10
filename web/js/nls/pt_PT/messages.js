@@ -117,8 +117,8 @@ nlsmessages = {
 'Skip':'Avançar',
 'Use':'Uso',
 'Total online:':'Total online',
-'match':'',
-'no match':'',
-'Error encountered:':'',
-'Please try again later':''
+'match':'coincide',
+'no match':'não coincide',
+'Error encountered:':'Erro encontrado',
+'Please try again later':'Por favor tente novamente mais tarde'
 }
