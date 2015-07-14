@@ -6758,11 +6758,7 @@ sub set_text_file_line_endings {
 	}
 	$line_ending = 'win' unless $line_ending;
 	
-	# Convert the Windows-style path to a Cygwin/Unix-style path or else the sed command in OS.pm::set_text_file_line_endings will fail with this error:
-	# sed: couldn't open temporary file C:/sedxxxxxx: No such file or directory
-	my $unix_file_path = $self->get_cygwin_unix_file_path($file_path) || $file_path;
-	
-	return $self->SUPER::set_text_file_line_endings($unix_file_path, $line_ending);
+	return $self->SUPER::set_text_file_line_endings($file_path, $line_ending);
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -10842,16 +10838,46 @@ sub sanitize_files {
 		return;
 	}
 	
+	my @file_paths = @_;
+	
 	# Get the file path arguments, add the node configuration directory
 	my $node_configuration_directory = $self->get_node_configuration_directory();
-	my @file_paths = @_;
 	push @file_paths, "$node_configuration_directory/Scripts";
 	push @file_paths, "$node_configuration_directory/Logs";
+
+	# Attempt to get the existing Windows root password from autologon_enable.cmd
+	# This is necessary in case a different password was used when the image was captured
+	my $existing_password;
+	my $grep_command = "/bin/grep -i \"set PASSWORD\" \"$node_configuration_directory/Scripts/autologon_enable.cmd\" 2>&1";
+	my ($grep_status, $grep_output) = $self->execute($grep_command, 0);
+	if (!defined($grep_output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to retrieve Windows root password from autologon_enable.cmd");
+	}
+	elsif (grep(/No such file/i, @$grep_output)) {
+		notify($ERRORS{'DEBUG'}, 0, "existing Windows root password not retrieved from autologon_enable.cmd because the file does not exist");
+	}
+	else {
+		($existing_password) = map { $_ =~ /set PASSWORD=(.+)/; $1;} @$grep_output;
+		if ($existing_password) {
+			notify($ERRORS{'DEBUG'}, 0, "retrieved password from autologon_enable.cmd: $existing_password");
+		}
+		else {
+			notify($ERRORS{'DEBUG'}, 0, "password not found in autologon_enable.cmd:\n" . join("\n", @$grep_output));
+		}
+	}
+	
+	my $password_pattern;
+	if ($existing_password && $existing_password ne $WINDOWS_ROOT_PASSWORD) {
+		$password_pattern = "\\\($WINDOWS_ROOT_PASSWORD\\\|$existing_password\\\)";
+	}
+	else {
+		$password_pattern = $WINDOWS_ROOT_PASSWORD;
+	}
 	
 	# Loop through each file path, remove the Windows root password from each
 	my $error_occurred = 0;
 	for my $file_path (@file_paths) {
-		if (!$self->search_and_replace_in_files($file_path, $WINDOWS_ROOT_PASSWORD, 'WINDOWS_ROOT_PASSWORD')) {
+		if (!$self->search_and_replace_in_files($file_path, $password_pattern, 'WINDOWS_ROOT_PASSWORD')) {
 			notify($ERRORS{'WARNING'}, 0, "failed to remove the Windows root password from: $file_path");
 			$error_occurred = 1;
 		}
