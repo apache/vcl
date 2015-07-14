@@ -52,6 +52,7 @@ use strict;
 use warnings;
 use diagnostics;
 use English '-no_match_vars';
+use POSIX qw(tmpnam);
 use Net::SSH::Expect;
 use List::Util qw(min max);
 
@@ -2139,7 +2140,7 @@ sub get_public_default_gateway {
 
 =head2 create_text_file
 
- Parameters  : $file_path, $file_contents, $concatenate
+ Parameters  : $file_path, $file_contents, $append
  Returns     : boolean
  Description : Creates a text file on the computer. The $file_contents
                string argument is converted to ASCII hex values. These values
@@ -2155,7 +2156,7 @@ sub create_text_file {
 		return;
 	}
 	
-	my ($file_path, $file_contents_string, $concatenate) = @_;
+	my ($file_path, $file_contents_string, $append) = @_;
 	if (!defined($file_path)) {
 		notify($ERRORS{'WARNING'}, 0, "file path argument was not supplied");
 		return;
@@ -2169,77 +2170,92 @@ sub create_text_file {
 	my $image_os_type = $self->data->get_image_os_type();
 	
 	# Attempt to create the parent directory if it does not exist
-	if ($self->can('create_directory')) {
+	if ($file_path =~ /[\\\/]/ && $self->can('create_directory')) {
 		my $parent_directory_path = parent_directory_path($file_path);
 		$self->create_directory($parent_directory_path) if $parent_directory_path;
 	}
 	
-	# Convert the string to a string containing the hex value of each character
-	# This is done to avoid problems with special characters in the file contents
-	
-	# Split the string up into an array if integers representing each character's ASCII decimal value
-	my @decimal_values = unpack("C*", $file_contents_string);
-	
-	# Convert the ASCII decimal values into hex values and add '\x' before each hex value
-	my @hex_values = map { '\x' . sprintf("%x", $_) } @decimal_values;
-	
-	# Join the hex values together into a string
-	my $hex_string = join('', @hex_values);
-	
-	# Enclose the file path in quotes if it contains any spaces
-	if ($file_path =~ / /) {
-		$file_path = "\"$file_path\"";
-	}
-	
-	# Create a command to echo the string and another to echo the hex string to the file, use -e to enable interpretation of backslash escapes
-	# The hex string command is preferred because it will handle special characters
-	# However, the command may become very long and fail
-	my $command .= "echo \"$file_contents_string\"";
-	my $hex_command .= "echo -e \"$hex_string\"";
-	if ($concatenate) {
-		$command .= " >> $file_path";
-		$hex_command .= " >> $file_path";
+	my $mode;
+	my $mode_string;
+	if ($append) {
+		$mode = '>>';
+		$mode_string = 'append';
 	}
 	else {
-		$command .= " > $file_path";
-		$hex_command .= " > $file_path";
+		$mode = '>';
+		$mode_string = 'create';
 	}
 	
-	# Try to create/append the file using the hex string first
-	my ($hex_exit_status, $hex_output) = $self->execute($hex_command, 0, 15, 1);
-	if (!defined($hex_output)) {
-		notify($ERRORS{'DEBUG'}, 0, "failed to execute command to create file on $computer_node_name using hex values of characters, attempting to use regular characters");
-	}
-	elsif ($hex_exit_status != 0 || grep(/^\w+:/i, @$hex_output)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to execute command to create a file on $computer_node_name using hex values of characters, command: '$hex_command', exit status: $hex_exit_status, output:\n" . join("\n", @$hex_output));
-	}
-	elsif ($concatenate) {
-		notify($ERRORS{'DEBUG'}, 0, "appended text file on $computer_node_name using hex values of characters: $file_path");
-		return 1;
+	# The echo method will fail of the file contents are too large
+	# An "Argument list too long" error will be displayed
+	my $file_contents_length = length($file_contents_string);
+	if ($file_contents_length < 32000) {
+		# Create a command to echo the string and another to echo the hex string to the file
+		# The hex string command is preferred because it will handle special characters including single quotes
+		# Use -e to enable interpretation of backslash escapes
+		# Use -n to prevent trailing newline from being added
+		# However, the command may become very long and fail
+		# Convert the string to a string containing the hex value of each character
+		# This is done to avoid problems with special characters in the file contents
+		# Split the string up into an array if integers representing each character's ASCII decimal value
+		my @decimal_values = unpack("C*", $file_contents_string);
+		
+		# Convert the ASCII decimal values into hex values and add '\x' before each hex value
+		my @hex_values = map { '\x' . sprintf("%x", $_) } @decimal_values;
+		
+		# Join the hex values together into a string
+		my $hex_string = join('', @hex_values);
+		
+		# Attempt to create/append the file using the hex string
+		my $command = "echo -n -e \"$hex_string\" $mode \"$file_path\"";
+		my ($exit_status, $output) = $self->execute($command, 0, 15, 1);
+		if (!defined($output)) {
+			notify($ERRORS{'DEBUG'}, 0, "failed to execute command to $mode_string file on $computer_node_name, attempting to create file on management node and copy it to $computer_node_name");
+		}
+		elsif ($exit_status != 0 || grep(/^\w+:/i, @$output)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to execute command to $mode_string a file on $computer_node_name, command: '$command', exit status: $exit_status, output:\n" . join("\n", @$output) . "\nattempting to create file on management node and copy it to $computer_node_name");
+		}
+		elsif ($append) {
+			notify($ERRORS{'DEBUG'}, 0, $mode_string . ($append ? 'ed' : 'd') . " text file on $computer_node_name: $file_path");
+			return 1;
+		}
+		else {
+			notify($ERRORS{'DEBUG'}, 0, $mode_string . ($append ? 'ed' : 'd') . " text file on $computer_node_name: $file_path");
+			return 1;
+		}
 	}
 	else {
-		notify($ERRORS{'DEBUG'}, 0, "created text file on $computer_node_name using hex values of characters: $file_path");
-		return 1;
+		notify($ERRORS{'DEBUG'}, 0, "skipping attempt to $mode_string on $computer_node_name using echo, file content string length: $file_contents_length");
 	}
 	
-	my ($exit_status, $output) = $self->execute($command, 0, 15, 1);
-	if (!defined($output)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to execute command to create file on $computer_node_name: $file_path, command:\n$command");
+	# File will be copied from the management node to the computer
+	if ($append) {
+		if ($self->file_exists($file_path)) {
+			my $existing_file_contents = $self->get_file_contents($file_path);
+			if (defined($existing_file_contents)) {
+				$file_contents_string = $existing_file_contents . $file_contents_string;
+			}
+			else {
+				notify($ERRORS{'WARNING'}, 0, "failed to $mode_string text file on $computer_node_name, append argument was specified but contents of the existing file could not be retrieved: $file_path");
+				return;
+			}
+		}
+	}
+	
+	# Create a temporary file on the management node, copy it to the computer, then delete temporary file from management node
+	my $mn_temp_file_path = tmpnam();
+	if (!$self->mn_os->create_text_file($mn_temp_file_path, $file_contents_string, $append)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to create text file on $computer_node_name, temporary file could not be created on the management node");
 		return;
 	}
-	elsif ($exit_status != 0 || grep(/^\w+:/i, @$output)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to execute command to create a file on $computer_node_name, command: '$command', exit status: $exit_status, output:\n" . join("\n", @$output));
+	if (!$self->copy_file_to($mn_temp_file_path, $file_path)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to create text file, temporary file could not be dopied from management node to $computer_node_name: $mn_temp_file_path --> $file_path");
 		return;
 	}
-	elsif ($concatenate) {
-		notify($ERRORS{'DEBUG'}, 0, "appended text file on $computer_node_name: $file_path");
-		return 1;
-	}
-	else {
-		notify($ERRORS{'DEBUG'}, 0, "created text file on $computer_node_name: $file_path");
-		return 1;
-	}
+	$self->mn_os->delete_file($mn_temp_file_path);
 	
+	notify($ERRORS{'DEBUG'}, 0, "created text file on $computer_node_name by copying a file created on management node");
+	return 1;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -2294,29 +2310,36 @@ sub set_text_file_line_endings {
 		return;
 	}
 	
-	my $command = 'sed -i -r ';
-	my $type;
-	if ($line_ending && $line_ending =~ /(r|win)/i) {
-		$type = 'windows';
-		$command .= '"s/\r*$/\r/"';
-	}
-	else {
-		$type = 'unix';
-		$command .= '"s/\r//"';
-	}
-	$command .= " $file_path";
-	my ($exit_status, $output) = $self->execute($command);
-	if (!defined($output)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to execute command to set $type-style line endings for file: $file_path");
+	my $computer_name = $self->data->get_computer_short_name();
+	
+	my $file_contents_original = $self->get_file_contents($file_path);
+	if (!defined($file_contents_original)) {
+		notify($ERRORS{'WARNING'}, 0, "unable to set line endings for $file_path on $computer_name, failed to retrieve file contents");
 		return;
 	}
-	elsif ($exit_status eq 0) {
-		notify($ERRORS{'DEBUG'}, 0, "set $type-style line endings for file: $file_path");
+	my $file_contents_updated = $file_contents_original;
+	
+	my $line_ending_type;
+	if ($line_ending && $line_ending =~ /(r|win)/i) {
+		$file_contents_updated =~ s/\r?\n/\r\n/g;
+		$line_ending_type = 'Windows';
+	}
+	else {
+		$file_contents_updated =~ s/\r//g;
+		$line_ending_type = 'Unix';
+	}
+	
+	if ($file_contents_updated eq $file_contents_original) {
+		notify($ERRORS{'DEBUG'}, 0, "$line_ending_type-style line endings already set for $file_path on $computer_name");
+		return 1;
+	}
+	elsif ($self->create_text_file($file_path, $file_contents_updated)) {
+		notify($ERRORS{'DEBUG'}, 0, "set $line_ending_type-style line endings for $file_path on $computer_name");
 		return 1;
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to set $type-style line endings for file: $file_path, exit status: $exit_status, command:\n$command\noutput:\n@{$output}");
-		return;
+		notify($ERRORS{'WARNING'}, 0, "failed to set $line_ending_type-style line endings for $file_path on $computer_name, unable to overwrite file");
+		return 0;
 	}
 }
 
@@ -2325,10 +2348,15 @@ sub set_text_file_line_endings {
 =head2 get_file_contents
 
  Parameters  : $file_path
- Returns     : array
- Description : Returns an array containing the contents of the file specified by
-               the file path argument. Each array element contains a line from
-               the file.
+ Returns     : array or string
+ Description : Returns the contents of the file specified by the file path
+               argument.
+               
+               If the expected return value is an array, each array element
+               contains a string for each line from the file. Newlines and
+               carriage returns are not included.
+               
+               If the expected return value is a scalar, a string is returned.
 
 =cut
 
@@ -2339,9 +2367,9 @@ sub get_file_contents {
 		return;
 	}
 	
-	# Get the path argument
-	my $path = shift;
-	if (!$path) {
+	# Get the file path argument
+	my $file_path = shift;
+	if (!$file_path) {
 		notify($ERRORS{'WARNING'}, 0, "path argument was not specified");
 		return;
 	}
@@ -2349,21 +2377,18 @@ sub get_file_contents {
 	my $computer_short_name = $self->data->get_computer_short_name();
 	
 	# Run cat to retrieve the contents of the file
-	my $command = "cat \"$path\"";
+	my $command = "cat \"$file_path\"";
 	my ($exit_status, $output) = $self->execute($command, 0);
 	if (!defined($output)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to run command to read file on $computer_short_name:\n path: '$path'\ncommand: '$command'");
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to read file on $computer_short_name: '$file_path'\ncommand: '$command'");
 		return;
 	}
 	elsif (grep(/^cat: /, @$output)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to read contents of file on $computer_short_name: '$path', exit status: $exit_status, output:\n" . join("\n", @$output));
+		notify($ERRORS{'WARNING'}, 0, "failed to read contents of file on $computer_short_name: '$file_path', exit status: $exit_status, output:\n" . join("\n", @$output));
 		return;
 	}
 	else {
-		notify($ERRORS{'DEBUG'}, 0, "retrieved " . scalar(@$output) . " lines from file on $computer_short_name: '$path'");
-		
-		map { s/[\r\n]+$//g; } (@$output);
-		
+		notify($ERRORS{'DEBUG'}, 0, "retrieved " . scalar(@$output) . " lines from file on $computer_short_name: '$file_path'");
 		if (wantarray) {
 			return @$output;
 		}
@@ -2502,8 +2527,14 @@ sub execute {
 	}
 	
 	# TESTING: use the new subroutine if $ENV{execute_new} is set and the command isn't one that's known to fail with the new subroutine
-	if ($ENV{execute_new} && $command !~ /(vmkfstools|qemu-img|Convert-VHD|scp)/) {
-		return execute_new(@original_arguments);
+	if ($ENV{execute_new}) {
+		my @excluded_commands = $command =~ /(vmkfstools|qemu-img|Convert-VHD|scp|shutdown|reboot)/i;
+		if (@excluded_commands) {
+			notify($ERRORS{'DEBUG'}, 0, "not using execute_new, command: $command\nexcluded commands matched:\n" . join("\n", @excluded_commands));
+		}
+		else {
+			return execute_new(@original_arguments);
+		}
 	}
 	
 	my $arguments = {
@@ -3188,6 +3219,8 @@ sub copy_file {
 		return;
 	}
 	
+	my $computer_node_name = $self->data->get_computer_node_name();
+	
 	# Normalize the source and destination paths
 	$source_file_path = normalize_file_path($source_file_path);
 	$destination_file_path = normalize_file_path($destination_file_path);
@@ -3198,19 +3231,17 @@ sub copy_file {
 	
 	# Make sure the source and destination paths are different
 	if ($escaped_source_path eq $escaped_destination_path) {
-		notify($ERRORS{'WARNING'}, 0, "unable to copy file, source and destination file path arguments are the same: $escaped_source_path");
+		notify($ERRORS{'WARNING'}, 0, "unable to copy file on $computer_node_name, source and destination file path arguments are the same: $escaped_source_path");
 		return;
 	}
 	
-	# Get the destination parent directory path and create the directory if it does not exist
-	my $destination_directory_path = parent_directory_path($destination_file_path);
-	if (!$destination_directory_path) {
-		notify($ERRORS{'WARNING'}, 0, "unable to determine destination parent directory path: $destination_file_path");
-		return;
+	# Create the destination parent directory if it does not exist
+	if ($destination_file_path =~ /[\\\/]/ && $self->can('create_directory')) {
+		my $destination_directory_path = parent_directory_path($destination_file_path);
+		if ($destination_directory_path) {
+			$self->create_directory($destination_directory_path);
+		}
 	}
-	$self->create_directory($destination_directory_path) || return;
-	
-	my $computer_node_name = $self->data->get_computer_node_name();
 	
 	# Execute the command to copy the file
 	my $command = "cp -fr $escaped_source_path $escaped_destination_path";

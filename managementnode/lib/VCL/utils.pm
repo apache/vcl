@@ -4167,8 +4167,11 @@ sub run_ssh_command {
 	}
 	
 	# TESTING: use the new subroutine if $ENV{execute_new} is set and the command isn't one that's known to fail with the new subroutine
-	if ($ENV{execute_new} && $command !~ /(vmkfstools|qemu-img|Convert-VHD|scp)/) {
-		return VCL::Module::OS::execute_new($node, $command, $output_level, $timeout_seconds, $max_attempts, $port, $user, '', $identity_paths);
+	my $calling_subroutine = get_calling_subroutine();
+	if ($calling_subroutine && $calling_subroutine !~ /execute/) {
+		if ($ENV{execute_new} && $command !~ /(vmkfstools|qemu-img|Convert-VHD|scp|reboot|shutdown)/) {
+			return VCL::Module::OS::execute_new($node, $command, $output_level, $timeout_seconds, $max_attempts, $port, $user, '', $identity_paths);
+		}
 	}
 	
 	# Locate the path to the ssh binary
@@ -4239,6 +4242,15 @@ sub run_ssh_command {
 	$ssh_command .= "-x ";
 	$ssh_command .= "$remote_connection_target '$command' 2>&1";
 	
+	my $ssh_command_length = length($ssh_command);
+	my $ssh_command_summary;
+	if ($ssh_command_length > 500) {
+		$ssh_command_summary = substr($ssh_command, 0, 100) . ' ... ' . substr($ssh_command, -100);
+	}
+	else {
+		$ssh_command_summary = $ssh_command;
+	}
+	
 	# Execute the command
 	my $ssh_output = '';
 	my $ssh_output_formatted = '';
@@ -4264,10 +4276,10 @@ sub run_ssh_command {
 		
 		# Print the SSH command, only display the attempt # if > 1
 		if ($attempts == 1) {
-			notify($ERRORS{'DEBUG'}, 0, "executing SSH command on $node_string: '$command'") if $output_level;
+			notify($ERRORS{'DEBUG'}, 0, "executing SSH command on $node_string: '$ssh_command_summary', SSH command length: $ssh_command_length") if $output_level;
 		}
 		else {
-			notify($ERRORS{'DEBUG'}, 0, "attempt $attempts/$max_attempts: executing SSH command on $node_string: '$ssh_command'") if $output_level;
+			notify($ERRORS{'DEBUG'}, 0, "attempt $attempts/$max_attempts: executing SSH command on $node_string: '$ssh_command_summary'") if $output_level;
 		}
 		
 		# Enclose SSH command in an eval block and use alarm to eventually timeout the SSH command if it hangs
@@ -4275,10 +4287,16 @@ sub run_ssh_command {
 		eval {
 			# Override the die and alarm handlers
 			local $SIG{__DIE__} = sub{};
+			
+			local $SIG{__WARN__} = sub{
+				my $warning_message = shift || '';
+				notify($ERRORS{'WARNING'}, 0, "SSH command generated warning, command length: $ssh_command_length, warning message: $warning_message");
+			};
+			
 			local $SIG{ALRM} = sub { die "alarm\n" };
 			
 			if ($timeout_seconds) {
-				notify($ERRORS{'DEBUG'}, 0, "waiting up to $timeout_seconds seconds for SSH process to finish");
+				notify($ERRORS{'DEBUG'}, 0, "waiting up to $timeout_seconds seconds for SSH process to finish") if $output_level;
 				alarm $timeout_seconds;
 			}
 			
@@ -4323,7 +4341,15 @@ sub run_ssh_command {
 			next;
 		}
 		elsif ($EVAL_ERROR) {
-			notify($ERRORS{'CRITICAL'}, 0, "attempt $attempts/$max_attempts: eval error was generated attempting to run SSH command: $node_string:\n$ssh_command, error: $EVAL_ERROR");
+			notify($ERRORS{'CRITICAL'}, 0, "attempt $attempts/$max_attempts: eval error was generated attempting to run SSH command: $node_string:\n$ssh_command_summary, error: $EVAL_ERROR");
+			next;
+		}
+		elsif ($OS_ERROR) {
+			notify($ERRORS{'WARNING'}, 0, "attempt $attempts/$max_attempts: OS error was generated attempting to run SSH command: $node_string:\n$ssh_command_summary, command length: $ssh_command_length, error: $OS_ERROR");
+			next;
+		}
+		elsif (!defined($ssh_output)) {
+			notify($ERRORS{'WARNING'}, 0, "attempt $attempts/$max_attempts: SSH output is not defined after attempting to run SSH command: $node_string:\n$ssh_command_summary, command length: $ssh_command_length");
 			next;
 		}
 		

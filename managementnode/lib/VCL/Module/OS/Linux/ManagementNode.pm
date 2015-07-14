@@ -171,6 +171,106 @@ sub copy_file_to {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 create_text_file
+
+ Parameters  : $file_path, $file_contents_string, $append (optional)
+ Returns     : boolean
+ Description : Creates a text file on the management node.
+
+=cut
+
+sub create_text_file {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my ($file_path, $file_contents_string, $append) = @_;
+	if (!defined($file_path)) {
+		notify($ERRORS{'WARNING'}, 0, "file path argument was not supplied");
+		return;
+	}
+	elsif (!defined($file_contents_string)) {
+		notify($ERRORS{'WARNING'}, 0, "file contents argument was not supplied");
+		return;
+	}
+	
+	my $computer_node_name = $self->data->get_computer_node_name();
+	
+	my $mode;
+	my $mode_string;
+	if ($append) {
+		$mode = '>>';
+		$mode_string = 'append';
+	}
+	else {
+		$mode = '>';
+		$mode_string = 'create';
+	}
+	
+	if (!open FILE, $mode, $file_path) {
+		notify($ERRORS{'WARNING'}, 0, "failed to $mode_string text file on $computer_node_name, file path could not be opened: $file_path");
+		return;
+	}
+	
+	if (!print FILE $file_contents_string) {
+		close FILE;
+		notify($ERRORS{'WARNING'}, 0, "failed to $mode_string text file on $computer_node_name: $file_path, contents could not be written to the file");
+		return;
+	}
+	
+	close FILE;
+	notify($ERRORS{'DEBUG'}, 0, $mode_string . ($append ? 'ed' : 'd') . " text file on $computer_node_name: $file_path");
+	
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_file_contents
+
+ Parameters  : $file_path
+ Returns     : array or string
+ Description : Retrieves the contents of a file on the management node.
+
+=cut
+
+sub get_file_contents {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my ($file_path) = @_;
+	if (!defined($file_path)) {
+		notify($ERRORS{'WARNING'}, 0, "file path argument was not supplied");
+		return;
+	}
+	
+	my $computer_node_name = $self->data->get_computer_node_name();
+	
+	if (!open FILE, '<', $file_path) {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve contents of file on $computer_node_name, file could not be opened: $file_path");
+		return;
+	}
+	my @lines = <FILE>;
+	close FILE;
+	
+	my $line_count = scalar(@lines);
+	notify($ERRORS{'DEBUG'}, 0, "retrieved contents of file on $computer_node_name: $file_path ($line_count lines)");
+	if (wantarray) {		
+		map { s/[\r\n]+$//g; } (@lines);
+		return @lines;
+	}
+	else {
+		return join('', @lines);
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 =head2 check_private_ip_addresses
 
  Parameters  : none
