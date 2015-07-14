@@ -94,8 +94,7 @@ sub pre_capture {
 		return;
 	}
 	
-	my $computer_node_name   = $self->data->get_computer_node_name();
-	my $end_state = $self->{end_state} || 'off';
+	my $computer_node_name = $self->data->get_computer_node_name();
 	
 	# Call parent class's pre_capture subroutine
 	notify($ERRORS{'OK'}, 0, "calling parent class pre_capture() subroutine");
@@ -104,7 +103,9 @@ sub pre_capture {
 		return;
 	}
 	
-	notify($ERRORS{'OK'}, 0, "beginning Windows 8 image capture preparation tasks");
+	my $end_state = $self->{end_state} || 'off';
+	
+	notify($ERRORS{'OK'}, 0, "beginning Windows 8 image capture preparation tasks, end state: $end_state");
 	
 	# Get the node configuration directory
 	my $node_configuration_directory = $self->get_node_configuration_directory();
