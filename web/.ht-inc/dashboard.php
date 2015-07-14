@@ -731,25 +731,29 @@ function getNewReservationData() {
 function getFailedImagingData() {
 	$affilid = getDashboardAffilID();
 	$query = "SELECT c.hostname AS computer, "
-	       .        "i.prettyname AS image, "
-	       .        "rq.id, "
-	       .        "rq.start, "
-	       .        "o.installtype, "
-	       .        "m.hostname AS managementnode, "
-	       .        "ch.hostname AS vmhost, "
-	       .        "u.unityid AS owner "
-	       . "FROM request rq "
-	       . "LEFT JOIN reservation rs ON (rs.requestid = rq.id) "
-	       . "LEFT JOIN computer c ON (c.id = rs.computerid) "
-	       . "LEFT JOIN image i ON (i.id = rs.imageid) "
-	       . "LEFT JOIN OS o ON (o.id = i.OSid) "
-	       . "LEFT JOIN managementnode m ON (m.id = rs.managementnodeid) "
-	       . "LEFT JOIN vmhost vh ON (c.vmhostid = vh.id) "
-	       . "LEFT JOIN computer ch ON (vh.computerid = ch.id) "
-	       . "LEFT JOIN user u ON (rq.userid = u.id) "
-	       . "LEFT JOIN user u2 ON (u2.id = c.ownerid) "
-	       . "WHERE rq.stateid = 10 AND "
-	       .       "rq.laststateid = 16 ";
+               .        "i.prettyname AS image, "
+               .        "rq.id, "
+               .        "rq.start, "
+               .        "o.installtype, "
+               .        "m.hostname AS managementnode, "
+               .        "ch.hostname AS vmhost, "
+               .        "u.unityid AS owner, "
+               .        "s1.name AS s1_name, "
+               .        "s2.name AS s2_name "
+               . "FROM request rq "
+               . "LEFT JOIN reservation rs ON (rs.requestid = rq.id) "
+               . "LEFT JOIN computer c ON (c.id = rs.computerid) "
+               . "LEFT JOIN image i ON (i.id = rs.imageid) "
+               . "LEFT JOIN OS o ON (o.id = i.OSid) "
+               . "LEFT JOIN managementnode m ON (m.id = rs.managementnodeid) "
+               . "LEFT JOIN vmhost vh ON (c.vmhostid = vh.id) "
+               . "LEFT JOIN computer ch ON (vh.computerid = ch.id) "
+               . "LEFT JOIN user u ON (rq.userid = u.id) "
+               . "LEFT JOIN user u2 ON (u2.id = c.ownerid) "
+               . "LEFT JOIN state s1 ON (s1.id = rq.stateid) "
+               . "LEFT JOIN state s2 ON (s2.id = rq.laststateid) "
+               . "WHERE s1.name = \"maintenance\" AND "
+               .       "s2.name in (\"image\",\"checkpoint\") ";
 	if($affilid)
 		$query .= "AND (u.affiliationid = $affilid OR u2.affiliationid = $affilid) ";
 	$query .= "ORDER BY rq.start";
@@ -850,16 +854,17 @@ function AJrestartImageCapture() {
 		return;
 	}
 	$request = getRequestInfo($requestid);
-	if($request['stateid'] != 10 || $request['laststateid'] != 16 ||
+	if($request['stateid'] != 10 || $request['laststateid'] != (16|24) ||
 	   count($request['reservations']) > 1) {
 		sendJSON(array('status' => 'wrongstate'));
 		return;
 	}
 	$compid = $request['reservations'][0]['computerid'];
+	$laststate = $request['laststateid'];
 	$query = "UPDATE computer c, "
 	       .        "request rq "
 	       . "SET c.stateid = 8, "
-	       .     "rq.stateid = 16, "
+	       .     "rq.stateid = $laststate, "
 	       .     "rq.laststateid = 10 "
 	       . "WHERE c.id = $compid AND "
 	       .       "rq.id = $requestid";
