@@ -1296,7 +1296,7 @@ sub delete_file {
 	
 	my $path_unix = $self->format_path_unix($path_argument);
 	my $path_dos = $self->format_path_dos($path_argument);
-	
+
 	notify($ERRORS{'DEBUG'}, 0, "attempting to delete file: '$path_argument'");
 	
 	# Assemble a set of commands concatenated together
@@ -1304,8 +1304,8 @@ sub delete_file {
 	# This should allow files to be deleted with restrictive ownership, permissions, and attributes
 	
 	my $path_unix_directory = parent_directory_path($path_unix);
-	my ($path_unix_pattern) = $path_unix =~ /\/([^\/]+)$/;
-	
+	my ($path_unix_pattern) = $path_unix =~ /\/?([^\/]+)$/;
+
 	my $command;
 	$command .= "echo ---";
 	$command .= " ; echo Calling chown.exe to change owner to root...";
@@ -12377,7 +12377,7 @@ sub set_computer_hostname {
 	}
 	
 	# Assemble the command
-	my $command = "echo | cmd.exe /c \"$system32_path/Wbem/wmic.exe COMPUTERSYSTEM WHERE Name='%COMPUTERNAME%' Rename '$new_computer_name'\"";
+	my $command = "echo | cmd.exe /c \"$system32_path/Wbem/wmic.exe COMPUTERSYSTEM WHERE Name=\\\"%COMPUTERNAME%\\\" Rename \\\"$new_computer_name\\\"\"";
 	my ($exit_status, $output) = $self->execute($command);
 	if (!defined($output)) {
 		notify($ERRORS{'DEBUG'}, 0, "failed to execute command to set computer name of $database_computer_hostname to $new_computer_name");
