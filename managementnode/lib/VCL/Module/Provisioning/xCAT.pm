@@ -687,15 +687,20 @@ sub does_image_exist {
 	else {
 		$du_command = "du -c $image_repository_path/*$image_name* 2>&1 | grep total 2>&1"
 	}
-	my ($du_exit_status, $du_output) = run_command($du_command);
+
+	my ($du_exit_status, $du_output) = $self->mn_os->execute($du_command);
 	
 	# If the partner doesn't have the image, a "no such file" error should be displayed
 	my $image_files_exist;
-	if (defined(@$du_output) && grep(/no such file/i, @$du_output)) {
+	if(!defined($du_output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command du command to if image $image_name exists");
+		return;
+	}
+	elsif (grep(/no such file/i, @$du_output)) {
 		notify($ERRORS{'OK'}, 0, "$image_name does NOT exist");
 		$image_files_exist = 0;
 	}
-	elsif (defined(@$du_output) && !grep(/\d+\s+total/i, @$du_output)) {
+	elsif (!grep(/\d+\s+total/i, @$du_output)) {
 		notify($ERRORS{'WARNING'}, 0, "du output does not contain a total line:\n" . join("\n", @$du_output));
 		return;
 	}
