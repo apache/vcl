@@ -1839,7 +1839,7 @@ function AJupdateWaitTime() {
 	}
 	if($end < $start) {
 		print "dojo.byId('deployerr').innerHTML = '";
-		print _("The end time must be later than the start time.") . "';";
+		print escq(_("The end time must be later than the start time.")) . "';";
 		print "dojo.removeClass('deployerr', 'hidden');";
 		return;
 	}
@@ -1851,7 +1851,7 @@ function AJupdateWaitTime() {
 	if($type == 'server' && $fixedIP != '') {
 		if(! validateIPv4addr($fixedIP)) {
 			print "dojo.byId('deployerr').innerHTML = '";
-			print _("Invalid IP address specified.") . "';";
+			print escq(_("Invalid IP address specified.")) . "';";
 			print "dojo.removeClass('deployerr', 'hidden');";
 			return;
 		}
@@ -1860,7 +1860,7 @@ function AJupdateWaitTime() {
 		$intersect = array_intersect($mappedmns, $mnnets);
 		if(empty($intersect)) {
 			print "dojo.byId('deployerr').innerHTML = '";
-			print _("There are no management nodes that can deploy the selected image with the specified IP address.") . "';";
+			print escq(_("There are no management nodes that can deploy the selected image with the specified IP address.")) . "';";
 			print "dojo.removeClass('deployerr', 'hidden');";
 			return;
 		}
@@ -1900,12 +1900,12 @@ function AJupdateWaitTime() {
 	$max = getMaxOverlap($user['id']);
 	if(checkOverlap($start, $end, $max)) {
 		print "dojo.byId('deployerr').innerHTML = '";
-		print _("The selected time overlaps with another reservation you have.");
+		print escq(_("The selected time overlaps with another reservation you have."));
 		print "<br>";
 		if($max == 0)
-			print _("You cannot have any overlapping reservations.");
+			print escq(_("You cannot have any overlapping reservations."));
 		else
-			printf(_("You can have up to %d overlapping reservations."), $max);
+			printf(escq(_("You can have up to %d overlapping reservations.")), $max);
 		print "'; dojo.removeClass('deployerr', 'hidden');";
 		return;
 	}
@@ -1944,29 +1944,29 @@ function AJupdateWaitTime() {
 		print "dojo.byId('waittime').innerHTML = '";
 	}
 	if($rc == -2)
-		print _("Selection not currently available due to scheduled system downtime for maintenance");
+		print escq(_("Selection not currently available due to scheduled system downtime for maintenance"));
 	elseif($rc == -3)
-		print _("IP address not available for selected time");
+		print escq(_("IP address not available for selected time"));
 	elseif($rc == -4)
-		print _("IP address not available");
+		print escq(_("IP address not available"));
 	elseif($rc < 1)
 		if(array_key_exists('subimages', $images[$imageid]) &&
 		   count($images[$imageid]['subimages']))
-			print _("Selection not currently available. Times cannot be suggested for cluster reservations.");
+			print escq(_("Selection not currently available. Times cannot be suggested for cluster reservations."));
 		else
-			print _("Selection not currently available");
+			print escq(_("Selection not currently available"));
 	elseif(array_key_exists(0, $requestInfo['loaded']) &&
 	       $requestInfo['loaded'][0]) {
-		print _("Estimated load time:");
+		print escq(_("Estimated load time:"));
 		if($start < $now) {
 			print " &lt; ";
-			print _("1 minute");
+			print escq(_("1 minute"));
 		}
 		else
-			print ' ' . _("Ready at start of reservation");
+			print ' ' . escq(_("Ready at start of reservation"));
 	}
 	else {
-		print _("Estimated load time:");
+		print escq(_("Estimated load time:"));
 		$loadtime = getImageLoadEstimate($imageid);
 		if($start < $now) {
 			$loadtime = (int)($loadtime / 60);
@@ -1975,7 +1975,7 @@ function AJupdateWaitTime() {
 				print $images[$imageid]['reloadtime'];
 			else
 				printf("%2.0f", $loadtime + 1);
-			print " " . _("minutes");
+			print " " . escq(_("minutes"));
 		}
 		elseif($loadtime != 0 && ($start - $now < $loadtime))
 			print ' ' . _("Ready at") . date(" g:i a", ($now + $loadtime));
@@ -1986,7 +1986,7 @@ function AJupdateWaitTime() {
 	if($requestInfo['ipwarning']) {
 		print "dojo.removeClass('deployerr', 'hidden');";
 		print "dojo.byId('deployerr').innerHTML = '";
-		$h = _("WARNING: Current conflict with specified IP address. If the conflict is not resolved by the start of your reservation, the reservation will fail.");
+		$h = escq(_("WARNING: Current conflict with specified IP address. If the conflict is not resolved by the start of your reservation, the reservation will fail."));
 		print preg_replace("/(.{1,68}([ ]|$))/", '\1<br>', $h);
 		print "<br>';";
 	}
@@ -2012,7 +2012,7 @@ function printImageDescription($imageid) {
 		$desc = preg_replace("/'/", '&#39;', $desc);
 		$desc = preg_replace("/(.{1,60}([ \n]|$))/", '\1<br>', $desc);
 		print "dojo.byId('imgdesc').innerHTML = '<b>";
-		print _("Image Description") . "</b>:<br>";
+		print escq(_("Image Description")) . "</b>:<br>";
 		print "$desc<br>'; ";
 	}
 }
@@ -2258,7 +2258,7 @@ function AJnewRequest() {
 	$max = getMaxOverlap($user['id']);
 	if(checkOverlap($startts, $endts, $max)) {
 		print "dojo.byId('deployerr').innerHTML = '";
-		print _("The selected time overlaps with another reservation you have.");
+		print escq(_("The selected time overlaps with another reservation you have."));
 		print "<br>";
 		if($max == 0)
 			print _("You cannot have any overlapping reservations.");

@@ -13410,6 +13410,23 @@ function changeLocale() {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
+/// \fn escq($str)
+///
+/// \param $str - string
+///
+/// \return $str with any single quotes changed to &#39;
+///
+/// \brief converts any single quotes to &#39; useful for dealing with strings
+/// that will be single quoted and passed as javascript but that may be
+/// translated to something that contains a single quote
+///
+////////////////////////////////////////////////////////////////////////////////
+function escq($str) {
+	return preg_replace("/'/", '&#39;', $str);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
 /// \fn setVCLLocale()
 ///
 /// \brief sets a cookie for the locale; configures php for the locale
