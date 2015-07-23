@@ -692,8 +692,8 @@ sub does_image_exist {
 	
 	# If the partner doesn't have the image, a "no such file" error should be displayed
 	my $image_files_exist;
-	if(!defined($du_output)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to execute command du command to if image $image_name exists");
+	if (!defined($du_output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command $du_command");
 		return;
 	}
 	elsif (grep(/no such file/i, @$du_output)) {
