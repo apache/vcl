@@ -108,7 +108,7 @@ sub pre_capture {
 	
 	notify($ERRORS{'OK'}, 0, "beginning Windows Vista image capture preparation tasks");
 
-=item 1
+=item *
 
 Disable the following scheduled tasks:
 

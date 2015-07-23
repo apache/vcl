@@ -274,7 +274,7 @@ sub pre_capture {
 
 	notify($ERRORS{'OK'}, 0, "beginning Windows image capture preparation tasks on $computer_node_name");
 
-=item 1
+=item *
 
  Disable RDP access from any IP address
 
@@ -656,7 +656,7 @@ sub post_load {
 	
 	notify($ERRORS{'OK'}, 0, "beginning Windows post-load tasks on $computer_node_name");
 
-=item 1
+=item *
 
  Wait for computer to respond to SSH
 
@@ -1006,29 +1006,18 @@ sub post_reserve {
 		return 0;
 	}
 	
-	my $image_name = $self->data->get_image_name();
-	my $computer_short_name = $self->data->get_computer_short_name();
-	
 	# Run custom post_reserve scripts residing on the management node
 	$self->run_management_node_tools_scripts('post_reserve');
 	
-	# Check if script exists in the image
+	# Check if custom post_reserve script exists in the image
 	my $script_path = '$SYSTEMROOT/vcl_post_reserve.cmd';
 	if (!$self->file_exists($script_path)) {
-		notify($ERRORS{'DEBUG'}, 0, "post_reserve script does NOT exist: $script_path");
+		notify($ERRORS{'DEBUG'}, 0, "custom post_reserve script does NOT exist in image: $script_path");
 		return 1;
 	}
-	
-	# Run the vcl_post_reserve.cmd script if it exists in the image
-	my $result = $self->run_script($script_path);
-	if (!defined($result)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to run post_reserve script: $script_path");
-	}
-	elsif ($result == 0) {
-		notify($ERRORS{'DEBUG'}, 0, "$script_path does not exist in image: $image_name");
-	}
 	else {
-		notify($ERRORS{'DEBUG'}, 0, "ran $script_path");
+		# Run the post_reserve script
+		$self->run_script($script_path);
 	}
 	
 	return 1;
@@ -1055,22 +1044,15 @@ sub post_reservation {
 	# Run custom post_reservation scripts residing on the management node
 	$self->run_management_node_tools_scripts('post_reservation');
 	
+	# Check if custom post_reservation script exists in image
 	my $script_path = '$SYSTEMROOT/vcl_post_reservation.cmd';
-	
-	# Check if script exists
 	if (!$self->file_exists($script_path)) {
-		notify($ERRORS{'DEBUG'}, 0, "post_reservation script does NOT exist: $script_path");
+		notify($ERRORS{'DEBUG'}, 0, "custom post_reservation script does NOT exist in image: $script_path");
 		return 1;
 	}
 	
-	# Run the vcl_post_reserve.cmd script if it exists in the image
-	my $result = $self->run_script($script_path);
-	if (!$result) {
-		notify($ERRORS{'WARNING'}, 0, "failed to execute post_reservation script: $script_path");
-	}
-	else {
-		notify($ERRORS{'DEBUG'}, 0, "executed $script_path");
-	}
+	# Run the post_reservation script
+	$self->run_script($script_path);
 	
 	return 1;
 }
@@ -8208,6 +8190,7 @@ EOF
 		notify($ERRORS{'WARNING'}, 0, "failed to set the registry key to disable automatic updates");
 		return 0;
 	}
+	
 
 	return 1;
 }

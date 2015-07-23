@@ -107,7 +107,7 @@ sub pre_capture {
 	
 	notify($ERRORS{'OK'}, 0, "beginning Windows 7 image capture preparation tasks");
 
-=item 1
+=item *
 
 Disable the following scheduled tasks:
 

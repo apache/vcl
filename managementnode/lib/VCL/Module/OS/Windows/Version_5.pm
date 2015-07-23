@@ -22,10 +22,6 @@
 
 VCL::Module::OS::Windows::Version_5.pm - VCL module to support Windows 5.x operating systems
 
-=head1 SYNOPSIS
-
- Needs to be written
-
 =head1 DESCRIPTION
 
  This module provides VCL support for Windows version 5.x operating systems.
@@ -154,9 +150,7 @@ sub post_load {
 	
 	notify($ERRORS{'DEBUG'}, 0, "beginning Windows version 5.x post-load tasks");
 
-=item 1
-
-Call parent class's post_load() subroutine
+=item * Call parent class's post_load() subroutine
 
 =cut
 
@@ -169,13 +163,25 @@ Call parent class's post_load() subroutine
 		return;
 	}
 
-=item *
-
-Run custom post_load scripts residing on the management node
+=item * Run custom post_load scripts residing on the management node
 
 =cut
 
 	$self->run_management_node_tools_scripts('post_load');
+
+=item * Run custom post_load scripts residing in the image
+
+=cut
+
+	my $script_path = '$SYSTEMROOT/vcl_post_load.cmd';
+	if (!$self->file_exists($script_path)) {
+		notify($ERRORS{'DEBUG'}, 0, "custom post_load script does NOT exist in image: $script_path");
+		return 1;
+	}
+	else {
+		# Run the post_reserve script
+		$self->run_script($script_path);
+	}
 
 =back
 

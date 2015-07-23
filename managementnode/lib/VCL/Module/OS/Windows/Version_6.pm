@@ -161,7 +161,7 @@ sub pre_capture {
 		return;
 	}
 
-=item 1
+=item *
 
 Call parent class's pre_capture() subroutine
 
@@ -178,12 +178,14 @@ Call parent class's pre_capture() subroutine
 	
 	notify($ERRORS{'OK'}, 0, "beginning Windows version 6 image pre-capture tasks");
 
-=item 1
+=item *
 
 Disable the following scheduled tasks:
 
  * ScheduledDefrag - This task defragments the computers hard disk drives
+
  * SR - This task creates regular system protection points
+
  * Consolidator - If the user has consented to participate in the Windows Customer Experience Improvement Program, this job collects and sends usage data to Microsoft
 
 =cut	
@@ -241,9 +243,7 @@ sub post_load {
 	
 	notify($ERRORS{'DEBUG'}, 0, "beginning Windows version 6 post-load tasks");
 
-=item 1
-
-Call parent class's post_load() subroutine
+=item * Call parent class's post_load() subroutine
 
 =cut
 
@@ -256,29 +256,37 @@ Call parent class's post_load() subroutine
 		return;
 	}
 
-=item *
-
-Ignore default routes configured for the private interface and use default routes configured for the public interface
+=item * Ignore default routes configured for the private interface and use default routes configured for the public interface
 
 =cut
 
 	$self->set_ignore_default_routes();
 
-=item *
-
-Activate Windows license
+=item * Activate Windows license
 
 =cut
 
 	$self->activate();
 
-=item *
-
-Run custom post_load scripts residing on the management node
+=item * Run custom post_load scripts residing on the management node
 
 =cut
 
 	$self->run_management_node_tools_scripts('post_load');
+
+=item * Run custom post_load scripts residing in the image
+
+=cut
+
+	my $script_path = '$SYSTEMROOT/vcl_post_load.cmd';
+	if (!$self->file_exists($script_path)) {
+		notify($ERRORS{'DEBUG'}, 0, "custom post_load script does NOT exist in image: $script_path");
+		return 1;
+	}
+	else {
+		# Run the post_reserve script
+		$self->run_script($script_path);
+	}
 
 =back
 
