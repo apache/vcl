@@ -381,6 +381,9 @@ class Computer extends Resource {
 		$h .= "  </div>\n"; # tooltip dialog
 		$h .= "</div>\n"; # drop down button
 
+		# refresh button
+		$h .= dijitButton('', 'Refresh Computer Data', 'refreshcompdata(0);');
+
 		$h .= "<div dojoType=dijit.Dialog\n";
 		$h .= "      id=\"confirmactiondlg\"\n";
 		$h .= "      duration=250\n";
