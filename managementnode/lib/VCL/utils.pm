@@ -2811,7 +2811,7 @@ sub database_select {
 
 	# Execute the statement handle
 	if (!($select_handle->execute())) {
-		notify($ERRORS{'WARNING'}, 0, "could not execute statement, $select_statement, " . $dbh->errstr());
+		notify($ERRORS{'WARNING'}, 0, "could not execute statement on $database database, $select_statement\nerror: " . $dbh->errstr());
 		$select_handle->finish;
 		$dbh->disconnect if !defined $ENV{dbh};
 		return ();
@@ -4242,10 +4242,26 @@ sub run_ssh_command {
 	$ssh_command .= "-x ";
 	$ssh_command .= "$remote_connection_target '$command' 2>&1";
 	
+	# Truncate command shown in vcld.log if it is very long
+	my $max_command_output_length = 3000;
+	my $beginning_characters_shown = 500;
+	my $ending_characters_shown = 200;
+	
+	my $command_length = length($command);
+	my $command_summary;
+	my $command_chars_suppressed = ($command_length - $beginning_characters_shown - $ending_characters_shown - $max_command_output_length);
+	if ($command_chars_suppressed > 0) {
+		$command_summary = substr($command, 0, $beginning_characters_shown) . "<$command_chars_suppressed characters omitted>" . substr($command, -$ending_characters_shown);
+	}
+	else {
+		$command_summary = $command;
+	}
+	
 	my $ssh_command_length = length($ssh_command);
 	my $ssh_command_summary;
-	if ($ssh_command_length > 500) {
-		$ssh_command_summary = substr($ssh_command, 0, 100) . ' ... ' . substr($ssh_command, -100);
+	my $ssh_command_chars_suppressed = ($ssh_command_length - $beginning_characters_shown - $ending_characters_shown - $max_command_output_length);
+	if ($ssh_command_chars_suppressed > 0) {
+		$ssh_command_summary = substr($ssh_command, 0, $beginning_characters_shown) . "<$ssh_command_chars_suppressed characters omitted>" . substr($ssh_command, -$ending_characters_shown);
 	}
 	else {
 		$ssh_command_summary = $ssh_command;
@@ -4290,7 +4306,7 @@ sub run_ssh_command {
 			
 			local $SIG{__WARN__} = sub{
 				my $warning_message = shift || '';
-				notify($ERRORS{'WARNING'}, 0, "SSH command generated warning, command length: $ssh_command_length, warning message: $warning_message");
+				notify($ERRORS{'WARNING'}, 0, "attempt $attempts/$max_attempts: warning was generated attempting to run SSH command on $node_string, command length: $ssh_command_length, warning message: $warning_message\nSSH command:\n$ssh_command_summary");
 			};
 			
 			local $SIG{ALRM} = sub { die "alarm\n" };
@@ -4319,7 +4335,7 @@ sub run_ssh_command {
 				alarm 0;
 			}
 		};
-	
+		
 		my $duration = (time - $start_time);
 		
 		# Check if the timeout was reached
@@ -4341,11 +4357,7 @@ sub run_ssh_command {
 			next;
 		}
 		elsif ($EVAL_ERROR) {
-			notify($ERRORS{'CRITICAL'}, 0, "attempt $attempts/$max_attempts: eval error was generated attempting to run SSH command: $node_string:\n$ssh_command_summary, error: $EVAL_ERROR");
-			next;
-		}
-		elsif ($OS_ERROR) {
-			notify($ERRORS{'WARNING'}, 0, "attempt $attempts/$max_attempts: OS error was generated attempting to run SSH command: $node_string:\n$ssh_command_summary, command length: $ssh_command_length, error: $OS_ERROR");
+			notify($ERRORS{'CRITICAL'}, 0, "attempt $attempts/$max_attempts: eval error was generated attempting to run SSH command: $node_string:\n$ssh_command_summary, eval error: $EVAL_ERROR");
 			next;
 		}
 		elsif (!defined($ssh_output)) {
@@ -4428,7 +4440,7 @@ sub run_ssh_command {
 			my @output_lines = split(/[\r\n]+/, $ssh_output);
 			
 			# Print the output unless no_output is set
-			notify($ERRORS{'DEBUG'}, 0, "command: '$command', output:\n" . join("\n", @output_lines)) if $output_level > 1;
+			notify($ERRORS{'DEBUG'}, 0, "command: '$command_summary', exit_status: $exit_status, output:\n" . join("\n", @output_lines)) if $output_level > 1;
 			
 			# Return the exit status and output
 			return ($exit_status, \@output_lines);
@@ -4436,7 +4448,7 @@ sub run_ssh_command {
 	} ## end while ($attempts < $max_attempts)
 
 	# Failure, SSH command did not run at all
-	notify($ERRORS{'WARNING'}, 0, "failed to run SSH command after $attempts attempts, command: $ssh_command, exit status: $exit_status, output:\n$ssh_output_formatted") if $output_level;
+	notify($ERRORS{'WARNING'}, 0, "failed to run SSH command after $attempts attempts, command: $ssh_command_summary, exit status: $exit_status, output:\n$ssh_output_formatted") if $output_level;
 	return ();
 
 } ## end sub run_ssh_command
