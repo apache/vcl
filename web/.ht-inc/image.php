@@ -114,37 +114,37 @@ class Image extends Resource {
 	function fieldDisplayName($field) {
 		switch($field) {
 			case 'os':
-				return _("OS");
+				return i("OS");
 			case 'installtype':
-				return _("Install Type");
+				return i("Install Type");
 			case 'ostype':
-				return _("OS Type");
+				return i("OS Type");
 			case 'minram':
-				return _("Required RAM");
+				return i("Required RAM");
 			case 'minprocnumber':
-				return _("Required Cores");
+				return i("Required Cores");
 			case 'minprocspeed':
-				return _("Processor Speed");
+				return i("Processor Speed");
 			case 'minnetwork':
-				return _("Min. Network Speed");
+				return i("Min. Network Speed");
 			case 'maxconcurrent':
-				return _("Max Concurrent Usage");
+				return i("Max Concurrent Usage");
 			case 'reloadtime':
-				return _("Est. Reload Time");
+				return i("Est. Reload Time");
 			case 'lastupdate':
-				return _("Last Updated");
+				return i("Last Updated");
 			case 'forcheckout':
-				return _("Available for checkout");
+				return i("Available for checkout");
 			case 'maxinitialtime':
-				return _("Max Initial Time");
+				return i("Max Initial Time");
 			case 'checkuser':
-				return _("Check Logged in User");
+				return i("Check Logged in User");
 			case 'rootaccess':
-				return _("Admin. Access");
+				return i("Admin. Access");
 			case 'sethostname':
-				return _("Set Hostname");
+				return i("Set Hostname");
 		}
-		return _(ucfirst($field));
+		return i(ucfirst($field));
 	}
 
 	/////////////////////////////////////////////////////////////////////////////
@@ -172,7 +172,7 @@ class Image extends Resource {
 		       . "LIMIT 1";
 		$qh = doQuery($query);
 		if($row = mysql_fetch_assoc($qh))
-			$msgs[] = sprintf(_("There is at least one <strong>reservation</strong> for this image. The latest end time is %s."), prettyDatetime($row['end'], 1));;
+			$msgs[] = sprintf(i("There is at least one <strong>reservation</strong> for this image. The latest end time is %s."), prettyDatetime($row['end'], 1));;
 
 		# check blockComputers
 		$query = "SELECT br.name, "
@@ -190,7 +190,7 @@ class Image extends Resource {
 		       . "LIMIT 1";
 		$qh = doQuery($query);
 		if($row = mysql_fetch_assoc($qh))
-			$msgs[] = sprintf(_("There is at least one <strong>Block Allocation</strong> with computers currently allocated with this image. Block Allocation %s has the latest end time which is %s."), $row['name'], prettyDatetime($row['end'], 1));
+			$msgs[] = sprintf(i("There is at least one <strong>Block Allocation</strong> with computers currently allocated with this image. Block Allocation %s has the latest end time which is %s."), $row['name'], prettyDatetime($row['end'], 1));
 
 		# check blockRequest
 		$query = "SELECT br.name, "
@@ -206,7 +206,7 @@ class Image extends Resource {
 		       . "LIMIT 1";
 		$qh = doQuery($query);
 		if($row = mysql_fetch_assoc($qh))
-			$msgs[] = sprintf(_("There is at least one <strong>Block Allocation</strong> configured to use this image. Block Allocation %s has the latest end time which is %s."), $row['name'], prettyDatetime($row['end'], 1));
+			$msgs[] = sprintf(i("There is at least one <strong>Block Allocation</strong> configured to use this image. Block Allocation %s has the latest end time which is %s."), $row['name'], prettyDatetime($row['end'], 1));
 
 		# check serverprofile
 		$query = "SELECT name "
@@ -217,7 +217,7 @@ class Image extends Resource {
 		while($row = mysql_fetch_assoc($qh))
 			$profiles[] = $row['name'];
 		if(count($profiles))
-			$msgs[] = _("The following <strong>Server Profiles</strong> are configured to use this image:") . "<br><br>\n" . implode("<br>\n", $profiles);
+			$msgs[] = i("The following <strong>Server Profiles</strong> are configured to use this image:") . "<br><br>\n" . implode("<br>\n", $profiles);
 
 		# check subimages
 		$query = "SELECT DISTINCT i.prettyname "
@@ -232,7 +232,7 @@ class Image extends Resource {
 		while($row = mysql_fetch_assoc($qh))
 			$images[] = $row['prettyname'];
 		if(count($images))
-			$msgs[] = _("The following <strong>images</strong> have the selected image assigned as a <strong>subimage</strong>:") . "<br><br>\n" . implode("<br>\n", $images);
+			$msgs[] = i("The following <strong>images</strong> have the selected image assigned as a <strong>subimage</strong>:") . "<br><br>\n" . implode("<br>\n", $images);
 
 		# check vmprofile
 		$query = "SELECT profilename "
@@ -242,12 +242,12 @@ class Image extends Resource {
 		while($row = mysql_fetch_assoc($qh))
 			$profiles[] = $row['profilename'];
 		if(count($profiles))
-			$msgs[] = _("The following <strong>VM Host Profiles</strong> have the this image selected:") . "<br><br>\n" . implode("<br>\n", $profiles);
+			$msgs[] = i("The following <strong>VM Host Profiles</strong> have the this image selected:") . "<br><br>\n" . implode("<br>\n", $profiles);
 
 		if(empty($msgs))
 			return '';
 
-		$msg = _("The selected image is currently being used in the following ways and cannot be deleted at this time.") . "<br><br>\n";
+		$msg = i("The selected image is currently being used in the following ways and cannot be deleted at this time.") . "<br><br>\n";
 		$msg .= implode("<br><br>\n", $msgs) . "<br><br>\n";
 		return $msg;
 	}
@@ -300,7 +300,7 @@ class Image extends Resource {
 		$cont = addContinuationsEntry("viewRequests", $cdata);
 		$h .= "<INPUT type=radio name=\"continuation\" value=\"$cont\" id=\"";
 		$h .= "createimage\"><label for=\"createimage\">";
-		$h .= _("Create / Update an Image");
+		$h .= i("Create / Update an Image");
 		$h .= "</label><br>\n";
 		return $h;
 	}
@@ -321,9 +321,9 @@ class Image extends Resource {
 		$h .= "<div dojoType=dijit.Dialog\n";
 		$h .= "      id=\"addeditdlg\"\n";
 		if($add)
-			$h .= "      title=\"" . _("Add {$this->restypename}") . "\"\n";
+			$h .= "      title=\"" . i("Add {$this->restypename}") . "\"\n";
 		else
-			$h .= "      title=\"" . _("Edit {$this->restypename}") . "\"\n";
+			$h .= "      title=\"" . i("Edit {$this->restypename}") . "\"\n";
 		$h .= "      duration=250\n";
 		$h .= "      draggable=true>\n";
 		$h .= "<div id=\"addeditdlgcontent\">\n";
@@ -333,37 +333,37 @@ class Image extends Resource {
 		if(! $add)
 			$h .= "<div style=\"width: 80%; margin-left: 10%; overflow: auto; height: 80%;\">\n";
 		# name
-		$errmsg = _("Name cannot contain dashes (-), single (') or double (&quot;) quotes, less than (&lt;), or greater than (&gt;) and can be from 2 to 60 characters long");
-		$h .= labeledFormItem('name', _('Name'), 'text', '^([A-Za-z0-9!@#$%^&\*\(\)_=\+\[\]{}\\\|:;,\./\?~` ]){2,60}$',
+		$errmsg = i("Name cannot contain dashes (-), single (') or double (&quot;) quotes, less than (&lt;), or greater than (&gt;) and can be from 2 to 60 characters long");
+		$h .= labeledFormItem('name', i('Name'), 'text', '^([A-Za-z0-9!@#$%^&\*\(\)_=\+\[\]{}\\\|:;,\./\?~` ]){2,60}$',
 		                      1, '', $errmsg); 
 		# owner
 		$extra = array('onKeyPress' => 'setOwnerChecking');
-		$h .= labeledFormItem('owner', _('Owner'), 'text', '', 1, '', _('Unknown user'),
+		$h .= labeledFormItem('owner', i('Owner'), 'text', '', 1, '', i('Unknown user'),
 		                      'checkOwner', $extra);
-		#$h .= labeledFormItem('owner', _('Owner'), 'text', '{$user['unityid']}@{$user['affiliation']}',
-		#                      1, '', _('Unknown user'), 'checkOwner', 'onKeyPress', 'setOwnerChecking');
+		#$h .= labeledFormItem('owner', i('Owner'), 'text', '{$user['unityid']}@{$user['affiliation']}',
+		#                      1, '', i('Unknown user'), 'checkOwner', 'onKeyPress', 'setOwnerChecking');
 		$cont = addContinuationsEntry('AJvalidateUserid');
 		$h .= "<input type=\"hidden\" id=\"valuseridcont\" value=\"$cont\">\n";
 		# description
 		$h .= "<fieldset>\n";
-		$h .= "<legend>" . _("Image Description") . "</legend>\n";
-		$h .= _("Description of image (required - users will see this on the <strong>New Reservations</strong> page):");
+		$h .= "<legend>" . i("Image Description") . "</legend>\n";
+		$h .= i("Description of image (required - users will see this on the <strong>New Reservations</strong> page):");
 		$h .= "<br>\n";
 		$h .= "<textarea dojoType=\"dijit.form.Textarea\" id=\"description\" ";
 		$h .= "style=\"width: 400px; text-align: left;\"></textarea>\n";
 		$h .= "</fieldset>\n";
 		# usage notes
 		$h .= "<fieldset>\n";
-		$h .= "<legend>" . _("Usage Notes") . "</legend>\n";
-		$msg = _("Optional notes to the user explaining how to use the image (users will see this on the <strong>Connect!</strong> page):");
+		$h .= "<legend>" . i("Usage Notes") . "</legend>\n";
+		$msg = i("Optional notes to the user explaining how to use the image (users will see this on the <strong>Connect!</strong> page):");
 		$h .= preg_replace("/(.{1,100}([ \n]|$))/", '\1<br>', $msg);
 		$h .= "<textarea dojoType=\"dijit.form.Textarea\" id=\"usage\" ";
 		$h .= "style=\"width: 400px; text-align: left;\"></textarea>\n";
 		$h .= "</fieldset>\n";
 		if($add) {
 			$h .= "<fieldset>\n";
-			$h .= "<legend>" . _("Revision Comments") . "</legend>\n";
-			$msg = _("Notes for yourself and other admins about how the image was setup/installed. These are optional and are not visible to end users.");
+			$h .= "<legend>" . i("Revision Comments") . "</legend>\n";
+			$msg = i("Notes for yourself and other admins about how the image was setup/installed. These are optional and are not visible to end users.");
 			$h .= preg_replace("/(.{1,80}([ \n]|$))/", '\1<br>', $msg);
 			$h .= "<textarea dojoType=\"dijit.form.Textarea\" id=\"imgcomments\" ";
 			$h .= "style=\"width: 400px; text-align: left;\"></textarea>";
@@ -371,20 +371,20 @@ class Image extends Resource {
 		}
 		# advanced options
 		$h .= "<div dojoType=\"dijit.TitlePane\" title=\"";
-		$h .= _("Advanced Options - leave default values unless you really know what you are doing (click to expand)");
+		$h .= i("Advanced Options - leave default values unless you really know what you are doing (click to expand)");
 		$h .= "\" open=\"false\" style=\"width: 460px\" id=\"advancedoptions\" ";
 		$h .= "onShow=\"delayedEditResize();\" onHide=\"delayedEditResize();\">\n";
 		# RAM
 		$extra = array('smallDelta' => 256, 'largeDelta' => 1024);
-		$h .= labeledFormItem('ram', _('Required RAM'), 'spinner', '{min:512, max:8388607}',
+		$h .= labeledFormItem('ram', i('Required RAM'), 'spinner', '{min:512, max:8388607}',
 		                      1, 1024, '', '', $extra);
 		# cores
 		$extra = array('smallDelta' => 1, 'largeDelta' => 2);
-		$h .= labeledFormItem('cores', _('Required Cores'), 'spinner', '{min:1, max:255}',
+		$h .= labeledFormItem('cores', i('Required Cores'), 'spinner', '{min:1, max:255}',
 		                      1, 1, '', '', $extra);
 		# proc speed
 		$extra = array('smallDelta' => 500, 'largeDelta' => 8000);
-		$h .= labeledFormItem('cpuspeed', _('Processor Speed'), 'spinner', '{min:500, max:8000}',
+		$h .= labeledFormItem('cpuspeed', i('Processor Speed'), 'spinner', '{min:500, max:8000}',
 		                      1, 1000, '', '', $extra);
 		# network speed
 		$vals = array('10' => '10 Mbps',
@@ -392,40 +392,40 @@ class Image extends Resource {
 		              '1000' => '1 Gbps',
 		              '10000' => '10 Gbps',
 		              '100000' => '100 Gbps');
-		$h .= labeledFormItem('networkspeed', _('Minimum Network Speed'), 'select', $vals);
+		$h .= labeledFormItem('networkspeed', i('Minimum Network Speed'), 'select', $vals);
 		# concurrent usage
 		$extra = array('smallDelta' => 1, 'largeDelta' => 10);
-		$h .= labeledFormItem('concurrent', _('Max Concurrent Usage'), 'spinner','{min:0, max:255}',
-		                       1, 0, '', '', $extra, '', _('(0 = unlimited)'));
+		$h .= labeledFormItem('concurrent', i('Max Concurrent Usage'), 'spinner','{min:0, max:255}',
+		                       1, 0, '', '', $extra, '', i('(0 = unlimited)'));
 		# reload time
 		if(! $add) {
 			$extra = array('smallDelta' => 1, 'largeDelta' => 5);
-			$h .= labeledFormItem('reload', _('Estimated Reload Time'), 'spinner',
+			$h .= labeledFormItem('reload', i('Estimated Reload Time'), 'spinner',
 			                      '{min:1, max:255}', 1, 5, '', '', $extra);
 		}
 		# for checkout
 		$yesno = array('1' => 'Yes',
 		              '0' => 'No');
-		$h .= labeledFormItem('checkout', _('Available for checkout'), 'select', $yesno);
+		$h .= labeledFormItem('checkout', i('Available for checkout'), 'select', $yesno);
 		# check user
-		$h .= labeledFormItem('checkuser', _('Check for logged in user'), 'select', $yesno);
+		$h .= labeledFormItem('checkuser', i('Check for logged in user'), 'select', $yesno);
 		# admin access
-		$h .= labeledFormItem('rootaccess', _('Users have administrative access'), 'select', $yesno);
+		$h .= labeledFormItem('rootaccess', i('Users have administrative access'), 'select', $yesno);
 		# set hostname
 		$h .= "<div id=\"sethostnamediv\">\n";
-		$h .= labeledFormItem('sethostname', _('Set computer hostname'), 'select', $yesno);
+		$h .= labeledFormItem('sethostname', i('Set computer hostname'), 'select', $yesno);
 		$h .= "</div>\n";
 		# sysprep
 		if($add) {
 			$h .= "<div id=\"sysprepdiv\">\n";
-			$h .= labeledFormItem('sysprep', _('Use sysprep'), 'select', $yesno);
+			$h .= labeledFormItem('sysprep', i('Use sysprep'), 'select', $yesno);
 			$h .= "</div>\n";
 		}
 		# connect methods
-		$h .= "<label for=\"connectmethodlist\">" . _("Connect methods:") . "</label>\n";
+		$h .= "<label for=\"connectmethodlist\">" . i("Connect methods:") . "</label>\n";
 		$h .= "<div class=\"labeledform\"><span id=\"connectmethodlist\"></span><br>\n";
 		$h .= "<div dojoType=\"dijit.form.DropDownButton\" id=\"connectmethoddlg\">\n";
-		$h .= "  <span>" . _("Modify Connection Methods") . "</span>\n";
+		$h .= "  <span>" . i("Modify Connection Methods") . "</span>\n";
 		// if leave off the href attribute, inital sizing of popup is wrong
 		$h .= "  <div dojoType=\"dijit.TooltipDialog\" id=\"connectmethodttd\" href=\"\"></div>\n";
 		$h .= "</div>\n";
@@ -439,7 +439,7 @@ class Image extends Resource {
 			$h .= "<br>\n";
 			$h .= "<div align=\"center\">\n";
 			$h .= "<div dojoType=\"dijit.form.DropDownButton\" id=\"subimagebtn\">";
-			$h .= "  <span>" . _("Manage Subimages") . "</span>\n";
+			$h .= "  <span>" . i("Manage Subimages") . "</span>\n";
 			// if leave off the href attribute, inital sizing of popup is wrong
 			$h .= "  <div dojoType=\"dijit.TooltipDialog\" id=\"subimagedlg\" href=\"\"></div>\n";
 			$h .= "</div>\n";
@@ -461,30 +461,30 @@ class Image extends Resource {
 		$h .= "</div>\n"; # addeditdlgcontent
 
 		$h .= "<div id=\"editdlgbtns\" align=\"center\">\n";
-		$h .= dijitButton('addeditbtn', _("Confirm"), "saveResource();");
+		$h .= dijitButton('addeditbtn', i("Confirm"), "saveResource();");
 		$script  = "    dijit.byId('addeditdlg').hide();\n";
 		$script .= "    dijit.registry.filter(function(widget, index){return widget.id.match(/^comments/);}).forEach(function(widget) {widget.destroy();});\n";
-		$h .= dijitButton('', _("Cancel"), $script);
+		$h .= dijitButton('', i("Cancel"), $script);
 		$h .= "</div>\n"; # editdlgbtns
 		$h .= "</div>\n"; # addeditdlg
 
 		$h .= "<div dojoType=dijit.Dialog\n";
 		$h .= "      id=\"autoconfirmdlg\"\n";
-		$h .= "      title=\"" . _("Confirm Manual Install") . "\"\n";
+		$h .= "      title=\"" . i("Confirm Manual Install") . "\"\n";
 		$h .= "      duration=250\n";
 		$h .= "      draggable=true>\n";
 		$h .= "<strong><span id=\"autoconfirmcontent\"></span></strong><br><br>\n";
 		$h .= "<div style=\"width: 230px;\">\n";
-		$h .= _("This method cannot be automatically added to the image by VCL. The image must be created with the software for this method already installed. If this image already has software for this method installed in it, please click <strong>Software is Manually Installed</strong>. Otherwise, click cancel.");
+		$h .= i("This method cannot be automatically added to the image by VCL. The image must be created with the software for this method already installed. If this image already has software for this method installed in it, please click <strong>Software is Manually Installed</strong>. Otherwise, click cancel.");
 		$h .= "</div><br><br>\n";
 		$h .= "   <div align=\"center\">\n";
 		$script  = "       dijit.byId('autoconfirmdlg').hide();\n";
 		$script .= "       addConnectMethod3();\n";
 		$script .= "       dijit.byId('connectmethoddlg').openDropDown();\n";
-		$h .= dijitButton('', _("Software is Manually Installed"), $script);
+		$h .= dijitButton('', i("Software is Manually Installed"), $script);
 		$script  = "       dijit.byId('autoconfirmdlg').hide();\n";
 		$script .= "       dijit.byId('connectmethoddlg').openDropDown();\n";
-		$h .= dijitButton('', _("Cancel"), $script);
+		$h .= dijitButton('', i("Cancel"), $script);
 		$h .= "   </div>\n";
 		$h .= "</div>\n"; # autoconfirmdlg
 		return $h;
@@ -505,9 +505,9 @@ class Image extends Resource {
 		$methods = getConnectMethods($imageid);
 		$revisions = getImageRevisions($imageid);
 	
-		$h  = "<h3>" . _("Modify Connection Methods") . "</h3>";
+		$h  = "<h3>" . i("Modify Connection Methods") . "</h3>";
 		if(! $newimage && count($revisions) > 1) {
-			$h .= _("Selected Revision ID:") . " ";
+			$h .= i("Selected Revision ID:") . " ";
 			$cdata = $this->basecdata;
 			$cdata['imageid'] = $imageid;
 			$cdata['revids'] = array_keys($revisions);
@@ -536,12 +536,12 @@ class Image extends Resource {
 		$h .= "<div dojoType=\"dijit.form.Select\" id=\"addcmsel\" ";
 		$h .= "store=\"cmstore\" query=\"{active: 0}\" ";
 		$h .= "onSetStore=\"updateCurrentConMethods();\"></div>";
-		$h .= dijitButton('addcmbtn', _("Add Method"), "addConnectMethod();");
+		$h .= dijitButton('addcmbtn', i("Add Method"), "addConnectMethod();");
 		$h .= "<br>";
-		$h .= "<h3>" . _("Current Methods") . "</h3>";
+		$h .= "<h3>" . i("Current Methods") . "</h3>";
 		$h .= "<select id=\"curmethodsel\" multiple size=\"5\">";
 		$h .= "</select><br>";
-		$h .= dijitButton('remcmbtn', _("Remove Selected Methods(s)"), "remConnectMethod();");
+		$h .= dijitButton('remcmbtn', i("Remove Selected Methods(s)"), "remConnectMethod();");
 		$h .= "<br>";
 		$h .= "<div id=\"cmerror\" class=\"rederrormsg\"></div>\n";
 		$adminimages = getUserResources(array("imageAdmin"), array("administer"));
@@ -557,7 +557,7 @@ class Image extends Resource {
 		$h .= "<INPUT type=hidden id=remcmcont value=\"$cont\">";
 		if(! $newimage) {
 			$h .= "<div style=\"width: 280px;\">\n";
-			$h .= _("NOTE: Connection Method changes take effect immediately; you do <strong>not</strong> need to click \"Submit Changes\" to submit them.");
+			$h .= i("NOTE: Connection Method changes take effect immediately; you do <strong>not</strong> need to click \"Submit Changes\" to submit them.");
 			$h .= "</div>\n";
 		}
 		print $h;
@@ -577,11 +577,11 @@ class Image extends Resource {
 
 		$resources = getUserResources(array("imageAdmin"));
 		if(empty($resources['image'])) {
-			print _("You do not have access to add any subimages to this image.");
+			print i("You do not have access to add any subimages to this image.");
 			return;
 		}
 
-		$h  = "<h3>" . _("Add New Subimage") . "</h3>";
+		$h  = "<h3>" . i("Add New Subimage") . "</h3>";
 		$h .= "<select dojoType=\"dijit.form.FilteringSelect\" id=\"addsubimagesel\">";
 		foreach($resources['image'] as $id => $name) {
 			if($name == 'No Image')
@@ -589,9 +589,9 @@ class Image extends Resource {
 			$h .= "<option value=$id>$name</option>";
 		}
 		$h .= "</select>";
-		$h .= dijitButton('addbtn', _("Add Subimage"), "addSubimage();");
+		$h .= dijitButton('addbtn', i("Add Subimage"), "addSubimage();");
 		$h .= "<br>";
-		$h .= "<h3>" . _("Current Subimages") . "</h3>";
+		$h .= "<h3>" . i("Current Subimages") . "</h3>";
 		$subimgcnt = 0;
 		if(array_key_exists("subimages", $image) && count($image["subimages"])) {
 			$subimages = array();
@@ -608,11 +608,11 @@ class Image extends Resource {
 		else {
 			$h .= "<select id=\"cursubimagesel\" multiple size=\"10\" disabled>";
 			$image['subimages'] = array();
-			$h .= "<option value=\"none\">" . _("(None)") . "</option>";
+			$h .= "<option value=\"none\">" . i("(None)") . "</option>";
 		}
 		$h .= "</select><br>";
-		$h .= _("total subimages:") . " <span id=subimgcnt>$subimgcnt</span><br>";
-		$h .= dijitButton('rembtn', _("Remove Selected Subimage(s)"), "remSubimages();");
+		$h .= i("total subimages:") . " <span id=subimgcnt>$subimgcnt</span><br>";
+		$h .= dijitButton('rembtn', i("Remove Selected Subimage(s)"), "remSubimages();");
 		$h .= "<br>";
 		$adminimages = getUserResources(array("imageAdmin"), array("administer"));
 		$adminids = array_keys($adminimages["image"]);
@@ -627,7 +627,7 @@ class Image extends Resource {
 		$cont = addContinuationsEntry('AJremSubimage', $cdata, SECINDAY, 1, 0);
 		$h .= "<INPUT type=\"hidden\" id=\"remsubimagecont\" value=\"$cont\">";
 		$h .= "<div style=\"width: 320px;\">\n";
-		$h .= _("NOTE: Subimage changes take effect immediately; you do <strong>not</strong> need to click \"Submit Changes\" to submit them.");
+		$h .= i("NOTE: Subimage changes take effect immediately; you do <strong>not</strong> need to click \"Submit Changes\" to submit them.");
 		$h .= "</div>\n";
 		print $h;
 	}
@@ -676,7 +676,7 @@ class Image extends Resource {
 		# save continuation
 		$cont = addContinuationsEntry('AJsaveResource', $cdata);
 
-		$ret = array('title' => _("Edit {$this->restypename}"),
+		$ret = array('title' => i("Edit {$this->restypename}"),
 		             'cont' => $cont,
 		             'resid' => $imageid,
 		             'data' => $data,
@@ -863,7 +863,7 @@ class Image extends Resource {
 		# add the image
 		if(! $imageid = $this->addResource($data)) {
 			sendJSON(array('status' => 'adderror',
-			               'errormsg' => _("Error encountered while trying to create new image.<br>Please contact an admin for assistance.")));
+			               'errormsg' => i("Error encountered while trying to create new image.<br>Please contact an admin for assistance.")));
 			return;
 		}
 
@@ -1266,22 +1266,22 @@ class Image extends Resource {
 	function getRevisionHTML($imageid) {
 		$revisions = getImageRevisions($imageid);
 		$rt = '';
-		$rt .= "<h3>" . _("Revisions of this Image") . "</h3>\n";
+		$rt .= "<h3>" . i("Revisions of this Image") . "</h3>\n";
 		$rt .= "<table summary=\"\"><tr><td>\n";
 		if(count($revisions) > 1 && isImageBlockTimeActive($imageid)) {
 			$rt .= "<font color=\"red\">";
-			$warn = _("WARNING: This image is part of an active block allocation. Changing the production revision of the image at this time will result in new reservations under the block allocation to have full reload times instead of a &lt; 1 minutes wait.");
+			$warn = i("WARNING: This image is part of an active block allocation. Changing the production revision of the image at this time will result in new reservations under the block allocation to have full reload times instead of a &lt; 1 minutes wait.");
 			$rt .= preg_replace("/(.{1,100}([ \n]|$))/", '\1<br>', $warn);
 			$rt .= "</font><br>\n";
 		}
 		$rt .= "<table summary=\"\" id=\"revisiontable\">\n";
 		$rt .= "  <tr>\n";
 		$rt .= "    <td></td>\n";
-		$rt .= "    <th>" . _("Revision") . "</th>\n";
-		$rt .= "    <th>" . _("Creator") . "</th>\n";
-		$rt .= "    <th>" . _("Created") . "</th>\n";
-		$rt .= "    <th nowrap>" . _("In Production") . "</th>\n";
-		$rt .= "    <th>" . _("Comments (click to edit)") . "</th>\n";
+		$rt .= "    <th>" . i("Revision") . "</th>\n";
+		$rt .= "    <th>" . i("Creator") . "</th>\n";
+		$rt .= "    <th>" . i("Created") . "</th>\n";
+		$rt .= "    <th nowrap>" . i("In Production") . "</th>\n";
+		$rt .= "    <th>" . i("Comments (click to edit)") . "</th>\n";
 		$rt .= "  </tr>\n";
 		foreach($revisions AS $rev) {
 			if($rev['deleted'] == 1)
@@ -1325,7 +1325,7 @@ class Image extends Resource {
 		$cont = addContinuationsEntry('AJdeleteRevisions', $cdata);
 		$ids = implode(',', $keys);
 		$rt .= "<button onclick=\"deleteRevisions('$cont', '$ids'); return false;\">";
-		$rt .= _("Delete selected revisions") . "</button>\n";
+		$rt .= i("Delete selected revisions") . "</button>\n";
 		$rt .= "</div>\n";
 		$rt .= "</td></tr></table>\n";
 		return $rt;
@@ -1346,14 +1346,14 @@ class Image extends Resource {
 		$imagemetaid = getContinuationVar('imagemetaid');
 		if(! in_array($imageid, $adminids)) {
 			$arr = array('error' => 'noimageaccess',
-		                'msg' => _("You do not have access to manage this image."));
+		                'msg' => i("You do not have access to manage this image."));
 			sendJSON($arr);
 			return;
 		}
 		$newid = processInputVar('imageid', ARG_NUMERIC);
 		if(! in_array($newid, $userimageids)) {
 			$arr = array('error' => 'nosubimageaccess',
-		                'msg' => _("You do not have access to add this subimage."));
+		                'msg' => i("You do not have access to add this subimage."));
 			sendJSON($arr);
 			return;
 		}
@@ -1413,7 +1413,7 @@ class Image extends Resource {
 		$imagemetaid = getContinuationVar('imagemetaid');
 		if(! in_array($imageid, $adminids)) {
 			$arr = array('error' => 'noimageaccess',
-		                'msg' => _("You do not have access to manage this image."));
+		                'msg' => i("You do not have access to manage this image."));
 			sendJSON($arr);
 			return;
 		}
@@ -1422,14 +1422,14 @@ class Image extends Resource {
 		foreach($remids as $id) {
 			if(! is_numeric($id)) {
 				$arr = array('error' => 'invalidinput',
-				             'msg' => _("Non-numeric data was submitted for an image id."));
+				             'msg' => i("Non-numeric data was submitted for an image id."));
 				sendJSON($arr);
 				return;
 			}
 		}
 		if(is_null($imagemetaid)) {
 			$arr = array('error' => 'nullimagemetaid',
-		                'msg' => _("Invalid infomation in database. Contact your system administrator."));
+		                'msg' => i("Invalid infomation in database. Contact your system administrator."));
 			sendJSON($arr);
 			return;
 		}
@@ -1566,11 +1566,11 @@ class Image extends Resource {
 		if(preg_match("/[-'\"]/", $return["name"]) ||
 			strlen($return["name"]) > 60 || strlen($return["name"]) < 2) {
 			$return['error'] = 1;
-			$errormsg[] = _("Name must be from 2 to 60 characters and cannot contain any dashes (-), single (') or double (\") quotes.");
+			$errormsg[] = i("Name must be from 2 to 60 characters and cannot contain any dashes (-), single (') or double (\") quotes.");
 		}
 		elseif(! preg_match('/^[\x20-\x7E]+$/', $return["name"])) {
 			$return['error'] = 1;
-			$errormsg[] = _("Name can only contain alphabets, numbers, signs, and spaces.");
+			$errormsg[] = i("Name can only contain alphabets, numbers, signs, and spaces.");
 		}
 		else {
 			if($return['mode'] == 'edit')
@@ -1579,64 +1579,64 @@ class Image extends Resource {
 				$imageid = '';
 			if($this->checkForImageName($return["name"], "long", $imageid)) {
 				$return['error'] = 1;
-				$errormsg[] = _("An image already exists with this name.");
+				$errormsg[] = i("An image already exists with this name.");
 			}
 		}
 		if($return["ram"] < 0 || $return["ram"] > 8388607) {
 			$return['error'] = 1;
-			$errormsg[] = _("RAM must be between 0 and 8388607");
+			$errormsg[] = i("RAM must be between 0 and 8388607");
 		}
 		if($return["cores"] < 0 || $return["cores"] > 255) {
 			$return['error'] = 1;
-			$errormsg[] = _("Cores must be between 0 and 255");
+			$errormsg[] = i("Cores must be between 0 and 255");
 		}
 		if($return["cpuspeed"] < 0 || $return["cpuspeed"] > 20000) {
 			$return['error'] = 1;
-			$errormsg[] = _("Processor Speed must be between 0 and 20000");
+			$errormsg[] = i("Processor Speed must be between 0 and 20000");
 		}
 		$lognetwork = log10($return['networkspeed']);
 		if($lognetwork < 1 || $lognetwork > 5) {
 			$return['error'] = 1;
-			$errormsg[] = _("Invalid value submitted for network speed");
+			$errormsg[] = i("Invalid value submitted for network speed");
 		}
 		if((! is_numeric($return['concurrent']) && ! empty($return['concurrent'])) ||
 			(is_numeric($return['concurrent']) && ($return["concurrent"] < 0 || $return["concurrent"] > 255))) {
 			$return['error'] = 1;
-			$errormsg[] = _("Max concurrent usage must be between 0 and 255");
+			$errormsg[] = i("Max concurrent usage must be between 0 and 255");
 		}
 		if($return['mode'] == 'edit' && 
 		   ($return["reload"] < 0 || $return["reload"] > 120)) {
 			$return['error'] = 1;
-			$errormsg[] = _("Estimated Reload Time must be between 0 and 120");
+			$errormsg[] = i("Estimated Reload Time must be between 0 and 120");
 		}
 		if(! validateUserid($return["owner"])) {
 			$return['error'] = 1;
-			$errormsg[] = _("Submitted ID is not valid");
+			$errormsg[] = i("Submitted ID is not valid");
 		}
 		if($return['checkout'] != 0 && $return['checkout'] != 1) {
 			$return['error'] = 1;
-			$errormsg[] = _("Available for checkout must be Yes or No");
+			$errormsg[] = i("Available for checkout must be Yes or No");
 		}
 		if($return['checkuser'] != 0 && $return['checkuser'] != 1) {
 			$return['error'] = 1;
-			$errormsg[] = _("Check for logged in user must be Yes or No");
+			$errormsg[] = i("Check for logged in user must be Yes or No");
 		}
 		if($return['rootaccess'] != 0 && $return['rootaccess'] != 1) {
 			$return['error'] = 1;
-			$errormsg[] = _("Users have administrative access must be Yes or No");
+			$errormsg[] = i("Users have administrative access must be Yes or No");
 		}
 		if($return['sethostname'] != 0 && $return['sethostname'] != 1) {
 			$return['error'] = 1;
-			$errormsg[] = _("Set computer hostname must be Yes or No");
+			$errormsg[] = i("Set computer hostname must be Yes or No");
 		}
 		if($return['mode'] == 'add' && $return['sysprep'] != 0 &&
 		   $return['sysprep'] != 1) {
 			$return['error'] = 1;
-			$errormsg[] = _("Use sysprep must be Yes or No");
+			$errormsg[] = i("Use sysprep must be Yes or No");
 		}
 		if(empty($return['desc'])) {
 			$return['error'] = 1;
-			$errormsg[] = _("You must include a description of the image") . "<br>";
+			$errormsg[] = i("You must include a description of the image") . "<br>";
 		}
 		if($return['mode'] == 'add') {
 			if(! preg_match('/^[,0-9]+$/', $return['connectmethodids'])) {
@@ -1933,13 +1933,13 @@ class Image extends Resource {
 		$newimage = getContinuationVar('newimage');
 		if(! array_key_exists($newid, $methods)) {
 			$arr = array('error' => 'invalidmethod',
-		                'msg' => _("Invalid method submitted."));
+		                'msg' => i("Invalid method submitted."));
 			sendJSON($arr);
 			return;
 		}
 		if($revid != 0 && ! in_array($revid, $revids)) {
 			$arr = array('error' => 'invalidrevision',
-		                'msg' => _("Invalid revision id submitted."));
+		                'msg' => i("Invalid revision id submitted."));
 			sendJSON($arr);
 			return;
 		}
@@ -2022,14 +2022,14 @@ class Image extends Resource {
 		foreach($remids as $id) {
 			if(! is_numeric($id)) {
 				$arr = array('error' => 'invalidinput',
-				             'msg' => _("Non-numeric data was submitted for a connection method id."));
+				             'msg' => i("Non-numeric data was submitted for a connection method id."));
 				sendJSON($arr);
 				return;
 			}
 		}
 		if($revid != 0 && ! in_array($revid, $revids)) {
 			$arr = array('error' => 'invalidrevision',
-		                'msg' => _("Invalid revision id submitted."));
+		                'msg' => i("Invalid revision id submitted."));
 			sendJSON($arr);
 			return;
 		}
@@ -2170,7 +2170,7 @@ class Image extends Resource {
 				$inuseids[] = $row['revision'];
 			$inuseids = implode(',', $inuseids);
 			$rc = array('status' => 'error',
-			            'msg' => _("The following revisions are in use and cannot be deleted at this time:") . " $inuseids");
+			            'msg' => i("The following revisions are in use and cannot be deleted at this time:") . " $inuseids");
 			sendJSON($rc);
 			return;
 		}

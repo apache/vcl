@@ -1098,7 +1098,7 @@ function nodeExists($node) {
 function validateNodeName($name, &$errmsg) {
 	if(preg_match('/^[-A-Za-z0-9_\. ]+$/', $name))
 		return 1;
-	$errmsg = _("Node names can only contain letters, numbers, spaces,<br>dashes(-), dots(.), and underscores(_).");
+	$errmsg = i("Node names can only contain letters, numbers, spaces,<br>dashes(-), dots(.), and underscores(_).");
 	return 0;
 }
 
@@ -1168,7 +1168,7 @@ function AJsubmitRenameNode() {
 	       .       "name = '$_newname'";
 	$qh = doQuery($query, 101);
 	if(mysql_num_rows($qh)) {
-		$msg = _("A sibling node of that name currently exists");
+		$msg = i("A sibling node of that name currently exists");
 		$arr = array('error' => 2, 'message' => $msg);
 		sendJSON($arr);
 		return;

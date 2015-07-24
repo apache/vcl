@@ -41,7 +41,7 @@ function selectStatistics() {
 	list($month1, $day1, $year1) = explode(',', date('n,j,Y', time() - 
 	                                    (SECINDAY * 6)));
 	list($month2, $day2, $year2) = explode(',', date('n,j,Y', time()));
-	print "<H2>" . _("Statistic Information") . "</H2>\n";
+	print "<H2>" . i("Statistic Information") . "</H2>\n";
 	if($submitErr) {
 		printSubmitErr(STARTERR);
 		printSubmitErr(ENDERR);
@@ -56,7 +56,7 @@ function selectStatistics() {
 	}
 	else
 		$affilid = $user['affiliationid'];
-	print _("Select a starting date:") . "<br>\n";
+	print i("Select a starting date:") . "<br>\n";
 	$months = array('');
 	for($i = 2 * SECINDAY, $cnt = 1; $cnt < 13; $i += SECINMONTH, $cnt++)
 		$months[$cnt] = strftime('%B', $i);
@@ -80,7 +80,7 @@ function selectStatistics() {
 	printSelectInput("day1", $days, $daykey1);
 	printSelectInput("year1", $years, $yearkey1);
 	print "<br>\n";
-	print _("Select an ending date:") . "<br>\n";
+	print i("Select an ending date:") . "<br>\n";
 	if(! $submitErr) {
 		$monthkey2 = $month2;
 		$daykey2 = array_search($day2, $days);
@@ -93,8 +93,8 @@ function selectStatistics() {
 	$cont = addContinuationsEntry('viewstats');
 	if(checkUserHasPerm('View Statistics by Affiliation')) {
 		print "<input type=radio id=stattype1 name=continuation value=\"$cont\" checked>\n";
-		print "<label for=stattype1>" . _("View General Statistics") . "</label> - \n";
-		print _("Select an affiliation:") . "\n";
+		print "<label for=stattype1>" . i("View General Statistics") . "</label> - \n";
+		print i("Select an affiliation:") . "\n";
 		$affils = getAffiliations();
 		if(! array_key_exists($affilid, $affils))
 			$affilid = $user['affiliationid'];
@@ -116,14 +116,14 @@ function selectStatistics() {
 		               'provs' => $provs);
 		$cont2 = addContinuationsEntry('viewstats', $cdata);
 		print "<input type=radio id=stattype3 name=continuation value=\"$cont2\">\n";
-		print "<label for=stattype3>" . _("View Statistics by provisioning engine");
+		print "<label for=stattype3>" . i("View Statistics by provisioning engine");
 		print "</label>:\n";
 		printSelectInput("provid", $provs);
 		print "<br>\n";
 	}
 	else
 		print "<INPUT type=hidden name=continuation value=\"$cont\">\n";
-	print "<INPUT type=submit value=" . _("Submit") . ">\n";
+	print "<INPUT type=submit value=" . i("Submit") . ">\n";
 	print "</FORM>\n";
 }
 
@@ -166,7 +166,7 @@ function viewStatistics() {
 		$affilid = $user['affiliationid'];
 
 	if($affilid == 0)
-		$statsfor = _("All Affiliations");
+		$statsfor = i("All Affiliations");
 	else
 		$statsfor = $affils[$affilid];
 
@@ -174,15 +174,15 @@ function viewStatistics() {
 	$end = "$year2-$month2-$day2 23:59:59";
 	if(! checkdate($month1, $day1, $year1)) {
 		$submitErr |= STARTERR;
-		$submitErrMsg[STARTERR] = _("The selected start date is not valid. Please select a valid date.") . "<br>\n";
+		$submitErrMsg[STARTERR] = i("The selected start date is not valid. Please select a valid date.") . "<br>\n";
 	}
 	if(! checkdate($month2, $day2, $year2)) {
 		$submitErr |= ENDERR;
-		$submitErrMsg[ENDERR] = _("The selected end date is not valid. Please select a valid date.") . "<br>\n";
+		$submitErrMsg[ENDERR] = i("The selected end date is not valid. Please select a valid date.") . "<br>\n";
 	}
 	if(datetimeToUnix($start) > datetimeToUnix($end)) {
 		$submitErr |= ORDERERR;
-		$submitErrMsg[ORDERERR] = _("The selected end date is before the selected start date. Please select an end date equal to or greater than the start date.") . "<br>\n";
+		$submitErrMsg[ORDERERR] = i("The selected end date is before the selected start date. Please select an end date equal to or greater than the start date.") . "<br>\n";
 	}
 	if($submitErr) {
 		selectStatistics();
@@ -191,15 +191,15 @@ function viewStatistics() {
 
 	$timestart = microtime(1);
 	if($mode2 == 'default')
-		print "<H2>" . _("Statistic Information for") . " $statsfor</H2>\n";
+		print "<H2>" . i("Statistic Information for") . " $statsfor</H2>\n";
 	elseif($mode2 == 'provisioning')
-		print "<H2>" . _("Statistic Information for") . " {$provs[$provid]}</H2>\n";
+		print "<H2>" . i("Statistic Information for") . " {$provs[$provid]}</H2>\n";
 	print "<H3>";
 	$tmp = mktime(0, 0, 0, $month1, $day1, $year1);
 	$starttime = strftime('%x', $tmp);
 	$tmp = mktime(0, 0, 0, $month2, $day2, $year2);
 	$endtime = strftime('%x', $tmp);
-	printf(_("Reservation information between %s and %s:"), $starttime, $endtime);
+	printf(i("Reservation information between %s and %s:"), $starttime, $endtime);
 	print "</H3>\n";
 	$reloadid = getUserlistID('vclreload@Local');
 	if($mode2 == 'default') {
@@ -393,46 +393,46 @@ function viewStatistics() {
 	print "<DIV align=center>\n";
 	print "<TABLE>\n";
 	print "  <TR>\n";
-	print "    <TH align=right>" . _("Total Reservations:") . "</TH>\n";
+	print "    <TH align=right>" . i("Total Reservations:") . "</TH>\n";
 	print "    <TD>$totalreservations</TD>\n";
 	print "  </TR>\n";
 	print "  <TR>\n";
-	print "    <TH align=right>" . _("Total Hours Used:") . "</TH>\n";
+	print "    <TH align=right>" . i("Total Hours Used:") . "</TH>\n";
 	print "    <TD>" . (int)($totalhours / 3600) . "</TD>\n";
 	print "  </TR>\n";
 	print "  <TR>\n";
-	print "    <TH align=right>" . _("\"Now\" Reservations:") . "</TH>\n";
+	print "    <TH align=right>" . i("\"Now\" Reservations:") . "</TH>\n";
 	print "    <TD>$nows</TD>\n";
 	print "  </TR>\n";
 	print "  <TR>\n";
-	print "    <TH align=right>" . _("\"Later\" Reservations:") . "</TH>\n";
+	print "    <TH align=right>" . i("\"Later\" Reservations:") . "</TH>\n";
 	print "    <TD>$futures</TD>\n";
 	print "  </TR>\n";
 	print "  <TR>\n";
-	print "    <TH align=right>" . _("Unavailable:") . "</TH>\n";
+	print "    <TH align=right>" . i("Unavailable:") . "</TH>\n";
 	print "    <TD>$notavailable</TD>\n";
 	print "  </TR>\n";
 	print "  <TR>\n";
-	print "    <TH align=right>" . _("Load times &lt; 2 minutes:") . "</TH>\n";
+	print "    <TH align=right>" . i("Load times &lt; 2 minutes:") . "</TH>\n";
 	print "    <TD>{$loadtimes['2less']}</TD>\n";
 	print "  </TR>\n";
-	print "    <TH align=right>" . _("Load times 2-6 minutes:") . "</TH>\n";
+	print "    <TH align=right>" . i("Load times 2-6 minutes:") . "</TH>\n";
 	print "    <TD>{$loadtimes['2to6']}</TD>\n";
 	print "  </TR>\n";
-	print "    <TH align=right>" . _("Load times 6-8 minutes:") . "</TH>\n";
+	print "    <TH align=right>" . i("Load times 6-8 minutes:") . "</TH>\n";
 	print "    <TD>{$loadtimes['6to8']}</TD>\n";
 	print "  <TR>\n";
-	print "    <TH align=right>" . _("Load times &gt;= 8 minutes:") . "</TH>\n";
+	print "    <TH align=right>" . i("Load times &gt;= 8 minutes:") . "</TH>\n";
 	print "    <TD>{$loadtimes['8more']}</TD>\n";
 	print "  </TR>\n";
 	print "  <TR>\n";
-	print "    <TH align=right>" . _("Total Unique Users:") . "</TH>\n";
+	print "    <TH align=right>" . i("Total Unique Users:") . "</TH>\n";
 	print "    <TD>" . count($users) . "</TD>\n";
 	print "  </TR>\n";
 	foreach(array_keys($osusers) as $key) {
 		print "  <TR>\n";
 		print "    <TH align=right>";
-		printf(_("Unique Users of %s:"), $key);
+		printf(i("Unique Users of %s:"), $key);
 		print "</TH>\n";
 		print "    <TD>" . count($osusers[$key]) . "</TD>\n";
 		print "  </TR>\n";
@@ -442,14 +442,14 @@ function viewStatistics() {
 	print "<TABLE>\n";
 	print "  <TR>\n";
 	print "    <TD></TD>\n";
-	print "    <TH>" . _("Reservations") . "</TH>\n";
-	print "    <TH>" . _("Unique Users") . "</TH>\n";
-	print "    <TH>" . _("Hours Used") . "</TH>\n";
-	print "    <TH>" . _("&lt; 2 min wait") . "</TH>\n";
-	print "    <TH>" . _("2-6 min wait") . "</TH>\n";
-	print "    <TH>" . _("6-8 min wait") . "</TH>\n";
-	print "    <TH>" . _("&gt;= 8 min wait") . "</TH>\n";
-	print "    <TH>" . _("Failures") . "</TH>\n";
+	print "    <TH>" . i("Reservations") . "</TH>\n";
+	print "    <TH>" . i("Unique Users") . "</TH>\n";
+	print "    <TH>" . i("Hours Used") . "</TH>\n";
+	print "    <TH>" . i("&lt; 2 min wait") . "</TH>\n";
+	print "    <TH>" . i("2-6 min wait") . "</TH>\n";
+	print "    <TH>" . i("6-8 min wait") . "</TH>\n";
+	print "    <TH>" . i("&gt;= 8 min wait") . "</TH>\n";
+	print "    <TH>" . i("Failures") . "</TH>\n";
 	print "  </TR>\n";
 	foreach($imagecount as $key => $value) {
 		print "  <TR>\n";
@@ -479,79 +479,79 @@ function viewStatistics() {
 	}
 	print "</TABLE>\n";
 
-	print "<H3>" . _("Durations:") . "</H3>\n";
+	print "<H3>" . i("Durations:") . "</H3>\n";
 	print "<TABLE>\n";
 	print "  <TR>\n";
-	print "    <TH align=right>" . _("0 - 30 Min:") . "</TH>\n";
+	print "    <TH align=right>" . i("0 - 30 Min:") . "</TH>\n";
 	print "    <TD>" . $lengths["30min"] . "</TD>\n";
 	print "  </TR>\n";
 	print "  <TR>\n";
-	print "    <TH align=right>" . _("30 Min - 1 Hour:") . "</TH>\n";
+	print "    <TH align=right>" . i("30 Min - 1 Hour:") . "</TH>\n";
 	print "    <TD>" . $lengths["1hour"] . "</TD>\n";
 	print "  </TR>\n";
 	print "  <TR>\n";
-	print "    <TH align=right>" . _("1 Hour - 2 Hours:") . "</TH>\n";
+	print "    <TH align=right>" . i("1 Hour - 2 Hours:") . "</TH>\n";
 	print "    <TD>" . $lengths["2hours"] . "</TD>\n";
 	print "  </TR>\n";
 	print "  <TR>\n";
-	print "    <TH align=right>" . _("2 Hours - 4 Hours:") . "</TH>\n";
+	print "    <TH align=right>" . i("2 Hours - 4 Hours:") . "</TH>\n";
 	print "    <TD>" . $lengths["4hours"] . "</TD>\n";
 	print "  </TR>\n";
 	print "  <TR>\n";
-	print "    <TH align=right>" . _("4 Hours - 6 Hours:") . "</TH>\n";
+	print "    <TH align=right>" . i("4 Hours - 6 Hours:") . "</TH>\n";
 	print "    <TD>" . $lengths["6hours"] . "</TD>\n";
 	print "  </TR>\n";
 	print "  <TR>\n";
-	print "    <TH align=right>" . _("6 Hours - 8 Hours:") . "</TH>\n";
+	print "    <TH align=right>" . i("6 Hours - 8 Hours:") . "</TH>\n";
 	print "    <TD>" . $lengths["8hours"] . "</TD>\n";
 	print "  </TR>\n";
 	print "  <TR>\n";
-	print "    <TH align=right>" . _("8 Hours - 10 Hours:") . "</TH>\n";
+	print "    <TH align=right>" . i("8 Hours - 10 Hours:") . "</TH>\n";
 	print "    <TD>" . $lengths["10hours"] . "</TD>\n";
 	print "  </TR>\n";
 	print "  <TR>\n";
-	print "    <TH align=right>" . _("&gt; 10 Hours:") . "</TH>\n";
+	print "    <TH align=right>" . i("&gt; 10 Hours:") . "</TH>\n";
 	print "    <TD>" . $lengths["10hrsplus"] . "</TD>\n";
 	print "  </TR>\n";
 	print "</TABLE>\n";
 
-	print "<H3>" . _("Ending information:") . "</H3>\n";
+	print "<H3>" . i("Ending information:") . "</H3>\n";
 	print "<TABLE>\n";
 	print "  <TR>\n";
-	print "    <TH align=right>" . _("Deleted:") . "</TH>\n";
+	print "    <TH align=right>" . i("Deleted:") . "</TH>\n";
 	print "    <TD>" . $ending["deleted"] . "</TD>\n";
 	print "    <TD rowspan=7><img src=\"images/blank.gif\" width=5></TD>\n";
-	print "    <TD>" . _("(Future reservation deleted before start time reached)") . "</TD>\n";
+	print "    <TD>" . i("(Future reservation deleted before start time reached)") . "</TD>\n";
 	print "  </TR>\n";
 	print "  <TR>\n";
-	print "    <TH align=right>" . _("Released:") . "</TH>\n";
+	print "    <TH align=right>" . i("Released:") . "</TH>\n";
 	print "    <TD>" . $ending["released"] . "</TD>\n";
-	print "    <TD>" . _("(Reservation released before end time reached)") . "</TD>\n";
+	print "    <TD>" . i("(Reservation released before end time reached)") . "</TD>\n";
 	print "  </TR>\n";
 	print "  <TR>\n";
-	print "    <TH align=right>" . _("Not Acknowledged:") . "</TH>\n";
+	print "    <TH align=right>" . i("Not Acknowledged:") . "</TH>\n";
 	print "    <TD>" . $ending["noack"] . "</TD>\n";
-	print "    <TD>" . _("(\"Connect!\" button never clicked)") . "</TD>\n";
+	print "    <TD>" . i("(\"Connect!\" button never clicked)") . "</TD>\n";
 	print "  </TR>\n";
 	print "  <TR>\n";
-	print "    <TH align=right>" . _("No Login:") . "</TH>\n";
+	print "    <TH align=right>" . i("No Login:") . "</TH>\n";
 	print "    <TD>" . $ending["nologin"] . "</TD>\n";
-	print "    <TD>" . _("(User never logged in)") . "</TD>\n";
+	print "    <TD>" . i("(User never logged in)") . "</TD>\n";
 	print "  </TR>\n";
 	print "  <TR>\n";
-	print "    <TH align=right>" . _("End of Reservation:") . "</TH>\n";
+	print "    <TH align=right>" . i("End of Reservation:") . "</TH>\n";
 	print "    <TD>" . $ending["EOR"] . "</TD>\n";
-	print "    <TD>" . _("(End of reservation reached)") . "</TD>\n";
+	print "    <TD>" . i("(End of reservation reached)") . "</TD>\n";
 	print "  </TR>\n";
 	print "  <TR>\n";
-	print "    <TH align=right>" . _("Timed Out:") . "</TH>\n";
+	print "    <TH align=right>" . i("Timed Out:") . "</TH>\n";
 	print "    <TD>" . $ending["timeout"] . "</TD>\n";
-	print "    <TD>" . _("(Disconnect and no reconnection within 15 minutes)") . "</TD>\n";
+	print "    <TD>" . i("(Disconnect and no reconnection within 15 minutes)") . "</TD>\n";
 	print "  </TR>\n";
 	print "  <TR>\n";
-	print "    <TH align=right>" . _("Failed:") . "</TH>\n";
+	print "    <TH align=right>" . i("Failed:") . "</TH>\n";
 	print "    <TD>" . $ending["failed"] . "</TD>\n";
-	print "    <TD>" . _("(Reserved computer failed to get prepared for user)") . "</TD>\n";
+	print "    <TD>" . i("(Reserved computer failed to get prepared for user)") . "</TD>\n";
 	print "  </TR>\n";
 	print "</TABLE>\n";
 	print "<br>\n";
@@ -566,33 +566,33 @@ function viewStatistics() {
 	               'affilid' => $affilid,
 	               'mode' => $mode2,
 	               'provid' => $provid);
-	print "<H2>" . _("Reservations by Day") . "</H2>\n";
-	print "<small>" . _("(Reservations with start time on given day)") . "</small><br>\n";
+	print "<H2>" . i("Reservations by Day") . "</H2>\n";
+	print "<small>" . i("(Reservations with start time on given day)") . "</small><br>\n";
 	$cdata['divid'] = 'resbyday';
 	$cont = addContinuationsEntry('AJgetStatData', $cdata);
 	print "<input type=hidden id=statdaycont value=\"$cont\">\n";
 	print "<div id=\"resbyday\" class=\"statgraph\">(Loading...)</div>\n";
 
-	print "<H2>" . _("Max Concurrent Reservations By Day") . "</H2>\n";
+	print "<H2>" . i("Max Concurrent Reservations By Day") . "</H2>\n";
 	$cdata['divid'] = 'maxconcurresday';
 	$cont = addContinuationsEntry('AJgetStatData', $cdata);
 	print "<input type=hidden id=statconcurrescont value=\"$cont\">\n";
 	print "<div id=\"maxconcurresday\" class=\"statgraph\">Loading graph data...</div>\n";
 
-	print "<H2>" . _("Max Concurrent Blade Reservations By Day") . "</H2>\n";
+	print "<H2>" . i("Max Concurrent Blade Reservations By Day") . "</H2>\n";
 	$cdata['divid'] = 'maxconcurbladeday';
 	$cont = addContinuationsEntry('AJgetStatData', $cdata);
 	print "<input type=hidden id=statconcurbladecont value=\"$cont\">\n";
 	print "<div id=\"maxconcurbladeday\" class=\"statgraph\">Loading graph data...</div>\n";
 
-	print "<H2>" . _("Max Concurrent Virtual Machine Reservations By Day") . "</H2>\n";
+	print "<H2>" . i("Max Concurrent Virtual Machine Reservations By Day") . "</H2>\n";
 	$cdata['divid'] = 'maxconcurvmday';
 	$cont = addContinuationsEntry('AJgetStatData', $cdata);
 	print "<input type=hidden id=statconcurvmcont value=\"$cont\">\n";
 	print "<div id=\"maxconcurvmday\" class=\"statgraph\">Loading graph data...</div>\n";
 
-	print "<H2>" . _("Reservations by Hour") . "</H2>\n";
-	print "<small>(" . _("Active reservations during given hour averaged over selected dates") . ")</small><br><br>\n";
+	print "<H2>" . i("Reservations by Hour") . "</H2>\n";
+	print "<small>(" . i("Active reservations during given hour averaged over selected dates") . ")</small><br><br>\n";
 	$cdata['divid'] = 'resbyhour';
 	$cont = addContinuationsEntry('AJgetStatData', $cdata);
 	print "<input type=hidden id=statreshourcont value=\"$cont\">\n";
@@ -952,7 +952,7 @@ function getStatGraphDayConUsersData($start, $end, $affilid, $mode, $provid) {
 	while($row = mysql_fetch_assoc($qh))
 		$cachepts[$row['statdate']] = $row['value'];
 	if((count($cachepts) + 31) < $daycnt) {
-		$data = array('nodata' => _('(too much computational time required to generate this graph)'));
+		$data = array('nodata' => i('(too much computational time required to generate this graph)'));
 		return $data;
 	}
 	for($daystart = $startunix; $daystart < $endunix; $daystart += SECINDAY) {
@@ -1096,7 +1096,7 @@ function getStatGraphConBladeUserData($start, $end, $affilid, $mode, $provid) {
 	while($row = mysql_fetch_assoc($qh))
 		$cachepts[$row['statdate']] = $row['value'];
 	if((count($cachepts) + 31) < $daycnt) {
-		$data = array('nodata' => _('(too much computational time required to generate this graph)'));
+		$data = array('nodata' => i('(too much computational time required to generate this graph)'));
 		return $data;
 	}
 	for($daystart = $startunix; $daystart < $endunix; $daystart += SECINDAY) {
@@ -1274,7 +1274,7 @@ function getStatGraphConVMUserData($start, $end, $affilid, $mode, $provid) {
 	while($row = mysql_fetch_assoc($qh))
 		$cachepts[$row['statdate']] = $row['value'];
 	if((count($cachepts) + 31) < $daycnt) {
-		$data = array('nodata' => _('(too much computational time required to generate this graph)'));
+		$data = array('nodata' => i('(too much computational time required to generate this graph)'));
 		return $data;
 	}
 	for($daystart = $startunix; $daystart < $endunix; $daystart += SECINDAY) {

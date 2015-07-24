@@ -292,13 +292,13 @@ class ManagementNode extends Resource {
 
 		#$h .= "<div style=\"width: 80%; margin-left: 10%;\">\n";
 		# name
-		$errmsg = _("Name can only contain letters, numbers, dashes(-), periods(.), and underscores(_). It can be from 1 to 50 characters long.");
-		$h .= labeledFormItem('name', _('Name') . '*', 'text', '^([a-zA-Z0-9_][-a-zA-Z0-9_\.]{1,49})$',
+		$errmsg = i("Name can only contain letters, numbers, dashes(-), periods(.), and underscores(_). It can be from 1 to 50 characters long.");
+		$h .= labeledFormItem('name', i('Name') . '*', 'text', '^([a-zA-Z0-9_][-a-zA-Z0-9_\.]{1,49})$',
 		                      1, '', $errmsg); 
 		# owner
 		$extra = array('onKeyPress' => 'setOwnerChecking');
-		$h .= labeledFormItem('owner', _('Owner') . '*', 'text', '', 1,
-		                      "{$user['unityid']}@{$user['affiliation']}", _('Unknown user'),
+		$h .= labeledFormItem('owner', i('Owner') . '*', 'text', '', 1,
+		                      "{$user['unityid']}@{$user['affiliation']}", i('Unknown user'),
 		                      'checkOwner', $extra);
 		$cont = addContinuationsEntry('AJvalidateUserid');
 		$h .= "<input type=\"hidden\" id=\"valuseridcont\" value=\"$cont\">\n";
@@ -306,77 +306,77 @@ class ManagementNode extends Resource {
 		# IP address
 		$ipreg = '(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)';
 		$ipreg1 = "^$ipreg$";
-		$errmsg = _("Invalid IP address specified - must be a valid IPV4 address");
-		$h .= labeledFormItem('ipaddress', _('IP Address') . '*', 'text', $ipreg1, 1, '', $errmsg); 
+		$errmsg = i("Invalid IP address specified - must be a valid IPV4 address");
+		$h .= labeledFormItem('ipaddress', i('IP Address') . '*', 'text', $ipreg1, 1, '', $errmsg); 
 
 		# State
 		$vals = array(2 => "available", 10 => "maintenance", 5 => "failed");
-		$h .= labeledFormItem('stateid', _('State'), 'select', $vals);
+		$h .= labeledFormItem('stateid', i('State'), 'select', $vals);
 
 		# sysadmin email
 		$reg = '^([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,4},)*([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,4})$';
-		$errmsg = _("Invalid email address(es) specified");
-		$h .= labeledFormItem('sysadminemail', _("SysAdmin Email Address(es)"), 'text', $reg, 0, '',
+		$errmsg = i("Invalid email address(es) specified");
+		$h .= labeledFormItem('sysadminemail', i("SysAdmin Email Address(es)"), 'text', $reg, 0, '',
 		                      $errmsg, '', '', '', helpIcon('sysadminemailhelp')); 
 
 		# shared mailbox
 		$reg = '^([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,4})$';
-		$errmsg = _("Invalid email address specified");
-		$h .= labeledFormItem('sharedmailbox', _('Address for Shadow Emails'), 'text', $reg, 0, '',
+		$errmsg = i("Invalid email address specified");
+		$h .= labeledFormItem('sharedmailbox', i('Address for Shadow Emails'), 'text', $reg, 0, '',
 		                      $errmsg, '', '', '', helpIcon('sharedmailboxhelp')); 
 
 		# checkininterval
 		$extra = array('smallDelta' => 1, 'largeDelta' => 2);
-		$h .= labeledFormItem('checkininterval', _('Check-in Interval (sec)'), 'spinner', '{min:5,max:30,places:0}',
+		$h .= labeledFormItem('checkininterval', i('Check-in Interval (sec)'), 'spinner', '{min:5,max:30,places:0}',
 		                      1, '6', '', '', $extra, '', helpIcon('checkinhelp'));
 
 		# installpath
 		$reg = '^([-a-zA-Z0-9_\.\/]){2,100}$';
-		$errmsg = _("Invalid install path specified");
-		$h .= labeledFormItem('installpath', _('Install Path'), 'text', $reg, 0, '', $errmsg,
+		$errmsg = i("Invalid install path specified");
+		$h .= labeledFormItem('installpath', i('Install Path'), 'text', $reg, 0, '', $errmsg,
 		                      '', '', '', helpIcon('installpathhelp')); 
 
 		# timeserver list
 		$reg = '^(([a-zA-Z0-9_][-a-zA-Z0-9_\.]{1,49})(,?)){1,5}$';
-		$errmsg = _("Invalid time server(s) specified. Must be comman delimited list of hostnames or IP addresses, with up to 5 allowed");
+		$errmsg = i("Invalid time server(s) specified. Must be comman delimited list of hostnames or IP addresses, with up to 5 allowed");
 		$val = getVariable('timesource|global');
-		$h .= labeledFormItem('timeservers', _('Time Server(s)'), 'text', $reg, 0, $val, $errmsg,
+		$h .= labeledFormItem('timeservers', i('Time Server(s)'), 'text', $reg, 0, $val, $errmsg,
 		                      '', '', '', helpIcon('timeservershelp')); 
 
 		# keys
 		$reg = '^([-a-zA-Z0-9_\.\/,]){2,1024}$';
-		$errmsg = _("Invalid path to identity key files");
-		$h .= labeledFormItem('keys', _('End Node SSH Identity Key Files'), 'text', $reg, 0, '', $errmsg,
+		$errmsg = i("Invalid path to identity key files");
+		$h .= labeledFormItem('keys', i('End Node SSH Identity Key Files'), 'text', $reg, 0, '', $errmsg,
 		                      '', '', '', helpIcon('identityhelp')); 
 
 		# sshport
 		$extra = array('smallDelta' => 1, 'largeDelta' => 2);
-		$h .= labeledFormItem('sshport', _('SSH Port for this node'), 'spinner', '{min:1,max:65535,places:0}',
+		$h .= labeledFormItem('sshport', i('SSH Port for this node'), 'spinner', '{min:1,max:65535,places:0}',
 		                      1, '22', '', '', $extra, '', helpIcon('sshporthelp'));
 
 		# image library
 		$h .= "<div class=\"boxedoptions\">\n";
 		# imagelibenable
 		$extra = array('onChange' => 'toggleImageLibrary();');
-		$h .= labeledFormItem('imagelibenable', _('Enable Image Library'), 'check', '', '', '', '', '',
+		$h .= labeledFormItem('imagelibenable', i('Enable Image Library'), 'check', '', '', '', '', '',
 		                      $extra, '', helpIcon('imagelibhelp'));
 
 		# imagelibgroupid
 		$disabled = array('disabled' => 'true');
 		$vals = getUserResources(array('mgmtNodeAdmin'), array("manageGroup"), 1);
-		$h .= labeledFormItem('imagelibgroupid', _('Image Library Management Node Group'), 'select',
+		$h .= labeledFormItem('imagelibgroupid', i('Image Library Management Node Group'), 'select',
 		                      $vals['managementnode'], '', '', '', '', $disabled, '', helpIcon('imagelibgrouphelp'));
 
 		# imagelibuser
 		$reg = '^([-a-zA-Z0-9_\.\/,]){2,20}$';
-		$errmsg = _("Invalid image library user");
-		$h .= labeledFormItem('imagelibuser', _('Image Library User'), 'text', $reg, 0, '', $errmsg,
+		$errmsg = i("Invalid image library user");
+		$h .= labeledFormItem('imagelibuser', i('Image Library User'), 'text', $reg, 0, '', $errmsg,
 		                      '', $disabled, '', helpIcon('imagelibuserhelp')); 
 
 		# imagelibkey
 		$reg = '^([-a-zA-Z0-9_\.\/,]){2,100}$';
-		$errmsg = _("Invalid image library identity key");
-		$h .= labeledFormItem('imagelibkey', _('Image Library SSH Identity Key File'), 'text', $reg, 0, '', $errmsg,
+		$errmsg = i("Invalid image library identity key");
+		$h .= labeledFormItem('imagelibkey', i('Image Library SSH Identity Key File'), 'text', $reg, 0, '', $errmsg,
 		                      '', $disabled, '', helpIcon('imagelibkeyhelp')); 
 		$h .= "</div>\n"; # image library
 
@@ -387,47 +387,47 @@ class ManagementNode extends Resource {
 		$vals = array('dynamicDHCP' => 'Dynamic DHCP',
 		              'manualDHCP' => 'Manual DHCP',
 		              'static' => 'Static');
-		$h .= labeledFormItem('publicIPconfig', _('Public NIC configuration method'), 'select', $vals,
+		$h .= labeledFormItem('publicIPconfig', i('Public NIC configuration method'), 'select', $vals,
 		                      '', '', '', '', $extra, '', helpIcon('ipconfighelp'));
 
 		# netmask
-		$errmsg = _("Invalid public netmask");
-		$h .= labeledFormItem('publicnetmask', _('Public Netmask'), 'text', $ipreg1, 0, '', $errmsg,
+		$errmsg = i("Invalid public netmask");
+		$h .= labeledFormItem('publicnetmask', i('Public Netmask'), 'text', $ipreg1, 0, '', $errmsg,
 		                      '', $disabled, '', helpIcon('netmaskhelp')); 
 
 		# gateway
 		$reg = '^[a-zA-Z0-9_][-a-zA-Z0-9_\.]{1,56}$';
-		$errmsg = _("Invalid public gateway");
-		$h .= labeledFormItem('publicgateway', _('Public Gateway'), 'text', $reg, 0, '', $errmsg,
+		$errmsg = i("Invalid public gateway");
+		$h .= labeledFormItem('publicgateway', i('Public Gateway'), 'text', $reg, 0, '', $errmsg,
 		                      '', $disabled, '', helpIcon('gatewayhelp')); 
 
 		# dnsserver
 		$reg = "^($ipreg,)*($ipreg)$";
-		$errmsg = _("Invalid public DNS server");
-		$h .= labeledFormItem('publicdnsserver', _('Public DNS Server'), 'text', $reg, 0, '', $errmsg,
+		$errmsg = i("Invalid public DNS server");
+		$h .= labeledFormItem('publicdnsserver', i('Public DNS Server'), 'text', $reg, 0, '', $errmsg,
 		                      '', $disabled, '', helpIcon('dnsserverhelp')); 
 		$h .= "</div>\n"; # IP config method
 
 		# available public networks
-		$h .= labeledFormItem('availablenetworks', _('Available Public Networks'), 'textarea', '', 1,
+		$h .= labeledFormItem('availablenetworks', i('Available Public Networks'), 'textarea', '', 1,
 		                      '', '', '', '', '', helpIcon('availnetshelp'));
 
 		# federated auth
-		$h .= labeledFormItem('federatedauth', _('Affiliations using Federated Authentication for Linux Images'),
+		$h .= labeledFormItem('federatedauth', i('Affiliations using Federated Authentication for Linux Images'),
 		                      'textarea', '', 1, '', '', '', '', '', helpIcon('federatedauthhelp'));
 
 		# NAT Host
 		$h .= "<div id=\"nathost\" class=\"boxedoptions\">\n";
 		# use as NAT host
 		$extra = array('onChange' => "toggleNAThost();");
-		$h .= labeledFormItem('nathostenabled', _('Use as NAT Host'), 'check', '', '', '1', '', '', $extra);
+		$h .= labeledFormItem('nathostenabled', i('Use as NAT Host'), 'check', '', '', '1', '', '', $extra);
 		# public IP
-		$errmsg = _("Invalid NAT Public IP address specified - must be a valid IPV4 address");
-		$h .= labeledFormItem('natpublicipaddress', _('NAT Public IP Address'), 'text', $ipreg1, 1, '', $errmsg,
+		$errmsg = i("Invalid NAT Public IP address specified - must be a valid IPV4 address");
+		$h .= labeledFormItem('natpublicipaddress', i('NAT Public IP Address'), 'text', $ipreg1, 1, '', $errmsg,
 		                      '', '', '', helpIcon('natpubliciphelp')); 
 		# internal IP
-		$errmsg = _("Invalid NAT Internal IP address specified - must be a valid IPV4 address");
-		$h .= labeledFormItem('natinternalipaddress', _('NAT Internal IP Address'), 'text', $ipreg1, 1, '', $errmsg,
+		$errmsg = i("Invalid NAT Internal IP address specified - must be a valid IPV4 address");
+		$h .= labeledFormItem('natinternalipaddress', i('NAT Internal IP Address'), 'text', $ipreg1, 1, '', $errmsg,
 		                      '', '', '', helpIcon('natinternaliphelp')); 
 		$h .= "</div>\n"; # NAT Host
 
@@ -466,25 +466,25 @@ class ManagementNode extends Resource {
 		$h .= "</div>\n"; # groupdlg
 
 		$h .= "<div id=\"tooltips\">\n";
-		$h .= helpTooltip('sysadminemailhelp', _("Comma delimited list of email addresses for sysadmins who should receive error emails from this management node. Leave empty to disable this feature."));
-		$h .= helpTooltip('sharedmailboxhelp', _("Single email address to which copies of all user emails should be sent. This is a high traffic set of emails. Leave empty to disable this feature."));
-		$h .= helpTooltip('checkinhelp', _("the number of seconds that this management node will wait before checking the database for tasks."));
-		$h .= helpTooltip('installpathhelp', _("path to parent directory of image repository directories (typically /install) - only needed with bare metal installs or VMWare with local disk"));
-		$h .= helpTooltip('timeservershelp', _("comma delimited list of time servers for this management node"));
-		$h .= helpTooltip('identityhelp', _("comma delimited list of full paths to ssh identity keys to try when connecting to end nodes (optional)"));
-		$h .= helpTooltip('sshporthelp', _("SSH port this node is listening on for image file transfers"));
-		$h .= helpTooltip('imagelibhelp', _("Enable sharing of images between management nodes. This allows a management node to attempt fetching files for a requested image from other management nodes if it does not have them."));
-		$h .= helpTooltip('imagelibgrouphelp', _("This management node will try to get image files from other nodes in the selected group."));
-		$h .= helpTooltip('imagelibuserhelp', _("userid to use for scp when copying image files from another management node"));
-		$h .= helpTooltip('imagelibkeyhelp', _("path to ssh identity key file to use for scp when copying image files from another management node"));
-		$h .= helpTooltip('ipconfighelp', _("Method by which public NIC on nodes controlled by this management node recive their network configuration <ul><li>Dynamic DHCP - nodes receive an address via DHCP from a pool of addresses</li><li>Manual DHCP - nodes always receive the same address via DHCP</li><li>Static - VCL will configure the public address of the node</li></ul>"));
-		$h .= helpTooltip('netmaskhelp', _("Netmask for public NIC"));
-		$h .= helpTooltip('gatewayhelp', _("IP address of gateway for public NIC"));
-		$h .= helpTooltip('dnsserverhelp', _("comma delimited list of IP addresses of DNS servers for public network"));
-		$h .= helpTooltip('availnetshelp', _("This is a list of IP networks, one per line, available to nodes deployed by this management node. Networks should be specified in x.x.x.x/yy form.  It is for deploying servers having a fixed IP address to ensure a node is selected that can actually be on the specified network."));
-		$h .= helpTooltip('federatedauthhelp', _("Comma delimited list of affiliations for which user passwords are not set for Linux image reservations under this management node. Each Linux image is then required to have federated authentication set up so that users' passwords are passed along to the federated authentication system when a user attempts to log in. (for clarity, not set setting user passwords does not mean users have an empty password, but that a federated system must authenticate the users)"));
-		$h .= helpTooltip('natpubliciphelp', _("message"));
-		$h .= helpTooltip('natinternaliphelp', _("message 2"));
+		$h .= helpTooltip('sysadminemailhelp', i("Comma delimited list of email addresses for sysadmins who should receive error emails from this management node. Leave empty to disable this feature."));
+		$h .= helpTooltip('sharedmailboxhelp', i("Single email address to which copies of all user emails should be sent. This is a high traffic set of emails. Leave empty to disable this feature."));
+		$h .= helpTooltip('checkinhelp', i("the number of seconds that this management node will wait before checking the database for tasks."));
+		$h .= helpTooltip('installpathhelp', i("path to parent directory of image repository directories (typically /install) - only needed with bare metal installs or VMWare with local disk"));
+		$h .= helpTooltip('timeservershelp', i("comma delimited list of time servers for this management node"));
+		$h .= helpTooltip('identityhelp', i("comma delimited list of full paths to ssh identity keys to try when connecting to end nodes (optional)"));
+		$h .= helpTooltip('sshporthelp', i("SSH port this node is listening on for image file transfers"));
+		$h .= helpTooltip('imagelibhelp', i("Enable sharing of images between management nodes. This allows a management node to attempt fetching files for a requested image from other management nodes if it does not have them."));
+		$h .= helpTooltip('imagelibgrouphelp', i("This management node will try to get image files from other nodes in the selected group."));
+		$h .= helpTooltip('imagelibuserhelp', i("userid to use for scp when copying image files from another management node"));
+		$h .= helpTooltip('imagelibkeyhelp', i("path to ssh identity key file to use for scp when copying image files from another management node"));
+		$h .= helpTooltip('ipconfighelp', i("Method by which public NIC on nodes controlled by this management node recive their network configuration <ul><li>Dynamic DHCP - nodes receive an address via DHCP from a pool of addresses</li><li>Manual DHCP - nodes always receive the same address via DHCP</li><li>Static - VCL will configure the public address of the node</li></ul>"));
+		$h .= helpTooltip('netmaskhelp', i("Netmask for public NIC"));
+		$h .= helpTooltip('gatewayhelp', i("IP address of gateway for public NIC"));
+		$h .= helpTooltip('dnsserverhelp', i("comma delimited list of IP addresses of DNS servers for public network"));
+		$h .= helpTooltip('availnetshelp', i("This is a list of IP networks, one per line, available to nodes deployed by this management node. Networks should be specified in x.x.x.x/yy form.  It is for deploying servers having a fixed IP address to ensure a node is selected that can actually be on the specified network."));
+		$h .= helpTooltip('federatedauthhelp', i("Comma delimited list of affiliations for which user passwords are not set for Linux image reservations under this management node. Each Linux image is then required to have federated authentication set up so that users' passwords are passed along to the federated authentication system when a user attempts to log in. (for clarity, not set setting user passwords does not mean users have an empty password, but that a federated system must authenticate the users)"));
+		$h .= helpTooltip('natpubliciphelp', i("message"));
+		$h .= helpTooltip('natinternaliphelp', i("message 2"));
 		$h .= "</div>\n"; # tooltips
 		return $h;
 	}

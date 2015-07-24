@@ -26,12 +26,12 @@
 function siteconfig() {
 	if(! checkUserHasPerm('Site Configuration (global)') &&
 	   ! checkUserHasPerm('Site Configuration (affiliation only)')) {
-		print "<h2>" . _("Site Configuration") . "</h2>\n";
+		print "<h2>" . i("Site Configuration") . "</h2>\n";
 		print "You do not have access to this part of the site.<br>\n";
 		return;
 	}
 	$h = '';
-	$h .= "<h2>" . _("Site Configuration") . "</h2>\n";
+	$h .= "<h2>" . i("Site Configuration") . "</h2>\n";
 
 	$globalopts = 0;
 	if(checkUserHasPerm('Site Configuration (global)'))
@@ -126,15 +126,15 @@ function timeSourceHTML($globalopts) {
 	if(! $globalopts)
 		return '';
 	$h  = "<div class=\"configwidget\">\n";
-	$h .= "<h3>" . _("Time Source") . "</h3>\n";
+	$h .= "<h3>" . i("Time Source") . "</h3>\n";
 	$h .= "<span class=\"siteconfigdesc\">\n";
-	$h .= _("Set the default list of time servers to be used on installed nodes. These can be overridden for each management node under the settings for a given management node. Separate hostnames using a comma (,).") . "<br><br>\n";
+	$h .= i("Set the default list of time servers to be used on installed nodes. These can be overridden for each management node under the settings for a given management node. Separate hostnames using a comma (,).") . "<br><br>\n";
 	$h .= "</span>\n";
 	$val = getVariable('timesource|global', '', 1);
 	$hostreg = '(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]*[a-zA-Z0-9])\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\-]*[A-Za-z0-9])';
-	$h .= labeledFormItem('timesource', _('Time Servers'), 'text', "^($hostreg){1}(,$hostreg)*$", '', $val['value']);
+	$h .= labeledFormItem('timesource', i('Time Servers'), 'text', "^($hostreg){1}(,$hostreg)*$", '', $val['value']);
 	$h .= "<div id=\"timesourcemsg\"></div>\n";
-	$h .= dijitButton('timesourcebtn', _('Submit Changes'), "saveTimeSource();", 1);
+	$h .= dijitButton('timesourcebtn', i('Submit Changes'), "saveTimeSource();", 1);
 	$cont = addContinuationsEntry('AJupdateTimeSource', array('origval' => $val));
 	$h .= "<input type=hidden id=timesourcecont value=\"$cont\">\n";
 	$h .= "</div>\n";
@@ -151,7 +151,7 @@ function timeSourceHTML($globalopts) {
 function AJupdateTimeSource() {
 	if(! checkUserHasPerm('Site Configuration (global)')) {
 		$arr = array('status' => 'noaccess',
-		             'msg' => _('You do not have access to set the global Time Server setting.'));
+		             'msg' => i('You do not have access to set the global Time Server setting.'));
 		sendJSON($arr);
 		return;
 	}
@@ -169,7 +169,7 @@ function AJupdateTimeSource() {
 				$arr = array('status' => 'failed',
 				             'msgid' => 'timesourcemsg',
 				             'btn' => 'timesourcebtn',
-				             'errmsg' => _('Invalid server(s) specified.'));
+				             'errmsg' => i('Invalid server(s) specified.'));
 				sendJSON($arr);
 				return;
 			}
@@ -180,7 +180,7 @@ function AJupdateTimeSource() {
 	$arr = array('status' => 'success',
 	             'msgid' => 'timesourcemsg',
 	             'btn' => 'timesourcebtn',
-	             'msg' => _('Time Server successfully updated'));
+	             'msg' => i('Time Server successfully updated'));
 	sendJSON($arr);
 }
 
@@ -218,9 +218,9 @@ class TimeVariable {
 		$this->basecdata = array();
 		$this->scale60 = 0;
 		$this->defaultval = 900;
-		$this->addmsg = _("Time out for %s added");
-		$this->updatemsg = _("Time out values saved");
-		$this->delmsg = _("Time out for %s deleted");
+		$this->addmsg = i("Time out for %s added");
+		$this->updatemsg = i("Time out values saved");
+		$this->delmsg = i("Time out for %s deleted");
 		$this->minval = 5;
 	}
 
@@ -263,8 +263,8 @@ class TimeVariable {
 				if($this->scale60)
 					$dispval = (int)($dispval / 60);
 			}
-			$label = _('Global');
-			unset_by_val(_('Global'), $affils);
+			$label = i('Global');
+			unset_by_val(i('Global'), $affils);
 		}
 		else {
 			$key = "{$this->key}|{$user['affiliation']}";
@@ -309,7 +309,7 @@ class TimeVariable {
 					$dispval = (int)($dispval / 60);
 				$h .= "<span id=\"{$key}span\">\n";
 				$h .= labeledFormItem($key, $label, 'spinner', "{min:{$this->minval}, max:{$this->maxval}}", 1, $dispval, '', '', $extra, '', '', 0);
-				$h .= dijitButton("{$key}delbtn", _("Delete"), "{$this->jsname}.deleteAffiliationSetting('$key', '{$this->domidbase}');") . "<br>\n";
+				$h .= dijitButton("{$key}delbtn", i("Delete"), "{$this->jsname}.deleteAffiliationSetting('$key', '{$this->domidbase}');") . "<br>\n";
 				$h .= "</span>\n";
 				$origvals[$key] = array('key' => $prekey, 'val' => $val);
 				unset_by_val($label, $affils);
@@ -333,7 +333,7 @@ class TimeVariable {
 			$h .=        "smallDelta=\"1\" ";
 			$h .=        "largeDelta=\"10\" ";
 			$h .=        "id=\"{$this->domidbase}newval\">\n";
-			$h .= dijitButton("{$this->domidbase}addbtn", _('Add'), "{$this->jsname}.addAffiliationSetting();");
+			$h .= dijitButton("{$this->domidbase}addbtn", i('Add'), "{$this->jsname}.addAffiliationSetting();");
 			$cont = addContinuationsEntry('AJaddAffiliationSetting', $this->basecdata);
 			$h .= "<input type=\"hidden\" id=\"{$this->domidbase}addcont\" value=\"$cont\">\n";
 			$h .= "</div>\n";
@@ -348,7 +348,7 @@ class TimeVariable {
 		$keys = implode(',', $tmp);
 		$h .= "<div id=\"{$this->domidbase}msg\"></div>\n";
 		$h .= "<input type=\"hidden\" id=\"{$this->domidbase}savekeys\" value=\"$keys\">\n";
-		$h .= dijitButton("{$this->domidbase}btn", _('Submit Changes'), "{$this->jsname}.saveSettings();", 1);
+		$h .= dijitButton("{$this->domidbase}btn", i('Submit Changes'), "{$this->jsname}.saveSettings();", 1);
 		$cdata = $this->basecdata;
 		$cdata['origvals'] = $origvals;
 		$cont = addContinuationsEntry('AJupdateAllSettings', $cdata);
@@ -368,7 +368,7 @@ class TimeVariable {
 		global $user;
 		if(! checkUserHasPerm('Site Configuration (global)')) {
 			$arr = array('status' => 'noaccess',
-			             'msg' => _('You do not have access to modify settings for other affiliations.'));
+			             'msg' => i('You do not have access to modify settings for other affiliations.'));
 			sendJSON($arr);
 			return;
 		}
@@ -377,7 +377,7 @@ class TimeVariable {
 		if(! array_key_exists($affilid, $affils)) {
 			$arr = array('status' => 'failed',
 			             'msgid' => "{$this->domidbase}msg",
-			             'errmsg' => _('Invalid affiliation submitted.'));
+			             'errmsg' => i('Invalid affiliation submitted.'));
 			sendJSON($arr);
 			return;
 		}
@@ -385,7 +385,7 @@ class TimeVariable {
 		if($value < $this->minval || $value > $this->maxval) {
 			$arr = array('status' => 'failed',
 			             'msgid' => "{$this->domidbase}msg",
-			             'errmsg' => _('Invalid value submitted.'));
+			             'errmsg' => i('Invalid value submitted.'));
 			sendJSON($arr);
 			return;
 		}
@@ -435,7 +435,7 @@ class TimeVariable {
 		if(! checkUserHasPerm('Site Configuration (global)') &&
 		   ! checkUserHasPerm('Site Configuration (affiliation only)')) {
 			$arr = array('status' => 'noaccess',
-			             'msg' => _('You do not have access to modify the submitted settings.'));
+			             'msg' => i('You do not have access to modify the submitted settings.'));
 			sendJSON($arr);
 			return;
 		}
@@ -453,7 +453,7 @@ class TimeVariable {
 				$arr = array('status' => 'failed',
 				             'msgid' => "{$this->domidbase}msg",
 				             'btn' => "{$this->domidbase}btn",
-				             'errmsg' => _("Invalid value submitted for ") . $affil);
+				             'errmsg' => i("Invalid value submitted for ") . $affil);
 				sendJSON($arr);
 				return;
 			}
@@ -490,7 +490,7 @@ class TimeVariable {
 	function AJdeleteAffiliationSetting() {
 		if(! checkUserHasPerm('Site Configuration (global)')) {
 			$arr = array('status' => 'noaccess',
-			             'msg' => _('You do not have access to delete the submitted setting.'));
+			             'msg' => i('You do not have access to delete the submitted setting.'));
 			sendJSON($arr);
 			return;
 		}
@@ -499,7 +499,7 @@ class TimeVariable {
 		if(! array_key_exists($key, $origvals)) {
 			$arr = array('status' => 'failed',
 			             'msgid' => "{$this->domidbase}msg",
-			             'msg' => _('Invalid data submitted.'));
+			             'msg' => i('Invalid data submitted.'));
 			sendJSON($arr);
 			return;
 		}
@@ -549,9 +549,9 @@ class connectedUserCheck extends TimeVariable {
 	/////////////////////////////////////////////////////////////////////////////
 	function __construct() {
 		parent::__construct();
-		$this->name = _('Connected User Check Threshold');
+		$this->name = i('Connected User Check Threshold');
 		$this->key = 'ignore_connections_gte';
-		$this->desc = _("Do not perform user-logged-in time out checks if reservation duration is greater than the specified value (in hours).");
+		$this->desc = i("Do not perform user-logged-in time out checks if reservation duration is greater than the specified value (in hours).");
 		$this->domidbase = 'connectedusercheck';
 		$this->basecdata['obj'] = $this;
 		$this->jsname = 'connectedUserCheck';
@@ -579,9 +579,9 @@ class acknowledge extends TimeVariable {
 	/////////////////////////////////////////////////////////////////////////////
 	function __construct() {
 		parent::__construct();
-		$this->name = _('Acknowledge Reservation Timeout');
+		$this->name = i('Acknowledge Reservation Timeout');
 		$this->key = 'acknowledgetimeout';
-		$this->desc = _("Once a reservation is ready, users have this long to click the Connect button before the reservation is timed out (in minutes, does not apply to Server Reservations).");
+		$this->desc = i("Once a reservation is ready, users have this long to click the Connect button before the reservation is timed out (in minutes, does not apply to Server Reservations).");
 		$this->domidbase = 'acknowledge';
 		$this->basecdata['obj'] = $this;
 		$this->jsname = 'acknowledge';
@@ -607,9 +607,9 @@ class initialconnecttimeout extends TimeVariable {
 	/////////////////////////////////////////////////////////////////////////////
 	function __construct() {
 		parent::__construct();
-		$this->name = _('Connect To Reservation Timeout');
+		$this->name = i('Connect To Reservation Timeout');
 		$this->key = 'initialconnecttimeout';
-		$this->desc = _("After clicking the Connect button for a reservation, users have this long to connect to a reserved node before the reservation is timed out (in minutes, does not apply to Server Reservations).");
+		$this->desc = i("After clicking the Connect button for a reservation, users have this long to connect to a reserved node before the reservation is timed out (in minutes, does not apply to Server Reservations).");
 		$this->domidbase = 'initialconnecttimeout';
 		$this->basecdata['obj'] = $this;
 		$this->jsname = 'initialconnecttimeout';
@@ -635,9 +635,9 @@ class reconnecttimeout extends TimeVariable {
 	/////////////////////////////////////////////////////////////////////////////
 	function __construct() {
 		parent::__construct();
-		$this->name = _('Re-connect To Reservation Timeout');
+		$this->name = i('Re-connect To Reservation Timeout');
 		$this->key = 'reconnecttimeout';
-		$this->desc = _("After disconnecting from a reservation, users have this long to reconnect to a reserved node before the reservation is timed out (in minutes, does not apply to Server Reservations).");
+		$this->desc = i("After disconnecting from a reservation, users have this long to reconnect to a reserved node before the reservation is timed out (in minutes, does not apply to Server Reservations).");
 		$this->domidbase = 'reconnecttimeout';
 		$this->basecdata['obj'] = $this;
 		$this->jsname = 'reconnecttimeout';
@@ -663,18 +663,18 @@ class generalInuse extends TimeVariable {
 	/////////////////////////////////////////////////////////////////////////////
 	function __construct() {
 		parent::__construct();
-		$this->name = _('In-Use Reservation Check');
+		$this->name = i('In-Use Reservation Check');
 		$this->key = 'general_inuse_check';
-		$this->desc = _("Frequency at which a general check of each reservation is done (in minutes).");
+		$this->desc = i("Frequency at which a general check of each reservation is done (in minutes).");
 		$this->domidbase = 'generalinuse';
 		$this->basecdata['obj'] = $this;
 		$this->jsname = 'generalInuse';
 		$this->scale60 = 1;
 		$this->maxval = 60;
 		$this->defaultval = 300;
-		$this->addmsg = _("In-Use check for %s added");
-		$this->updatemsg = _("In-Use check values saved");
-		$this->delmsg = _("In-Use check for %s deleted");
+		$this->addmsg = i("In-Use check for %s added");
+		$this->updatemsg = i("In-Use check values saved");
+		$this->delmsg = i("In-Use check for %s deleted");
 	}
 }
 
@@ -695,18 +695,18 @@ class serverInuse extends TimeVariable {
 	/////////////////////////////////////////////////////////////////////////////
 	function __construct() {
 		parent::__construct();
-		$this->name = _('In-Use Reservation Check (servers)');
+		$this->name = i('In-Use Reservation Check (servers)');
 		$this->key = 'server_inuse_check';
-		$this->desc = _("Frequency at which a general check of each server reservation is done (in minutes).");
+		$this->desc = i("Frequency at which a general check of each server reservation is done (in minutes).");
 		$this->domidbase = 'serverinuse';
 		$this->basecdata['obj'] = $this;
 		$this->jsname = 'serverInuse';
 		$this->scale60 = 1;
 		$this->maxval = 240;
 		$this->defaultval = 900;
-		$this->addmsg = _("In-Use check for %s added");
-		$this->updatemsg = _("In-Use check values saved");
-		$this->delmsg = _("In-Use check for %s deleted");
+		$this->addmsg = i("In-Use check for %s added");
+		$this->updatemsg = i("In-Use check values saved");
+		$this->delmsg = i("In-Use check for %s deleted");
 	}
 }
 
@@ -727,18 +727,18 @@ class clusterInuse extends TimeVariable {
 	/////////////////////////////////////////////////////////////////////////////
 	function __construct() {
 		parent::__construct();
-		$this->name = _('In-Use Reservation Check (clusters)');
+		$this->name = i('In-Use Reservation Check (clusters)');
 		$this->key = 'cluster_inuse_check';
-		$this->desc = _("Frequency at which a general check of each cluster reservation is done (in minutes).");
+		$this->desc = i("Frequency at which a general check of each cluster reservation is done (in minutes).");
 		$this->domidbase = 'clusterinuse';
 		$this->basecdata['obj'] = $this;
 		$this->jsname = 'clusterInuse';
 		$this->scale60 = 1;
 		$this->maxval = 240;
 		$this->defaultval = 900;
-		$this->addmsg = _("In-Use check for %s added");
-		$this->updatemsg = _("In-Use check values saved");
-		$this->delmsg = _("In-Use check for %s deleted");
+		$this->addmsg = i("In-Use check for %s added");
+		$this->updatemsg = i("In-Use check values saved");
+		$this->delmsg = i("In-Use check for %s deleted");
 	}
 }
 
@@ -759,18 +759,18 @@ class generalEndNotice1 extends TimeVariable {
 	/////////////////////////////////////////////////////////////////////////////
 	function __construct() {
 		parent::__construct();
-		$this->name = _('First Notice For Reservation Ending');
+		$this->name = i('First Notice For Reservation Ending');
 		$this->key = 'general_end_notice_first';
-		$this->desc = _("Users are notified two times that their reservations are going to end when getting close to the end time. This is the time before the end that the first of those notices should be sent.");
+		$this->desc = i("Users are notified two times that their reservations are going to end when getting close to the end time. This is the time before the end that the first of those notices should be sent.");
 		$this->domidbase = 'generalendnotice1';
 		$this->basecdata['obj'] = $this;
 		$this->jsname = 'generalEndNotice1';
 		$this->scale60 = 1;
 		$this->maxval = 120;
 		$this->defaultval = 600;
-		$this->addmsg = _("End notice time for %s added");
-		$this->updatemsg = _("End notice time values saved");
-		$this->delmsg = _("End notice time for %s deleted");
+		$this->addmsg = i("End notice time for %s added");
+		$this->updatemsg = i("End notice time values saved");
+		$this->delmsg = i("End notice time for %s deleted");
 	}
 }
 
@@ -791,18 +791,18 @@ class generalEndNotice2 extends TimeVariable {
 	/////////////////////////////////////////////////////////////////////////////
 	function __construct() {
 		parent::__construct();
-		$this->name = _('Second Notice For Reservation Ending');
+		$this->name = i('Second Notice For Reservation Ending');
 		$this->key = 'general_end_notice_second';
-		$this->desc = _("Users are notified two times that their reservations are going to end when getting close to the end time. This is the time before the end that the second of those notices should be sent.");
+		$this->desc = i("Users are notified two times that their reservations are going to end when getting close to the end time. This is the time before the end that the second of those notices should be sent.");
 		$this->domidbase = 'generalendnotice2';
 		$this->basecdata['obj'] = $this;
 		$this->jsname = 'generalEndNotice2';
 		$this->scale60 = 1;
 		$this->maxval = 60;
 		$this->defaultval = 300;
-		$this->addmsg = _("End notice time for %s added");
-		$this->updatemsg = _("End notice time values saved");
-		$this->delmsg = _("End notice time for %s deleted");
+		$this->addmsg = i("End notice time for %s added");
+		$this->updatemsg = i("End notice time values saved");
+		$this->delmsg = i("End notice time for %s deleted");
 	}
 }
 
@@ -834,7 +834,7 @@ class GlobalSingleVariable {
 	/////////////////////////////////////////////////////////////////////////////
 	function __construct() {
 		$this->basecdata = array('obj' => $this);
-		$this->updatemsg = _("New value saved");
+		$this->updatemsg = i("New value saved");
 		$this->label = $this->name;
 		$type = 'text';
 	}
@@ -875,7 +875,7 @@ class GlobalSingleVariable {
 				break;
 		}
 		$h .= "<div id=\"{$this->domidbase}msg\"></div>\n";
-		$h .= dijitButton("{$this->domidbase}btn", _('Submit Changes'), "{$this->jsname}.saveSettings();", 1);
+		$h .= dijitButton("{$this->domidbase}btn", i('Submit Changes'), "{$this->jsname}.saveSettings();", 1);
 		$cdata = $this->basecdata;
 		$cont = addContinuationsEntry('AJupdateAllSettings', $cdata);
 		$h .= "<input type=\"hidden\" id=\"{$this->domidbase}cont\" value=\"$cont\">\n";
@@ -893,7 +893,7 @@ class GlobalSingleVariable {
 	function AJupdateAllSettings() {
 		if(! checkUserHasPerm('Site Configuration (global)')) {
 			$arr = array('status' => 'noaccess',
-			             'msg' => _('You do not have access to modify the submitted settings.'));
+			             'msg' => i('You do not have access to modify the submitted settings.'));
 			sendJSON($arr);
 			return;
 		}
@@ -904,7 +904,7 @@ class GlobalSingleVariable {
 					$arr = array('status' => 'failed',
 					             'msgid' => "{$this->domidbase}msg",
 					             'btn' => "{$this->domidbase}btn",
-					             'errmsg' => _("Invalid value submitted"));
+					             'errmsg' => i("Invalid value submitted"));
 					sendJSON($arr);
 					return;
 				}
@@ -915,7 +915,7 @@ class GlobalSingleVariable {
 					$arr = array('status' => 'failed',
 					             'msgid' => "{$this->domidbase}msg",
 					             'btn' => "{$this->domidbase}btn",
-					             'errmsg' => _("Invalid value submitted"));
+					             'errmsg' => i("Invalid value submitted"));
 					sendJSON($arr);
 					return;
 				}
@@ -926,7 +926,7 @@ class GlobalSingleVariable {
 				$arr = array('status' => 'failed',
 				             'msgid' => "{$this->domidbase}msg",
 				             'btn' => "{$this->domidbase}btn",
-				             'errmsg' => _("unsupported type"));
+				             'errmsg' => i("unsupported type"));
 				sendJSON($arr);
 				return;
 			case 'textarea':
@@ -935,7 +935,7 @@ class GlobalSingleVariable {
 					$arr = array('status' => 'failed',
 					             'msgid' => "{$this->domidbase}msg",
 					             'btn' => "{$this->domidbase}btn",
-					             'errmsg' => _("Invalid value submitted"));
+					             'errmsg' => i("Invalid value submitted"));
 					if(isset($this->invalidvaluemsg))
 						$arr['errmsg'] = $this->invalidvaluemsg;
 					sendJSON($arr);
@@ -946,7 +946,7 @@ class GlobalSingleVariable {
 				$arr = array('status' => 'failed',
 				             'msgid' => "{$this->domidbase}msg",
 				             'btn' => "{$this->domidbase}btn",
-				             'errmsg' => _("Invalid value submitted"));
+				             'errmsg' => i("Invalid value submitted"));
 				sendJSON($arr);
 				return;
 		}
@@ -988,10 +988,10 @@ class userPasswordLength extends GlobalSingleVariable {
 	/////////////////////////////////////////////////////////////////////////////
 	function __construct() {
 		parent::__construct();
-		$this->name = _('User Reservation Password Length');
+		$this->name = i('User Reservation Password Length');
 		$this->key = 'user_password_length';
-		$this->label = _("Password Length");
-		$this->desc = _("For reservations not using federated authentication, VCL generates random user passwords. This specifies how many characters should be in the password.");
+		$this->label = i("Password Length");
+		$this->desc = i("For reservations not using federated authentication, VCL generates random user passwords. This specifies how many characters should be in the password.");
 		$this->domidbase = 'userpasswordlength';
 		$this->basecdata['obj'] = $this;
 		$this->jsname = 'userPasswordLength';
@@ -1020,10 +1020,10 @@ class userPasswordSpecialChar extends GlobalSingleVariable {
 	/////////////////////////////////////////////////////////////////////////////
 	function __construct() {
 		parent::__construct();
-		$this->name = _('User Reservation Password Special Characters');
+		$this->name = i('User Reservation Password Special Characters');
 		$this->key = 'user_password_spchar';
-		$this->label = _("Include Special Characters");
-		$this->desc = _("For reservations not using federated authentication, VCL generates random user passwords. This specifies if characters other than letters and numbers should be included in the passwords.");
+		$this->label = i("Include Special Characters");
+		$this->desc = i("For reservations not using federated authentication, VCL generates random user passwords. This specifies if characters other than letters and numbers should be included in the passwords.");
 		$this->domidbase = 'userpasswordspchar';
 		$this->basecdata['obj'] = $this;
 		$this->jsname = 'userPasswordSpecialChar';
@@ -1049,16 +1049,16 @@ class NATportRange extends GlobalSingleVariable {
 	/////////////////////////////////////////////////////////////////////////////
 	function __construct() {
 		parent::__construct();
-		$this->name = _('NAT Port Ranges');
+		$this->name = i('NAT Port Ranges');
 		$this->key = 'nat_port_range';
-		$this->label = _("NAT Port Ranges");
-		$this->desc = _("Port ranges available for use on NAT servers. Type of port (TCP/UDP) is not specified. List ranges one per line (ex: 10000-20000).");
+		$this->label = i("NAT Port Ranges");
+		$this->desc = i("Port ranges available for use on NAT servers. Type of port (TCP/UDP) is not specified. List ranges one per line (ex: 10000-20000).");
 		$this->domidbase = 'natportrange';
 		$this->basecdata['obj'] = $this;
 		$this->jsname = 'natPortRange';
 		$this->defaultval = '10000-60000';
 		$this->type = 'textarea';
-		$this->invalidvaluemsg = _("Invalid value submitted. Must be numeric ranges of ports of the form 10000-20000, one per line.");
+		$this->invalidvaluemsg = i("Invalid value submitted. Must be numeric ranges of ports of the form 10000-20000, one per line.");
 	}
 
 	////////////////////////////////////////////////////////////////////////////////

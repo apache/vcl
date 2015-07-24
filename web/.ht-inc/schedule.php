@@ -82,16 +82,16 @@ class Schedule extends Resource {
 
 		$h .= "<div style=\"text-align: center;\">\n";
 		# name
-		$errmsg = _("Name cannot contain single (') or double (&quot;) quotes, less than (&lt;), or greater than (&gt;) and can be from 2 to 30 characters long");
-		$h .= labeledFormItem('name', _('Name'), 'text', '^([A-Za-z0-9-!@#$%^&\*\(\)_=\+\[\]{}\\\|:;,\./\?~` ]){2,30}$',
+		$errmsg = i("Name cannot contain single (') or double (&quot;) quotes, less than (&lt;), or greater than (&gt;) and can be from 2 to 30 characters long");
+		$h .= labeledFormItem('name', i('Name'), 'text', '^([A-Za-z0-9-!@#$%^&\*\(\)_=\+\[\]{}\\\|:;,\./\?~` ]){2,30}$',
 		                      1, '', $errmsg, '', '', '200px'); 
 		# owner
 		$extra = array('onKeyPress' => 'setOwnerChecking');
-		$h .= labeledFormItem('owner', _('Owner'), 'text', '', 1,
-		                      "{$user['unityid']}@{$user['affiliation']}", _('Unknown user'),
+		$h .= labeledFormItem('owner', i('Owner'), 'text', '', 1,
+		                      "{$user['unityid']}@{$user['affiliation']}", i('Unknown user'),
 		                      'checkOwner', $extra, '200px');
-		#$h .= labeledFormItem('owner', _('Owner'), 'text', '{$user['unityid']}@{$user['affiliation']}',
-		#                      1, '', _('Unknown user'), 'checkOwner', 'onKeyPress', 'setOwnerChecking');
+		#$h .= labeledFormItem('owner', i('Owner'), 'text', '{$user['unityid']}@{$user['affiliation']}',
+		#                      1, '', i('Unknown user'), 'checkOwner', 'onKeyPress', 'setOwnerChecking');
 		$cont = addContinuationsEntry('AJvalidateUserid');
 		$h .= "<input type=\"hidden\" id=\"valuseridcont\" value=\"$cont\">\n";
 

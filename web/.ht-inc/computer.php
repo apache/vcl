@@ -208,7 +208,7 @@ class Computer extends Resource {
 
 		# selected items menu
 		$h .= "<div dojoType=\"dijit.form.DropDownButton\">\n";
-		$h .= "<span>" . _("Actions for selected computers") . "</span>\n";
+		$h .= "<span>" . i("Actions for selected computers") . "</span>\n";
 		$h .= "<div dojoType=\"dijit.Menu\" id=\"actionmenu\">\n";
 
 		# change NAT
@@ -217,10 +217,10 @@ class Computer extends Resource {
 		$h .= "    <div dojoType=\"dijit.layout.ContentPane\"\n";
 		$h .= "         style=\"background-color: white; padding: 5px; border: 1px solid black;\">\n";
 		$extra = array('onChange' => "toggleNAT('newnatenabled', 'newnathostid');");
-		$h .= labeledFormItem('newnatenabled', _('Connect Using NAT'), 'check', '', '', '1', '', '', $extra);
+		$h .= labeledFormItem('newnatenabled', i('Connect Using NAT'), 'check', '', '', '1', '', '', $extra);
 		$nathosts = getNAThosts(0, 1);
 		$disabled = array('disabled' => 'true');
-		$h .= labeledFormItem('newnathostid', _('NAT Host'), 'select', $nathosts,
+		$h .= labeledFormItem('newnathostid', i('NAT Host'), 'select', $nathosts,
 		                      '', '', '', '', $disabled);
 		$cdata = $this->basecdata;
 		$cont = addContinuationsEntry('AJcompNATchange', $cdata);
@@ -523,7 +523,7 @@ class Computer extends Resource {
 		$extra = array('onChange' => 'toggleSingleMultiple();');
 		$modes = array('single' => 'Single Computer',
 		               'multiple' => 'Multiple Computers');
-		$h .= labeledFormItem('mode', _('Add') . ' ', 'select', $modes, 1, '', '', '', $extra);
+		$h .= labeledFormItem('mode', i('Add') . ' ', 'select', $modes, 1, '', '', '', $extra);
 		$h .= "<br>\n";
 		$h .= "</div>\n"; # singlemultiplediv
 
@@ -561,79 +561,79 @@ class Computer extends Resource {
 		$h .= "<div class=\"highlightnoticenotify hidden\" id=\"cancelvmhostinuseokdiv\"></div>\n";
 
 		# hostname
-		$errmsg = _("Name can only contain letters, numbers, dashes(-), periods(.), and underscores(_). It can be from 1 to 36 characters long.");
-		$h .= labeledFormItem('name', _('Name') . '*', 'text', '^([a-zA-Z0-9_][-a-zA-Z0-9_\.]{1,35})$',
+		$errmsg = i("Name can only contain letters, numbers, dashes(-), periods(.), and underscores(_). It can be from 1 to 36 characters long.");
+		$h .= labeledFormItem('name', i('Name') . '*', 'text', '^([a-zA-Z0-9_][-a-zA-Z0-9_\.]{1,35})$',
 		                      1, '', $errmsg); 
 
 		# start/end
 		$h .= "<div id=\"startenddiv\" class=\"hidden\">\n";
 		$extra = array('smallDelta' => 1, 'largeDelta' => 10);
-		$h .= labeledFormItem('startnum', _('Start') . '*', 'spinner', '{min:0,max:255,places:0}', 1);
-		$h .= labeledFormItem('endnum', _('End') . '*', 'spinner', '{min:0,max:255,places:0}', 1);
+		$h .= labeledFormItem('startnum', i('Start') . '*', 'spinner', '{min:0,max:255,places:0}', 1);
+		$h .= labeledFormItem('endnum', i('End') . '*', 'spinner', '{min:0,max:255,places:0}', 1);
 		$h .= "</div>\n"; # startenddiv
 
 		# owner
 		$extra = array('onKeyPress' => 'setOwnerChecking');
-		$h .= labeledFormItem('owner', _('Owner') . '*', 'text', '', 1,
-		                      "{$user['unityid']}@{$user['affiliation']}", _('Unknown user'),
+		$h .= labeledFormItem('owner', i('Owner') . '*', 'text', '', 1,
+		                      "{$user['unityid']}@{$user['affiliation']}", i('Unknown user'),
 		                      'checkOwner', $extra);
 		$cont = addContinuationsEntry('AJvalidateUserid');
 		$h .= "<input type=\"hidden\" id=\"valuseridcont\" value=\"$cont\">\n";
 
 		# type
 		$extra = array('onChange' => 'selectType();');
-		$h .= labeledFormItem('type', _('Type'), 'select', $types, 1, '', '', '', $extra);
+		$h .= labeledFormItem('type', i('Type'), 'select', $types, 1, '', '', '', $extra);
 
 		# single computer fields
 		$h .= "<div id=\"singleipmacdiv\">\n";
 		# public IP
 		$ipreg = '(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)';
 		$ipreg1 = "^$ipreg$";
-		$errmsg = _("Invalid Public IP address specified - must be a valid IPV4 address");
-		$h .= labeledFormItem('ipaddress', _('Public IP Address') . '*', 'text', $ipreg1, 1, '', $errmsg); 
+		$errmsg = i("Invalid Public IP address specified - must be a valid IPV4 address");
+		$h .= labeledFormItem('ipaddress', i('Public IP Address') . '*', 'text', $ipreg1, 1, '', $errmsg); 
 
 		# private IP
-		$errmsg = _("Invalid Private IP address specified - must be a valid IPV4 address");
-		$h .= labeledFormItem('privateipaddress', _('Private IP Address'), 'text', $ipreg1, 0, '', $errmsg); 
+		$errmsg = i("Invalid Private IP address specified - must be a valid IPV4 address");
+		$h .= labeledFormItem('privateipaddress', i('Private IP Address'), 'text', $ipreg1, 0, '', $errmsg); 
 
 		# Public MAC
 		$macreg = '^([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}$';
-		$errmsg = _("Invalid Public MAC address specified");
-		$h .= labeledFormItem('publicmac', _('Public MAC Address'), 'text', $macreg, 0, '', $errmsg); 
+		$errmsg = i("Invalid Public MAC address specified");
+		$h .= labeledFormItem('publicmac', i('Public MAC Address'), 'text', $macreg, 0, '', $errmsg); 
 
 		# private MAC
-		$errmsg = _("Invalid Private MAC address specified");
-		$h .= labeledFormItem('privatemac', _('Private MAC Address'), 'text', $macreg, 0, '', $errmsg); 
+		$errmsg = i("Invalid Private MAC address specified");
+		$h .= labeledFormItem('privatemac', i('Private MAC Address'), 'text', $macreg, 0, '', $errmsg); 
 
 		$h .= "</div>\n"; # singleipmacdiv
 
 		# multi computer fields
 		$h .= "<div id=\"multiipmacdiv\" class=\"hidden\">\n";
 		# start public IP
-		$errmsg = _("Invalid Start Public IP Address specified - must be a valid IPV4 address");
-		$h .= labeledFormItem('startpubipaddress', _('Start Public IP Address') . '*', 'text', $ipreg1, 1, '', $errmsg); 
+		$errmsg = i("Invalid Start Public IP Address specified - must be a valid IPV4 address");
+		$h .= labeledFormItem('startpubipaddress', i('Start Public IP Address') . '*', 'text', $ipreg1, 1, '', $errmsg); 
 
 		# end public IP
-		$errmsg = _("Invalid End Public IP Address specified - must be a valid IPV4 address");
-		$h .= labeledFormItem('endpubipaddress', _('End Public IP Address') . '*', 'text', $ipreg1, 1, '', $errmsg); 
+		$errmsg = i("Invalid End Public IP Address specified - must be a valid IPV4 address");
+		$h .= labeledFormItem('endpubipaddress', i('End Public IP Address') . '*', 'text', $ipreg1, 1, '', $errmsg); 
 
 		# start private IP
-		$errmsg = _("Invalid Start Private IP Address specified - must be a valid IPV4 address");
-		$h .= labeledFormItem('startprivipaddress', _('Start Private IP Address') . '*', 'text', $ipreg1, 1, '', $errmsg); 
+		$errmsg = i("Invalid Start Private IP Address specified - must be a valid IPV4 address");
+		$h .= labeledFormItem('startprivipaddress', i('Start Private IP Address') . '*', 'text', $ipreg1, 1, '', $errmsg); 
 
 		# end private IP
-		$errmsg = _("Invalid End Private IP Address specified - must be a valid IPV4 address");
-		$h .= labeledFormItem('endprivipaddress', _('End Private IP Address') . '*', 'text', $ipreg1, 1, '', $errmsg); 
+		$errmsg = i("Invalid End Private IP Address specified - must be a valid IPV4 address");
+		$h .= labeledFormItem('endprivipaddress', i('End Private IP Address') . '*', 'text', $ipreg1, 1, '', $errmsg); 
 
 		# start MAC
-		$errmsg = _("Invalid Start MAC Address specified");
-		$h .= labeledFormItem('startmac', _('Start MAC Address'), 'text', $macreg, 0, '', $errmsg); 
+		$errmsg = i("Invalid Start MAC Address specified");
+		$h .= labeledFormItem('startmac', i('Start MAC Address'), 'text', $macreg, 0, '', $errmsg); 
 
 		$h .= "</div>\n"; # multiipsdiv
 
 		# provisioning engine
 		$extra = array('onChange' => 'selectProvisioning();');
-		$h .= labeledFormItem('provisioningid', _('Provisioning Engine'), 'selectonly', $provisioning, 1, '', '', '', $extra);
+		$h .= labeledFormItem('provisioningid', i('Provisioning Engine'), 'selectonly', $provisioning, 1, '', '', '', $extra);
 
 		# state
 		$extra = array('onChange' => 'selectState();');
@@ -641,28 +641,28 @@ class Computer extends Resource {
 		                23 => 'hpc',
 		                10 => 'maintenance',
 		                20 => 'vmhostinuse');
-		$h .= labeledFormItem('stateid', _('State'), 'selectonly', $states, 1, '', '', '', $extra);
+		$h .= labeledFormItem('stateid', i('State'), 'selectonly', $states, 1, '', '', '', $extra);
 
 		# maintenance notes
 		$h .= "<div id=\"notesspan\">\n";
-		$h .= labeledFormItem('notes', _('Reason for maintenance'), 'textarea');
+		$h .= labeledFormItem('notes', i('Reason for maintenance'), 'textarea');
 		$h .= "</div>\n";
 
 		# VMhost profile
 		$profiles = getVMProfiles();
 		uasort($profiles, 'sortKeepIndex');
 		$h .= "<div id=\"vmprofilespan\">\n";
-		$h .= labeledFormItem('vmprofileid', _('VM Host Porfile'), 'select', $profiles);
+		$h .= labeledFormItem('vmprofileid', i('VM Host Porfile'), 'select', $profiles);
 		$h .= "</div>\n";
 
 		# platform
 		$platforms = getPlatforms();
-		$h .= labeledFormItem('platformid', _('Platform'), 'select', $platforms);
+		$h .= labeledFormItem('platformid', i('Platform'), 'select', $platforms);
 
 		# schedule
 		$tmp = getUserResources(array("scheduleAdmin"), array("manageGroup"));
 		$schedules = $tmp["schedule"];
-		$h .= labeledFormItem('scheduleid', _('Schedule'), 'selectonly', $schedules);
+		$h .= labeledFormItem('scheduleid', i('Schedule'), 'selectonly', $schedules);
 
 		# current image
 		$h .= "<div id=\"curimgspan\">\n";
@@ -672,45 +672,45 @@ class Computer extends Resource {
 
 		# ram
 		$extra = array('smallDelta' => 1024, 'largeDelta' => 4096);
-		$h .= labeledFormItem('ram', _('RAM (MB)') . '*', 'spinner', '{min:500,max:16777215,places:0}', 1);
+		$h .= labeledFormItem('ram', i('RAM (MB)') . '*', 'spinner', '{min:500,max:16777215,places:0}', 1);
 
 		# cores
 		$extra = array('smallDelta' => 1, 'largeDelta' => 4);
-		$h .= labeledFormItem('cores', _('No. Cores') . '*', 'spinner', '{min:1,max:255,places:0}', 1);
+		$h .= labeledFormItem('cores', i('No. Cores') . '*', 'spinner', '{min:1,max:255,places:0}', 1);
 
 		# proc speed
 		$extra = array('smallDelta' => 100, 'largeDelta' => 1000);
-		$h .= labeledFormItem('procspeed', _('Processor Speed (MHz)') . '*', 'spinner', '{min:500,max:10000,places:0}', 1);
+		$h .= labeledFormItem('procspeed', i('Processor Speed (MHz)') . '*', 'spinner', '{min:500,max:10000,places:0}', 1);
 
 		# network speed
 		$tmpArr = array("10" => "10", "100" => "100", "1000" => "1000", "10000" => "10000", "100000" => "100000");
-		$h .= labeledFormItem('network', _('Network'), 'select', $tmpArr);
+		$h .= labeledFormItem('network', i('Network'), 'select', $tmpArr);
 
 		# predictive loading module
 		$vals = getPredictiveModules();
-		$h .= labeledFormItem('predictivemoduleid', _('Predictive Loading Module'), 'select', $vals);
+		$h .= labeledFormItem('predictivemoduleid', i('Predictive Loading Module'), 'select', $vals);
 
 		# NAT
 		$h .= "<div class=\"boxedoptions\">\n";
 		# use NAT
 		$extra = array('onChange' => "toggleNAT('natenabled', 'nathostid');");
-		$h .= labeledFormItem('natenabled', _('Connect Using NAT'), 'check', '', '', '1', '', '', $extra);
+		$h .= labeledFormItem('natenabled', i('Connect Using NAT'), 'check', '', '', '1', '', '', $extra);
 		# which NAT host
 		$nathosts = getNAThosts(0, 1);
-		$h .= labeledFormItem('nathostid', _('NAT Host'), 'selectonly', $nathosts);
+		$h .= labeledFormItem('nathostid', i('NAT Host'), 'selectonly', $nathosts);
 		$h .= "</div>\n"; # NAT
 
 		# NAT Host
 		$h .= "<div id=\"nathost\" class=\"boxedoptions\">\n";
 		# use as NAT host
 		$extra = array('onChange' => "toggleNAThost();");
-		$h .= labeledFormItem('nathostenabled', _('Use as NAT Host'), 'check', '', '', '1', '', '', $extra);
+		$h .= labeledFormItem('nathostenabled', i('Use as NAT Host'), 'check', '', '', '1', '', '', $extra);
 		# public IP
-		$errmsg = _("Invalid NAT Public IP address specified - must be a valid IPV4 address");
-		$h .= labeledFormItem('natpublicipaddress', _('NAT Public IP Address'), 'text', $ipreg1, 1, '', $errmsg); 
+		$errmsg = i("Invalid NAT Public IP address specified - must be a valid IPV4 address");
+		$h .= labeledFormItem('natpublicipaddress', i('NAT Public IP Address'), 'text', $ipreg1, 1, '', $errmsg); 
 		# internal IP
-		$errmsg = _("Invalid NAT Internal IP address specified - must be a valid IPV4 address");
-		$h .= labeledFormItem('natinternalipaddress', _('NAT Internal IP Address'), 'text', $ipreg1, 1, '', $errmsg); 
+		$errmsg = i("Invalid NAT Internal IP address specified - must be a valid IPV4 address");
+		$h .= labeledFormItem('natinternalipaddress', i('NAT Internal IP Address'), 'text', $ipreg1, 1, '', $errmsg); 
 		$h .= "</div>\n"; # NAT Host
 
 		# compid
@@ -720,8 +720,8 @@ class Computer extends Resource {
 		$h .= "</div>\n";
 
 		# location
-		$errmsg = _("Location can be up to 255 characters long and may contain letters, numbers, spaces, and these characters: - , . _ @ # ( )");
-		$h .= labeledFormItem('location', _('Location'), 'text',
+		$errmsg = i("Location can be up to 255 characters long and may contain letters, numbers, spaces, and these characters: - , . _ @ # ( )");
+		$h .= labeledFormItem('location', i('Location'), 'text',
 		                      '^([-a-zA-Z0-9_\. ,@#\(\)]{0,255})$', 0, '', $errmsg); 
 
 		$h .= "</div>\n"; # computerdlgcontent

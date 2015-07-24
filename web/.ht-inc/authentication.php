@@ -154,13 +154,13 @@ function selectAuth() {
 	$HTMLheader = getHeader(0);
 	print $HTMLheader;
 	$printedHTMLheader = 1;
-	print "<H2>" . _("Welcome to the Virtual Computing Lab") . "</H2>\n";
+	print "<H2>" . i("Welcome to the Virtual Computing Lab") . "</H2>\n";
 	print "<TABLE>\n";
 	print "<TR>\n";
 	print "<TD nowrap class=rightborder>\n";
-	print _("Please select an authentication method to use:") . "<br><br>\n";
+	print i("Please select an authentication method to use:") . "<br><br>\n";
 	if(strlen($authtype))
-		print "<font color=red>" . _("Selected method failed, please try again") . "</font><br>\n";
+		print "<font color=red>" . i("Selected method failed, please try again") . "</font><br>\n";
 	foreach(array_keys($authMechs) as $mech)
 		$methods["$mech"] = $mech;
 	print "<FORM action=\"" . BASEURL . SCRIPT . "\" method=post name=loginform>\n";
@@ -172,12 +172,12 @@ function selectAuth() {
 		printSelectInput("authtype", $methods, -1, 0, 0, '', 'tabindex=1');
 	print "<br><INPUT type=hidden name=mode value=selectauth>\n";
 	print "<input type=checkbox id=remsel name=remsel value=1 tabindex=2>\n";
-	print "<label for=remsel>" . _("Remember my selection") . "</label><br>\n";
-	print "<INPUT type=submit value=\"" . _("Proceed to Login") . "\" tabindex=3 name=userid>\n";
+	print "<label for=remsel>" . i("Remember my selection") . "</label><br>\n";
+	print "<INPUT type=submit value=\"" . i("Proceed to Login") . "\" tabindex=3 name=userid>\n";
 	print "</FORM>\n";
 	print "</TD>\n";
 	print "<TD>\n";
-	print "<h3>" . _("Explanation of authentication methods:") . "</h3>\n";
+	print "<h3>" . i("Explanation of authentication methods:") . "</h3>\n";
 	print "<UL id=expauthul>\n";
 	foreach($authMechs as $mech)
 		print "<LI>{$mech['help']}</LI>\n";
@@ -229,7 +229,7 @@ function printLoginPage($servertimeout=0) {
 	if(isset($_GET['userid']))
 		unset($_GET['userid']);
 	$userid = processInputVar('userid', ARG_STRING, '');
-	if($userid == _('Proceed to Login'))
+	if($userid == i('Proceed to Login'))
 		$userid = '';
 	if(! array_key_exists($authtype, $authMechs)) {
 		// FIXME - hackish
@@ -241,7 +241,7 @@ function printLoginPage($servertimeout=0) {
 	$userid = htmlspecialchars($userid);
 	$extrafailedmsg = '';
 	if($servertimeout)
-		$extrafailedmsg = " " . _("(unable to connect to authentication server)");
+		$extrafailedmsg = " " . i("(unable to connect to authentication server)");
 	/*if($skin == 'example1') {
 		$useridLabel = 'Pirateid';
 		$passLabel = 'Passphrase';
@@ -279,15 +279,15 @@ function printLoginPage($servertimeout=0) {
 		return;
 	}
 	else {*/
-		$useridLabel = _('Userid');
-		$passLabel = _('Password');
-		$text1 = _("Login with") . " $authtype";
+		$useridLabel = i('Userid');
+		$passLabel = i('Password');
+		$text1 = i("Login with") . " $authtype";
 		$text2 = "";
 	#}
 	print "<H2 style=\"display: block\">$text1</H2>\n";
 	print "<FORM action=\"" . BASEURL . SCRIPT . "\" method=post name=loginform>\n";
 	if(strlen($userid))
-		print "<font color=red>" . _("Login failed") . " $extrafailedmsg</font>\n";
+		print "<font color=red>" . i("Login failed") . " $extrafailedmsg</font>\n";
 	print "<TABLE>\n";
 	print "  <TR>\n";
 	print "    <TH align=right>$useridLabel:</TH>\n";
@@ -298,7 +298,7 @@ function printLoginPage($servertimeout=0) {
 	print "    <TD><INPUT type=password name=password></TD>\n";
 	print "  </TR>\n";
 	print "  <TR>\n";
-	print "    <TD colspan=2 align=right><INPUT type=submit value=\"" . _("Login") . "\"></TD>\n";
+	print "    <TD colspan=2 align=right><INPUT type=submit value=\"" . i("Login") . "\"></TD>\n";
 	print "  </TR>\n";
 	print "</TABLE>\n";
 	$cdata = array('authtype' => $authtype);
