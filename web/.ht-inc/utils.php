@@ -13410,19 +13410,18 @@ function changeLocale() {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
-/// \fn escq($str)
+/// \fn i($str)
 ///
 /// \param $str - string
 ///
-/// \return $str with any single quotes changed to &#39;
+/// \return possibly translated $str with any single quotes changed to &#39;
 ///
-/// \brief converts any single quotes to &#39; useful for dealing with strings
-/// that will be single quoted and passed as javascript but that may be
-/// translated to something that contains a single quote
+/// \brief function name comes from first letter of "internationalize" - calls
+/// _() on $str and converts any single quotes in returned string to &#39;
 ///
 ////////////////////////////////////////////////////////////////////////////////
-function escq($str) {
-	return preg_replace("/'/", '&#39;', $str);
+function i($str) {
+	return preg_replace("/'/", '&#39;', _($str));
 }
 
 ////////////////////////////////////////////////////////////////////////////////
