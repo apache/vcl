@@ -116,5 +116,9 @@ nlsmessages = {
 'User Submitted Comments:':'',
 'Skip':'',
 'Use':'',
-'Total online:':''
+'Total online:':'',
+'match':'',
+'no match':'',
+'Error encountered:':'',
+'Please try again later':''
 }
