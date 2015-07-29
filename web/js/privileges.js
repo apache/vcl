@@ -90,15 +90,6 @@ function showPrivPane(name) {
 	dijit.byId(name).show();
 }
 
-function getTreeIcon(item, opened) {
-	if(! item)
-		return '';
-	if(opened)
-		return 'openedtreefolder';
-	else
-		return 'closedtreefolder';
-}
-
 function focusFirstNode(id) {
 	var tree = dijit.byId('privtree');
 	if(tree._itemNodesMap && tree._itemNodesMap[id]) {

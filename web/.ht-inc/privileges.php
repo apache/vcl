@@ -62,13 +62,6 @@ function viewNodes() {
 	print "<div dojoType=\"dojo.data.ItemFileWriteStore\" url=\"" . BASEURL . SCRIPT . "?continuation=$cont\" jsid=\"nodestore\" id=\"nodestore\"></div>\n";
 	print "<div class=privtreediv>\n";
 	print "<div dojoType=\"dijit.Tree\" store=\"nodestore\" showRoot=\"false\" id=privtree>\n";
-	#print "  <script type=\"dojo/method\" event=\"getIconClass\" args=\"item, opened\">\n";
-	##print "    return getTreeIcon(item, opened);\n";
-	#print "    return '';\n";
-	#print "  </script>\n";
-	#print "  <script type=\"dojo/method\" event=\"onClick\" args=\"item, node\">\n";
-	#print "    nodeSelect(item, node);\n";
-	#print "  </script>\n";
 	print "  <script type=\"dojo/connect\" event=\"focusNode\" args=\"node\">\n";
 	print "    nodeSelect(node);\n";
 	print "  </script>\n";

@@ -256,14 +256,6 @@ body {
 	padding-right: 5px;
 }
 
-.closedtreefolder {
-	background: url(../images/closedtreeicon.gif) no-repeat;
-}
-
-.openedtreefolder {
-	background: url(../images/opentreeicon.gif) no-repeat;
-}
-
 .privtreeselected {
 	background-color: #678db2;
 	color: white;
