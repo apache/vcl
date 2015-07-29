@@ -134,7 +134,7 @@ function selectAuth() {
 		$authtype = $_COOKIE['VCLAUTHSEL'];
 	if(array_key_exists('clearselection', $_GET) && $_GET['clearselection'] == 1) {
 		setcookie("VCLAUTHSEL", '', time() - 10, "/", COOKIEDOMAIN);
-		unset($authtype);
+		$authtype = '';
 	}
 	if(array_key_exists($authtype, $authMechs)) {
 		if(array_key_exists('remsel', $_POST) && $_POST['remsel'] == 1)
