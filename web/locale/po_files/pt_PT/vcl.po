@@ -2281,7 +2281,7 @@ msgid ""
 "The following <strong>images</strong> have the selected image assigned as a "
 "<strong>subimage</strong>:"
 msgstr ""
-"As seguintes <strong>imagens</ strong> teem a imagem atribuída como uma "
+"As seguintes <strong>imagens</strong> teem a imagem atribuída como uma "
 "<strong>subimagem</strong>:"
 
 #: ../.ht-inc/image.php:243
@@ -2316,7 +2316,7 @@ msgid ""
 "Reservations</strong> page):"
 msgstr ""
 "Descrição da imagem (requerido - os utilizadores irão ver isso na "
-"página <strong>Novas Reservas</ strong>):"
+"página <strong>Novas Reservas</strong>):"
 
 #: ../.ht-inc/image.php:355
 msgid "Usage Notes"
@@ -2438,7 +2438,7 @@ msgid ""
 "strong> need to click \"Submit Changes\" to submit them."
 msgstr ""
 "NOTA: As alterações método de conexão têm efeito imediato; você "
-"<strong>não</ strong> precisa de clicar \"Enviar alterações\" para submetê-"
+"<strong>não</strong> precisa de clicar \"Enviar alterações\" para submetê-"
 "las."
 
 #: ../.ht-inc/image.php:571
