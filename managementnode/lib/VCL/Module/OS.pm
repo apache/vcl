@@ -2207,7 +2207,7 @@ sub create_text_file {
 		my $hex_string = join('', @hex_values);
 		
 		# Attempt to create/append the file using the hex string
-		my $command = "echo -n -e \"$hex_string\" $mode \"$file_path\"";
+		my $command = "echo -e \"$hex_string\" $mode \"$file_path\"";
 		my ($exit_status, $output) = $self->execute($command, 0, 15, 1);
 		if (!defined($output)) {
 			notify($ERRORS{'DEBUG'}, 0, "failed to execute command to $mode_string file on $computer_node_name, attempting to create file on management node and copy it to $computer_node_name");
