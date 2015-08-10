@@ -561,7 +561,7 @@ function submitGeneralPreferences() {
 		$_SESSION['user']['usepublickeys'] = $newval;
 		$user['usepublickeys'] = $newval;
 	}
-	if($pubkeyauth == 2 && preg_match('|^[-a-zA-Z0-9\+/ @=\.]*$|', $pubkeys)) {
+	if($pubkeyauth == 2 && preg_match('|^[-a-zA-Z0-9\+/ @=\.\n\r]*$|', $pubkeys)) {
 		if(get_magic_quotes_gpc())
 			$pubkeys = stripslashes($pubkeys);
 		$_pubkeys = mysql_real_escape_string($pubkeys);
