@@ -477,8 +477,7 @@ sub capture { ## This is going to need to be implemented before the module is co
 	my $computer_nodename  = $computer_shortname;
 	my $computer_hostname  = $self->data->get_computer_hostname;
 	my $computer_type      = $self->data->get_computer_type;
-
-	my $vmtype_name             = $self->data->get_vmhost_type_name;
+	
 	my $vmhost_vmpath           = $self->data->get_vmhost_profile_vmpath;
 	my $vmprofile_vmdisk        = $self->data->get_vmhost_profile_vmdisk;
 	my $vmprofile_datastorepath = $self->data->get_vmhost_profile_datastore_path;
@@ -497,7 +496,6 @@ sub capture { ## This is going to need to be implemented before the module is co
 	notify($ERRORS{'OK'}, 0, "$notify_prefix new name: $image_name");
 	notify($ERRORS{'OK'}, 0, "$notify_prefix computer_name: $computer_shortname");
 	notify($ERRORS{'OK'}, 0, "$notify_prefix vmhost_hostname: $vmhost_hostname");
-	notify($ERRORS{'OK'}, 0, "$notify_prefix vmtype_name: $vmtype_name");
 
 	my @sshcmd;
 
