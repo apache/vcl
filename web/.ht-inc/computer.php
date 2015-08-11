@@ -361,6 +361,22 @@ class Computer extends Resource {
 			$h .= "  </div>\n";
 		}
 
+		# show reservations
+		$h .= "  <div dojoType=\"dijit.MenuItem\"\n";
+		$h .= "       onClick=\"showReservations\">\n";
+		$h .= "    Reservation Information\n";
+		$cont = addContinuationsEntry('AJshowReservations', $this->basecdata);
+		$h .= "      <input type=\"hidden\" id=\"showreservationscont\" value=\"$cont\"><br>\n";
+		$h .= "  </div>\n";
+
+		# show reservation history
+		$h .= "  <div dojoType=\"dijit.MenuItem\"\n";
+		$h .= "       onClick=\"showReservationHistory\">\n";
+		$h .= "    Reservation History\n";
+		$cont = addContinuationsEntry('AJshowReservationHistory', $this->basecdata);
+		$h .= "      <input type=\"hidden\" id=\"showreservationhistorycont\" value=\"$cont\"><br>\n";
+		$h .= "  </div>\n";
+
 		$h .= "</div>\n"; # close Menu
 		$h .= "</div>\n"; # close DropDownButton
 
@@ -4741,6 +4757,166 @@ class Computer extends Resource {
 
 		$ret = array('status' => 'onestep',
 		             'title' => ucfirst($type) . " dhcpd Data",
+		             'actionmsg' => $msg);
+		sendJSON($ret);
+	}
+
+	/////////////////////////////////////////////////////////////////////////////
+	///
+	/// \fn AJshowReservations()
+	///
+	/// \brief gets reservation information for submitted computers
+	///
+	/////////////////////////////////////////////////////////////////////////////
+	function AJshowReservations() {
+		$compids = $this->validateCompIDs();
+		if(array_key_exists('error', $compids)) {
+			$ret = array('status' => 'error', 'errormsg' => $compids['msg']);
+			sendJSON($ret);
+			return;
+		}
+		if(count($compids) == 0) {
+			$ret = array('status' => 'noaction');
+			sendJSON($ret);
+			return;
+		}
+
+		$complist = implode(',', $compids);
+		$query = "SELECT UNIX_TIMESTAMP(rq.start) AS start, "
+		       .        "UNIX_TIMESTAMP(rq.daterequested) AS daterequested, "
+		       .        "UNIX_TIMESTAMP(rq.end) AS end, "
+		       .        "i.prettyname AS image, "
+		       .        "ir.revision, "
+		       .        "c.hostname AS hostname, "
+		       .        "mn.hostname AS managementnode, "
+		       .        "sr.name AS rqname, "
+		       .        "CONCAT(u.unityid, '@', a.name) AS username, "
+		       .        "rq.id AS requestid, "
+		       .        "vh.hostname AS vmhost "
+		       . "FROM computer c "
+		       . "LEFT JOIN reservation rs ON (c.id = rs.computerid) "
+		       . "LEFT JOIN image i ON (rs.imageid = i.id) "
+		       . "LEFT JOIN imagerevision ir ON (rs.imagerevisionid = ir.id) "
+		       . "LEFT JOIN managementnode mn ON (rs.managementnodeid = mn.id) "
+		       . "LEFT JOIN request rq ON (rs.requestid = rq.id) "
+		       . "LEFT JOIN serverrequest sr ON (sr.requestid = rq.id) "
+		       . "LEFT JOIN user u ON (rq.userid = u.id) "
+		       . "LEFT JOIN affiliation a ON (u.affiliationid = a.id) "
+		       . "LEFT JOIN vmhost v ON (c.vmhostid = v.id) "
+		       . "LEFT JOIN computer vh ON (v.computerid = vh.id) "
+		       . "WHERE c.id IN ($complist)";
+		$qh = doQuery($query);
+		$data = array();
+		while($row = mysql_fetch_assoc($qh)) {
+			$msg = "<strong>{$row['hostname']}</strong><br>";
+			if($row['start'] == '') {
+				$msg .= "(No reservations)<br><hr>";
+				$data[] = array('name' => $row['hostname'], 'msg' => $msg);
+				continue;
+			}
+			$msg .= "User: {$row['username']}<br>";
+			if($row['rqname'] != '')
+				$msg .= "Name: {$row['rqname']}<br>";
+			$msg .= "Image: {$row['image']}<br>";
+			$msg .= "Revision: {$row['revision']}<br>";
+			if($row['start'] < $row['daterequested'])
+				$msg .= "Start: " . prettyDatetime($row['daterequested'], 1) . "<br>";
+			else
+				$msg .= "Start: " . prettyDatetime($row['start'], 1) . "<br>";
+			if($row['end'] == datetimeToUnix('2038-01-01 00:00:00'))
+				$msg .= "End: (indefinite)<br>";
+			else
+				$msg .= "End: " . prettyDatetime($row['end'], 1) . "<br>";
+			$msg .= "Management Node: {$row['managementnode']}<br>";
+			if(! is_null($row['vmhost']))
+				$msg .= "VM Host: {$row['vmhost']}<br>";
+			$msg .= "Request ID: {$row['requestid']}<br>";
+			$msg .= "<hr>";
+			$data[] = array('name' => $row['hostname'], 'msg' => $msg);
+		}
+		uasort($data, 'sortKeepIndex');
+		$msg = '';
+		foreach($data as $item)
+			$msg .= $item['msg'];
+		$msg = substr($msg, 0, -4);
+
+		$ret = array('status' => 'onestep',
+		             'title' => 'Reservation Information',
+		             'actionmsg' => $msg);
+		sendJSON($ret);
+	}
+
+	/////////////////////////////////////////////////////////////////////////////
+	///
+	/// \fn AJshowReservationHistory()
+	///
+	/// \brief gets reservation history for submitted computers
+	///
+	/////////////////////////////////////////////////////////////////////////////
+	function AJshowReservationHistory() {
+		$compids = $this->validateCompIDs();
+		if(array_key_exists('error', $compids)) {
+			$ret = array('status' => 'error', 'errormsg' => $compids['msg']);
+			sendJSON($ret);
+			return;
+		}
+		if(count($compids) == 0) {
+			$ret = array('status' => 'noaction');
+			sendJSON($ret);
+			return;
+		}
+
+		$complist = implode(',', $compids);
+		$query = "SELECT UNIX_TIMESTAMP(l.start) AS start, "
+		       .        "UNIX_TIMESTAMP(l.finalend) AS end, "
+		       .        "i.prettyname AS image, "
+		       .        "ir.revision, "
+		       .        "c.hostname AS hostname, "
+		       .        "mn.hostname AS managementnode, "
+		       .        "l.ending, "
+		       .        "CONCAT(u.unityid, '@', a.name) AS username "
+		       . "FROM computer c "
+		       . "LEFT JOIN sublog s ON (c.id = s.computerid) "
+		       . "LEFT JOIN image i ON (s.imageid = i.id) "
+		       . "LEFT JOIN imagerevision ir ON (s.imagerevisionid = ir.id) "
+		       . "LEFT JOIN managementnode mn ON (s.managementnodeid = mn.id) "
+		       . "LEFT JOIN log l ON (s.logid = l.id) "
+		       . "LEFT JOIN user u ON (l.userid = u.id) "
+		       . "LEFT JOIN affiliation a ON (u.affiliationid = a.id) "
+		       . "WHERE c.id IN ($complist) "
+		       . "ORDER BY c.hostname, "
+		       .          "l.start DESC";
+		$qh = doQuery($query);
+		$data = array();
+		while($row = mysql_fetch_assoc($qh)) {
+			if(! is_numeric($row['end']))
+				continue;
+			$msg = "<strong>{$row['hostname']}</strong><br>";
+			if($row['start'] == '') {
+				$msg .= "(No reservations)<br><hr>";
+				$data[] = array('name' => $row['hostname'], 'msg' => $msg);
+				continue;
+			}
+			$msg .= "User: {$row['username']}<br>";
+			$msg .= "Image: {$row['image']}<br>";
+			$msg .= "Revision: {$row['revision']}<br>";
+			$msg .= "Start: " . prettyDatetime($row['start'], 1) . "<br>";
+			if($row['end'] == datetimeToUnix('2038-01-01 00:00:00'))
+				$msg .= "End: (indefinite)<br>";
+			else
+				$msg .= "End: " . prettyDatetime($row['end'], 1) . "<br>";
+			$msg .= "Management Node: {$row['managementnode']}<br>";
+			$msg .= "Ending: {$row['ending']}<br>";
+			$msg .= "<hr>";
+			$data[] = array('name' => $row['hostname'], 'msg' => $msg);
+		}
+		$msg = '';
+		foreach($data as $item)
+			$msg .= $item['msg'];
+		$msg = substr($msg, 0, -4);
+
+		$ret = array('status' => 'onestep',
+		             'title' => 'Reservation History',
 		             'actionmsg' => $msg);
 		sendJSON($ret);
 	}

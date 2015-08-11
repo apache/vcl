@@ -189,6 +189,8 @@ $noHTMLwrappers = array('sendRDPfile',
                         'AJreloadComputers',
                         'AJsubmitReloadComputers',
                         'AJdeleteComputers',
+                        'AJshowReservations',
+                        'AJshowReservationHistory',
                         'AJsubmitDeleteComputers',
                         'AJcompScheduleChange',
                         'AJsubmitCompScheduleChange',
@@ -247,6 +249,7 @@ $actions['pages']['selectTimeTable'] = "reservations";
 $actions['pages']['AJshowRequestSuggestedTimes'] = "reservations";
 $actions['pages']['AJrebootRequest'] = "reservations";
 $actions['pages']['AJreinstallRequest'] = "reservations";
+$actions['pages']['AJsetImageProduction'] = "reservations";
 $actions['pages']['AJsubmitSetImageProduction'] = "reservations";
 $actions['pages']['AJshowReinstallRequest'] = "reservations";
 $actions['pages']['viewRequests'] = "reservations";
@@ -597,6 +600,8 @@ $actions['mode']['AJcanceltovmhostinuse'] = "AJcanceltovmhostinuse";
 $actions['mode']['AJreloadComputers'] = "AJreloadComputers";
 $actions['mode']['AJsubmitReloadComputers'] = "AJsubmitReloadComputers";
 $actions['mode']['AJdeleteComputers'] = "AJdeleteComputers";
+$actions['mode']['AJshowReservations'] = "AJshowReservations";
+$actions['mode']['AJshowReservationHistory'] = "AJshowReservationHistory";
 $actions['mode']['AJsubmitDeleteComputers'] = "AJsubmitDeleteComputers";
 $actions['mode']['AJcompScheduleChange'] = "AJcompScheduleChange";
 $actions['mode']['AJsubmitCompScheduleChange'] = "AJsubmitCompScheduleChange";
@@ -655,6 +660,8 @@ $actions['pages']['AJcanceltovmhostinuse'] = "resource";
 $actions['pages']['AJreloadComputers'] = "resource";
 $actions['pages']['AJsubmitReloadComputers'] = "resource";
 $actions['pages']['AJdeleteComputers'] = "resource";
+$actions['pages']['AJshowReservations'] = "resource";
+$actions['pages']['AJshowReservationHistory'] = "resource";
 $actions['pages']['AJsubmitDeleteComputers'] = "resource";
 $actions['pages']['AJcompScheduleChange'] = "resource";
 $actions['pages']['AJsubmitCompScheduleChange'] = "resource";

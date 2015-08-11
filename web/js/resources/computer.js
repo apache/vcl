@@ -1085,6 +1085,24 @@ function hostsData() {
 	confirmAction(data);
 }
 
+function showReservations() {
+	var data = {continuation: dojo.byId('showreservationscont').value};
+	confirmAction(data);
+}
+
+function showReservationHistory() {
+	var compids = [];
+	dojo.forEach(resource.selids, function(id) {
+		compids.push(id.replace('chkb', ''));
+	});
+	if(compids.length > 3) {
+		alert('Due to the load this can introduce on the database server, only a maximum of 3 computers can be selected for viewing Reservation History.');
+		return;
+	}
+	var data = {continuation: dojo.byId('showreservationhistorycont').value};
+	confirmAction(data);
+}
+
 function confirmAction(data) {
 	dijit.popup.close(dijit.byId('actionmenu'));
 	var compids = [];
