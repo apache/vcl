@@ -4292,7 +4292,7 @@ sub run_ssh_command {
 		
 		# Print the SSH command, only display the attempt # if > 1
 		if ($attempts == 1) {
-			notify($ERRORS{'DEBUG'}, 0, "executing SSH command on $node_string: '$ssh_command_summary', SSH command length: $ssh_command_length") if $output_level;
+			notify($ERRORS{'DEBUG'}, 0, "executing SSH command on $node_string: '$ssh_command_summary'") if $output_level;
 		}
 		else {
 			notify($ERRORS{'DEBUG'}, 0, "attempt $attempts/$max_attempts: executing SSH command on $node_string: '$ssh_command_summary'") if $output_level;
