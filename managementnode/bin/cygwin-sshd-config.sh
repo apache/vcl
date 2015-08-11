@@ -319,17 +319,17 @@ print_hr
 
 # Get the Windows version
 WINDOWS_VERSION=`/cygdrive/c/Windows/system32/cmd.exe /c ver`
-[[ $WINDOWS_VERSION =~ ([0-9\.]+) ]]
-WINDOWS_VERSION=${BASH_REMATCH[0]}
+[[ $WINDOWS_VERSION =~ ([0-9]+)\. ]]
+WINDOWS_VERSION=${BASH_REMATCH[1]}
 echo Windows version: $WINDOWS_VERSION
 
 # Create firewall exception for sshd TCP port 22 traffic
-if [[ $WINDOWS_VERSION =~ ^6\. ]]; then
-	echo Configuring sshd firewall port 22 exception for Windows 6.x
+if [ $WINDOWS_VERSION -gt 5 ]; then
+	echo Configuring sshd firewall port 22 exception for Windows 6.x and later
 	netsh.exe advfirewall firewall delete rule name=all dir=in protocol=TCP localport=22
 	netsh.exe advfirewall firewall add rule name="VCL: allow SSH port 22 from any address" description="Allows incoming SSH (TCP port 22) traffic from any address" protocol=TCP localport=22 action=allow enable=yes dir=in localip=any remoteip=any
 else
- echo Configuring sshd firewall port 22 exception for Windows 5.x
+	echo Configuring sshd firewall port 22 exception for Windows 5.x and earlier
 	netsh.exe firewall set portopening name = "Cygwin SSHD" protocol = TCP port = 22 mode = ENABLE profile = ALL scope = ALL
 fi
 
