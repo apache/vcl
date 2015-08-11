@@ -1715,7 +1715,8 @@ INSERT IGNORE INTO `module` (`id`, `name`, `prettyname`, `description`, `perlpac
 (30, 'os_win2012', 'Windows Server 2012 OS Module', '', 'VCL::Module::OS::Windows::Version_6::2012'),
 (31, 'predictive_level_2', 'Unload/power off after reservation', 'Power off computer. If a virtual machine, it will be also destroyed.', 'VCL::Module::Predictive::Level_2'),
 (32, 'provisioning_openstack', 'OpenStack Provisioning Module', '', 'VCL::Module::Provisioning::openstack'),
-(33, 'provisioning_one', 'OpenNebula Provisioning Module', '', 'VCL::Module::Provisioning::one');
+(33, 'provisioning_one', 'OpenNebula Provisioning Module', '', 'VCL::Module::Provisioning::one'),
+(34, 'os_win10', 'Windows 10.x OS Module', '', 'VCL::Module::OS::Windows::Version_10::10');
 
 -- 
 -- Dumping data for table `OStype`
@@ -1782,10 +1783,12 @@ INSERT IGNORE INTO `OS` (`id`, `name`, `prettyname`, `type`, `installtype`, `sou
 (51, 'rhel7', 'Red Hat Enterprise 7 (Kickstart)', 'linux', 'kickstart', 'rhel7', 5),
 (52, 'centos6image', 'CentOS 6 (Bare Metal) Image', 'linux', 'partimage', 'image', 5),
 (53, 'centos7image', 'CentOS 7 (Bare Metal) Image', 'linux', 'partimage', 'image', 5),
-(54, 'rhelimage', 'Red Hat Based Image', 'linux', 'partimage', 'image', 5);
+(54, 'rhelimage', 'Red Hat Based Image', 'linux', 'partimage', 'image', 5),
+(55, 'win10', 'Windows 10.x (Bare Metal)', 'windows', 'partimage', 'image', 34),
+(56, 'vmwarewin10', 'Windows 10.x (VMware)', 'windows', 'vmware', 'vmware_images', 34);
 
 UPDATE OS SET minram = 1024 WHERE name REGEXP 'win.*';
-UPDATE OS SET minram = 2048 WHERE name REGEXP 'win.*(7|8|2008|2012)';
+UPDATE OS SET minram = 2048 WHERE name REGEXP 'win.*(7|8|10|2008|2012)';
 UPDATE OS SET minram = 1024 WHERE name REGEXP '(centos|rh|rhel)(5|6|7)';
 
 -- 

@@ -1650,6 +1650,7 @@ INSERT IGNORE INTO `module` (`name`, `prettyname`, `description`, `perlpackage`)
 INSERT IGNORE INTO `module` (`name`, `prettyname`, `description`, `perlpackage`) VALUES ('predictive_level_2', 'Unload/power off after reservation', 'Power off computer. If a virtual machine, it will be also destroyed.', 'VCL::Module::Predictive::Level_2');
 INSERT IGNORE INTO `module` (`name`, `prettyname`, `description`, `perlpackage`) VALUES ('provisioning_openstack', 'OpenStack Provisioning Module', '', 'VCL::Module::Provisioning::openstack');
 INSERT IGNORE INTO `module` (`name`, `prettyname`, `description`, `perlpackage`) VALUES ('provisioning_one', 'OpenNebula Provisioning Module', '', 'VCL::Module::Provisioning::one');
+INSERT IGNORE INTO `module` (`name`, `prettyname`, `description`, `perlpackage`) VALUES ('os_win10', 'Windows 10.x OS Module', '', 'VCL::Module::OS::Windows::Version_10::10');
 
 -- --------------------------------------------------------
 
@@ -1681,6 +1682,8 @@ INSERT IGNORE INTO `OS` (`name`, `prettyname`, `type`, `installtype`, `sourcepat
 INSERT IGNORE INTO `OS` (`name`, `prettyname`, `type`, `installtype`, `sourcepath`, `moduleid`) VALUES ('win8', 'Windows 8.x (Bare Metal)', 'windows', 'partimage', 'image', (SELECT `id` FROM `module` WHERE `name` LIKE 'os_win8'));
 INSERT IGNORE INTO `OS` (`name`, `prettyname`, `type`, `installtype`, `sourcepath`, `moduleid`) VALUES ('vmwarewin2012', 'Windows Server 2012 (VMware)', 'windows', 'vmware', 'vmware_images', (SELECT `id` FROM `module` WHERE `name` LIKE 'os_win2012'));
 INSERT IGNORE INTO `OS` (`name`, `prettyname`, `type`, `installtype`, `sourcepath`, `moduleid`) VALUES ('win2012', 'Windows Server 2012 (Bare Metal)', 'windows', 'partimage', 'image', (SELECT `id` FROM `module` WHERE `name` LIKE 'os_win2012'));
+INSERT IGNORE INTO `OS` (`name`, `prettyname`, `type`, `installtype`, `sourcepath`, `moduleid`) VALUES ('vmwarewin10', 'Windows 10.x (VMware)', 'windows', 'vmware', 'vmware_images', (SELECT `id` FROM `module` WHERE `name` LIKE 'os_win10'));
+INSERT IGNORE INTO `OS` (`name`, `prettyname`, `type`, `installtype`, `sourcepath`, `moduleid`) VALUES ('win10', 'Windows 10.x (Bare Metal)', 'windows', 'partimage', 'image', (SELECT `id` FROM `module` WHERE `name` LIKE 'os_win10'));
 
 INSERT IGNORE INTO `OS` (`name`, `prettyname`, `type`, `installtype`, `sourcepath`, `moduleid`) VALUES ('centos6', 'CentOS 6 (Kickstart)', 'linux', 'kickstart', 'centos6', (SELECT `id` FROM `module` WHERE `name` LIKE 'os_linux'));
 INSERT IGNORE INTO `OS` (`name`, `prettyname`, `type`, `installtype`, `sourcepath`, `moduleid`) VALUES ('centos7', 'CentOS 7 (Kickstart)', 'linux', 'kickstart', 'centos7', (SELECT `id` FROM `module` WHERE `name` LIKE 'os_linux'));
@@ -1691,7 +1694,7 @@ INSERT IGNORE INTO `OS` (`name`, `prettyname`, `type`, `installtype`, `sourcepat
 INSERT IGNORE INTO `OS` (`name`, `prettyname`, `type`, `installtype`, `sourcepath`, `moduleid`) VALUES ('rhelimage', 'General Red Hat Based Image', 'linux', 'partimage', 'image', (SELECT `id` FROM `module` WHERE `name` LIKE 'os_linux'));
 
 UPDATE OS SET minram = 1024 WHERE name REGEXP 'win.*';
-UPDATE OS SET minram = 2048 WHERE name REGEXP 'win.*(7|8|2008|2012)';
+UPDATE OS SET minram = 2048 WHERE name REGEXP 'win.*(7|8|10|2008|2012)';
 UPDATE OS SET minram = 1024 WHERE name REGEXP '(centos|rh|rhel)(5|6|7)';
 
 -- --------------------------------------------------------
