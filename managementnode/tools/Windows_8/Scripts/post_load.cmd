@@ -48,19 +48,6 @@ echo.
 
 echo ----------------------------------------------------------------------
 
-if exist "%SystemRoot%\post_load_custom.cmd" goto POST_LOAD_CUSTOM
-echo Custom post-load script does not exist: "%SystemRoot%\post_load_custom.cmd"
-goto UPDATE_CYGWIN
-
-:POST_LOAD_CUSTOM
-echo %TIME%: Executing %SystemRoot%\post_load_custom.cmd...
-start "post_load_custom.cmd" /WAIT cmd.exe /c "%SystemRoot%\post_load_custom.cmd >> %LOGS_DIR%\post_load_custom.log 2>&1"
-echo ERRORLEVEL: %ERRORLEVEL%
-set /A STATUS+=%ERRORLEVEL%
-echo.
-
-echo ----------------------------------------------------------------------
-
 :UPDATE_CYGWIN
 echo %TIME%: Calling %SCRIPT_DIR%\update_cygwin.cmd...
 start "update_cygwin.cmd" /WAIT cmd.exe /c "%SCRIPT_DIR%\update_cygwin.cmd >> %LOGS_DIR%\update_cygwin.log 2>&1"
