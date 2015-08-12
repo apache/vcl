@@ -1363,37 +1363,22 @@ sub set_vcld_post_load_status {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return;
 	}
-
-	my $image_os_type = $self->data->get_image_os_type();
-	my $computer_node_name = $self->data->get_computer_node_name();
-	
-	my $time = localtime;
 	
 	my $file_path = 'currentimage.txt';
-	$self->remove_lines_from_file($file_path, 'vcld_post_load');
 	
+	my $time = localtime;
 	my $post_load_line = "vcld_post_load=success ($time)";
 	
-	# Assemble the command
-	my $command;
-	$command .= " echo >> $file_path";
-	$command .= " && echo \"$post_load_line\" >> $file_path";
-	
-	my ($exit_status, $output) = $self->execute($command, 1);
-	if (defined($exit_status) && $exit_status == 0) {
-		notify($ERRORS{'DEBUG'}, 0, "added line to $file_path on $computer_node_name: '$post_load_line'");
+	my $file_contents;
+	my @existing_lines = $self->get_file_contents($file_path);
+	for my $existing_line (@existing_lines) {
+		if ($existing_line !~ /\w/ || $existing_line =~ /^vcld_post_load/) {
+			next;
+		}
+		$file_contents .= "$existing_line\n";
 	}
-	elsif ($exit_status) {
-		notify($ERRORS{'WARNING'}, 0, "failed to add line to $file_path on $computer_node_name: '$post_load_line', exit status: $exit_status, output:\n" . join("\n", @$output));
-		return;
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to run SSH command to add line to $file_path on $computer_node_name");
-		return;
-	}
-	
-	$self->set_text_file_line_endings($file_path);
-	return 1;
+	$file_contents .= $post_load_line;
+	return $self->create_text_file($file_path, $file_contents);
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -2142,10 +2127,17 @@ sub get_public_default_gateway {
 
  Parameters  : $file_path, $file_contents, $append
  Returns     : boolean
- Description : Creates a text file on the computer. The $file_contents
-               string argument is converted to ASCII hex values. These values
-               are echo'd on the computer which avoids problems with special
-               characters and escaping.
+ Description : Creates a text file on the computer or appends to an existing
+               file.
+               
+               A trailing newline character is added to the end of the
+               file if one is not present in the $file_contents argument.
+               
+               It is assumed that when appending to an existing file, the value
+               of $file_contents is intended to be added on a new line at the
+               end of the file. The contents of the existing file are first
+               retrieved. If the existing file does not contain a trailing
+               newline, one is added before appending to the file.
 
 =cut
 
@@ -2167,23 +2159,56 @@ sub create_text_file {
 	}
 	
 	my $computer_node_name = $self->data->get_computer_node_name();
-	my $image_os_type = $self->data->get_image_os_type();
 	
+	my $image_os_type = $self->data->get_image_os_type();
+	my $newline;
+	if ($image_os_type =~ /win/i) {
+		$newline = "\r\n";
+	}
+	else {
+		$newline = "\n";
+	}
+	
+	# Used only to format notify messages
+	my $mode_string;
+	if ($append) {
+		$mode_string = 'append';
+		
+		# Retrieve the contents of the existing file if necessary
+		if ($self->file_exists($file_path)) {
+			my $existing_file_contents = $self->get_file_contents($file_path);
+			if (!defined($existing_file_contents)) {
+				# Do not proceed if any problem occurred retrieving the existing file contents
+				# Otherwise, it would be overwritten and data would be lost
+				notify($ERRORS{'WARNING'}, 0, "failed to $mode_string text file on $computer_node_name, append argument was specified but contents of the existing file could not be retrieved: $file_path");
+				return;
+			}
+			elsif ($existing_file_contents && $existing_file_contents !~ /\n$/) {
+				# Add a newline to the end of the existing contents if one isn't present
+				$existing_file_contents .= $newline;
+				$file_contents_string = $existing_file_contents . $file_contents_string;
+			}
+			
+		}
+	}
+	else {
+		$mode_string = 'create';
+	}
+
+	# Make sure the file contents ends with a newline
+	# This is helpful to prevent problems with files such as sshd_config and sudoers where a line might be echo'd to the end of it
+	# Without the newline, the last line could wind up being a merged line if a simple echo is used to add a line
+	if (length($file_contents_string) && $file_contents_string !~ /\n$/) {
+		$file_contents_string .= $newline;
+	}
+	
+	# Make line endings consistent
+	$file_contents_string =~ s/\r*\n/$newline/g;
+
 	# Attempt to create the parent directory if it does not exist
 	if ($file_path =~ /[\\\/]/ && $self->can('create_directory')) {
 		my $parent_directory_path = parent_directory_path($file_path);
 		$self->create_directory($parent_directory_path) if $parent_directory_path;
-	}
-	
-	my $mode;
-	my $mode_string;
-	if ($append) {
-		$mode = '>>';
-		$mode_string = 'append';
-	}
-	else {
-		$mode = '>';
-		$mode_string = 'create';
 	}
 	
 	# The echo method will fail of the file contents are too large
@@ -2206,8 +2231,13 @@ sub create_text_file {
 		# Join the hex values together into a string
 		my $hex_string = join('', @hex_values);
 		
-		# Attempt to create/append the file using the hex string
-		my $command = "echo -e \"$hex_string\" $mode \"$file_path\"";
+		# Enclose the file path in quotes if it contains a space
+		if ($file_path =~ /[\s]/) {
+			$file_path = "\"$file_path\"";
+		}
+		
+		# Attempt to create the file using the hex string
+		my $command = "echo -n -e \"$hex_string\" > $file_path";
 		my ($exit_status, $output) = $self->execute($command, 0, 15, 1);
 		if (!defined($output)) {
 			notify($ERRORS{'DEBUG'}, 0, "failed to execute command to $mode_string file on $computer_node_name, attempting to create file on management node and copy it to $computer_node_name");
@@ -2228,20 +2258,7 @@ sub create_text_file {
 		notify($ERRORS{'DEBUG'}, 0, "skipping attempt to $mode_string on $computer_node_name using echo, file content string length: $file_contents_length");
 	}
 	
-	# File will be copied from the management node to the computer
-	if ($append) {
-		if ($self->file_exists($file_path)) {
-			my $existing_file_contents = $self->get_file_contents($file_path);
-			if (defined($existing_file_contents)) {
-				$file_contents_string = $existing_file_contents . $file_contents_string;
-			}
-			else {
-				notify($ERRORS{'WARNING'}, 0, "failed to $mode_string text file on $computer_node_name, append argument was specified but contents of the existing file could not be retrieved: $file_path");
-				return;
-			}
-		}
-	}
-	
+	# File was not created using the quicker echo method
 	# Create a temporary file on the management node, copy it to the computer, then delete temporary file from management node
 	my $mn_temp_file_path = tmpnam();
 	if (!$self->mn_os->create_text_file($mn_temp_file_path, $file_contents_string, $append)) {
@@ -2253,7 +2270,6 @@ sub create_text_file {
 		return;
 	}
 	$self->mn_os->delete_file($mn_temp_file_path);
-	
 	notify($ERRORS{'DEBUG'}, 0, "created text file on $computer_node_name by copying a file created on management node");
 	return 1;
 }
@@ -4122,13 +4138,9 @@ sub update_cluster {
 		$cluster_info_string .= "$cluster_computer_public_ip_address\n";
 	}
 	
-	# Remove trailing newline
-	$cluster_info_string =~ s/\n$//;
-	
 	# Create the cluster_info file on the computer
 	if ($self->create_text_file($cluster_info_file_path, $cluster_info_string)) {
 		notify($ERRORS{'DEBUG'}, 0, "created $cluster_info_file_path on $computer_short_name:\n$cluster_info_string");
-		$self->set_text_file_line_endings($cluster_info_file_path);
 	}
 	else {
 		notify($ERRORS{'WARNING'}, 0, "failed to create $cluster_info_file_path on $computer_short_name");
@@ -4136,7 +4148,7 @@ sub update_cluster {
 	}
 	
 	# Open the firewall allowing other cluster reservations computers access
-	if ($self->can('enable_firewall_port')) {
+	if (@public_ip_addresses && $self->can('enable_firewall_port')) {
 		my $firewall_scope = join(",", @public_ip_addresses);
 		notify($ERRORS{'DEBUG'}, 0, "attempting to open the firewall on $computer_short_name to allow access from other cluster reservation computers: $firewall_scope");
 		

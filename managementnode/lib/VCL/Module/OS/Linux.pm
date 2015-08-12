@@ -636,12 +636,8 @@ sub post_reservation {
  Parameters  : none
  Returns     : boolean
  Description : Retrieves the public IP address being used on the Linux computer.
-               Runs ipcalc locally on the management node to determine the
-               registered hostname for that IP address. If unable to determine
-               the hostname by running ipcalc on the management node, an attempt
-               is made to run ipcalc on the Linux computer. Once the hostname is
-               determined, the hostname command is run to set the hostname on
-               the Linux computer.
+               Determines the hostname the IP address resolves to. Sets the
+               hostname on the Linux computer.
 
 =cut
 
@@ -654,93 +650,92 @@ sub update_public_hostname {
 	
 	my $computer_node_name = $self->data->get_computer_node_name();
 	
-	# Get the IP address of the public adapter
-	my $public_ip_address = $self->get_public_ip_address();
-	if (!$public_ip_address) {
-		notify($ERRORS{'WARNING'}, 0, "hostname cannot be set, unable to determine public IP address");
-		return;
-	}
-	notify($ERRORS{'DEBUG'}, 0, "retrieved public IP address of $computer_node_name: $public_ip_address");
-	
-	# Get the hostname for the public IP address
-	my $public_hostname = ip_address_to_hostname($public_ip_address) || $computer_node_name;
-	
-	# Set the node's hostname to public hostname
-	if ($self->can("update_hostname_file")) {
-		if (!$self->update_hostname_file($public_hostname)) {
-			notify($ERRORS{'WARNING'}, 0, "failed to update hostname file");
-		}
-	}
-	
-	my $hostname_command = "hostname $public_hostname";
-	my ($hostname_exit_status, $hostname_output) = $self->execute($hostname_command);
-	if (!defined($hostname_output)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to SSH command to set hostname on $computer_node_name to $public_hostname, command: '$hostname_command'");
-		return;
-	}
-	elsif ($hostname_exit_status == 0) {
-		notify($ERRORS{'OK'}, 0, "set public hostname on $computer_node_name to $public_hostname");
-		return 1;
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to set public hostname on $computer_node_name to $public_hostname, exit status: $hostname_exit_status, output:\n" . join("\n", @$hostname_output));
-		return 0;
-	}
-	
-	return 1;
-}
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 update_hostname_file
-
- Parameters  : hostname
- Returns     : boolean
- Description : updates the static hostname file on node, so hostname persists across reboots
-               seperated from update_public_hostname as the file location and format can differ
-               accross Linux distributions
-
-=cut
-
-sub update_hostname_file {
-	my $self = shift;
-	if (ref($self) !~ /linux/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return 0;
-	}
-
 	my $public_hostname = shift;
 	if (!$public_hostname) {
-		notify($ERRORS{'WARNING'}, 0, "public_hostname was not passed correctly");
-		return 0;
+		# Get the IP address of the public adapter
+		my $public_ip_address = $self->get_public_ip_address();
+		if (!$public_ip_address) {
+			notify($ERRORS{'WARNING'}, 0, "hostname cannot be set, unable to determine public IP address");
+			return;
+		}
+		notify($ERRORS{'DEBUG'}, 0, "retrieved public IP address of $computer_node_name: $public_ip_address");
+		
+		# Get the hostname for the public IP address
+		$public_hostname = ip_address_to_hostname($public_ip_address) || $computer_node_name;
 	}
-
-	my $computer_node_name = $self->data->get_computer_node_name();
-	my $network_file_path = '/etc/sysconfig/network';
 	
-	my $hostname_file_path =  '/etc/hostname';
-	# For Linux OS that are using /etc/hostname
-	if($self->file_exists($hostname_file_path)) {
-		my $update_hostname_file_cmd = "echo $public_hostname > $hostname_file_path";
-		if($self->execute($update_hostname_file_cmd)) {
-			notify($ERRORS{'OK'}, 0, "updated $hostname_file_path on $computer_node_name to $public_hostname");
+	my $error_occurred = 0;
+	
+	# Check if hostname file exists and update if necessary
+	my $hostname_file_path = '/etc/hostname';
+	if ($self->file_exists($hostname_file_path)) {
+		if ($self->create_text_file($hostname_file_path, $public_hostname)) {
+			notify($ERRORS{'DEBUG'}, 0, "updated $hostname_file_path on $computer_node_name with hostname '$public_hostname'");
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "failed to update $hostname_file_path on $computer_node_name with '$public_hostname'");
+			$error_occurred = 1;
 		}
 	}
-
-	my $command = "sed -i -e \"/^HOSTNAME=/d\" $network_file_path; echo \"HOSTNAME=$public_hostname\" >> $network_file_path";
-	my ($exit_status, $output) = $self->execute($command);
-	if (!defined($output)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to SSH command to set hostname on $computer_node_name to $public_hostname, command: '$command'");
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "$hostname_file_path not updated on $computer_node_name because the file does not exist");
 	}
-	elsif ($exit_status == 0) {
-		notify($ERRORS{'OK'}, 0, "set public hostname on $computer_node_name to $public_hostname");
+	
+	
+	# Check if network file exists and update if necessary
+	my $network_file_path = '/etc/sysconfig/network';
+	if ($self->file_exists($network_file_path)) {
+		my $sed_command = "sed -i -e \"/^HOSTNAME=/d\" $network_file_path; echo \"HOSTNAME=$public_hostname\" >> $network_file_path";
+		my ($sed_exit_status, $sed_output) = $self->execute($sed_command);
+		if (!defined($sed_output)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to execute command to update hostname in $network_file_path on $computer_node_name");
+			return;
+		}
+		elsif ($sed_exit_status != 0) {
+			notify($ERRORS{'WARNING'}, 0, "failed to update hostname in $network_file_path on $computer_node_name, exit status: $sed_exit_status, output:\n" . join("\n", @$sed_output));
+			$error_occurred = 1;
+		}
+		else {
+			notify($ERRORS{'OK'}, 0, "updated hostname in $network_file_path on $computer_node_name to '$public_hostname'");
+		}
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to set public hostname on $computer_node_name to $public_hostname, exit status: $exit_status, output:\n" . join("\n", @ $output));
+		notify($ERRORS{'DEBUG'}, 0, "$network_file_path not updated on $computer_node_name because the file does not exist");
 	}
-
-	return 1;
-
+	
+	# Check if hostnamectl exists, this is provided by systemd on CentOS/RHEL 7+
+	if ($self->command_exists('hostnamectl')) {
+		my $hostnamectl_command = "hostnamectl set-hostname $public_hostname";
+		my ($hostnamectl_exit_status, $hostnamectl_output) = $self->execute($hostnamectl_command);
+		if (!defined($hostnamectl_output)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to execute command to set hostname using hostnamectl command on $computer_node_name to $public_hostname");
+			return;
+		}
+		elsif ($hostnamectl_exit_status != 0) {
+			notify($ERRORS{'WARNING'}, 0, "failed to set hostname using hostnamectl command on $computer_node_name to $public_hostname, exit status: $hostnamectl_exit_status, command: '$hostnamectl_command', output:\n" . join("\n", @$hostnamectl_output));
+			$error_occurred = 1;
+		}
+		else {
+			notify($ERRORS{'OK'}, 0, "set hostname using hostnamectl command on $computer_node_name to $public_hostname");
+		}
+	}
+	else {
+		my $hostname_command = "hostname $public_hostname";
+		my ($hostname_exit_status, $hostname_output) = $self->execute($hostname_command);
+		if (!defined($hostname_output)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to execute command to set hostname using hostname command on $computer_node_name to $public_hostname");
+			return;
+		}
+		elsif ($hostname_exit_status != 0) {
+			notify($ERRORS{'WARNING'}, 0, "failed to set hostname using hostname command on $computer_node_name to $public_hostname, exit status: $hostname_exit_status, command: '$hostname_command', output:\n" . join("\n", @$hostname_output));
+			$error_occurred = 1;
+		}
+		else {
+			notify($ERRORS{'OK'}, 0, "set hostname using hostname command on $computer_node_name to $public_hostname");
+		}
+	}
+	
+	return !$error_occurred;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -2770,17 +2765,13 @@ sub create_user {
 			notify($ERRORS{'WARNING'}, 0, "failed to process grant_connect_method_access for $username");
 		}
 	}
-
+	
 	# Add user to sudoers if necessary
-	if ($self->can("grant_root_access")) {
-		if (!$self->grant_root_access({
-			username => $username,
-			root_access => $root_access,
-			})) {
-			notify($ERRORS{'WARNING'}, 0, "failed to process grant_root_access for $username");
-			}
+	if ($root_access && !$self->grant_root_access($username)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to process grant_root_access for $username");
+		return;
 	}
-
+	
 	return 1;
 } ## end sub create_user
 
@@ -2790,8 +2781,8 @@ sub create_user {
 =head2 grant_root_access
 
  Parameters  : $username
- Returns     : 1 , 0
- Description : Updates sudoers file for
+ Returns     : boolean
+ Description : Adds the user to the sudoers file.
 
 =cut
 
@@ -2802,45 +2793,22 @@ sub grant_root_access {
 		return;
 	}
 	
-	my $user_parameters = shift;
-	if (!$user_parameters) {
-		notify($ERRORS{'WARNING'}, 0, "unable to grant acess, user parameters argument was not provided");
-		return;
-	}
-	elsif (!ref($user_parameters) || ref($user_parameters) ne 'HASH') {
-		notify($ERRORS{'WARNING'}, 0, "unable to grant access, argument provided is not a hash reference");
-		return;
-	}
-	
-	my $username = $user_parameters->{username};
+	my $username = shift;
 	if (!defined($username)) {
-		notify($ERRORS{'WARNING'}, 0, "argument hash does not contain a 'username' key:\n" . format_data($user_parameters));
+		notify($ERRORS{'WARNING'}, 0, "username argument was not supplied");
 		return;
 	}
 	
-	my $root_access = $user_parameters->{root_access};
-	if (!defined($root_access)) {
-		notify($ERRORS{'WARNING'}, 0, "argument hash does not contain a 'root_access' key:\n" . format_data($user_parameters));
-		return;
-	}
-
-	if ($root_access) {
-		my $sudoers_file_path = '/etc/sudoers';
-		my $sudoers_line = "$username ALL= NOPASSWD: ALL";
-		if ($self->append_text_file($sudoers_file_path, $sudoers_line)) {
-			notify($ERRORS{'DEBUG'}, 0, "appended line to $sudoers_file_path: '$sudoers_line'");
-			return 1;
-		}
-		else {
-			notify($ERRORS{'WARNING'}, 0, "failed to append line to $sudoers_file_path: '$sudoers_line'");
-			return 1;
-		}
+	my $sudoers_file_path = '/etc/sudoers';
+	my $sudoers_line = "$username ALL= NOPASSWD: ALL";
+	if ($self->append_text_file($sudoers_file_path, $sudoers_line)) {
+		notify($ERRORS{'DEBUG'}, 0, "appended line to $sudoers_file_path: '$sudoers_line'");
+		return 1;
 	}
 	else {
-		notify($ERRORS{'OK'}, 0, "root access for user $username was not allowed root_access = $root_access ");
-      return 1;
+		notify($ERRORS{'WARNING'}, 0, "failed to append line to $sudoers_file_path: '$sudoers_line'");
+		return 0;
 	}
-
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -6095,7 +6063,7 @@ sub get_ssh_public_key_string {
 	}
 	if ($public_key_string) {
 		if ($comment) {
-			$public_key_string =~ s/(ssh-[^\s]+\s[^\s=]+).*$/$1== $comment/g;
+			$public_key_string =~ s/(ssh-[^\s]+\s[^\s=]+).*$/$1 $comment/g;
 		}
 		return $public_key_string;
 	}
@@ -6180,6 +6148,63 @@ sub _get_ssh_public_key_string_helper {
 	else {
 		notify($ERRORS{'OK'}, 0, "failed to retrieved SSH public key string using $utility from $private_key_file_path on $computer_name, output does not contain a line beginning with 'ssh-', command:\n$command\noutput:\n" . join("\n", @$output));
 		return;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 install_package
+
+ Parameters  : $package_name, $timeout_seconds (optional)
+ Returns     : boolean
+ Description : Installs a Linux package using yum.
+
+=cut
+
+sub install_package {
+	my $self = shift;
+	if (ref($self) !~ /linux/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my ($package_name, $timeout_seconds) = @_;
+	if (!$package_name) {
+		notify($ERRORS{'WARNING'}, 0, "package name argument was not supplied");
+		return;
+	}
+	
+	my $computer_name = $self->data->get_computer_node_name();
+	
+	if (!$self->command_exists('yum')) {
+		notify($ERRORS{'WARNING'}, 0, "failed to install $package_name on $computer_name, yum command is not available");
+		return;
+	}
+	
+	$timeout_seconds = 120 unless $timeout_seconds;
+	
+	my $command = "yum install -q -y $package_name";
+	notify($ERRORS{'DEBUG'}, 0, "attempting to install $package_name using yum on $computer_name, timeout seconds: $timeout_seconds");
+	my ($exit_status, $output) = $self->execute({
+		'command' => $command,
+		'display_output' => 0,
+		'timeout_seconds' => $timeout_seconds,
+	});
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to install $package_name using yum on $computer_name");
+		return;
+	}
+	elsif ($exit_status ne 0) {
+		notify($ERRORS{'WARNING'}, 0, "failed to install $package_name using yum on $computer_name, exit status: $exit_status, command: '$command', output:\n" . join("\n", @$output));
+		return 0;
+	}
+	elsif (grep(/$package_name.+already installed/, @$output)) {
+		notify($ERRORS{'DEBUG'}, 0, "$package_name is already installed on $computer_name, command: '$command', output:\n" . join("\n", @$output));
+		return 1;
+	}
+	else {
+		notify($ERRORS{'OK'}, 0, "installed $package_name using yum on $computer_name, command: '$command', output:\n" . join("\n", @$output));
+		return 1;
 	}
 }
 
