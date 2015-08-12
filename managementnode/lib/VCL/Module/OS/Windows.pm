@@ -1723,8 +1723,8 @@ sub user_exists {
 		return;
 	}
 
-	my $computer_node_name   = $self->data->get_computer_node_name();
-	my $system32_path        = $self->get_system32_path() || return;
+	my $computer_node_name = $self->data->get_computer_node_name();
+	my $system32_path = $self->get_system32_path() || return;
 
 	# Attempt to get the username from the arguments
 	# If no argument was supplied, use the user specified in the DataStructure
@@ -1733,25 +1733,25 @@ sub user_exists {
 		$username = $self->data->get_user_login_id();
 	}
 
-	notify($ERRORS{'DEBUG'}, 0, "checking if user $username exists on $computer_node_name");
+	#notify($ERRORS{'DEBUG'}, 0, "checking if user $username exists on $computer_node_name");
 
 	# Attempt to query the user account
 	my $query_user_command = "$system32_path/net.exe user \"$username\"";
-	my ($query_user_exit_status, $query_user_output) = $self->execute($query_user_command, '1');
+	my ($query_user_exit_status, $query_user_output) = $self->execute($query_user_command, 0);
 	if (defined($query_user_exit_status) && $query_user_exit_status == 0) {
 		notify($ERRORS{'DEBUG'}, 0, "user $username exists on $computer_node_name");
 		return 1;
 	}
 	elsif (defined($query_user_exit_status) && $query_user_exit_status == 2) {
-		notify($ERRORS{'DEBUG'}, 0, "user $username does not exist on $computer_node_name");
+		notify($ERRORS{'DEBUG'}, 0, "user does not exist on $computer_node_name: $username");
 		return 0;
 	}
 	elsif (defined($query_user_exit_status)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to determine if user $username exists on $computer_node_name, exit status: $query_user_exit_status, output:\n@{$query_user_output}");
+		notify($ERRORS{'WARNING'}, 0, "failed to determine if user exists on $computer_node_name: $username, exit status: $query_user_exit_status, output:\n@{$query_user_output}");
 		return;
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to determine if user $username exists on $computer_node_name");
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to determine if user exists on $computer_node_name: $username");
 		return;
 	}
 } ## end sub user_exists
@@ -1763,10 +1763,10 @@ sub user_exists {
  Parameters  : hash reference
  Returns     : boolean
  Description : Creates a user on the computer. The argument must be a hash
-               reference to user parameters. The hash must contain the keys:
-               - username
-               - password
-               - root_access
+               reference containing the following keys:
+               * username
+               * password
+               * root_access
 
 =cut
 
@@ -1778,7 +1778,7 @@ sub create_user {
 	}
 	
 	my $computer_node_name = $self->data->get_computer_node_name();
-	my $system32_path      = $self->get_system32_path() || return;
+	my $system32_path = $self->get_system32_path() || return;
 	
 	my $user_parameters = shift;
 	if (!$user_parameters) {
@@ -1810,183 +1810,53 @@ sub create_user {
 	
 	# Check if user already exists
 	if (!$self->user_exists($username)) {
-	
-		notify($ERRORS{'DEBUG'}, 0, "attempting to add user $username to $computer_node_name ($password)");
-
-		# Attempt to add the user account
+		# Attempt to create the user account
 		my $add_user_command = "$system32_path/net.exe user \"$username\" \"$password\" /ADD /EXPIRES:NEVER /COMMENT:\"Account created by VCL\"";
-		$add_user_command .= " && $system32_path/net.exe localgroup \"Remote Desktop Users\" \"$username\" /ADD";
-		
-		# Add the user to the Administrators group if imagemeta.rootaccess isn't 0
-		if ($root_access) {
-			notify($ERRORS{'DEBUG'}, 0, "user will be added to the Administrators group");
-			$add_user_command .= " && $system32_path/net.exe localgroup \"Administrators\" \"$username\" /ADD";
+		my ($add_user_exit_status, $add_user_output) = $self->execute($add_user_command, 0);
+		if (!defined($add_user_output)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to execute command create user on $computer_node_name: $username");
+			return;
+		}
+		elsif ($add_user_exit_status == 0) {
+			notify($ERRORS{'OK'}, 0, "created user on $computer_node_name: $username, password: $password");
 		}
 		else {
-			notify($ERRORS{'DEBUG'}, 0, "user will NOT be added to the Administrators group");
-		}
-		
-		my ($add_user_exit_status, $add_user_output) = $self->execute($add_user_command, '1');
-		if (defined($add_user_exit_status) && $add_user_exit_status == 0) {
-			notify($ERRORS{'OK'}, 0, "added user $username ($password) to $computer_node_name");
-		}
-		elsif (defined($add_user_exit_status) && $add_user_exit_status == 2) {
-			notify($ERRORS{'OK'}, 0, "user $username was not added, user already exists");
-			return 1;
-		}
-		elsif (defined($add_user_exit_status)) {
-			notify($ERRORS{'WARNING'}, 0, "failed to add user $username to $computer_node_name, exit status: $add_user_exit_status, output:\n@{$add_user_output}");
+			notify($ERRORS{'WARNING'}, 0, "failed to create user on $computer_node_name: $username, exit status: $add_user_exit_status, output:\n" . join("\n", @$add_user_output));
 			return 0;
 		}
-		else {
-			notify($ERRORS{'WARNING'}, 0, "failed to run ssh command add user $username to $computer_node_name");
+	}
+	else {
+		# Account already exists on machine, set password
+		if (!$self->set_password($username, $password)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to set password of existing user on $computer_node_name: $username");
+			return;
+		}
+	}
+	
+	if (!$self->add_user_to_group($username, "Remote Desktop Users")) {
+		return;
+	}
+	
+	# Add user to Administrators group if necessary
+	if ($root_access) {
+		if (!$self->add_user_to_group($username, "Administrators")) {
 			return;
 		}
 	}
 	else {
-		# Account already exists on machine
-		# -- setup password if exists
-		# -- grant root access if allowed
-		# -- process connect access
-		
-		if ($password) {
-			# Set password
-			if (!$self->set_password($username, $password)) {
-				notify($ERRORS{'CRITICAL'}, 0, "failed to set password of user '$username' on $computer_node_name");
-				return;
-			}
-		}
-
-		# Add user to Administrators group if allowed
-	 	if ($self->can("grant_root_access")) {
-		  if (!$self->grant_root_access({
-				username => $username,
-				root_access => $root_access,
-			})) {
-			notify($ERRORS{'WARNING'}, 0, "failed to process grant_root_access for $username");
-			}
-		}
-
-		# Process connect_methods
-		if($self->can("grant_connect_method_access")) {
-			if(!$self->grant_connect_method_access({
-				username => $username,
-				})) {
-				notify($ERRORS{'WARNING'}, 0, "failed to process grant_connect_method_access for $username");
-			}
-		}
+		notify($ERRORS{'DEBUG'}, 0, "existing user NOT added to Administrators group on $computer_node_name: $username");
 	}
 
 	return 1;
 } ## end sub create_user
 
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 grant_connect_method_access
-
- Parameters  : user login id 
- Returns     : boolean
- Description : Adds username to the Remote Desktop Users group
- 					TODO - in next release pull this out into connect method modules.
-
-=cut
-
-sub grant_connect_method_access {
-	my $self = shift;
-	if (ref($self) !~ /windows/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return;
-	}
-	
-	my $user_parameters = shift;
-
-	if (!$user_parameters) {
-		notify($ERRORS{'WARNING'}, 0, "user parameters argument was not provided");
-		return;
-	}
-	elsif (!ref($user_parameters) || ref($user_parameters) ne 'HASH') {
-		notify($ERRORS{'WARNING'}, 0, "argument provided is not a hash reference");
-		return;
-	}
-
-	my $username = $user_parameters->{username};
-	if (!defined($username)) {
-		notify($ERRORS{'WARNING'}, 0, "argument hash does not contain a 'username' key:\n" . format_data($user_parameters));
-		return;
-	}
-
-	my $computer_node_name = $self->data->get_computer_node_name();
-
-	if($self->add_user_to_group($username,"Remote Desktop Users")) {
-		notify($ERRORS{'OK'}, 0, "added user $username to $computer_node_name");
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to execute add user $username to Administrators $computer_node_name");
-		return;
-	}
-
-}
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 grant_root_access
-
- Parameters  : user_parameters 
- Returns     : 1 or 0 
- Description : grants admin access
-
-=cut
-
-sub grant_root_access {
-	my $self = shift;
-	if (ref($self) !~ /windows/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return;
-	}
-   my $user_parameters = shift;
-   if (!$user_parameters) {
-		notify($ERRORS{'WARNING'}, 0, "unable to root access, user parameters argument was not provided");
-		return;
-	}
-	elsif (!ref($user_parameters) || ref($user_parameters) ne 'HASH') {
-		notify($ERRORS{'WARNING'}, 0, "unable to grant access, argument provided is not a hash reference");
-		return;
-	}
-	
-	my $username = $user_parameters->{username};
-	if (!defined($username)) {
-		notify($ERRORS{'WARNING'}, 0, "argument hash does not contain a 'username' key:\n" . format_data($user_parameters));
-		return;
-	}
-	
-	my $root_access = $user_parameters->{root_access};
-	if (!defined($root_access)) {
-		notify($ERRORS{'WARNING'}, 0, "argument hash does not contain a 'root_access' key:\n" . format_data($user_parameters));
-		return;
-	}
-
-	my $computer_node_name = $self->data->get_computer_node_name();
-
-	if($root_access) {
-		if($self->add_user_to_group($username,"Administrators")) {
-			notify($ERRORS{'OK'}, 0, "added user $username to $computer_node_name");
-			return 1;
-		}
-	}
-	else {
-		notify($ERRORS{'OK'}, 0, "admin access for user $username was not allowed root_access = $root_access ");
-		return 1;
-	}
-	return;
-}
 #/////////////////////////////////////////////////////////////////////////////
 
 =head2 add_user_to_group
 
- Parameters  : 
- Returns     : 
- Description : 
+ Parameters  : $username, $group
+ Returns     : boolean
+ Description : Adds a user to a group on the computer.
 
 =cut
 
@@ -1997,13 +1867,13 @@ sub add_user_to_group {
 		return;
 	}
 
-	my $computer_node_name   = $self->data->get_computer_node_name();
-	my $system32_path        = $self->get_system32_path() || return;
+	my $computer_node_name = $self->data->get_computer_node_name();
+	my $system32_path = $self->get_system32_path() || return;
 
 	# Attempt to get the username from the arguments
 	# If no argument was supplied, use the user specified in the DataStructure
 	my $username = shift;
-	my $group    = shift;
+	my $group = shift;
 	if (!$username || !$group) {
 		notify($ERRORS{'WARNING'}, 0, "unable to add user to group, arguments were not passed correctly");
 		return;
@@ -2013,7 +1883,7 @@ sub add_user_to_group {
 	my $localgroup_user_command = "$system32_path/net.exe localgroup \"$group\" $username /ADD";
 	my ($localgroup_user_exit_status, $localgroup_user_output) = $self->execute($localgroup_user_command);
 	if (defined($localgroup_user_exit_status) && $localgroup_user_exit_status == 0) {
-		notify($ERRORS{'OK'}, 0, "added user $username to \"$group\" group on $computer_node_name");
+		notify($ERRORS{'OK'}, 0, "added user to '$group' group on $computer_node_name: $username");
 	}
 	elsif (defined($localgroup_user_exit_status) && $localgroup_user_exit_status == 2) {
 		# Exit status is 2, this could mean the user is already a member or that the group doesn't exist
@@ -2021,20 +1891,20 @@ sub add_user_to_group {
 		if (grep(/error 1378/, @{$localgroup_user_output})) {
 			# System error 1378 has occurred.
 			# The specified account name is already a member of the group.
-			notify($ERRORS{'OK'}, 0, "user $username was not added to $group group because user already a member");
+			notify($ERRORS{'OK'}, 0, "user is already a member of '$group' group on $computer_node_name: $username");
 			return 1;
 		}
 		else {
-			notify($ERRORS{'WARNING'}, 0, "failed to add user $username to $group group on $computer_node_name, exit status: $localgroup_user_exit_status, output:\n@{$localgroup_user_output}");
+			notify($ERRORS{'WARNING'}, 0, "failed to add user to '$group' group on $computer_node_name: $username, exit status: $localgroup_user_exit_status, output:\n@{$localgroup_user_output}");
 			return 0;
 		}
 	} ## end elsif (defined($localgroup_user_exit_status) ... [ if (defined($localgroup_user_exit_status) ...
 	elsif (defined($localgroup_user_exit_status)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to add user $username to $group group on $computer_node_name, exit status: $localgroup_user_exit_status, output:\n@{$localgroup_user_output}");
+		notify($ERRORS{'WARNING'}, 0, "failed to add user to '$group' group on $computer_node_name: $username, exit status: $localgroup_user_exit_status, output:\n@{$localgroup_user_output}");
 		return 0;
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to add user $username to $group group on $computer_node_name");
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to add user to '$group' group on $computer_node_name: $username");
 		return;
 	}
 
