@@ -2012,12 +2012,12 @@ INSERT IGNORE INTO `localauth` (`userid`, `passhash`, `salt`, `lastupdated`, `lo
 -- 
 
 INSERT IGNORE INTO `usergroup` (`id`, `name`, `affiliationid`, `ownerid`, `editusergroupid`, `custom`, `courseroll`, `initialmaxtime`, `totalmaxtime`, `maxextendtime`, `overlapResCount`) VALUES 
-(1, 'global', 1, 1, 1, 1, 0, 240, 360, 30, 0),
+(1, 'global', 1, 1, 1, 1, 0, 240, 360, 60, 0),
 (3, 'adminUsers', 1, 1, 1, 1, 0, 480, 600, 180, 50),
-(4, 'manageNewImages', 1, 1, 3, 1, 0, 240, 360, 30, 0),
-(5, 'Specify End Time', 1, 1, 3, 1, 0, 240, 360, 30, 0),
-(6, 'Allow No User Check', 1, 1, 3, 1, 0, 240, 360, 30, 0),
-(7, 'Default for Editable by', 1, 1, 3, 1, 0, 240, 360, 30, 0);
+(4, 'manageNewImages', 1, 1, 3, 1, 0, 240, 360, 60, 0),
+(5, 'Specify End Time', 1, 1, 3, 1, 0, 240, 360, 60, 0),
+(6, 'Allow No User Check', 1, 1, 3, 1, 0, 240, 360, 60, 0),
+(7, 'Default for Editable by', 1, 1, 3, 1, 0, 240, 360, 60, 0);
 
 -- 
 -- Dumping data for table `usergroupmembers`

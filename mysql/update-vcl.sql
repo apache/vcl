@@ -1846,6 +1846,7 @@ UPDATE user SET IMtypeid = NULL WHERE IMtypeid NOT IN (SELECT id FROM IMtype);
 
 UPDATE IGNORE `usergroup` SET `overlapResCount` = '50' WHERE `usergroup`.`name` = 'adminUsers' AND `usergroup`.`overlapResCount` = 0;
 CALL AddUserGroup('Allow No User Check', 'Local', 'admin', 'Local', 'adminUsers', 'Local');
+CALL AddUserGroup('Default for Editable by', 'Local', 'admin', 'Local', 'adminUsers', 'Local');
 
 -- --------------------------------------------------------
 
@@ -1857,7 +1858,8 @@ INSERT IGNORE INTO `usergroupmembers` (`userid`, `usergroupid`) VALUES
 ((SELECT `id` FROM `user` WHERE `unityid` = 'admin' AND `affiliationid` = (SELECT `id` FROM `affiliation` WHERE `name` = 'Local')), (SELECT `id` FROM `usergroup` WHERE `name` = 'adminUsers' AND `affiliationid` = (SELECT `id` FROM `affiliation` WHERE `name` = 'Local'))),
 ((SELECT `id` FROM `user` WHERE `unityid` = 'admin' AND `affiliationid` = (SELECT `id` FROM `affiliation` WHERE `name` = 'Local')), (SELECT `id` FROM `usergroup` WHERE `name` = 'manageNewImages' AND `affiliationid` = (SELECT `id` FROM `affiliation` WHERE `name` = 'Local'))),
 ((SELECT `id` FROM `user` WHERE `unityid` = 'admin' AND `affiliationid` = (SELECT `id` FROM `affiliation` WHERE `name` = 'Local')), (SELECT `id` FROM `usergroup` WHERE `name` = 'Specify End Time' AND `affiliationid` = (SELECT `id` FROM `affiliation` WHERE `name` = 'Local'))),
-((SELECT `id` FROM `user` WHERE `unityid` = 'admin' AND `affiliationid` = (SELECT `id` FROM `affiliation` WHERE `name` = 'Local')), (SELECT `id` FROM `usergroup` WHERE `name` = 'Allow No User Check' AND `affiliationid` = (SELECT `id` FROM `affiliation` WHERE `name` = 'Local')));
+((SELECT `id` FROM `user` WHERE `unityid` = 'admin' AND `affiliationid` = (SELECT `id` FROM `affiliation` WHERE `name` = 'Local')), (SELECT `id` FROM `usergroup` WHERE `name` = 'Allow No User Check' AND `affiliationid` = (SELECT `id` FROM `affiliation` WHERE `name` = 'Local'))),
+((SELECT `id` FROM `user` WHERE `unityid` = 'admin' AND `affiliationid` = (SELECT `id` FROM `affiliation` WHERE `name` = 'Local')), (SELECT `id` FROM `usergroup` WHERE `name` = 'Default for Editable by' AND `affiliationid` = (SELECT `id` FROM `affiliation` WHERE `name` = 'Local')));
 
 -- --------------------------------------------------------
 
@@ -1922,6 +1924,8 @@ INSERT IGNORE userpriv (usergroupid, privnodeid, userprivtypeid) SELECT usergrou
 -- Inserts for table `variable`
 --
 
+DELETE FROM `variable` WHERE `name` = 'connecttimeout' AND `serialization` = 'none';
+
 INSERT IGNORE INTO `variable` (`name`, `serialization`, `value`) VALUES ('schema-version', 'none', '1');
 INSERT IGNORE INTO `variable` (`name`, `serialization`, `value`) VALUES ('timesource|global', 'none','time.nist.gov,time-a.nist.gov,time-b.nist.gov,time.windows.com');
 INSERT IGNORE INTO `variable` (`name`, `serialization`, `value`) VALUES ('acknowledgetimeout', 'none', '900');
@@ -1936,6 +1940,8 @@ INSERT IGNORE INTO `variable` (`name`, `serialization`, `value`) VALUES ('ignore
 INSERT IGNORE INTO `variable` (`name`, `serialization`, `value`) VALUES ('natport_ranges', 'none', '5700-6500,9696-9701,49152-65535');
 INSERT IGNORE INTO `variable` (`name`, `serialization`, `value`) VALUES ('windows_ignore_users', 'none', 'Administrator,cyg_server,root,sshd,Guest');
 INSERT IGNORE INTO `variable` (`name`, `serialization`, `value`) VALUES ('windows_disable_users', 'none', '');
+INSERT IGNORE INTO `variable` (`name`, `serialization`, `value`) VALUES ('xcat|timeout_error_limit', 'none', '5');
+INSERT IGNORE INTO `variable` (`name`, `serialization`, `value`) VALUES ('xcat|rpower_error_limit', 'none', '3');
 
 -- --------------------------------------------------------
 
