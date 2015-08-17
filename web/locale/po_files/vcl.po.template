@@ -1353,7 +1353,7 @@ msgid "Administrative access has been disabled for this image. Users in the Admi
 msgstr ""
 
 #: ../.ht-inc/requests.php
-msgid "You cannot create new images from this image because the owner of the image has set \"Users have administrative access\" to No under the Advanced Options of the image."
+msgid "You cannot create new images from this image because the owner of the image has set \"Users Have Administrative Access\" to No under the Advanced Options of the image."
 msgstr ""
 
 #: ../.ht-inc/userpreferences.php:61
@@ -1892,7 +1892,7 @@ msgid "Last Updated"
 msgstr ""
 
 #: ../.ht-inc/image.php:137 ../.ht-inc/image.php:407
-msgid "Available for checkout"
+msgid "Available for Checkout"
 msgstr ""
 
 #: ../.ht-inc/image.php:139
@@ -1987,23 +1987,23 @@ msgid "Estimated Reload Time"
 msgstr ""
 
 #: ../.ht-inc/image.php:409
-msgid "Check for logged in user"
+msgid "Check for Logged in User"
 msgstr ""
 
 #: ../.ht-inc/image.php:411
-msgid "Users have administrative access"
+msgid "Users Have Administrative Access"
 msgstr ""
 
 #: ../.ht-inc/image.php
-msgid "Set computer hostname"
+msgid "Set Computer Hostname"
 msgstr ""
 
 #: ../.ht-inc/image.php:414
-msgid "Use sysprep"
+msgid "Use Sysprep"
 msgstr ""
 
 #: ../.ht-inc/image.php:416
-msgid "Connect methods:"
+msgid "Connect Methods:"
 msgstr ""
 
 #: ../.ht-inc/image.php:419 ../.ht-inc/image.php:499
@@ -2167,23 +2167,23 @@ msgid "Submitted ID is not valid"
 msgstr ""
 
 #: ../.ht-inc/image.php:1584
-msgid "Available for checkout must be Yes or No"
+msgid "Available for Checkout must be Yes or No"
 msgstr ""
 
 #: ../.ht-inc/image.php:1588
-msgid "Check for logged in user must be Yes or No"
+msgid "Check for Logged in User must be Yes or No"
 msgstr ""
 
 #: ../.ht-inc/image.php:1592
-msgid "Users have administrative access must be Yes or No"
+msgid "Users Have Administrative Access must be Yes or No"
 msgstr ""
 
 #: ../.ht-inc/image.php
-msgid "Set computer hostname must be Yes or No"
+msgid "Set Computer Hostname must be Yes or No"
 msgstr ""
 
 #: ../.ht-inc/image.php:1597
-msgid "Use sysprep must be Yes or No"
+msgid "Use Sysprep must be Yes or No"
 msgstr ""
 
 #: ../.ht-inc/image.php:1601

@@ -351,7 +351,7 @@ class ManagementNode extends Resource {
 
 		# sshport
 		$extra = array('smallDelta' => 1, 'largeDelta' => 2);
-		$h .= labeledFormItem('sshport', i('SSH Port for this node'), 'spinner', '{min:1,max:65535,places:0}',
+		$h .= labeledFormItem('sshport', i('SSH Port for this Node'), 'spinner', '{min:1,max:65535,places:0}',
 		                      1, '22', '', '', $extra, '', helpIcon('sshporthelp'));
 
 		# image library
@@ -387,7 +387,7 @@ class ManagementNode extends Resource {
 		$vals = array('dynamicDHCP' => 'Dynamic DHCP',
 		              'manualDHCP' => 'Manual DHCP',
 		              'static' => 'Static');
-		$h .= labeledFormItem('publicIPconfig', i('Public NIC configuration method'), 'select', $vals,
+		$h .= labeledFormItem('publicIPconfig', i('Public NIC Configuration Method'), 'select', $vals,
 		                      '', '', '', '', $extra, '', helpIcon('ipconfighelp'));
 
 		# netmask
@@ -413,7 +413,7 @@ class ManagementNode extends Resource {
 		                      '', '', '', '', '', helpIcon('availnetshelp'));
 
 		# federated auth
-		$h .= labeledFormItem('federatedauth', i('Affiliations using Federated Authentication for Linux Images'),
+		$h .= labeledFormItem('federatedauth', i('Affiliations Using Federated Authentication for Linux Images'),
 		                      'textarea', '', 1, '', '', '', '', '', helpIcon('federatedauthhelp'));
 
 		# NAT Host
@@ -935,7 +935,7 @@ class ManagementNode extends Resource {
 				if(count($test) == count($new))
 					$errormsg[] = "These affiliations do not exist: " . implode(', ', $new);
 				else
-					$errormsg[] = "Invalid data entered for Affiliations using Federated Authentication for Linux Images";
+					$errormsg[] = "Invalid data entered for Affiliations Using Federated Authentication for Linux Images";
 				$return['error'] = 1;
 			}
 		}

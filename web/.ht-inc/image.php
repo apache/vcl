@@ -134,7 +134,7 @@ class Image extends Resource {
 			case 'lastupdate':
 				return i("Last Updated");
 			case 'forcheckout':
-				return i("Available for checkout");
+				return i("Available for Checkout");
 			case 'maxinitialtime':
 				return i("Max Initial Time");
 			case 'checkuser':
@@ -406,23 +406,23 @@ class Image extends Resource {
 		# for checkout
 		$yesno = array('1' => 'Yes',
 		              '0' => 'No');
-		$h .= labeledFormItem('checkout', i('Available for checkout'), 'select', $yesno);
+		$h .= labeledFormItem('checkout', i('Available for Checkout'), 'select', $yesno);
 		# check user
-		$h .= labeledFormItem('checkuser', i('Check for logged in user'), 'select', $yesno);
+		$h .= labeledFormItem('checkuser', i('Check for Logged in User'), 'select', $yesno);
 		# admin access
-		$h .= labeledFormItem('rootaccess', i('Users have administrative access'), 'select', $yesno);
+		$h .= labeledFormItem('rootaccess', i('Users Have Administrative Access'), 'select', $yesno);
 		# set hostname
 		$h .= "<div id=\"sethostnamediv\">\n";
-		$h .= labeledFormItem('sethostname', i('Set computer hostname'), 'select', $yesno);
+		$h .= labeledFormItem('sethostname', i('Set Computer Hostname'), 'select', $yesno);
 		$h .= "</div>\n";
 		# sysprep
 		if($add) {
 			$h .= "<div id=\"sysprepdiv\">\n";
-			$h .= labeledFormItem('sysprep', i('Use sysprep'), 'select', $yesno);
+			$h .= labeledFormItem('sysprep', i('Use Sysprep'), 'select', $yesno);
 			$h .= "</div>\n";
 		}
 		# connect methods
-		$h .= "<label for=\"connectmethodlist\">" . i("Connect methods:") . "</label>\n";
+		$h .= "<label for=\"connectmethodlist\">" . i("Connect Methods:") . "</label>\n";
 		$h .= "<div class=\"labeledform\"><span id=\"connectmethodlist\"></span><br>\n";
 		$h .= "<div dojoType=\"dijit.form.DropDownButton\" id=\"connectmethoddlg\">\n";
 		$h .= "  <span>" . i("Modify Connection Methods") . "</span>\n";
@@ -1615,24 +1615,24 @@ class Image extends Resource {
 		}
 		if($return['checkout'] != 0 && $return['checkout'] != 1) {
 			$return['error'] = 1;
-			$errormsg[] = i("Available for checkout must be Yes or No");
+			$errormsg[] = i("Available for Checkout must be Yes or No");
 		}
 		if($return['checkuser'] != 0 && $return['checkuser'] != 1) {
 			$return['error'] = 1;
-			$errormsg[] = i("Check for logged in user must be Yes or No");
+			$errormsg[] = i("Check for Logged in User must be Yes or No");
 		}
 		if($return['rootaccess'] != 0 && $return['rootaccess'] != 1) {
 			$return['error'] = 1;
-			$errormsg[] = i("Users have administrative access must be Yes or No");
+			$errormsg[] = i("Users Have Administrative Access must be Yes or No");
 		}
 		if($return['sethostname'] != 0 && $return['sethostname'] != 1) {
 			$return['error'] = 1;
-			$errormsg[] = i("Set computer hostname must be Yes or No");
+			$errormsg[] = i("Set Computer Hostname must be Yes or No");
 		}
 		if($return['mode'] == 'add' && $return['sysprep'] != 0 &&
 		   $return['sysprep'] != 1) {
 			$return['error'] = 1;
-			$errormsg[] = i("Use sysprep must be Yes or No");
+			$errormsg[] = i("Use Sysprep must be Yes or No");
 		}
 		if(empty($return['desc'])) {
 			$return['error'] = 1;

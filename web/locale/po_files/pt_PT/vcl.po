@@ -2219,7 +2219,7 @@ msgid "Last Updated"
 msgstr "Última Atualização"
 
 #: ../.ht-inc/image.php:137 ../.ht-inc/image.php:407
-msgid "Available for checkout"
+msgid "Available for Checkout"
 msgstr "Disponível para sair"
 
 #: ../.ht-inc/image.php:139
@@ -2364,23 +2364,23 @@ msgid "Estimated Reload Time"
 msgstr "Tempo estimado de Carregamento"
 
 #: ../.ht-inc/image.php:409
-msgid "Check for logged in user"
+msgid "Check for Logged in User"
 msgstr "Verifique no site para o utilizador"
 
 #: ../.ht-inc/image.php:411
-msgid "Users have administrative access"
+msgid "Users Have Administrative Access"
 msgstr "Utilizadores com acesso administrativo"
 
 #: ../.ht-inc/image.php
-msgid "Set computer hostname"
+msgid "Set Computer Hostname"
 msgstr "Colocar nome do computador"
 
 #: ../.ht-inc/image.php:414
-msgid "Use sysprep"
-msgstr "Use sysprep"
+msgid "Use Sysprep"
+msgstr "Use Sysprep"
 
 #: ../.ht-inc/image.php:416
-msgid "Connect methods:"
+msgid "Connect Methods:"
 msgstr "Formas de conexão:"
 
 #: ../.ht-inc/image.php:419 ../.ht-inc/image.php:499
@@ -2581,24 +2581,24 @@ msgid "Submitted ID is not valid"
 msgstr "ID submetido é inválido"
 
 #: ../.ht-inc/image.php:1584
-msgid "Available for checkout must be Yes or No"
+msgid "Available for Checkout must be Yes or No"
 msgstr "Disponível para checkout deve ser Sim ou Não"
 
 #: ../.ht-inc/image.php:1588
-msgid "Check for logged in user must be Yes or No"
+msgid "Check for Logged in User must be Yes or No"
 msgstr "Verifique no site para os utilizadores deve ser Sim ou Não"
 
 #: ../.ht-inc/image.php:1592
-msgid "Users have administrative access must be Yes or No"
+msgid "Users Have Administrative Access must be Yes or No"
 msgstr "Os utilizadores têm acesso administrativo deve ser Sim ou Não"
 
 #: ../.ht-inc/image.php
-msgid "Set computer hostname must be Yes or No"
+msgid "Set Computer Hostname must be Yes or No"
 msgstr "Definir hostname do computador deve ser Sim ou Não"
 
 #: ../.ht-inc/image.php:1597
-msgid "Use sysprep must be Yes or No"
-msgstr "Usar sysprep tem que ser Sim ou Não"
+msgid "Use Sysprep must be Yes or No"
+msgstr "Usar Sysprep tem que ser Sim ou Não"
 
 #: ../.ht-inc/image.php:1601
 msgid "You must include a description of the image"

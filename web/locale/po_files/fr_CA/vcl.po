@@ -1884,7 +1884,7 @@ msgid "Last Updated"
 msgstr "Dernière mise à jour"
 
 #: ../.ht-inc/image.php:137 ../.ht-inc/image.php:407
-msgid "Available for checkout"
+msgid "Available for Checkout"
 msgstr "Disponible pour check-out"
 
 #: ../.ht-inc/image.php:139
@@ -1975,19 +1975,19 @@ msgid "Estimated Reload Time"
 msgstr "Temps de chargement estimé"
 
 #: ../.ht-inc/image.php:409
-msgid "Check for logged in user"
+msgid "Check for Logged in User"
 msgstr "Vérifier l'utilisateur connecter"
 
 #: ../.ht-inc/image.php:411
-msgid "Users have administrative access"
+msgid "Users Have Administrative Access"
 msgstr "Les utilisateurs ont les droits administrateur"
 
 #: ../.ht-inc/image.php:414
-msgid "Use sysprep"
+msgid "Use Sysprep"
 msgstr "Utiliser sysprep"
 
 #: ../.ht-inc/image.php:416
-msgid "Connect methods:"
+msgid "Connect Methods:"
 msgstr "Méthodes de connexion"
 
 #: ../.ht-inc/image.php:419 ../.ht-inc/image.php:499
@@ -2151,19 +2151,19 @@ msgid "Submitted ID is not valid"
 msgstr "L'ID soumise est non valide"
 
 #: ../.ht-inc/image.php:1584
-msgid "Available for checkout must be Yes or No"
+msgid "Available for Checkout must be Yes or No"
 msgstr "Disponible pour le check-out doit être Oui ou Non"
 
 #: ../.ht-inc/image.php:1588
-msgid "Check for logged in user must be Yes or No"
+msgid "Check for Logged in User must be Yes or No"
 msgstr "Vérifier l'utilisateur conncté doit être Oui ou Non"
 
 #: ../.ht-inc/image.php:1592
-msgid "Users have administrative access must be Yes or No"
+msgid "Users Have Administrative Access must be Yes or No"
 msgstr "Les utilisateur ont les droits administrateur doit être Oui ou Non"
 
 #: ../.ht-inc/image.php:1597
-msgid "Use sysprep must be Yes or No"
+msgid "Use Sysprep must be Yes or No"
 msgstr "Utiliser sysprep doit être Oui ou Non"
 
 #: ../.ht-inc/image.php:1601

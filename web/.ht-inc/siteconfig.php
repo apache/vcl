@@ -635,7 +635,7 @@ class reconnecttimeout extends TimeVariable {
 	/////////////////////////////////////////////////////////////////////////////
 	function __construct() {
 		parent::__construct();
-		$this->name = i('Re-connect To Reservation Timeout');
+		$this->name = i('Reconnect To Reservation Timeout');
 		$this->key = 'reconnecttimeout';
 		$this->desc = i("After disconnecting from a reservation, users have this long to reconnect to a reserved node before the reservation is timed out (in minutes, does not apply to Server Reservations).");
 		$this->domidbase = 'reconnecttimeout';

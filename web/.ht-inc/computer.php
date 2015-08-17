@@ -661,7 +661,7 @@ class Computer extends Resource {
 
 		# maintenance notes
 		$h .= "<div id=\"notesspan\">\n";
-		$h .= labeledFormItem('notes', i('Reason for maintenance'), 'textarea');
+		$h .= labeledFormItem('notes', i('Reason for Maintenance'), 'textarea');
 		$h .= "</div>\n";
 
 		# VMhost profile
@@ -692,7 +692,7 @@ class Computer extends Resource {
 
 		# cores
 		$extra = array('smallDelta' => 1, 'largeDelta' => 4);
-		$h .= labeledFormItem('cores', i('No. Cores') . '*', 'spinner', '{min:1,max:255,places:0}', 1);
+		$h .= labeledFormItem('cores', i('Cores') . '*', 'spinner', '{min:1,max:255,places:0}', 1);
 
 		# proc speed
 		$extra = array('smallDelta' => 100, 'largeDelta' => 1000);
@@ -1987,7 +1987,7 @@ class Computer extends Resource {
 		# cores
 		if($return['cores'] < 1 || $return['cores'] > 255) {
 			$return['error'] = 1;
-			$errormsg[] = "Invalid value submitted for No. Cores";
+			$errormsg[] = "Invalid value submitted for Cores";
 		}
 		# procspeed
 		if($return['procspeed'] < 500 || $return['procspeed'] > 10000) {
