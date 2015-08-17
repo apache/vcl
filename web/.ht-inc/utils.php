@@ -151,7 +151,11 @@ function initGlobals() {
 	# end auth check
 
 	if($authed && $mode == 'selectauth')
-		$mode = 'home';
+		$mode = 'main';
+
+	# check that mode is valid
+	if(! array_key_exists($mode, $actions['pages']))
+		$mode = 'main';
 
 	if(! $authed) {
 		# set $skin based on cookie (so it gets set before user logs in
@@ -12285,7 +12289,7 @@ function menulistLI($page) {
 	global $mode, $actions, $inContinuation;
 	$mymode = $mode;
 	if(empty($mymode))
-		$mymode = "home";
+		$mymode = "main";
 	$testval = $actions['pages'][$mymode];
 	if($inContinuation) {
 		$obj = getContinuationVar('obj');
