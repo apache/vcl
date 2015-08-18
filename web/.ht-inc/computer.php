@@ -3224,13 +3224,13 @@ class Computer extends Resource {
 		$fails = array();
 		$passes = array();
 
-		# get ids from getUserResources because that data should already be in cache
-		$resources = getUserResources(array("imageAdmin", "imageCheckOut"));
-		$tmp = array_keys($resources['image']);
-		$imageid = $tmp[0];
+		$imageid = getImageId('noimage');
 		$revid = getProductionRevisionid($imageid);
-		$tmp = array_keys($resources['managementnode']);
-		$mnid = $tmp[0];
+		if(! ($mnid = getAnyManagementNodeID())) {
+			$ret = array('status' => 'error', 'errormsg' => 'No management nodes are available for controlling the submitted computers.');
+			sendJSON($ret);
+			return;
+		}
 
 		foreach($compids as $compid) {
 			if(retryGetSemaphore($imageid, $revid, $mnid, $compid, $startstamp, $endstamp))
@@ -3393,23 +3393,12 @@ class Computer extends Resource {
 		             'clearselection' => 0,
 		             'newstate' => $states[$newstateid],
 		             'refreshcount' => 1);
-		# get ids from getUserResources because that data should already be in cache
-		$resources = getUserResources(array("imageAdmin", "imageCheckOut"));
-		$tmp = array_keys($resources['image']);
-		$semimageid = $tmp[0];
-		$semrevid = getProductionRevisionid($semimageid);
-		if(! empty($resources['managementnode'])) {
-			$tmp = array_keys($resources['managementnode']);
-			$semmnid = $tmp[0];
-		}
-		else {
-			$allmns = array_keys(getManagementNodes('future'));
-			if(empty($allmns)) {
-				$ret = array('status' => 'error', 'errormsg' => 'No management nodes are available for controlling the submitted computers.');
-				sendJSON($ret);
-				return;
-			}
-			$semmnid = $allmns[0];
+		$noimageid = getImageId('noimage');
+		$norevid = getProductionRevisionid($noimageid);
+		if(! ($semmnid = getAnyManagementNodeID())) {
+			$ret = array('status' => 'error', 'errormsg' => 'No management nodes are available for controlling the submitted computers.');
+			sendJSON($ret);
+			return;
 		}
 
 		if($newstateid == 2) {
@@ -3613,7 +3602,7 @@ class Computer extends Resource {
 				cleanSemaphore();
 				$reloadstart = getCompFinalReservationTime($compid);
 				if($computers[$compid]['state'] == 'vmhostinuse') {
-					$sem = array('imageid' => $semimageid, 'revid' => $semrevid,
+					$sem = array('imageid' => $noimageid, 'revid' => $norevid,
 					             'mnid' => $semmnid, 'start' => $semstart, 'end' => $semend);
 					moveReservationsOffVMs($compid, $sem);
 					cleanSemaphore();
@@ -3630,8 +3619,6 @@ class Computer extends Resource {
 							continue;
 						}
 						# schedule tomaintenance/tohpc reservations for VMs and host
-						$noimageid = getImageId('noimage');
-						$revid = getProductionRevisionid($noimageid);
 						$startdt = unixToDatetime($reloadstart);
 						$end = $reloadstart + SECINMONTH;
 						$enddt = unixToDatetime($end);
@@ -3651,7 +3638,7 @@ class Computer extends Resource {
 								# leave existing tomaintenance reservation as is
 							}
 							# add tomaintenance reservation
-							elseif(! simpleAddRequest($row['id'], $noimageid, $revid, $startdt,
+							elseif(! simpleAddRequest($row['id'], $noimageid, $norevid, $startdt,
 							                          $enddt, 18, $vclreloadid)) {
 								cleanSemaphore();
 								$fails[] = $compid;
@@ -3669,7 +3656,7 @@ class Computer extends Resource {
 						$start = $reloadstart + 300; # allow 5 minutes for VMs to get removed
 						$startdt = unixToDatetime($start);
 						# lock this computer
-						if(! retryGetSemaphore($semimageid, $semrevid, $semmnid, $compid, $startdt, $enddt)) {
+						if(! retryGetSemaphore($noimageid, $norevid, $semmnid, $compid, $startdt, $enddt)) {
 							cleanSemaphore();
 							$fails[] = $compid;
 							continue;
@@ -3685,7 +3672,7 @@ class Computer extends Resource {
 								updateExistingToState($compid, $startdt, $tostateid);
 							# leave existing tomaintenance/tohpc reservation as is
 						}
-						elseif(! simpleAddRequest($compid, $noimageid, $revid, $startdt,
+						elseif(! simpleAddRequest($compid, $noimageid, $norevid, $startdt,
 						                          $enddt, $tostateid, $vclreloadid)) {
 							cleanSemaphore();
 							$fails[] = $compid;
@@ -3717,13 +3704,11 @@ class Computer extends Resource {
 						continue;
 					}
 					# computer has reservations, schedule tomaintenance
-					$noimageid = getImageId('noimage');
-					$revid = getProductionRevisionid($noimageid);
 					$startdt = unixToDatetime($reloadstart);
 					$end = $reloadstart + SECINMONTH;
 					$enddt = unixToDatetime($end);
 					# lock this computer
-					if(! retryGetSemaphore($semimageid, $semrevid, $semmnid, $compid, $startdt, $enddt)) {
+					if(! retryGetSemaphore($noimageid, $norevid, $semmnid, $compid, $startdt, $enddt)) {
 						$fails[] = $compid;
 						cleanSemaphore();
 						continue;
@@ -3741,7 +3726,7 @@ class Computer extends Resource {
 							# leave existing tomaintenance/tohpc reservation as is
 							$reloadstart = $checkstart;
 					}
-					elseif(! simpleAddRequest($compid, $noimageid, $revid, $startdt,
+					elseif(! simpleAddRequest($compid, $noimageid, $norevid, $startdt,
 					                          $enddt, $tostateid, $vclreloadid)) {
 						$fails[] = $compid;
 						cleanSemaphore();
@@ -3757,7 +3742,7 @@ class Computer extends Resource {
 				# we may end up moving reservations to the computer later in the
 				# loop
 				# lock this computer
-				if(! retryGetSemaphore($semimageid, $semrevid, $semmnid, $compid, $semstart, $semend)) {
+				if(! retryGetSemaphore($noimageid, $norevid, $semmnid, $compid, $semstart, $semend)) {
 					$fails[] = $compid;
 					cleanSemaphore();
 					continue;
@@ -3910,16 +3895,14 @@ class Computer extends Resource {
 						if(! is_null($computers[$compid]['vmprofileid']) &&
 						   array_key_exists($compid, $maintvmids) &&
 						   count($maintvmids[$compid])) {
-							$noimageid = getImageId('noimage');
-							$revid = getProductionRevisionid($noimageid);
 							$reloadstart = $start + 1800;
 							$reloadstartdt = unixToDatetime($reloadstart);
 							$end = $reloadstart + 3600;
 							$enddt = unixToDatetime($end);
 							foreach($maintvmids[$compid] as $vmid) {
-								if(! retryGetSemaphore($semimageid, $semrevid, $semmnid, $vmid, $reloadstartdt, $enddt))
+								if(! retryGetSemaphore($noimageid, $norevid, $semmnid, $vmid, $reloadstartdt, $enddt))
 									continue;
-								simpleAddRequest($vmid, $noimageid, $revid, $reloadstartdt,
+								simpleAddRequest($vmid, $noimageid, $norevid, $reloadstartdt,
 								                 $enddt, 19, $vclreloadid);
 								# continue even if failed to schedule VM to be reloaded
 							}
@@ -3977,7 +3960,7 @@ class Computer extends Resource {
 					if($profiles[$computers[$compid]['vmprofileid']]['imageid'] !=
 					   $profiles[$profileid]['imageid']) {
 						if($computers[$compid]['provisioning'] != 'None') {
-							$sem = array('imageid' => $semimageid, 'revid' => $semrevid,
+							$sem = array('imageid' => $noimageid, 'revid' => $norevid,
 							             'mnid' => $semmnid, 'start' => $semstart, 'end' => $semend);
 							moveReservationsOffVMs($compid, $sem);
 							cleanSemaphore();
@@ -3991,8 +3974,6 @@ class Computer extends Resource {
 								$start = getReloadStartTime();
 							else
 								$start = $reloadstart;
-							$noimageid = getImageId('noimage');
-							$revid = getProductionRevisionid($noimageid);
 							$startdt = unixToDatetime($start);
 							$end = $start + SECINWEEK;
 							$enddt = unixToDatetime($end);
@@ -4051,7 +4032,7 @@ class Computer extends Resource {
 												$end = $start + SECINYEAR;
 												$enddt = unixToDatetime($end);
 												# lock this computer
-												if(! retryGetSemaphore($semimageid, $semrevid, $semmnid, $compid, $startdt, $enddt)) {
+												if(! retryGetSemaphore($noimageid, $norevid, $semmnid, $compid, $startdt, $enddt)) {
 													$fails[] = $compid;
 													continue;
 												}
@@ -4077,7 +4058,7 @@ class Computer extends Resource {
 							}
 							if(array_key_exists($compid, $allvmids)) {
 								foreach($allvmids[$compid] as $vmid) {
-									$rc = simpleAddRequest($vmid, $noimageid, $revid, $startdt,
+									$rc = simpleAddRequest($vmid, $noimageid, $norevid, $startdt,
 									                       $enddt, 19, $vclreloadid);
 									if(! $rc) {
 										$fails[] = $compid;

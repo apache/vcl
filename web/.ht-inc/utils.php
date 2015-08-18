@@ -5817,9 +5817,6 @@ function moveReservationsOffComputer($compid=0, $count=0) {
 /// for a VM after reservations have been moved off of it; must include these
 /// keys: imageid, revid, mnid, start (datetime), end (datetime)
 ///
-/// \return 0 if failed to move reservations, 1 if succeeded, -1 if no
-/// reservations were found on $compid
-///
 /// \brief attempts to move reservations off of any VMs assigned to a $compid
 /// NOTE - cleanSemaphore should be called after this by the calling function
 ///
@@ -5827,12 +5824,10 @@ function moveReservationsOffComputer($compid=0, $count=0) {
 function moveReservationsOffVMs($compid, $sem=0) {
 	if(! is_array($sem)) {
 		$sem = array();
-		$resources = getUserResources(array("imageAdmin", "imageCheckOut"));
-		$tmp = array_keys($resources['image']);
-		$sem['imageid'] = $tmp[0];
+		$sem['imageid'] = getImageId('noimage');
 		$sem['revid'] = getProductionRevisionid($sem['imageid']);
-		$tmp = array_keys($resources['managementnode']);
-		$sem['mnid'] = $tmp[0];
+		if(! ($sem['mnid'] = getAnyManagementNodeID()))
+			return;
 		$sem['start'] = unixToDatetime(time());
 		$sem['end'] = '2038-01-01 00:00:00';
 	}
@@ -6901,6 +6896,30 @@ function getMnsFromImage($imageid) {
 	foreach($mns as $mnid => $name)
 		$mnids[$mnid] = 1;
 	return array_keys($mnids);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn getAnyManagementNodeID()
+///
+/// \return id of any management node available to user; 0 if none available
+///
+/// \brief finds a management node available to the user; primarily useful for
+/// getting an id to be used when getting a semaphore lock on a computer when
+/// the computer isn't actually going to be loaded as a result of the lock
+///
+////////////////////////////////////////////////////////////////////////////////
+function getAnyManagementNodeID() {
+	# try getting id from getUserResources because that data should already be in cache
+	$resources = getUserResources(array("imageCheckOut", "mgmtNodeAdmin"));
+	if(! empty($resources['managementnode'])) {
+		$tmp = array_keys($resources['managementnode']);
+		return $tmp[0];
+	}
+	$allmns = array_keys(getManagementNodes('future'));
+	if(empty($allmns))
+		return 0;
+	return $allmns[0];
 }
 
 ////////////////////////////////////////////////////////////////////////////////
