@@ -96,7 +96,7 @@ TimeVariable.prototype.addAffiliationSettingCBextra = function(data) {
 	var domidbase = this.domidbase;
 	var btn = new dijit.form.Button({
 		id: data.items.id + 'delbtn',
-		label: i('Delete'),
+		label: _('Delete'),
 		onClick: function() {
 			func(data.items.id, domidbase);
 		}

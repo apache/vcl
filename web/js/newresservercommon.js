@@ -112,7 +112,7 @@ function deployProfileChanged() {
 		onItem: function(item, request) {
 			var desc = profilesstore.getValue(item, 'desc');
 			if(desc == '') {
-				desc = i('(No description)');
+				desc = _('(No description)');
 			}
 			dojo.byId('deploydesc').innerHTML = desc;
 		}
@@ -121,7 +121,7 @@ function deployProfileChanged() {
 
 function getServerProfileData(cont, id, cb) {
 	if(id == 'profileid') {
-		dijit.byId('fetchProfilesBtn').set('label', i('Working...'));
+		dijit.byId('fetchProfilesBtn').set('label', _('Working...'));
 		dijit.byId('fetchProfilesBtn').set('disabled', true);
 	}
 	var data = {continuation: cont,
@@ -133,7 +133,7 @@ function getServerProfileData(cont, id, cb) {
 function getServerProfileDataDeployCB(data, ioArgs) {
 	document.body.style.cursor = 'default';
 	if(data.items.error) {
-		alert(i('You do not have access to apply this server profile.'));
+		alert(_('You do not have access to apply this server profile.'));
 		return;
 	}
 	dojo.byId('appliedprofileid').value = data.items.id;

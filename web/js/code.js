@@ -35,7 +35,7 @@ function setBrowser() {
 }
 setBrowser();
 
-function i(str) {
+function _(str) {
 	if(typeof usenls == 'undefined' ||
 	   typeof nlsmessages == 'undefined' ||
 	   ! (str in nlsmessages) ||
@@ -81,7 +81,7 @@ function returnCheck(CB, data, ioArgs) {
 	catch(error) {
 		if((! data.match(/-- continuationserror --/)) &&
 		   (data.match(/<html/) || ! error.message.match(/syntax error/))) {
-			alert(i('Error encountered:') + " " + i('Please try again later'));
+			alert(_('Error encountered:') + " " + _('Please try again later'));
 			return;
 		}
 		else if(data.match(/-- continuationserror --/)) {
@@ -93,7 +93,7 @@ function returnCheck(CB, data, ioArgs) {
 		var div = document.createElement('div');
 		div.innerHTML = data;
 		var msg = div.textContent || div.innerText || "";
-		alert(i('Error encountered:') + '\n\n' + msg);
+		alert(_('Error encountered:') + '\n\n' + msg);
 		return;
 	}
 	CB(json, ioArgs);
@@ -254,10 +254,10 @@ function checkNewLocalPassword() {
 		stat.innerHTML = '';
 	}
 	else if(pwd1.value == pwd2.value) {
-		stat.innerHTML = '<font color="#008000">' + i('match') + '</font>';
+		stat.innerHTML = '<font color="#008000">' + _('match') + '</font>';
 	}
 	else {
-		stat.innerHTML = '<font color="red">' + i('no match') + '</font>';
+		stat.innerHTML = '<font color="red">' + _('no match') + '</font>';
 	}
 }
 

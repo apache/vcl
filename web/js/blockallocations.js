@@ -76,7 +76,7 @@ function populateBlockStoreCB(data, ioArgs) {
 			end.setHours(data.items.endhs[i]);
 			end.setMinutes(data.items.endms[i]);
 			var btn = new dijit.form.Button({
-				label: i("Remove"),
+				label: _("Remove"),
 				onClick: createRemoveFunc(rmfunc, id)
 			});
 			store.newItem({id: id, start: start, start2: start2, end: end, remove: btn});
@@ -111,7 +111,7 @@ function populateBlockStoreCB(data, ioArgs) {
 			end.setHours(data.items.endhs[i]);
 			end.setMinutes(data.items.endms[i]);
 			var btn = new dijit.form.Button({
-				label: i("Remove"),
+				label: _("Remove"),
 				onClick: createRemoveFunc(blockFormRemoveListSlot, id)
 			});
 			store.newItem({id: id, date1: date1, date2: date2, start: start, end: end, remove: btn});
@@ -131,7 +131,7 @@ function updateBlockStatus() {
 
 function updateBlockStatusCB(data, ioArgs) {
 	if(data.items.status && data.items.status == 'gone') {
-		dojo.byId('statusdiv').innerHTML = i('The selected Block Request no longer exists.');
+		dojo.byId('statusdiv').innerHTML = _('The selected Block Request no longer exists.');
 		return;
 	}
 	dojo.byId('available').innerHTML = data.items.available;
@@ -213,7 +213,7 @@ function blockFormAddWeeklyTime() {
 		teststart = teststart.getTime();
 		if(startts < testend &&
 		   endts > teststart) {
-			alert(i('These times overlap with an existing time slot'));
+			alert(_('These times overlap with an existing time slot'));
 			return;
 		}
 	}
@@ -224,7 +224,7 @@ function blockFormAddWeeklyTime() {
 	requestBlockAddWeeklyStore.nextid = id;
 
 	var btn = new dijit.form.Button({
-		label: i("Remove"),
+		label: _("Remove"),
 		onClick: function() {blockFormRemoveWeeklyTime(id);}
 	});
 	requestBlockAddWeeklyStore.newItem({id: id, start: start, start2: s, end: end, remove: btn});
@@ -252,7 +252,7 @@ function blockFormAddMonthlyTime() {
 	for(var i = 0; i < len; i++) {
 		if(startts < items[i].end[0].getTime() &&
 		   endts > items[i].start2[0].getTime()) {
-			alert(i('These times overlap with an existing time slot'));
+			alert(_('These times overlap with an existing time slot'));
 			return;
 		}
 	}
@@ -263,7 +263,7 @@ function blockFormAddMonthlyTime() {
 	requestBlockAddMonthlyStore.nextid = id;
 
 	var btn = new dijit.form.Button({
-		label: i("Remove"),
+		label: _("Remove"),
 		onClick: function() {blockFormRemoveMonthlyTime(id);}
 	});
 	requestBlockAddMonthlyStore.newItem({id: id, start: start, start2: s, end: end, remove: btn});
@@ -282,7 +282,7 @@ function blockFormAddListSlot() {
 	today.setSeconds(0);
 	today.setMilliseconds(0);
 	if(dateobj.value < today) {
-		alert(i('The date must be today or later'));
+		alert(_('The date must be today or later'));
 		return;
 	}
 
@@ -308,7 +308,7 @@ function blockFormAddListSlot() {
 		var checkend = items[i].date2[0].getTime() + items[i].end[0].getTime();
 		if(startts < checkend &&
 		   endts > checkstart) {
-			alert(i('The date and times overlap with an existing time slot'));
+			alert(_('The date and times overlap with an existing time slot'));
 			return;
 		}
 	}
@@ -319,7 +319,7 @@ function blockFormAddListSlot() {
 	requestBlockAddListStore.nextid = id;
 
 	var btn = new dijit.form.Button({
-		label: i("Remove"),
+		label: _("Remove"),
 		onClick: function() {blockFormRemoveListSlot(id);}
 	});
 	requestBlockAddListStore.newItem({id: id, date1: date1, date2: d, start: start, end: end, remove: btn});
@@ -359,7 +359,7 @@ function blockFormConfirm(mode) {
 	   (dijit.byId('groupsel') && ! dijit.byId('groupsel').isValid()) ||
 		(dijit.byId('brname') && ! dijit.byId('brname').isValid()) ||
 		(dijit.byId('browner') && ! dijit.byId('browner').isValid())) {
-		alert(i('Please fix invalid values before submitting.'));
+		alert(_('Please fix invalid values before submitting.'));
 		return;
 	}
 	var weekly = dojo.byId('weeklyradio');
@@ -389,13 +389,13 @@ function blockFormVerifyWeekly(mode) {
 	if(! dijit.byId('wkfirstdate').isValid()) {
 		dijit.byId('wkfirstdate')._hasBeenBlurred = true;
 		dijit.byId('wkfirstdate').validate();
-		alert(i('Please fill in First Date of Usage'));
+		alert(_('Please fill in First Date of Usage'));
 		return;
 	}
 	if(! dijit.byId('wklastdate').isValid()) {
 		dijit.byId('wklastdate')._hasBeenBlurred = true;
 		dijit.byId('wklastdate').validate();
-		alert(i('Please fill in Last Date of Usage'));
+		alert(_('Please fill in Last Date of Usage'));
 		return;
 	}
 	var today = new Date();
@@ -404,39 +404,39 @@ function blockFormVerifyWeekly(mode) {
 	today.setSeconds(0);
 	today.setMilliseconds(0);
 	if(pagemode != 'edit' && dijit.byId('wkfirstdate').value < today) {
-		alert(i('The First Date of Usage must be today or later'));
+		alert(_('The First Date of Usage must be today or later'));
 		return;
 	}
 	if(pagemode != 'edit' && dijit.byId('wklastdate').value < dijit.byId('wkfirstdate').value) {
-		alert(i('The Last Date of Usage must be the same or later than the First Date of Usage'));
+		alert(_('The Last Date of Usage must be the same or later than the First Date of Usage'));
 		return;
 	}
 	if(pagemode == 'edit' && dijit.byId('wklastdate').value < today) {
-		alert(i('The Last Date of Usage must be today or later'));
+		alert(_('The Last Date of Usage must be today or later'));
 		return;
 	}
 	var days = new Array();
 	if(dojo.byId('wdays0').checked)
-		days.push(i('Sunday'));
+		days.push(_('Sunday'));
 	if(dojo.byId('wdays1').checked)
-		days.push(i('Monday'));
+		days.push(_('Monday'));
 	if(dojo.byId('wdays2').checked)
-		days.push(i('Tuesday'));
+		days.push(_('Tuesday'));
 	if(dojo.byId('wdays3').checked)
-		days.push(i('Wednesday'));
+		days.push(_('Wednesday'));
 	if(dojo.byId('wdays4').checked)
-		days.push(i('Thursday'));
+		days.push(_('Thursday'));
 	if(dojo.byId('wdays5').checked)
-		days.push(i('Friday'));
+		days.push(_('Friday'));
 	if(dojo.byId('wdays6').checked)
-		days.push(i('Saturday'));
+		days.push(_('Saturday'));
 	if(days.length == 0) {
-		alert(i('At least one day must be checked when using "Repeating Weekly"'));
+		alert(_('At least one day must be checked when using "Repeating Weekly"'));
 		return;
 	}
 	var len = requestBlockAddWeeklyStore._getItemsArray().length;
 	if(len == 0) {
-		alert(i('At least one start/end combination must be entered when using "Repeating Weekly"'));
+		alert(_('At least one start/end combination must be entered when using "Repeating Weekly"'));
 		return;
 	}
 	if(dijit.byId('groupsel'))
@@ -445,27 +445,27 @@ function blockFormVerifyWeekly(mode) {
 		var groupselobj = dojo.byId('groupsel');
 	if(mode == 'request' && groupselobj.value == 0 &&
 	   dijit.byId('comments').value.length == 0) {
-		alert(i('When submitting "(group not listed)" as the user group, information must be included in the comments about what group needs to be created.'));
+		alert(_('When submitting "(group not listed)" as the user group, information must be included in the comments about what group needs to be created.'));
 		return;
 	}
 	if(mode != 'request') {
-		dojo.byId('confnametitle').innerHTML = i('Name:');
+		dojo.byId('confnametitle').innerHTML = _('Name:');
 		dojo.byId('confname').innerHTML = dijit.byId('brname').textbox.value;
-		dojo.byId('confownertitle').innerHTML = i('Owner:');
+		dojo.byId('confownertitle').innerHTML = _('Owner:');
 		dojo.byId('confowner').innerHTML = dijit.byId('browner').textbox.value;
 	}
 	dojo.byId('confimage').innerHTML = getSelectText('imagesel');
 	dojo.byId('confseats').innerHTML = dijit.byId('machinecnt').value;
 	if(groupselobj.value == 0)
-		dojo.byId('confgroup').innerHTML = i('specified in comments');
+		dojo.byId('confgroup').innerHTML = _('specified in comments');
 	else
 		dojo.byId('confgroup').innerHTML = getSelectText('groupsel');
-	dojo.byId('confrepeat').innerHTML = i('Weekly');
-	dojo.byId('conftitle1').innerHTML = i('First Date:');
+	dojo.byId('confrepeat').innerHTML = _('Weekly');
+	dojo.byId('conftitle1').innerHTML = _('First Date:');
 	dojo.byId('confvalue1').innerHTML = dijit.byId('wkfirstdate').getDisplayedValue();
-	dojo.byId('conftitle2').innerHTML = i('Last Date:');
+	dojo.byId('conftitle2').innerHTML = _('Last Date:');
 	dojo.byId('confvalue2').innerHTML = dijit.byId('wklastdate').getDisplayedValue();
-	dojo.byId('conftitle3').innerHTML = i('Repeating on these days:');
+	dojo.byId('conftitle3').innerHTML = _('Repeating on these days:');
 	dojo.byId('confvalue3').innerHTML = days.join('<br>');
 	var times = new Array();
 	var items = requestBlockAddWeeklyStore._getItemsArray();
@@ -479,7 +479,7 @@ function blockFormVerifyWeekly(mode) {
 	var times2 = new Array();
 	for(i = 0; i < len; i++)
 		times2.push(times[i].val);
-	dojo.byId('conftitle4').innerHTML = i('During these times:');
+	dojo.byId('conftitle4').innerHTML = _('During these times:');
 	dojo.byId('confvalue4').innerHTML = times2.join('<br>');
 	if(dijit.byId('comments') && dijit.byId('comments').value.length)
 		dojo.removeClass('commentsnote', 'hidden');
@@ -554,13 +554,13 @@ function blockFormVerifyMonthly(mode) {
 	if(! dijit.byId('mnfirstdate').isValid()) {
 		dijit.byId('mnfirstdate')._hasBeenBlurred = true;
 		dijit.byId('mnfirstdate').validate();
-		alert(i('Please fill in First Date of Usage'));
+		alert(_('Please fill in First Date of Usage'));
 		return;
 	}
 	if(! dijit.byId('mnlastdate').isValid()) {
 		dijit.byId('mnlastdate')._hasBeenBlurred = true;
 		dijit.byId('mnlastdate').validate();
-		alert(i('Please fill in Last Date of Usage'));
+		alert(_('Please fill in Last Date of Usage'));
 		return;
 	}
 	var today = new Date();
@@ -569,20 +569,20 @@ function blockFormVerifyMonthly(mode) {
 	today.setSeconds(0);
 	today.setMilliseconds(0);
 	if(pagemode != 'edit' && dijit.byId('mnfirstdate').value < today) {
-		alert(i('The First Date of Usage must be today or later'));
+		alert(_('The First Date of Usage must be today or later'));
 		return;
 	}
 	if(pagemode != 'edit' && dijit.byId('mnlastdate').value < dijit.byId('mnfirstdate').value) {
-		alert(i('The Last Date of Usage must be the same or later than the First Date of Usage'));
+		alert(_('The Last Date of Usage must be the same or later than the First Date of Usage'));
 		return;
 	}
 	if(pagemode == 'edit' && dijit.byId('mnlastdate').value < today) {
-		alert(i('The Last Date of Usage must be today or later'));
+		alert(_('The Last Date of Usage must be today or later'));
 		return;
 	}
 	var len = requestBlockAddMonthlyStore._getItemsArray().length;
 	if(len == 0) {
-		alert(i('At least one start/end combination must be entered when using "Repeating Monthly"'));
+		alert(_('At least one start/end combination must be entered when using "Repeating Monthly"'));
 		return;
 	}
 	if(dijit.byId('groupsel'))
@@ -591,32 +591,32 @@ function blockFormVerifyMonthly(mode) {
 		var groupselobj = dojo.byId('groupsel');
 	if(mode == 'request' && groupselobj.value == 0 &&
 	   dijit.byId('comments').value.length == 0) {
-		alert(i('When submitting "(group not listed)" as the user group, information must be included in the comments about what group needs to be created.'));
+		alert(_('When submitting "(group not listed)" as the user group, information must be included in the comments about what group needs to be created.'));
 		return;
 	}
 	if(mode != 'request') {
-		dojo.byId('confnametitle').innerHTML = i('Name:');
+		dojo.byId('confnametitle').innerHTML = _('Name:');
 		dojo.byId('confname').innerHTML = dijit.byId('brname').textbox.value;
-		dojo.byId('confownertitle').innerHTML = i('Owner:');
+		dojo.byId('confownertitle').innerHTML = _('Owner:');
 		dojo.byId('confowner').innerHTML = dijit.byId('browner').textbox.value;
 	}
 	dojo.byId('confimage').innerHTML = getSelectText('imagesel');
 	dojo.byId('confseats').innerHTML = dijit.byId('machinecnt').value;
 	if(groupselobj.value == 0)
-		dojo.byId('confgroup').innerHTML = i('specified in comments');
+		dojo.byId('confgroup').innerHTML = _('specified in comments');
 	else
 		dojo.byId('confgroup').innerHTML = getSelectText('groupsel');
-	dojo.byId('confrepeat').innerHTML = i('Monthly');
-	dojo.byId('conftitle1').innerHTML = i('First Date:');
+	dojo.byId('confrepeat').innerHTML = _('Monthly');
+	dojo.byId('conftitle1').innerHTML = _('First Date:');
 	dojo.byId('confvalue1').innerHTML = dijit.byId('mnfirstdate').getDisplayedValue();
-	dojo.byId('conftitle2').innerHTML = i('Last Date:');
+	dojo.byId('conftitle2').innerHTML = _('Last Date:');
 	dojo.byId('confvalue2').innerHTML = dijit.byId('mnlastdate').getDisplayedValue();
-	dojo.byId('conftitle3').innerHTML = i('Repeat on:');
+	dojo.byId('conftitle3').innerHTML = _('Repeat on:');
 	var obj = dojo.byId('mnweeknum');
 	var date1 = obj.options[obj.selectedIndex].text;
 	obj = dojo.byId('mnday');
 	date1 += " " + obj.options[obj.selectedIndex].text;
-	dojo.byId('confvalue3').innerHTML = date1 + ' ' + i("of each month");
+	dojo.byId('confvalue3').innerHTML = date1 + ' ' + _("of each month");
 	var times = new Array();
 	var items = requestBlockAddMonthlyStore._getItemsArray();
 	for(var i = 0; i < len; i++) {
@@ -629,7 +629,7 @@ function blockFormVerifyMonthly(mode) {
 	var times2 = new Array();
 	for(i = 0; i < len; i++)
 		times2.push(times[i].val);
-	dojo.byId('conftitle4').innerHTML = i('During these times:');
+	dojo.byId('conftitle4').innerHTML = _('During these times:');
 	dojo.byId('confvalue4').innerHTML = times2.join('<br>');
 	if(dijit.byId('comments') && dijit.byId('comments').value.length)
 		dojo.removeClass('commentsnote', 'hidden');
@@ -690,7 +690,7 @@ function blockFormSubmitMonthly(mode) {
 function blockFormVerifyList(mode) {
 	var len = requestBlockAddListStore._getItemsArray().length;
 	if(len == 0) {
-		alert(i('At least one date/start/end combination must be entered when using "List of Dates/Times"'));
+		alert(_('At least one date/start/end combination must be entered when using "List of Dates/Times"'));
 		return;
 	}
 	if(dijit.byId('groupsel'))
@@ -698,23 +698,23 @@ function blockFormVerifyList(mode) {
 	else
 		var groupselobj = dojo.byId('groupsel');
 	if(groupselobj.value == 0 && dijit.byId('comments').value.length == 0) {
-		alert(i('When submitting "(group not listed)" as the user group, information must be included in the comments about what group needs to be created.'));
+		alert(_('When submitting "(group not listed)" as the user group, information must be included in the comments about what group needs to be created.'));
 		return;
 	}
 	if(mode != 'request') {
-		dojo.byId('confnametitle').innerHTML = i('Name:');
+		dojo.byId('confnametitle').innerHTML = _('Name:');
 		dojo.byId('confname').innerHTML = dijit.byId('brname').textbox.value;
-		dojo.byId('confownertitle').innerHTML = i('Owner:');
+		dojo.byId('confownertitle').innerHTML = _('Owner:');
 		dojo.byId('confowner').innerHTML = dijit.byId('browner').textbox.value;
 	}
 	dojo.byId('confimage').innerHTML = getSelectText('imagesel');
 	dojo.byId('confseats').innerHTML = dijit.byId('machinecnt').value;
 	if(groupselobj.value == 0)
-		dojo.byId('confgroup').innerHTML = i('specified in comments');
+		dojo.byId('confgroup').innerHTML = _('specified in comments');
 	else
 		dojo.byId('confgroup').innerHTML = getSelectText('groupsel');
-	dojo.byId('confrepeat').innerHTML = i('List of Dates/Times');
-	dojo.byId('conftitle1').innerHTML = i('Repeat on:');
+	dojo.byId('confrepeat').innerHTML = _('List of Dates/Times');
+	dojo.byId('conftitle1').innerHTML = _('Repeat on:');
 	var slots = new Array();
 	var items = requestBlockAddListStore._getItemsArray();
 	var date1 = '';
@@ -888,14 +888,14 @@ function deleteBlockConfirmCB(data, ioArgs) {
 		dojo.byId('confimage').innerHTML = data.items.image;
 		dojo.byId('confseats').innerHTML = data.items.seats;
 		dojo.byId('confgroup').innerHTML = data.items.usergroup;
-		dojo.byId('confrepeat').innerHTML = i('Weekly');
-		dojo.byId('conftitle1').innerHTML = i('First Date:');
+		dojo.byId('confrepeat').innerHTML = _('Weekly');
+		dojo.byId('conftitle1').innerHTML = _('First Date:');
 		dojo.byId('confvalue1').innerHTML = data.items.startdate;
-		dojo.byId('conftitle2').innerHTML = i('Last Date:');
+		dojo.byId('conftitle2').innerHTML = _('Last Date:');
 		dojo.byId('confvalue2').innerHTML = data.items.lastdate;
-		dojo.byId('conftitle3').innerHTML = i('Repeating on these days:');
+		dojo.byId('conftitle3').innerHTML = _('Repeating on these days:');
 		dojo.byId('confvalue3').innerHTML = data.items.days.join('<br>');
-		dojo.byId('conftitle4').innerHTML = i('During these times:');
+		dojo.byId('conftitle4').innerHTML = _('During these times:');
 		dojo.byId('confvalue4').innerHTML = data.items.times.join('<br>');
 	}
 	else if(data.items.repeating == 'monthly') {
@@ -904,14 +904,14 @@ function deleteBlockConfirmCB(data, ioArgs) {
 		dojo.byId('confimage').innerHTML = data.items.image;
 		dojo.byId('confseats').innerHTML = data.items.seats;
 		dojo.byId('confgroup').innerHTML = data.items.usergroup;
-		dojo.byId('confrepeat').innerHTML = i('Monthly');
-		dojo.byId('conftitle1').innerHTML = i('First Date:');
+		dojo.byId('confrepeat').innerHTML = _('Monthly');
+		dojo.byId('conftitle1').innerHTML = _('First Date:');
 		dojo.byId('confvalue1').innerHTML = data.items.startdate;
-		dojo.byId('conftitle2').innerHTML = i('Last Date:');
+		dojo.byId('conftitle2').innerHTML = _('Last Date:');
 		dojo.byId('confvalue2').innerHTML = data.items.lastdate;
-		dojo.byId('conftitle3').innerHTML = i('Repeat on:');
-		dojo.byId('confvalue3').innerHTML = data.items.date1 + ' ' + i("of each month");
-		dojo.byId('conftitle4').innerHTML = i('During these times:');
+		dojo.byId('conftitle3').innerHTML = _('Repeat on:');
+		dojo.byId('confvalue3').innerHTML = data.items.date1 + ' ' + _("of each month");
+		dojo.byId('conftitle4').innerHTML = _('During these times:');
 		dojo.byId('confvalue4').innerHTML = data.items.times.join('<br>');
 	}
 	else if(data.items.repeating == 'list') {
@@ -920,8 +920,8 @@ function deleteBlockConfirmCB(data, ioArgs) {
 		dojo.byId('confimage').innerHTML = data.items.image;
 		dojo.byId('confseats').innerHTML = data.items.seats;
 		dojo.byId('confgroup').innerHTML = data.items.usergroup;
-		dojo.byId('confrepeat').innerHTML = i('List of Dates/Times');
-		dojo.byId('conftitle1').innerHTML = i('Repeat on:');
+		dojo.byId('confrepeat').innerHTML = _('List of Dates/Times');
+		dojo.byId('conftitle1').innerHTML = _('Repeat on:');
 		dojo.byId('confvalue1').innerHTML = data.items.slots.join('<br>');
 	}
 	dojo.byId('submitdeletecont').value = data.items.cont;
@@ -949,14 +949,14 @@ function viewBlockAllocationCB(data, ioArgs) {
 		dojo.byId('confimage').innerHTML = data.items.image;
 		dojo.byId('confseats').innerHTML = data.items.seats;
 		dojo.byId('confgroup').innerHTML = data.items.usergroup;
-		dojo.byId('confrepeat').innerHTML = i('Weekly');
-		dojo.byId('conftitle1').innerHTML = i('First Date:');
+		dojo.byId('confrepeat').innerHTML = _('Weekly');
+		dojo.byId('conftitle1').innerHTML = _('First Date:');
 		dojo.byId('confvalue1').innerHTML = data.items.startdate;
-		dojo.byId('conftitle2').innerHTML = i('Last Date:');
+		dojo.byId('conftitle2').innerHTML = _('Last Date:');
 		dojo.byId('confvalue2').innerHTML = data.items.lastdate;
-		dojo.byId('conftitle3').innerHTML = i('Repeating on these days:');
+		dojo.byId('conftitle3').innerHTML = _('Repeating on these days:');
 		dojo.byId('confvalue3').innerHTML = data.items.days.join('<br>');
-		dojo.byId('conftitle4').innerHTML = i('During these times:');
+		dojo.byId('conftitle4').innerHTML = _('During these times:');
 		dojo.byId('confvalue4').innerHTML = data.items.times.join('<br>');
 	}
 	else if(data.items.repeating == 'monthly') {
@@ -965,14 +965,14 @@ function viewBlockAllocationCB(data, ioArgs) {
 		dojo.byId('confimage').innerHTML = data.items.image;
 		dojo.byId('confseats').innerHTML = data.items.seats;
 		dojo.byId('confgroup').innerHTML = data.items.usergroup;
-		dojo.byId('confrepeat').innerHTML = i('Monthly');
-		dojo.byId('conftitle1').innerHTML = i('First Date:');
+		dojo.byId('confrepeat').innerHTML = _('Monthly');
+		dojo.byId('conftitle1').innerHTML = _('First Date:');
 		dojo.byId('confvalue1').innerHTML = data.items.startdate;
-		dojo.byId('conftitle2').innerHTML = i('Last Date:');
+		dojo.byId('conftitle2').innerHTML = _('Last Date:');
 		dojo.byId('confvalue2').innerHTML = data.items.lastdate;
-		dojo.byId('conftitle3').innerHTML = i('Repeat on:');
-		dojo.byId('confvalue3').innerHTML = data.items.date1 + ' ' + i("of each month");
-		dojo.byId('conftitle4').innerHTML = i('During these times:');
+		dojo.byId('conftitle3').innerHTML = _('Repeat on:');
+		dojo.byId('confvalue3').innerHTML = data.items.date1 + ' ' + _("of each month");
+		dojo.byId('conftitle4').innerHTML = _('During these times:');
 		dojo.byId('confvalue4').innerHTML = data.items.times.join('<br>');
 	}
 	else if(data.items.repeating == 'list') {
@@ -981,8 +981,8 @@ function viewBlockAllocationCB(data, ioArgs) {
 		dojo.byId('confimage').innerHTML = data.items.image;
 		dojo.byId('confseats').innerHTML = data.items.seats;
 		dojo.byId('confgroup').innerHTML = data.items.usergroup;
-		dojo.byId('confrepeat').innerHTML = i('List of Dates/Times');
-		dojo.byId('conftitle1').innerHTML = i('Repeat on:');
+		dojo.byId('confrepeat').innerHTML = _('List of Dates/Times');
+		dojo.byId('conftitle1').innerHTML = _('Repeat on:');
 		dojo.byId('confvalue1').innerHTML = data.items.slots.join('<br>');
 	}
 	document.body.style.cursor = 'default';
@@ -1026,36 +1026,36 @@ function acceptBlockConfirmCB(data, ioArgs) {
 		dojo.removeClass('acceptemailwarning', 'hidden');
 	}
 	if(data.items.repeating == 'weekly') {
-		dojo.byId('acceptrepeat').innerHTML = i('Weekly');
-		dojo.byId('accepttitle1').innerHTML = i('First Date:');
+		dojo.byId('acceptrepeat').innerHTML = _('Weekly');
+		dojo.byId('accepttitle1').innerHTML = _('First Date:');
 		dojo.byId('acceptvalue1').innerHTML = data.items.startdate;
-		dojo.byId('accepttitle2').innerHTML = i('Last Date:');
+		dojo.byId('accepttitle2').innerHTML = _('Last Date:');
 		dojo.byId('acceptvalue2').innerHTML = data.items.lastdate;
-		dojo.byId('accepttitle3').innerHTML = i('Repeating on these days:');
+		dojo.byId('accepttitle3').innerHTML = _('Repeating on these days:');
 		dojo.byId('acceptvalue3').innerHTML = data.items.days.join('<br>');
-		dojo.byId('accepttitle4').innerHTML = i('During these times:');
+		dojo.byId('accepttitle4').innerHTML = _('During these times:');
 		dojo.byId('acceptvalue4').innerHTML = data.items.times.join('<br>');
-		dojo.byId('accepttitle5').innerHTML = i('User Submitted Comments:');
+		dojo.byId('accepttitle5').innerHTML = _('User Submitted Comments:');
 		dojo.byId('acceptvalue5').innerHTML = data.items.comments;
 	}
 	else if(data.items.repeating == 'monthly') {
-		dojo.byId('acceptrepeat').innerHTML = i('Monthly');
-		dojo.byId('accepttitle1').innerHTML = i('First Date:');
+		dojo.byId('acceptrepeat').innerHTML = _('Monthly');
+		dojo.byId('accepttitle1').innerHTML = _('First Date:');
 		dojo.byId('acceptvalue1').innerHTML = data.items.startdate;
-		dojo.byId('accepttitle2').innerHTML = i('Last Date:');
+		dojo.byId('accepttitle2').innerHTML = _('Last Date:');
 		dojo.byId('acceptvalue2').innerHTML = data.items.lastdate;
-		dojo.byId('accepttitle3').innerHTML = i('Repeat on:');
-		dojo.byId('acceptvalue3').innerHTML = data.items.date1 + ' ' + i("of each month");
-		dojo.byId('accepttitle4').innerHTML = i('During these times:');
+		dojo.byId('accepttitle3').innerHTML = _('Repeat on:');
+		dojo.byId('acceptvalue3').innerHTML = data.items.date1 + ' ' + _("of each month");
+		dojo.byId('accepttitle4').innerHTML = _('During these times:');
 		dojo.byId('acceptvalue4').innerHTML = data.items.times.join('<br>');
-		dojo.byId('accepttitle5').innerHTML = i('User Submitted Comments:');
+		dojo.byId('accepttitle5').innerHTML = _('User Submitted Comments:');
 		dojo.byId('acceptvalue5').innerHTML = data.items.comments;
 	}
 	else if(data.items.repeating == 'list') {
-		dojo.byId('acceptrepeat').innerHTML = i('List of Dates/Times');
-		dojo.byId('accepttitle1').innerHTML = i('Repeat on:');
+		dojo.byId('acceptrepeat').innerHTML = _('List of Dates/Times');
+		dojo.byId('accepttitle1').innerHTML = _('Repeat on:');
 		dojo.byId('acceptvalue1').innerHTML = data.items.slots.join('<br>');
-		dojo.byId('accepttitle2').innerHTML = i('User Submitted Comments:');
+		dojo.byId('accepttitle2').innerHTML = _('User Submitted Comments:');
 		dojo.byId('acceptvalue2').innerHTML = data.items.comments;
 	}
 	dojo.byId('submitacceptcont').value = data.items.cont;
@@ -1101,36 +1101,36 @@ function rejectBlockConfirmCB(data, ioArgs) {
 		dojo.removeClass('rejectemailwarning', 'hidden');
 	}
 	if(data.items.repeating == 'weekly') {
-		dojo.byId('rejectrepeat').innerHTML = i('Weekly');
-		dojo.byId('rejecttitle1').innerHTML = i('First Date:');
+		dojo.byId('rejectrepeat').innerHTML = _('Weekly');
+		dojo.byId('rejecttitle1').innerHTML = _('First Date:');
 		dojo.byId('rejectvalue1').innerHTML = data.items.startdate;
-		dojo.byId('rejecttitle2').innerHTML = i('Last Date:');
+		dojo.byId('rejecttitle2').innerHTML = _('Last Date:');
 		dojo.byId('rejectvalue2').innerHTML = data.items.lastdate;
-		dojo.byId('rejecttitle3').innerHTML = i('Repeating on these days:');
+		dojo.byId('rejecttitle3').innerHTML = _('Repeating on these days:');
 		dojo.byId('rejectvalue3').innerHTML = data.items.days.join('<br>');
-		dojo.byId('rejecttitle4').innerHTML = i('During these times:');
+		dojo.byId('rejecttitle4').innerHTML = _('During these times:');
 		dojo.byId('rejectvalue4').innerHTML = data.items.times.join('<br>');
-		dojo.byId('rejecttitle5').innerHTML = i('User Submitted Comments:');
+		dojo.byId('rejecttitle5').innerHTML = _('User Submitted Comments:');
 		dojo.byId('rejectvalue5').innerHTML = data.items.comments;
 	}
 	else if(data.items.repeating == 'monthly') {
-		dojo.byId('rejectrepeat').innerHTML = i('Monthly');
-		dojo.byId('rejecttitle1').innerHTML = i('First Date:');
+		dojo.byId('rejectrepeat').innerHTML = _('Monthly');
+		dojo.byId('rejecttitle1').innerHTML = _('First Date:');
 		dojo.byId('rejectvalue1').innerHTML = data.items.startdate;
-		dojo.byId('rejecttitle2').innerHTML = i('Last Date:');
+		dojo.byId('rejecttitle2').innerHTML = _('Last Date:');
 		dojo.byId('rejectvalue2').innerHTML = data.items.lastdate;
-		dojo.byId('rejecttitle3').innerHTML = i('Repeat on:');
-		dojo.byId('rejectvalue3').innerHTML = data.items.date1 + ' ' + i("of each month");
-		dojo.byId('rejecttitle4').innerHTML = i('During these times:');
+		dojo.byId('rejecttitle3').innerHTML = _('Repeat on:');
+		dojo.byId('rejectvalue3').innerHTML = data.items.date1 + ' ' + _("of each month");
+		dojo.byId('rejecttitle4').innerHTML = _('During these times:');
 		dojo.byId('rejectvalue4').innerHTML = data.items.times.join('<br>');
-		dojo.byId('rejecttitle5').innerHTML = i('User Submitted Comments:');
+		dojo.byId('rejecttitle5').innerHTML = _('User Submitted Comments:');
 		dojo.byId('rejectvalue5').innerHTML = data.items.comments;
 	}
 	else if(data.items.repeating == 'list') {
-		dojo.byId('rejectrepeat').innerHTML = i('List of Dates/Times');
-		dojo.byId('rejecttitle1').innerHTML = i('Repeat on:');
+		dojo.byId('rejectrepeat').innerHTML = _('List of Dates/Times');
+		dojo.byId('rejecttitle1').innerHTML = _('Repeat on:');
 		dojo.byId('rejectvalue1').innerHTML = data.items.slots.join('<br>');
-		dojo.byId('rejecttitle2').innerHTML = i('User Submitted Comments:');
+		dojo.byId('rejecttitle2').innerHTML = _('User Submitted Comments:');
 		dojo.byId('rejectvalue2').innerHTML = data.items.comments;
 	}
 	dojo.byId('submitrejectcont').value = data.items.cont;
@@ -1195,9 +1195,9 @@ function viewBlockTimesCB(data, ioArgs) {
 	var items = data.items.items;
 	for(var i = 0; i < items.length; i++) {
 		if(items[i].skip == 0)
-			var label = i('Skip');
+			var label = _('Skip');
 		else
-			var label = i('Use');
+			var label = _('Use');
 		var btn = new dijit.form.Button({
 			label: label,
 			onClick: createRemoveFunc(toggleBlockTime, items[i].id)
@@ -1233,9 +1233,9 @@ function toggleBlockTimeCB(data, ioArgs) {
 			function(items, request) {
 				items[0].skip[0] = data.items.newval;
 				if(data.items.newval == 1)
-					items[0].delbtn[0].setLabel(i('Use'));
+					items[0].delbtn[0].setLabel(_('Use'));
 				else
-					items[0].delbtn[0].setLabel(i('Skip'));
+					items[0].delbtn[0].setLabel(_('Skip'));
 				blockTimesGrid.update();
 			}
 	});
@@ -1331,11 +1331,11 @@ function updateAllocatedMachinesCB(data, ioArgs) {
 	graph.labeldata = data.items.virtual.points;
 	graph.render();
 	if(data.items.bare.total != 0)
-		dojo.byId('totalbare').innerHTML = i('Total online:') + ' ' + data.items.bare.total;
+		dojo.byId('totalbare').innerHTML = _('Total online:') + ' ' + data.items.bare.total;
 	else
 		dojo.byId('totalbare').innerHTML = '';
 	if(data.items.virtual.total != 0)
-		dojo.byId('totalvirtual').innerHTML = i('Total online:') + ' ' + data.items.virtual.total;
+		dojo.byId('totalvirtual').innerHTML = _('Total online:') + ' ' + data.items.virtual.total;
 	else
 		dojo.byId('totalvirtual').innerHTML = '';
 	dojo.byId('allocatedBareMachines').style.height = '320px';

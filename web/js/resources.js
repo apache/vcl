@@ -22,9 +22,9 @@ function Resource() {
 Resource.prototype.DeleteBtn = function(rscid, rowIndex) {
 	var rowdata = this.grid.getItem(rowIndex);
 	if(! ('deleted' in rowdata) || rowdata.deleted == '0')
-		var label = i('Delete');
+		var label = _('Delete');
 	else
-		var label = i('Undelete');
+		var label = _('Undelete');
 	var btn = new dijit.form.Button({
 		label: label,
 		onClick: function() {
@@ -42,7 +42,7 @@ Resource.prototype.EditBtn = function(rscid, rowIndex) {
 	else
 		var disable = true;
 	var btn = new dijit.form.Button({
-		label: i('Edit'),
+		label: _('Edit'),
 		disabled: disable,
 		onClick: function() {
 			editResource(rscid);
@@ -114,7 +114,7 @@ Resource.prototype.addRemItemCB = function(data, ioArgs) {
 		});
 	}
 	else if(data.items.status == 'noaccess') {
-		alert(i('You do not have access to the submitted resource or group'));
+		alert(_('You do not have access to the submitted resource or group'));
 	}
 	document.body.style.cursor = 'default';
 }
@@ -269,7 +269,7 @@ function toggleDeleteResourceCB(data, ioArgs) {
 		div.style = 'text-align: center;';
 		var dlg = new dijit.Dialog({
 			id: 'resourceinusedlg',
-			title: i('Resource In Use'),
+			title: _('Resource In Use'),
 			content: data.items.msg,
 			style: 'width: 400px;',
 			autofocus: false,
@@ -289,7 +289,7 @@ function submitToggleDeleteResource() {
 
 function submitToggleDeleteResourceCB(data, ioArgs) {
 	if(data.items.status == 'error') {
-		alert(i('Problem encountered while attempting to delete resource. Please contact a system administrator.'));
+		alert(_('Problem encountered while attempting to delete resource. Please contact a system administrator.'));
 		return;
 	}
 	else if(data.items.status == 'success') {
@@ -384,7 +384,7 @@ function populateLists(selobj, inselobj, intitle, outtitle, cont) {
 function populateListsCB(data, ioArgs) {
 	if(data.items.status == 'noaccess') {
 		document.body.style.cursor = 'default';
-		alert(i('You do not have access to the submitted resource or group'));
+		alert(_('You do not have access to the submitted resource or group'));
 		return;
 	}
 	var oldstore = window[data.items.intitle].store;

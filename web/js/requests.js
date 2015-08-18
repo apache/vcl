@@ -53,8 +53,8 @@ function initViewRequests(imaging) {
 			});
 			var dlg = new dijit.Dialog({
 				id: 'noimageaccessdlg',
-				title: i('Create / Update an Image'),
-				content: i('You do not have access to create or update any images.') + '<br><br>',
+				title: _('Create / Update an Image'),
+				content: _('You do not have access to create or update any images.') + '<br><br>',
 				style: 'width: 300px; text-align: center;',
 				closable: false
 			});
@@ -216,7 +216,7 @@ function selectResType() {
 		dojo.removeClass('whentitleserver', 'hidden');
 		if(profilesstore._arrayOfAllItems.length != 0 &&
 		   (profilesstore._arrayOfAllItems.length != 1 ||
-		   profilesstore._arrayOfAllItems[0].name != i('(New Profile)')))
+		   profilesstore._arrayOfAllItems[0].name != _('(New Profile)')))
 			dojo.removeClass('deployprofileslist', 'hidden');
 		dojo.removeClass('nrnamespan', 'hidden');
 		dojo.removeClass('nrservergroupspan', 'hidden');
@@ -347,7 +347,7 @@ function validateDeployInputs() {
 			start.setMinutes(time.getMinutes());
 			var teststart = parseInt(start.getTime() / 1000);
 			if(start < now) {
-				dojo.byId('deployerr').innerHTML = i('The start day and time must be in the future.');
+				dojo.byId('deployerr').innerHTML = _('The start day and time must be in the future.');
 				dojo.removeClass('deployerr', 'hidden');
 				dijit.byId('newResDlgBtn').set('disabled', true);
 				return false;
@@ -366,7 +366,7 @@ function validateDeployInputs() {
 			teststart.setMinutes(dojo.byId('deploymin').value);
 			teststart.setSeconds(0);
 			if(teststart < now) {
-				dojo.byId('deployerr').innerHTML = i('The start day and time must be in the future.');
+				dojo.byId('deployerr').innerHTML = _('The start day and time must be in the future.');
 				dojo.removeClass('deployerr', 'hidden');
 				dijit.byId('newResDlgBtn').set('disabled', true);
 				return false;
@@ -381,7 +381,7 @@ function validateDeployInputs() {
 		end.setMinutes(time.getMinutes());
 		var endts = parseInt(end.getTime() / 1000);
 		if(nowts + 1800 > endts) {
-			dojo.byId('deployerr').innerHTML = i('The end time must be at least 30 minutes in the future.');
+			dojo.byId('deployerr').innerHTML = _('The end time must be at least 30 minutes in the future.');
 			dojo.removeClass('deployerr', 'hidden');
 			dijit.byId('newResDlgBtn').set('disabled', true);
 			return false;
@@ -392,13 +392,13 @@ function validateDeployInputs() {
 			teststart = parseInt(teststart.getTime() / 1000);
 		}
 		if(teststart > endts) {
-			dojo.byId('deployerr').innerHTML = i('The end time must be after the start time.');
+			dojo.byId('deployerr').innerHTML = _('The end time must be after the start time.');
 			dojo.removeClass('deployerr', 'hidden');
 			dijit.byId('newResDlgBtn').set('disabled', true);
 			return false;
 		}
 		if(teststart + 1800 > endts) {
-			dojo.byId('deployerr').innerHTML = i('The end time is too close to the start time.');
+			dojo.byId('deployerr').innerHTML = _('The end time is too close to the start time.');
 			dojo.removeClass('deployerr', 'hidden');
 			dijit.byId('newResDlgBtn').set('disabled', true);
 			return false;
@@ -552,7 +552,7 @@ function getImageDescription() {
 
 function showSuggestedTimes() {
 	if(dojo.byId('suggestcont').value == 'cluster') {
-		alert(i('Times cannot be suggested for cluster reservations'));
+		alert(_('Times cannot be suggested for cluster reservations'));
 		return;
 	}
 	dijit.byId('suggestedTimes').show();
@@ -560,7 +560,7 @@ function showSuggestedTimes() {
 	dojo.removeClass('suggestloading', 'hidden');
 	dijit.byId('suggestDlgBtn').set('disabled', true);
 	showDijitButton('suggestDlgBtn');
-	dijit.byId('suggestDlgCancelBtn').set('label', i('Cancel'));
+	dijit.byId('suggestDlgCancelBtn').set('label', _('Cancel'));
 	var data = {continuation: dojo.byId('suggestcont').value};
 	RPCwrapper(data, showSuggestedTimesCB, 1, 30000);
 	document.body.style.cursor = 'wait';
@@ -578,7 +578,7 @@ function showSuggestedTimesCB(data, ioArgs) {
 	}
 	else if(data.items.status == 'error') {
 		hideDijitButton('suggestDlgBtn');
-		dijit.byId('suggestDlgCancelBtn').set('label', i('Okay'));
+		dijit.byId('suggestDlgCancelBtn').set('label', _('Okay'));
 		if(dijit.byId('suggestedTimes'))
 			recenterDijitDialog('suggestedTimes');
 		return;
@@ -588,7 +588,7 @@ function showSuggestedTimesCB(data, ioArgs) {
 		dojo.byId('editResDlgContent').innerHTML = data.items.html;
 		dojo.byId('editResDlgErrMsg').innerHTML = '';
 		dijit.byId('editResDlgBtn').set('style', 'display: none');
-		dijit.byId('editResCancelBtn').set('label', i('Okay'));
+		dijit.byId('editResCancelBtn').set('label', _('Okay'));
 		recenterDijitDialog('editResDlg');
 		return;
 	}
@@ -659,7 +659,7 @@ function selectLater() {
 		if(resbtntxt != '')
 			dijit.byId('newResDlgBtn').set('label', resbtntxt);
 		else
-			dijit.byId('newResDlgBtn').set('label', i('Create Reservation'));
+			dijit.byId('newResDlgBtn').set('label', _('Create Reservation'));
 	}
 	dojo.addClass('waittime', 'hidden');
 }
@@ -672,7 +672,7 @@ function selectLength() {
 function selectEnding() {
 	if(dojo.byId('dateradio'))
 		dojo.byId('dateradio').checked = true;
-	dijit.byId('editResDlgBtn').set('label', i('Modify Reservation'));
+	dijit.byId('editResDlgBtn').set('label', _('Modify Reservation'));
 	resetEditResBtn();
 }
 
@@ -758,21 +758,21 @@ function setEndAt() {
 
 function resetDeployBtnLabel() {
 	if(dojo.byId('basicrdo').checked)
-		dijit.byId('newResDlgBtn').set('label', i("Create Reservation"));
+		dijit.byId('newResDlgBtn').set('label', _("Create Reservation"));
 	if(dojo.byId('imagingrdo').checked)
-		dijit.byId('newResDlgBtn').set('label', i("Create Imaging Reservation"));
+		dijit.byId('newResDlgBtn').set('label', _("Create Imaging Reservation"));
 	if(dojo.byId('serverrdo').checked)
-		dijit.byId('newResDlgBtn').set('label', i("Deploy Server"));
+		dijit.byId('newResDlgBtn').set('label', _("Deploy Server"));
 }
 
 function checkValidImage() {
 	if(resSubmitted)
 		return false;
 	if(dijit.byId('deployimage') && ! dijit.byId('deployimage').isValid()) {
-		alert(i('Please select a valid environment.'));
+		alert(_('Please select a valid environment.'));
 		return false;
 	}
-	if(dijit.byId('newResDlgBtn').get('label') == i('View Available Times')) {
+	if(dijit.byId('newResDlgBtn').get('label') == _('View Available Times')) {
 		showSuggestedTimes();
 		return false;
 	}
@@ -796,7 +796,7 @@ function setMaxRequestLength(minutes) {
 		// if last option is < 60, add 1 hr
 		if(parseInt(obj.options[i].value) < 60 &&
 			minutes >= 60) {
-			text = '1 ' + i('hour');
+			text = '1 ' + _('hour');
 			newminutes = 60;
 		}
 		// if option > 46 hours, add as days
@@ -808,7 +808,7 @@ function setMaxRequestLength(minutes) {
 				len = len - (len % 1440);
 			else
 				len = len + 1440;
-			text = len / 1440 + ' ' + i('days');
+			text = len / 1440 + ' ' + _('days');
 			newminutes = len;
 		}
 		// else add in 2 hr chuncks up to max
@@ -818,17 +818,17 @@ function setMaxRequestLength(minutes) {
 				tmp = tmp - (tmp % 120);
 			newminutes = tmp + 120;
 			if(newminutes < minutes)
-				text = (newminutes / 60) + ' ' + i('hours');
+				text = (newminutes / 60) + ' ' + _('hours');
 			else {
 				newminutes = minutes;
 				tmp = newminutes - (newminutes % 60);
 				if(newminutes % 60)
 					if(newminutes % 60 < 10)
-						text = (tmp / 60) + ':0' + (newminutes % 60) + ' ' + i('hours');
+						text = (tmp / 60) + ':0' + (newminutes % 60) + ' ' + _('hours');
 					else
-						text = (tmp / 60) + ':' + (newminutes % 60) + ' ' + i('hours');
+						text = (tmp / 60) + ':' + (newminutes % 60) + ' ' + _('hours');
 				else
-					text = (tmp / 60) + ' ' + i('hours');
+					text = (tmp / 60) + ' ' + _('hours');
 			}
 		}
 		obj.options[i + 1] = new Option(text, newminutes);
@@ -1086,8 +1086,8 @@ function promptRevisions() {
 		dijit.byId('imageRevisionDlg').destroyRecursive();
 	var divall = document.createElement('div');
 	var div1 = document.createElement('div');
-	div1.innerHTML = i("There are multiple versions of this environment available.") + "<br>" +
-		              i("Please select the version you would like to check out:");
+	div1.innerHTML = _("There are multiple versions of this environment available.") + "<br>" +
+		              _("Please select the version you would like to check out:");
 	divall.appendChild(div1);
 	var div2 = document.createElement('div');
 	div2.id = 'imageRevisionContent';
@@ -1104,14 +1104,14 @@ function promptRevisions() {
 	dojo.connect(btn1, 'onClick', submitNewReservation);
 	div3.appendChild(btn1.domNode);
 	var btn2 = new dijit.form.Button({
-		label: i('Cancel'),
+		label: _('Cancel'),
 	}, document.createElement('div'));
 	dojo.connect(btn2, 'onClick', function() {dijit.byId('imageRevisionDlg').hide();});
 	div3.appendChild(btn2.domNode);
 	divall.appendChild(div3);
 	var dlg = new dijit.Dialog({
 		id: 'imageRevisionDlg',
-		title: i('Select Image Revisions'),
+		title: _('Select Image Revisions'),
 		content: divall,
 		width: "50%",
 		style: "width: 50%",
@@ -1143,10 +1143,10 @@ function addRevisionSelection(item) {
 	var mstore = new dojo.store.Memory({data: item.imagerevision});
 	var wrapper = new dojo.data.ObjectStore({objectStore: mstore});
 	var layout = [
-		{field: 'revision', name: i('Revision'), width: '60px'},
-		{field: 'user', name: i('User'), width: '130px'},
-		{field: 'prettydate', name: i('Created'), width: '110px'},
-		{field: 'production', name: i('Production'), width: '60px'}
+		{field: 'revision', name: _('Revision'), width: '60px'},
+		{field: 'user', name: _('User'), width: '130px'},
+		{field: 'prettydate', name: _('Created'), width: '110px'},
+		{field: 'production', name: _('Production'), width: '60px'}
 	];
 	var div = document.createElement('div');
 	div.style.width = "100%";
@@ -1194,7 +1194,7 @@ function submitNewReservation() {
 	if(! validateDeployInputs()) {
 		return;
 	}
-	if(dijit.byId('newResDlgBtn').get('label') == i('View Available Times')) {
+	if(dijit.byId('newResDlgBtn').get('label') == _('View Available Times')) {
 		showSuggestedTimes();
 		return;
 	}
@@ -1217,7 +1217,7 @@ function submitNewReservation() {
 				revids.push(0);
 		}
 		data.revisionid = revids.join(':');
-		dijit.byId('imageRevBtn').set('label', i('Working...'));
+		dijit.byId('imageRevBtn').set('label', _('Working...'));
 		dijit.byId('imageRevBtn').set('disabled', true);
 	}
 	else {
@@ -1297,7 +1297,7 @@ function showResStatusPane(reqid) {
 	var obj = dijit.byId('resStatusPane');
 	if(currdetailid != reqid) {
 		dojo.byId('detailreqid').value = reqid;
-		dojo.byId('resStatusText').innerHTML = i('Loading...');
+		dojo.byId('resStatusText').innerHTML = _('Loading...');
 	}
 	var disp = dijit.byId('resStatusPane').domNode.style.visibility;
 	if(disp == 'hidden')
@@ -1436,11 +1436,11 @@ function editReservationCB(data, ioArgs) {
 	AJdojoCreate('editResDlgContent');
 	if(data.items.status == 'nomodify') {
 		dijit.byId('editResDlgBtn').set('style', 'display: none');
-		dijit.byId('editResCancelBtn').set('label', i('Okay'));
+		dijit.byId('editResCancelBtn').set('label', _('Okay'));
 	}
 	else if(data.items.status == 'noindefinite') {
 		dijit.byId('editResDlgBtn').set('style', 'display: inline');
-		dijit.byId('editResCancelBtn').set('label', i('Cancel'));
+		dijit.byId('editResCancelBtn').set('label', _('Cancel'));
 		dojo.byId('editrescont').value = data.items.cont;
 		dojo.byId('editresid').value = data.items.requestid;
 		if(dojo.byId('indefinitelabel'))
@@ -1450,7 +1450,7 @@ function editReservationCB(data, ioArgs) {
 	}
 	else {
 		dijit.byId('editResDlgBtn').set('style', 'display: inline');
-		dijit.byId('editResCancelBtn').set('label', i('Cancel'));
+		dijit.byId('editResCancelBtn').set('label', _('Cancel'));
 		dojo.byId('editrescont').value = data.items.cont;
 		dojo.byId('editresid').value = data.items.requestid;
 	}
@@ -1485,7 +1485,7 @@ function hideEditResDlg() {
 
 function resetEditResBtn() {
 	dojo.byId('editResDlgErrMsg').innerHTML = '';
-	dijit.byId('editResDlgBtn').set('label', i('Modify Reservation'));
+	dijit.byId('editResDlgBtn').set('label', _('Modify Reservation'));
 }
 
 function editResOpenEnd() {
@@ -1509,10 +1509,10 @@ function editResOpenEnd() {
 }
 
 function submitEditReservation() {
-	if(dijit.byId('editResDlgBtn').get('label') == i('View Available Times')) {
+	if(dijit.byId('editResDlgBtn').get('label') == _('View Available Times')) {
 		dijit.byId('suggestDlgBtn').set('disabled', true);
 		showDijitButton('suggestDlgBtn');
-		dijit.byId('suggestDlgCancelBtn').set('label', i('Cancel'));
+		dijit.byId('suggestDlgCancelBtn').set('label', _('Cancel'));
 		showSuggestedTimes();
 		return;
 	}
@@ -1561,7 +1561,7 @@ function submitEditReservation() {
 		data.endmode = 'ending';
 		var testend = new Date(d.getFullYear(), d.getMonth(), d.getDate(), t.getHours(), t.getMinutes(), 0, 0);
 		if(dijit.byId('editstarttime') && testend <= teststart) {
-			dojo.byId('editResDlgErrMsg').innerHTML = i("The end time must be later than the start time.");
+			dojo.byId('editResDlgErrMsg').innerHTML = _("The end time must be later than the start time.");
 			return;
 		}
 	}
@@ -1584,7 +1584,7 @@ function submitEditReservationCB(data, ioArgs) {
 		dojo.byId('editResDlgContent').innerHTML = data.items.html;
 		dojo.byId('editResDlgErrMsg').innerHTML = '';
 		dijit.byId('editResDlgBtn').set('style', 'display: none');
-		dijit.byId('editResCancelBtn').set('label', i('Okay'));
+		dijit.byId('editResCancelBtn').set('label', _('Okay'));
 		resRefresh();
 		return;
 	}
@@ -1593,7 +1593,7 @@ function submitEditReservationCB(data, ioArgs) {
 		dojo.byId('editrescont').value = data.items.cont;
 		//dojo.byId('editresid').value = '';
 		dojo.byId('suggestcont').value = data.items.sugcont;
-		dijit.byId('editResDlgBtn').set('label', i('View Available Times'));
+		dijit.byId('editResDlgBtn').set('label', _('View Available Times'));
 		return;
 	}
 	else if(data.items.status == 'unavailable') {
@@ -1619,18 +1619,18 @@ function checkResGone(reqids) {
 
 function resGone(type) {
 	if(type == 'edit') {
-		dojo.byId('editResDlgContent').innerHTML = i('The reservation you selected<br>to edit has expired.<br><br>');
+		dojo.byId('editResDlgContent').innerHTML = _('The reservation you selected<br>to edit has expired.<br><br>');
 	}
 	else if(type == 'reboot') {
-		dojo.byId('editResDlgContent').innerHTML = i('The reservation you selected<br>to reboot has expired.<br><br>');
+		dojo.byId('editResDlgContent').innerHTML = _('The reservation you selected<br>to reboot has expired.<br><br>');
 	}
 	else if(type == 'reinstall') {
-		dojo.byId('editResDlgContent').innerHTML = i('The reservation you selected<br>to reinstall has expired.<br><br>');
+		dojo.byId('editResDlgContent').innerHTML = _('The reservation you selected<br>to reinstall has expired.<br><br>');
 	}
 	dojo.byId('editresid').value = '';
 	dojo.byId('editResDlgErrMsg').innerHTML = '';
 	dijit.byId('editResDlgBtn').set('style', 'display: none');
-	dijit.byId('editResCancelBtn').set('label', i('Okay'));
+	dijit.byId('editResCancelBtn').set('label', _('Okay'));
 	recenterDijitDialog('editResDlg');
 }
 
@@ -1710,7 +1710,7 @@ function submitReinstallReservationCB(data, ioArgs) {
 		return;
 	}
 	if(data.items.status == 'invalidrevisionid') {
-		dojo.byId('reinstallResDlgErrMsg').innerHTML = i('An invalid version was submitted.');
+		dojo.byId('reinstallResDlgErrMsg').innerHTML = _('An invalid version was submitted.');
 		dojo.byId('reinstallrescont').value = data.items.cont;
 		return;
 	}
