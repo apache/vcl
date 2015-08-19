@@ -1928,9 +1928,9 @@ function AJupdateWaitTime() {
 		else
 			print "dojo.byId('suggestcont').value = '$cont';";
 		print "if(dijit.byId('newResDlgBtn')) {";
-		print "if(dijit.byId('newResDlgBtn').get('label') != i('View Available Times')) ";
+		print "if(dijit.byId('newResDlgBtn').get('label') != _('View Available Times')) ";
 		print "resbtntxt = dijit.byId('newResDlgBtn').get('label'); ";
-		print "dijit.byId('newResDlgBtn').set('label', i('View Available Times'));";
+		print "dijit.byId('newResDlgBtn').set('label', _('View Available Times'));";
 		print "}";
 	}
 	if($rc < 1) {
@@ -3279,7 +3279,7 @@ function AJeditRequest() {
 		$maxcheck = $maxtimes['total'];
 	if(! $openend && ($reslen >= $maxcheck)) {
 		$h  = sprintf(i("You are only allowed to extend your reservation such that it has a total length of %s. "), minToHourMin($maxcheck));
-		$h .=i("This reservation already meets that length. Therefore, you are not allowed to extend your reservation any further.");
+		$h .= i("This reservation already meets that length. Therefore, you are not allowed to extend your reservation any further.");
 		$h = preg_replace("/(.{1,60}([ \n]|$))/", '\1<br>', $h) . "<br>";
 		sendJSON(array('status' => 'nomodify', 'html' => $h));
 		return;
