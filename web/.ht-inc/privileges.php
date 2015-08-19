@@ -1502,11 +1502,14 @@ function userLookup() {
 		       .        "c.hostname, "
 		       .        "i.prettyname AS prettyimage, "
 		       .        "s.IPaddress, "
-		       .        "l.ending "
+		       .        "l.ending, "
+		       .        "l.requestid, "
+		       .        "m.hostname AS managementnode "
 		       . "FROM log l, "
 		       .      "image i, "
 		       .      "computer c, "
 		       .      "sublog s "
+		       . "LEFT JOIN managementnode m ON (s.managementnodeid = m.id) "
 		       . "WHERE l.userid = {$userdata['id']} AND "
 		       .        "s.logid = l.id AND "
 		       .        "i.id = s.imageid AND "
@@ -1555,6 +1558,18 @@ function userLookup() {
 				print "    <th align=right>Ending:</th>\n";
 				print "    <td>{$req['ending']}</td>\n";
 				print "  </tr>\n";
+				if($req['requestid'] != '') {
+					print "  <tr>\n";
+					print "    <th align=right>Request ID:</th>\n";
+					print "    <td>{$req['requestid']}</td>\n";
+					print "  </tr>\n";
+				}
+				if($req['managementnode'] != '') {
+					print "  <tr>\n";
+					print "    <th align=right>Management Node:</th>\n";
+					print "    <td>{$req['managementnode']}</td>\n";
+					print "  </tr>\n";
+				}
 			}
 			print "</table>\n";
 		}
