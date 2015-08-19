@@ -638,6 +638,10 @@ function processUserPrefsInput($checks=1) {
 			$submitErrMsg[LOCALPASSWORDERR] = i("Passwords do not match");
 		}
 	}
+	if(array_key_exists('preferredname', $_POST) ||
+		array_key_exists('newpassword', $_POST))
+		$return['rdpport'] = $user['rdpport'];
+
 	if($return['rdpport'] != $user['rdpport']) {
 		$requests = getUserRequests('all');
 		$nochange = 0;
