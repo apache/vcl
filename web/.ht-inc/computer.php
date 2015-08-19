@@ -4654,7 +4654,7 @@ class Computer extends Resource {
 		if($type == 'private') {
 			$mnip = processInputVar('mnip', ARG_STRING);
 			if(! validateIPv4addr($mnip)) {
-				sendJSON(array('status' => 'error', 'errmsg' => 'invalid IP address submitted'));
+				sendJSON(array('status' => 'error', 'errormsg' => 'invalid IP address submitted'));
 				return;
 			}
 			$ipprefix = 'private';
