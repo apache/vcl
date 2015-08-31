@@ -4368,7 +4368,7 @@ function isAvailable($images, $imageid, $imagerevisionid, $start, $end,
 
 				$query = "CREATE TEMPORARY TABLE VMhostCheck ( "
 				       .    "RAM mediumint unsigned NOT NULL, "
-				       .    "allocRAM mediumint unsigned NOT NULL, "
+				       .    "allocRAM int NOT NULL, "
 				       .    "vmhostid smallint unsigned NOT NULL "
 				       . ") ENGINE=MEMORY";
 				doQuery($query, 101);
@@ -4393,7 +4393,7 @@ function isAvailable($images, $imageid, $imagerevisionid, $start, $end,
 			       . "LEFT JOIN computer c ON (v.vmhostid = c.vmhostid) "
 			       . "LEFT JOIN image i ON (c.currentimageid = i.id) "
 			       . "WHERE c.id IN ($inids) AND "
-			       .       "(v.allocRAM - i.minram + {$images[$imageid]['minram']}) < v.RAM "
+			       .       "(v.allocRAM - CAST(i.minram AS SIGNED) + {$images[$imageid]['minram']}) < v.RAM "
 			       . "ORDER BY c.RAM, "
 			       .          "(c.procspeed * c.procnumber), "
 			       .          "c.network";
