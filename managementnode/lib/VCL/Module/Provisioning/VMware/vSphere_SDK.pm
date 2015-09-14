@@ -217,9 +217,31 @@ sub get_registered_vms {
 
 	my @vmx_paths;
 	for my $vm (@vms) {
+		my $vm_name = $vm->summary->config->name || '';
 		my $vmx_path = $vm->summary->config->vmPathName;
-		my $vmx_path_normal = $self->_get_normal_path($vmx_path);
 		
+		# Make sure the VM is not "Unknown":
+		#{
+		#   "name" => "Unknown",
+		#   "template" => 0,
+		#   "vmPathName" => "[] /vmfs/volumes/52f94710-c205360c-c589-e41f13ca0e40/vm190_3081-v5/vm190_3081-v5.vmx"
+		#},
+		if ($vm_name eq 'Unknown') {
+			notify($ERRORS{'DEBUG'}, 0, "ignoring 'Unknown' VM:\n" . format_data($vm->summary->config));
+			next;
+		}
+		
+		# Make sure the .vmx path isn't malformed, it may contain [] if the VM is "Unknown" or problematic
+		if (!defined($vmx_path)) {
+			notify($ERRORS{'DEBUG'}, 0, "ignoring VM, vmPathName (.vmx file path) is not defined:\n" . format_data($vm->summary->config));
+			next;
+		}
+		elsif ($vmx_path =~ /\[\]/) {
+			notify($ERRORS{'DEBUG'}, 0, "ignoring VM with malformed .vmx file path: '$vmx_path'\n" . format_data($vm->summary->config));
+			next;
+		}
+		
+		my $vmx_path_normal = $self->_get_normal_path($vmx_path);
 		if ($vmx_path_normal) {
 			push @vmx_paths, $vmx_path_normal;
 		}
@@ -2024,7 +2046,7 @@ sub file_exists {
 	my $base_directory_path = $self->_get_parent_directory_datastore_path($file_path) || return;
 	my $file_name = $self->_get_file_name($file_path) || return;
 	
-	my $result = $self->find_files($base_directory_path, $file_name, 0, $type);
+	my $result = $self->find_datastore_files($base_directory_path, $file_name, 0, $type);
 	if ($result) {
 		notify($ERRORS{'DEBUG'}, 0, "file exists: $file_path");
 		return 1;

@@ -836,7 +836,7 @@ sub capture {
 			elsif ($virtual_disk_type =~ /sparse/i) {
 				# Virtual disk is sparse, get a list of the vmdk file paths
 				notify($ERRORS{'DEBUG'}, 0, "vmdk can be copied directly from VM host $vmhost_name to the image repository because the virtual disk type is sparse: $virtual_disk_type");
-				@vmdk_copy_paths = $self->vmhost_os->find_files($vmdk_directory_path_renamed, '*.vmdk');
+				@vmdk_copy_paths = $self->find_datastore_files($vmdk_directory_path_renamed, '*.vmdk');
 			}
 			else {
 				# Virtual disk is NOT sparse - a sparse copy must first be created before being copied to the repository
@@ -851,7 +851,7 @@ sub capture {
 				# Create a sparse copy of the virtual disk
 				if ($self->copy_vmdk($vmdk_file_path_renamed, $vmdk_file_path_sparse, '2gbsparse')) {
 					# Get a list of the 2gbsparse vmdk file paths
-					@vmdk_copy_paths = $self->vmhost_os->find_files($vmdk_directory_path_sparse, '*.vmdk');
+					@vmdk_copy_paths = $self->find_datastore_files($vmdk_directory_path_sparse, '*.vmdk');
 				}
 				else {
 					notify($ERRORS{'WARNING'}, 0, "failed to create a temporary 2gbsparse copy of the vmdk file: '$vmdk_file_path_renamed' --> '$vmdk_file_path_sparse'");
@@ -1431,7 +1431,7 @@ sub remove_existing_vms {
 	
 	# Delete orphaned vmx or vmdk directories previously created by VCL for the computer
 	# Find any files under the vmx or vmdk base directories matching the computer name
-	my @orphaned_vmx_file_paths = $self->vmhost_os->find_files($vmx_base_directory_path, "*$computer_name*\.vmx");
+	my @orphaned_vmx_file_paths = $self->find_datastore_files($vmx_base_directory_path, "*$computer_name*\.vmx");
 	
 	# Check if any of the paths match the format of a directory VCL would have created for the computer
 	for my $orphaned_vmx_file_path (@orphaned_vmx_file_paths) {
@@ -5151,6 +5151,53 @@ sub get_vm_cpu_limit {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 find_datastore_files
+
+ Parameters  : $base_directory_path, $pattern
+ Returns     : array
+ Description : Calls the VM host OS module's find_files subroutine and prunes
+               files found in directories known to cause problems. Currently,
+               the only files pruned are ones which have a parent directory
+               named .snapshot.
+
+=cut
+
+sub find_datastore_files {
+	my $self = shift;
+	if (ref($self) !~ /vmware/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my ($base_directory_path, $pattern) = @_;
+	if (!defined($base_directory_path)) {
+		notify($ERRORS{'WARNING'}, 0, "base directory path argument was not supplied");
+		return;
+	}
+	elsif (!defined($pattern)) {
+		notify($ERRORS{'WARNING'}, 0, "file name pattern argument was not supplied");
+		return;
+	}
+	
+	# Use the VM host's OS module to find files
+	my @file_paths = $self->vmhost_os->find_files($base_directory_path, $pattern);
+	
+	my @file_paths_pruned;
+	for my $file_path (@file_paths) {
+		# Prune any file path with an intermediate directory beginning with a period
+		# This is to prevent Netapp (and possibly other) snapshot directory files from being included
+		if ($file_path =~ /\/(\.snapshot)\//g) {
+			notify($ERRORS{'DEBUG'}, 0, "ignoring files under parent directory '$1': $file_path");
+			next;
+		}
+		push @file_paths_pruned, $file_path;
+	}
+	
+	return @file_paths_pruned;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 =head2 get_vmx_file_paths
 
  Parameters  : none
@@ -5172,7 +5219,7 @@ sub get_vmx_file_paths {
 	my $vmx_base_directory_path = $self->get_vmx_base_directory_path() || return;
 	
 	# Get a list of all the vmx files under the normal vmx base directory
-	my @found_vmx_paths = $self->vmhost_os->find_files($vmx_base_directory_path, "*.vmx");
+	my @found_vmx_paths = $self->find_datastore_files($vmx_base_directory_path, "*.vmx");
 	#notify($ERRORS{'DEBUG'}, 0, "found " . scalar(@found_vmx_paths) . " vmx files under $vmx_base_directory_path\n" . join("\n", sort @found_vmx_paths));
 	
 	# Get a list of the registered VMs in case a VM is registered and the vmx file does not reside under the normal vmx base directory
@@ -6173,7 +6220,7 @@ sub move_vmdk {
 		}
 		elsif (grep(/success/i, @$vdisk_output)) {
 			# Check if the source directory still exists and contains files
-			my @source_directory_files = $self->vmhost_os->find_files($source_vmdk_directory_path, '*');
+			my @source_directory_files = $self->find_datastore_files($source_vmdk_directory_path, '*');
 			if (@source_directory_files) {
 				notify($ERRORS{'DEBUG'}, 0, "source directory will not be deleted, it still contains files: $source_vmdk_directory_path\n" . join("\n", @source_directory_files));
 			}
@@ -6212,7 +6259,7 @@ sub move_vmdk {
 		}
 		else {
 			# Check if the source directory still exists and contains files
-			my @source_directory_files = $self->vmhost_os->find_files($source_vmdk_directory_path, '*');
+			my @source_directory_files = $self->find_datastore_files($source_vmdk_directory_path, '*');
 			if (@source_directory_files) {
 				notify($ERRORS{'DEBUG'}, 0, "source directory will not be deleted, it still contains files: $source_vmdk_directory_path\n" . join("\n", @source_directory_files));
 			}
@@ -6260,7 +6307,7 @@ sub move_vmdk {
 	}
 	
 	# Find all of the source vmdk file paths including the extents
-	my @source_vmdk_file_paths = $self->vmhost_os->find_files($source_vmdk_directory_path, "$source_vmdk_file_prefix*.vmdk");
+	my @source_vmdk_file_paths = $self->find_datastore_files($source_vmdk_directory_path, "$source_vmdk_file_prefix*.vmdk");
 	if (@source_vmdk_file_paths) {
 		notify($ERRORS{'DEBUG'}, 0, "found " . scalar(@source_vmdk_file_paths) . " source vmdk file paths:\n" . join("\n", sort @source_vmdk_file_paths));
 	}
@@ -6368,7 +6415,7 @@ sub move_vmdk {
 	}
 	
 	# Check if the source directory still exists and contains files
-	my @source_directory_files = $self->vmhost_os->find_files($source_vmdk_directory_path, '*');
+	my @source_directory_files = $self->find_datastore_files($source_vmdk_directory_path, '*');
 	if (@source_directory_files) {
 		notify($ERRORS{'DEBUG'}, 0, "source directory will not be deleted, it still contains files: $source_vmdk_directory_path\n" . join("\n", @source_directory_files));
 	}
@@ -8470,7 +8517,7 @@ sub setup_purge_repository_images {
 		print "repository directory path: $repository_directory_path\n";
 		
 		# Check files in directory, make sure it's safe to delete
-		my @file_paths = $self->vmhost_os->find_files($repository_directory_path, "*", 1);
+		my @file_paths = $self->find_datastore_files($repository_directory_path, "*", 1);
 		
 		# Don't delete directories which contain files which shouldn't reside in a repository direcotry
 		my @unsafe_file_paths = ();
@@ -8540,7 +8587,7 @@ sub get_datastore_imagerevision_names {
 	
 	print "Retrieving list of files and directories in datastore: $datastore_base_path\n";
 	
-	my @file_paths = $self->vmhost_os->find_files($datastore_base_path, "*.vmdk", 1);
+	my @file_paths = $self->find_datastore_files($datastore_base_path, "*.vmdk", 1);
 
 	my @datastore_imagerevision_names;
 	my @ignored;
