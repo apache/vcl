@@ -2543,7 +2543,12 @@ sub get_config_option_info {
 		return;
 	}
 	
-	return $result;
+	if (!defined($result->{'vim.vm.ConfigOption'})) {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve config option info for $key, 'vim.vm.ConfigOption' key does not exist:\n" . format_hash_keys($result));
+		return;
+	}
+	
+	return $result->{'vim.vm.ConfigOption'};
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -2586,13 +2591,13 @@ sub get_config_option_guest_os_info {
 	
 	my $guest_os_descriptor_array_ref = $config_option_info->{guestOSDescriptor};
 	if (!defined($guest_os_descriptor_array_ref)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to retrieve config option guest OS info, config option info does not contain a 'guestOSDescriptor' key:\n" . format_data($config_option_info));
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve config option guest OS info, config option info does not contain a 'guestOSDescriptor' key:\n" . format_hash_keys($config_option_info));
 		return;
 	}
 	
 	my $type = ref($guest_os_descriptor_array_ref);
 	if (!$type || $type ne 'ARRAY') {
-		notify($ERRORS{'WARNING'}, 0, "failed to retrieve config option guest OS info, guestOSDescriptor value is not an array reference:\n" . format_data($guest_os_descriptor_array_ref));
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve config option guest OS info for '$key', guestOSDescriptor value is not an array reference:\n" . format_data($guest_os_descriptor_array_ref));
 		return;
 	}
 	
@@ -2600,7 +2605,7 @@ sub get_config_option_guest_os_info {
 	for my $guest_os_descriptor (@$guest_os_descriptor_array_ref) {
 		my $id = $guest_os_descriptor->{id};
 		if (!defined($id)) {
-			notify($ERRORS{'WARNING'}, 0, "failed to retrieve config option guest OS info, guest OS descriptor does not contain an 'id' key:\n" . format_data($guest_os_descriptor));
+			notify($ERRORS{'WARNING'}, 0, "failed to retrieve config option guest OS info for '$key', guest OS descriptor does not contain an 'id' key:\n" . format_data($guest_os_descriptor));
 			return;
 		}
 		$config_option_guest_os_info->{$id} = $guest_os_descriptor;
@@ -2632,12 +2637,15 @@ sub _print_compatible_guest_os_hardware_versions {
 	
 	my $guest_os_info = {};
 	my $config_option_descriptor_info = $self->get_config_option_descriptor_info();
+	
 	for my $version_key (sort keys %$config_option_descriptor_info) {
 		my $config_option_guest_os_info = $self->get_config_option_guest_os_info($version_key);
 		for my $guest_os (keys %$config_option_guest_os_info) {
 			$guest_os_info->{$guest_os}{$version_key} = 1;
 		}
 	}
+	
+	my $version_key_count = scalar(keys %$config_option_descriptor_info);
 	
 	for my $guest_os (sort keys %$guest_os_info) {
 		if ($print_code) {
@@ -2650,10 +2658,19 @@ sub _print_compatible_guest_os_hardware_versions {
 		}
 		else {
 			my $length = length($guest_os);
+			my $guest_os_version_key_count = scalar(keys %{$guest_os_info->{$guest_os}});
 			print "$guest_os ";
 			print (' ' x (25-$length));
-			print (' ' x (50-scalar(@{$guest_os_info->{$guest_os}})*8));
-			print join(", ", sort keys %{$guest_os_info->{$guest_os}});
+			
+			for my $version_key (sort keys %$config_option_descriptor_info) {
+				print " ";
+				if ($guest_os_info->{$guest_os}{$version_key}) {
+					print "$version_key";
+				}
+				else {
+					print "      ";
+				}
+			}
 			print "\n";
 		}
 	}
@@ -2711,6 +2728,8 @@ sub _parse_vim_cmd_output {
 		
 		$line_number++;
 		
+		my $original_line = $line;
+		
 		# Remove trailing newlines
 		$line =~ s/\n+$//g;
 		
@@ -2719,8 +2738,12 @@ sub _parse_vim_cmd_output {
 		$line =~ s/^(\s+)\([^\)]*\)\s*/$1/g;
 		
 		# Remove class names at beginning of a line surrounded by parenthesis
-		# '(vim.vm.device.VirtualPointingDevice) {' --> '{'
+		# '(vim.vm.device.VirtualPointingDevice) {' --> 'vim.vm.device.VirtualPointingDevice => {'
 		$line =~ s/^\(([^\)]+)\)\s*{/'$1' => {/gx;
+		
+		# Remove class names 
+		# '(vim.vm.ConfigOptionDescriptor) ['
+		$line =~ s/^\([^\)]+\)\s*(\[)/$1/gx;
 		
 		# Add comma to lines containing a closing curly bracket
 		# '   }' --> '   },'
@@ -2728,7 +2751,11 @@ sub _parse_vim_cmd_output {
 		
 		# Remove class names after an equals sign
 		# 'backing = (vim.vm.device.VirtualDevice.BackingInfo) null,' --> 'backing = null'
-		$line =~ s/(=\s+)\([^\)]+\)\s*//g;
+		$line =~ s/(=\s+)\([^\)]+\)\s*/$1/g;
+		
+		# Add comma to lines containing = sign which don't end with a comma
+		# 'value = xxx' --> 'value = xxx,'
+		$line =~ s/(=\s+[^,]+[\w>])$/$1,/g;
 		
 		# Surround values after equals sign in quotes
 		# 'value = xxx,' --> 'value = "xxx",'
@@ -2739,18 +2766,20 @@ sub _parse_vim_cmd_output {
 		$line =~ s/(\w\s+)null,/$1 => undef,/g;
 		
 		# Change = to =>
-		$line =~ s/=(\s+.+),/=>$1,/g;
+		$line =~ s/=(\s+.+)/=>$1/g;
 		
 		# Add => before array and hash references
 		# 'guestOSDescriptor [' --> 'guestOSDescriptor => ['
 		$line =~ s/(\w\s+)([\[{])/$1=>$2/g;
 		
 		$statement .= "$line\n";
-		$numbered_statement .= "$line_number:$line\n";
+		$numbered_statement .= "$line_number: '$original_line' --> '$line'\n";
 	}
-	
+
 	# Enclose the entire statement in curly brackets
-	$statement = "{\n$statement\n}";
+	if ($statement =~ /^[^\n]+{/) {
+		$statement = "{\n$statement\n}";
+	}
 
 	# The statement variable should contain a valid definition
 	my $result = eval($statement);
