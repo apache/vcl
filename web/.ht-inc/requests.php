@@ -4305,6 +4305,11 @@ function AJconnectRequest() {
 	$return = array('html' => $h);
 	if(! is_null($timeout)) {
 		$return['timeoutid'] = "timeoutvalue|$requestid";
+		// if reservation in reserved state, set timeout to 1 minute later so that Reservation
+		// contents get reloaded hopefully after the user has connected and the state has been
+		// updated to inuse so that More Options items can bet updated accordingly
+		if($requestData['laststateid'] == 3 && $requestData['stateid'] == 14)
+			$timeout = time() + 60;
 		$return['timeout'] = $timeout;
 	}
 	sendJSON($return);
