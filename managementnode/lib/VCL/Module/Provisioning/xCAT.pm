@@ -704,10 +704,6 @@ sub does_image_exist {
 		notify($ERRORS{'WARNING'}, 0, "du output does not contain a total line:\n" . join("\n", @$du_output));
 		return;
 	}
-	elsif (!defined($du_exit_status)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to determine if image $image_name exists");
-		return;
-	}
 	
 	# Return 1 if the image size > 0
 	my ($image_size) = (@$du_output[0] =~ /(\d+)\s+total/);
