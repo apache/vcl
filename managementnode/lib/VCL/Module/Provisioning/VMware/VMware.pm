@@ -5187,7 +5187,7 @@ sub find_datastore_files {
 		# Prune any file path with an intermediate directory beginning with a period
 		# This is to prevent Netapp (and possibly other) snapshot directory files from being included
 		if ($file_path =~ /\/(\.snapshot)\//g) {
-			notify($ERRORS{'DEBUG'}, 0, "ignoring files under parent directory '$1': $file_path");
+			#notify($ERRORS{'DEBUG'}, 0, "ignoring files under parent directory '$1': $file_path");
 			next;
 		}
 		push @file_paths_pruned, $file_path;
@@ -8050,36 +8050,39 @@ sub setup_vm_host_operations {
 		$management_node_vmhost_info->{$vmhost_id}{provisioner} = $vmhost_provisioner;
 	}
 	
-	setup_print_break('.');
 	my $datastore_operations_menu = {
 		'Migrate VM to another host' => \&setup_migrate_vm,
 		'Purge deleted and unused images from virtual disk datastore' => \&setup_purge_datastore_images,
 		'Purge deleted and unused images from repository datastore' => \&setup_purge_repository_images,
 	};
 	
-	print "Select an operation:\n";
-	my $datastore_operations_choice = setup_get_menu_choice($datastore_operations_menu) || return;
-	#For testing:
-	#my $datastore_operations_choice = {
-	#	"name" => "Purge deleted images from datastore",
-	#	"parent_menu_names" => [],
-	#	"sub_ref" => \&setup_purge_datastore_images,
-	#};
-	#my $datastore_operations_choice = {
-	#	"name" => "Purge deleted images from repository",
-	#	"parent_menu_names" => [],
-	#	"sub_ref" => \&setup_purge_repository_images,
-	#};
-	#my $datastore_operations_choice = {
-	#	"name" => "Migrate VM to another host",
-	#	"parent_menu_names" => [],
-	#	"sub_ref" => \&setup_migrate_vm,
-	#};
-	
-	my $datastore_operations_choice_name = $datastore_operations_choice->{name};
-	my $datastore_operations_choice_sub_ref = $datastore_operations_choice->{sub_ref};
-	push @{$ENV{setup_path}}, $datastore_operations_choice_name;
-	return &$datastore_operations_choice_sub_ref($vmhost_provisioner);
+	while (1) {
+		setup_print_break('.');
+		print "Select an operation:\n";
+		my $datastore_operations_choice = setup_get_menu_choice($datastore_operations_menu);
+		last if (!defined($datastore_operations_choice));
+		#For testing:
+		#my $datastore_operations_choice = {
+		#	"name" => "Purge deleted images from datastore",
+		#	"parent_menu_names" => [],
+		#	"sub_ref" => \&setup_purge_datastore_images,
+		#};
+		#my $datastore_operations_choice = {
+		#	"name" => "Purge deleted images from repository",
+		#	"parent_menu_names" => [],
+		#	"sub_ref" => \&setup_purge_repository_images,
+		#};
+		#my $datastore_operations_choice = {
+		#	"name" => "Migrate VM to another host",
+		#	"parent_menu_names" => [],
+		#	"sub_ref" => \&setup_migrate_vm,
+		#};
+		
+		my $datastore_operations_choice_name = $datastore_operations_choice->{name};
+		my $datastore_operations_choice_sub_ref = $datastore_operations_choice->{sub_ref};
+		&$datastore_operations_choice_sub_ref($vmhost_provisioner);
+	}
+	return 1;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -8331,42 +8334,7 @@ sub setup_purge_datastore_images {
 		return;
 	}
 	
-	my $purgable_imagerevision_count = scalar(@purgable_imagerevisions);
-	
-	my $delete_limit;
-	while (!$delete_limit) {
-		$delete_limit = setup_get_input_string("Enter number of image revisions to purge (0-$purgable_imagerevision_count)", $purgable_imagerevision_count);
-		return if !$delete_limit;
-		$delete_limit =~ s/\s*//g;
-		if ($delete_limit !~ /^\d+$/ || $delete_limit > $purgable_imagerevision_count) {
-			print "Value must be an integer between 0 and $purgable_imagerevision_count\n";
-			$delete_limit = '';
-		}
-	}
-	
-	my $delete_count = 0;
-	for my $imagerevision_name (@purgable_imagerevisions) {
-		$delete_count++;
-		setup_print_break('.');
-		print "Deleting image revision $delete_count/$delete_limit: $imagerevision_name\n";
-		
-		my $datastore_directory_path = "$datastore_base_path/$imagerevision_name";
-		print "Datastore directory path: $datastore_directory_path\n";
-		
-		if ($self->vmhost_os->delete_file($datastore_directory_path)) {
-			print "Done\n";
-		}
-		else {
-			print "\nERROR: failed to delete image revision: $imagerevision_name\n";
-			exit;
-		}
-		
-		if ($delete_count >= $delete_limit) {
-			last;
-		}
-	}
-	
-	return 1;
+	return $self->setup_purge_images_helper($datastore_base_path, \@purgable_imagerevisions);
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -8471,7 +8439,7 @@ sub setup_purge_repository_images {
 	my @deleted_no_reservations_loaded        = get_array_intersection(\@deleted, \@no_reservations, \@loaded);
 	my @deleted_no_reservations_not_loaded    = get_array_intersection(\@deleted, \@no_reservations, \@not_loaded);
 	
-	setup_print_break('-');
+	#setup_print_break('-');
 	print "Analyzed image revisions stored in the repository datastore:\n";
 	print "|- Deleted: "                   . scalar(@deleted) . "\n";
 	print "   |- Has reservation: "        . scalar(@deleted_has_reservations) . "\n";
@@ -8490,68 +8458,139 @@ sub setup_purge_repository_images {
 	}
 	
 	if (!@purgable_imagerevisions) {
-		print "No image revisions were found which can be safely purged from the repository datastore\n";
+		setup_print_ok("No image revisions were found which can be safely purged from the repository datastore");
+		return 1;
+	}
+	
+	return $self->setup_purge_images_helper($repository_base_path, \@purgable_imagerevisions);
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 setup_purge_images_helper
+
+ Parameters  : $datastore_base_path, $purgable_imagerevisions
+ Returns     : boolean
+ Description : 
+
+=cut
+
+sub setup_purge_images_helper {
+	my $self = shift;
+	if (ref($self) !~ /VMware/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return;
 	}
 	
-	my $purgable_imagerevision_count = scalar(@purgable_imagerevisions);
-	
-	my $delete_limit;
-	while (!$delete_limit) {
-		$delete_limit = setup_get_input_string("Enter number of image revisions to purge (0-$purgable_imagerevision_count)", $purgable_imagerevision_count);
-		return if !$delete_limit;
-		$delete_limit =~ s/\s*//g;
-		if ($delete_limit !~ /^\d+$/ || $delete_limit > $purgable_imagerevision_count) {
-			print "Value must be an integer between 0 and $purgable_imagerevision_count\n";
-			$delete_limit = '';
-		}
+	my ($datastore_base_path, $purgable_imagerevisions) = @_;
+	if (!defined($datastore_base_path)) {
+		notify($ERRORS{'WARNING'}, 0, "datastore base path argument was not supplied");
+		return;
 	}
+	elsif (!defined($purgable_imagerevisions)) {
+		notify($ERRORS{'WARNING'}, 0, "purgable image revision array reference argument was not supplied");
+		return;
+	}
+	elsif (!ref($purgable_imagerevisions) || ref($purgable_imagerevisions) ne 'ARRAY') {
+		notify($ERRORS{'WARNING'}, 0, "purgable image revision argument is not an array reference");
+		return;
+	}
+
+
+	my $purgable_hashref = {};
+	for (my $i=0; $i < scalar(@$purgable_imagerevisions); $i++) {
+		$purgable_hashref->{$i}{imagename} = @$purgable_imagerevisions[$i];
+	}
+	my @indexes_to_purge = setup_get_hash_multiple_choice($purgable_hashref,
+		{
+			'title' => "Select image revisions to purge:",
+			'display_keys' => ['{imagename}'],
+		}
+	);
 	
-	my $delete_count = 0;
-	for my $imagerevision_name (@purgable_imagerevisions) {
-		$delete_count++;
-		setup_print_break('.');
-		print "Deleting image revision $delete_count/$delete_limit: $imagerevision_name\n";
+	
+	my @failed_directory_paths;
+	IMAGEREVISION: for my $index (@indexes_to_purge) {
+		my $imagerevision_name = @$purgable_imagerevisions[$index];
 		
-		my $repository_directory_path = "$repository_base_path/$imagerevision_name";
-		print "repository directory path: $repository_directory_path\n";
+		setup_print_break('.');
+		print "Deleting image revision: $imagerevision_name\n";
+		
+		my $datastore_directory_path = "$datastore_base_path/$imagerevision_name";
+		print "Datastore directory path: $datastore_directory_path\n";
+		
+		my $datastore_directory_name_renamed = "_delete_$imagerevision_name";
+		my $datastore_directory_path_renamed = "$datastore_base_path/$datastore_directory_name_renamed";
 		
 		# Check files in directory, make sure it's safe to delete
-		my @file_paths = $self->find_datastore_files($repository_directory_path, "*", 1);
+		my @file_paths = $self->find_datastore_files($datastore_directory_path, "*", 1);
 		
-		# Don't delete directories which contain files which shouldn't reside in a repository direcotry
+		# Don't delete directories which contain files which shouldn't reside in a datastore direcotry
 		my @unsafe_file_paths = ();
-		push @unsafe_file_paths, grep(/-flat\./, @file_paths);
+		#push @unsafe_file_paths, grep(/-flat\./, @file_paths);
 		push @unsafe_file_paths, grep(/\.vmx$/, @file_paths);
 		if (@unsafe_file_paths) {
-			print "ERROR: image revision not deleted from repository: $imagerevision_name\n";
-			print "Directory contains files which normally wouldn't reside in an image repository directory:\n";
+			setup_print_error("Image revision not deleted from datastore: $imagerevision_name");
+			print "Directory contains files which normally wouldn't reside in an image datastore directory:\n";
 			print join("\n", @unsafe_file_paths) . "\n";
-			next;
+			push @failed_directory_paths, $datastore_directory_path;
+			next IMAGEREVISION;
 		}
 		
-		# Make sure directory contains a file name using the 2gbsparse format
-		if (!grep(/-s\d+\.vmdk$/, @file_paths)) {
-			print "ERROR: image revision not deleted from repository: $imagerevision_name\n";
-			print "Directory does not contain a 2GB sparse formatted file name (xxx-s001.vmdk):\n";
-			print join("\n", @file_paths) . "\n";
-			next;
+		## Make sure directory contains a file name using the 2gbsparse format
+		#if (!grep(/-s\d+\.vmdk$/, @file_paths)) {
+		#	setup_print_error("Image revision not deleted from datastore: $imagerevision_name");
+		#	print "Directory does not contain a 2GB sparse formatted file name (xxx-s001.vmdk):\n";
+		#	print join("\n", @file_paths) . "\n";
+		#	push @failed_directory_paths, $datastore_directory_path;
+		#	next IMAGEREVISION;
+		#}
+		
+		# Attempt to rename the directory before deleting the files
+		# This should determine if all of the files can be deleted
+		# Otherwise, if some files are locked the delete operation may delete some files but not all and fail
+		# This results in a directory which must be deleted manually because subsequent attempts of this subroutine will detect something amiss
+		print "Attempting to rename directory: $imagerevision_name --> $datastore_directory_name_renamed\n";
+		if (!$self->vmhost_os->move_file($datastore_directory_path, $datastore_directory_path_renamed)) {
+			setup_print_error("image revision not deleted from datastore: $imagerevision_name");
+			print "Directory could not be renamed prior to deletion, files in the directory may be locked\n";
+			push @failed_directory_paths, $datastore_directory_path;
+			next IMAGEREVISION;
 		}
 		
-		if ($self->vmhost_os->delete_file($repository_directory_path)) {
-			print "Done\n";
+		my $delete_attempt_limit = 5;
+		DELETE_ATTEMPT: for (my $delete_attempt = 1; $delete_attempt <= $delete_attempt_limit; $delete_attempt++) {
+			if ($self->vmhost_os->delete_file($datastore_directory_path_renamed)) {
+				setup_print_ok("Directory deleted: $datastore_directory_path_renamed");
+				next IMAGEREVISION;
+			}
+			else {
+				setup_print_warning("Attempt $delete_attempt/$delete_attempt_limit, failed to delete image revision: $imagerevision_name");
+				sleep_uninterrupted(3);
+			}
 		}
-		else {
-			print "\nERROR: failed to delete image revision: $imagerevision_name\n";
-			exit;
+		setup_print_error("Failed to delete image revision: $imagerevision_name");
+		push @failed_directory_paths, $datastore_directory_path;
+		
+		print "attempting to revert directory name change: $datastore_directory_name_renamed --> $imagerevision_name\n";
+		if (!$self->vmhost_os->move_file($datastore_directory_path_renamed, $datastore_directory_path)) {
+			setup_print_error("Failed to revert directory name change: $datastore_directory_name_renamed --> $imagerevision_name");
+			print "Directory must be manually deleted: $datastore_directory_path_renamed\n";
+			return 0;
 		}
 		
-		if ($delete_count >= $delete_limit) {
-			last;
-		}
+		next IMAGEREVISION;
 	}
 	
-	return 1;
+	if (@failed_directory_paths) {
+		setup_print_break('-');
+		setup_print_warning("Some directories could not be deleted:");
+		print join("\n", @failed_directory_paths) . "\n";
+		return 0;
+	}
+	else {
+		return 1;
+	}
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -8585,25 +8624,26 @@ sub get_datastore_imagerevision_names {
 	print scalar(@imagerevision_names) . " found\n";
 	my %imagerevision_name_hash = map { $_ => 1 } @imagerevision_names;
 	
-	print "Retrieving list of files and directories in datastore: $datastore_base_path\n";
-	
+	print "Retrieving list of files and directories in datastore: $datastore_base_path...";
 	my @file_paths = $self->find_datastore_files($datastore_base_path, "*.vmdk", 1);
-
+	print " Done\n";
+	
 	my @datastore_imagerevision_names;
 	my @ignored;
 	
+	my $start = time();
 	for my $file_path (@file_paths) {
 		$file_path =~ s/\/+$//;
 		next if $file_path eq $datastore_base_path;
 		
-		my $file_name = $self->_get_parent_directory_name($file_path);
-		next if !$file_name || $file_name !~ /v\d+/;
+		my ($parent_directory_name) = $file_path =~ m|\/([^\/]+)\/[^\/]+$|;
+		next if !defined($parent_directory_name);
 		
-		if (defined($imagerevision_name_hash{$file_name})) {
-			push @datastore_imagerevision_names, $file_name;
+		if (defined($imagerevision_name_hash{$parent_directory_name})) {
+			push @datastore_imagerevision_names, $parent_directory_name;
 		}
 		else {
-			push @ignored, $file_name;
+			push @ignored, $parent_directory_name;
 		}
 	}
 	
@@ -8989,7 +9029,7 @@ sub setup_migrate_vm {
 		else {
 			print colored("Failed to migrate $vm_computer_name from $source_vmhost_computer_name to $destination_vmhost_computer_name, check $LOGFILE for more information", 'BOLD YELLOW ON_RED');
 			print "\n";
-			return;
+			#return;
 		}
 	}
 	return 1;
@@ -9027,7 +9067,7 @@ sub migrate_vm {
 		return;
 	}
 	
-	my $revert_destination_on_error = 1;
+	my $revert_destination_on_error = 0;
 	if (defined($options->{revert_destination_on_error})) {
 		$revert_destination_on_error = $options->{revert_destination_on_error};
 	}
@@ -9046,20 +9086,16 @@ sub migrate_vm {
 				print colored("ERROR: $message", 'BOLD YELLOW ON_RED');
 				print "\n";
 			}
-			else {
-				if ($calling_subroutine =~ /migrate_vm/) {
-					if ($type == $ERRORS{'DEBUG'}) {
-						print colored("$message", 'WHITE');
-					}
-					elsif ($type == $ERRORS{'OK'}) {
-						print colored($message, 'WHITE');
-					}
-					print "\n";
+			elsif ($calling_subroutine =~ /migrate_vm/) {
+				if ($type == $ERRORS{'DEBUG'}) {
+					print colored("$message", 'WHITE');
 				}
-				else {
-					VCL::utils::notify($type, $log, $message);
+				elsif ($type == $ERRORS{'OK'}) {
+					print colored($message, 'WHITE');
 				}
+				print "\n";
 			}
+			VCL::utils::notify($type, $log, $message);
 		};
 	}
 
@@ -9086,27 +9122,32 @@ sub migrate_vm {
 		return;
 	}
 	
-	## Check if VM is responding
+	# Check if VM is responding
+	my $vm_os_perl_package = $vm_data->get_image_os_module_perl_package();
 	#my $vm_os_responding = $vm_os->is_ssh_responding(); 
-	#if (!$vm_os_responding) {
+	#if ($vm_os_responding) {
+	#	# Determine the OS perl package to use to control the VM and create an OS object
+	#	notify($ERRORS{'DEBUG'}, 0, "attempting to log in to $vm_computer_name and determine OS currently loaded");
+	#	$vm_os_perl_package = VCL::Module::OS::get_os_perl_package($vm_computer_name);
+	#	if ($vm_os_perl_package) {
+	#		notify($ERRORS{'DEBUG'}, 0, "retrieved OS currently loaded on $vm_computer_name, $vm_os_perl_package module will be used");
+	#	}
+	#	else {
+	#		$vm_os_perl_package = $vm_data->get_image_os_module_perl_package();
+	#		notify($ERRORS{'WARNING'}, 0, "failed to determine OS currently loaded on $vm_computer_name, using OS currently loaded according to database: $vm_os_perl_package");
+	#	}
+	#}
+	#else {
 	#	if ($SETUP_MODE) {
 	#		notify($ERRORS{'WARNING'}, 0, "$vm_computer_name is not responding to SSH");
 	#		if (!setup_confirm("Continue to migrate the VM?", "N")) {
 	#			return;
 	#		}
 	#	}
+	#	$vm_os_perl_package = $vm_data->get_image_os_module_perl_package();
 	#}
 	
-	# Determine the OS perl package to use to control the VM and create an OS object
-	notify($ERRORS{'DEBUG'}, 0, "attempting to log in to $vm_computer_name and determine OS currently loaded");
-	my $vm_os_perl_package = VCL::Module::OS::get_os_perl_package($vm_computer_name);
-	if ($vm_os_perl_package) {
-		notify($ERRORS{'DEBUG'}, 0, "retrieved OS currently loaded on $vm_computer_name, $vm_os_perl_package module will be used");
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to determine OS currently loaded on $vm_computer_name");
-		return;
-	}
+	
 	my $vm_os = VCL::Module::create_object($vm_os_perl_package, $vm_data);
 	if ($vm_os) {
 		notify($ERRORS{'OK'}, 0, "created object to control VM $vm_computer_name ($vm_os_perl_package)");
@@ -9121,6 +9162,17 @@ sub migrate_vm {
 			return;
 		}
 	}
+	
+	my $vm_os_responding = $vm_os->is_ssh_responding();
+	#if (!$vm_os_responding) {
+	#	if ($SETUP_MODE) {
+			#notify($ERRORS{'WARNING'}, 0, "$vm_computer_name is not responding to SSH");
+	#		if (!setup_confirm("Continue to migrate the VM?", "N")) {
+	#			return;
+	#		}
+	#	}
+	#}
+	
 	
 	#...........................................................................
 	# Create an OS object for the source VM host
@@ -9242,7 +9294,13 @@ sub migrate_vm {
 	# Figure out if VMware's suspend or the guest OS's hibernate should be used
 	# Check if source vmx contains any values known to cause problems with VMware's suspend/resume
 	my $source_vmx_info = $source->get_vmx_info($source_vmx_file_path);
-	my $suspend_method = 'vmware';
+	my $suspend_method = 'shutdown';
+	#my $suspend_method = 'vmware';
+	#
+	#if (!$vm_os_responding) {
+	#	$suspend_method = 'vmware';
+	#}
+	
 	#my $problematic_suspend_parameters = {
 	#	'mks.enable3d' => 'true',
 	#	'svga.yes3d' => 'true',
@@ -9263,15 +9321,15 @@ sub migrate_vm {
 	#		last;
 	#	}
 	#}
-	## Perform additional checks if VMware's suspend/resume can't be used
-	#if ($suspend_method eq 'os') {
-	#	# Check if the VM OS object implements a hibernate subroutine
-	#	if (!$vm_os->can('hibernate')) {
-	#		notify($ERRORS{'WARNING'}, 0, "unable to migrate $vm_computer_name, VMware suspend/resume cannot be used and $vm_os_perl_package module does not implement a 'hibernate' subroutine");
-	#		return;
-	#	}
-	#}
-	#notify($ERRORS{'DEBUG'}, 0, "source VM suspend/hibernate method: " . ($suspend_method eq 'vmware' ? 'VMware suspend' : 'guest OS hibernate'));
+	# Perform additional checks if VMware's suspend/resume can't be used
+	if ($suspend_method eq 'os') {
+		# Check if the VM OS object implements a hibernate subroutine
+		if (!$vm_os->can('hibernate')) {
+			notify($ERRORS{'WARNING'}, 0, "unable to migrate $vm_computer_name, VMware suspend/resume cannot be used and $vm_os_perl_package module does not implement a 'hibernate' subroutine");
+			return;
+		}
+	}
+	notify($ERRORS{'DEBUG'}, 0, "source VM suspend/hibernate method: " . ($suspend_method eq 'vmware' ? 'VMware suspend' : 'guest OS hibernate'));
 	
 	
 	# Figure out the destination vmx file path
@@ -9368,32 +9426,28 @@ sub migrate_vm {
 	my $destination_vmdk_directory_url_path = $destination->_get_url_path($destination_vmdk_directory_path);
 	my $same_vmdk_directory = ($source_vmdk_directory_url_path eq $destination_vmdk_directory_url_path ? 1 : 0);
 	
-	# If the source and destination are using the same vmdk directory, check if the vmdk is dedicated
-	if ($same_vmdk_directory) {
-		notify($ERRORS{'DEBUG'}, 0, "source and destination VMs use the same vmdk directory: $source_vmdk_directory_url_path");
-		my $source_vmdk_directory_path_dedicated = $source->get_vmdk_directory_path_dedicated();
-		my $source_vmdk_directory_url_path_dedicated = $source->_get_url_path($source_vmdk_directory_path_dedicated);
-		if ($source_vmdk_directory_url_path_dedicated eq $destination_vmdk_directory_url_path) {
-			notify($ERRORS{'DEBUG'}, 0, "vmdk directory is dedicated: $source_vmdk_directory_url_path_dedicated");
-			
-			# Override the destination vmdk file path
-			$destination->set_vmdk_file_path($destination->get_vmdk_file_path_dedicated());
-			$destination_vmdk_file_path = $destination->get_vmdk_file_path();
-			$destination_vmdk_directory_path = $destination->get_vmdk_directory_path();
-			$destination_vmdk_directory_url_path = $destination->_get_url_path($destination_vmdk_directory_path);
-			$destination->{vm_dedicated} = 1;
-		}
-		else {
-			notify($ERRORS{'DEBUG'}, 0, "vmdk directory is NOT dedicated: $source_vmdk_directory_url_path_dedicated");
-		}
+	# Check if the source vmdk directory is dedicated to the VM
+	my $source_vmdk_directory_path_dedicated = $source->get_vmdk_directory_path_dedicated();
+	my $source_vmdk_directory_url_path_dedicated = $source->_get_url_path($source_vmdk_directory_path_dedicated);
+	if ($source_vmdk_directory_url_path_dedicated eq $source_vmdk_directory_url_path || $source_vmdk_directory_name =~ /^$vm_computer_name/) {
+		notify($ERRORS{'DEBUG'}, 0, "vmdk directory is dedicated: $source_vmdk_directory_url_path_dedicated");
+		
+		# Override the destination vmdk file path
+		$destination->set_vmdk_file_path($destination->get_vmdk_file_path_dedicated());
+		$destination_vmdk_file_path = $destination->get_vmdk_file_path();
+		$destination_vmdk_directory_path = $destination->get_vmdk_directory_path();
+		$destination_vmdk_directory_url_path = $destination->_get_url_path($destination_vmdk_directory_path);
+		$destination->{vm_dedicated} = 1;
 	}
 	else {
-		notify($ERRORS{'DEBUG'}, 0, "source and destination VMs use different vmdk directories:\nsource: $source_vmdk_directory_url_path\ndestination: $destination_vmdk_directory_url_path");
+		notify($ERRORS{'DEBUG'}, 0, "vmdk directory is NOT dedicated:\n" .
+			"source vmdk directory path: $source_vmdk_directory_url_path\n" .
+			"source vmdk dedicated path: $source_vmdk_directory_url_path_dedicated"
+		);
 	}
 	
 	my $source_vmdk_file_url_path = $source->_get_url_path($source_vmdk_file_path);
 	my $destination_vmdk_file_url_path = $destination->_get_url_path($destination_vmdk_file_path);
-	
 
 	# Copy the parent vmdk to the correct location on the destination
 	# This may fail if vmdk doesn't exist on destination datastore or repository
@@ -9439,7 +9493,7 @@ sub migrate_vm {
 		my $destination_file_path = "$destination_vmx_directory_path/$source_file_name";
 		
 		# Ignore these files, they aren't required on the destination in order for the VM to run
-		if ($source_file_path =~ /(\.log|vmx~|\.vswp|\.lck)/) {
+		if ($source_file_path =~ /(\.log|vmx~|\.vswp|\.lck|-core\.gz|zdump\.|\.vmss)/) {
 			#notify($ERRORS{'DEBUG'}, 0, "file will not be copied: $source_file_name");
 			next;
 		}
@@ -9452,9 +9506,10 @@ sub migrate_vm {
 		
 		# Keep list of files in use by the source VM which is still running
 		# These will be copied after the VM hibernates
-		if ($source_file_path =~ /$source_active_vmdk_file_base_name[\.-].*vmdk$/) {
+		# .vmx file gets updated when VM is suspended
+		if ($source_file_path =~ /($source_active_vmdk_file_base_name[\.-].*\.vmdk|\.vmx)/) {
 			push @source_active_file_paths, $source_file_path;
-			notify($ERRORS{'DEBUG'}, 0, "file is actively being used by the source VM, will be copied after source VM is suspended: $source_file_name");
+			notify($ERRORS{'DEBUG'}, 0, "file is actively being used by the source VM or may change during suspend, will be copied after source VM is suspended: $source_file_name");
 			next;
 		}
 		
@@ -9475,8 +9530,7 @@ sub migrate_vm {
 			return;
 		}
 	}
-	
-	
+
 	# Suspend/hibernate the source VM - the amount of time the VM is unavailable should be minimized
 	# Do as much as possible before this step
 	# Keep track of how long the VM is inaccessible
@@ -9492,10 +9546,17 @@ sub migrate_vm {
 			return;
 		}
 	}
+	elsif ($suspend_method eq 'shutdown') {
+		notify($ERRORS{'DEBUG'}, 0, "attempting to shutdown guest OS of $vm_computer_name");
+		if (!$vm_os->shutdown()) {
+			notify($ERRORS{'WARNING'}, 0, "failed to migrate $vm_computer_name, failed to shutdown VM's guest OS");
+			return;
+		}
+	}
 	else {
-		notify($ERRORS{'DEBUG'}, 0, "attempting to hibernate $vm_computer_name's guest OS");
+		notify($ERRORS{'DEBUG'}, 0, "attempting to hibernate guest OS of $vm_computer_name");
 		if ($vm_os->hibernate()) {
-			notify($ERRORS{'OK'}, 0, "hibernated $vm_computer_name's guest OS");
+			notify($ERRORS{'OK'}, 0, "hibernated guest OS of $vm_computer_name");
 		}
 		else {
 			notify($ERRORS{'WARNING'}, 0, "failed to migrate $vm_computer_name, failed to hibernate VM's guest OS");
@@ -9505,7 +9566,7 @@ sub migrate_vm {
 	}
 	
 	# Update computer.vmhostid
-	# Do this before hibernating - it would be more difficult to revert things if the update were to fail after a successful migration
+	# Do this before completing the destination VM - it would be more difficult to revert things if the update were to fail after a successful migration
 	if (update_computer_vmhost_id($vm_computer_id, $destination_vmhost_id)) {
 		notify($ERRORS{'OK'}, 0, "updated VM host $vm_computer_name is assigned to in the database (VM host ID: $destination_vmhost_id)");
 	}
@@ -9516,10 +9577,24 @@ sub migrate_vm {
 		return;
 	}
 	
+	# Get the .vmss file path(s) created when the VM was suspended
+	my @source_vmss_file_paths = $source->vmhost_os->find_files($source_vmx_directory_path, '*.vmss');
+	push @source_active_file_paths, @source_vmss_file_paths;
+	@source_active_file_paths = remove_array_duplicates(@source_active_file_paths);
+	
 	# Copy the files that were actively being used by the source VM
 	for my $source_file_path (@source_active_file_paths) {
 		my $file_name = $self->_get_file_name($source_file_path);
 		my $destination_file_path = "$destination_vmx_directory_path/$file_name";
+		
+		# Attempt to retrieve the source file size - useful info to present because copy may take a long time
+		my $source_file_size_bytes = $source->vmhost_os->get_file_size($source_file_path);
+		my $file_size_string = '';
+		if ($source_file_size_bytes) {
+			$file_size_string = ' (' . get_file_size_info_string($source_file_size_bytes) . ')';
+		}
+		
+		notify($ERRORS{'DEBUG'}, 0, "copying file to destination: $destination_vmhost_computer_name:$destination_file_path" . $file_size_string);
 		if ($source->copy_file_to_another_host($source_file_path, $destination, $destination_file_path)) {
 			notify($ERRORS{'OK'}, 0, "copied file to destination VM host: $destination_vmhost_computer_name:$destination_file_path");
 		}
@@ -9569,9 +9644,10 @@ sub migrate_vm {
 				return;
 			}
 			else {
-				notify($ERRORS{'OK'}, 0, "updated file on $destination_vmhost_computer_name: $destination_file_path, pattern: $source_pattern --> $destination_pattern");
+				#notify($ERRORS{'OK'}, 0, "updated file on $destination_vmhost_computer_name: $destination_file_path, pattern: $source_pattern --> $destination_pattern");
 			}
 		}
+		notify($ERRORS{'OK'}, 0, "updated file on $destination_vmhost_computer_name: $destination_file_path");
 	}
 	
 	# Register the VM on the destination VM host
@@ -9590,6 +9666,7 @@ sub migrate_vm {
 	
 	# Power on the VM on the destination VM host
 	notify($ERRORS{'DEBUG'}, 0, "powering on $vm_computer_name on destination VM host $destination_vmhost_computer_name: $destination_vmx_file_path");
+	
 	if ($destination->api->vm_power_on($destination_vmx_file_path)) {
 		notify($ERRORS{'OK'}, 0, "powered on $vm_computer_name on $destination_vmhost_computer_name");
 	}
@@ -9604,26 +9681,36 @@ sub migrate_vm {
 	}
 	
 	# Wait for the destination VM to respond
-	notify($ERRORS{'DEBUG'}, 0, "waiting for $vm_computer_name to respond to SSH on destination VM host $destination_vmhost_computer_name");
-	if ($vm_os->wait_for_ssh(300, 3)) {
-		notify($ERRORS{'OK'}, 0, "$vm_computer_name is responding to SSH on destination VM host $destination_vmhost_computer_name");
+	if ($vm_os_responding) {
+		notify($ERRORS{'DEBUG'}, 0, "waiting for $vm_computer_name to respond to SSH on destination VM host $destination_vmhost_computer_name");
+		if ($vm_os->wait_for_ssh(300, 3)) {
+			notify($ERRORS{'OK'}, 0, "$vm_computer_name is responding to SSH on destination VM host $destination_vmhost_computer_name");
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "failed to migrate $vm_computer_name, VM never responded on destination VM host $destination_vmhost_computer_name");
+			migrate_revert_source($source, $vm_os);
+			if ($revert_destination_on_error) {
+				$destination->api->vm_unregister($destination_vmx_file_path);
+				$destination->vmhost_os->delete_file($destination_vmx_directory_path);
+			}
+			return;
+		}
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to migrate $vm_computer_name, VM never responded on destination VM host $destination_vmhost_computer_name");
-		migrate_revert_source($source, $vm_os);
-		if ($revert_destination_on_error) {
-			$destination->api->vm_unregister($destination_vmx_file_path);
-			$destination->vmhost_os->delete_file($destination_vmx_directory_path);
-		}
-		return;
+		notify($ERRORS{'DEBUG'}, 0, "skipping wait for $vm_computer_name to respond to SSH on destination VM host $destination_vmhost_computer_name, VM was not responding prior to migration");
 	}
 	
 	my $hibernate_duration = (time - $hibernate_start_time);
-	
-	# Remove the original VM from the source VM host
-	notify($ERRORS{'DEBUG'}, 0, "deleting original VM from $source_vmhost_computer_name: $source_vmx_file_path");
-	$source->delete_vm($source_vmx_file_path);
-	notify($ERRORS{'OK'}, 0, "deleted original VM from $source_vmhost_computer_name: $source_vmx_file_path");
+	#
+	#if ($vm_os_responding) {
+	#	# Remove the original VM from the source VM host
+	#	notify($ERRORS{'DEBUG'}, 0, "deleting original VM from $source_vmhost_computer_name: $source_vmx_file_path");
+	#	$source->delete_vm($source_vmx_file_path);
+	#	notify($ERRORS{'OK'}, 0, "deleted original VM from $source_vmhost_computer_name: $source_vmx_file_path");
+	#}
+	#else {
+	#	notify($ERRORS{'DEBUG'}, 0, "original VM not deleted from $source_vmhost_computer_name for safety, VM was not responding to SSH prior to migration");
+	#}
 	
 	notify($ERRORS{'OK'}, 0, "migration of $vm_computer_name complete: $source_vmhost_computer_name --> $destination_vmhost_computer_name, hibernation duration: $hibernate_duration seconds");
 	return 1;
@@ -9656,26 +9743,33 @@ sub migrate_revert_source {
 	my $source_vmhost_computer_name = $source->vmhost_os->data->get_computer_short_name();
 	my $source_vmhost_id = $source->data->get_vmhost_id();
 	
+	my $error_occurred = 0;
+	
+	# Change computer.vmhostid back to the source VM host
+	if (!update_computer_vmhost_id($vm_computer_id, $source_vmhost_id)) {
+		notify($ERRORS{'CRITICAL'}, 0, "migration failed, failed to set VM host ID of $vm_computer_name back to source VM host ID: $source_vmhost_id");
+		$error_occurred = 1;
+	}
+	
 	# Power the source VM back on
 	if (!$source->power_on()) {
 		notify($ERRORS{'CRITICAL'}, 0, "migration failed, failed to power $vm_computer_name back on after it hibernated on source VM host $source_vmhost_computer_name");
-		return;
+		$error_occurred = 1;
 	}
 	
 	# Wait for the source VM to respond
 	if (!$vm_os->wait_for_ssh(300, 5)) {
 		notify($ERRORS{'CRITICAL'}, 0, "migration failed, source VM $vm_computer_name never responded after it was powered back on after hibernation on $source_vmhost_computer_name");
-		return;
+		$error_occurred = 1;
 	}
 	
-	# Change computer.vmhostid back to the source VM host
-	if (!update_computer_vmhost_id($vm_computer_id, $source_vmhost_id)) {
-		notify($ERRORS{'CRITICAL'}, 0, "migration failed, failed to set VM host ID of $vm_computer_name back to source VM host ID: $source_vmhost_id");
+	if ($error_occurred) {
 		return;
 	}
-	
-	notify($ERRORS{'OK'}, 0, "reverted VM $vm_computer_name on source VM host $source_vmhost_computer_name");
-	return 1;
+	else {
+		notify($ERRORS{'OK'}, 0, "reverted VM $vm_computer_name on source VM host $source_vmhost_computer_name");
+		return 1;
+	}
 }
 
 #/////////////////////////////////////////////////////////////////////////////

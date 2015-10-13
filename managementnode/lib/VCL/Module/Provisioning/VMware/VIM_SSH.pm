@@ -213,7 +213,13 @@ sub _run_vim_cmd {
 		$self->{vim_cmd_calls}++;
 		#notify($ERRORS{'DEBUG'}, 0, "vim-cmd call count: $self->{vim_cmd_calls} ($vim_arguments)");
 		
-		my ($exit_status, $output) = $self->vmhost_os->execute($command, 0, $timeout_seconds);
+		my ($exit_status, $output) = $self->vmhost_os->execute({
+			'command' => $command,
+			'display_output' => 0,
+			'timeout_seconds' => $timeout_seconds,
+			#'max_attempts' => 1
+		});
+		
 		if (!defined($output)) {
 			notify($ERRORS{'WARNING'}, 0, "attempt $attempt/$attempt_limit: failed to run VIM command on VM host $vmhost_computer_name: $command");
 		}
@@ -570,11 +576,14 @@ sub _get_vm_summary {
 		return;
 	}
 	
-	my $vm_id = shift;
-	if (!$vm_id) {
-		notify($ERRORS{'WARNING'}, 0, "VM ID argument was not specified");
+	# Get the vmx file path argument
+	my $vmx_file_path = shift || $self->get_vmx_file_path();
+	if (!$vmx_file_path) {
+		notify($ERRORS{'WARNING'}, 0, "vmx file path argument could not be determined");
 		return;
 	}
+	
+	my $vm_id = $self->_get_vm_id($vmx_file_path) || return;
 	
 	my $vim_cmd_arguments = "vmsvc/get.summary $vm_id";
 	my ($exit_status, $output) = $self->_run_vim_cmd($vim_cmd_arguments);
@@ -668,7 +677,14 @@ sub _get_vm_summary {
 		return;
 	}
 	
-	return $output;
+	my $vm_summary_info = $self->_parse_vim_cmd_output($output);
+	if (defined($vm_summary_info->{'vim.vm.Summary'})) {
+		return $vm_summary_info->{'vim.vm.Summary'};
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve summary of VM: $vmx_file_path, parsed output does not contain a 'vim.vm.Summary' key:\n" . format_data($vm_summary_info));
+		return;
+	}
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -2695,7 +2711,7 @@ sub _parse_vim_cmd_output {
 		return;
 	}
 	
-	my ($argument) = @_;
+	my ($argument, $debug) = @_;
 	if (!defined($argument)) {
 		notify($ERRORS{'WARNING'}, 0, "vim-cmd output argument was not supplied");
 		return;
@@ -2723,6 +2739,13 @@ sub _parse_vim_cmd_output {
 	for my $line (@lines) {
 		# Skip blank lines
 		if ($line !~ /\S/) {
+			next;
+		}
+		
+		# Some commands such as 'vim-cmd vmsvc/get.summary' add this to the beginning:
+		# Listsummary:
+		if ($line =~ /:$/) {
+			notify($ERRORS{'DEBUG'}, 0, "skipping line: $line");
 			next;
 		}
 		
@@ -2780,11 +2803,22 @@ sub _parse_vim_cmd_output {
 	if ($statement =~ /^[^\n]+{/) {
 		$statement = "{\n$statement\n}";
 	}
-
+	
+	if ($debug) {
+		print "\n";
+		print '.' x 200 . "\n";
+		print "Statement:\n$statement\n";
+		print '.' x 200 . "\n";
+	}
+	
 	# The statement variable should contain a valid definition
 	my $result = eval($statement);
 	if ($EVAL_ERROR) {
 		notify($ERRORS{'WARNING'}, 0, "failed to parse vim-cmd output, error:\n$EVAL_ERROR\n$numbered_statement");
+		return;
+	}
+	elsif (!defined($result)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to parse vim-cmd output:\n$numbered_statement");
 		return;
 	}
 	else {
@@ -2955,6 +2989,61 @@ sub get_vm_virtual_disk_file_paths {
 	return @virtual_disks;
 }
 
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_vm_cpu_usage
+
+ Parameters  : $vmx_file_path
+ Returns     : integer (percent)
+ Description : Retrieves the most recent overall CPU usage for a VM. This is
+               calculated based on the values returned from:
+               vim-cmd vmsvc/get.summary
+               {quickStats}{overallCpuUsage} / {runtime}{maxCpuUsage} = %usage
+
+=cut
+
+sub get_vm_cpu_usage {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Get the vmx file path argument
+	my $vmx_file_path = shift || $self->get_vmx_file_path();
+	if (!$vmx_file_path) {
+		notify($ERRORS{'WARNING'}, 0, "vmx file path argument could not be determined");
+		return;
+	}
+	
+	my $vm_summary = $self->_get_vm_summary($vmx_file_path) || return;
+	
+	my $max_cpu_usage = $vm_summary->{runtime}{maxCpuUsage};
+	if (!defined($max_cpu_usage)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to determine CPU usage for VM $vmx_file_path, VM summary information does not contain a {runtime}{maxCpuUsage} key:\n" . format_data($vm_summary));
+		return;
+	}
+	elsif ($max_cpu_usage !~ /^\d+$/ || !$max_cpu_usage) {
+		notify($ERRORS{'WARNING'}, 0, "failed to determine CPU usage for VM $vmx_file_path, maxCpuUsage value is not valid: $max_cpu_usage");
+		return;
+	}
+	
+	my $overall_cpu_usage = $vm_summary->{quickStats}{overallCpuUsage};
+	if (!defined($overall_cpu_usage)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to determine CPU usage for VM $vmx_file_path, VM summary information does not contain a {quickStats}{overallCpuUsage} key:\n" . format_data($vm_summary));
+		return;
+	}
+	elsif ($overall_cpu_usage !~ /^\d+$/) {
+		notify($ERRORS{'WARNING'}, 0, "failed to determine CPU usage for VM $vmx_file_path, $overall_cpu_usage value is not valid: $overall_cpu_usage");
+		return;
+	}
+	
+	my $cpu_usage_percent = format_number(($overall_cpu_usage / $max_cpu_usage), 2) * 100;
+	
+	notify($ERRORS{'DEBUG'}, 0, "retrieved CPU usage for VM $vmx_file_path: $cpu_usage_percent\% (overall CPU usage: $overall_cpu_usage MHz / max CPU usage: $max_cpu_usage MHz)");
+	return $cpu_usage_percent;
+
+}
 
 #/////////////////////////////////////////////////////////////////////////////
 
