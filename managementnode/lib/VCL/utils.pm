@@ -196,6 +196,7 @@ our @EXPORT = qw(
 	insert_nathost
 	insert_reload_request
 	insert_request
+	insert_reservation
 	insertloadlog
 	ip_address_to_hostname
 	ip_address_to_network_address
@@ -8079,6 +8080,207 @@ EOF
 			#notify($ERRORS{'DEBUG'}, 0, "computer was found matching argument $computer_identifier, returning computer ID: $computer_id");
 			return $computer_id;
 		}
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 insert_reservation
+
+ Parameters  : hash reference
+ Returns     : array or integer
+ Description : Inserts a reservation into the database. A hash reference
+               argument must be supplied with the following keys:
+                  state          : request state name
+                  user           : user identifier
+                  computer       : computer identifier
+                  imagerevision  : image revision identifier
+               
+               The following keys are optional:
+                  managementnode : management node identifier
+                                   (default: current management node)
+                  laststate      : request laststate name
+                                   (default: same as request.state)
+                  start_minutes  : minutes in future of request.start
+                                   (default: 0)
+                  end_minutes    : minutes in future of request.end
+                                   (default: 120)
+
+=cut
+
+sub insert_reservation {
+	my ($arguments) = @_;
+	if (!defined($arguments)) {
+		notify($ERRORS{'WARNING'}, 0, "argument hash reference was not supplied");
+		return;
+	}
+	elsif (!ref($arguments) || ref($arguments) ne 'HASH') {
+		notify($ERRORS{'WARNING'}, 0, "argument is not a hash reference:\n" . format_data($arguments));
+		return;
+	}
+	
+	my $managementnode_identifier 	= $arguments->{'managementnode'};
+	my $request_state_name 				= $arguments->{'state'};
+	my $request_laststate_name 		= $arguments->{'laststate'};
+	my $user_identifier 					= $arguments->{'user'};
+	my $computer_identifier 			= $arguments->{'computer'};
+	my $imagerevision_identifier 		= $arguments->{'imagerevision'};
+	my $future_start_minutes 			= $arguments->{'start_minutes'} || 0;
+	my $future_end_minutes 				= $arguments->{'end_minutes'} || 120;
+	
+	if (!defined($request_state_name)) {
+		notify($ERRORS{'WARNING'}, 0, "argument hash reference does not contain a required 'state' key");
+		return;
+	}
+	if (!defined($user_identifier)) {
+		notify($ERRORS{'WARNING'}, 0, "argument hash reference does not contain a required 'user' key");
+		return;
+	}
+	if (!defined($computer_identifier)) {
+		notify($ERRORS{'WARNING'}, 0, "argument hash reference does not contain a required 'computer' key");
+		return;
+	}
+	if (!defined($imagerevision_identifier)) {
+		notify($ERRORS{'WARNING'}, 0, "argument hash reference does not contain a required 'imagerevision' key");
+		return;
+	}
+	
+	$request_laststate_name = $request_state_name unless defined($request_laststate_name);
+	
+	# Retrieve current management node info if argument was not specified
+	my $management_node_info = get_management_node_info($managementnode_identifier);
+	if (!defined($management_node_info)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to insert reservation, management node info could not be retrieved");
+		return;
+	}
+	my $management_node_id = $management_node_info->{id};
+	my $management_node_hostname = $management_node_info->{hostname};
+	
+	my $user_info = get_user_info($user_identifier);
+	if (!defined($user_info)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to insert reservation, user info could not be retrieved");
+		return;
+	}
+	my $user_id = $user_info->{id};
+	my $user_unityid = $user_info->{unityid};
+	
+	my $computer_info = get_computer_info($computer_identifier);
+	if (!defined($computer_info)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to insert reservation, computer info could not be retrieved");
+		return;
+	}
+	my $computer_id = $computer_info->{id};
+	my $computer_hostname = $computer_info->{hostname};
+	
+	my $imagerevision_info = get_imagerevision_info($imagerevision_identifier);
+	if (!defined($imagerevision_info)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to insert reservation, image revision info could not be retrieved");
+		return;
+	}
+	my $imagerevision_id = $imagerevision_info->{id};
+	my $image_id = $imagerevision_info->{imageid};
+	my $image_name = $imagerevision_info->{imagename};
+	
+	notify($ERRORS{'DEBUG'}, 0, "attempting to insert reservation:\n" .
+		"request state: $request_state_name/$request_laststate_name\n" .
+		"management node: $management_node_hostname (ID: $management_node_id)\n" .
+		"user: $user_unityid (ID: $user_id)\n" .
+		"computer: $computer_hostname (ID: $computer_id)\n" .
+		"image: $image_name (ID: $image_id, imagerevision ID: $imagerevision_id)"
+	);
+	
+	# Only insert a log table entry if this reservation is tied to a user
+	# Don't insert for reload, tomaintenance, etc.
+	if ($request_state_name =~ /^(new|inuse|reserved|timeout)$/) {
+		my $insert_log_statement = <<EOF;
+INSERT INTO log
+(userid, start, initialend, finalend, computerid, imageid)
+VALUES (
+	$user_id,
+	TIMESTAMPADD(MINUTE, $future_start_minutes, NOW()),
+	NOW(),
+	TIMESTAMPADD(MINUTE, $future_end_minutes, NOW()),
+	$computer_id,
+	$image_id
+)
+EOF
+		my $log_id = database_execute($insert_log_statement);
+		if (!$log_id) {
+			notify($ERRORS{'WARNING'}, 0, "unable to insert reservation, failed to insert into log table");
+			return;
+		}
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "log table entry not inserted, request state: $request_state_name");
+	}
+
+	my $insert_sublog_statement = <<EOF;
+INSERT INTO sublog
+(logid, imageid, imagerevisionid, computerid, managementnodeid, predictivemoduleid)
+VALUES (
+	$log_id,
+	$image_id,
+	$imagerevision_id,
+	$computer_id,
+	$management_node_id,
+	(SELECT MIN(id) FROM module WHERE perlpackage = 'VCL::Module::Predictive::Level_0')
+)
+EOF
+	my $sublog_id = database_execute($insert_sublog_statement);
+	if (!$sublog_id) {
+		notify($ERRORS{'WARNING'}, 0, "unable to insert reservation, failed to insert into sublog table");
+		return;
+	}
+	
+	my $insert_request_statement = <<EOF;
+INSERT INTO request
+(userid, stateid, laststateid, logid, start, end)
+VALUES (
+	$user_id,
+	(SELECT id FROM state WHERE name = '$request_state_name'),
+	(SELECT id FROM state WHERE name = '$request_laststate_name'),
+	$log_id,
+	(SELECT start FROM log WHERE id = $log_id),
+	(SELECT initialend FROM log WHERE id = $log_id)
+)
+EOF
+	my $request_id = database_execute($insert_request_statement);
+	if (!$request_id) {
+		notify($ERRORS{'WARNING'}, 0, "unable to insert reservation, failed to insert into request table");
+		return;
+	}
+	
+	my $insert_reservation_statement = <<EOF;
+INSERT INTO reservation
+(requestid, computerid, imageid, imagerevisionid, managementnodeid)
+VALUES (
+	$request_id,
+	$computer_id,
+	$image_id,
+	$imagerevision_id,
+	$management_node_id
+)
+EOF
+	my $reservation_id = database_execute($insert_reservation_statement);
+	if (!$reservation_id) {
+		notify($ERRORS{'WARNING'}, 0, "unable to insert reservation, failed to insert into reservation table");
+		return;
+	}
+	
+	my $update_log_statement = "UPDATE log SET requestid = $request_id WHERE id = $log_id";
+	database_execute($update_log_statement);
+	
+	notify($ERRORS{'OK'}, 0, "inserted reservation:\n" .
+		"request ID: $request_id\n" .
+		"reservation ID: $reservation_id\n" .
+		"log ID: $log_id\n" .
+		"sublog ID: $sublog_id"
+	);
+	if (wantarray) {
+		return ($request_id, $reservation_id);
+	}
+	else {
+		return $reservation_id;
 	}
 }
 
