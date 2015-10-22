@@ -9244,43 +9244,57 @@ sub character_to_ascii_value {
 
 =cut
 sub add_imageid_to_newimages {
-	my ($ownerid, $resourceid, $virtual) = @_;
-
-   my ($package, $filename, $line, $sub) = caller(0);
-
-   # Check the arguments
-   if (!defined($ownerid)) {
-       notify($ERRORS{'WARNING'}, 0, "ownerid was not specified");
-       return 0;
-   }
-   if (!defined($resourceid)) {
-       notify($ERRORS{'WARNING'}, 0, "resourceid was not specified");
-       return 0;
-   }
-   if (!defined($virtual)) {
-       notify($ERRORS{'WARNING'}, 0, "virtual was not specified");
-       return 0;
-   }
-
-	my $method = "XMLRPCfinishBaseImageCapture";
-	my @argument_string = ($method,$ownerid, $resourceid, $virtual); 
-	my $xml_ret = xmlrpc_call(@argument_string);
-	# Check if the XML::RPC call failed
-   if (!defined($xml_ret)) {
-      notify($ERRORS{'WARNING'}, 0, "failed to add image to owner's new image group, XML::RPC '$method' call failed");
-      return 0;
-   }
-   elsif ($xml_ret->value->{status} !~ /success/) {
-      notify($ERRORS{'WARNING'}, 0, "failed to add image to owner's newimage group, XML::RPC '$method' status: $xml_ret->value->{status}\n" .
-            "error code $xml_ret->value->{errorcode}\n" .
-            "error message: $xml_ret->value->{errormsg}"
-       );
-       return 0;
+	my ($user_id, $resource_id, $is_vm_image) = @_;
+	
+	# Check the arguments
+	if (!defined($user_id)) {
+		notify($ERRORS{'WARNING'}, 0, "user ID argument was not specified");
+		return;
 	}
-   else {
+	elsif (!defined($resource_id)) {
+		notify($ERRORS{'WARNING'}, 0, "resource ID argument was not specified");
+		return;
+	}
+	elsif (!defined($is_vm_image)) {
+		notify($ERRORS{'WARNING'}, 0, "'is vm image' argument was not specified");
+		return;
+	}
+	
+	my $method = "XMLRPCfinishBaseImageCapture";
+	my @argument_string = ($method, $user_id, $resource_id, $is_vm_image); 
+	my $response = xmlrpc_call(@argument_string);
+	
+	if (!defined($response)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to add image to owner's new images group, XML-RPC $method call failed");
+		return;
+	}
+	elsif (!defined($response->value)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to add image to owner's new images group, XML-RPC $method response value is not defined:" . format_data($response));
+		return;
+	}
+	
+	my $status = $response->value->{status} || '<undefined>';
+	my $error_message = $response->value->{errormsg} || '<undefined>';
+	
+	if ($status =~ /success/) {
+		notify($ERRORS{'OK'}, 0, "added image to owner's new images group, user ID: $user_id, image resource ID: $resource_id, VM image: $is_vm_image");
 		return 1;
 	}
-
+	
+	my ($xmlrpc_username, $xmlrpc_affiliation) = $XMLRPC_USER =~ /^([^@]+)@?(.*)$/;
+	my $xmlrpc_user_info = get_user_info($xmlrpc_username, $xmlrpc_affiliation) || {};
+	my $xmlrpc_user_id = $xmlrpc_user_info->{id} || '<unknown>';
+	
+	notify($ERRORS{'WARNING'}, 0, "failed to add image to owner's new images group\n" .
+		"make sure the value $xmlrpc_user_id (user ID of $XMLRPC_USER) is included in the \$xmlrpcBlockAPIUsers variable in the VCL website's conf.php file\n" .
+		"image owner user ID: $user_id\n" .
+		"image resource ID: $resource_id\n" .
+		"VM image: $is_vm_image\n" .
+		"XML-RPC method: $method\n" .
+		"status: $status\n" .
+		"error message: $error_message"
+	);
+	return 0;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -10453,9 +10467,12 @@ sub setup_get_hash_multiple_choice {
 			}
 		}
 		
-		if (defined($entry_hash->{$entry_display_name})) {
+		if (defined($entry_display_name) && defined($entry_hash->{$entry_display_name})) {
 			notify($ERRORS{'WARNING'}, 0, "duplicate entry display names: '$entry_display_name', appending hash key: '$entry_display_name {$key}'");
 			$entry_display_name = "$entry_display_name {$key}";
+		}
+		elsif (!defined($entry_display_name)) {
+			$entry_display_name = $key;
 		}
 		else {
 			notify($ERRORS{'DEBUG'}, 0, "choice entry name for hash key $key: '$entry_display_name'");
@@ -10534,7 +10551,7 @@ sub setup_get_hash_multiple_choice {
 		print "\n";
 		print "[1";
 		print "-$entry_count" if ($entry_count > 1);
-		print "] - toggle selection (mutiple may be entered)\n";
+		print "] - toggle selection (multiple may be entered)\n";
 		print "  $option_pad_string\[a] - select all\n";
 		print "  $option_pad_string\[n] - select none\n";
 		print "  $option_pad_string\[i] - invert selected\n";
@@ -10712,10 +10729,10 @@ sub setup_get_input_string {
 	$message .= "('c' to cancel)";
 	
 	if ($default_value) {
-		setup_print_wrap("$message [$default_value]: ");
+		setup_print_wrap("$message [$default_value]: ", 0, 1);
 	}
 	else {
-		setup_print_wrap("$message: ");
+		setup_print_wrap("$message: ", 0, 1);
 	}
 	
 	my $input = <STDIN>;
@@ -10904,7 +10921,7 @@ sub setup_print_break {
 
 =head2 setup_print_wrap
 
- Parameters  : $message, $columns (optional)
+ Parameters  : $message, $columns (optional), $no_trailing_newline (optional)
  Returns     : true
  Description : Prints a message to STDOUT formatted to the column width. 100 is
                the default column value.
@@ -10914,6 +10931,7 @@ sub setup_print_break {
 sub setup_print_wrap {
 	my $message = shift || return;
 	my $columns = shift || 100;
+	my $no_trailing_newline = shift;
 	
 	# Save the leading and trailing lines then remove them from the string
 	# This is done so wrap doesn't lose them
@@ -10931,7 +10949,7 @@ sub setup_print_wrap {
 	if ($trailing_newlines) {
 		print $trailing_newlines;
 	}
-	else {
+	elsif (!$no_trailing_newline) {
 		print "\n";
 	}
 	
@@ -10954,7 +10972,7 @@ sub setup_print_ok {
 	$message =~ s/[\s\n]+$//g;
 	
 	my $prefix = 'OK';
-	print colored("$prefix:", "BLACK ON_GREEN");
+	print colored(" $prefix ", "BOLD WHITE ON_GREEN");
 	print " ";
 	setup_print_wrap($message, (100-length($prefix)-2));
 	return 1;
@@ -10975,10 +10993,10 @@ sub setup_print_error {
 	return unless defined($message);
 	$message =~ s/[\s\n]+$//g;
 	
-	print get_caller_trace() . "\n\n";
+	#print get_caller_trace() . "\n\n";
 	
 	my $prefix = 'ERROR';
-	print colored("$prefix:", "BOLD WHITE ON_RED");
+	print colored(" $prefix ", "BOLD WHITE ON_RED");
 	print " ";
 	setup_print_wrap($message, (100-length($prefix)-2));
 	return 1;
@@ -11000,7 +11018,7 @@ sub setup_print_warning {
 	$message =~ s/[\s\n]+$//g;
 	
 	my $prefix = 'WARNING';
-	print colored("$prefix:", "BLACK ON_YELLOW");
+	print colored(" $prefix ", "BLACK ON_YELLOW");
 	print " ";
 	setup_print_wrap($message, (100-length($prefix)-2));
 	return 1;
@@ -11334,7 +11352,7 @@ sub get_random_mac_address {
 	my $mac_address = uc($prefix);
 	
 	for (my $i=0; $i<$random_octet_count; $i++) {
-		$mac_address .= ":" . sprintf("%02X",int(rand(255)));
+		$mac_address .= ":" . sprintf("%02X",int(rand(256)));
 	}
 	
 	notify($ERRORS{'DEBUG'}, 0, "generated random MAC address: '$mac_address'");
@@ -11870,7 +11888,7 @@ EOF
 	for my $row (@selected_rows) {
 		my $computer_id = $row->{id};
 		my $computer_info = get_computer_info($computer_id);
-		$assigned_computer_info->{$computer_id} = $computer_info;
+		$assigned_computer_info->{$computer_id} = $computer_info if $computer_info;
 	}
 	
 	notify($ERRORS{'DEBUG'}, 0, "retrieved computer info for VMs assigned to VM host $vmhost_id: " . join(', ', sort keys %$assigned_computer_info));
