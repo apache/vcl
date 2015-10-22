@@ -4964,6 +4964,11 @@ sub configure_default_sshd {
 	
 	my $computer_node_name = $self->data->get_computer_node_name();
 	
+	if (!$self->service_exists('sshd')) {
+		notify($ERRORS{'DEBUG'}, 0, "skipping default sshd configuation, sshd service does not exist");
+		return 1;
+	}
+	
 	# Stop existing external sshd process if it is running
 	if (!$self->stop_external_sshd()) {
 		notify($ERRORS{'WARNING'}, 0, "unable to configure default sshd state, problem occurred attempting to kill external sshd process");
@@ -5012,6 +5017,11 @@ sub configure_ext_sshd {
 	if (!$private_ip_address) {
 		notify($ERRORS{'WARNING'}, 0, "unable to configure ext_sshd, failed to retrieve private IP address of $computer_node_name, necessary to configure sshd to only listen on private network");
 		return;
+	}
+	
+	if (!$self->service_exists('sshd')) {
+		notify($ERRORS{'DEBUG'}, 0, "skipping ext_sshd configuation, sshd service does not exist");
+		return 1;
 	}
 	
 	# Recreate the sshd_config file, set ListenAddress to the private IP address
@@ -6062,9 +6072,9 @@ sub get_ssh_public_key_string {
 		$public_key_string = $self->_get_ssh_public_key_string_helper($private_key_file_path, 'dropbearkey');
 	}
 	if ($public_key_string) {
-		if ($comment) {
-			$public_key_string =~ s/(ssh-[^\s]+\s[^\s=]+).*$/$1 $comment/g;
-		}
+		#if ($comment) {
+		#	$public_key_string =~ s/(ssh-[^\s]+\s[^\s=]+).*$/$1 $comment/g;
+		#}
 		return $public_key_string;
 	}
 	
@@ -6206,6 +6216,386 @@ sub install_package {
 		notify($ERRORS{'OK'}, 0, "installed $package_name using yum on $computer_name, command: '$command', output:\n" . join("\n", @$output));
 		return 1;
 	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 mount_nfs_share
+
+ Parameters  : $remote_nfs_share, $local_mount_directory, $options
+ Returns     : boolean
+ Description : Mounts an NFS share on the computer. The $remote_nfs_share
+               argument must be in the for used by the mount command:
+               <hostname|IP>:/path-to-share
+               
+               The $local_mount_directory argument must specify a directory.
+               This directory will be created if it does not already exist.
+               
+               The $options argument allows NFS mount options to be specified
+               such as:
+               rsize=1048576,wsize=1048576,vers=3
+               
+               The $options string must be formatted correctly and is passed
+               directly to the mount command.
+
+=cut
+
+sub mount_nfs_share {
+	my $self = shift;
+	if (ref($self) !~ /linux/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my ($remote_nfs_share, $local_mount_directory, $options, $is_retry_attempt) = @_;
+	if (!defined($remote_nfs_share)) {
+		notify($ERRORS{'WARNING'}, 0, "remote target argument was not supplied");
+		return;
+	}
+	elsif (!defined($local_mount_directory)) {
+		notify($ERRORS{'WARNING'}, 0, "local directory path argument was not supplied");
+		return;
+	}
+	
+	my $computer_name = $self->data->get_computer_node_name();
+	
+	# Try to repair NFS client if 1st attempt failed
+	if ($is_retry_attempt) {
+		# Check if nfs-utils is installed, if not, try to install it
+		# Error looks like this if nfs-utils is not installed:
+		#    mount: wrong fs type, bad option, bad superblock on 10.1.2.3:/nfs,
+		#    missing codepage or helper program, or other error
+		#    (for several filesystems (e.g. nfs, cifs) you might
+		#    need a /sbin/mount.<type> helper program)
+		#    In some cases useful info is found in syslog - try
+		#    dmesg | tail  or so
+		if (!$self->command_exists('mount.nfs')) {
+			$self->install_package('nfs-utils');
+		}
+		
+		# Check if the rpcbind service exists, if not, try to install it
+		# Mount may fail if rpcbind service is not installed and running:
+		#    mount.nfs: rpc.statd is not running but is required for remote locking.
+		#    mount.nfs: Either use '-o nolock' to keep locks local, or start statd.
+		#    mount.nfs: an incorrect mount option was specified
+		if (!$self->service_exists('rpcbind')) {
+			$self->install_package('rpcbind');
+		}
+		
+		# Try to start the service
+		$self->start_service('rpcbind');
+	}
+	else {
+		# Create the local mount point directory if it does not exist
+		if (!$self->create_directory($local_mount_directory)) {
+			notify($ERRORS{'WARNING'}, 0, "unable to mount $remote_nfs_share on $computer_name, failed to create directory: $local_mount_directory");
+			return;
+		}
+	}
+	
+	my $mount_command = "mount -t nfs $remote_nfs_share \"$local_mount_directory\" -v";
+	if ($options) {
+		$mount_command .= " -o $options";
+	}
+	
+	notify($ERRORS{'DEBUG'}, 0, "attempting to mount NFS share on $computer_name: $mount_command");
+	my ($mount_exit_status, $mount_output) = $self->execute({
+		command => $mount_command,
+		timeout_seconds => 10,
+		max_attempts => 2,
+	});
+	if (!defined($mount_exit_status)) {
+		notify($ERRORS{'CRITICAL'}, 0, "failed to execute command to mount NFS share on $computer_name: $mount_command");
+		return;
+	}
+	elsif ($mount_exit_status eq 0) {
+		notify($ERRORS{'OK'}, 0, "mounted NFS share on $computer_name: $remote_nfs_share --> $local_mount_directory");
+		return 1;
+	}
+	elsif (grep(/already mounted/, @$mount_output)) {
+		# mount.nfs: /mnt/mymountpoint is busy or already mounted
+		if ($self->is_nfs_share_mounted($remote_nfs_share, $local_mount_directory)) {
+			return 1;
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "failed to mount NFS share on $computer_name: $remote_nfs_share --> $local_mount_directory, mount command output indicates 'already mounted' but failed to verify mount in /proc/mounts, mount command: '$mount_command', exit status: $mount_exit_status, mount output:\n" . join("\n", @$mount_output));
+			return;
+		}
+	}
+	elsif (grep(/(Invalid argument|incorrect mount option|Usage:)/, @$mount_output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to mount NFS share on $computer_name: $remote_nfs_share --> $local_mount_directory, command: '$mount_command', exit status: $mount_exit_status, output:\n" . join("\n", @$mount_output));
+		return;
+	}
+	else {
+		if ($is_retry_attempt) {
+			notify($ERRORS{'WARNING'}, 0, "failed to mount NFS share on $computer_name on 2nd attempt: $remote_nfs_share --> $local_mount_directory, command: '$mount_command', exit status: $mount_exit_status, output:\n" . join("\n", @$mount_output));
+			return;
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "failed to mount NFS share on $computer_name on 1st attempt: $remote_nfs_share --> $local_mount_directory, command: '$mount_command', exit status: $mount_exit_status, output:\n" . join("\n", @$mount_output));
+			
+			# Try to mount the NFS share again, set retry flag to avoid endless loop
+			return $self->mount_nfs_share($remote_nfs_share, $local_mount_directory, $options, 1);
+		}
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 unmount_nfs_share
+
+ Parameters  : $local_mount_directory
+ Returns     : boolean
+ Description : Unmounts an NFS share on the computer.
+
+=cut
+
+sub unmount_nfs_share {
+	my $self = shift;
+	if (ref($self) !~ /linux/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my ($local_mount_directory) = @_;
+	if (!defined($local_mount_directory)) {
+		notify($ERRORS{'WARNING'}, 0, "local directory path argument was not supplied");
+		return;
+	}
+	
+	my $computer_name = $self->data->get_computer_node_name();
+	
+	my $umount_command = "umount -v \"$local_mount_directory\" -v";
+	my ($umount_exit_status, $umount_output) = $self->execute({
+		command => $umount_command,
+		timeout_seconds => 30,
+		max_attempts => 2,
+	});
+	if (!defined($umount_exit_status)) {
+		notify($ERRORS{'CRITICAL'}, 0, "failed to execute command to umount NFS share on $computer_name: $umount_command");
+		return;
+	}
+	elsif ($umount_exit_status eq 0) {
+		notify($ERRORS{'OK'}, 0, "unmounted NFS share on $computer_name: $local_mount_directory, output:\n" . join("\n", @$umount_output));
+		return 1;
+	}
+	elsif (grep(/not mounted/, @$umount_output)) {
+		notify($ERRORS{'OK'}, 0, "NFS share is not mounted on $computer_name: $local_mount_directory");
+		return 1;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to unmount NFS share on $computer_name: $local_mount_directory, command: '$umount_command', exit status: $umount_exit_status, output:\n" . join("\n", @$umount_output));
+		return;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 is_nfs_share_mounted
+
+ Parameters  : $remote_nfs_share, $local_mount_directory
+ Returns     : boolean
+ Description : Checks if an NFS share is mounted on the computer matching both
+               the remote NFS share path and local mount point directory
+               arguments.
+
+=cut
+
+sub is_nfs_share_mounted {
+	my $self = shift;
+	if (ref($self) !~ /linux/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my ($remote_nfs_share, $local_mount_directory) = @_;
+	if (!defined($remote_nfs_share)) {
+		notify($ERRORS{'WARNING'}, 0, "remote target argument was not supplied");
+		return;
+	}
+	elsif (!defined($local_mount_directory)) {
+		notify($ERRORS{'WARNING'}, 0, "local directory path argument was not supplied");
+		return;
+	}
+	
+	my $computer_name = $self->data->get_computer_node_name();
+	
+	if ($self->get_nfs_mount_string($remote_nfs_share, $local_mount_directory)) {
+		notify($ERRORS{'DEBUG'}, 0, "NFS share is mounted on $computer_name: $remote_nfs_share --> $local_mount_directory");
+		return 1;
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "NFS share is NOT mounted on $computer_name: $remote_nfs_share --> $local_mount_directory");
+		return 0;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_nfs_mount_string
+
+ Parameters  : $remote_nfs_share, $local_mount_directory
+ Returns     : string
+ Description : Examines the contents of /proc/mounts and attempts to locate a
+               line matching the arguments. If found, the line is returned which
+               may be used in /etc/fstab. If not found, 0 is returned. Undefined
+               is returned if an error occurs.
+
+=cut
+
+sub get_nfs_mount_string {
+	my $self = shift;
+	if (ref($self) !~ /linux/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my ($remote_nfs_share, $local_mount_directory) = @_;
+	if (!defined($remote_nfs_share)) {
+		notify($ERRORS{'WARNING'}, 0, "remote target argument was not supplied");
+		return;
+	}
+	elsif (!defined($local_mount_directory)) {
+		notify($ERRORS{'WARNING'}, 0, "local directory path argument was not supplied");
+		return;
+	}
+	
+	# Remove trailing slashes for consistent comparison
+	$remote_nfs_share =~ s/\/+$//;
+	$local_mount_directory =~ s/\/+$//;
+	
+	# If the NFS share or local directory contain a space, the octal value will appear in /proc/mounts
+	$remote_nfs_share =~ s/ /\\\\040/g;
+	$local_mount_directory =~ s/ /\\\\040/g;
+	
+	my $computer_name = $self->data->get_computer_node_name();
+	
+	my $command = "cat /proc/mounts | grep ' nfs'";
+	my ($exit_status, $output) = $self->execute($command);
+	if (!defined($exit_status)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command on $computer_name: $command");
+		return;
+	}
+	
+	for my $line (@$output) {
+		if ($line =~ m|^$remote_nfs_share\/?\s+$local_mount_directory\/?\s|) {
+			notify($ERRORS{'DEBUG'}, 0, "found NFS share line in /proc/mounts on $computer_name: $remote_nfs_share --> $local_mount_directory\n$line");
+			return $line;
+		}
+	}
+	
+	notify($ERRORS{'DEBUG'}, 0, "/proc/mounts on $computer_name does NOT contain a line matching NFS share: $remote_nfs_share --> $local_mount_directory\n" . join("\n", @$output));
+	return 0;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 add_fstab_nfs_mount
+
+ Parameters  : $remote_nfs_share, $local_mount_directory
+ Returns     : boolean
+ Description : Adds a line to /etc/fstab for an existing NFS mount. The share
+               must be mounted prior to calling this subroutine.
+
+=cut
+
+sub add_fstab_nfs_mount {
+	my $self = shift;
+	if (ref($self) !~ /linux/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my ($remote_nfs_share, $local_mount_directory) = @_;
+	if (!defined($remote_nfs_share)) {
+		notify($ERRORS{'WARNING'}, 0, "remote target argument was not supplied");
+		return;
+	}
+	elsif (!defined($local_mount_directory)) {
+		notify($ERRORS{'WARNING'}, 0, "local directory path argument was not supplied");
+		return;
+	}
+	
+	my $computer_name = $self->data->get_computer_node_name();
+	
+	my $nfs_mount_string = $self->get_nfs_mount_string($remote_nfs_share, $local_mount_directory);
+	if (!$nfs_mount_string) {
+		notify($ERRORS{'WARNING'}, 0, "unable to add NFS mount line to /etc/fstab, NFS share is not mounted: $remote_nfs_share --> $local_mount_directory");
+		return;
+	}
+	
+	# Remove existing line matching the local mount directory followed by "nfs" to avoid duplicate lines
+	$self->remove_matching_fstab_lines("$local_mount_directory nfs");
+	
+	my @fstab_lines = $self->get_file_contents('/etc/fstab');
+	push @fstab_lines, $nfs_mount_string;
+	my $new_fstab_contents = join("\n", @fstab_lines);
+	
+	my $timestamp = POSIX::strftime("%Y-%m-%d_%H-%M-%S\n", localtime);
+	$self->copy_file('/etc/fstab', "/tmp/fstab.$timestamp");
+	
+	if ($self->create_text_file('/etc/fstab', $new_fstab_contents)) {
+		notify($ERRORS{'OK'}, 0, "added line to /etc/fstab on $computer_name:\n$nfs_mount_string");
+		return 1;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to add line to /etc/fstab on $computer_name:\n$nfs_mount_string");
+		return;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 remove_matching_fstab_lines
+
+ Parameters  : $regex_pattern
+ Returns     : boolean
+ Description : Removes all lines from /etc/fstab matching the pattern.
+
+=cut
+
+sub remove_matching_fstab_lines {
+	my $self = shift;
+	if (ref($self) !~ /linux/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my ($regex_pattern) = @_;
+	if (!defined($regex_pattern)) {
+		notify($ERRORS{'WARNING'}, 0, "pattern argument was not supplied");
+		return;
+	}
+	
+	my $computer_name = $self->data->get_computer_node_name();
+	
+	my $updated_fstab_contents;
+	
+	my @matching_lines;
+	my @fstab_lines = $self->get_file_contents('/etc/fstab');
+	for my $fstab_line (@fstab_lines) {
+		(my $fstab_line_cleaned = $fstab_line) =~ s/\\040/ /g;
+		
+		if ($fstab_line =~ m|$regex_pattern| || $fstab_line_cleaned =~ m|$regex_pattern|) {
+			push @matching_lines, $fstab_line;
+			notify($ERRORS{'DEBUG'}, 0, "removing line in /etc/fstab matching pattern: $regex_pattern\n$fstab_line");
+			next;
+		}
+		$updated_fstab_contents .= "$fstab_line\n";
+	}
+	
+	if (!@matching_lines) {
+		notify($ERRORS{'DEBUG'}, 0, "/etc/fstab does not contain any lines matching pattern: $regex_pattern");
+		return 1;
+	}
+	
+	notify($ERRORS{'DEBUG'}, 0, "removing " . scalar(@matching_lines) . " lines from /etc/fstab on $computer_name:\n" . join("\n", @matching_lines));
+	
+	# Save a backup
+	my $timestamp = POSIX::strftime("%Y-%m-%d_%H-%M-%S\n", localtime);
+	$self->copy_file('/etc/fstab', "/tmp/fstab.$timestamp");
+	
+	return $self->create_text_file('/etc/fstab', $updated_fstab_contents);
 }
 
 ##/////////////////////////////////////////////////////////////////////////////
