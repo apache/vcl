@@ -160,11 +160,7 @@ function initGlobals() {
 	if(! $authed) {
 		# set $skin based on cookie (so it gets set before user logs in
 		#   later, we set it by affiliation (helps with 'view as user')
-		if(preg_match('/^152\.9\./', $_SERVER['REMOTE_ADDR']) ||
-			(array_key_exists('VCLSKIN', $_COOKIE) && $_COOKIE['VCLSKIN'] == 'EXAMPLE1')) {
-			$skin = 'example1';
-		}
-		elseif(array_key_exists('VCLSKIN', $_COOKIE)) {
+		if(array_key_exists('VCLSKIN', $_COOKIE)) {
 			switch($_COOKIE['VCLSKIN']) {
 				case 'EXAMPLE2':
 					$skin = 'example2';
@@ -174,6 +170,12 @@ function initGlobals() {
 					break;
 			}
 		}
+		# set skin based on IP address, useful to ensure anyone coming
+		#   from a certain organization automatically gets a different skin
+		/*elseif(preg_match('/^152\.9\./', $_SERVER['REMOTE_ADDR']) ||
+			(array_key_exists('VCLSKIN', $_COOKIE) && $_COOKIE['VCLSKIN'] == 'EXAMPLE1')) {
+			$skin = 'example1';
+		}*/
 		else
 			$skin = DEFAULTTHEME;
 		if($mode != 'selectauth' && $mode != 'submitLogin')
