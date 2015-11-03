@@ -1819,7 +1819,7 @@ sub get_available_space {
 	my $command = "stat -f \"$path\"";
 	my ($exit_status, $output) = $self->execute($command);
 	if (!defined($output)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to run command to determine available space on $computer_short_name:\ncommand: $command\noutput:\n" . join("\n", @$output));
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to determine available space on $computer_short_name, command: $command");
 		return;
 	}
 	elsif (grep(/^stat: /i, @$output)) {
@@ -1890,7 +1890,7 @@ sub get_total_space {
 	my $command = "stat -f \"$path\"";
 	my ($exit_status, $output) = $self->execute($command);
 	if (!defined($output)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to run command to determine available space on $computer_short_name:\ncommand: $command\noutput:\n" . join("\n", @$output));
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to determine available space on $computer_short_name, command: $command");
 		return;
 	}
 	elsif (grep(/^stat: /i, @$output)) {
@@ -5947,7 +5947,7 @@ sub _generate_ssh_private_key_file_helper {
 	if ($utility eq 'ssh-keygen') {
 		$command = "ssh-keygen -t $type -f \"$private_key_file_path\" -N \"$passphrase\"";
 		$command .= " -b $bits" if (defined($bits) && length($bits));
-		$comment .= " $options" if (defined($options) && length($options));
+		$command .= " $options" if (defined($options) && length($options));
 		$command .= " -C \"$comment\"" if (defined($comment) && length($comment));
 	}
 	elsif ($utility eq 'dropbearkey') {
