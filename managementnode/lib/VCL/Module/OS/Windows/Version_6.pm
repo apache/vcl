@@ -2139,7 +2139,7 @@ sub wait_for_response {
 	my $ssh_response_timeout_seconds;
 	
 	if ($self->data->get_imagemeta_sysprep()) {
-		$initial_delay_seconds = 30;
+		$initial_delay_seconds = 5;
 		$ssh_response_timeout_seconds = 1800; 
 	}
 	else {
