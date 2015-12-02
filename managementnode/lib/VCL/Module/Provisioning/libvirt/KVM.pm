@@ -552,7 +552,7 @@ sub copy_virtual_disk {
 	#		## Leaving the -f option off also results in an empty file
 	#		#my $command = "qemu-img convert -f raw \"$source_file_path\" -O raw \"$raw_file_path\" && qemu-img info \"$raw_file_path\"";
 	#		#notify($ERRORS{'DEBUG'}, 0, "attempting to convert vmdk file to raw format: $source_file_path --> $raw_file_path, command:\n$command");
-	#		#my ($exit_status, $output) = $self->vmhost_os->execute($command, 0, 1800);
+	#		#my ($exit_status, $output) = $self->vmhost_os->execute($command, 0, 7200);
 	#		#if (!defined($exit_status)) {
 	#		#	notify($ERRORS{'WARNING'}, 0, "failed to execute command to convert vmdk file to raw format:\n$command");
 	#		#	return;
@@ -572,7 +572,7 @@ sub copy_virtual_disk {
 	#	#my $raw_file_path_merged = "$raw_file_directory_path/$image_name.raw";
 	#	#my $cat_command = "cat $source_file_paths_string > \"$raw_file_path_merged\"";
 	#	#notify($ERRORS{'DEBUG'}, 0, "attempting to merge split raw files into $raw_file_path_merged, command:\n$cat_command");
-	#	#my ($cat_exit_status, $cat_output) = $self->vmhost_os->execute($cat_command, 0, 1800);
+	#	#my ($cat_exit_status, $cat_output) = $self->vmhost_os->execute($cat_command, 0, 7200);
 	#	#if (!defined($cat_exit_status)) {
 	#	#	notify($ERRORS{'WARNING'}, 0, "failed to execute command to merge split raw files into $raw_file_path_merged, command: $cat_command");
 	#	#	return;
@@ -602,7 +602,7 @@ sub copy_virtual_disk {
 	notify($ERRORS{'DEBUG'}, 0, "attempting to copy/convert virtual disk to $disk_format format --> $destination_file_path, command:\n$command");
 	
 	my $start_time = time;
-	my ($exit_status, $output) = $self->vmhost_os->execute($command, 0, 1800);
+	my ($exit_status, $output) = $self->vmhost_os->execute($command, 0, 7200);
 	if (!defined($exit_status)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to execute command to copy/convert virtual disk on $node_name:\n$command");
 		return;
