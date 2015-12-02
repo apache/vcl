@@ -1812,7 +1812,7 @@ class Image extends Resource {
 			updateResourcePrivs("image/newimages-{$ownerdata['login']}-$ownerid", $newnode, $adds, array());
 	
 		// add image to image group
-		$query = "INSERT INTO resourcegroupmembers "
+		$query = "INSERT IGNORE INTO resourcegroupmembers "
 		       . "(resourceid, resourcegroupid) "
 		       . "VALUES ($resourceid, $resourcegroupid)";
 		doQuery($query, 101);
