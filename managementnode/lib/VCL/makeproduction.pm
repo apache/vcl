@@ -95,7 +95,7 @@ sub process {
 	}
 	
 	# Notify owner that image revision is production
-	if (!$self->notify_imagerevision_to_production()) {
+	if (!$self->notify_production_imagerevision()) {
 		$self->reservation_failed("failed to notify owner that $image_name is in production mode");
 	}
 	
@@ -114,45 +114,28 @@ sub process {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 notify_imagerevision_to_production
+=head2 notify_production_imagerevision
 
- Parameters  : 
- Returns     : 
- Description : 
+ Parameters  : none
+ Returns     : boolean
+ Description : Notifies the image owner that the production image revision has
+               changed.
  
 =cut
 
-sub notify_imagerevision_to_production {
+sub notify_production_imagerevision {
 	my $self = shift;
-	my $image_prettyname                = $self->data->get_image_prettyname();
-	my $imagerevision_revision          = $self->data->get_imagerevision_revision();
-	my $user_affiliation_helpaddress    = $self->data->get_user_affiliation_helpaddress();
-	my $user_email                      = $self->data->get_user_email();
 	
-
-	# Assemble the message subject
-	my $subject = "VCL -- Image $image_prettyname made production";
+	my $user_affiliation_helpaddress = $self->data->get_user_affiliation_helpaddress();
+	my $user_email                   = $self->data->get_user_email();
 	
-	# Assemble the message body
-	my $body = <<"END";
-
-Revision $imagerevision_revision of your VCL '$image_prettyname' image has been made production.  Any new reservations for the image will receive this revision by default.
-
-If you have any questions, please contact $user_affiliation_helpaddress.
-
-Thank You,
-VCL Team
-END
-	
-	# Send the message
-	if (mail($user_email, $subject, $body)) {
-		notify($ERRORS{'OK'}, 0, "email message sent to $user_email");
-		return 1;
+	my $user_message_key = 'production_imagerevision';
+	my ($user_subject, $user_message) = $self->get_user_message($user_message_key);
+	if (defined($user_subject) && defined($user_message)) {
+		mail($user_email, $user_subject, $user_message, $user_affiliation_helpaddress);
 	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to send email message to $user_email");
-		return 0;
-	}
+	
+	return 1;
 } ## end sub _notify_owner
 
 #/////////////////////////////////////////////////////////////////////////////

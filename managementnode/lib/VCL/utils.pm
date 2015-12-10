@@ -2790,6 +2790,8 @@ sub database_select {
 		$ENV{database_select_calls}{$calling_sub}++;
 	}
 	
+	$database = $DATABASE unless $database;
+	
 	my $dbh;
 	if (!($dbh = getnewdbh($database))) {
 		# Try again if first attempt failed
@@ -8694,9 +8696,29 @@ sub get_caller_trace {
 =cut
 
 sub get_calling_subroutine {
-	my @caller = caller(2);
-	my $calling_subroutine = $caller[3] || '';
-	return $calling_subroutine;
+	for (my $i=2; $i<10; $i++) {
+		my @caller = caller($i);
+		
+		if (!@caller) {
+			return '';
+		}
+		
+		my $calling_subroutine = $caller[3];
+		
+		# Ignore if subroutine includes _ANON_
+		# This is a workaround for DataStructure.pm::can
+		# DataStructure.pm::_automethod checks if DataStructure.pm::can is called
+		if ($calling_subroutine =~ /_ANON_/) {
+			#notify($ERRORS{'DEBUG'}, 0, "ignoring calling subroutine: $calling_subroutine");
+			next;
+		}
+		else {
+			return $calling_subroutine;
+		}
+	}
+	
+	notify($ERRORS{'WARNING'}, 0, "failed to determine calling subroutine");
+	return '';
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -10139,48 +10161,71 @@ sub get_current_subroutine_name {
 
 =head2 get_affiliation_info
 
- Parameters  : Affiliation ID (optional)
- Returns     : Array
- Description : Returns a hash reference containing information from the affiliation
-               table.
+ Parameters  : $affiliation_identifier (optional)
+ Returns     : hash reference
+ Description : Returns a hash reference containing information from the
+               affiliation table.
                
-               An optional affiliation ID argument can be supplied. If supplied, only
-               the information for the specified affiliation is returned.
+               If no $affiliation_identifier argument is supplied, a hash
+               reference is returned with the hash keys corresponding to the
+               affiliation.id values:
+                  {
+                    1 => {
+                      "dataUpdateText" => "",
+                      "helpaddress" => "vcl_help\@example.edu",
+                      "id" => 1,
+                      "name" => "Local",
+                      "shibname" => undef,
+                      "shibonly" => 0,
+                      "sitewwwaddress" => undef,
+                      "theme" => "default"
+                    },
+                    2 => {
+                      "dataUpdateText" => "",
+                      "helpaddress" => "vcl_help\@example.edu",
+                      "id" => 2,
+                      "name" => "Global",
+                      "shibname" => undef,
+                      "shibonly" => 0,
+                      "sitewwwaddress" => undef,
+                      "theme" => "default"
+                    },
+                    ...
+                  }
                
-               A hash reference is returned. The keys of the hash are the affiliation IDs.
-               Example showing the format of the data structure returned:
-               
-               my $affiliation_info = get_affiliation_info();
-               $affiliation_info->{0}
-                  |--{dataUpdateText} = ''
-                  |--{helpaddress} = NULL
-                  |--{name} = 'Global'
-                  |--{shibname} = NULL
-                  |--{shibonly} = '0'
-                  |--{sitewwwaddress} = NULL
-               $affiliation_info->{1}
-                  |--{dataUpdateText} = '<font size="-2">* To update any of these fields, follow the appropriate<br>link under <strong>Related Tools</strong> at the Campus Directory</font>'
-                  |--{helpaddress} = 'vcl_help@blah.edu'
-                  |--{name} = 'University of Blah'
-                  |--{shibname} = 'blah.edu'
-                  |--{shibonly} = '0'
-                  |--{sitewwwaddress} = 'http://vcl.blah.edu'
+               If the $affiliation_identifier argument is supplied, a hash
+               reference is returned which only contains information for the
+               matching affiliation:
+                  {
+                    "dataUpdateText" => "",
+                    "helpaddress" => "vcl_help\@example.edu",
+                    "id" => 2,
+                    "name" => "Global",
+                    "shibname" => undef,
+                    "shibonly" => 0,
+                    "sitewwwaddress" => undef,
+                    "theme" => "default"
+                  }
 
 =cut
 
 sub get_affiliation_info {
-	# Create the select statement
-	my $select_statement = "
-   SELECT
-	*
-	FROM
-	affiliation
-	";
+	my ($affiliation_identifier) = @_;
 	
-	# Append a WHERE clause if a affiliation ID argument was supplied
-	my $affiliation_id = shift;
-	if ($affiliation_id) {
-		$select_statement .= "WHERE id = $affiliation_id";
+	# Create the select statement
+	my $select_statement = <<EOF;
+SELECT
+*
+FROM
+affiliation
+EOF
+	
+	# Append a WHERE clause if a affiliation identifier argument was supplied
+	if ($affiliation_identifier && $affiliation_identifier =~ /^\d+$/) {
+		$select_statement .= "WHERE id = $affiliation_identifier";
+	}
+	elsif ($affiliation_identifier) {
+		$select_statement .= "WHERE name = '$affiliation_identifier'";
 	}
 
 	# Call the database select subroutine
@@ -10188,24 +10233,31 @@ sub get_affiliation_info {
 
 	# Check to make sure rows were returned
 	if (!@selected_rows) {
-		notify($ERRORS{'WARNING'}, 0, "unable to retrieve rows from affiliation table");
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve rows from affiliation table");
 		return;
 	}
 	
 	# Transform the array of database rows into a hash
-	my %affiliation_info_hash;
+	my $affiliation_info = {};
 	for my $row (@selected_rows) {
 		my $affiliation_id = $row->{id};
 		
 		for my $key (keys %$row) {
-			next if $key eq 'id';
 			my $value = $row->{$key};
-			$affiliation_info_hash{$affiliation_id}{$key} = $value;
+			$affiliation_info->{$affiliation_id}{$key} = $value;
 		}
 	}
 	
-	#notify($ERRORS{'DEBUG'}, 0, "retrieved affiliation info:\n" . format_data(\%affiliation_info_hash));
-	return \%affiliation_info_hash;
+	if ($affiliation_identifier) {
+		my $affiliation_id = (keys %$affiliation_info)[0];
+		$affiliation_info = $affiliation_info->{$affiliation_id};
+		notify($ERRORS{'DEBUG'}, 0, "retrieved info for affiliation $affiliation_identifier:\n" . format_data($affiliation_info));
+		return $affiliation_info;
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "retrieved affiliation info:\n" . format_data($affiliation_info));
+		return $affiliation_info;
+	}
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -12684,7 +12736,7 @@ EOF
 	# Check to make 1 sure row was returned
 	if (!@selected_rows) {
 		notify($ERRORS{'OK'}, 0, "variable '$variable_name' is not set in the database") if $show_warnings;
-		return 0;
+		return;
 	}
 	elsif (@selected_rows > 1) {
 		notify($ERRORS{'WARNING'}, 0, "unable to get value of variable '$variable_name', multiple rows exist in the database for variable:\n" . format_data(\@selected_rows));
@@ -12844,13 +12896,6 @@ sub set_variable {
 			return;
 		}
 	}
-	
-	# Escape all backslashes
-	$database_value =~ s/\\/\\\\/g;
-	
-	# Escape all single quote characters with a backslash
-	#   or else the SQL statement will fail becuase it is wrapped in single quotes
-	$database_value =~ s/'/\\'/g;
 	
 	# Assemble an insert statement, if the variable already exists, update the existing row
 	my $insert_statement .= <<"EOF";

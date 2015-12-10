@@ -764,7 +764,7 @@ sub _initialize : Init {
 
 =head2 automethod
 
- Parameters  : None
+ Parameters  : $show_warnings (optional)
  Returns     : Data based on the method name, 0 if method was not handled
  Description : This subroutine is automatically invoked when an class method is
                called on a DataStructure object but the method isn't explicitly
@@ -808,11 +808,21 @@ sub _automethod : Automethod {
 	elsif ($mode =~ /get/ && defined $args[0] && !$args[0]) {
 		$show_warnings = 0;
 	}
-
+	
+	my $calling_subroutine = get_calling_subroutine();
+	
 	# Check if the sub name is defined in the subroutine mappings hash
 	# Return if it isn't
 	if (!defined $SUBROUTINE_MAPPINGS{$data_identifier}) {
-		notify($ERRORS{'WARNING'}, 0, "unsupported subroutine name: $method_name");
+		if ($calling_subroutine eq 'VCL::DataStructure::can') {
+			return;
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "unsupported subroutine name: $method_name");
+			return sub { };
+		}
+	}
+	elsif ($calling_subroutine eq 'VCL::DataStructure::can') {
 		return sub { };
 	}
 
@@ -888,20 +898,20 @@ sub _automethod : Automethod {
 			# Just attempt to retrieve the value from the hash path
 			$return_value = eval $hash_path;
 		}
-
+		
 		if (!defined $return_value) {
 			if ($show_warnings && $method_name !~ /^(get_management_node_keys)$/) {
 				notify($ERRORS{'WARNING'}, 0, "corresponding data is undefined for $method_name: $hash_path");
 			}
 			return sub { };
 		}
-
+		
 		# Return the data
 		return sub {$return_value;};
 	} ## end if ($mode =~ /get/)
 	elsif ($mode =~ /set/) {
 		eval $hash_path . ' = $set_data';
-
+		
 		# Make sure the value was set in the hash
 		my $check_value = eval $hash_path;
 		if ($check_value eq $set_data) {
@@ -928,6 +938,35 @@ sub _automethod : Automethod {
 sub get_request_data {
 	my $self = shift;
 	return $self->request_data;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 can
+
+ Parameters  : $function_name
+ Returns     : boolean
+ Description : Determines if this module supports a particular function.
+
+=cut
+
+sub can {
+	my $self = shift;
+	
+	my $function_name = shift;
+	if (!defined($function_name)) {
+		notify($ERRORS{'WARNING'}, 0, "function name argument is not implemented");
+		return;
+	}
+	
+	if ($self->SUPER::can($function_name)) {
+		#notify($ERRORS{'DEBUG'}, 0, "function is implemented: $function_name");
+		return 1;
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "function is NOT implemented: $function_name");
+		return 0;
+	}
 }
 
 #/////////////////////////////////////////////////////////////////////////////

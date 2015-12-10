@@ -113,34 +113,15 @@ sub process {
 	my $computer_shortname         = $self->data->get_computer_short_name();
 	my $managementnode_shortname   = $self->data->get_management_node_short_name();
 	my $sysadmin_mail_address      = $self->data->get_management_node_sysadmin_email(0);
-
-	if ($sysadmin_mail_address) {
-		# Notify administrators that image creation is starting
-		my $body = <<"END";
-VCL Image Creation Started
-
-Request ID: $request_id
-Reservation ID: $reservation_id
-PID: $$
-
-Image ID: $image_id
-Image name: $image_name
-Base image size: $image_size
-Base revision ID: $imagerevision_id
-
-Management node: $managementnode_shortname
-
-Username: $user_unityid
-User ID: $user_id
-
-Computer ID: $computer_id
-Computer name: $computer_shortname
-
-Use Sysprep: $imagemeta_sysprep
-END
-		mail($sysadmin_mail_address, "VCL IMAGE Creation Started: $image_name", $body, $affiliation_helpaddress);
-	}
 	
+	# Send an email to administrators indicating image capture started
+	if ($sysadmin_mail_address) {
+		my ($admin_subject, $admin_message) = $self->get_admin_message('image_creation_started');
+		if (defined($admin_subject) && defined($admin_message)) {
+			mail($sysadmin_mail_address, $admin_subject, $admin_message, $affiliation_helpaddress);
+		}
+	}
+
 	# Make sure image does not exist in the repository
 	my $image_already_exists = $self->provisioner->does_image_exist();
 	if ($image_already_exists) {
@@ -248,7 +229,7 @@ EOF
 
 =head2 reservation_successful
 
- Parameters  : none
+ Parameters  : $image_size_old
  Returns     : exits
  Description : Handles final steps when an image capture is successful. Sends
                message to image creator. Inserts reload request into the
@@ -259,97 +240,39 @@ EOF
 
 sub reservation_successful {
 	my $self           = shift;
-	my $image_size_old = shift;
+	my $image_size_old = shift || 0;
 	
 	my $request_data               = $self->data->get_request_data();
-	my $request_id                 = $self->data->get_request_id();
 	my $request_state_name         = $self->data->get_request_state_name();
-	my $reservation_id             = $self->data->get_reservation_id();
-	my $user_id                    = $self->data->get_user_id();
-	my $user_unityid               = $self->data->get_user_login_id();
 	my $user_email                 = $self->data->get_user_email();
-	my $affiliation_sitewwwaddress = $self->data->get_user_affiliation_sitewwwaddress();
 	my $affiliation_helpaddress    = $self->data->get_user_affiliation_helpaddress();
-	my $image_id                   = $self->data->get_image_id();
-	my $image_name                 = $self->data->get_image_name();
-	my $image_prettyname           = $self->data->get_image_prettyname();
-	my $image_size                 = $self->data->get_image_size();
-	my $imagerevision_id           = $self->data->get_imagerevision_id();
-	my $imagemeta_sysprep          = $self->data->get_imagemeta_sysprep();
 	my $computer_id                = $self->data->get_computer_id();
-	my $computer_shortname         = $self->data->get_computer_short_name();
-	my $managementnode_shortname   = $self->data->get_management_node_short_name();
 	my $sysadmin_mail_address      = $self->data->get_management_node_sysadmin_email(0);
 	
-	# Send image creation successful email to user
-	my $subject_user;
-	my $body_user;
+	my $image_capture_type;
 	
-	if ($request_state_name eq 'checkpoint') {
-		$subject_user = "VCL -- $image_prettyname Image Checkpoint Succeeded";
-		$body_user = <<"END";
-
-Your VCL image checkpoint creation request for $image_prettyname has succeeded.
-
-You will need to visit the "Current Reservations" page and click "Connect" in order to be able to reconnect to the computer.
-
-Thank You,
-VCL Team
-END
+	# Send a capture completed message to the image owner
+	my ($user_subject, $user_message);
+	if ($request_state_name =~ /(checkpoint)/i) {
+		$image_capture_type = 'Checkpoint';
+		($user_subject, $user_message) = $self->get_user_message('image_checkpoint_success');
 	}
 	else {
-		$subject_user = "VCL -- $image_prettyname Image Creation Succeeded";
-		$body_user = <<"END";
-
-Your VCL image creation request for $image_prettyname has succeeded.
-
-Please visit $affiliation_sitewwwaddress and you should see an image called $image_prettyname.
-
-Please test this image to confirm it works correctly.
-
-Thank You,
-VCL Team
-END
+		$image_capture_type = 'Capture';
+		($user_subject, $user_message) = $self->get_user_message('image_creation_success');
+	}
+	if (defined($user_subject) && defined($user_message)) {
+		mail($user_email, $user_subject, $user_message, $affiliation_helpaddress);
 	}
 	
-	mail($user_email, $subject_user, $body_user, $affiliation_helpaddress);
-	
-	
-	# Send mail to $sysadmin_mail_address
+	# Send mail to administrators
 	if ($sysadmin_mail_address) {
-		my $subject_admin;
-		if ($request_state_name eq 'checkpoint') {
-			$subject_admin = "VCL IMAGE Checkpoint Completed: $image_name"
+		# Get the administrator email subject and message
+		# Pass a hash containing an IMAGE_CAPTURE_TYPE key - this gets replaced in the subject of the message
+		my ($admin_subject, $admin_message) = $self->get_admin_message('image_creation_complete', { 'IMAGE_CAPTURE_TYPE' => $image_capture_type, IMAGE_SIZE_OLD => $image_size_old });
+		if (defined($admin_subject) && defined($admin_message)) {
+			mail($sysadmin_mail_address, $admin_subject, $admin_message, $affiliation_helpaddress);
 		}
-		else {
-			$subject_admin = "VCL IMAGE Creation Completed: $image_name"
-		}
-		
-		my $body_admin = <<"END";
-VCL Image Creation Completed
-
-Request ID: $request_id
-Reservation ID: $reservation_id
-PID: $$
-
-Image ID: $image_id
-Image name: $image_name
-Image size change: $image_size_old --> $image_size
-
-Revision ID: $imagerevision_id
-
-Management node: $managementnode_shortname
-
-Username: $user_unityid
-User ID: $user_id
-
-Computer ID: $computer_id
-Computer name: $computer_shortname
-
-Use Sysprep: $imagemeta_sysprep
-END
-
-		mail($sysadmin_mail_address, $subject_admin, $body_admin, $affiliation_helpaddress);
 	}
 	
 	if ($request_state_name eq 'checkpoint') {
@@ -358,7 +281,7 @@ END
 	else {
 		# Insert reload request data into the datbase
 		if (!insert_reload_request($request_data)) {
-			notify($ERRORS{'CRITICAL'}, 0, "failed to insert reload request into database for computer id=$computer_id");
+			notify($ERRORS{'CRITICAL'}, 0, "failed to insert reload request into database for computer ID: $computer_id");
 		}
 		
 		# Switch the request state to complete, leave the computer state as is, update log ending to EOR, exit
@@ -384,115 +307,51 @@ sub reservation_failed {
 	my $self = shift;
 	
 	my $request_id                 = $self->data->get_request_id();
-	my $reservation_id             = $self->data->get_reservation_id();
 	my $request_state_name         = $self->data->get_request_state_name();
-	my $user_id                    = $self->data->get_user_id();
-	my $user_unityid               = $self->data->get_user_login_id();
+	my $request_laststate_name     = $self->data->get_request_laststate_name();
 	my $user_email                 = $self->data->get_user_email();
-	my $user_firstname             = $self->data->get_user_firstname() || '';
-	my $user_lastname              = $self->data->get_user_lastname() || '';
-	my $user_affiliation_name      = $self->data->get_user_affiliation_name();
 	my $affiliation_helpaddress    = $self->data->get_user_affiliation_helpaddress();
-	my $image_id                   = $self->data->get_image_id();
 	my $image_name                 = $self->data->get_image_name();
-	my $image_prettyname           = $self->data->get_image_prettyname();
-	my $imagerevision_id           = $self->data->get_imagerevision_id();
-	my $os_module_perl_package     = $self->data->get_image_os_module_perl_package();
-	my $imagemeta_sysprep          = $self->data->get_imagemeta_sysprep();
 	my $computer_id                = $self->data->get_computer_id();
 	my $computer_shortname         = $self->data->get_computer_short_name();
-	my $computer_state_name        = $self->data->get_computer_state_name();
-	my $provisioning_pretty_name   = $self->data->get_computer_provisioning_pretty_name();
-	my $provisioning_name          = $self->data->get_computer_provisioning_name();
-	my $provisioning_perl_package  = $self->data->get_computer_provisioning_module_perl_package();
-	my $managementnode_shortname   = $self->data->get_management_node_short_name();
 	my $sysadmin_mail_address      = $self->data->get_management_node_sysadmin_email(0);
-	my $vmhost_id                  = $self->data->get_vmhost_id() || '';
-	my $vmhost_computer_id         = $self->data->get_vmhost_computer_id() || '';
-	my $vmhost_short_name          = $self->data->get_vmhost_short_name() || '';
-	my $vmhost_profile_id          = $self->data->get_vmhost_profile_id() || '';
-	my $vmhost_profile_name        = $self->data->get_vmhost_profile_name() || '';
-	my $request_laststate_name     = $self->data->get_request_laststate_name();
 	
 	my $message = shift;
 	
-	# Image process failed
-	if ($message) {
-		notify($ERRORS{'CRITICAL'}, 0, "$image_name image creation failed - $message");
+	my $image_capture_type;
+	if ($request_state_name =~ /(checkpoint)/i) {
+		$image_capture_type = 'Checkpoint';
 	}
 	else {
-		notify($ERRORS{'CRITICAL'}, 0, "$image_name image creation failed");
+		$image_capture_type = 'Creation';
 	}
 	
-	# Send mail to user
-	my $body_user = <<"END";
-
-We apologize for the inconvenience.
-Your image creation of $image_prettyname has been delayed
-due to a system issue that prevented the automatic completion.
-
-The image creation request and the computing resource have
-been placed in a safe mode. The VCL system administrators
-have been notified for manual intervention.
-
-Once the issues have been resolved, you will be notified
-by the successful completion email or contacted directly
-by the VCL system administrators.
-
-If you do not receive a response within one business day, please
-reply to this email.
-
-Thank You,
-VCL Team
-END
-	# Don't attempt to send another notice if $request_laststate_name is image. 
-	if ($request_laststate_name ne "maintenance") {
-		mail($user_email, "VCL -- NOTICE DELAY Image Creation $image_prettyname", $body_user, $affiliation_helpaddress);
+	# Image process failed
+	if ($message) {
+		notify($ERRORS{'CRITICAL'}, 0, "$image_name Image $image_capture_type Failed - $message");
 	}
-
-	# Send mail to $sysadmin_mail_address
+	else {
+		notify($ERRORS{'CRITICAL'}, 0, "$image_name Image $image_capture_type Failed");
+	}
+	
+	# Send a capture delayed message to the image owner
+	my $user_message_key = 'image_creation_delayed';
+	my ($user_subject, $user_message) = $self->get_user_message($user_message_key);
+	if ($request_laststate_name ne "maintenance" && defined($user_subject) && defined($user_message)) {
+		mail($user_email, $user_subject, $user_message, $affiliation_helpaddress);
+	}
+	
+	# Send mail to administrators
 	if ($sysadmin_mail_address) {
-		my $body_admin = <<"END";
-VCL Image Creation Failed
-
-Management node: $managementnode_shortname
-
-Request ID: $request_id
-Reservation ID: $reservation_id
-PID: $$
-
-Image ID: $image_id
-Image revision ID: $imagerevision_id
-Image name: $image_name
-Image display name: $image_prettyname
-Image OS package: $os_module_perl_package
-
-User ID: $user_id
-User login name: $user_unityid
-User name: $user_firstname $user_lastname
-User affiliation: $user_affiliation_name
-
-Provisioning module: $provisioning_pretty_name ($provisioning_name)
-Provisioning package: $provisioning_perl_package
-
-Computer ID: $computer_id
-Computer name: $computer_shortname
-END
-		if ($vmhost_id) {
-			$body_admin .= <<"END";
-
-VM host ID: $vmhost_id
-VM host computer ID: $vmhost_computer_id
-VM host computer name: $vmhost_short_name
-
-VM host profile ID: $vmhost_profile_id
-VM host profile name: $vmhost_profile_name
-END
+		# Get the administrator email subject and message
+		# Pass a hash containing an IMAGE_CAPTURE_TYPE key - this gets replaced in the subject of the message
+		my $admin_message_key = 'image_creation_failed';
+		my ($admin_subject, $admin_message) = $self->get_admin_message($admin_message_key, { 'IMAGE_CAPTURE_TYPE' => $image_capture_type });
+		if (defined($admin_subject) && defined($admin_message)) {
+			mail($sysadmin_mail_address, $admin_subject, $admin_message, $affiliation_helpaddress);
 		}
-		notify($ERRORS{'OK'}, 0, "imaging reservation info:\n$body_admin");
-		mail($sysadmin_mail_address, "VCL -- NOTICE FAILED Image Creation $image_prettyname", $body_admin, $affiliation_helpaddress);
 	}
-	
+
 	# Update the request state to maintenance, laststate to image
 	if (update_request_state($request_id, "maintenance", $request_state_name)) {
 		notify($ERRORS{'OK'}, 0, "request state set to maintenance, laststate to $request_state_name");

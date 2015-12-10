@@ -94,7 +94,6 @@ sub process {
 	my $self = shift;
 	
 	my $request_id                      = $self->data->get_request_id();
-	my $request_data                    = $self->data->get_request_data();
 	my $request_logid                   = $self->data->get_request_log_id();
 	my $request_checkuser               = $self->data->get_request_checkuser();
 	my $reservation_id                  = $self->data->get_reservation_id();
@@ -121,7 +120,7 @@ sub process {
 	if ($is_parent_reservation) {
 		# Send an email and/or IM to the user
 		# Do this after updating the computer state to reserved because this is when the Connect button appears
-		$self->_notify_user_ready();
+		$self->notify_user_ready();
 		
 		# Insert acknowledgetimeout immediately before beginning to check user clicked Connect
 		# Web uses timestamp of this to determine when next to refresh the page
@@ -161,7 +160,7 @@ sub process {
 	# Wait for the user to acknowledge the request by clicking Connect button or from API
 	my $user_acknowledged = $self->code_loop_timeout(sub{$self->user_acknowledged()}, [], 'waiting for user acknowledgement', $acknowledge_timeout_remaining_seconds, 1, 10);
 	if (!$user_acknowledged) {
-		$self->_notify_user_timeout($request_data);
+		$self->notify_user_timeout_no_acknowledgement();
 		$self->state_exit('timeout', 'available', 'noack');
 	}
 	
@@ -245,7 +244,7 @@ sub process {
 			$self->state_exit();
 		}
 		else {
-			$self->_notify_user_no_login();
+			$self->notify_user_timeout_no_initial_connection();
 			$self->state_exit('timeout', 'reserved', 'nologin');
 		}
 	}
@@ -383,7 +382,7 @@ sub user_acknowledged {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 _notify_user_ready
+=head2 notify_user_ready
 
  Parameters  : none
  Returns     : boolean
@@ -391,84 +390,47 @@ sub user_acknowledged {
 
 =cut
 
-sub _notify_user_ready {
+sub notify_user_ready {
 	my $self = shift;
 	
-	#my $request_id                 = $self->data->get_request_id();
-	my $request_state_name         = $self->data->get_request_id();
-	#my $reservation_id             = $self->data->get_reservation_id();
-	my $user_email                 = $self->data->get_user_email();
-	my $user_emailnotices          = $self->data->get_user_emailnotices();
-	my $user_imtype_name               = $self->data->get_user_imtype_name();
-	my $user_im_id                 = $self->data->get_user_im_id();
-	my $affiliation_sitewwwaddress = $self->data->get_user_affiliation_sitewwwaddress();
-	my $affiliation_helpaddress    = $self->data->get_user_affiliation_helpaddress();
-	my $image_prettyname           = $self->data->get_image_prettyname();
-	my $is_parent_reservation      = $self->data->is_parent_reservation();
-
-	my $mailstring;
-	my $subject;
+	my $request_state_name = $self->data->get_request_id();
+	my $user_email = $self->data->get_user_email();
+	my $user_emailnotices = $self->data->get_user_emailnotices();
+	my $user_imtype_name = $self->data->get_user_imtype_name();
+	my $user_im_id = $self->data->get_user_im_id();
+	my $affiliation_helpaddress = $self->data->get_user_affiliation_helpaddress();
+	my $is_parent_reservation = $self->data->is_parent_reservation();
 	
-	# Assemble the message body reservations
+	my $user_message_key;
 	if ($request_state_name =~ /^(reinstall)$/) {
-		$subject = "VCL -- $image_prettyname reservation reinstalled";
-		
-		$mailstring = <<"EOF";
-Your reservation was successfully reinstalled and you can proceed to reconnect. 
-Please revisit the 'Current Reservations' page for any additional information.
-EOF
+		$user_message_key = 'reinstalled';
 	}
 	else {
-		$subject = "VCL -- $image_prettyname reservation";
-		
-		$mailstring = <<"EOF";
-The resources for your VCL reservation have been successfully reserved.
-Connection will not be allowed until you click the 'Connect' button on the 'Current Reservations' page.
-You must acknowledge the reservation within the next 15 minutes or the resources will be reclaimed for other VCL users.
-
--Visit $affiliation_sitewwwaddress
--Select "Current Reservations"
--Click the "Connect" button
-Upon acknowledgement, all of the remaining connection details will be displayed.
-EOF
+		$user_message_key = 'reserved';
 	}
 	
-	$mailstring .= <<"EOF";
-
-Thank You,
-VCL Team
-
-******************************************************************
-This is an automated notice. If you need assistance please respond 
-with detailed information on the issue and a help ticket will be 
-generated.
-
-To disable email notices
--Visit $affiliation_sitewwwaddress
--Select User Preferences
--Select General Preferences
-
-******************************************************************
-EOF
+	my ($subject, $message) = $self->get_user_message($user_message_key);
+	if (!defined($subject) || !defined($message)) {
+		return;
+	}
 	
 	if ($is_parent_reservation && $user_emailnotices) {
-		mail($user_email, $subject, $mailstring, $affiliation_helpaddress);
+		mail($user_email, $subject, $message, $affiliation_helpaddress);
 	}
 	else {
-		# For email record keeping
-		notify($ERRORS{'MAILMASTERS'}, 0, " $user_email\n$mailstring");
+		notify($ERRORS{'MAILMASTERS'}, 0, "$user_email\n$message");
 	}
 	
 	if ($user_imtype_name ne "none") {
-		notify_via_im($user_imtype_name, $user_im_id, $mailstring, $affiliation_helpaddress);
+		notify_via_im($user_imtype_name, $user_im_id, $message, $affiliation_helpaddress);
 	}
 	
 	return 1;
-} ## end sub _notify_user_no_login
+}
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 _notify_user_no_login
+=head2 notify_user_timeout_no_initial_connection
 
  Parameters  : none
  Returns     : boolean
@@ -478,59 +440,35 @@ EOF
 
 =cut
 
-sub _notify_user_no_login {
+sub notify_user_timeout_no_initial_connection {
 	my $self = shift;
 	
-	my $request_id                 = $self->data->get_request_id();
-	my $reservation_id             = $self->data->get_reservation_id();
 	my $user_email                 = $self->data->get_user_email();
 	my $user_emailnotices          = $self->data->get_user_emailnotices();
 	my $user_im_name               = $self->data->get_user_imtype_name();
 	my $user_im_id                 = $self->data->get_user_im_id();
-	my $affiliation_sitewwwaddress = $self->data->get_user_affiliation_sitewwwaddress();
 	my $affiliation_helpaddress    = $self->data->get_user_affiliation_helpaddress();
-	my $image_prettyname           = $self->data->get_image_prettyname();
 	my $is_parent_reservation      = $self->data->is_parent_reservation();
-
-	my $message = <<"EOF";
-
-Your reservation has timed out for image $image_prettyname because no initial connection was made.
-
-To make another reservation, please revisit $affiliation_sitewwwaddress.
-
-Thank You,
-VCL Team
-
-
-******************************************************************
-This is an automated notice. If you need assistance
-please respond with detailed information on the issue
-and a help ticket will be generated.
-
-To disable email notices
--Visit $affiliation_sitewwwaddress
--Select User Preferences
--Select General Preferences
-******************************************************************
-EOF
-
-	my $subject = "VCL -- Reservation Timeout";
-
+	
+	my $user_message_key = 'timeout_no_initial_connection';
+	my ($subject, $message) = $self->get_user_message($user_message_key);
+	if (!defined($subject) || !defined($message)) {
+		return;
+	}
+	
 	if ($is_parent_reservation && $user_emailnotices) {
-		#if  "0" user does not care to get additional notices
 		mail($user_email, $subject, $message, $affiliation_helpaddress);
-		notify($ERRORS{'OK'}, 0, "sent reservation timeout e-mail to $user_email");
 	}
 	if ($user_im_name ne "none") {
 		notify_via_im($user_im_name, $user_im_id, $message);
-		notify($ERRORS{'OK'}, 0, "sent reservation timeout IM to $user_im_name");
 	}
+	
 	return 1;
-} ## end sub _notify_user_no_login
+}
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 _notify_user_timeout
+=head2 notify_user_timeout_no_acknowledgement
 
  Parameters  : none
  Returns     : boolean
@@ -540,55 +478,31 @@ EOF
 
 =cut
 
-sub _notify_user_timeout {
+sub notify_user_timeout_no_acknowledgement {
 	my $self = shift;
 	
-	my $request_id                 = $self->data->get_request_id();
-	my $reservation_id             = $self->data->get_reservation_id();
 	my $user_email                 = $self->data->get_user_email();
 	my $user_emailnotices          = $self->data->get_user_emailnotices();
 	my $user_im_name               = $self->data->get_user_imtype_name();
 	my $user_im_id                 = $self->data->get_user_im_id();
-	my $affiliation_sitewwwaddress = $self->data->get_user_affiliation_sitewwwaddress();
 	my $affiliation_helpaddress    = $self->data->get_user_affiliation_helpaddress();
-	my $image_prettyname           = $self->data->get_image_prettyname();
 	my $is_parent_reservation      = $self->data->is_parent_reservation();
-
-	my $message = <<"EOF";
-
-Your reservation has timed out for image $image_prettyname because no initial connection was made.
-
-To make another reservation, please revisit $affiliation_sitewwwaddress.
-
-Thank You,
-VCL Team
-
-
-******************************************************************
-This is an automated notice. If you need assistance
-please respond with detailed information on the issue
-and a help ticket will be generated.
-
-To disable email notices
--Visit $affiliation_sitewwwaddress
--Select User Preferences
--Select General Preferences
-******************************************************************
-EOF
-
-	my $subject = "VCL -- Reservation Timeout";
-
+	
+	my $user_message_key = 'timeout_no_acknowledgement';
+	my ($subject, $message) = $self->get_user_message($user_message_key);
+	if (!defined($subject) || !defined($message)) {
+		return;
+	}
+	
 	if ($is_parent_reservation && $user_emailnotices) {
-		#if  "0" user does not care to get additional notices
 		mail($user_email, $subject, $message, $affiliation_helpaddress);
-		notify($ERRORS{'OK'}, 0, "sent reservation timeout e-mail to $user_email");
 	}
 	if ($user_im_name ne "none") {
 		notify_via_im($user_im_name, $user_im_id, $message);
-		notify($ERRORS{'OK'}, 0, "sent reservation timeout IM to $user_im_name");
 	}
+	
 	return 1;
-} ## end sub _notify_user_timeout
+}
 
 #/////////////////////////////////////////////////////////////////////////////
 

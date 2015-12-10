@@ -82,6 +82,9 @@ use 5.008000;
 use strict;
 use warnings;
 use diagnostics;
+
+no warnings 'redefine';
+
 use English '-no_match_vars';
 use Digest::SHA1 qw(sha1_hex);
 
@@ -1554,6 +1557,418 @@ sub does_semaphore_exist {
 	}
 	
 	return $semaphore->semaphore_exists($semaphore_id);
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 set_admin_message_variable
+
+ Parameters  : $admin_message_key, $subject, $message, $substitution_hashref (optional)
+ Returns     : boolean
+ Description : Sets an administrative message variable in the database.
+
+=cut
+
+sub set_admin_message_variable {
+	my $self = shift;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my ($admin_message_key, $subject, $message, $substitution_hashref) = @_;
+	if (!defined($admin_message_key)) {
+		notify($ERRORS{'WARNING'}, 0, "message key argument was not supplied");
+		return;
+	}
+	elsif (!defined($subject)) {
+		notify($ERRORS{'WARNING'}, 0, "subject argument was not supplied\n" . format_data(\@_));
+		return;
+	}
+	elsif (!defined($message)) {
+		notify($ERRORS{'WARNING'}, 0, "message argument was not supplied");
+		return;
+	}
+	
+	my $variable_name = "adminmessage|$admin_message_key";
+	
+	my $variable_value = {
+		subject => $subject,
+		message => $message,
+		substitutions => $substitution_hashref,
+	};
+	
+	if (!set_variable($variable_name, $variable_value)) {
+		return;
+	}
+	
+	# Test retrieving the variable
+	return $self->get_admin_message($admin_message_key, $substitution_hashref);
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 set_user_message_variable
+
+ Parameters  : $user_message_key, $affiliation_identifier, $subject, $message, $short_message (optional), $substitution_hashref (optional)
+ Returns     : boolean
+ Description : Sets a user message variable in the database.
+
+=cut
+
+sub set_user_message_variable {
+	my $self = shift;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my ($user_message_key, $affiliation_identifier, $subject, $message, $short_message, $substitution_hashref) = @_;
+	if (!defined($user_message_key)) {
+		notify($ERRORS{'WARNING'}, 0, "key argument was not supplied");
+		return;
+	}
+	elsif (!defined($affiliation_identifier)) {
+		notify($ERRORS{'WARNING'}, 0, "affiliation identifier argument was not supplied");
+		return;
+	}
+	elsif (!defined($subject)) {
+		notify($ERRORS{'WARNING'}, 0, "subject argument was not supplied\n" . format_data(\@_));
+		return;
+	}
+	elsif (!defined($message)) {
+		notify($ERRORS{'WARNING'}, 0, "message argument was not supplied");
+		return;
+	}
+	
+	
+	# Determine the affiliation name from the $affiliation_identifier argument
+	my $affiliation_info = get_affiliation_info($affiliation_identifier);
+	if (!$affiliation_info) {
+		notify($ERRORS{'WARNING'}, 0, "failed to set user message variable, affiliation info could not be retrieved for identifier argument: '$affiliation_identifier'");
+		return;
+	}
+	my $affiliation_name = $affiliation_info->{name};
+	
+	my $variable_name = "usermessage|$user_message_key|$affiliation_name";
+	
+	my $variable_value = {
+		subject => $subject,
+		message => $message,
+		short_message => $short_message,
+		substitutions => $substitution_hashref,
+	};
+	
+	if (!set_variable($variable_name, $variable_value)) {
+		return;
+	}
+	
+	# Test retrieving the variable
+	return $self->_get_message_variable($user_message_key, $substitution_hashref);
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 _get_message_variable
+
+ Parameters  : $message_key, $substitution_hashref (optional), $return_short_message (optional), $admin_message (optional)
+ Returns     : array context, array: ($subject, $message)
+               scalar context, string: $message
+ Description : Retrieves message components from the variable table in the
+               database. This is a helper subroutine and should not be called
+               directly from outside this module file.
+               
+               The composition of the variable.name field varies based on
+               whether the message is intended for end users or for
+               administrators of the VCL system. variable.name will begin with
+               either of the following:
+               usermessage|
+               adminmessage|
+               
+               The $message_key argument is a string that identifies the
+               message to retrieve. It is treated the same for both user and
+               admin-intended messages.
+               
+               Admin-intended messages cannot be customized per affiliation. The
+               composition of variable.name is as follows:
+               adminmessage|<Message Key>
+               
+               Example:
+               adminmessage|image_creation_failed
+               
+               User-intended messages may be customized based on the user's
+               affiliation and the variable.name field contains an additional
+               affiliation name component:
+               usermessage|<Message Key>|<Affiliation Name>
+               
+               Example:
+               usermessage|timeout_inactivity|Global
+               
+               The database schema contains default message entries for the
+               'Global' affiliation. For user-intended messages, if there is an
+               entry that matches the user's affiliation name, that message will
+               be returned. If not, the Global affiliation message will be
+               returned by default.
+               
+               The variable.value field contains a YAML-encoded hash data
+               structure. The following hash keys are recognized:
+               * subject (required)
+               * message (required)
+               * short_message (optional)
+               * substitutions (optional)
+               
+               The subject and message values will be used when sending email
+               messages. The short_message key is optional and will be used when
+               sending console, desktop, or IM messages to users.
+               
+               The substitutions key is optional and is intended to only be used
+               to verify when message variables added or modified in the
+               database. Ideally, every variable entry which has custom
+               (uppercase) substitution strings in subject, message, or
+               short_message should have corresponding substitutions hash keys
+               and values:
+               variable.name: 'usermessage|TestKey|Global'
+               variable.value:
+               {
+                  'message' => "[MY_USERNAME]'s reservation will timeout in [NOTICE_INTERVAL]",
+                  'substitutions' => {
+                     'MY_USERNAME' => 'some-default-username',
+                     'NOTICE_INTERVAL' => 'xxx minutes',
+                  },
+               }
+               
+               The $substitution_hashref argument must be provided if subject,
+               message, or short_message contains custom strings to be replaced.
+               There must be a $substitution_hashref key for every custom,
+               upper-case replacement string. For example:
+               my $message = $self->_get_message_variable('TestKey', { 'MY_USERNAME' => 'slappy', NOTICE_INTERVAL' => '5 minutes' });
+               
+               ...would return the string:
+               "slappy's reservation will timeout in 5 minutes"
+               
+               The $return_short_message argument controls whether to return the
+               value of message (default) or short_message.
+               
+               The $admin_message argument controls whether to retrieve
+               messages with a variable.name beginning with 'usermessage'
+               (default) or 'adminmessage'.
+
+=cut
+
+sub _get_message_variable {
+	my $self = shift;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my ($message_key, $substitution_hashref, $return_short_message, $admin_message) = @_;
+	if (!defined($message_key)) {
+		notify($ERRORS{'WARNING'}, 0, "key argument was not supplied");
+		return;
+	}
+	
+	# Initialize hash reference if argument was not supplied
+	if (defined($substitution_hashref)) {
+		my $type = ref($substitution_hashref);
+		if (!$type || $type ne 'HASH') {
+			notify($ERRORS{'WARNING'}, 0, "substitution argument is not a hash reference:\n" . format_data($substitution_hashref));
+			return;
+		}
+		elsif (keys(%$substitution_hashref)) {
+			notify($ERRORS{'DEBUG'}, 0, "substitution hash reference was specified:\n" . format_data($substitution_hashref));
+		}
+	}
+	else {
+		$substitution_hashref = {};
+	}
+	
+	# Set common substitution values
+	$substitution_hashref->{PID} = $$;
+	
+	my $message_type = ($admin_message ? 'admin' : 'user');
+	
+	# Assemble the variable name
+	my $variable_name;
+	if ($admin_message) {
+		# Assemble admin message variable name
+		$variable_name= "adminmessage|$message_key";
+	}
+	else {
+		# Assemble user message variable name
+		my $user_affiliation_name = $self->data->get_user_affiliation_name();
+		$variable_name= "usermessage|$message_key|$user_affiliation_name";
+		
+		# Check if the affiliation-specific variable is set, if not revert to Global
+		if (!is_variable_set($variable_name)) {
+			notify($ERRORS{'DEBUG'}, 0, "affiliation-specific variable is NOT set in database: $variable_name");
+			$variable_name = "usermessage|$message_key|Global";
+		}
+	}
+	
+	# Retrieve the variable from the database
+	my $variable = get_variable($variable_name);
+	if (!defined($variable)) {
+		notify($ERRORS{'WARNING'}, 0, "unable to retrieve $message_type message variable, failed to retieve variable matching name: '$variable_name'");
+		return;
+	}
+	
+	# Make sure the variable contains subject key
+	my $subject = $variable->{subject};
+	if (!defined($subject)) {
+		notify($ERRORS{'WARNING'}, 0, "unable to retrieve $message_type message variable, '$variable_name' variable stored in database does not contain a {subject} key:\n" . format_data($variable));
+		return;
+	}
+	
+	# Check if supposed to return short message, return long message if not defined
+	my $message;
+	if ($return_short_message) {
+		if ($variable->{short_message}) {
+			$message = $variable->{short_message};
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "short message was requested but not defined in '$variable_name' variable");
+		}
+	}
+	$message = $variable->{message} if !defined($message);
+	
+	# Make sure message was determined
+	if (!defined($message)) {
+		notify($ERRORS{'WARNING'}, 0, "unable to retrieve $message_type message variable, '$variable_name' variable stored in database does not contain a {message} key:\n" . format_data($variable));
+		return;
+	}
+	
+	# Extract all substitution string sections from the subject and message in the form: [foo]
+	my @substitution_strings = "$subject $message" =~ /\[([\w_]+)\]/g;
+	@substitution_strings = remove_array_duplicates(@substitution_strings);
+	
+	for my $substitution_string (@substitution_strings) {
+		my $substitution_value;
+		
+		# Check if the string matches a key in the optional substitution hash reference
+		if (defined($substitution_hashref->{$substitution_string})) {
+			$substitution_value = $substitution_hashref->{$substitution_string};
+			notify($ERRORS{'DEBUG'}, 0, "determined substitution value from supplied hash reference for '$variable_name' $message_type variable: $substitution_string --> $substitution_value");
+		}
+		elsif (defined($variable->{substitutions}{$substitution_string})) {
+			$substitution_value = $variable->{substitutions}{$substitution_string};
+			notify($ERRORS{'DEBUG'}, 0, "determined substitution value from variable definition substitutions for '$variable_name' $message_type variable: $substitution_string --> $substitution_value");
+		}
+		else {
+			#notify($ERRORS{'DEBUG'}, 0, "substitution hash reference does not contain a '$substitution_string' key:\n" . format_data($substitution_hashref));
+			
+			# Attempt to retrieve the substitution value from the DataStructure
+			# String in subject or message must be in a form such as: [image_name]
+			# Brackets were removed in earlier regex, so $substitution_string would now contain: image_name
+			
+			# Check if DataStructure.pm implements get_ function
+			if (!$self->data->can("get_$substitution_string")) {
+				notify($ERRORS{'CRITICAL'}, 0, "$message_type variable: '$variable_name', failed to determine substitution value for substitution string: $substitution_string, DataStructure does not implement a get_$substitution_string function\n" .
+					"substitution hash reference argument:\n" . format_data($substitution_hashref) . "\n" .
+					"variable definition substitution hash reference:\n" . format_data($variable->{substitutions})
+				);
+				return;
+			}
+			
+			# Assemble a code string to retrieve the value from the DataStructure:
+			my $eval_string = "\$self->data->get_$substitution_string(0)";
+			
+			# Evaluate the code string:
+			$substitution_value = eval $eval_string;
+			if (defined($substitution_value)) {
+				#notify($ERRORS{'DEBUG'}, 0, "determined DataStructure substitution value: $eval_string --> $substitution_value");
+			}
+			else {
+				$substitution_value = '<undefined>';
+			}
+		}
+		
+		# Replace the substitution strings in the subject and message
+		$subject =~ s/\[$substitution_string\]/$substitution_value/g;
+		$message =~ s/\[$substitution_string\]/$substitution_value/g;	
+	}
+	
+	# Remove leading and trailing newlines from message
+	$message =~ s/^\n+//g;
+	$message =~ s/\n+$//g;
+	
+	if (wantarray) {
+		notify($ERRORS{'DEBUG'}, 0, "retrieved '$variable_name' $message_type message variable and substituted text, returning array:\n" .
+			"subject: $subject\n" .
+			"message:\n$message"
+		);
+		return ($subject, $message);
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "retrieved '$variable_name' $message_type message variable and substituted text, returning message string:\n$message");
+		return $message;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_user_message
+
+ Parameters  : $user_message_key, $substitution_hashref (optional)
+ Returns     : array context, array: ($subject, $message)
+               scalar context, string: $message
+ Description : Retrieves user messages.
+
+=cut
+
+sub get_user_message {
+	my $self = shift;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my ($user_message_key, $substitution_hashref) = @_;
+	return $self->_get_message_variable($user_message_key, $substitution_hashref);
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_user_short_message
+
+ Parameters  : $user_message_key, $substitution_hashref (optional)
+ Returns     : array context, array: ($subject, $short_message)
+               scalar context, string: $short_message
+ Description : Retrieves user short messages.
+
+=cut
+
+sub get_user_short_message {
+	my $self = shift;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my ($user_message_key, $substitution_hashref) = @_;
+	return $self->_get_message_variable($user_message_key, $substitution_hashref, 1);
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_admin_message
+
+ Parameters  : $admin_message_key, $substitution_hashref (optional)
+ Returns     : array context, array: ($subject, $message)
+               scalar context, string: $message
+ Description : Retrieves administrative messages.
+
+=cut
+
+sub get_admin_message {
+	my $self = shift;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my ($admin_message_key, $substitution_hashref) = @_;
+	return $self->_get_message_variable($admin_message_key, $substitution_hashref, 0, 1);
 }
 
 #/////////////////////////////////////////////////////////////////////////////

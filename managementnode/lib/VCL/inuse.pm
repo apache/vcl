@@ -39,13 +39,14 @@ VCL::inuse - Perl module for the VCL inuse state
 
  # Create a new VCL::inuse object based on the request information
  my $inuse = VCL::inuse->new($request_info);
+ 
+ $inuse->process();
 
 =head1 DESCRIPTION
 
- This module supports the VCL "inuse" state. The inuse state is reached after
- a user has made a reservation, acknowledged the reservation, and connected to
- the machine. Once connected, vcld creates a new process which then
- creates a new instance of this module.
+ This module supports the VCL "inuse" state. The inuse state is reached after a
+ user has made a reservation, acknowledged the reservation by clicking the
+ "Connect" button, and connected to the remote computer.
 
  If the "checkuser" flag is set for the image that the user requested,
  this process will periodically check to make sure the user is still
@@ -101,19 +102,19 @@ use VCL::utils;
 sub process {
 	my $self = shift;
 	
-	my $request_id              = $self->data->get_request_id();
-	my $request_state_name      = $self->data->get_request_state_name();
-	my $request_start           = $self->data->get_request_start_time();
-	my $request_end             = $self->data->get_request_end_time();
-	my $request_forimaging      = $self->data->get_request_forimaging();
-	my $request_checkuser       = $self->data->get_request_checkuser();
-	my $reservation_id          = $self->data->get_reservation_id();
-	my $reservation_count       = $self->data->get_reservation_count();
-	my $server_request_id       = $self->data->get_server_request_id();
-	my $imagemeta_checkuser     = $self->data->get_imagemeta_checkuser();
-	my $is_parent_reservation   = $self->data->is_parent_reservation();
-	my $computer_id             = $self->data->get_computer_id();
-	my $computer_short_name     = $self->data->get_computer_short_name();
+	my $request_id            = $self->data->get_request_id();
+	my $request_state_name    = $self->data->get_request_state_name();
+	my $request_start         = $self->data->get_request_start_time();
+	my $request_end           = $self->data->get_request_end_time();
+	my $request_forimaging    = $self->data->get_request_forimaging();
+	my $request_checkuser     = $self->data->get_request_checkuser();
+	my $reservation_id        = $self->data->get_reservation_id();
+	my $reservation_count     = $self->data->get_reservation_count();
+	my $server_request_id     = $self->data->get_server_request_id();
+	my $imagemeta_checkuser   = $self->data->get_imagemeta_checkuser();
+	my $is_parent_reservation = $self->data->is_parent_reservation();
+	my $computer_id           = $self->data->get_computer_id();
+	my $computer_short_name   = $self->data->get_computer_short_name();
 	
 	my $connect_timeout_seconds = $self->os->get_timings('reconnecttimeout');
 	
@@ -222,7 +223,7 @@ sub process {
 			
 			# Notify user when 5 or 10 minutes remain
 			if ($request_remaining_minutes == 5 || $request_remaining_minutes == 10) {
-				$self->_notify_user_disconnect($request_remaining_minutes);
+				$self->_notify_user_endtime_imminent("$request_remaining_minutes minutes");
 			}
 			
 			if ($iteration < $end_time_notify_minutes) {
@@ -232,12 +233,12 @@ sub process {
 		}
 		
 		# Notify user - endtime and image capture has started
-		$self->_notify_user_request_ended();
+		$self->_notify_user_endtime_reached();
 		
 		# Initiate auto-capture process if this is an imaging request and not a cluster reservation
 		if ($request_forimaging && $reservation_count == 1) {
 			notify($ERRORS{'OK'}, 0, "initiating image auto-capture process");
-			if (!$self->_start_imaging_request()) {
+			if (!$self->start_imaging_request()) {
 				notify($ERRORS{'CRITICAL'}, 0, "failed to initiate image auto-capture process, changing request and computer state to maintenance");
 				$self->state_exit('maintenance', 'maintenance');
 			}
@@ -254,7 +255,7 @@ sub process {
 		# Check end time for a notice interval - returns 0 if no notice is to be given
 		my $notice_interval = check_endtimenotice_interval($request_end);
 		if ($notice_interval) {
-			$self->_notify_user_endtime($notice_interval);
+			$self->_notify_user_future_endtime($notice_interval);
 		}
 	}
 	else {
@@ -328,7 +329,7 @@ sub process {
 			# Update reservation lastcheck, otherwise request will be processed immediately again
 			update_reservation_lastcheck($reservation_id);
 			
-			$self->_notify_user_timeout();
+			$self->_notify_user_timeout_inactivity();
 			$self->state_exit('timeout', 'inuse', 'timeout');
 		}
 	}
@@ -338,18 +339,18 @@ sub process {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 _notify_user_endtime
+=head2 notify_user_future_endtime
 
- Parameters  : $request_data_hash_reference, $notice_interval
- Returns     : 1 if successful, 0 otherwise
+ Parameters  : $notice_interval
+ Returns     : boolean
  Description : Notifies the user how long they have until the end of the
-               request. Based on the user configuration, an e-mail message, IM
-               message, or wall message may be sent. A notice interval string
-               must be passed. Its value should be something like "5 minutes".
+               request. A notice interval argument must be passed. Its value
+               gets inserted directly in the message sent to the user and should
+               contain something like "5 minutes".
 
 =cut
 
-sub _notify_user_endtime {
+sub notify_user_future_endtime {
 	my $self = shift;
 	my $notice_interval = shift;
 	
@@ -359,412 +360,220 @@ sub _notify_user_endtime {
 		return 0;
 	}
 	
-	my $is_parent_reservation = $self->data->is_parent_reservation();
-	if (!$is_parent_reservation) {
-		notify($ERRORS{'DEBUG'}, 0, "child reservation - not notifying user of endtime");
-		return 1;
-	}
+	my $is_parent_reservation        = $self->data->is_parent_reservation();
+	my $computer_short_name          = $self->data->get_computer_short_name();
+	my $image_os_type                = $self->data->get_image_os_type();
+	my $user_affiliation_helpaddress = $self->data->get_user_affiliation_helpaddress();
+	my $user_login_id                = $self->data->get_user_login_id();
+	my $user_email                   = $self->data->get_user_email();
+	my $user_emailnotices            = $self->data->get_user_emailnotices();
+	my $user_imtype_name             = $self->data->get_user_imtype_name();
+	my $user_im_id                   = $self->data->get_user_im_id();
 	
-	my $computer_short_name             = $self->data->get_computer_short_name();
-	my $computer_type                   = $self->data->get_computer_type();
-	my $image_os_name                   = $self->data->get_image_os_name();
-	my $image_prettyname                = $self->data->get_image_prettyname();
-	my $image_os_type                   = $self->data->get_image_os_type();
-	my $user_affiliation_sitewwwaddress = $self->data->get_user_affiliation_sitewwwaddress();
-	my $user_affiliation_helpaddress    = $self->data->get_user_affiliation_helpaddress();
-	my $user_login_id                   = $self->data->get_user_login_id();
-	my $user_email                      = $self->data->get_user_email();
-	my $user_emailnotices               = $self->data->get_user_emailnotices();
-	my $user_imtype_name                = $self->data->get_user_imtype_name();
-	my $user_im_id                      = $self->data->get_user_im_id();
-	my $request_forimaging              = $self->check_imaging_request();	
-	my $request_id                      = $self->data->get_request_id();
+	my $user_message_key = 'future_endtime';
 	
-	my $message;
-	my $subject;
-	my $short_message = "You have $notice_interval until the scheduled end time of your reservation. VCL Team";
-	
-	$message  = <<"EOF";
-
-You have $notice_interval until the scheduled end time of your reservation for image $image_prettyname.
-
-Reservation extensions are available if the machine you are on does not have a reservation immediately following.
-
-To edit this reservation:
--Visit $user_affiliation_sitewwwaddress
--Select Current Reservations
-
-Thank You,
-VCL Team
-
-
-******************************************************************
-This is an automated notice. If you need assistance please respond 
-with detailed information on the issue and a help ticket will be 
-generated.
-
-To disable email notices
--Visit $user_affiliation_sitewwwaddress
--Select User Preferences
--Select General Preferences
-
-******************************************************************
-EOF
-
-	$subject = "VCL -- $notice_interval until end of reservation for $image_prettyname";
-	
-	# Send mail
-	if ($user_emailnotices) {
-		notify($ERRORS{'DEBUG'}, 0, "user $user_login_id email notices enabled - notifying user of endtime");
-		mail($user_email, $subject, $message, $user_affiliation_helpaddress);
-	}
-	else {
-		notify($ERRORS{'DEBUG'}, 0, "user $user_login_id email notices disabled - not notifying user of endtime");
-	}
-
-	# notify via console
-	if ( $self->os->can('notify_user_console') ) {
-		if ( $self->os->notify_user_console($short_message) ) {
-			notify($ERRORS{'DEBUG'}, 0, "Successfully notified user $user_login_id via console method");
+	# Send a message to the user notifying them the reservation end time is coming up
+	if ($is_parent_reservation && $user_emailnotices) {
+		my ($user_subject, $user_message) = $self->get_user_message($user_message_key, { NOTICE_INTERVAL => $notice_interval});
+		if (defined($user_subject) && defined($user_message)) {
+			mail($user_email, $user_subject, $user_message, $user_affiliation_helpaddress);
 		}
 	}
 	
-	# Send message to machine
-	if ($computer_type =~ /blade|virtualmachine/) {
+	my $user_short_message = $self->get_user_short_message($user_message_key, { NOTICE_INTERVAL => $notice_interval});
+	if ($user_short_message) {
+		# Display a message on the console or desktop if the OS module supports it
+		if ($self->os->can('notify_user_console')) {
+			$self->os->notify_user_console($user_short_message);
+		}
+		
+		# TODO: move this to OS module
 		if ($image_os_type =~ /osx/) {
-        # Notify via oascript
-        notify_via_oascript($computer_short_name, $user_login_id, $short_message);
-     }
-	} ## end if ($computer_type =~ /blade|virtualmachine/)
-	
-	# Send IM
-	if ($user_imtype_name ne "none") {
-		notify($ERRORS{'DEBUG'}, 0, "user $user_login_id IM type: $user_imtype_name - notifying user of endtime");
-		notify_via_im($user_imtype_name, $user_im_id, $message);
-	}
-	else {
-		notify($ERRORS{'DEBUG'}, 0, "user $user_login_id IM type: $user_imtype_name - not notifying user of endtime");
+			# Mac images only, notify via oascript
+			notify_via_oascript($computer_short_name, $user_login_id, $user_short_message);
+		}
+		
+		# Notify via IM
+		if ($user_imtype_name ne "none" && defined($user_im_id)) {
+			notify_via_im($user_imtype_name, $user_im_id, $user_short_message);
+		}
 	}
 	
 	return 1;
-} ## end sub _notify_user_endtime
+} ## end sub notify_user_future_endtime
+
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 _notify_user_disconnect
+=head2 notify_user_endtime_imminent
 
- Parameters  : $disconnect_time
+ Parameters  : $notice_interval
  Returns     : boolean
- Description : Notifies the user that the session will be disconnected soon.
-               Based on the user configuration, an e-mail message, IM message,
-               Windows msg, or Linux wall message may be sent. A scalar
-               containing the number of minutes until the user is disconnected
-               must be passed as the 2nd parameter.
+ Description : Notifies the user that the request end time will be reached and
+               the session will be disconnected soon. A notice interval argument
+               must be passed. Its value gets inserted directly in the message
+               sent to the user and should contain something like "5 minutes".
 
 =cut
 
-sub _notify_user_disconnect {
+sub notify_user_endtime_imminent {
 	my $self = shift;
-	my $disconnect_time = shift;
+	my $notice_interval = shift;
 	
 	# Check to make sure disconnect time was passed
-	if (!defined($disconnect_time)) {
+	if (!defined($notice_interval)) {
 		notify($ERRORS{'WARNING'}, 0, "disconnect time message not set, disconnect time was not passed");
 		return 0;
 	}
 	
-	my $computer_short_name             = $self->data->get_computer_short_name();
-	my $computer_type                   = $self->data->get_computer_type();
-	my $image_os_name                   = $self->data->get_image_os_name();
-	my $image_prettyname                = $self->data->get_image_prettyname();
-	my $image_os_type                   = $self->data->get_image_os_type();
-	my $user_affiliation_sitewwwaddress = $self->data->get_user_affiliation_sitewwwaddress();
-	my $user_affiliation_helpaddress    = $self->data->get_user_affiliation_helpaddress();
-	my $user_login_id                   = $self->data->get_user_login_id();
-	my $user_email                      = $self->data->get_user_email();
-	my $user_emailnotices               = $self->data->get_user_emailnotices();
-	my $user_imtype_name                = $self->data->get_user_imtype_name();
-	my $user_im_id                      = $self->data->get_user_im_id();
-	my $is_parent_reservation           = $self->data->is_parent_reservation();
-	my $request_forimaging              = $self->check_imaging_request();
+	my $computer_short_name          = $self->data->get_computer_short_name();
+	my $image_os_type                = $self->data->get_image_os_type();
+	my $user_affiliation_helpaddress = $self->data->get_user_affiliation_helpaddress();
+	my $user_login_id                = $self->data->get_user_login_id();
+	my $user_email                   = $self->data->get_user_email();
+	my $user_emailnotices            = $self->data->get_user_emailnotices();
+	my $user_imtype_name             = $self->data->get_user_imtype_name();
+	my $user_im_id                   = $self->data->get_user_im_id();
+	my $is_parent_reservation        = $self->data->is_parent_reservation();
+	my $request_forimaging           = $self->check_imaging_request();
 	
-	my $disconnect_string;
-	if ($disconnect_time == 0) {
-		$disconnect_string = "0 minutes";
-	}
-	elsif ($disconnect_time == 1) {
-		$disconnect_string = "1 minute";
+	my $user_message_key;
+	if ($request_forimaging) {
+		$user_message_key = 'endtime_imminent_imaging';
 	}
 	else {
-		$disconnect_string = "$disconnect_time minutes";
+		$user_message_key = 'endtime_imminent';
 	}
 	
-	my $short_message;
-	my $subject;
-	my $message;
 	
-	if (!$request_forimaging) {
-		$message = <<"EOF";
-
-You have $disconnect_string until the end of your reservation for image $image_prettyname, please save all work and prepare to exit.
-
-Reservation extensions are available if the machine you are on does not have a reservation immediately following.
-
-Visit $user_affiliation_sitewwwaddress and select Current Reservations to edit this reservation.
-
-Thank You,
-VCL Team
-
-
-******************************************************************
-This is an automated notice. If you need assistance please respond 
-with detailed information on the issue and a help ticket will be 
-generated.
-
-To disable email notices
--Visit $user_affiliation_sitewwwaddress
--Select User Preferences
--Select General Preferences
-
-******************************************************************
-EOF
-
-		$short_message = "You have $disconnect_string until the end of your reservation. Please save all work and prepare to log off.";
-		$subject = "VCL -- $disconnect_string until end of reservation";
-	}
-	else {
-		$short_message = "You have $disconnect_string until the auto capture process is started.";
-		$subject = "VCL Imaging Reservation -- $disconnect_string until starting auto capture";
-		$message = <<"EOF";
-
-You have $disconnect_string until the end of your reservation for image $image_prettyname. 
-
-At the scheduled end time your imaging reservation will be automatically captured. 
-
-To prevent this auto capture, visit the VCL site $user_affiliation_sitewwwaddress manually start the image creation process.
-
-Please note this auto capture feature is intended to prevent destorying any work you have done to the image.
-
-Thank You,
-VCL Team
-
-
-******************************************************************
-This is an automated notice. If you need assistance please respond 
-with detailed information on the issue and a help ticket will be 
-generated.
-
-To disable email notices
--Visit $user_affiliation_sitewwwaddress
--Select User Preferences
--Select General Preferences
-
-******************************************************************
-EOF
-
-	}
-	
-	# Send mail
+	# Send a message to the user notifying them the reservation end time is close
 	if ($is_parent_reservation && $user_emailnotices) {
-		mail($user_email, $subject, $message, $user_affiliation_helpaddress);
-	}
-
-	# notify via console
-	if ( $self->os->can('notify_user_console') ) {
-		if ( $self->os->notify_user_console($short_message) ) {
-			notify($ERRORS{'DEBUG'}, 0, "Successfully notified user $user_login_id via console method");
+		my ($user_subject, $user_message) = $self->get_user_message($user_message_key, { NOTICE_INTERVAL => $notice_interval});
+		if (defined($user_subject) && defined($user_message)) {
+			mail($user_email, $user_subject, $user_message, $user_affiliation_helpaddress);
 		}
 	}
 	
-	# Send IM
-	if ($is_parent_reservation && $user_imtype_name ne "none") {
-		notify_via_im($user_imtype_name, $user_im_id, $message);
+	my $user_short_message = $self->get_user_short_message($user_message_key, { NOTICE_INTERVAL => $notice_interval});
+	if ($user_short_message) {
+		# Display a message on the console or desktop if the OS module supports it
+		if ($self->os->can('notify_user_console')) {
+			$self->os->notify_user_console($user_short_message);
+		}
+		
+		# TODO: move this to OS module
+		if ($image_os_type =~ /osx/) {
+			# Mac images only, notify via oascript
+			notify_via_oascript($computer_short_name, $user_login_id, $user_short_message);
+		}
+		
+		# Notify via IM
+		if ($user_imtype_name ne "none" && defined($user_im_id)) {
+			notify_via_im($user_imtype_name, $user_im_id, $user_short_message);
+		}
 	}
 	
 	return 1;
-} ## end sub _notify_user_disconnect
+} ## end sub notify_user_endtime_imminent
+
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 _notify_user_timeout
+=head2 notify_user_timeout_inactivity
 
  Parameters  : none
  Returns     : boolean
- Description : Notifies the user that the session has timed out. Based on the
-               user configuration, an e-mail message, IM message, Windows msg,
-               or Linux wall message may be sent.
+ Description : Notifies the user that the session has timed out due to
+               inactivity.
 
 =cut
 
-sub _notify_user_timeout {
+sub notify_user_timeout_inactivity {
 	my $self = shift;
 	
-	my $computer_short_name             = $self->data->get_computer_short_name();
-	my $computer_type                   = $self->data->get_computer_type();
-	my $image_os_name                   = $self->data->get_image_os_name();
-	my $image_prettyname                = $self->data->get_image_prettyname();
-	my $image_os_type                   = $self->data->get_image_os_type();
-	my $user_affiliation_sitewwwaddress = $self->data->get_user_affiliation_sitewwwaddress();
-	my $user_affiliation_helpaddress    = $self->data->get_user_affiliation_helpaddress();
-	my $user_login_id                   = $self->data->get_user_login_id();
-	my $user_email                      = $self->data->get_user_email();
-	my $user_emailnotices               = $self->data->get_user_emailnotices();
-	my $user_imtype_name                = $self->data->get_user_imtype_name();
-	my $user_im_id                      = $self->data->get_user_im_id();
-	my $is_parent_reservation           = $self->data->is_parent_reservation();
+	my $user_affiliation_helpaddress = $self->data->get_user_affiliation_helpaddress();
+	my $user_email                   = $self->data->get_user_email();
+	my $user_emailnotices            = $self->data->get_user_emailnotices();
+	my $user_imtype_name             = $self->data->get_user_imtype_name();
+	my $user_im_id                   = $self->data->get_user_im_id();
+	my $is_parent_reservation        = $self->data->is_parent_reservation();
 	
-	my $message = <<"EOF";
+	my $user_message_key = 'timeout_inactivity';
+	my ($user_subject, $user_message) = $self->get_user_message($user_message_key);
 
-Your reservation has timed out due to inactivity for image $image_prettyname.
-
-To make another reservation, please revisit:
-$user_affiliation_sitewwwaddress
-
-Thank You,
-VCL Team
-
-
-******************************************************************
-This is an automated notice. If you need assistance please respond 
-with detailed information on the issue and a help ticket will be 
-generated.
-
-To disable email notices
--Visit $user_affiliation_sitewwwaddress
--Select User Preferences
--Select General Preferences
-
-******************************************************************
-EOF
-
-	my $subject = "VCL -- reservation timeout";
-	
-	# Send mail
+	# Send a message to the user notifying them the reservation timed out
 	if ($is_parent_reservation && $user_emailnotices) {
-		mail($user_email, $subject, $message, $user_affiliation_helpaddress);
+		if (defined($user_subject) && defined($user_message)) {
+			mail($user_email, $user_subject, $user_message, $user_affiliation_helpaddress);
+		}
 	}
 	
-	# Send IM
-	if ($is_parent_reservation && $user_imtype_name ne "none") {
-		notify_via_im($user_imtype_name, $user_im_id, $message);
+	# Notify the user via IM
+	if ($user_imtype_name ne "none" && defined($user_im_id)) {
+		notify_via_im($user_imtype_name, $user_im_id, $user_message);
 	}
 	
 	return 1;
-} ## end sub _notify_user_timeout
+} ## end sub notify_user_timeout_inactivity
+
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 _notify_user_request_ended
+=head2 notify_user_endtime_reached
 
  Parameters  : none
  Returns     : boolean
- Description : Notifies the user that the session has ended.
-               Based on the user configuration, an e-mail message, IM message,
-               Windows msg, or Linux wall message may be sent.
+ Description : Notifies the user that the request has ended because the end
+               time was reached.
 
 =cut
 
-sub _notify_user_request_ended {
+sub notify_user_endtime_reached {
 	my $self = shift;
 	
-	my $request_id                      = $self->data->get_request_id();
-	my $request_logid                   = $self->data->get_request_log_id();
-	my $request_forimaging              = $self->data->get_request_forimaging();
-	my $reservation_count               = $self->data->get_reservation_count();
-	my $reservation_id                  = $self->data->get_reservation_id();
-	my $reservation_is_parent           = $self->data->is_parent_reservation;
-	my $computer_id                     = $self->data->get_computer_id();
-	my $computer_short_name             = $self->data->get_computer_short_name();
-	my $computer_type                   = $self->data->get_computer_type();
-	my $image_os_name                   = $self->data->get_image_os_name();
-	my $image_prettyname                = $self->data->get_image_prettyname();
-	my $image_os_type                   = $self->data->get_image_os_type();
-	my $user_affiliation_sitewwwaddress = $self->data->get_user_affiliation_sitewwwaddress();
-	my $user_affiliation_helpaddress    = $self->data->get_user_affiliation_helpaddress();
-	my $user_standalone                 = $self->data->get_user_standalone();
-	my $user_email                      = $self->data->get_user_email();
-	my $user_emailnotices               = $self->data->get_user_emailnotices();
-	my $user_imtype_name                = $self->data->get_user_imtype_name();
-	my $user_im_id                      = $self->data->get_user_im_id();
-	my $is_parent_reservation           = $self->data->is_parent_reservation();
-	my $subject;
-	my $message;
+	my $request_forimaging           = $self->data->get_request_forimaging();
+	my $user_affiliation_helpaddress = $self->data->get_user_affiliation_helpaddress();
+	my $user_email                   = $self->data->get_user_email();
+	my $user_emailnotices            = $self->data->get_user_emailnotices();
+	my $user_imtype_name             = $self->data->get_user_imtype_name();
+	my $user_im_id                   = $self->data->get_user_im_id();
+	my $is_parent_reservation        = $self->data->is_parent_reservation();
 	
-	if (!$request_forimaging) {
-	$subject = "VCL -- End of reservation";
-	
-	$message = <<"EOF";
-
-Your reservation of $image_prettyname has ended. Thank you for using $user_affiliation_sitewwwaddress.
-
-Regards,
-VCL Team
-
-
-******************************************************************
-This is an automated notice. If you need assistance please respond 
-with detailed information on the issue and a help ticket will be 
-generated.
-
-To disable email notices
--Visit $user_affiliation_sitewwwaddress
--Select User Preferences
--Select General Preferences
-
-******************************************************************
-EOF
+	my $user_message_key;
+	if ($request_forimaging) {
+		$user_message_key = 'endtime_reached_imaging';
 	}
 	else {
-		$subject = "VCL Image Reservation - Auto capture started";
-		
-		$message = <<"EOF";
-
-Your imaging reservation of $image_prettyname has reached it's scheduled end time.
-
-To avoid losing your work we have started an automatic capture of this image. Upon completion of the 
-image capture. You will be notified about the completion of the image capture.
-
-Thank You,
-VCL Team
-
-
-******************************************************************
-This is an automated notice. If you need assistance please respond 
-with detailed information on the issue and a help ticket will be 
-generated.
-
-To disable email notices
--Visit $user_affiliation_sitewwwaddress
--Select User Preferences
--Select General Preferences
-
-******************************************************************
-EOF
-
+		$user_message_key = 'endtime_reached';
 	}
 	
-	# Send mail
+	my ($user_subject, $user_message) = $self->get_user_message($user_message_key);
+	if (!defined($user_subject) || !defined($user_message)) {
+		return;
+	}
+	
+	# Send a message to the user notifying them the reservation ended
 	if ($is_parent_reservation && $user_emailnotices) {
-		mail($user_email, $subject, $message, $user_affiliation_helpaddress);
+		mail($user_email, $user_subject, $user_message, $user_affiliation_helpaddress);
 	}
 	
-	# Send IM
-	if ($is_parent_reservation && $user_imtype_name ne "none") {
-		notify_via_im($user_imtype_name, $user_im_id, $message);
+	# Notify via IM
+	if ($user_imtype_name ne "none" && defined($user_im_id)) {
+		notify_via_im($user_imtype_name, $user_im_id, $user_message);
 	}
 	
 	return 1;
-} ## end sub _notify_user_request_ended
+} ## end sub notify_user_endtime_reached
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 _start_imaging_request
+=head2 start_imaging_request
 
  Parameters  : none
  Returns     : boolean
- Description : If request is forimaging and times out, this inserts a imaging
-               reservation. 
+ Description : Inserts an "autocapture" imaging request is imaging request times
+               out.
 
 =cut
 
-sub _start_imaging_request {
+sub start_imaging_request {
 	my $self = shift;
 	
 	my $request_id = $self->data->get_request_id();
