@@ -1669,6 +1669,7 @@ sub logoff_users {
 	# '>                  root                      0  Disc    rdpwd               '
 	# '>rdp-tcp#24        root                      0  Active  rdpwd               '
 	foreach my $connection_line (@connection_lines) {
+		$connection_line =~ s/(^\s+|\s+$)//g;
 		my ($session_id) = $connection_line =~ /(\d+)\s+(?:Active|Listen|Conn|Disc)/g;
 		my ($session_name) = $connection_line =~ /^\s?>?([^ ]+)/g;
 		
@@ -1686,7 +1687,7 @@ sub logoff_users {
 			notify($ERRORS{'WARNING'}, 0, "session ID or name could not be determined from line:\n$connection_line");
 			next;
 		}
-		notify($ERRORS{'DEBUG'}, 0, "attempting to kill connection:\nline: '$connection_line'\nsession identifier: $session_identifier");
+		notify($ERRORS{'DEBUG'}, 0, "attempting to kill connection $session_identifier: '$connection_line'");
 		
 		#LOGOFF [sessionname | sessionid] [/SERVER:servername] [/V]
 		#  sessionname         The name of the session.
@@ -1696,7 +1697,10 @@ sub logoff_users {
 		#  /V                  Displays information about the actions performed.
 		# Call logoff.exe, pass it the session
 		my ($logoff_exit_status, $logoff_output) = $self->execute("$system32_path/logoff.exe $session_identifier /V");
-		if ($logoff_exit_status == 0) {
+		if (!defined($logoff_output)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to execute command to log off session: $session_identifier");
+		}
+		elsif ($logoff_exit_status == 0) {
 			notify($ERRORS{'OK'}, 0, "logged off session: $session_identifier, output:\n" . join("\n", @$logoff_output));
 		}
 		else {
