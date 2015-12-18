@@ -981,6 +981,18 @@ function validateUserid($loginid) {
 	if(mysql_num_rows($qh))
 		return 1;
 
+	if($rc == 0 &&
+	   ALLOWADDSHIBUSERS == 1 && 
+	   strpos($loginid, '@')) {
+		$query = "SELECT shibonly "
+		       . "FROM affiliation "
+		       . "WHERE id = " . DEFAULT_AFFILID;
+		$qh = doQuery($query); 
+		$row = mysql_fetch_assoc($qh);
+		if($row['shibonly'] == 1)
+			return 0;           
+	}
+
 	$valfunc = $affilValFunc[$affilid];
 	if(array_key_exists($affilid, $affilValFuncArgs))
 		return $valfunc($affilValFuncArgs[$affilid], $loginid);
