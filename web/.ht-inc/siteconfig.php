@@ -1050,7 +1050,7 @@ class NATportRange extends GlobalSingleVariable {
 	function __construct() {
 		parent::__construct();
 		$this->name = i('NAT Port Ranges');
-		$this->key = 'nat_port_range';
+		$this->key = 'natport_ranges';
 		$this->label = i("NAT Port Ranges");
 		$this->desc = i("Port ranges available for use on NAT servers. Type of port (TCP/UDP) is not specified. List ranges one per line (ex: 10000-20000).");
 		$this->domidbase = 'natportrange';
