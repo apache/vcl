@@ -20,116 +20,277 @@
 
 =head1 NAME
 
-VCL::monitor_vcld - VCL monitoring utility
+VCL::monitor_vcld - VCL management node daemon service monitoring utility
 
 =head1 SYNOPSIS
 
- perl vcld
+ perl monitory_vcld.pl [OPTION]...
 
 =head1 DESCRIPTION
 
- Needs to be written...
+ Usage: perl monitory_vcld.pl [OPTION]...
+
+ Checks the VCL management node daemon service. Starts the service if it is not
+ running. Restarts the service if number of seconds since the management node
+ last checked into the VCL database is greater than the critical threashold.
+
+   --service-name=NAME      name of the service to check (default: vcld)
+   --warning-seconds=NUM    a notice is sent to the VCL system administrators if
+                            the management node last checked into the VCL
+                            database more than NUM seconds ago (default: 60)
+   --critical-seconds=NUM   the service is restarted and a warning message is
+                            sent to the VCL system administrators if the
+                            management node last checked into the VCL database
+                            more than NUM seconds ago (default: 180)
 
 =cut
 
-##############################################################################
+###############################################################################
 package VCL::monitor_vcld;
 
 # Specify the lib path using FindBin
 use FindBin;
 use lib "$FindBin::Bin/../lib";
 
-# Configure inheritance
-use base qw();
-
 # Specify the version of this module
 our $VERSION = '2.4.2';
-
-# Specify the version of Perl to use
-use 5.008000;
 
 use strict;
 use warnings;
 use diagnostics;
+no warnings 'redefine';
 
-use VCL::utils;
-use DBI;
 use Getopt::Long;
 
-##############################################################################
+###############################################################################
 
-sub main ();
-our $LOG     = "/var/log/monitor_vcld.log";
-our $STARTUP = "/etc/init.d/vcld";
-main();
+INIT {
+	Getopt::Long::Configure('pass_through');
+	my $options = {};
+	GetOptions($options, 'help');
+	help() if defined($options->{'help'});
+}
+
+#==============================================================================
+
+use VCL::utils;
+use VCL::Module;
+
+$DAEMON_MODE = 0;
+
+my $options = {};
+GetOptions($options, 'service-name=s');
+GetOptions($options, 'warning-seconds=s');
+GetOptions($options, 'critical-seconds=s');
+
+my $vcld_service_name = defined($options->{'service-name'}) ? $options->{'service-name'} : 'vcld';
+my $lastcheckin_warning_seconds = defined($options->{'warning-seconds'}) ? $options->{'warning-seconds'} : 60;
+my $lastcheckin_critical_seconds = defined($options->{'critical-seconds'}) ? $options->{'critical-seconds'} : 180;
+
+if ($lastcheckin_warning_seconds !~ /^\d+$/) {
+	print_warning("--warning-seconds argument is not an integer: $lastcheckin_warning_seconds");
+	help();
+}
+elsif ($lastcheckin_critical_seconds !~ /^\d+$/) {
+	print_warning("--critical-seconds argument is not an integer: $lastcheckin_critical_seconds");
+	help();
+}
+elsif ($lastcheckin_warning_seconds > $lastcheckin_critical_seconds) {
+	print_warning("--warning-seconds argument ($lastcheckin_warning_seconds) is not less than --critical-seconds argument ($lastcheckin_critical_seconds)");
+	help();
+}
+
+# Create a management node OS object
+my $mn_os_perl_package = 'VCL::Module::OS::Linux::ManagementNode';
+my $mn_os = VCL::Module::create_object($mn_os_perl_package);
+if (!$mn_os) {
+	print_warning("failed to create management node OS object");
+	exit 1;
+}
+
+# Set the object's own MN OS to itself
+# This is needed because some places in Linux.pm use $self->mn_os
+$mn_os->set_mn_os($mn_os);
+
+my $management_node_name = $mn_os->data->get_management_node_short_name();
+
+print_message('[' . makedatestring() . "] checking $vcld_service_name service on $management_node_name, last checkin thresholds, warning: $lastcheckin_warning_seconds seconds, critical: $lastcheckin_critical_seconds");
 
 
-sub main () {
-	my ($managementnodeid, $lci, $mnid, $selh, $updhdle, $rows, $timestamp);
-	my %info;
-	if ($info{managementnode} = get_management_node_info()) {
-                notify($ERRORS{'DEBUG'}, $LOG, "retrieved management node information from database");
-        }
-        else {
-                notify($ERRORS{'WARNING'}, $LOG, "unable to retrieve management node information from database");
-                exit;
-        }
-	my $MN             = $info{managementnode}{hostname};
-	my $lastcheckin   = $info{managementnode}{lastcheckin};
-	my $pidjuststarted = 0;
+# Check if the vcld service exists
+if (!$mn_os->service_exists($vcld_service_name)) {
+	print_warning("$vcld_service_name service does not exist on $management_node_name");
+	exit 1;
+}
 
-	#check if local vcld is running
-	my $l;
-	my $pidliving = 0;
-	if (open(TEST, "$STARTUP status 2>&1 |")) {
-		my @file = <TEST>;
-		close(TEST);
-		foreach $l (@file) {
-			# Search for a line matching: vcld (pid 28560 26333 17710) is running...
-			if ($l =~ /vcld \(pid [\d\s]*\) is running/) {
-				$pidliving = 1;
-			}
-		}
-	} ## end if (open(TEST, "$STARTUP status 2>&1 |"))
-	if ($pidliving) {
-		notify($ERRORS{'OK'}, $LOG, "monitor_vcld.pl parent pid is alive");
+# Check if the vcld service is running
+my $service_status = $mn_os->is_service_running($vcld_service_name);
+if (!defined($service_status)) {
+	print_critical("failed to determine if $vcld_service_name service is running on $management_node_name");
+	exit 1;
+}
+elsif ($service_status) {
+	print_ok("$vcld_service_name service is running on $management_node_name");
+}
+else {
+	print_warning("$vcld_service_name service is not running on $management_node_name");
+	
+	# Attempt to start the service
+	if ($mn_os->start_service($vcld_service_name)) {
+		print_message("started $vcld_service_name service on $management_node_name, waiting 30 seconds before checking if daemon is checking into database");
+		
+		# Wait for 30 seconds and then check last checkin time
+		sleep_uninterrupted(30);
 	}
 	else {
-		#restart vcld
-		notify($ERRORS{'OK'}, $LOG, "monitor_vcld.pl parent pid not found, restarting on $MN");
-		#on startup vcld sleep 20secs before checking in with db
-		$pidjuststarted = 1;
-		sleep 25;
+		print_critical("failed to start $vcld_service_name service on $management_node_name");
+		exit 1;
 	}
+}
 
-	#check on the last checkin time, if older then X, restart vcld core process
-	my $currenttime = makedatestring;
-	my $ctime       = convert_to_epoch_seconds($currenttime);
-	my $lchecktime  = convert_to_epoch_seconds($lastcheckin);
-	my $diff        = $ctime - $lchecktime;
-	if ($diff >= (3 * 60)) {
-		notify($ERRORS{'OK'}, $LOG, "monitor_vcld.pl managementnodeid $managementnodeid checkin time is old currenttime= $currenttime lastcheckintime= $lci");
-		#restart kill and start vcld
-		if ($pidjuststarted) {
-			$pidjuststarted = 0;
-			notify($ERRORS{'OK'}, $LOG, "monitor_vcld.pl vcld was just restarted waiting a moment before check db");
-			#we may not have waited long enough for a fresh checkin
-			goto RECHECK;
-		}
-		else {
-			if (open(RESTART, "$STARTUP restart 2>&1 |")) {
-				my @restart = <RESTART>;
-				close(RESTART);
-				notify($ERRORS{'CRITICAL'}, $LOG, "monitor_vcld.pl lastcheckin is to old restarted vcld on $MN\n restart output= @restart");
-			}
-		}
-	} ## end if ($diff >= (3 * 60))
-	else {
-		notify($ERRORS{'OK'}, $LOG, "monitor_vcld.pl managementnodeid $MN is fresh lastcheckintime= $lastcheckin");
+# Service is running, check management node last checkin time
+my $management_node_info = get_management_node_info();
+if (!defined($management_node_info)) {
+	print_critical("failed to retrieve management node info for $management_node_name");
+	exit 1;
+}
+
+my $lastcheckin_timestamp = $management_node_info->{lastcheckin};
+if (!defined($lastcheckin_timestamp)) {
+	print_critical("failed to retrieve lastcheckin timestamp from management node info, 'lastcheckin' key was not found:\n" . format_data($management_node_info));
+	exit 1;
+}
+
+my $current_epoch_seconds = convert_to_epoch_seconds();
+my $lastcheckin_epoch_seconds = convert_to_epoch_seconds($lastcheckin_timestamp);
+my $lastcheckin_seconds_ago = ($current_epoch_seconds - $lastcheckin_epoch_seconds);
+
+if ($lastcheckin_seconds_ago < 0) {
+	print_warning("$management_node_name last checkin time is in the future: $lastcheckin_timestamp, exiting");
+	exit 1;
+}
+elsif ($lastcheckin_seconds_ago < $lastcheckin_warning_seconds) {
+	print_ok("$management_node_name last checked in $lastcheckin_seconds_ago seconds ago at $lastcheckin_timestamp");
+}
+elsif ($lastcheckin_seconds_ago >= $lastcheckin_critical_seconds) {
+	my $critical_message = "critical threshold exceeded, $management_node_name last checked in $lastcheckin_seconds_ago seconds ago at $lastcheckin_timestamp";
+	# Attempt to restart the vcld service
+	if ($mn_os->restart_service($vcld_service_name)) {
+		print_critical("$critical_message, $vcld_service_name service restarted");
 	}
-} ## end sub main ()
+	else {
+		print_critical("$critical_message, failed to restart $vcld_service_name service");
+	}
+}
+else {
+	print_critical("last checkin warning threshold exceeded, $management_node_name last checked in $lastcheckin_seconds_ago seconds ago at $lastcheckin_timestamp");
+}
+
+print_message('[' . makedatestring() . "] done");
+exit 0;
 
 #/////////////////////////////////////////////////////////////////////////////
+
+=head2 print_message
+
+ Parameters  : $message
+ Returns     : 1
+ Description : 
+
+=cut
+
+sub print_message {
+	my ($message) = @_;
+	print "$message\n";
+	VCL::utils::notify($ERRORS{'DEBUG'}, 0, $message);
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 print_ok
+
+ Parameters  : $message
+ Returns     : 1
+ Description : 
+
+=cut
+
+sub print_ok {
+	my ($message) = @_;
+	print "OK: $message\n";
+	VCL::utils::notify($ERRORS{'OK'}, 0, $message);
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 print_warning
+
+ Parameters  : $message
+ Returns     : 1
+ Description : 
+
+=cut
+
+sub print_warning {
+	my ($message) = @_;
+	print "WARNING: $message\n";
+	VCL::utils::notify($ERRORS{'WARNING'}, 0, $message);
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 print_critical
+
+ Parameters  : $message
+ Returns     : 1
+ Description : 
+
+=cut
+
+sub print_critical {
+	my ($message) = @_;
+	print "CRITICAL: $message\n";
+	VCL::utils::notify($ERRORS{'CRITICAL'}, 0, $message);
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 help
+
+ Parameters  : none
+ Returns     : exits
+ Description : Displays a help message and exits.
+
+=cut
+
+sub help {
+	
+	print <<EOF;
+Usage: perl monitory_vcld.pl [OPTION]...
+
+Checks the VCL management node daemon service. Starts the service if it is not
+running. Restarts the service if number of seconds since the management node
+last checked into the VCL database is greater than the critical threashold.
+
+  --service-name=NAME      name of the service to check (default: vcld)
+  --warning-seconds=NUM    a notice is sent to the VCL system administrators if
+                           the management node last checked into the VCL
+                           database more than NUM seconds ago (default: 60)
+  --critical-seconds=NUM   the service is restarted and a warning message is
+                           sent to the VCL system administrators if the
+                           management node last checked into the VCL database
+                           more than NUM seconds ago (default: 180)
+
+EOF
+	
+	exit 1;
+}
+
+###############################################################################
 
 1;
 __END__
