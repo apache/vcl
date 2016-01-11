@@ -319,19 +319,23 @@ sub service_running {
 		notify($ERRORS{'WARNING'}, 0, "'$service_name' service does not exist on $computer_node_name");
 		return;
 	}
-	elsif (grep(/is running/i, @$output)) {
+	elsif (grep(/(is running)/i, @$output)) {
 		# Output if the service is running: '<service name> is running'
-		notify($ERRORS{'DEBUG'}, 0, "'$service_name' service is running on $computer_node_name");
+		notify($ERRORS{'DEBUG'}, 0, "'$service_name' service is running on $computer_node_name, output:\n" . join("\n", @$output));
 		return 1;
 	}
-	elsif (grep(/is not running/i, @$output)) {
+	elsif (grep(/(is not running|no\s.*process)/i, @$output)) {
 		# Output if the service is not running: '<service name> is not running'
-		notify($ERRORS{'DEBUG'}, 0, "'$service_name' service is not running on $computer_node_name");
+		notify($ERRORS{'DEBUG'}, 0, "'$service_name' service is not running on $computer_node_name, output:\n" . join("\n", @$output));
 		return 0;
 	}
+	elsif ($exit_status == 0) {
+		notify($ERRORS{'DEBUG'}, 0, "unable to determine if '$service_name' service is running on $computer_node_name based on output but exit status of $command is $exit_status, assuming service is running, output:\n" . join("\n", @$output));
+		return 1;
+	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to determine if '$service_name' service is running on $computer_node_name, exit status: $exit_status, output:\n" . join("\n", @$output));
-		return;
+		notify($ERRORS{'DEBUG'}, 0, "unable to determine if '$service_name' service is running on $computer_node_name based on output but exit status of $command is $exit_status, assuming service is NOT running, output:\n" . join("\n", @$output));
+		return 0;
 	}
 }
 
