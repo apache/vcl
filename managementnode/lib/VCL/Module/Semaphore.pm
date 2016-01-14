@@ -252,11 +252,11 @@ sub get_lockfile_owning_pid {
 	# Run lsof to determine which process is locking the file
 	my ($exit_status, $output) = $self->mn_os->execute("/usr/sbin/lsof -Fp $file_path", 0, 10);
 	if (!defined($output)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to run losf command to determine which process is locking the file: $file_path");
+		notify($ERRORS{'WARNING'}, 0, "failed to run lsof command to determine which process is locking the file: $file_path");
 		return;
 	}
 	elsif (grep(/no such file/i, @$output)) {
-		notify($ERRORS{'WARNING'}, 0, "losf command reports that the file does not exist: $file_path");
+		notify($ERRORS{'WARNING'}, 0, "lsof command reports that the file does not exist: $file_path");
 		return;
 	}
 	
