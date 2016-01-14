@@ -104,7 +104,7 @@ sub initialize {
 
 =head2 execute
 
- Parameters  : $command, $display_output (optional)
+ Parameters  : $command, $display_output (optional), $timeout_seconds (optional)
  Returns     : array
  Description :
 
@@ -127,8 +127,10 @@ sub execute {
 	# Get 2nd display output argument if supplied, or set default value
 	my $display_output = shift || '0';
 	
+	my $timeout_seconds = shift;
+	
 	# Run the command
-	my ($exit_status, $output) = run_command($command, !$display_output);
+	my ($exit_status, $output) = run_command($command, !$display_output, $timeout_seconds);
 	if (defined($exit_status) && defined($output)) {
 		if ($display_output) {
 			notify($ERRORS{'OK'}, 0, "executed command: '$command', exit status: $exit_status, output:\n" . join("\n", @$output)) if $display_output;

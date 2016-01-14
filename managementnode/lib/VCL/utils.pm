@@ -9264,7 +9264,7 @@ EOF
 
 =head2 run_command
 
- Parameters  : string
+ Parameters  : $command, $no_output (optional), $timeout_seconds (optional)
  Returns     : array if command run, undefined if it didn't
  Description : Runs a command locally on the management node.
                If command completed successfully, an array containing
@@ -9278,27 +9278,56 @@ EOF
 =cut
 
 sub run_command {
-	my ($command, $no_output) = @_;
+	my ($command, $no_output, $timeout_seconds) = @_;
 	
+	my @output;
 	my $output_string;
-	$output_string = `$command 2>&1`;
-	$output_string = '' unless $output_string;
+	my $exit_status;
+	my $timeout_flag = 0;
 	
-	my $exit_status = $?;
-	if ($exit_status >= 0) {
-		$exit_status = $exit_status >> 8;
+	eval {
+		# Override the die and alarm handlers
+		local $SIG{__DIE__} = sub{};
+		
+		local $SIG{__WARN__} = sub {
+			my $warning_message = shift || '';
+			notify($ERRORS{'WARNING'}, 0, "warning was generated attempting to run command: $warning_message");
+		};
+		
+		local $SIG{ALRM} = sub {
+			$timeout_flag = 1;
+			die;
+		};
+		
+		if ($timeout_seconds) {
+			notify($ERRORS{'DEBUG'}, 0, "waiting up to $timeout_seconds seconds for command to finish: '$command'");
+			alarm $timeout_seconds;
+		}
+		
+		$output_string = `$command 2>&1`;
+		
+		# Save the exit status
+		$exit_status = $?;
+		if ($exit_status >= 0) {
+			$exit_status = $exit_status >> 8;
+		}
+		
+		# Remove any trailing newlines from the output
+		chomp $output_string;
+		
+		# Split the output string into an array of lines
+		@output = split(/[\r\n]+/, $output_string);
+	};
+	
+	if ($timeout_flag) {
+		notify($ERRORS{'WARNING'}, 0, "command timed out after $timeout_seconds seconds: '$command'");
+		kill_child_processes($PID);
+		return;
 	}
-
-	
-	# Remove any trailing newlines from the output
-	chomp $output_string;
-	
-	# Split the output string into an array of lines
-	my @output = split(/[\r\n]+/, $output_string);
-	
-	if (!$no_output) {
-		notify($ERRORS{'DEBUG'}, 0, "executed command: $command, exit status: $exit_status, output:\n" . join("\n", @output));
+	elsif (!$no_output) {
+		notify($ERRORS{'DEBUG'}, 0, "executed command: '$command', exit status: $exit_status, output:\n" . join("\n", @output));
 	}
+	
 	return ($exit_status, \@output);
 }
 	

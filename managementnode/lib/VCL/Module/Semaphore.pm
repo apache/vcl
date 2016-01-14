@@ -250,7 +250,7 @@ sub get_lockfile_owning_pid {
 	}
 	
 	# Run lsof to determine which process is locking the file
-	my ($exit_status, $output) = $self->mn_os->execute("/usr/sbin/lsof -Fp $file_path", 0);
+	my ($exit_status, $output) = $self->mn_os->execute("/usr/sbin/lsof -Fp $file_path", 0, 10);
 	if (!defined($output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to run losf command to determine which process is locking the file: $file_path");
 		return;
@@ -272,7 +272,7 @@ sub get_lockfile_owning_pid {
 		return;
 	}
 	else {
-		notify($ERRORS{'DEBUG'}, 0, "file is not locked of lockfile: $file_path");
+		notify($ERRORS{'DEBUG'}, 0, "file is not locked: $file_path");
 		return ();
 	}
 }
