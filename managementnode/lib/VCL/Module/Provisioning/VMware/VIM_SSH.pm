@@ -1928,19 +1928,12 @@ sub get_virtual_disk_hardware_version {
 			next;
 		}
 		
-		my ($hardware_version) = $disk_info =~ /\shardwareVersion\s*=\s*(.+)/i;
+		my ($hardware_version) = $disk_info =~ /\shardwareVersion\s*=\s*(\d+)/i;
 		if (!$hardware_version) {
 			notify($ERRORS{'WARNING'}, 0, "unable to determine disk hardware version, disk path: $disk_path, disk info section from vim-cmd $vim_cmd_arguments output:\n$disk_info");
 			next;
 		}
-		
-		if ($hardware_version =~ /unset/i) {
-			notify($ERRORS{'DEBUG'}, 0, "disk hardware version is not set in the vmdk file: $disk_path");
-			return 0;
-		}
 		else {
-			# Extract just the hardware version from the value
-			$hardware_version =~ s/.*(\d+).*/$1/ig;
 			notify($ERRORS{'DEBUG'}, 0, "retrieved hardware version for $disk_path: '$hardware_version'");
 			return $hardware_version;
 		}
