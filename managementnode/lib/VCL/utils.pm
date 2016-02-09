@@ -168,6 +168,7 @@ our @EXPORT = qw(
 	get_os_info
 	get_production_imagerevision_info
 	get_provisioning_osinstalltype_info
+	get_provisioning_table_info
 	get_random_mac_address
 	get_request_by_computerid
 	get_request_current_state_name
@@ -186,6 +187,7 @@ our @EXPORT = qw(
 	get_user_info
 	get_variable
 	get_vmhost_assigned_vm_info
+	get_vmhost_assigned_vm_provisioning_info
 	get_vmhost_info
 	getnewdbh
 	getpw
@@ -12150,7 +12152,7 @@ sub get_management_node_vmhost_info {
 
 =head2 get_vmhost_assigned_vm_info
 
- Parameters  : $vmhost_id
+ Parameters  : $vmhost_id, $no_cache (optional)
  Returns     : hash reference
  Description : Returns a hash reference containing all of the computer IDs
                assigned to a VM host.
@@ -12158,10 +12160,14 @@ sub get_management_node_vmhost_info {
 =cut
 
 sub get_vmhost_assigned_vm_info {
-	my $vmhost_id = shift;
+	my ($vmhost_id, $no_cache) = @_;
 	if (!$vmhost_id) {
 		notify($ERRORS{'WARNING'}, 0, "VM host ID argument was not supplied");
 		return;
+	}
+	
+	if (!$no_cache && defined($ENV{vmhost_assigned_vm_info}{$vmhost_id})) {
+		return $ENV{vmhost_assigned_vm_info}{$vmhost_id};
 	}
 	
 	my $select_statement = <<EOF;
@@ -12182,8 +12188,102 @@ EOF
 		$assigned_computer_info->{$computer_id} = $computer_info if $computer_info;
 	}
 	
+	$ENV{vmhost_assigned_vm_info}{$vmhost_id} = $assigned_computer_info;
 	notify($ERRORS{'DEBUG'}, 0, "retrieved computer info for VMs assigned to VM host $vmhost_id: " . join(', ', sort keys %$assigned_computer_info));
 	return $assigned_computer_info;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2  get_vmhost_assigned_vm_provisioning_info
+
+ Parameters  : $vmhost_identifier, $no_cache (optional)
+ Returns     : hash reference
+ Description : For a given vmhost entry, retrieves the provisioning ID for all
+               of the computers assigned to the VM host. This information can be
+               used to attempt to determine which provisioning module should be
+               used to control the VM host.
+               
+               There is currently no deterministic way to tie a VM host to a
+               provisioning table type. It's possible to assign VMs with
+               different computer.provisioningid values to the same VM host.
+               This is usually done by mistake.
+               
+               This subroutine constructs a hash refererence with keys
+               corresponding to provisioning.id values. Each key contains the
+               provisioning table information.
+               
+               An 'ASSIGNED_COMPUTER_IDS' key is added containing a hash
+               reference. The keys of this hash correspond to computer.id values
+               of VMs assigned to the host with the corresponding
+               computer.provisioningid value. An 'ASSIGNED_COMPUTER_COUNT' key
+               is added containing the number of VMs.
+               
+               Example where VM host has multiple VM provisioning types
+               assigned:
+               
+                  {
+                    14 => {
+                      "ASSIGNED_VM_COUNT" => 1,
+                      "id" => 14,
+                      "module" => {
+                        "description" => "",
+                        "id" => 33,
+                        "name" => "provisioning_libvirt",
+                        "perlpackage" => "VCL::Module::Provisioning::libvirt",
+                        "prettyname" => "Libvirt Provisioning"
+                      },
+                      "moduleid" => 33,
+                      "name" => "libvirt",
+                      "prettyname" => "Libvirt"
+                    },
+                    8 => {
+                      "ASSIGNED_VM_COUNT" => 27,
+                      "id" => 8,
+                      "module" => {
+                        "description" => "",
+                        "id" => 21,
+                        "name" => "provisioning_vmware_vsphere",
+                        "perlpackage" => "VCL::Module::Provisioning::VMware::VMware",
+                        "prettyname" => "VMware Provisioning Module"
+                      },
+                      "moduleid" => 21,
+                      "name" => "vmware",
+                      "prettyname" => "VMware Server 2.x and ESX/ESXi"
+                    }
+                  }
+
+=cut
+
+
+sub get_vmhost_assigned_vm_provisioning_info {
+	my ($vmhost_id, $no_cache) = @_;
+	
+	# Check the passed parameter
+	if (!defined($vmhost_id)) {
+		notify($ERRORS{'WARNING'}, 0, "VM host ID argument was not specified");
+		return;
+	}
+	
+	if (!$no_cache && defined($ENV{vmhost_assigned_vm_provisioning_info}{$vmhost_id})) {
+		return $ENV{vmhost_assigned_vm_provisioning_info}{$vmhost_id};
+	}
+	
+	my $vmhost_assigned_vm_info = get_vmhost_assigned_vm_info($vmhost_id, $no_cache) || return;
+
+	my $vmhost_assigned_vm_provisioning_info = {};
+	for my $computer_id (keys %$vmhost_assigned_vm_info) {
+		my $provisioning_id = $vmhost_assigned_vm_info->{$computer_id}{provisioning}{id};
+		if (!defined($vmhost_assigned_vm_provisioning_info->{$provisioning_id})) {
+			$vmhost_assigned_vm_provisioning_info->{$provisioning_id} = $vmhost_assigned_vm_info->{$computer_id}{provisioning};
+		}
+		#$vmhost_assigned_vm_provisioning_info->{$provisioning_id}{ASSIGNED_COMPUTER_IDS}{$computer_id} = 1;
+		$vmhost_assigned_vm_provisioning_info->{$provisioning_id}{ASSIGNED_VM_COUNT}++;
+	}
+	
+	$ENV{vmhost_assigned_vm_provisioning_info}{$vmhost_id} = $vmhost_assigned_vm_provisioning_info;
+	notify($ERRORS{'DEBUG'}, 0, "retrieved provisioning info for VMs assigned to VM host $vmhost_id:\n" . format_data($vmhost_assigned_vm_provisioning_info));
+	return $vmhost_assigned_vm_provisioning_info;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -13966,6 +14066,123 @@ EOF
 	
 	notify($ERRORS{'DEBUG'}, 0, "retrieved info for OSinstalltypes mapped to provisioning ID $provisioning_id: " . format_data($info));
 	return $info;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_provisioning_table_info
+
+ Parameters  : none
+ Returns     : hash reference
+ Description : Retrieves information from the provisioning and module tables
+               and assembles a hash. The hash keys are the provisioning.id
+               values. Example:
+               {
+                 1 => {
+                   "id" => 1,
+                   "module" => {
+                     "description" => "",
+                     "id" => 1,
+                     "name" => "provisioning_xCAT",
+                     "perlpackage" => "VCL::Module::Provisioning::xCAT",
+                     "prettyname" => "xCAT"
+                   },
+                   "moduleid" => 1,
+                   "name" => "xcat",
+                   "prettyname" => "xCAT"
+                 },
+                 13 => {
+                   "id" => 13,
+                   "module" => {
+                     "description" => "",
+                     "id" => 21,
+                     "name" => "provisioning_vmware_vsphere",
+                     "perlpackage" => "VCL::Module::Provisioning::VMware::VMware",
+                     "prettyname" => "VMware Provisioning Module"
+                   },
+                   "moduleid" => 21,
+                   "name" => "vmware_vsphere",
+                   "prettyname" => "VMware vSphere"
+                 },
+                 15 => {
+                   "id" => 15,
+                   "module" => {
+                     "description" => "",
+                     "id" => 26,
+                     "name" => "base_module",
+                     "perlpackage" => "VCL::Module",
+                     "prettyname" => "VCL Base Module"
+                   },
+                   "moduleid" => 26,
+                   "name" => "none",
+                   "prettyname" => "None"
+                 },
+               }
+
+=cut
+
+sub get_provisioning_table_info {
+	return $ENV{provisioning_table_info} if (defined($ENV{provisioning_table_info}));
+	
+	# Get a hash ref containing the database column names
+	my $database_table_columns = get_database_table_columns();
+	
+	my @tables = (
+		'provisioning',
+		'module',
+	);
+	
+	# Construct the select statement
+	my $select_statement = "SELECT DISTINCT\n";
+	
+	# Get the column names for each table and add them to the select statement
+	for my $table (@tables) {
+		my @columns = @{$database_table_columns->{$table}};
+		for my $column (@columns) {
+			$select_statement .= "$table.$column AS '$table-$column',\n";
+		}
+	}
+	
+	# Remove the comma after the last column line
+	$select_statement =~ s/,$//;
+	
+	# Complete the select statement
+	$select_statement .= <<EOF;
+FROM
+provisioning,
+module
+WHERE
+provisioning.moduleid = module.id
+EOF
+
+	# Call the database select subroutine
+	my @selected_rows = database_select($select_statement);
+	
+	my $provisioning_table_info = {};
+	for my $row (@selected_rows) {
+		my $provisioning_id = $row->{'provisioning-id'};
+		
+		# Loop through all the columns returned
+		for my $key (keys %$row) {
+			my $value = $row->{$key};
+			
+			# Split the table-column names
+			my ($table, $column) = $key =~ /^([^-]+)-(.+)/;
+			
+			# Add the values for the primary table to the hash
+			# Add values for other tables under separate keys
+			if ($table eq 'provisioning') {
+				$provisioning_table_info->{$provisioning_id}{$column} = $value;
+			}
+			else {
+				$provisioning_table_info->{$provisioning_id}{$table}{$column} = $value;
+			}
+		}
+	}
+	
+	$ENV{provisioning_table_info} = $provisioning_table_info;
+	notify($ERRORS{'DEBUG'}, 0, "retrieved provisioning info: " . format_data($provisioning_table_info));
+	return $provisioning_table_info;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
