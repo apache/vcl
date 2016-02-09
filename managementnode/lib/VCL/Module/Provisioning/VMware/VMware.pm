@@ -7973,7 +7973,7 @@ sub set_image_repository_permissions {
 sub setup_get_menu {
 	return {
 		'VMware Provisioning Module' => {
-			'VM Host Operations' => \&setup_vm_host_operations,
+			'VM Host Operations' => \&VCL::Module::Provisioning::VMware::VMware::setup_vm_host_operations,
 		},
 	};
 }
@@ -8713,14 +8713,14 @@ sub configure_root_ssh_key {
 		}
 		
 		# Create the private key file
-		if (!$self->vmhost_os->generate_ssh_private_key_file($vmhost_private_key_file_path, 'rsa', $bits, $vmhost_name)) {
+		if (!$self->vmhost_os->generate_ssh_private_key_file($vmhost_private_key_file_path, 'rsa', $bits)) {
 			return;
 		}
 	}
 	
 	# Create the public key file if it wasn't created when the private key was created
 	if (!$self->vmhost_os->file_exists($vmhost_public_key_file_path)) {
-		if (!$self->vmhost_os->generate_ssh_public_key_file($vmhost_private_key_file_path, $vmhost_public_key_file_path, $vmhost_name)) {
+		if (!$self->vmhost_os->generate_ssh_public_key_file($vmhost_private_key_file_path, $vmhost_public_key_file_path)) {
 			return;
 		}
 	}
@@ -8780,7 +8780,7 @@ sub add_ssh_root_key_to_authorized_keys {
 	}
 	
 	# Get the source VM host's public key string
-	my $source_public_key_string = $source->vmhost_os->get_ssh_public_key_string($source_private_key_file_path, $source_vmhost_computer_name);
+	my $source_public_key_string = $source->vmhost_os->get_ssh_public_key_string($source_private_key_file_path);
 	if ($source_public_key_string) {
 		notify($ERRORS{'DEBUG'}, 0, "retrieved source VM host $source_vmhost_computer_name public SSH key:\n$source_public_key_string");
 	}
@@ -8896,8 +8896,8 @@ sub add_ssh_host_key_to_known_hosts {
 		return;
 	}
 	
-	# Make sure there is no comment in the public key or things won't work
-	$destination_public_key_string =~ s/(ssh-\w+\s+[^=\s]+).*/$1/;
+	## Make sure there is no comment in the public key or things won't work
+	#$destination_public_key_string =~ s/(ssh-\w+\s+[^=\s]+).*/$1/;
 	
 	# Remove any existing entries from the known_hosts file on the source
 	$source->vmhost_os->execute("sed -i -e \"/^$destination_remote_connection_target /d\" $source_known_hosts_file_path");
@@ -8987,7 +8987,7 @@ sub setup_migrate_vm {
 	my $source_vmhost_computer_name = $self->data->get_vmhost_short_name();
 	my $source_vmhost_id = $self->data->get_vmhost_id();
 	
-	my $source_assigned_vm_info = get_vmhost_assigned_vm_info($source_vmhost_id);
+	my $source_assigned_vm_info = get_vmhost_assigned_vm_info($source_vmhost_id, 1);
 	if (!keys %$source_assigned_vm_info) {
 		print "No VMs are assigned to $source_vmhost_computer_name\n";
 		return;
@@ -9124,8 +9124,8 @@ sub migrate_vm {
 	
 	# Check if VM is responding
 	my $vm_os_perl_package = $vm_data->get_image_os_module_perl_package();
-	#my $vm_os_responding = $vm_os->is_ssh_responding(); 
-	#if ($vm_os_responding) {
+	#my $vm_os_responding_before = $vm_os->is_ssh_responding(); 
+	#if ($vm_os_responding_before) {
 	#	# Determine the OS perl package to use to control the VM and create an OS object
 	#	notify($ERRORS{'DEBUG'}, 0, "attempting to log in to $vm_computer_name and determine OS currently loaded");
 	#	$vm_os_perl_package = VCL::Module::OS::get_os_perl_package($vm_computer_name);
@@ -9150,7 +9150,7 @@ sub migrate_vm {
 	
 	my $vm_os = VCL::Module::create_object($vm_os_perl_package, $vm_data);
 	if ($vm_os) {
-		notify($ERRORS{'OK'}, 0, "created object to control VM $vm_computer_name ($vm_os_perl_package)");
+		notify($ERRORS{'OK'}, 0, "created object to control VM $vm_computer_name (type: $vm_os_perl_package)");
 	}
 	else {
 		notify($ERRORS{'WARNING'}, 0, "failed to create $vm_os_perl_package object to control VM $vm_computer_name");
@@ -9163,22 +9163,13 @@ sub migrate_vm {
 		}
 	}
 	
-	my $vm_os_responding = $vm_os->is_ssh_responding();
-	#if (!$vm_os_responding) {
-	#	if ($SETUP_MODE) {
-			#notify($ERRORS{'WARNING'}, 0, "$vm_computer_name is not responding to SSH");
-	#		if (!setup_confirm("Continue to migrate the VM?", "N")) {
-	#			return;
-	#		}
-	#	}
-	#}
-	
 	
 	#...........................................................................
 	# Create an OS object for the source VM host
 	my $source_vmhost_os = $self->create_vmhost_os_object($source_vmhost_id);
 	if ($source_vmhost_os) {
-		notify($ERRORS{'OK'}, 0, "created OS object to control source VM host: $source_vmhost_computer_name (VM host computer ID: $source_vmhost_computer_id)");
+		my $source_vmhost_os_type = ref($source_vmhost_os);
+		notify($ERRORS{'OK'}, 0, "created OS object to control source VM host: $source_vmhost_computer_name (VM host computer ID: $source_vmhost_computer_id, type: $source_vmhost_os_type)");
 	}
 	else {
 		notify($ERRORS{'WARNING'}, 0, "unable to migrate VM: $vm_computer_name, failed to create OS object to control source VM host: $source_vmhost_computer_name (VM host computer ID: $source_vmhost_computer_id)");
@@ -9198,7 +9189,7 @@ sub migrate_vm {
 		{ vmhost_os => $source_vmhost_os }
 	);
 	if ($source) {
-		notify($ERRORS{'OK'}, 0, "created $provisioning_object_type object for source VM host: $source_vmhost_computer_name (VM host ID: $source_vmhost_id)");
+		notify($ERRORS{'OK'}, 0, "created $provisioning_object_type object for source VM host: $source_vmhost_computer_name (VM host ID: $source_vmhost_id, type: $provisioning_object_type)");
 	}
 	else {
 		notify($ERRORS{'WARNING'}, 0, "failed to create $provisioning_object_type object for source VM host: $source_vmhost_computer_name (VM host ID: $source_vmhost_id)");
@@ -9230,7 +9221,9 @@ sub migrate_vm {
 	
 	my $destination_vmhost_computer_id = $destination_vmhost_os->data->get_computer_id(0);
 	my $destination_vmhost_computer_name = $destination_vmhost_os->data->get_computer_short_name(0);
-	notify($ERRORS{'OK'}, 0, "created OS object to control destination VM host: $destination_vmhost_computer_name");
+	
+	my $destination_vmhost_os_type = ref($destination_vmhost_os);
+	notify($ERRORS{'OK'}, 0, "created OS object to control destination VM host: $destination_vmhost_computer_name, type: $destination_vmhost_os_type");
 	
 	# Create a provisioning object for the destination VM host
 	my $destination = $self->create_object(
@@ -9261,12 +9254,48 @@ sub migrate_vm {
 		return;
 	}
 	
+	#...........................................................................
 	# Configure host to host SSH
-	if (!($source->configure_root_ssh_key() && $source->add_ssh_root_key_to_authorized_keys($destination) && $source->add_ssh_host_key_to_known_hosts($destination))) {
+	if (!($source->configure_root_ssh_key() &&
+			$source->add_ssh_root_key_to_authorized_keys($destination) &&
+			$source->add_ssh_host_key_to_known_hosts($destination)
+		)) {
 		notify($ERRORS{'WARNING'}, 0, "unable to migrate VM: $vm_computer_name, failed to configure SSH access between $source_vmhost_computer_name and $destination_vmhost_computer_name");
 		return;
 	}
 	
+	$source->api->firewall_ruleset_enable('sshClient');
+	
+	my $source_remote_connection_target = determine_remote_connection_target($source_vmhost_computer_name);
+	my $destination_remote_connection_target = determine_remote_connection_target($destination_vmhost_computer_name);
+	
+	my $source_outbound_22_ruleset_info = $source->api->get_matching_firewall_ruleset_info('out', 22);
+	for my $ruleset_name (keys %$source_outbound_22_ruleset_info) {
+		if (!$source->api->firewall_ruleset_allow_ip($ruleset_name, $destination_remote_connection_target)) {
+			notify($ERRORS{'WARNING'}, 0, "unable to migrate VM: $vm_computer_name, failed to add $destination_remote_connection_target to $ruleset_name on $source_vmhost_computer_name");
+			return;
+		}
+	}
+	
+	my $destination_inbound_22_ruleset_info = $destination->api->get_matching_firewall_ruleset_info('in', 22);
+	for my $ruleset_name (keys %$destination_inbound_22_ruleset_info) {
+		if (!$destination->api->firewall_ruleset_allow_ip($ruleset_name, $source_remote_connection_target)) {
+			notify($ERRORS{'WARNING'}, 0, "unable to migrate VM: $vm_computer_name, failed to add $source_remote_connection_target to $ruleset_name on $destination_vmhost_computer_name");
+			return;
+		}
+	}
+	
+	my ($exit_status, $output) = $source->vmhost_os->execute({
+		command => "ssh -o ConnectTimeout=5 -o ConnectionAttempts=1 -i /.ssh/id_rsa $destination_remote_connection_target hostname",
+		display_output => 1,
+		timeout_seconds => 5,
+		max_attempts => 1,
+	});
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "unable to migrate VM: $vm_computer_name, failed to verify SSH access between $source_vmhost_computer_name and $destination_vmhost_computer_name");
+		return;
+	}
+
 	# Find the .vmx file on the source VM host
 	my @source_vmx_file_paths = $source->api->get_registered_vms();
 	my @matching_source_vmx_file_paths = grep(/\/$vm_computer_name\_[^\/]*\.vmx$/i, @source_vmx_file_paths);
@@ -9294,10 +9323,41 @@ sub migrate_vm {
 	# Figure out if VMware's suspend or the guest OS's hibernate should be used
 	# Check if source vmx contains any values known to cause problems with VMware's suspend/resume
 	my $source_vmx_info = $source->get_vmx_info($source_vmx_file_path);
+	
+	
+	#...........................................................................
+	# Check if the source VM is powered on
+	my $vm_power_status_before = $source->power_status($source_vmx_file_path);
+	if (!defined($vm_power_status_before)) {
+		notify($ERRORS{'WARNING'}, 0, "migration failed, failed to determine power status of source VM $vm_computer_name on $source_vmhost_computer_name");
+		return;
+	}
+	elsif ($vm_power_status_before !~ /on/i) {
+		if ($SETUP_MODE) {
+			notify($ERRORS{'WARNING'}, 0, "$vm_computer_name power status is not on: $vm_power_status_before");
+			#if (!setup_confirm("Continue to migrate the VM?", "N")) {
+			#	return;
+			#}
+		}
+	}
+	
+	# Check if the source VM OS is responding
+	my $vm_os_responding_before = $vm_os->is_ssh_responding();
+	#if (!$vm_os_responding_before) {
+	#	if ($SETUP_MODE) {
+	#		notify($ERRORS{'WARNING'}, 0, "$vm_computer_name is not responding to SSH");
+	#		if (!setup_confirm("Continue to migrate the VM?", "N")) {
+	#			return;
+	#		}
+	#	}
+	#}
+	
+	#...........................................................................
+	# Determine how to suspend or power off the source VM
 	my $suspend_method = 'shutdown';
 	#my $suspend_method = 'vmware';
 	#
-	#if (!$vm_os_responding) {
+	#if (!$vm_os_responding_before) {
 	#	$suspend_method = 'vmware';
 	#}
 	
@@ -9366,6 +9426,21 @@ sub migrate_vm {
 	my $destination_vmx_directory_path = $destination->get_vmx_directory_path();
 	my $destination_vmx_directory_url_path = $destination->_get_url_path($destination_vmx_directory_path);
 	
+	# Check if the source and destination working directories are on the same datastore
+	my $source_vmx_datastore_root_url_path = $source->_get_datastore_root_url_path($source_vmx_file_path);
+	my $destination_vmx_datastore_root_url_path = $destination->_get_datastore_root_url_path($destination_vmx_file_path);
+	my $same_vmx_datastore = ($source_vmx_datastore_root_url_path eq $destination_vmx_datastore_root_url_path ? 1 : 0);
+	if ($same_vmx_datastore) {
+		notify($ERRORS{'OK'}, 0, "source and destination VM hosts use the same datastore for the VM's working directory: $source_vmx_datastore_root_url_path");
+	}
+	else {
+		notify($ERRORS{'OK'}, 0, "source and destination VM hosts do not use the same datastore for the VM's working directory:\n" .
+			"   $source_vmhost_computer_name: $source_vmx_datastore_root_url_path\n" .
+			"   $destination_vmhost_computer_name: $destination_vmx_datastore_root_url_path"
+		);
+	}
+	
+	#...........................................................................
 	# Create a snapshot of the source
 	# This is to reduce the amount of data to copy while the VM is hibernating
 	notify($ERRORS{'DEBUG'}, 0, "attempting to create snapshot of $vm_computer_name on $source_vmhost_computer_name");
@@ -9500,8 +9575,11 @@ sub migrate_vm {
 		
 		# Keep list of files which contain datastore names/paths specific to the source VM host
 		# These will be searched/replaced later on
-		if ($source_file_path !~ /(-delta|\.vmss)/) {
+		if ($source_file_path !~ /(-delta|-flat|\.vmss|Snapshot)/) {
 			push @destination_edit_file_paths, $destination_file_path;
+		}
+		else {
+			notify($ERRORS{'DEBUG'}, 0, "destination file will not be altered: $destination_file_path");
 		}
 		
 		# Keep list of files in use by the source VM which is still running
@@ -9521,7 +9599,11 @@ sub migrate_vm {
 		}
 		
 		notify($ERRORS{'DEBUG'}, 0, "copying file to destination: $destination_vmhost_computer_name:$destination_file_path" . $file_size_string);
-		if ($source->copy_file_to_another_host($source_file_path, $destination, $destination_file_path)) {
+		
+		if ($same_vmx_datastore && $source->vmhost_os->copy_file($source_file_path, $destination_file_path)) {
+			notify($ERRORS{'OK'}, 0, "copied file on source VM host: $source_file_path --> $destination_file_path");
+		}
+		elsif ($source->copy_file_to_another_host($source_file_path, $destination, $destination_file_path)) {
 			#notify($ERRORS{'OK'}, 0, "copied file to destination: $destination_vmhost_computer_name:$destination_file_path");
 		}
 		else {
@@ -9535,33 +9617,35 @@ sub migrate_vm {
 	# Do as much as possible before this step
 	# Keep track of how long the VM is inaccessible
 	my $hibernate_start_time = time;
-	if ($suspend_method eq 'vmware') {
-		notify($ERRORS{'DEBUG'}, 0, "attempting to suspend $vm_computer_name on source VM host $source_vmhost_computer_name");
-		if ($self->api->vm_suspend($source_vmx_file_path)) {
-			notify($ERRORS{'OK'}, 0, "suspended $vm_computer_name on source VM host $source_vmhost_computer_name");
+	if ($vm_power_status_before =~ /on/i) {
+		if ($suspend_method eq 'vmware') {
+			notify($ERRORS{'DEBUG'}, 0, "attempting to suspend $vm_computer_name on source VM host $source_vmhost_computer_name");
+			if ($self->api->vm_suspend($source_vmx_file_path)) {
+				notify($ERRORS{'OK'}, 0, "suspended $vm_computer_name on source VM host $source_vmhost_computer_name");
+			}
+			else {
+				notify($ERRORS{'WARNING'}, 0, "failed to migrate $vm_computer_name, failed to suspend source VM");
+				$destination->vmhost_os->delete_file($destination_vmx_directory_path);
+				return;
+			}
+		}
+		elsif ($suspend_method eq 'shutdown') {
+			notify($ERRORS{'DEBUG'}, 0, "attempting to shutdown guest OS of $vm_computer_name");
+			if (!$vm_os->shutdown()) {
+				notify($ERRORS{'WARNING'}, 0, "failed to migrate $vm_computer_name, failed to shutdown VM's guest OS");
+				return;
+			}
 		}
 		else {
-			notify($ERRORS{'WARNING'}, 0, "failed to migrate $vm_computer_name, failed to suspend source VM");
-			$destination->vmhost_os->delete_file($destination_vmx_directory_path);
-			return;
-		}
-	}
-	elsif ($suspend_method eq 'shutdown') {
-		notify($ERRORS{'DEBUG'}, 0, "attempting to shutdown guest OS of $vm_computer_name");
-		if (!$vm_os->shutdown()) {
-			notify($ERRORS{'WARNING'}, 0, "failed to migrate $vm_computer_name, failed to shutdown VM's guest OS");
-			return;
-		}
-	}
-	else {
-		notify($ERRORS{'DEBUG'}, 0, "attempting to hibernate guest OS of $vm_computer_name");
-		if ($vm_os->hibernate()) {
-			notify($ERRORS{'OK'}, 0, "hibernated guest OS of $vm_computer_name");
-		}
-		else {
-			notify($ERRORS{'WARNING'}, 0, "failed to migrate $vm_computer_name, failed to hibernate VM's guest OS");
-			$destination->vmhost_os->delete_file($destination_vmx_directory_path);
-			return;
+			notify($ERRORS{'DEBUG'}, 0, "attempting to hibernate guest OS of $vm_computer_name");
+			if ($vm_os->hibernate()) {
+				notify($ERRORS{'OK'}, 0, "hibernated guest OS of $vm_computer_name");
+			}
+			else {
+				notify($ERRORS{'WARNING'}, 0, "failed to migrate $vm_computer_name, failed to hibernate VM's guest OS");
+				$destination->vmhost_os->delete_file($destination_vmx_directory_path);
+				return;
+			}
 		}
 	}
 	
@@ -9595,7 +9679,10 @@ sub migrate_vm {
 		}
 		
 		notify($ERRORS{'DEBUG'}, 0, "copying file to destination: $destination_vmhost_computer_name:$destination_file_path" . $file_size_string);
-		if ($source->copy_file_to_another_host($source_file_path, $destination, $destination_file_path)) {
+		if ($same_vmx_datastore && $source->vmhost_os->copy_file($source_file_path, $destination_file_path)) {
+			notify($ERRORS{'OK'}, 0, "copied file on source VM host: $source_file_path --> $destination_file_path");
+		}
+		elsif ($source->copy_file_to_another_host($source_file_path, $destination, $destination_file_path)) {
 			notify($ERRORS{'OK'}, 0, "copied file to destination VM host: $destination_vmhost_computer_name:$destination_file_path");
 		}
 		else {
@@ -9625,6 +9712,7 @@ sub migrate_vm {
 	push @file_replacements, ["$source_vmdk_base_directory_url_path/", "$destination_vmdk_base_directory_url_path/"];
 
 	for my $destination_file_path (@destination_edit_file_paths) {
+		notify($ERRORS{'DEBUG'}, 0, "updating file on $destination_vmhost_computer_name: $destination_file_path");
 		SOURCE_PATTERN: for my $file_replacement (@file_replacements) {
 			my ($source_pattern, $destination_pattern) = @$file_replacement;
 			next if ($source_pattern eq $destination_pattern);
@@ -9667,24 +9755,46 @@ sub migrate_vm {
 	# Power on the VM on the destination VM host
 	notify($ERRORS{'DEBUG'}, 0, "powering on $vm_computer_name on destination VM host $destination_vmhost_computer_name: $destination_vmx_file_path");
 	
-	if ($destination->api->vm_power_on($destination_vmx_file_path)) {
-		notify($ERRORS{'OK'}, 0, "powered on $vm_computer_name on $destination_vmhost_computer_name");
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to migrate $vm_computer_name, failed to power on VM on destination VM host $destination_vmhost_computer_name: $destination_vmx_file_path");
-		migrate_revert_source($source, $vm_os);
-		if ($revert_destination_on_error) {
-			$destination->api->vm_unregister($destination_vmx_file_path);
-			$destination->vmhost_os->delete_file($destination_vmx_directory_path);
+	if ($vm_power_status_before !~ /off/i) {
+		if ($destination->api->vm_power_on($destination_vmx_file_path)) {
+			notify($ERRORS{'OK'}, 0, "powered on $vm_computer_name on $destination_vmhost_computer_name");
 		}
-		return;
-	}
-	
-	# Wait for the destination VM to respond
-	if ($vm_os_responding) {
+		else {
+			notify($ERRORS{'WARNING'}, 0, "failed to migrate $vm_computer_name, failed to power on VM on destination VM host $destination_vmhost_computer_name: $destination_vmx_file_path");
+			migrate_revert_source($source, $vm_os);
+			if ($revert_destination_on_error) {
+				$destination->api->vm_unregister($destination_vmx_file_path);
+				$destination->vmhost_os->delete_file($destination_vmx_directory_path);
+			}
+			return;
+		}
+		
+		# Wait for the destination VM to respond
 		notify($ERRORS{'DEBUG'}, 0, "waiting for $vm_computer_name to respond to SSH on destination VM host $destination_vmhost_computer_name");
 		if ($vm_os->wait_for_ssh(300, 3)) {
-			notify($ERRORS{'OK'}, 0, "$vm_computer_name is responding to SSH on destination VM host $destination_vmhost_computer_name");
+			my $hibernate_duration = (time - $hibernate_start_time);
+			notify($ERRORS{'OK'}, 0, "$vm_computer_name is responding to SSH on destination VM host $destination_vmhost_computer_name, hibernation duration: $hibernate_duration seconds");
+			
+			if ($vm_os_responding_before) {
+				# Remove the original VM from the source VM host
+				notify($ERRORS{'DEBUG'}, 0, "deleting original VM from $source_vmhost_computer_name: $source_vmx_file_path");
+				$source->delete_vm($source_vmx_file_path);
+				notify($ERRORS{'OK'}, 0, "deleted original VM from $source_vmhost_computer_name: $source_vmx_file_path");
+			}
+			else {
+				# Unregister the original VM from the source VM host -- don't delete in case something went wrong
+				notify($ERRORS{'DEBUG'}, 0, "unregistering original VM from $source_vmhost_computer_name: $source_vmx_file_path");
+				$source->api->vm_unregister($source_vmx_file_path);
+				notify($ERRORS{'OK'}, 0, "unregistered original VM from $source_vmhost_computer_name: $source_vmx_file_path");
+			}
+		}
+		elsif (!$vm_os_responding_before) {
+			notify($ERRORS{'WARNING'}, 0, "$vm_computer_name was not responding to SSH prior to migration and never responded on destination VM host $destination_vmhost_computer_name");
+			
+			# Unregister the original VM from the source VM host -- don't delete in case something went wrong
+			notify($ERRORS{'DEBUG'}, 0, "unregistering original VM from $source_vmhost_computer_name: $source_vmx_file_path");
+			$source->api->vm_unregister($source_vmx_file_path);
+			notify($ERRORS{'OK'}, 0, "unregistered original VM from $source_vmhost_computer_name: $source_vmx_file_path");
 		}
 		else {
 			notify($ERRORS{'WARNING'}, 0, "failed to migrate $vm_computer_name, VM never responded on destination VM host $destination_vmhost_computer_name");
@@ -9697,22 +9807,10 @@ sub migrate_vm {
 		}
 	}
 	else {
-		notify($ERRORS{'DEBUG'}, 0, "skipping wait for $vm_computer_name to respond to SSH on destination VM host $destination_vmhost_computer_name, VM was not responding prior to migration");
+		notify($ERRORS{'OK'}, 0, "skipping power on of $vm_computer_name on $destination_vmhost_computer_name, VM's power status was not 'on' on source VM host $source_vmhost_computer_name: $vm_power_status_before");
 	}
 	
-	my $hibernate_duration = (time - $hibernate_start_time);
-	#
-	#if ($vm_os_responding) {
-	#	# Remove the original VM from the source VM host
-	#	notify($ERRORS{'DEBUG'}, 0, "deleting original VM from $source_vmhost_computer_name: $source_vmx_file_path");
-	#	$source->delete_vm($source_vmx_file_path);
-	#	notify($ERRORS{'OK'}, 0, "deleted original VM from $source_vmhost_computer_name: $source_vmx_file_path");
-	#}
-	#else {
-	#	notify($ERRORS{'DEBUG'}, 0, "original VM not deleted from $source_vmhost_computer_name for safety, VM was not responding to SSH prior to migration");
-	#}
-	
-	notify($ERRORS{'OK'}, 0, "migration of $vm_computer_name complete: $source_vmhost_computer_name --> $destination_vmhost_computer_name, hibernation duration: $hibernate_duration seconds");
+	notify($ERRORS{'OK'}, 0, "migration of $vm_computer_name complete: $source_vmhost_computer_name --> $destination_vmhost_computer_name");
 	return 1;
 }
 
