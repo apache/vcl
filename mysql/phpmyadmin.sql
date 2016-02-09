@@ -44,7 +44,7 @@ use `phpmyadmin`;
 -- Dumping data for table `pma_table_info`
 --
 
-INSERT IGNORE INTO `pma_table_info` (`db_name`, `table_name`, `display_field`) VALUES
+INSERT IGNORE INTO `pma__table_info` (`db_name`, `table_name`, `display_field`) VALUES
 ('vcl', 'IMtype', 'name'),
 ('vcl', 'OS', 'prettyname'),
 ('vcl', 'OSinstalltype', 'name'),
