@@ -264,12 +264,22 @@ sub _run_vim_cmd {
 			}
 			return;
 		}
-		elsif ($exit_status != 0 || grep(/^(vim-cmd:|Killed|terminate called|Aborted|what\()/i, @$output)) {
+		elsif (grep(/^(vim-cmd:|Killed|terminate called|Aborted|what\()/i, @$output)) {
 			# terminate called after throwing an instance of 'std::bad_alloc'
 			# what():  std::bad_alloc
 			# Aborted
 			notify($ERRORS{'WARNING'}, 0, "attempt $attempt/$attempt_limit: failed to execute command on VM host $vmhost_computer_name: $command, exit status: $exit_status, output:\n" . join("\n", @$output));
 			next ATTEMPT;
+		}
+		elsif ($exit_status != 0) {
+			if (grep(/(Create snapshot failed)/i, @$output)) {
+				notify($ERRORS{'WARNING'}, 0, "attempt $attempt/$attempt_limit: command failed on VM host $vmhost_computer_name, not making another attempt, task error checking will be done by calling subroutine, command: $command, exit status: $exit_status, output:\n" . join("\n", @$output));
+				return ($exit_status, $output);
+			}
+			else {
+				notify($ERRORS{'WARNING'}, 0, "attempt $attempt/$attempt_limit: command failed on VM host $vmhost_computer_name: $command, exit status: $exit_status, output:\n" . join("\n", @$output));
+				next ATTEMPT;
+			}
 		}
 		else {
 			# VIM command command was executed
@@ -1038,6 +1048,12 @@ sub _wait_for_task {
 				my $task_info_all = $self->_get_task_info();
 				notify($ERRORS{'WARNING'}, 0, "task $task_id did not complete successfully, state: $task_state, error message: $error_message, task info:\n" . format_data($task_info_all));
 			}
+			elsif ($error_message =~ /state of the virtual machine has not changed since the last snapshot/i) {
+				# Snapshot may fail if VM is suspended and snapshot was already taken after suspension, message will be:
+				# message = "An error occurred while taking a snapshot: The state of the virtual machine has not changed since the last snapshot operation."
+				notify($ERRORS{'DEBUG'}, 0, "snapshot task is not necessary: $task_id, message: $error_message");
+				return 1;
+			}
 			else {
 				notify($ERRORS{'WARNING'}, 0, "task $task_id did not complete successfully, state: $task_state, error message: $error_message");
 			}
@@ -1192,7 +1208,7 @@ sub vm_power_on {
 	}
 	
 	my $vim_cmd_arguments = "vmsvc/power.on $vm_id";
-	my ($exit_status, $output) = $self->_run_vim_cmd($vim_cmd_arguments);
+	my ($exit_status, $output) = $self->_run_vim_cmd($vim_cmd_arguments, 360);
 	return if !$output;
 	
 	# Expected output if the VM was not previously powered on:
@@ -2053,10 +2069,12 @@ sub create_snapshot {
 	
 	notify($ERRORS{'DEBUG'}, 0, "create snapshot output:\n" . join("\n", @$output));
 	
-	if (grep(/failed|invalid/i, @$output)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to create snapshot of VM $vmx_file_path, VIM command arguments: '$vim_cmd_arguments', output:\n" . join("\n", @$output));
-		return;
-	}
+	# IMPORTANT: Don't check for 'failed' in the output, it may contain failed but the snapshot is not necessary:
+	# Snapshot not taken since the state of the virtual machine has not changed since the last snapshot operation.
+	#if (grep(/failed|invalid/i, @$output)) {
+	#	notify($ERRORS{'WARNING'}, 0, "failed to create snapshot of VM $vmx_file_path, VIM command arguments: '$vim_cmd_arguments', output:\n" . join("\n", @$output));
+	#	return;
+	#}
 	
 	# Get the task ID
 	my @task_ids = $self->_get_task_ids($vmx_file_path, 'createSnapshot');
@@ -2632,6 +2650,120 @@ sub get_config_option_guest_os_info {
  Returns     : true
  Description : Used for development/testing only. Prints list of possible
                guestOS values.
+               asianux3Guest                            vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
+               asianux3_64Guest                         vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
+               asianux4Guest                                   vmx-08 vmx-09 vmx-10 vmx-11
+               asianux4_64Guest                                vmx-08 vmx-09 vmx-10 vmx-11
+               asianux5_64Guest                                                     vmx-11
+               centos64Guest                            vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
+               centosGuest                              vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
+               coreos64Guest                                                        vmx-11
+               darwin10Guest                            vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
+               darwin10_64Guest                         vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
+               darwin11Guest                                   vmx-08 vmx-09 vmx-10 vmx-11
+               darwin11_64Guest                                vmx-08 vmx-09 vmx-10 vmx-11
+               darwin12_64Guest                                       vmx-09 vmx-10 vmx-11
+               darwin13_64Guest                                              vmx-10 vmx-11
+               darwin14_64Guest                                                     vmx-11
+               darwin64Guest                            vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
+               darwinGuest                              vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
+               debian4Guest                             vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
+               debian4_64Guest                          vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
+               debian5Guest                             vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
+               debian5_64Guest                          vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
+               debian6Guest                                    vmx-08 vmx-09 vmx-10 vmx-11
+               debian6_64Guest                                 vmx-08 vmx-09 vmx-10 vmx-11
+               debian7Guest                                                  vmx-10 vmx-11
+               debian7_64Guest                                               vmx-10 vmx-11
+               debian8Guest                                                         vmx-11
+               debian8_64Guest                                                      vmx-11
+               dosGuest                                 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
+               eComStation2Guest                               vmx-08 vmx-09 vmx-10 vmx-11
+               eComStationGuest                         vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
+               fedora64Guest                                                        vmx-11
+               fedoraGuest                                                          vmx-11
+               freebsd64Guest                           vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
+               freebsdGuest                             vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
+               netware5Guest              vmx-03 vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
+               netware6Guest              vmx-03 vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
+               oesGuest                          vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
+               openServer5Guest                         vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
+               openServer6Guest                                vmx-08 vmx-09 vmx-10 vmx-11
+               opensuse64Guest                                                      vmx-11
+               opensuseGuest                                                        vmx-11
+               oracleLinux64Guest                       vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
+               oracleLinuxGuest                         vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
+               os2Guest                                 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
+               other24xLinux64Guest                     vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
+               other24xLinuxGuest                       vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
+               other26xLinux64Guest                     vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
+               other26xLinuxGuest                       vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
+               other3xLinux64Guest                                           vmx-10 vmx-11
+               other3xLinuxGuest                                             vmx-10 vmx-11
+               otherGuest                 vmx-03 vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
+               otherGuest64                      vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
+               otherLinux64Guest                 vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
+               otherLinuxGuest            vmx-03 vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
+               rhel2Guest                        vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
+               rhel3Guest                        vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
+               rhel3_64Guest                     vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
+               rhel4Guest                        vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
+               rhel4_64Guest                     vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
+               rhel5Guest                        vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
+               rhel5_64Guest                     vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
+               rhel6Guest                               vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
+               rhel6_64Guest                            vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
+               rhel7Guest                                             vmx-09 vmx-10
+               rhel7_64Guest                                          vmx-09 vmx-10 vmx-11
+               sles10Guest                       vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
+               sles10_64Guest                    vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
+               sles11Guest                       vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
+               sles11_64Guest                    vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
+               sles12Guest                                            vmx-09 vmx-10
+               sles12_64Guest                                         vmx-09 vmx-10 vmx-11
+               sles64Guest                       vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
+               slesGuest                         vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
+               solaris10Guest                    vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
+               solaris10_64Guest                 vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
+               solaris11_64Guest                               vmx-08 vmx-09 vmx-10 vmx-11
+               solaris8Guest                            vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
+               solaris9Guest                            vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
+               ubuntu64Guest                     vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
+               ubuntuGuest                       vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
+               unixWare7Guest                           vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
+               vmkernel5Guest                                  vmx-08 vmx-09 vmx-10 vmx-11
+               vmkernel6Guest                                                       vmx-11
+               vmkernelGuest                            vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
+               win2000AdvServGuest        vmx-03 vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
+               win2000ProGuest                   vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
+               win2000ServGuest           vmx-03 vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
+               win31Guest                               vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
+               win95Guest                               vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
+               win98Guest                               vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
+               winLonghorn64Guest                vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
+               winLonghornGuest                  vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
+               winNTGuest                 vmx-03 vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
+               winNetBusinessGuest        vmx-03 vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
+               winNetDatacenter64Guest           vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
+               winNetDatacenterGuest      vmx-03 vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
+               winNetEnterprise64Guest           vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
+               winNetEnterpriseGuest      vmx-03 vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
+               winNetStandard64Guest             vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
+               winNetStandardGuest        vmx-03 vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
+               winNetWebGuest             vmx-03 vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
+               winVista64Guest                   vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
+               winVistaGuest                     vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
+               winXPPro64Guest                   vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
+               winXPProGuest              vmx-03 vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
+               windows7Guest                     vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
+               windows7Server64Guest             vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
+               windows7_64Guest                  vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
+               windows8Guest                                   vmx-08 vmx-09 vmx-10 vmx-11
+               windows8Server64Guest                           vmx-08 vmx-09 vmx-10 vmx-11
+               windows8_64Guest                                vmx-08 vmx-09 vmx-10 vmx-11
+               windows9Guest                                                 vmx-10 vmx-11
+               windows9Server64Guest                                         vmx-10 vmx-11
+               windows9_64Guest                                              vmx-10 vmx-11
 
 =cut
 
@@ -3036,6 +3168,471 @@ sub get_vm_cpu_usage {
 	notify($ERRORS{'DEBUG'}, 0, "retrieved CPU usage for VM $vmx_file_path: $cpu_usage_percent\% (overall CPU usage: $overall_cpu_usage MHz / max CPU usage: $max_cpu_usage MHz)");
 	return $cpu_usage_percent;
 
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 firewall_ruleset_allow_ip
+
+ Parameters  : $ruleset_name, $ip_address
+ Returns     : boolean
+ Description : Adds an IP address to a firewall ruleset to allow traffic.
+
+=cut
+
+sub firewall_ruleset_allow_ip {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my ($ruleset_name, $ip_address) = @_;
+	if (!defined($ruleset_name)) {
+		notify($ERRORS{'WARNING'}, 0, "ruleset name argument was not supplied");
+		return;
+	}
+	elsif (!defined($ip_address)) {
+		notify($ERRORS{'WARNING'}, 0, "IP address argument was not supplied");
+		return;
+	}
+	
+	my $vmhost_computer_name = $self->data->get_vmhost_hostname();
+	
+	my $command;
+	if ($ip_address =~ /all/i) {
+		$command = "esxcli network firewall ruleset set --ruleset-id=$ruleset_name --allowed-all true";
+	}
+	else {
+		$command = "esxcli network firewall ruleset allowedip add --ruleset-id=$ruleset_name --ip-address=$ip_address";
+	}
+	
+	my ($exit_status, $output) = $self->vmhost_os->execute($command);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command on VM host $vmhost_computer_name: $command");
+		return;
+	}
+	elsif (grep(/already (exist|allowed)/i, @$output)) {
+		notify($ERRORS{'OK'}, 0, "$ip_address is already allowed for $ruleset_name ruleset on VM host $vmhost_computer_name");
+		return 1;
+	}
+	elsif (grep(/allowed-all/i, @$output)) {
+		# Couldn't update allowed ip list when allowed-all flag is true.
+		notify($ERRORS{'OK'}, 0, "all IP addresses are already allowed for $ruleset_name ruleset on VM host $vmhost_computer_name");
+		return 1;
+	}
+	elsif ($exit_status ne 0) {
+		notify($ERRORS{'WARNING'}, 0, "failed to add $ip_address to $ruleset_name ruleset on VM host $vmhost_computer_name, exit status: $exit_status, command:\n$command\noutput:\n" . join("\n", @$output));
+		return 0;
+	}
+	else {
+		notify($ERRORS{'OK'}, 0, "added $ip_address to $ruleset_name ruleset on VM host $vmhost_computer_name");
+		return 1;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 firewall_ruleset_enable
+
+ Parameters  : $ruleset_name
+ Returns     : boolean
+ Description : Enables a firewall ruleset.
+
+=cut
+
+sub firewall_ruleset_enable {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my ($ruleset_name) = @_;
+	if (!defined($ruleset_name)) {
+		notify($ERRORS{'WARNING'}, 0, "ruleset name argument was not supplied");
+		return;
+	}
+	
+	my $vmhost_computer_name = $self->data->get_vmhost_hostname();
+	
+	my $command = "esxcli network firewall ruleset set --ruleset-id=$ruleset_name --enabled true";
+	my ($exit_status, $output) = $self->vmhost_os->execute($command);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command on VM host $vmhost_computer_name: $command");
+		return;
+	}
+	elsif ($exit_status ne 0) {
+		notify($ERRORS{'WARNING'}, 0, "failed to enable $ruleset_name ruleset on VM host $vmhost_computer_name, exit status: $exit_status, command:\n$command\noutput:\n" . join("\n", @$output));
+		return 0;
+	}
+	else {
+		notify($ERRORS{'OK'}, 0, "enabled $ruleset_name ruleset on VM host $vmhost_computer_name");
+		return 1;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_firewall_ruleset_info
+
+ Parameters  : none
+ Returns     : array
+ Description : Retrieves information about all of the firewall rulesets from the
+               VM host. A hash reference is returned. Hash keys are the ruleset
+               names:
+                  "ipfam" => {
+                    "enabled" => 1,
+                    "rules" => [
+                      {
+                        "Direction" => "Inbound",
+                        "PortBegin" => 6999,
+                        "PortEnd" => 6999,
+                        "PortType" => "Dst",
+                        "Protocol" => "UDP"
+                      },
+                      {
+                        "Direction" => "Outbound",
+                        "PortBegin" => 6999,
+                        "PortEnd" => 6999,
+                        "PortType" => "Dst",
+                        "Protocol" => "UDP"
+                      }
+                    ]
+                  },
+                  "nfs41Client" => {
+                    "enabled" => 0,
+                    "rules" => [
+                      {
+                        "Direction" => "Outbound",
+                        "PortBegin" => 2049,
+                        "PortEnd" => 2049,
+                        "PortType" => "Dst",
+                        "Protocol" => "TCP"
+                      }
+                    ]
+                  },
+
+=cut
+
+sub get_firewall_ruleset_info {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	return $ENV{firewall_ruleset_info} if defined($ENV{firewall_ruleset_info});
+	
+	my $vmhost_computer_name = $self->data->get_vmhost_hostname();
+	
+	my $ruleset_info = {};
+	
+	# Get the enabled/disabled status of each ruleset
+	my $ruleset_list_command = "esxcli --formatter=csv network firewall ruleset list";
+	my ($ruleset_list_exit_status, $ruleset_list_output) = $self->vmhost_os->execute($ruleset_list_command);
+	if (!defined($ruleset_list_output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command on VM host $vmhost_computer_name: $ruleset_list_command");
+		return;
+	}
+	elsif ($ruleset_list_exit_status ne 0) {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve firewall ruleset info from VM host $vmhost_computer_name, exit status: $ruleset_list_exit_status, command:\n$ruleset_list_command\noutput:\n" . join("\n", @$ruleset_list_output));
+		return 0;
+	}
+	
+	# Enabled,Name,
+	# true,sshServer,
+	# true,sshClient,
+	# true,nfsClient,
+	# false,nfs41Client,
+	# ...
+	for my $line (@$ruleset_list_output) {
+		if ($line !~ /(true|false)/) {
+			next;
+		}
+		my ($enabled, $ruleset_name) = split(/,/, $line);
+		if ($enabled =~ /true/i) {
+			$ruleset_info->{$ruleset_name}{enabled} = 1;
+		}
+		else {
+			$ruleset_info->{$ruleset_name}{enabled} = 0;
+		}
+	}
+	
+	
+	
+	
+	# Get the allowed IPs of each ruleset
+	my $ruleset_allowed_ip_command = "esxcli --formatter=csv network firewall ruleset allowedip list";
+	my ($ruleset_allowed_ip_exit_status, $ruleset_allowed_ip_output) = $self->vmhost_os->execute($ruleset_allowed_ip_command);
+	if (!defined($ruleset_allowed_ip_output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command on VM host $vmhost_computer_name: $ruleset_allowed_ip_command");
+		return;
+	}
+	elsif ($ruleset_allowed_ip_exit_status ne 0) {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve firewall ruleset allowed IP info from VM host $vmhost_computer_name, exit status: $ruleset_allowed_ip_exit_status, command:\n$ruleset_allowed_ip_command\noutput:\n" . join("\n", @$ruleset_allowed_ip_output));
+		return 0;
+	}
+	
+	# AllowedIPAddresses,Ruleset,
+	# "152.1.4.152,10.25.7.2,10.25.11.104,10.25.0.241,10.25.0.242,10.25.0.243,10.25.0.244,10.25.0.245,10.25.0.246,10.25.1.178,",sshServer,
+	# "All,",sshClient,
+	# ...
+	for my $line (@$ruleset_allowed_ip_output) {
+		if ($line =~ /Ruleset/) {
+			next;
+		}
+		
+		my ($ip_address_string, $ruleset_name) = $line =~ /^"?(.+),"?,([^,]+),/g;
+		if (!defined($ruleset_name)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to retrieve firewall ruleset allowed IP info from VM host $vmhost_computer_name, failed to parse line:\n$line");
+			return;
+		}
+		
+		my @ip_addresses = split(/,/, $ip_address_string);
+		$ruleset_info->{$ruleset_name}{allowedip} = \@ip_addresses;
+	}
+	
+	# Get the rule port information
+	my $rule_list_command = "esxcli --formatter=csv network firewall ruleset rule list";
+	my ($rule_list_exit_status, $rule_list_output) = $self->vmhost_os->execute($rule_list_command);
+	if (!defined($rule_list_output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command on VM host $vmhost_computer_name: $rule_list_command");
+		return;
+	}
+	elsif ($rule_list_exit_status ne 0) {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve firewall rule info from VM host $vmhost_computer_name, exit status: $rule_list_exit_status, command:\n$rule_list_command\noutput:\n" . join("\n", @$rule_list_output));
+		return 0;
+	}
+	
+	# Parse the header line
+	# Direction,PortBegin,PortEnd,PortType,Protocol,Ruleset,
+	my $rule_header_line = shift @$rule_list_output;
+	my @rule_fields = split(/,/, $rule_header_line);
+	my $rule_field_count = scalar(@rule_fields);
+	
+	# Inbound,22,22,Dst,TCP,sshServer,
+	# Outbound,22,22,Dst,TCP,sshClient,
+	# Outbound,0,65535,Dst,TCP,nfsClient,
+	# Outbound,2049,2049,Dst,TCP,nfs41Client,
+	for my $line (@$rule_list_output) {
+		if ($line !~ /bound/) {
+			next;
+		}
+		my @values = split(/,/, $line);
+		my $rule = {};
+		for (my $i = 0; $i < $rule_field_count; $i++) {
+			my $field = $rule_fields[$i];
+			my $value = $values[$i];
+			$rule->{$field} = $value;
+		}
+		my $ruleset_name = $rule->{Ruleset};
+		delete $rule->{Ruleset};
+		
+		push @{$ruleset_info->{$ruleset_name}{rules}}, $rule;
+	}
+	
+	notify($ERRORS{'OK'}, 0, "retrieved firewall ruleset info from VM host $vmhost_computer_name:\n" . format_data($ruleset_info));
+	$ENV{firewall_ruleset_info} = $ruleset_info;
+	return $ruleset_info;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_matching_firewall_ruleset_info
+
+ Parameters  : $port (optional), $direction (optional), $include_disabled (optional)
+ Returns     : hash reference
+ Description : 
+
+=cut
+
+sub get_matching_firewall_ruleset_info {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my ($direction_argument, $port_argument, $exclude_disabled) = @_;
+	if ($port_argument) {
+		if ($port_argument =~ /^(\*|any)$/) {
+			$port_argument = 'any';
+		}
+		elsif ($port_argument !~ /^\d+$/) {
+			notify($ERRORS{'WARNING'}, 0, "port argument was specified but the value is not an integer: $port_argument");
+			return;
+		}
+	}
+	else {
+		$port_argument = 'any';
+	}
+	
+	if ($direction_argument) {
+		if ($direction_argument =~ /^(\*|any)$/) {
+			$direction_argument = 'any';
+		}
+		elsif ($direction_argument =~ /in/i) {
+			$direction_argument = 'inbound';
+		}
+		elsif ($direction_argument =~ /out/i) {
+			$direction_argument = 'outbound';
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "direction argument is not valid: $direction_argument");
+			return;
+		}
+	}
+	else {
+		$direction_argument = 'any';
+	}
+	
+	my $vmhost_computer_name = $self->data->get_vmhost_short_name();
+	
+	my $ruleset_info = $self->get_firewall_ruleset_info() || return;
+	
+	my $matching_ruleset_info = {};
+	
+	RULESET: for my $ruleset_name (sort {lc($a) cmp lc($b)} keys %$ruleset_info) {
+		my $ruleset = $ruleset_info->{$ruleset_name};
+		
+		# Ignore disabled rulesets if argument was supplied
+		my $enabled = $ruleset->{enabled};
+		if (!$enabled && $exclude_disabled) {
+			next RULESET;
+		}
+		
+		RULE: for my $rule (@{$ruleset->{rules}}) {
+			if ($direction_argument ne 'any') {
+				my $direction = $rule->{Direction};
+				if ($direction !~ /$direction_argument/i) {
+					#notify($ERRORS{'DEBUG'}, 0, "$ruleset_name direction does not match: argument: $direction_argument, rule: $direction");
+					next RULE;
+				}
+			}
+			
+			if ($port_argument ne 'any') {
+				my $port_begin = $rule->{PortBegin};
+				my $port_end = $rule->{PortEnd};
+				if ($port_argument < $port_begin || $port_argument > $port_end) {
+					#notify($ERRORS{'DEBUG'}, 0, "$ruleset_name port does not match: argument: $port_argument, port begin: $port_begin, port end: $port_end");
+					next RULE;
+				}
+			}
+			
+			$matching_ruleset_info->{$ruleset_name} = $ruleset;
+		}
+	}
+	
+	my $ruleset_count = scalar(keys %$matching_ruleset_info);
+	notify($ERRORS{'DEBUG'}, 0, "retrieved $ruleset_count matching firewall ruleset from VM host $vmhost_computer_name matching port: $port_argument, direction: $direction_argument, exclude disabled: " . ($exclude_disabled ? 'yes' : 'no') . "\n" . join("\n", sort keys %$matching_ruleset_info));
+	return $matching_ruleset_info;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 is_firewall_port_allowed
+
+ Parameters  : $direction, $port, $remote_ip_address
+ Returns     : boolean
+ Description : Checks if an enabled firewall ruleset exists which matches the
+               arguments.
+ 
+               *** WARNING ***
+               There seems to be no reliable way to determine if a port is truly
+               open if a custom rule exists with identical port and definitions
+               as a standard service. The IBMIMM is an example. It defines
+               outbound port 22 as does sshClient. If both of these services are
+               enabled with different allowed IP address lists, the allowed IP
+               address list of the service which started last prevails.
+               Example:
+               * sshClient allows only 10.1.1.1
+               * IBMIMM allows only 10.2.2.2
+               * Restart sshClient : 10.1.1.1 allowed, 10.2.2.2 blocked
+               * Restart IBMIMM    : 10.2.2.2 allowed, 10.1.1.1 blocked
+
+=cut
+
+sub is_firewall_port_allowed {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my ($direction_argument, $port_argument, $remote_ip_address) = @_;
+	
+	if (!defined($direction_argument)) {
+		notify($ERRORS{'WARNING'}, 0, "direction argument was not specified");
+		return;
+	}
+	elsif ($direction_argument =~ /in/i) {
+		$direction_argument = 'inbound';
+	}
+	elsif ($direction_argument =~ /out/i) {
+		$direction_argument = 'outbound';
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "direction argument is not valid: $direction_argument");
+		return;
+	}
+	
+	if (!defined($remote_ip_address)) {
+		notify($ERRORS{'WARNING'}, 0, "remote IP address argument was not specified");
+		return;
+	}
+	elsif (!is_valid_ip_address($remote_ip_address)) {
+		notify($ERRORS{'WARNING'}, 0, "remote IP address argument is not valid: $remote_ip_address");
+		return;
+	}
+	
+	my $vmhost_computer_name = $self->data->get_vmhost_short_name();
+	
+	my $ruleset_info = $self->get_firewall_ruleset_info() || return;
+	
+	my $matching_ruleset_info = {};
+	
+	RULESET: for my $ruleset_name (keys %$ruleset_info) {
+		my $ruleset = $ruleset_info->{$ruleset_name};
+		
+		# Ignore disabled rulesets
+		if (!$ruleset->{enabled}) {
+			#notify($ERRORS{'DEBUG'}, 0, "$ruleset_name ruleset ignored because it is not enabled");
+			next RULESET;
+		}
+		
+		my $direction_port_match = 0;
+		RULE: for my $rule (@{$ruleset->{rules}}) {
+			if ($rule->{Direction} !~ /$direction_argument/i) {
+				next RULE;
+			}
+			
+			if ($port_argument >= $rule->{PortBegin} && $port_argument <= $rule->{PortEnd}) {
+				$direction_port_match = 1;
+				#notify($ERRORS{'DEBUG'}, 0, "$ruleset_name ruleset rule matches direction: $direction_argument, port: $port_argument\n" . format_data($rule));
+				last RULE;
+			}
+		}
+		if (!$direction_port_match) {
+			next RULESET;
+		}
+		
+		my @allowed_ip_addresses = @{$ruleset->{allowedip}};
+		if ($allowed_ip_addresses[0] =~ /all/i) {
+			notify($ERRORS{'DEBUG'}, 0, "$ruleset_name ruleset on VM host $vmhost_computer_name allows $direction_argument port $port_argument " . ($direction_argument =~ /in/i ? 'from' : 'to') . " all:\n" . format_data($ruleset));
+			next RULESET;
+			#return 1;
+		}
+		elsif (grep { $_ eq $remote_ip_address } @allowed_ip_addresses) {
+			notify($ERRORS{'DEBUG'}, 0, "$ruleset_name ruleset on VM host $vmhost_computer_name allows $direction_argument port $port_argument " . ($direction_argument =~ /in/i ? 'from' : 'to') . " $remote_ip_address:\n" . format_data($ruleset));
+			next RULESET;
+			#return 1;
+		}
+		notify($ERRORS{'DEBUG'}, 0, "$ruleset_name ruleset on VM host $vmhost_computer_name does NOT allow $direction_argument port $port_argument " . ($direction_argument =~ /in/i ? 'from' : 'to') . " $remote_ip_address:\n" . format_data($ruleset));
+	}
+	
+	notify($ERRORS{'DEBUG'}, 0, "$direction_argument firewall port $port_argument is NOT allowed for $remote_ip_address on VM host $vmhost_computer_name");
+	return 1;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
