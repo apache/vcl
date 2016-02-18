@@ -102,7 +102,7 @@ sub process {
 	my $computer_short_name             = $self->data->get_computer_short_name();
 	my $is_parent_reservation           = $self->data->is_parent_reservation();
 	my $parent_reservation_id           = $self->data->get_parent_reservation_id();
-	my $server_request_id               = $self->data->get_server_request_id();
+	my $is_server_request               = $self->data->is_server_request();
 	my $imagemeta_checkuser             = $self->data->get_imagemeta_checkuser();
 	
 	my $acknowledge_timeout_seconds     = $self->os->get_timings('acknowledgetimeout');
@@ -158,6 +158,7 @@ sub process {
 	);
 	
 	# Wait for the user to acknowledge the request by clicking Connect button or from API
+	# Note: for server requests, this will always return true because the frontend inserts reservation.remoteIP when the reservation is made
 	my $user_acknowledged = $self->code_loop_timeout(sub{$self->user_acknowledged()}, [], 'waiting for user acknowledgement', $acknowledge_timeout_remaining_seconds, 1, 10);
 	if (!$user_acknowledged) {
 		$self->notify_user_timeout_no_acknowledgement();
@@ -168,19 +169,24 @@ sub process {
 	insertloadlog($reservation_id, $computer_id, "noinitialconnection", "user clicked Connect");
 	delete_computerloadlog_reservation($reservation_id, 'acknowledgetimeout');
 	
-	# The frontend should have inserted an 'initialconnecttimeout' computerloadlog entry for the parent reservation, retrieve its timestamp
-	my $connection_check_start_epoch_seconds = get_reservation_computerloadlog_time($parent_reservation_id, 'initialconnecttimeout');
-	if ($connection_check_start_epoch_seconds) {
-		notify($ERRORS{'DEBUG'}, 0, "retrieved timestamp of computerloadlog 'initialconnecttimeout' entry inserted by web frontend: $connection_check_start_epoch_seconds");
+	# For non-server requests, the frontend should have inserted an 'initialconnecttimeout' computerloadlog entry for the parent reservation when the user clicks Connect
+	# Web uses timestamp of this to determine when next to refresh the page
+	# The timestamp of this computerloadlog entry will be used to determine when to timeout the connection checking during the inuse state
+	my $connection_check_start_epoch_seconds;
+	if ($is_server_request) {
+		$connection_check_start_epoch_seconds = time;
+		insertloadlog($parent_reservation_id, $computer_id, "initialconnecttimeout", "begin initial connection timeout ($initial_connect_timeout_seconds seconds)");
 	}
 	else {
-		$connection_check_start_epoch_seconds = time;
-		notify($ERRORS{'WARNING'}, 0, "failed to retrieve timestamp of computerloadlog 'initialconnecttimeout' entry, web frontend should have inserted this, inserting new entry");
-		
-		# initialconnecttimeout should be inserted immediately after user acknowledged
-		# Web uses timestamp of this to determine when next to refresh the page
-		# The timestamp of this computerloadlog entry will be used to determine when to timeout the connection checking during the inuse state
-		insertloadlog($reservation_id, $computer_id, "initialconnecttimeout", "begin initial connection timeout ($initial_connect_timeout_seconds seconds)");
+		$connection_check_start_epoch_seconds = get_reservation_computerloadlog_time($parent_reservation_id, 'initialconnecttimeout');
+		if ($connection_check_start_epoch_seconds) {
+			notify($ERRORS{'DEBUG'}, 0, "retrieved timestamp of computerloadlog 'initialconnecttimeout' entry inserted by web frontend: $connection_check_start_epoch_seconds");
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "failed to retrieve timestamp of computerloadlog 'initialconnecttimeout' entry, web frontend should have inserted this, inserting new entry");
+			$connection_check_start_epoch_seconds = time;
+			insertloadlog($reservation_id, $computer_id, "initialconnecttimeout", "begin initial connection timeout ($initial_connect_timeout_seconds seconds)");
+		}
 	}
 	
 	# Call OS module's grant_access() subroutine which adds user accounts to computer
@@ -237,7 +243,7 @@ sub process {
 		if (!$imagemeta_checkuser || !$request_checkuser) {
 			notify($ERRORS{'OK'}, 0, "never detected user connection, skipping timeout, imagemeta checkuser: $imagemeta_checkuser, request checkuser: $request_checkuser");
 		}
-		elsif ($server_request_id) {
+		elsif ($is_server_request) {
 			notify($ERRORS{'OK'}, 0, "never detected user connection, skipping timeout, server reservation");
 		}
 		elsif (is_request_deleted($request_id)) {
