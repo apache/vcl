@@ -400,6 +400,9 @@ class Computer extends Resource {
 		# refresh button
 		$h .= dijitButton('', 'Refresh Computer Data', 'refreshcompdata(0);');
 
+		# span to list count of computer in table
+		$h .= "<span id=\"computercount\"></span>\n";
+
 		$h .= "<div dojoType=dijit.Dialog\n";
 		$h .= "      id=\"confirmactiondlg\"\n";
 		$h .= "      duration=250\n";

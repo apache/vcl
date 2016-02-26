@@ -291,6 +291,10 @@ function initPage() {
 		resourcestore.comparatorMap['procnumber'] = resource.nocasesort;
 		resourcestore.comparatorMap['procspeed'] = resource.nocasesort;
 		resourcestore.comparatorMap['network'] = resource.nocasesort;
+
+		setTimeout(function() {
+			dojo.byId('computercount').innerHTML = 'Computers in table: ' + resourcegrid.rowCount;
+		}, 3000);
 	}
 }
 
@@ -495,6 +499,8 @@ function applyExtraFilters(value) {
 	else if(value != '')
 		resourcegrid.query[this.field] = new RegExp('.*' + value + '.*', 'i');
 	resourcegrid.setQuery(resourcegrid.query);
+
+	dojo.byId('computercount').innerHTML = 'Computers in table: ' + resourcegrid.rowCount;
 
 	var savelist = resource.selids;
 	resourcegrid.selection.clear();
@@ -1254,4 +1260,6 @@ function compGroupFilterSelectionCB(data, ioArgs) {
 	query['id'] = new RegExp(data.items.regids);
 
 	resourcegrid.setQuery(query);
+
+	dojo.byId('computercount').innerHTML = 'Computers in table: ' + resourcegrid.rowCount;
 }
