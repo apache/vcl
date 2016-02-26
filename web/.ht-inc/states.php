@@ -210,6 +210,11 @@ $noHTMLwrappers = array('sendRDPfile',
                         'AJdeleteAffiliationSetting',
                         'AJaddAffiliationSetting',
                         'AJpreviewClickThrough',
+                        'AJdeleteMultiSetting',
+                        'AJaddConfigMultiVal',
+                        'AJsaveMessages',
+                        'AJdeleteMessages',
+                        'AJvalidateMessagesPoll',
 );
 
 # main
@@ -539,11 +544,21 @@ $actions['mode']['AJupdateTimeSource'] = "AJupdateTimeSource";
 $actions['mode']['AJaddAffiliationSetting'] = "AJaddAffiliationSetting";
 $actions['mode']['AJupdateAllSettings'] = "AJupdateAllSettings";
 $actions['mode']['AJdeleteAffiliationSetting'] = "AJdeleteAffiliationSetting";
+$actions['mode']['AJaddConfigMultiVal'] = "AJaddConfigMultiVal";
+$actions['mode']['AJdeleteMultiSetting'] = "AJdeleteMultiSetting";
+$actions['mode']['AJsaveMessages'] = "AJsaveMessages";
+$actions['mode']['AJdeleteMessages'] = "AJdeleteMessages";
+$actions['mode']['AJvalidateMessagesPoll'] = "AJvalidateMessagesPoll";
 $actions['pages']['siteconfig'] = "siteconfig";
 $actions['pages']['AJupdateTimeSource'] = "siteconfig";
 $actions['pages']['AJaddAffiliationSetting'] = "siteconfig";
 $actions['pages']['AJupdateAllSettings'] = "siteconfig";
 $actions['pages']['AJdeleteAffiliationSetting'] = "siteconfig";
+$actions['pages']['AJaddConfigMultiVal'] = "siteconfig";
+$actions['pages']['AJdeleteMultiSetting'] = "siteconfig";
+$actions['pages']['AJsaveMessages'] = "siteconfig";
+$actions['pages']['AJdeleteMessages'] = "siteconfig";
+$actions['pages']['AJvalidateMessagesPoll'] = "siteconfig";
 $actions['classmapping']['timevariable'] = 'siteconfig';
 $actions['classmapping']['connectedusercheck'] = 'siteconfig';
 $actions['classmapping']['acknowledge'] = 'siteconfig';
@@ -557,6 +572,8 @@ $actions['classmapping']['generalendnotice2'] = 'siteconfig';
 $actions['classmapping']['userpasswordlength'] = 'siteconfig';
 $actions['classmapping']['userpasswordspecialchar'] = 'siteconfig';
 $actions['classmapping']['natportrange'] = 'siteconfig';
+$actions['classmapping']['nfsmounts'] = 'siteconfig';
+$actions['classmapping']['messages'] = 'siteconfig';
 
 # resource
 $actions['mode']['resource'] = "resource";
