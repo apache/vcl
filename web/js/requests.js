@@ -799,6 +799,18 @@ function setMaxRequestLength(minutes) {
 			text = '1 ' + _('hour');
 			newminutes = 60;
 		}
+		// if option > 45 days, add as weeks
+		else if(parseInt(obj.options[i].value) > 64700) {
+			var len = parseInt(obj.options[i].value);
+			if(len == 64800)
+				len = 60480;
+			if(len % 10080)
+				len = len - (len % 10080);
+			else
+				len = len + 10080;
+			text = len / 10080 + ' ' + _('weeks');
+			newminutes = len;
+		}
 		// if option > 46 hours, add as days
 		else if(parseInt(obj.options[i].value) > 2640) {
 			var len = parseInt(obj.options[i].value);

@@ -10187,7 +10187,7 @@ function getUserMaxTimes($uid=0) {
 ///
 /// \fn getReservationLengths($max)
 ///
-/// \param $max - max allowed length in seconds
+/// \param $max - max allowed length in minutes
 ///
 /// \return array of lengths up to $max starting with 30 minutes, 1 hour, 
 /// 2 hours, then increasing by 2 hours up to 47 hours, then 2 days, then 
@@ -10206,8 +10206,10 @@ function getReservationLengths($max) {
 		$lengths["60"] = i("1 hour");
 	for($i = 120; $i <= $max && $i < 2880; $i += 120)
 		$lengths[$i] = $i / 60 . " " . i("hours");
-	for($i = 2880; $i <= $max; $i += 1440)
+	for($i = 2880; $i <= $max && $i <= 64800; $i += 1440)
 		$lengths[$i] = $i / 1440 . " " . i("days");
+	for($i = 70560; $i <= $max; $i += 10080)
+		$lengths[$i] = $i / 10080 . " " . i("weeks");
 	return $lengths;
 }
 
@@ -10229,7 +10231,9 @@ function getReservationLength($length) {
 		return i("1 hour");
 	if($length < 2880)
 		return intval($length / 60) . " " . i("hours");
-	return intval($length / 1440) . " " . i("days");
+	if($length < 64800)
+		return intval($length / 1440) . " " . i("days");
+	return intval($length / 10080) . " " . i("weeks");
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -10254,7 +10258,9 @@ function getReservationExtenstion($length) {
 	}
 	if($length < 2880)
 		return intval($length / 60) . " " . i("hours");
-	return intval($length / 1440) . " " . i("days");
+	if($length < 64800)
+		return intval($length / 1440) . " " . i("days");
+	return intval($length / 10080) . " " . i("weeks");
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -10286,7 +10292,11 @@ function getReservationLengthCeiling($length) {
 		if($length < $i)
 			return $i;
 	}
-	return 64800;
+	for($i = 70560; $i <= 201600; $i += 10080) {
+		if($length < $i)
+			return $i;
+	}
+	return 201600;
 }
 
 ////////////////////////////////////////////////////////////////////////////////

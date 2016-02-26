@@ -3342,8 +3342,10 @@ function AJeditRequest() {
 			$lengths["60"] = i("1 hour");
 		for($i = 120; (($reslen + $i) <= $maxtimes["total"]) && ($i <= $maxtimes["extend"]) && $i < 2880; $i += 120)
 			$lengths[$i] = $i / 60 . " " . i("hours");
-		for($i = 2880; (($reslen + $i) <= $maxtimes["total"]) && ($i <= $maxtimes["extend"]); $i += 1440)
+		for($i = 2880; (($reslen + $i) <= $maxtimes["total"]) && ($i <= $maxtimes["extend"]) && $i < 64800; $i += 1440)
 			$lengths[$i] = $i / 1440 . " " . i("days");
+		for($i = 70560; (($reslen + $i) <= $maxtimes["total"]) && ($i <= $maxtimes["extend"]); $i += 10080)
+			$lengths[$i] = $i / 10080 . " " . i("weeks");
 	}
 	else {
 		if($timeToNext >= 15 && (($reslen + 15) <= $maxtimes["total"]) && (15 <= $maxtimes["extend"]))
@@ -3356,8 +3358,10 @@ function AJeditRequest() {
 			$lengths["60"] = i("1 hour");
 		for($i = 120; ($i <= $timeToNext) && (($reslen + $i) <= $maxtimes["total"]) && ($i <= $maxtimes["extend"]) && $i < 2880; $i += 120)
 			$lengths[$i] = $i / 60 . " " . i("hours");
-		for($i = 2880; ($i <= $timeToNext) && (($reslen + $i) <= $maxtimes["total"]) && ($i <= $maxtimes["extend"]); $i += 1440)
+		for($i = 2880; ($i <= $timeToNext) && (($reslen + $i) <= $maxtimes["total"]) && ($i <= $maxtimes["extend"]) && $i < 64800; $i += 1440)
 			$lengths[$i] = $i / 1440 . " " . i("days");
+		for($i = 70560; ($i <= $timeToNext) && (($reslen + $i) <= $maxtimes["total"]) && ($i <= $maxtimes["extend"]); $i += 10080)
+			$lengths[$i] = $i / 10080 . " " . i("weeks");
 	}
 	$cdata['lengths'] = array_keys($lengths);
 	if($timeToNext == -1 || $timeToNext >= $maxtimes['total']) {
