@@ -9110,7 +9110,7 @@ function labeledFormItem($id, $label, $type, $constraints='', $required=1,
 		case 'textarea':
 			if($width == '')
 				$width = '300px';
-			$h .= "<label for=\"$id\">$label:</label>\n";
+			$h .= "<label style=\"vertical-align: top;\" for=\"$id\">$label:</label>\n";
 			$h .= "<span class=\"labeledform\">\n";
 			$h .= "<textarea ";
 			$h .=        "dojoType=\"dijit.form.Textarea\" ";
@@ -12962,6 +12962,7 @@ function getDojoHTML($refresh) {
 		case 'siteconfig':
 			$filename = 'siteconfig.js';
 			$dojoRequires = array('dojo.parser',
+			                      'dijit.Dialog',
 			                      'dijit.form.Button',
 			                      'dijit.form.Textarea',
 			                      'dijit.form.FilteringSelect',
@@ -12970,6 +12971,7 @@ function getDojoHTML($refresh) {
 			                      'dijit.form.CheckBox',
 			                      'dijit.form.ValidationTextBox',
 			                      'dijit.layout.ContentPane',
+			                      'dojox.layout.FloatingPane',
 			                      'dijit.layout.TabContainer');
 			break;
 		# TODO clean up
@@ -13366,6 +13368,7 @@ function getDojoHTML($refresh) {
 		case "siteconfig":
 			$rt .= "<style type=\"text/css\">\n";
 			$rt .= "   @import \"themes/$skin/css/dojo/$skin.css\";\n";
+			$rt .= "   @import \"dojo/dojox/layout/resources/FloatingPane.css\";\n";
 			$rt .= "   @import \"css/siteconfig.css\";\n";
 			$rt .= "</style>\n";
 			$rt .= "<script type=\"text/javascript\" src=\"js/siteconfig.js?v=$v\"></script>\n";

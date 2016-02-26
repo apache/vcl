@@ -346,7 +346,7 @@ function resizeRecenterDijitDialog(id) {
 
 function checkValidatedObj(objid, errobj) {
 	if(dijit.byId(objid) && ! dijit.byId(objid).get('disabled') &&
-	   ! dijit.byId(objid).isValid()) {
+	   'isValid' in dijit.byId(objid) && ! dijit.byId(objid).isValid()) {
 		dijit.byId(objid)._hasBeenBlurred = true;
 		dijit.byId(objid).validate();
 		//dijit.byId(objid).focus();

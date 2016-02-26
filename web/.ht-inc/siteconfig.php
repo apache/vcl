@@ -60,6 +60,12 @@ function generalOptions($globalopts) {
 
 	# -------- full width -----------
 	$h .= timeSourceHTML($globalopts);
+	if($globalopts) {
+		$obj = new NFSmounts();
+		$h .= $obj->getHTML();
+	}
+	$obj = new Messages($globalopts);
+	$h .= $obj->getHTML();
 	# ------ end full width ---------
 
 	$h .= "<table summary=\"\" id=siteconfig>\n";
@@ -1077,6 +1083,722 @@ class NATportRange extends GlobalSingleVariable {
 				return 0;
 		}
 		return 1;
+	}
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \class GlobalMultiVariable
+///
+/// \brief base class for global single value variables
+///
+////////////////////////////////////////////////////////////////////////////////
+class GlobalMultiVariable {
+	var $name;
+	var $units; #array('id' => array('name' => 'razr-mgt', ...))
+	var $values; #array('id' => '<IP>:/foo/bar,/mydata')
+	var $desc;
+	var $domidbase;
+	var $basecdata;
+	var $jsname;
+	var $defaultval;
+	var $updatemsg;
+	var $type;
+	var $width;
+
+	/////////////////////////////////////////////////////////////////////////////
+	///
+	/// \fn __construct()
+	///
+	/// \brief class construstor
+	///
+	/////////////////////////////////////////////////////////////////////////////
+	function __construct() {
+		$this->basecdata = array('obj' => $this);
+		$this->updatemsg = _("Values updated");
+		$type = 'text';
+	}
+
+	////////////////////////////////////////////////////////////////////////////////
+	///
+	/// \fn getHTML()
+	///
+	/// \return string of HTML
+	///
+	/// \brief generates HTML for setting variables
+	///
+	////////////////////////////////////////////////////////////////////////////////
+	function getHTML() {
+		global $user;
+		$h  = "<div class=\"configwidget\" style=\"width: 100%;\">\n";
+		$h .= "<h3>{$this->name}</h3>\n";
+		$h .= "<span class=\"siteconfigdesc\">\n";
+		$h .= $this->desc;
+		$h .= "<br><br></span>\n";
+		$this->savekeys = array();
+		$this->setkeys = array();
+
+		$h .= $this->existingValuesHTML();
+
+		$unitskeys = array_keys($this->units);
+		$remainingkeys = array_diff($unitskeys, $this->setkeys);
+		$remaining = array();
+		foreach($remainingkeys as $key) {
+			$remaining[$key] = $this->units[$key]['name'];
+		}
+		if(count($remaining) == 0)
+			$h .= "<span id=\"{$this->domidbase}multivalnewspan\" class=\"hidden\">\n";
+		else
+			$h .= "<span id=\"{$this->domidbase}multivalnewspan\">\n";
+
+		$h .= $this->newValueHTML($remaining);
+
+		$h .= "</span>\n"; # multivalnewspan
+
+		$h .= "<div id=\"{$this->domidbase}msg\"></div>\n";
+		$h .= dijitButton("{$this->domidbase}btn", _('Submit Changes'), "{$this->jsname}.saveSettings();", 1);
+		$cdata = $this->basecdata;
+		$cont = addContinuationsEntry('AJupdateAllSettings', $cdata);
+		$h .= "<input type=\"hidden\" id=\"{$this->domidbase}cont\" value=\"$cont\">\n";
+		$this->savekeys = implode(',', $this->savekeys);
+		$h .= "<input type=\"hidden\" id=\"{$this->domidbase}savekeys\" value=\"{$this->savekeys}\">\n";
+		$cont = addContinuationsEntry('AJdeleteMultiSetting', $cdata);
+		$h .= "<input type=\"hidden\" id=\"delete{$this->domidbase}cont\" value=\"$cont\">\n";
+		$h .= "</div>\n";
+		return $h;
+	}
+
+	////////////////////////////////////////////////////////////////////////////////
+	///
+	/// \fn existingValuesHTML()
+	///
+	/// \return string of HTML
+	///
+	/// \brief generates HTML for existing value forms
+	///
+	////////////////////////////////////////////////////////////////////////////////
+	function existingValuesHTML() {
+		$h = "<span id=\"{$this->domidbase}multivalspan\">\n";
+		foreach($this->values as $key => $val) {
+			$this->savekeys[] = "{$this->domidbase}|$key";
+			$this->setkeys[] = $key;
+			$h .= "<span id=\"{$this->domidbase}|{$key}wrapspan\">\n";
+			switch($this->type) {
+				/*case 'numeric':
+					$extra = array('smallDelta' => 1, 'largeDelta' => 10);
+					$h .= labeledFormItem($this->domidbase, $this->label, 'spinner', "{min:{$this->minval}, max:{$this->maxval}}", 1, $val, '', '', $extra);
+					break;
+				case 'boolean':
+					$extra = array();
+					if($val == 1)
+						$extra = array('checked' => 'checked');
+					$h .= labeledFormItem($this->domidbase, $this->label, 'check', '', 1, 1, '', '', $extra);
+					break;*/
+				case 'textarea':
+					$h .= labeledFormItem("{$this->domidbase}|$key", $this->units[$key]['name'], 'textarea', '', 1, $val, '', '', '', $this->width, '', 0);
+					break;
+				default:
+					$h .= labeledFormItem("{$this->domidbase}|$key", $this->units[$key]['name'], 'text', "{$this->constraint}", 1, $val, "{$this->invalidmsg}", '', '', $this->width, '', 0);
+					break;
+			}
+			$h .= dijitButton("{$this->domidbase}|{$key}delbtn", _('Delete'), "{$this->jsname}.deleteMultiVal('$key', '{$this->domidbase}');") . "<br></span>\n";
+		}
+		$h .= "</span>\n"; # multivalspan
+		return $h;
+	}
+
+	////////////////////////////////////////////////////////////////////////////////
+	///
+	/// \fn newValueHTML($remaining)
+	///
+	/// \param $remaining - array of remaining units for which values can be added
+	///
+	/// \return string of HTML
+	///
+	/// \brief generates HTML for new value form
+	///
+	////////////////////////////////////////////////////////////////////////////////
+	function newValueHTML($remaining) {
+		$h = selectInputHTML('', $remaining, "{$this->domidbase}newmultivalid", "dojoType=\"dijit.form.Select\"");
+
+		switch($this->type) {
+			case 'textarea':
+				$h .= "<textarea ";
+				$h .=   "dojoType=\"dijit.form.Textarea\" ";
+				$h .=   "style=\"width: {$this->width}; text-align: left;\" ";
+				$h .=   "id=\"{$this->domidbase}newmultival\">";
+				$h .= "</textarea>\n";
+				break;
+			default:
+				$h .= "<input type=\"text\" ";
+				$h .=   "dojoType=\"dijit.form.ValidationTextBox\" ";
+				$h .=   "regExp=\"{$this->constraint}\" ";
+				$h .=   "invalidMessage=\"{$this->invalidmsg}\" ";
+				$h .=   "style=\"width: {$this->width}\" ";
+				$h .=   "id=\"{$this->domidbase}newmultival\">";
+				break;
+		}
+		$h .= dijitButton("{$this->domidbase}addbtn", _('Add'), "{$this->jsname}.addNewMultiVal();");
+		$cont = addContinuationsEntry('AJaddConfigMultiVal', $this->basecdata);
+		$h .= "<input type=\"hidden\" id=\"{$this->domidbase}addcont\" value=\"$cont\">\n";
+		return $h;
+	}
+
+	////////////////////////////////////////////////////////////////////////////////
+	///
+	/// \fn AJaddConfigMultiVal()
+	///
+	/// \brief adds a multi value setting
+	///
+	////////////////////////////////////////////////////////////////////////////////
+	function AJaddConfigMultiVal() {
+		$newkey = processInputVar('multivalid', ARG_NUMERIC);
+		$newval = processInputVar('multival', ARG_STRING);
+		if(! array_key_exists($newkey, $this->units)) {
+			$arr = array('status' => 'failed',
+			             'msgid' => "{$this->domidbase}msg",
+			             'btn' => "{$this->domidbase}addbtn",
+			             'errmsg' => _("Invalid item selected for new value"));
+			sendJSON($arr);
+			return;
+		}
+		if(! $this->validateValue($newval)) {
+			$arr = array('status' => 'failed',
+			             'msgid' => "{$this->domidbase}msg",
+			             'btn' => "{$this->domidbase}addbtn",
+			             'errmsg' => _("Invalid value submitted"));
+			if(isset($this->invalidvaluemsg))
+				$arr['errmsg'] = $this->invalidvaluemsg;
+			sendJSON($arr);
+			return;
+		}
+		setVariable("{$this->domidbase}|$newkey", $newval, 'none');
+		$arr = array('status' => 'success',
+		             'msgid' => "{$this->domidbase}msg",
+		             'addid' => "{$this->domidbase}|$newkey",
+		             'addname' => $this->units[$newkey]['name'],
+		             'addval' => $newval,
+		             'delkey' => $newkey,
+		             'extrafunc' => "{$this->jsname}.addNewMultiValCBextra",
+		             'msg' => $this->addmsg,
+		             'regexp' => $this->constraint,
+		             'invalidmsg' => str_replace('&amp;', '&', $this->invalidmsg));
+		sendJSON($arr);
+	}
+
+	////////////////////////////////////////////////////////////////////////////////
+	///
+	/// \fn AJdeleteMultiSetting()
+	///
+	/// \brief deletes a multi value setting
+	///
+	////////////////////////////////////////////////////////////////////////////////
+	function AJdeleteMultiSetting() {
+		$key = processInputVar('key', ARG_NUMERIC);
+		if(! array_key_exists($key, $this->values)) {
+			$arr = array('status' => 'failed',
+			             'msgid' => "{$this->domidbase}msg",
+			             'btn' => "{$this->domidbase}|{$key}delbtn",
+			             'errmsg' => _("Invalid item submitted for deletion"));
+			sendJSON($arr);
+			return;
+		}
+		deleteVariable("{$this->domidbase}|$key");
+		$arr = array('status' => 'success',
+		             'msgid' => "{$this->domidbase}msg",
+		             'delid' => "{$this->domidbase}|$key",
+		             'extrafunc' => "{$this->jsname}.deleteMultiValCBextra",
+		             'addid' => "$key",
+		             'addname' => $this->units[$key]['name'],
+		             'msg' => $this->delmsg);
+		sendJSON($arr);
+	}
+
+	////////////////////////////////////////////////////////////////////////////////
+	///
+	/// \fn AJupdateAllSettings()
+	///
+	/// \brief updates all values for implemented type of timevariable
+	///
+	////////////////////////////////////////////////////////////////////////////////
+	function AJupdateAllSettings() {
+		if(! checkUserHasPerm('Site Configuration (global)')) {
+			$arr = array('status' => 'noaccess',
+			             'msg' => _('You do not have access to modify the submitted settings.'));
+			sendJSON($arr);
+			return;
+		}
+		$origvals = $this->values;
+		$newvals = array();
+		foreach($origvals as $key => $val) {
+			switch($this->type) {
+				/*case 'numeric':
+					$newval = processInputVar('newval', ARG_NUMERIC); 
+					if($newval < $this->minval || $newval > $this->maxval) {
+						$arr = array('status' => 'failed',
+						             'msgid' => "{$this->domidbase}msg",
+						             'btn' => "{$this->domidbase}btn",
+						             'errmsg' => _("Invalid value submitted"));
+						sendJSON($arr);
+						return;
+					}
+					break;
+				case 'boolean':
+					$newval = processInputVar('newval', ARG_NUMERIC); 
+					if($newval !== '0' && $newval !== '1') {
+						$arr = array('status' => 'failed',
+						             'msgid' => "{$this->domidbase}msg",
+						             'btn' => "{$this->domidbase}btn",
+						             'errmsg' => _("Invalid value submitted"));
+						sendJSON($arr);
+						return;
+					}
+					break;*/
+				case 'text':
+				case 'textarea':
+					$newval = processInputVar("{$this->domidbase}|$key", ARG_STRING); 
+					if(! $this->validateValue($newval)) {
+						$arr = array('status' => 'failed',
+						             'msgid' => "{$this->domidbase}msg",
+						             'btn' => "{$this->domidbase}btn",
+						             'errmsg' => _("Invalid value submitted for ") . $this->units[$key]['name']);
+						sendJSON($arr);
+						return;
+					}
+					if($newval != $origvals[$key])
+						$newvals["{$this->jsname}|$key"] = $newval;
+					break;
+				/*case 'textarea':
+					$newval = processInputVar('newval', ARG_STRING); 
+					if(! $this->validateValue($newval)) {
+						$arr = array('status' => 'failed',
+						             'msgid' => "{$this->domidbase}msg",
+						             'btn' => "{$this->domidbase}btn",
+						             'errmsg' => _("Invalid value submitted"));
+						if(isset($this->invalidvaluemsg))
+							$arr['errmsg'] = $this->invalidvaluemsg;
+						sendJSON($arr);
+						return;
+					}
+					break;*/
+				default:
+					$arr = array('status' => 'failed',
+					             'msgid' => "{$this->domidbase}msg",
+					             'btn' => "{$this->domidbase}btn",
+					             'errmsg' => _("Invalid value submitted"));
+					sendJSON($arr);
+					return;
+			}
+		}
+		foreach($newvals as $key => $val)
+			setVariable($key, $val, 'none');
+		$arr = array('status' => 'success',
+		             'msgid' => "{$this->domidbase}msg",
+		             'btn' => "{$this->domidbase}btn",
+		             'msg' => $this->updatemsg);
+		sendJSON($arr);
+	}
+
+	////////////////////////////////////////////////////////////////////////////////
+	///
+	/// \fn validateValue($val)
+	///
+	/// \brief validates that a new value is okay; should be implemented in 
+	/// inheriting class
+	///
+	////////////////////////////////////////////////////////////////////////////////
+	function validateValue($val) {
+		return 1;
+	}
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \class NFSmounts
+///
+/// \brief extends GlobalMultiVariable class to implement NFSmounts
+///
+////////////////////////////////////////////////////////////////////////////////
+class NFSmounts extends GlobalMultiVariable {
+	/////////////////////////////////////////////////////////////////////////////
+	///
+	/// \fn __construct()
+	///
+	/// \brief class construstor
+	///
+	/////////////////////////////////////////////////////////////////////////////
+	function __construct() {
+		parent::__construct();
+		$this->name = _('NFS Mounts');
+		$this->units = getManagementNodes();
+		foreach($this->units as $key => $val) {
+			$this->units[$key]['name'] = $val['hostname'];
+		}
+		$vals = getVariablesRegex('^nfsmount\\\|[0-9]+$');
+		$this->values = array();
+		foreach($vals as $key => $val) {
+			$tmp = explode('|', $key);
+			$id = $tmp[1];
+			$this->values[$id] = $val;
+		}
+		$formbase = ' &lt;hostname or IP&gt;:&lt;export path&gt;,&lt;mount path&gt;';
+		$this->desc = _("NFS Mounts are NFS exports that are to be mounted within each reservation deployed by a given management node.<br>Values must be like") . $formbase;
+		$this->domidbase = 'nfsmount';
+		$this->basecdata['obj'] = $this;
+		$this->jsname = 'nfsmount';
+		$this->defaultval = '';
+		$this->type = 'textarea';
+		$this->addmsg = "NFS mount sucessfully added";
+		$this->delmsg = "NFS mount sucessfully deleted";
+		$this->constraint = '((((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?))|([A-Za-z0-9\-\.]+)):\/[a-zA-Z0-9\.@#%\(\)-_=\+\/]+,\/[a-zA-Z0-9\.@#%\(\)-_=\+\/]+';
+		$this->invalidmsg = _("Invalid value - must be in the form") . str_replace('&', '&amp;', $formbase);
+		$this->invalidvaluemsg = html_entity_decode($this->invalidmsg);
+		$this->width = '400px';
+	}
+
+	////////////////////////////////////////////////////////////////////////////////
+	///
+	/// \fn validateValue($val)
+	///
+	/// \brief validates that a new value is okay
+	///
+	////////////////////////////////////////////////////////////////////////////////
+	function validateValue($val) {
+		$vals = explode(";", $val);
+		foreach($vals as $testval) {
+			$tmp = explode(':', $testval);
+			if(count($tmp) != 2)
+				return 0;
+			$iphost = $tmp[0];
+			if(preg_match('/^[0-9\.]+$/', $iphost) && ! validateIPv4addr($iphost))
+				return 0;
+			elseif(! preg_match('/^[A-Za-z0-9\-\.]+$/', $iphost))
+				return 0;
+			$tmp = explode(',', $tmp[1]);
+			if(count($tmp) != 2)
+				return 0;
+			$exportpath = $tmp[0];
+			$mntpath = $tmp[1];
+			if(! preg_match(':^/[a-zA-Z0-9\.@#%\(\)-_=\+/]+:', $exportpath))
+				return 0;
+			if(! preg_match(':^/[a-zA-Z0-9\.@#%\(\)-_=\+/]+:', $mntpath))
+				return 0;
+		}
+		return 1;
+	}
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \class Messages
+///
+/// \brief class to handle configuration of Messages
+///
+////////////////////////////////////////////////////////////////////////////////
+class Messages {
+	var $basecdata;
+	var $name;
+	var $desc;
+	var $affils;
+	var $units;
+	var $basekeys;
+	var $globalopts;
+
+	/////////////////////////////////////////////////////////////////////////////
+	///
+	/// \fn __construct()
+	///
+	/// \brief class construstor
+	///
+	/////////////////////////////////////////////////////////////////////////////
+	function __construct($globalopts) {
+		$this->basecdata['obj'] = $this;
+		$this->name = _('Messages');
+		$this->desc = sprintf(_("This section allows for configuration of messages that are sent to users and administrators about things such as reservations and image management. Every message has a default. Additionally, separate messages can be configured for each affiliation. Most of the messages will have parts that are in square brackets. These parts will have data substituted for them before the message is sent. A list of what can be used in squeare brackets can be found at the <a href=\"%s\">Apache VCL web site</a>. Some messages also have a short form that may be sent such as in the form of a popup within a reservation when the reservation is about to end."), "http://vcl.apache.org/docs/message_substitutions.html");
+		$this->affils = getAffiliations();
+		$this->units = array();
+		$this->basekeys = array();
+		$this->globalopts = $globalopts;
+
+		if($this->globalopts)
+			$data = getVariablesRegex('^(usermessage\\\||adminmessage\\\|)');
+		else
+			$data = getVariablesRegex('^usermessage\\\|');
+		foreach($data as $key => $item) {
+			# 0 - category, 1 - type, 2 - affil
+			$keyparts = explode('|', $key);
+			$k = "{$keyparts[0]}|{$keyparts[1]}";
+			$kname = "{$keyparts[0]} -&gt; {$keyparts[1]}";
+			$this->basekeys[$k] = $kname;
+
+			if($keyparts[0] == 'adminmessage')
+				$keyparts[2] = 'Global';
+			$this->units[$k][$keyparts[2]] = $item;
+		}
+		uasort($this->basekeys, "sortKeepIndex");
+	}
+
+	////////////////////////////////////////////////////////////////////////////////
+	///
+	/// \fn getHTML()
+	///
+	/// \return string of HTML
+	///
+	/// \brief generates HTML for setting variables
+	///
+	////////////////////////////////////////////////////////////////////////////////
+	function getHTML() {
+		global $user;
+		$h  = "<div class=\"configwidget\" style=\"width: 100%;\">\n";
+		$h .= "<h3>{$this->name}</h3>\n";
+		$h .= "<div style=\"text-align: left; padding: 4px;\">\n";
+		$h .= $this->desc;
+		$h .= "<br><br></div>\n";
+
+		$h .= "<script type=\"application/json\" id=\"messagesdata\">\n";
+		$h .= json_encode($this->units); 
+		$h .= "</script>\n";
+
+		$h .= "<strong>Select Message</strong>:";
+		$extra = "dojoType=\"dijit.form.FilteringSelect\" "
+		       . "style=\"width: 300px\" "
+		       . "onChange=\"messages.setContents(1);\"";
+		$h .= selectInputHTML('', $this->basekeys, "messagesselid", $extra);
+		$h .= "<br>\n";
+		if($this->globalopts) {
+			$h .= "<strong>Select Affiliation</strong>:";
+			$h .= selectInputHTML('', $this->affils, "messagesaffilid", $extra);
+		}
+		else {
+			$opts = array($user['affiliationid'] => $this->affils[$user['affiliationid']]);
+			$h .= "<strong>Affiliation: {$this->affils[$user['affiliationid']]}</strong>";
+			$h .= "<div class=\"hidden\">\n";
+			$h .= selectInputHTML('', $opts, "messagesaffilid", $extra);
+			$h .= "</div>\n";
+		}
+
+		$h .= "<br>\n";
+		$h .= "<div id=\"defaultmessagesdiv\" class=\"hidden highlightnotice\"><br><strong>";
+		$h .= i('There is no message set specifically for this affiliation. The default message is being used and is displayed below.');
+		$h .= "</strong><br><br></div>\n";
+		$h .= labeledFormItem("messagessubject", 'Subject', 'text', '', 1, '', '', '', '', '80ch');
+		$h .= labeledFormItem("messagesbody", 'Message', 'textarea', '', 1, '', '', '', '', '80ch');
+		$h .= labeledFormItem("messagesshortmsg", 'Short Message', 'textarea', '', 1, '', '', '', '', '80ch');
+
+		$h .= "<span id=\"messagesaffil\" style=\"font-weight: bold;\"";
+		if(! $this->globalopts)
+			$h .= " class=\"hidden\"";
+		$h .= ">Default message for any affiliation</span><br>\n";
+
+		$h .= dijitButton("messagessavebtn", _('Save Message'), "messages.savemsg();");
+		$h .= dijitButton("messagesdelbtn", _('Delete Message and Use Default'), "messages.confirmdeletemsg();");
+
+		$h .= "<div dojoType=dijit.Dialog\n";
+		$h .= "      id=\"deleteMessageDlg\"\n";
+		$h .= "      title=\"" . i("Delete Message") . "\"\n";
+		$h .= "      duration=250\n";
+		$h .= "      draggable=true\n";
+		$h .= "      style=\"width: 315px;\">\n";
+		$h .= "Are you sure you want to delete the selected message for this affiliaton ";
+		$h .= "and use the default message instead?<br><br>\n";
+		$h .= "<span style=\"font-weight: bold\">Affiliation:</span> <span id=\"deleteMsgAffil\"></span><br>\n";
+		$h .= "<span style=\"font-weight: bold\">Category:</span> <span id=\"deleteMsgCategory\"></span><br>\n";
+		$h .= "<span style=\"font-weight: bold\">Type:</span> <span id=\"deleteMsgType\"></span><br><br>\n";
+		$h .= "   <div align=\"center\">\n";
+		$h .= "   <button id=\"deleteMessageDelBtn\" dojoType=\"dijit.form.Button\">\n";
+		$h .= "    " . i("Delete Message") . "\n";
+		$h .= "     <script type=\"dojo/method\" event=\"onClick\">\n";
+		$h .= "       messages.deletemsg();\n";
+		$h .= "     </script>\n";
+		$h .= "   </button>\n";
+		$h .= "   <button dojoType=\"dijit.form.Button\">\n";
+		$h .= "     " . i("Cancel") . "\n";
+		$h .= "     <script type=\"dojo/method\" event=\"onClick\">\n";
+		$h .= "       dijit.byId('deleteMessageDlg').hide();\n";
+		$h .= "     </script>\n";
+		$h .= "   </button>\n";
+		$h .= "   </div>\n";
+		$h .= "</div>\n";
+
+		$h .= "<div dojoType=dojox.layout.FloatingPane\n";
+		$h .= "      id=\"invalidmsgfieldspane\"\n";
+		$h .= "      resizable=\"true\"\n";
+		$h .= "      closable=\"true\"\n";
+		$h .= "      title=\"" . i("Invalid Message Fields") . "\"\n";
+		$h .= "      style=\"width: 400px; ";
+		$h .=               "height: 200px; ";
+		$h .=               "visibility: hidden; ";
+		$h .=               "text-align: left; ";
+		$h .=               "border: solid 2px red;\"\n";
+		$h .= ">\n";
+		$h .= "<script type=\"dojo/method\" event=\"minimize\">\n";
+		$h .= "  this.hide();\n";
+		$h .= "</script>\n";
+		$h .= "<script type=\"dojo/method\" event=\"close\">\n";
+		$h .= "  this.hide();\n";
+		$h .= "  return false;\n";
+		$h .= "</script>\n";
+		$h .= "<div style=\"padding: 4px;\">\n";
+		$h .= _("The following messages have invalid items included for substitution. Please correct the message contents and save them again for the backend to validate.") . "<br><br>\n";
+		$h .= "   <div id=\"invalidmsgfieldcontent\"></div>\n";
+		$h .= "</div>\n";
+		$h .= "</div>\n";
+
+		$cdata = $this->basecdata;
+		$h .= "<div id=\"messagesmsg\"></div>\n";
+		$cont = addContinuationsEntry('AJsaveMessages', $cdata);
+		$h .= "<input type=\"hidden\" id=\"savemessagescont\" value=\"$cont\">\n";
+		$cont = addContinuationsEntry('AJdeleteMessages', $cdata);
+		$h .= "<input type=\"hidden\" id=\"deletemessagescont\" value=\"$cont\">\n";
+
+		$cont = addContinuationsEntry('AJvalidateMessagesPoll', $cdata);
+		$h .= "<input type=\"hidden\" id=\"validatemessagespollcont\" value=\"$cont\">\n";
+
+		$h .= "</div>\n";
+
+		return $h;
+	}
+
+	////////////////////////////////////////////////////////////////////////////////
+	///
+	/// \fn AJdeleteMessages()
+	///
+	/// \brief deletes an affiliation specific message
+	///
+	////////////////////////////////////////////////////////////////////////////////
+	function AJdeleteMessages() {
+		global $user;
+		$key = processInputVar('key', ARG_STRING);
+		$affilid = processInputVar('affilid', ARG_NUMERIC);
+		$keyparts = explode('|', $key);
+		if(! array_key_exists($key, $this->basekeys) ||
+		   ! array_key_exists($affilid, $this->affils) ||
+		   count($keyparts) != 2 ||
+		   $this->affils[$affilid] == 'Global' ||
+		   ($this->globalopts == 0 && $affilid != $user['affiliationid'])) {
+			$arr = array('status' => 'failed',
+			             'msgid' => "messagesmsg",
+			             'btn' => "messagesdelbtn",
+			             'errmsg' => _("Invalid item submitted for deletion"));
+			sendJSON($arr);
+			return;
+		}
+		$affil = $this->affils[$affilid];
+		$delkey = "$key|$affil";
+		deleteVariable($delkey);
+		$arr = array('status' => 'success',
+		             'msgid' => "messagesmsg",
+		             'key' => $key,
+		             'affil' => $affil,
+		             'extrafunc' => "messages.deleteMessagesCBextra",
+		             'btn' => "messagesdelbtn",
+		             'msg' => sprintf(_('Message type %s for affiliation %s successfully deleted'), $keyparts[1], $affil));
+		sendJSON($arr);
+	}
+
+	////////////////////////////////////////////////////////////////////////////////
+	///
+	/// \fn AJsaveMessages()
+	///
+	/// \brief saves an affiliation specific message
+	///
+	////////////////////////////////////////////////////////////////////////////////
+	function AJsaveMessages() {
+		global $user;
+		$key = processInputVar('key', ARG_STRING);
+		$affilid = processInputVar('affilid', ARG_NUMERIC);
+		$subject = processInputVar('subject', ARG_STRING);
+		$body = processInputVar('body', ARG_STRING);
+		$shortmsg = processInputVar('shortmsg', ARG_STRING);
+
+		$keyparts = explode('|', $key);
+
+		if(! array_key_exists($key, $this->basekeys) ||
+		   ! array_key_exists($affilid, $this->affils) ||
+			count($keyparts) != 2 ||
+		   ($this->globalopts == 0 && $keyparts[0] == 'adminmessage') ||
+		   ($this->globalopts == 0 && $affilid != $user['affiliationid'])) {
+			$arr = array('status' => 'failed',
+			             'msgid' => "messagesmsg",
+			             'btn' => "messagessavebtn",
+			             'errmsg' => _("Invalid item submitted to save"));
+			sendJSON($arr);
+			return;
+		}
+		$affil = $this->affils[$affilid];
+		$savekey = $key;
+		if($keyparts[0] == 'usermessage')
+			$savekey = "{$keyparts[0]}|{$keyparts[1]}|$affil";
+		$data = getVariable($savekey);
+		if(is_null($data))
+			$data = array();
+		$changed = 0;
+		if(! array_key_exists('subject', $data) || $data['subject'] != $subject) {
+			$data['subject'] = $subject;
+			$changed = 1;
+		}
+		if(! array_key_exists('message', $data) || $data['message'] != $body) {
+			$data['message'] = $body;
+			$changed = 1;
+		}
+		if($keyparts[0] == 'usermessage' &&
+			(! array_key_exists('usermessage', $data) ||
+			$data['short_message'] != $shortmsg)) {
+			$data['short_message'] = $shortmsg;
+			$changed = 1;
+		}
+		if($changed) {
+			if(preg_match('/\[.*\]/', $body) ||
+			   preg_match('/\[.*\]/', $shortmsg))
+				setVariable('usermessage_needs_validating', 1, 'none');
+			unset($data['invalidfields']);
+			setVariable($savekey, $data, 'yaml');
+			$usermsg = _('Message successfully saved');
+		}
+		else
+			$usermsg = _('No changes to submitted message. Nothing saved.');
+		$arr = array('status' => 'success',
+		             'msgid' => "messagesmsg",
+		             'key' => $key,
+		             'affil' => $affil,
+		             'subject' => $subject,
+		             'body' => $body,
+		             'shortmsg' => $shortmsg,
+		             'extrafunc' => "messages.saveMessagesCBextra",
+		             'btn' => "messagessavebtn",
+		             'msg' => $usermsg);
+		sendJSON($arr);
+	}
+
+	////////////////////////////////////////////////////////////////////////////////
+	///
+	/// \fn AJvalidateMessagesPoll()
+	///
+	/// \brief checks for errors found by vcld in any recently updated messages
+	///
+	////////////////////////////////////////////////////////////////////////////////
+	function AJvalidateMessagesPoll() {
+		$query = "SELECT v1.name, "
+		       .        "v1.value "
+		       . "FROM variable v1, "
+		       .      "variable v2 "
+		       . "WHERE v1.setby != 'webcode' AND "
+		       .       "v1.setby IS NOT NULL AND "
+		       .       "v2.name = 'usermessage_needs_validating' AND "
+		       .       "v1.timestamp > DATE_SUB(v2.timestamp, INTERVAL 5 MINUTE)";
+		$qh = doQuery($query);
+		$invalids = array();
+		while($row = mysql_fetch_assoc($qh)) {
+			$data = Spyc::YAMLLoad($row['value']);
+			if(array_key_exists('invalidfields', $data)) {
+				$invalids[$row['name']] = $data['invalidfields'];
+			}
+		}
+		if(count($invalids)) {
+			sendJSON(array('status' => 'invalid', 'values' => $invalids));
+			return;
+		}
+		sendJSON(array('status' => 'valid'));
 	}
 }
 

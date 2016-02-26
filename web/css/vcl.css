@@ -305,6 +305,13 @@ body {
 	text-align: left;
 }
 
+.highlightnotice {
+	background-color: #fffa9a;
+	border: 2px solid #eaea00;
+	padding: 3px;
+	margin: 10px;
+}
+
 .highlightnoticewarn {
 	background-color: #ffcccc;
 	border: 2px solid #ff0000;

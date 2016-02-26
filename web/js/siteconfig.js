@@ -249,3 +249,339 @@ function natPortRange() {
 }
 natPortRange.prototype = new GlobalSingleVariable();
 var natPortRange = new natPortRange();
+
+function GlobalMultiVariable() {}
+GlobalMultiVariable.prototype.saveSettings = function() {
+	var data = {continuation: dojo.byId(this.domidbase + 'cont').value};
+
+	var keys = dojo.byId(this.domidbase + 'savekeys').value.split(',');
+	for(var i = 0; i < keys.length; i++) {
+		if('checked' in dijit.byId(keys[i])) {
+			if(dijit.byId(keys[i]).checked)
+				data[keys[i]] = dijit.byId(keys[i]).value;
+			else
+				data[keys[i]] = 0;
+		}
+		else {
+			if(! checkValidatedObj(keys[i])) {
+				dijit.byId(keys[i]).focus();
+				return;
+			}
+			data[keys[i]] = dijit.byId(keys[i]).get('value');
+		}
+	}
+	dijit.byId(this.domidbase + 'btn').set('disabled', true);
+	RPCwrapper(data, generalSiteConfigCB, 1);
+}
+GlobalMultiVariable.prototype.addNewMultiVal = function() {
+	var data = {continuation: dojo.byId(this.domidbase + 'addcont').value,
+	            multivalid: dijit.byId(this.domidbase + 'newmultivalid').get('value'),
+	            multival: dijit.byId(this.domidbase + 'newmultival').get('value')};
+	dijit.byId(this.domidbase + 'addbtn').set('disabled', true);
+	RPCwrapper(data, generalSiteConfigCB, 1);
+}
+GlobalMultiVariable.prototype.addNewMultiValCBextra = function(data) {
+	var span = document.createElement('span');
+	span.setAttribute('id', data.items.addid + 'wrapspan');
+	var label = document.createElement('label');
+	label.setAttribute('for', data.items.addid);
+	label.innerHTML = data.items.addname + ': ';
+	span.appendChild(label);
+	var span2 = document.createElement('span');
+	span2.setAttribute('class', 'labeledform');
+	var text = new dijit.form.ValidationTextBox({
+		id: data.items.addid,
+		required: 'true',
+		style: 'width: 400px;',
+		value: data.items.addval,
+		regExp: data.items.regexp,
+		invalidMessage: data.items.invalidmsg
+	}, document.createElement('div'));
+	span2.appendChild(text.domNode);
+	span.appendChild(span2);
+	var func = this.deleteMultiVal
+	var domidbase = this.domidbase;
+	var btn = new dijit.form.Button({
+		id: data.items.addid + 'delbtn',
+		label: _('Delete'),
+		onClick: function() {
+			func(data.items.delkey, domidbase);
+		}
+	}, document.createElement('div'));
+	span.appendChild(btn.domNode);
+	span.appendChild(document.createElement('br'));
+	dojo.byId(this.domidbase + 'multivalspan').appendChild(span);
+	dijit.byId(this.domidbase + 'newmultival').set('value', '');
+	dijit.byId(this.domidbase + 'newmultivalid').removeOption({value: data.items.delkey});
+	if(dijit.byId(this.domidbase + 'newmultivalid').options.length == 0)
+		dojo.addClass(this.domidbase + 'multivalnewspan', 'hidden');
+	var keys = dojo.byId(this.domidbase + 'savekeys').value.split(',');
+	keys.push(data.items.addid);
+	dojo.byId(this.domidbase + 'savekeys').value = keys.join(',');
+	dijit.byId(this.domidbase + 'addbtn').set('disabled', false);
+}
+GlobalMultiVariable.prototype.deleteMultiVal = function(key, domidbase) {
+	var data = {key: key,
+	            continuation: dojo.byId('delete' + domidbase + 'cont').value};
+	RPCwrapper(data, generalSiteConfigCB, 1);
+}
+GlobalMultiVariable.prototype.deleteMultiValCBextra = function(data) {
+	dijit.byId(data.items.delid).destroy();
+	dijit.byId(data.items.delid + 'delbtn').destroy();
+	dojo.destroy(data.items.delid + 'wrapspan');
+	dijit.byId(this.domidbase + 'newmultivalid').addOption({value: data.items.addid, label: data.items.addname});
+	//dojo.removeClass(this.domidbase + 'adddiv', 'hidden');
+	var keys = dojo.byId(this.domidbase + 'savekeys').value.split(',');
+	var newkeys = new Array();
+	for(var i = 0; i < keys.length; i++) {
+		if(keys[i] != data.items.delid)
+			newkeys.push(keys[i]);
+	}
+	dojo.byId(this.domidbase + 'savekeys').value = newkeys.join(',');
+	//dojo.byId(this.domidbase + 'cont').value = data.items.savecont;
+	dojo.removeClass(this.domidbase + 'multivalnewspan', 'hidden');
+}
+
+function nfsmount() {
+	GlobalMultiVariable.apply(this, Array.prototype.slice.call(arguments));
+	this.domidbase = 'nfsmount';
+}
+nfsmount.prototype = new GlobalMultiVariable();
+var nfsmount = new nfsmount();
+
+function messages() {
+	var items;
+	var timer;
+	var validatecnt;
+	var invalids;
+	this.init();
+}
+messages.prototype.init = function() {
+	if(typeof dijit !== 'object' || dijit.byId('messagesselid') === undefined) {
+		setTimeout(this.init, 500);
+		return;
+	}
+	messages.setContents(1);
+	messages.invalids = new Object();
+	setTimeout(function() {
+		messages.validatecnt = 1;
+		messages.validatePoll();
+	}, 1000);
+}
+messages.prototype.validateContent = function() {
+	var subj = dijit.byId('messagessubject').get('value');
+	if(! this.checkBalancedBrackets(subj)) {
+		dojo.addClass('messagesmsg', 'cfgerror');
+		dojo.removeClass('messagesmsg', 'cfgsuccess');
+		dojo.byId('messagesmsg').innerHTML = _('Unmatched or empty brackets ( [ and ] ) in subject');
+		return false;
+	}
+	var body = dijit.byId('messagesbody').get('value');
+	if(! this.checkBalancedBrackets(body)) {
+		dojo.addClass('messagesmsg', 'cfgerror');
+		dojo.removeClass('messagesmsg', 'cfgsuccess');
+		dojo.byId('messagesmsg').innerHTML = _('Unmatched or empty brackets ( [ and ] ) in message');
+		return false;
+	}
+	var shortmsg = dijit.byId('messagesshortmsg').get('value');
+	if(! this.checkBalancedBrackets(shortmsg)) {
+		dojo.addClass('messagesmsg', 'cfgerror');
+		dojo.removeClass('messagesmsg', 'cfgsuccess');
+		dojo.byId('messagesmsg').innerHTML = _('Unmatched or empty brackets ( [ and ] ) in short message');
+		return false;
+	}
+	return true;
+}
+messages.prototype.checkBalancedBrackets = function(string) {
+	var len = string.length;
+	var inBracket = 0;
+	var hasContent = 0;
+	for(var i = 0; i < len; i++) {
+		var ch = string.charAt(i);
+		switch(ch) {
+			case '[':
+				if(inBracket)
+					return false;
+				inBracket = 1;
+				hasContent = 0;
+				break;
+			case ']':
+				if(! hasContent)
+					return false;
+				inBracket = 0;
+				hasContent = 0;
+				break;
+			default:
+				if(inBracket)
+					hasContent = 1;
+		}
+	}
+	if(inBracket)
+		return false;
+	return true;
+}
+messages.prototype.setContents = function(clearmsg) {
+	if(messages.items === undefined) {
+		messages.items = JSON.parse(document.getElementById('messagesdata').innerHTML);
+	}
+	var msgkey = dijit.byId('messagesselid').get('value');
+	var msgkeyparts = msgkey.split('|');
+	if(msgkeyparts[0] == 'adminmessage') {
+		dijit.byId('messagesaffilid').set('displayedValue', 'Global');
+		dijit.byId('messagesaffilid').set('disabled', true);
+	}
+	else {
+		dijit.byId('messagesaffilid').set('disabled', false);
+	}
+	var affil = dijit.byId('messagesaffilid').get('displayedValue');
+	var key = msgkey + '|' + affil;
+	if(affil == 'Global' || ! (affil in messages.items[msgkey])) {
+		// use default
+		dijit.byId('messagesdelbtn').set('disabled', true);
+		var item = messages.items[msgkey]['Global'];
+		if(affil == 'Global') {
+			dojo.addClass('defaultmessagesdiv', 'hidden');
+		}
+		else {
+			dojo.removeClass('defaultmessagesdiv', 'hidden');
+		}
+	}
+	else {
+		// use affil specific msg
+		dijit.byId('messagesdelbtn').set('disabled', false);
+		var item = messages.items[msgkey][affil];
+		dojo.addClass('defaultmessagesdiv', 'hidden');
+	}
+	var affiltype;
+	if(affil == 'Global') {
+		affiltype = 'Default message for any affiliation';
+	}
+	else {
+		affiltype = 'Message for ' + affil + ' affiliation';
+	}
+	dojo.byId('messagesaffil').innerHTML = affiltype;
+	dijit.byId('messagessubject').set('value', item['subject']);
+	dijit.byId('messagesbody').set('value', item['message']);
+	if('short_message' in item)
+		dijit.byId('messagesshortmsg').set('value', item['short_message']);
+	else
+		dijit.byId('messagesshortmsg').set('value', '');
+	if(clearmsg) {
+		dojo.removeClass('messagesmsg', 'cfgerror');
+		dojo.removeClass('messagesmsg', 'cfgsuccess');
+		dojo.byId('messagesmsg').innerHTML = '';
+	}
+}
+messages.prototype.confirmdeletemsg = function() {
+	var affil = dijit.byId('messagesaffilid').get('displayedValue');
+	if(affil == 'Global')
+		return;
+	var key = dijit.byId('messagesselid').get('value');
+	var keyparts = key.split('|');
+	dojo.byId('deleteMsgAffil').innerHTML = affil;
+	dojo.byId('deleteMsgCategory').innerHTML = keyparts[0];
+	dojo.byId('deleteMsgType').innerHTML = keyparts[1];
+	dijit.byId('deleteMessageDlg').show();
+}
+messages.prototype.deletemsg = function() {
+	dijit.byId('messagesdelbtn').set('disabled', true);
+	dijit.byId('messagesselid').set('disabled', true);
+	dijit.byId('messagesaffilid').set('disabled', true);
+	var data = {key: dijit.byId('messagesselid').get('value'),
+	            affilid: dijit.byId('messagesaffilid').get('value'),
+	            continuation: dojo.byId('deletemessagescont').value};
+	RPCwrapper(data, generalSiteConfigCB, 1);
+}
+messages.prototype.deleteMessagesCBextra = function(data) {
+	dijit.byId('messagesselid').set('disabled', false);
+	dijit.byId('messagesaffilid').set('disabled', false);
+	delete messages.items[data.items.key][data.items.affil];
+	dijit.byId('deleteMessageDlg').hide();
+	messages.setContents(0);
+}
+messages.prototype.savemsg = function() {
+	if(! this.validateContent()) {
+		return;
+	}
+	var invalidkey = dijit.byId('messagesselid').get('value') + '|' + dijit.byId('messagesaffilid').get('displayedValue');
+	if('invalidkey' in this.invalids) {
+		this.invalids.splice(invalidkey, 1);
+		this.updateInvalidContent();
+	}
+	dijit.byId('messagessavebtn').set('disabled', true);
+	dijit.byId('messagesselid').set('disabled', true);
+	dijit.byId('messagesaffilid').set('disabled', true);
+	var data = {key: dijit.byId('messagesselid').get('value'),
+	            affilid: dijit.byId('messagesaffilid').get('value'), 
+	            subject: dijit.byId('messagessubject').get('value'), 
+	            body:  dijit.byId('messagesbody').get('value'),
+	            shortmsg:  dijit.byId('messagesshortmsg').get('value'),
+	            continuation: dojo.byId('savemessagescont').value};
+	RPCwrapper(data, generalSiteConfigCB, 1);
+}
+messages.prototype.saveMessagesCBextra = function(data) {
+	dijit.byId('messagesselid').set('disabled', false);
+	dijit.byId('messagesaffilid').set('disabled', false);
+	messages.items[data.items.key][data.items.affil] = new Object();
+	messages.items[data.items.key][data.items.affil]['name'] = data.items.name;
+	messages.items[data.items.key][data.items.affil]['subject'] = data.items.subject;
+	messages.items[data.items.key][data.items.affil]['message'] = data.items.body;
+	messages.items[data.items.key][data.items.affil]['short_message'] = data.items.shortmsg;
+	dijit.byId('deleteMessageDlg').hide();
+	messages.setContents(0);
+	messages.startValidatePoll();
+}
+messages.prototype.validatePoll = function() {
+	var data = {continuation: dojo.byId('validatemessagespollcont').value};
+	RPCwrapper(data, this.validatePollCB, 1);
+	this.validatecnt--;
+}
+messages.prototype.validatePollCB = function(data, ioArgs) {
+	if(data.items.status == 'invalid') {
+		messages.invalids = data.items.values;
+		messages.updateInvalidContent();
+	}
+	else {
+		messages.invalids = new Object();
+		dijit.byId('invalidmsgfieldspane').hide();
+	}
+	clearTimeout(this.timer);
+	if(messages.validatecnt <= 0)
+		return;
+	messages.timer = setTimeout(function() {
+		messages.validatePoll();
+	}, 1000);
+}
+messages.prototype.startValidatePoll = function() {
+	this.validatecnt = 60;
+	this.validatePoll();
+}
+messages.prototype.stopValidatePoll = function() {
+	clearTimeout(messages.timer);
+}
+messages.prototype.updateInvalidContent = function() {
+	var msg = '';
+	for(key in this.invalids) {
+		var parts = key.split('|');
+		var item = this.invalids[key];
+		if(parts.length == 2) {
+			msg += 'Message: ' + parts[0] + ' -&gt; ' + parts[1] + '<br>';
+			for(var i = 0; i < item.length; i++) {
+				msg += item[i] + '<br>';
+			}
+			msg += '<br>';
+		}
+		else {
+			msg += 'Affiliation: ' + parts[2] + '<br>';
+			msg += 'Message: ' + parts[0] + ' -&gt; ' + parts[1] + '<br>';
+			for(var i = 0; i < item.length; i++) {
+				msg += item[i] + '<br>';
+			}
+			msg += '<br>';
+		}
+	}
+	dojo.byId('invalidmsgfieldcontent').innerHTML = msg;
+	if(dijit.byId('invalidmsgfieldspane').domNode.style.visibility != 'visible')
+		dijit.byId('invalidmsgfieldspane').show();
+}
+var messages = new messages();
