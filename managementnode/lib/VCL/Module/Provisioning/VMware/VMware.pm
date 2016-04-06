@@ -454,6 +454,95 @@ sub initialize {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 node_status
+
+ Parameters  : none
+ Returns     : string
+ Description : Checks the status of the computer in order to determine if the
+               computer is ready to be reserved or needs to be reloaded. A
+               string is returned depending on the status of the computer:
+               'READY':
+                  * Computer is ready to be reserved
+                  * It is accessible
+                  * It is loaded with the correct image
+                  * OS module's post-load tasks have run
+               'POST_LOAD':
+                  * Computer is loaded with the correct image
+                  * OS module's post-load tasks have not run
+               'RELOAD':
+                  * Computer is not accessible or not loaded with the correct
+                    image
+
+=cut
+
+sub node_status {
+	my $self = shift;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $request_state_name = $self->data->get_request_state_name();
+	my $is_server_request = $self->data->is_server_request();
+	my $computer_name = $self->data->get_computer_short_name();
+	
+	# Fist perform the normal checks using the subroutine in Provisioning.pm
+	my $result = $self->SUPER::node_status();
+	
+	# If normal checks require a reload, return it
+	if ($result =~ /reload/i) {
+		return $result;
+	}
+	
+	# VM is loaded with the correct image and responding, result is either READY or POST_LOAD
+	# If this is a reload request, no additional checks are necessary
+	if ($request_state_name =~ /reload/) {
+		notify($ERRORS{'DEBUG'}, 0, "request state is '$request_state_name', returning result from normal node_status checks: '$result'");
+		return $result;
+	}
+	# If this is not a server request, no additional checks are necessary
+	elsif (!$is_server_request) {
+		notify($ERRORS{'DEBUG'}, 0, "this is not a server request, returning result from normal node_status checks: '$result'");
+		return $result;
+	}
+	
+	# Server request
+	notify($ERRORS{'DEBUG'}, 0, "normal node_status checks returned $result, this is a server request, checking if $computer_name is using a dedicated or shared virtual disk");
+	
+	my $vmdk_file_path_dedicated = $self->get_vmdk_file_path_dedicated();
+	if (!$vmdk_file_path_dedicated) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine dedicated vmdk file path, returning 'RELOAD'");
+		return 'RELOAD';
+	}
+	
+	my $vmx_file_path = $self->get_vmx_file_path();
+	if (!$vmx_file_path) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine vmx file path, returning 'RELOAD'");
+		return 'RELOAD';
+	}
+	
+	my @vm_virtual_disk_file_paths = $self->api->get_vm_virtual_disk_file_paths($vmx_file_path);
+	if (!@vm_virtual_disk_file_paths) {
+		notify($ERRORS{'WARNING'}, 0, "unable to retrieve virtual disk files paths of $computer_name, returning 'RELOAD'");
+		return 'RELOAD';
+	}
+	
+	# Check if any of the vmdk files used by the VM match the dedicated vmdk file path
+	for my $virtual_disk_array_ref (@vm_virtual_disk_file_paths) {
+		for my $file_path (@$virtual_disk_array_ref) {
+			if ($file_path eq $vmdk_file_path_dedicated) {
+				notify($ERRORS{'DEBUG'}, 0, "$computer_name is using a dedicated virtual disk: $file_path, returning '$result'");
+				return $result;
+			}
+		}
+	}
+	
+	notify($ERRORS{'DEBUG'}, 0, "$computer_name is NOT using a dedicated virtual disk, returning 'RELOAD'\ndedicated vmdk file path: $vmdk_file_path_dedicated\nvmdk files used by VM:\n" . format_data(\@vm_virtual_disk_file_paths));
+	return 'RELOAD';
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 =head2 unload
 
  Parameters  : none
@@ -479,7 +568,6 @@ sub unload {
 	}
 
 	return 1;
-
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -1401,13 +1489,14 @@ sub remove_existing_vms {
 		my $vmx_file_name = $self->_get_file_name($vmx_file_path);
 		notify($ERRORS{'DEBUG'}, 0, "checking existing vmx file: '$vmx_file_path'");
 		
+		# Section commented out because it may prevent VM from being deleted if datastores change
 		# Ignore file if it does not begin with the base directory path
 		# get_vmx_file_paths() will return all vmx files it finds under the base directory path and all registered vmx files
 		# It's possible for a vmx file to be registered that resided on some other datastore
-		if ($vmx_file_path !~ /^$vmx_base_directory_path/) {
-			#notify($ERRORS{'DEBUG'}, 0, "ignoring existing vmx file '$vmx_file_path' because it does not begin with the base directory path: '$vmx_base_directory_path'");
-			next;
-		}
+		#if ($vmx_file_path !~ /^$vmx_base_directory_path/) {
+		#	notify($ERRORS{'DEBUG'}, 0, "ignoring existing vmx file '$vmx_file_path' because it does not begin with the base directory path: '$vmx_base_directory_path'");
+		#	next;
+		#}
 		
 		# Check if the vmx directory name matches the naming convention VCL would use for the computer
 		my $vmx_file_path_computer_name = $self->_get_file_path_computer_name($vmx_file_path);
@@ -1457,21 +1546,18 @@ sub remove_existing_vms {
 	
 	# Make sure the computer assigned to this reservation isn't still responding
 	# This could occur if a VM was configured to use the IP address but the directory where the VM resides doesn't match the name VCL would have given it
-	if ($self->os->is_ssh_responding()) {
-		my $private_ip_address = $self->data->get_computer_private_ip_address() || '';
-		notify($ERRORS{'WARNING'}, 0, "$computer_name ($private_ip_address) is still responding to SSH after deleting deleting matching VMs, attempting to determine vmx file path");
-		
-		my $active_vmx_file_path = $self->get_active_vmx_file_path();
-		if ($active_vmx_file_path) {
-			notify($ERRORS{'CRITICAL'}, 0, "VM is still running after attempting to delete all existing matching VMs: $computer_name ($private_ip_address)\nvmx file path: '$active_vmx_file_path'");
-		}
-		else {
-			notify($ERRORS{'CRITICAL'}, 0, "VM is still running after attempting to delete all existing matching VMs: $computer_name ($private_ip_address), unable to determine vmx file path");
-		}
-		return;
+	my $remote_connection_target = determine_remote_connection_target($computer_name);
+	if (_pingnode($computer_name)) {
+		notify($ERRORS{'WARNING'}, 0, "$computer_name ($remote_connection_target) is still responding to ping after deleting deleting matching VMs");
+		return 0;
 	}
-	
-	return 1;
+	elsif ($self->os->is_ssh_responding()) {
+		notify($ERRORS{'WARNING'}, 0, "$computer_name ($remote_connection_target) is still responding to SSH after deleting deleting matching VMs");
+		return 0;
+	}
+	else {
+		return 1;
+	}
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -1967,6 +2053,24 @@ sub prepare_vmdk {
 		}
 	}
 	
+	# Check if the VM is dedicated, if so, attempt to copy files from the shared vmdk directory if it exists
+	if ($is_vm_dedicated) {
+		if ($shared_vmdk_exists) {
+			notify($ERRORS{'DEBUG'}, 0, "VM is dedicated and shared vmdk exists on the VM host $vmhost_name, attempting to make a copy");
+			if ($self->copy_vmdk($host_vmdk_file_path_shared, $host_vmdk_file_path)) {
+				notify($ERRORS{'OK'}, 0, "copied vmdk from shared to dedicated directory on VM host $vmhost_name");
+				return 1;
+			}
+			else {
+				notify($ERRORS{'WARNING'}, 0, "failed to copy vmdk from shared to dedicated directory on VM host $vmhost_name");
+				return;
+			}
+		}
+		else {
+			notify($ERRORS{'DEBUG'}, 0, "VM is dedicated, shared vmdk does not exist on the VM host $vmhost_name: $host_vmdk_file_path_shared");
+		}
+	}
+	
 	# Check if the image repository is mounted on the VM host
 	# Copy vmdk files from repository datastore if it's mounted on the host
 	# Attempt this before attempting to copy from the shared datastore to reduce load on shared datastore
@@ -1989,24 +2093,6 @@ sub prepare_vmdk {
 		}
 		else {
 			notify($ERRORS{'DEBUG'}, 0, "vmdk file does not exist in image repository directory mounted on VM host $vmhost_name: $repository_vmdk_file_path");
-		}
-	}
-	
-	# Check if the VM is dedicated, if so, attempt to copy files from the shared vmdk directory if it exists
-	if ($is_vm_dedicated) {
-		if ($shared_vmdk_exists) {
-			notify($ERRORS{'DEBUG'}, 0, "VM is dedicated and shared vmdk exists on the VM host $vmhost_name, attempting to make a copy");
-			if ($self->copy_vmdk($host_vmdk_file_path_shared, $host_vmdk_file_path)) {
-				notify($ERRORS{'OK'}, 0, "copied vmdk from shared to dedicated directory on VM host $vmhost_name");
-				return 1;
-			}
-			else {
-				notify($ERRORS{'WARNING'}, 0, "failed to copy vmdk from shared to dedicated directory on VM host $vmhost_name");
-				return;
-			}
-		}
-		else {
-			notify($ERRORS{'DEBUG'}, 0, "VM is dedicated, shared vmdk does not exist on the VM host $vmhost_name: $host_vmdk_file_path_shared");
 		}
 	}
 	
@@ -8558,6 +8644,7 @@ sub setup_purge_images_helper {
 			next IMAGEREVISION;
 		}
 		
+		print "Attempting to delete directory: $datastore_directory_name_renamed\n";
 		my $delete_attempt_limit = 5;
 		DELETE_ATTEMPT: for (my $delete_attempt = 1; $delete_attempt <= $delete_attempt_limit; $delete_attempt++) {
 			if ($self->vmhost_os->delete_file($datastore_directory_path_renamed)) {
