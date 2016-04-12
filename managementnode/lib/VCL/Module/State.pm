@@ -415,7 +415,7 @@ sub reservation_failed {
 	my $new_computer_state_name;
 	my $request_log_ending;
 	
-	if ($request_state_name eq 'inuse') {
+	if ($request_state_name =~ /(inuse|reboot|server)/) {
 		# Check if the request end time has not been reached
 		my $request_end_time_epoch = convert_to_epoch_seconds($self->data->get_request_end_time());
 		my $current_time_epoch = time;
@@ -926,7 +926,7 @@ sub state_exit {
 				$request_state_name_new = 'maintenance';
 				$computer_state_name_new = 'maintenance';
 			}
-			elsif ($request_state_name_old eq 'inuse' && $request_state_name_new !~ /(inuse|timeout|maintenance)/) {
+			elsif ($request_state_name_old =~ /(inuse|reboot|server)/ && $request_state_name_new !~ /(inuse|timeout|maintenance)/) {
 				notify($ERRORS{'CRITICAL'}, 0, "previous request state is $request_state_name_old, not setting request state to $request_state_name_new, setting request and computer state to inuse");
 				$request_state_name_new = 'inuse';
 				$computer_state_name_new = 'inuse';
@@ -936,7 +936,7 @@ sub state_exit {
 			# Do this to ensure that reservations are not processed again quickly after this process exits
 			# For cluster requests, the parent may have had to wait a while for child processes to exit
 			# Resetting reservation.lastcheck causes reservations to wait the full interval between inuse checks
-			if ($request_state_name_new =~ /(reserved|inuse)/) {
+			if ($request_state_name_new =~ /(reserved|inuse|reboot|server)/) {
 				update_reservation_lastcheck(@reservation_ids);
 			}
 			

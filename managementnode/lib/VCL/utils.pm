@@ -6354,8 +6354,8 @@ sub switch_state {
 			$request_state_name_new = 'maintenance';
 			$computer_state_name_new = 'maintenance';
 		}
-		elsif ($request_state_name_old eq 'inuse') {
-			notify($ERRORS{'DEBUG'}, 0, "previous request state is $request_state_name_old, not setting request state to $request_state_name_new, setting request state back to $request_state_name_old");
+		elsif ($request_state_name_old =~ /(inuse|reboot|server)/) {
+			notify($ERRORS{'DEBUG'}, 0, "previous request state is $request_state_name_old, not setting request state to $request_state_name_new, setting request state back to inuse");
 			$request_state_name_new = 'inuse';
 			$computer_state_name_new = 'inuse';
 		}
@@ -6364,7 +6364,7 @@ sub switch_state {
 	# Don't set log.ending to failed for inuse - this throws off the counts on the dashboard page
 	# Don't set log.ending to failed for image or checkpoint
 	if ($request_log_ending && $request_log_ending =~ /(failed)/) {
-		if ($request_state_name_old =~ /(image|checkpoint|inuse)/) {
+		if ($request_state_name_old =~ /(image|checkpoint|inuse|reboot|server)/) {
 			notify($ERRORS{'DEBUG'}, 0, "request state is $request_state_name_old, not setting log.ending to $request_log_ending");
 			$request_log_ending = 0;
 		}
