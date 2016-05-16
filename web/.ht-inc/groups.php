@@ -146,7 +146,7 @@ function viewGroups() {
 	   preg_match('/Trident/i', $_SERVER['HTTP_USER_AGENT']))
 		$w = array('54px', '38px', '200px', '142px', '65px', '142px', '59px', '58px', '63px', '73px');
 	else
-		$w = array('4.5em', '3em', '17em', '12em', '5em', '12em', '5em', '5em', '5.6em', '6.3em');
+		$w = array('4.8em', '3.5em', '17em', '12em', '5em', '12em', '5em', '5em', '5.6em', '6.3em');
 	print "<th field=\"id\" width=\"{$w[0]}\" formatter=\"fmtUserGroupDeleteBtn\">&nbsp;</th>\n";
 	print "<th field=\"id\" width=\"{$w[1]}\" formatter=\"fmtUserGroupEditBtn\">&nbsp;</th>\n";
 	print "<th field=\"name\" width=\"{$w[2]}\">Name</th>\n";
@@ -268,7 +268,7 @@ function viewGroups() {
 	   preg_match('/Trident/i', $_SERVER['HTTP_USER_AGENT']))
 		$w = array('54px', '38px', '108px', '240px', '250px', '24px');
 	else
-		$w = array('4.5em', '3em', '9em', '20em', '21em', '1.6em');
+		$w = array('4.5em', '3.5em', '9em', '20em', '21em', '1.6em');
 
 	print "<th field=\"id\" width=\"{$w[0]}\" formatter=\"fmtResourceGroupDeleteBtn\">&nbsp;</th>\n";
 	print "<th field=\"id\" width=\"{$w[1]}\" formatter=\"fmtResourceGroupEditBtn\">&nbsp;</th>\n";
@@ -916,7 +916,7 @@ function editOrAddGroup($state) {
 			$edit = 0;
 		if(empty($groupmembers) && ! $edit)
 			print "(empty group)<br>\n";
-		print "<TABLE border=1>\n";
+		print "<TABLE border=1 id=\"groupmembershiptbl\">\n";
 		if($edit) {
 			print "  <TR>\n";
 			print "  <FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";

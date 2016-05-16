@@ -1486,7 +1486,7 @@ function newReservationHTML() {
 	$h .= "<div dojoType=\"dojo.data.ItemFileWriteStore\" data=\"images\" ";
 	$h .= "jsId=\"imagestore\"></div>\n";
 	$h .= "<select dojoType=\"dijit.form.FilteringSelect\" id=\"deployimage\" ";
-	$h .= "style=\"width: 400px\" required=\"true\" store=\"imagestore\" ";
+	$h .= "style=\"width: 95%;\" required=\"true\" store=\"imagestore\" ";
 	$h .= "queryExpr=\"*\${0}*\" ";
 	if($forimaging)
 		$h .= "query=\"{imaging: 1}\" ";

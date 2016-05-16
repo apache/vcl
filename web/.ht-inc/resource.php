@@ -309,7 +309,7 @@ class Resource {
 		   preg_match('/Trident/i', $_SERVER['HTTP_USER_AGENT']))
 			$w = array('64px', '38px', '200px');
 		else
-			$w = array('5em', '3em', '17em');
+			$w = array('5em', '3.5em', '17em');
 		$h .= "<th field=\"id\" id=\"delcolth\" width=\"{$w[0]}\" formatter=\"resource.DeleteBtn\" styles=\"text-align: center;\">&nbsp;</th>\n";
 		$h .= "<th field=\"id\" width=\"{$w[1]}\" formatter=\"resource.EditBtn\" styles=\"text-align: center;\">&nbsp;</th>\n";
 		$h .= "<th field=\"name\" width=\"{$w[2]}\">" . i("Name") . "</th>\n";

@@ -155,7 +155,7 @@ function selectAuth() {
 	print $HTMLheader;
 	$printedHTMLheader = 1;
 	print "<H2>" . i("Welcome to the Virtual Computing Lab") . "</H2>\n";
-	print "<TABLE>\n";
+	print "<TABLE id=\"loginlayout\">\n";
 	print "<TR>\n";
 	print "<TD nowrap class=rightborder>\n";
 	print i("Please select an authentication method to use:") . "<br><br>\n";
@@ -284,11 +284,12 @@ function printLoginPage($servertimeout=0) {
 		$text1 = i("Login with") . " $authtype";
 		$text2 = "";
 	#}
+	print "<div id=\"loginbox\">\n";
 	print "<H2 style=\"display: block\">$text1</H2>\n";
 	print "<FORM action=\"" . BASEURL . SCRIPT . "\" method=post name=loginform>\n";
 	if(strlen($userid))
 		print "<font color=red>" . i("Login failed") . " $extrafailedmsg</font>\n";
-	print "<TABLE>\n";
+	print "<TABLE id=\"loginlayout\">\n";
 	print "  <TR>\n";
 	print "    <TH align=right>$useridLabel:</TH>\n";
 	print "    <TD><INPUT type=text name=userid value=\"$userid\"></TD>\n";
@@ -306,6 +307,7 @@ function printLoginPage($servertimeout=0) {
 	print "<INPUT type=hidden name=continuation value=\"$cont\">\n";
 	print "</FORM>\n";
 	print "$text2<br>\n";
+	print "</div>\n";
 	print getFooter();
 }
 

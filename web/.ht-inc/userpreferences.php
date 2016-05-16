@@ -79,8 +79,8 @@ function userpreferences() {
 	print "      </ul>\n";
 	print "      </div>\n";
 	print "    </TD>\n";
-	print "    <TD rowspan=2 width=50px></TD>\n";
-	print "    <TD rowspan=2>\n";
+	print "    <TD rowspan=2 style=\"width: 5em;\"></TD>\n";
+	print "    <TD rowspan=2 id=\"uipreffieldsets\">\n";
 	if($showpersonal) {
 		print "      <fieldset id=personal class=shown>\n";
 		print "      <legend>" . i("Personal") . "</legend>\n";

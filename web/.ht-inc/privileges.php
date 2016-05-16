@@ -151,8 +151,8 @@ function viewNodes() {
 		print "<TABLE border=1 summary=\"\">\n";
 		print "  <TR>\n";
 		print "    <TD></TD>\n";
-		print "    <TH bgcolor=gray style=\"color: black;\">Block<br>Cascaded<br>Rights</TH>\n";
-		print "    <TH bgcolor=\"#008000\" style=\"color: black;\">Cascade<br>to Child<br>Nodes</TH>\n";
+		print "    <TH class=\"privBlock\" bgcolor=gray style=\"color: black;\">Block<br>Cascaded<br>Rights</TH>\n";
+		print "    <TH class=\"privCascade\" bgcolor=\"#008000\" style=\"color: black;\">Cascade<br>to Child<br>Nodes</TH>\n";
 		foreach($usertypes["users"] as $type) {
 			if($type == 'configAdmin')
 				continue;
@@ -200,8 +200,8 @@ function viewNodes() {
 		print "<TABLE border=1 summary=\"\">\n";
 		print "  <TR>\n";
 		print "    <TD></TD>\n";
-		print "    <TH bgcolor=gray style=\"color: black;\">Block<br>Cascaded<br>Rights</TH>\n";
-		print "    <TH bgcolor=\"#008000\" style=\"color: black;\">Cascade<br>to Child<br>Nodes</TH>\n";
+		print "    <TH class=\"privBlock\" bgcolor=gray style=\"color: black;\">Block<br>Cascaded<br>Rights</TH>\n";
+		print "    <TH class=\"privCascade\" bgcolor=\"#008000\" style=\"color: black;\">Cascade<br>to Child<br>Nodes</TH>\n";
 		foreach($usertypes["users"] as $type) {
 			if($type == 'configAdmin')
 				continue;
@@ -261,8 +261,8 @@ function viewNodes() {
 		print "  <TR>\n";
 		print "    <TH>Group<br>Name</TH>\n";
 		print "    <TH>Group<br>Type</TH>\n";
-		print "    <TH bgcolor=gray style=\"color: black;\">Block<br>Cascaded<br>Rights</TH>\n";
-		print "    <TH bgcolor=\"#008000\" style=\"color: black;\">Cascade<br>to Child<br>Nodes</TH>\n";
+		print "    <TH class=\"privBlock\" bgcolor=gray style=\"color: black;\">Block<br>Cascaded<br>Rights</TH>\n";
+		print "    <TH class=\"privCascade\" bgcolor=\"#008000\" style=\"color: black;\">Cascade<br>to Child<br>Nodes</TH>\n";
 		foreach($resourcetypes as $type) {
 			if($type == 'block' || $type == 'cascade')
 				continue;
@@ -325,8 +325,8 @@ function viewNodes() {
 	print "<TABLE border=1 summary=\"\">\n";
 	print "  <TR>\n";
 	print "    <TD></TD>\n";
-	print "    <TH bgcolor=gray style=\"color: black;\">Block<br>Cascaded<br>Rights</TH>\n";
-	print "    <TH bgcolor=\"#008000\" style=\"color: black;\">Cascade<br>to Child<br>Nodes</TH>\n";
+	print "    <TH class=\"privBlock\" bgcolor=gray style=\"color: black;\">Block<br>Cascaded<br>Rights</TH>\n";
+	print "    <TH class=\"privCascade\" bgcolor=\"#008000\" style=\"color: black;\">Cascade<br>to Child<br>Nodes</TH>\n";
 	foreach($usertypes["users"] as $type) {
 		$img = getImageText($type);
 		print "    <TD>$img</TD>\n";
@@ -338,11 +338,11 @@ function viewNodes() {
 
 	# block rights
 	$count = count($usertypes) + 1;
-	print "    <TD align=center bgcolor=gray><INPUT type=checkbox ";
+	print "    <TD class=\"privBlock\" align=center bgcolor=gray><INPUT type=checkbox ";
 	print "dojoType=dijit.form.CheckBox id=blockchk name=block></TD>\n";
 
 	#cascade rights
-	print "    <TD align=center bgcolor=\"#008000\" id=usercell0:0>";
+	print "    <TD class=\"privCascade\" align=center bgcolor=\"#008000\" id=usercell0:0>";
 	print "<INPUT type=checkbox dojoType=dijit.form.CheckBox id=userck0:0 ";
 	print "name=cascade></TD>\n";
 
@@ -356,7 +356,7 @@ function viewNodes() {
 	print "  </TR>\n";
 	print "</TABLE>\n";
 	print "<div id=addUserPrivStatus></div>\n";
-	print "<TABLE summary=\"\"><TR>\n";
+	print "<TABLE class=\"noborder\" summary=\"\"><TR>\n";
 	print "<TD>\n";
 	print "  <button id=submitAddUserBtn dojoType=\"dijit.form.Button\">\n";
 	print "    Submit New User\n";
@@ -391,8 +391,8 @@ function viewNodes() {
 	print "<TABLE border=1 summary=\"\">\n";
 	print "  <TR>\n";
 	print "    <TD></TD>\n";
-	print "    <TH bgcolor=gray style=\"color: black;\">Block<br>Cascaded<br>Rights</TH>\n";
-	print "    <TH bgcolor=\"#008000\" style=\"color: black;\">Cascade<br>to Child<br>Nodes</TH>\n";
+	print "    <TH class=\"privBlock\" bgcolor=gray style=\"color: black;\">Block<br>Cascaded<br>Rights</TH>\n";
+	print "    <TH class=\"privCascade\" bgcolor=\"#008000\" style=\"color: black;\">Cascade<br>to Child<br>Nodes</TH>\n";
 	foreach($usertypes["users"] as $type) {
 		$img = getImageText($type);
 		print "    <TD>$img</TD>\n";
@@ -406,11 +406,11 @@ function viewNodes() {
 	print "    </TD>\n";
 
 	# block rights
-	print "    <TD align=center bgcolor=gray><INPUT type=checkbox ";
+	print "    <TD class=\"privBlock\" align=center bgcolor=gray><INPUT type=checkbox ";
 	print "dojoType=dijit.form.CheckBox id=blockgrpchk name=blockgrp></TD>\n";
 
 	#cascade rights
-	print "    <TD align=center bgcolor=\"#008000\" id=grpcell0:0>";
+	print "    <TD class=\"privCascade\" align=center bgcolor=\"#008000\" id=grpcell0:0>";
 	print "<INPUT type=checkbox dojoType=dijit.form.CheckBox id=usergrpck0:0 ";
 	print "name=cascadegrp></TD>\n";
 
@@ -424,7 +424,7 @@ function viewNodes() {
 	print "  </TR>\n";
 	print "</TABLE>\n";
 	print "<div id=addUserGroupPrivStatus></div>\n";
-	print "<TABLE summary=\"\"><TR>\n";
+	print "<TABLE class=\"noborder\" summary=\"\"><TR>\n";
 	print "<TD>\n";
 	print "  <button id=submitAddGroupBtn dojoType=\"dijit.form.Button\">\n";
 	print "    Submit New User Group\n";
@@ -459,8 +459,8 @@ function viewNodes() {
 	print "<TABLE border=1 summary=\"\">\n";
 	print "  <TR>\n";
 	print "    <TD></TD>\n";
-	print "    <TH bgcolor=gray style=\"color: black;\">Block<br>Cascaded<br>Rights</TH>\n";
-	print "    <TH bgcolor=\"#008000\" style=\"color: black;\">Cascade<br>to Child<br>Nodes</TH>\n";
+	print "    <TH class=\"privBlock\" bgcolor=gray style=\"color: black;\">Block<br>Cascaded<br>Rights</TH>\n";
+	print "    <TH class=\"privCascade\" bgcolor=\"#008000\" style=\"color: black;\">Cascade<br>to Child<br>Nodes</TH>\n";
 	foreach($resourcetypes as $type) {
 		if($type == 'block' || $type == 'cascade')
 			continue;
@@ -483,11 +483,11 @@ function viewNodes() {
 	print "    </TD>\n";
 
 	# block rights
-	print "    <TD align=center bgcolor=gray><INPUT type=checkbox ";
+	print "    <TD class=\"privBlock\" align=center bgcolor=gray><INPUT type=checkbox ";
 	print "dojoType=dijit.form.CheckBox id=blockresgrpck name=blockresgrp></TD>\n";
 
 	#cascade rights
-	print "    <TD align=center bgcolor=\"#008000\" id=resgrpcell0:0>";
+	print "    <TD class=\"privCascade\" align=center bgcolor=\"#008000\" id=resgrpcell0:0>";
 	print "<INPUT type=checkbox dojoType=dijit.form.CheckBox id=resgrpck0:0 ";
 	print "name=cascaderesgrp></TD>\n";
 
@@ -503,7 +503,7 @@ function viewNodes() {
 	print "  </TR>\n";
 	print "</TABLE>\n";
 	print "<div id=addResourceGroupPrivStatus></div>\n";
-	print "<TABLE summary=\"\"><TR>\n";
+	print "<TABLE class=\"noborder\" summary=\"\"><TR>\n";
 	print "<TD>\n";
 	print "  <button dojoType=\"dijit.form.Button\">\n";
 	print "    Submit New Resource Group\n";
@@ -781,8 +781,8 @@ function selectNode() {
 		$text .= "<TABLE border=1 summary=\"\">";
 		$text .= "  <TR>";
 		$text .= "    <TD></TD>";
-		$text .= "    <TH bgcolor=gray style=\"color: black;\">Block<br>Cascaded<br>Rights</TH>";
-		$text .= "    <TH bgcolor=\"#008000\" style=\"color: black;\">Cascade<br>to Child<br>Nodes</TH>";
+		$text .= "    <TH class=\"privBlock\" bgcolor=gray style=\"color: black;\">Block<br>Cascaded<br>Rights</TH>";
+		$text .= "    <TH class=\"privCascade\" bgcolor=\"#008000\" style=\"color: black;\">Cascade<br>to Child<br>Nodes</TH>";
 		foreach($usertypes["users"] as $type) {
 			$img = getImageText($type);
 			$text .= "    <TD>$img</TD>";
@@ -831,8 +831,8 @@ function selectNode() {
 		$text .= "<TABLE border=1 summary=\"\">";
 		$text .= "  <TR>";
 		$text .= "    <TD></TD>";
-		$text .= "    <TH bgcolor=gray style=\"color: black;\">Block<br>Cascaded<br>Rights</TH>";
-		$text .= "    <TH bgcolor=\"#008000\" style=\"color: black;\">Cascade<br>to Child<br>Nodes</TH>";
+		$text .= "    <TH class=\"privBlock\" bgcolor=gray style=\"color: black;\">Block<br>Cascaded<br>Rights</TH>";
+		$text .= "    <TH class=\"privCascade\" bgcolor=\"#008000\" style=\"color: black;\">Cascade<br>to Child<br>Nodes</TH>";
 		foreach($usertypes["users"] as $type) {
 			$img = getImageText($type);
 			$text .= "    <TH>$img</TH>";
@@ -893,8 +893,8 @@ function selectNode() {
 		$text .= "  <TR>";
 		$text .= "    <TH>Group<br>Name</TH>";
 		$text .= "    <TH>Group<br>Type</TH>";
-		$text .= "    <TH bgcolor=gray style=\"color: black;\">Block<br>Cascaded<br>Rights</TH>";
-		$text .= "    <TH bgcolor=\"#008000\" style=\"color: black;\">Cascade<br>to Child<br>Nodes</TH>";
+		$text .= "    <TH class=\"privBlock\" bgcolor=gray style=\"color: black;\">Block<br>Cascaded<br>Rights</TH>";
+		$text .= "    <TH class=\"privCascade\" bgcolor=\"#008000\" style=\"color: black;\">Cascade<br>to Child<br>Nodes</TH>";
 		foreach($resourcetypes as $type) {
 			if($type == 'block' || $type == 'cascade')
 				continue;
@@ -1282,6 +1282,7 @@ function userLookup() {
 			}
 		}
 		$userdata["groups"] = getUsersGroups($userdata["id"], 1, 1);
+		print "<div id=\"userlookupdata\">\n";
 		print "<TABLE>\n";
 		if(! empty($userdata['unityid'])) {
 			print "  <TR>\n";
@@ -1430,6 +1431,7 @@ function userLookup() {
 				print "</TABLE>\n";
 			}
 		}
+		print "</div>\n";
 		print "<table>\n";
 		print "  <tr>\n";
 		print "    <th>Images User Has Access To:<th>\n";
@@ -1522,6 +1524,7 @@ function userLookup() {
 		$requests = array_reverse($requests);
 		if(! empty($requests)) {
 			print "<h3>User's last " . count($requests) . " reservations:</h3>\n";
+			print "<div id=\"userlookupresdata\">\n";
 			print "<table>\n";
 			$first = 1;
 			foreach($requests as $req) {
@@ -1572,6 +1575,7 @@ function userLookup() {
 				}
 			}
 			print "</table>\n";
+			print "</div>\n";
 		}
 		else
 			print "User made no reservations in the past week.<br>\n";
@@ -1786,7 +1790,7 @@ function printUserPrivRow($privname, $rownum, $privs, $types,
 		$usergroup = 2;
 		$name = "privrow[$privname:block]";
 	}
-	print "    <TD align=center bgcolor=gray>\n";
+	print "    <TD class=\"privBlock\" align=center bgcolor=gray>\n";
 	print "<INPUT type=checkbox dojoType=dijit.form.CheckBox id=ck$rownum:block ";
 	print "name=\"$name\" onClick=\"changeCascadedRights(this.checked, $rownum, ";
 	print "$count, 1, $usergroup);\" $checked $disabled></TD>\n";
@@ -1801,7 +1805,7 @@ function printUserPrivRow($privname, $rownum, $privs, $types,
 	else
 		$checked = "";
 	$name = "privrow[$privname:cascade]";
-	print "    <TD align=center bgcolor=\"#008000\" id=cell$rownum:0>";
+	print "    <TD class=\"privCascade\" align=center bgcolor=\"#008000\" id=cell$rownum:0>";
 	print "<INPUT type=checkbox dojoType=dijit.form.CheckBox id=ck$rownum:0 ";
 	print "name=\"$name\" onClick=\"privChange(this.checked, $rownum, 0, ";
 	print "$usergroup);\" $checked $disabled></TD>\n";
@@ -1820,7 +1824,7 @@ function printUserPrivRow($privname, $rownum, $privs, $types,
 		   in_array($type, $cascadeprivs[$privname])) ||
 		   ($usergroup == 2 &&
 		   in_array($type, $cascadeprivs[$privname]['privs'])))) {
-			$bgcolor = "bgcolor=\"#008000\"";
+			$bgcolor = "class=\"privCascade\" bgcolor=\"#008000\"";
 			$checked = "checked";
 			$value = "value=cascade";
 			$cascaded = 1;
@@ -1916,7 +1920,7 @@ function getUserPrivRowHTML($privname, $rownum, $privs, $types,
 	elseif($usergroup == 'group')
 		$usergroup = 2;
 	$name = "privrow[$privname:block]";
-	$text .= "    <TD align=center bgcolor=gray><INPUT type=checkbox ";
+	$text .= "    <TD class=\"privBlock\" align=center bgcolor=gray><INPUT type=checkbox ";
 	$text .= "dojoType=dijit.form.CheckBox id=ck$rownum:block name=\"$name\" ";
 	$text .= "$checked $disabled onClick=\"changeCascadedRights";
 	$text .= "(this.checked, $rownum, $count, 1, $usergroup)\"></TD>";
@@ -1931,7 +1935,7 @@ function getUserPrivRowHTML($privname, $rownum, $privs, $types,
 	else
 		$checked = "";
 	$name = "privrow[$privname:cascade]";
-	$text .= "    <TD align=center bgcolor=\"#008000\" id=cell$rownum:0>";
+	$text .= "    <TD class=\"privCascade\" align=center bgcolor=\"#008000\" id=cell$rownum:0>";
 	$text .= "<INPUT type=checkbox dojoType=dijit.form.CheckBox id=ck$rownum:0 ";
 	$text .= "name=\"$name\" onClick=\"privChange(this.checked, $rownum, 0, ";
 	$text .= "$usergroup);\" $checked $disabled></TD>";
@@ -1948,7 +1952,7 @@ function getUserPrivRowHTML($privname, $rownum, $privs, $types,
 		   in_array($type, $cascadeprivs[$privname])) ||
 		   ($usergroup == 2 &&
 		   in_array($type, $cascadeprivs[$privname]['privs'])))) {
-			$bgcolor = "bgcolor=\"#008000\"";
+			$bgcolor = "class=\"privCascade\" bgcolor=\"#008000\"";
 			$checked = "checked";
 			$value = "value=cascade";
 			$cascaded = 1;
@@ -2089,7 +2093,7 @@ function getResourcePrivRowHTML($privname, $rownum, $privs, $types,
 	}
 	$count = count($types) + 1;
 	$name = "privrow[" . $privname . ":block]";
-	$text .= "    <TD align=center bgcolor=gray><INPUT type=checkbox ";
+	$text .= "    <TD class=\"privBlock\" align=center bgcolor=gray><INPUT type=checkbox ";
 	$text .= "dojoType=dijit.form.CheckBox id=ck$rownum:block name=\"$name\" ";
 	$text .= "$checked $disabled onClick=\"changeCascadedRights";
 	$text .= "(this.checked, $rownum, $count, 1, 3)\"></TD>\n";
@@ -2101,7 +2105,7 @@ function getResourcePrivRowHTML($privname, $rownum, $privs, $types,
 	else
 		$checked = "";
 	$name = "privrow[" . $privname . ":cascade]";
-	$text .= "    <TD align=center bgcolor=\"#008000\" id=cell$rownum:0>";
+	$text .= "    <TD class=\"privCascade\" align=center bgcolor=\"#008000\" id=cell$rownum:0>";
 	$text .= "<INPUT type=checkbox dojoType=dijit.form.CheckBox id=ck$rownum:0 ";
 	$text .= "onClick=\"privChange(this.checked, $rownum, 0, 3);\" ";
 	$text .= "name=\"$name\" $checked $disabled></TD>\n";
@@ -2117,7 +2121,7 @@ function getResourcePrivRowHTML($privname, $rownum, $privs, $types,
 		$cascaded = 0;
 		if(array_key_exists($privname, $cascadeprivs) && 
 		   in_array($type, $cascadeprivs[$privname])) {
-			$bgcolor = "bgcolor=\"#008000\"";
+			$bgcolor = "class=\"privCascade\" bgcolor=\"#008000\"";
 			$checked = "checked";
 			$value = "value=cascade";
 			$cascaded = 1;

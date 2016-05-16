@@ -1427,7 +1427,7 @@ function getCurrentBlockHTML($listonly=0) {
 	$rt .= "</script>\n";
 	$rt .= "<thead>\n";
 	$rt .= "<tr>\n";
-	$rt .= "<th field=\"start\" width=\"60px\" formatter=\"blockTimesGridDate\">" . i("Date") . "</th>\n";
+	$rt .= "<th field=\"start\" width=\"65px\" formatter=\"blockTimesGridDate\">" . i("Date") . "</th>\n";
 	$rt .= "<th field=\"start\" width=\"54px\" formatter=\"blockTimesGridStart\">" . i("Start") . "</th>\n";
 	$rt .= "<th field=\"end\" width=\"54px\" formatter=\"blockTimesGridEnd\">" . i("End") . "</th>\n";
 	$rt .= "<th field=\"delbtn\" width=\"60px\">" . i("Skip") . "</th>\n";
