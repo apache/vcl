@@ -513,6 +513,9 @@ class ManagementNode extends Resource {
 			}
 		}
 		else {
+			$esc = array('sysadminemail' => mysql_real_escape_string($data['sysadminemail']),
+			             'sharedmailbox' => mysql_real_escape_string($data['sharedmailbox']));
+
 			$olddata = getContinuationVar('olddata');
 			$updates = array();
 			# hostname
