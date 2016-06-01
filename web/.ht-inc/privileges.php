@@ -1432,6 +1432,8 @@ function userLookup() {
 			}
 		}
 		print "</div>\n";
+
+		# image access
 		print "<table>\n";
 		print "  <tr>\n";
 		print "    <th>Images User Has Access To:<th>\n";
@@ -1506,16 +1508,18 @@ function userLookup() {
 		       .        "s.IPaddress, "
 		       .        "l.ending, "
 		       .        "l.requestid, "
-		       .        "m.hostname AS managementnode "
+		       .        "m.hostname AS managementnode, "
+		       .        "ch.hostname AS vmhost "
 		       . "FROM log l, "
 		       .      "image i, "
-		       .      "computer c, "
 		       .      "sublog s "
 		       . "LEFT JOIN managementnode m ON (s.managementnodeid = m.id) "
+		       . "LEFT JOIN computer c ON (s.computerid = c.id) "
+		       . "LEFT JOIN vmhost vh ON (c.vmhostid = vh.id) "
+		       . "LEFT JOIN computer ch ON (vh.computerid = ch.id) "
 		       . "WHERE l.userid = {$userdata['id']} AND "
 		       .        "s.logid = l.id AND "
-		       .        "i.id = s.imageid AND "
-		       .        "c.id = s.computerid "
+		       .        "i.id = s.imageid "
 		       . "ORDER BY l.start DESC "
 		       . "LIMIT 5";
 		$qh = doQuery($query, 290);
@@ -1543,6 +1547,12 @@ function userLookup() {
 				print "    <th align=right>Computer:</th>\n";
 				print "    <td>{$req['hostname']}</td>\n";
 				print "  </tr>\n";
+				if($req['vmhost'] != '') {
+					print "  <tr>\n";
+					print "    <th align=right>VM Host:</th>\n";
+					print "    <td>{$req['vmhost']}</td>\n";
+					print "  </tr>\n";
+				}
 				print "  <tr>\n";
 				print "    <th align=right>Start:</th>\n";
 				print "    <td>{$req['start']}</td>\n";
@@ -1578,7 +1588,7 @@ function userLookup() {
 			print "</div>\n";
 		}
 		else
-			print "User made no reservations in the past week.<br>\n";
+			print "User has made no reservations.<br>\n";
 
 		# current reservations
 		$requests = array();
@@ -1705,6 +1715,126 @@ function userLookup() {
 		}
 		else
 			print "User does not have any current reservations.<br>\n";
+
+		# reservation access
+		if(! empty($userdata['groups'])) {
+			$requests = array();
+			$query = "SELECT DATE_FORMAT(rq.start, '%W, %b %D, %Y, %h:%i %p') AS start, "
+			       .        "DATE_FORMAT(rq.end, '%W, %b %D, %Y, %h:%i %p') AS end, "
+			       .        "rq.id AS requestid, "
+			       .        "MIN(rs.id) AS reservationid, "
+			       .        "c.hostname AS computer, "
+			       .        "i.prettyname AS prettyimage, "
+			       .        "c.IPaddress AS compIP, "
+			       .        "ch.hostname AS vmhost, "
+			       .        "mn.hostname AS managementnode, "
+			       .        "srq.name AS servername, "
+			       .        "aug.name AS admingroup, "
+			       .        "lug.name AS logingroup, "
+			       .        "s1.name AS state, "
+			       .        "s2.name AS laststate "
+			       . "FROM image i, "
+			       .      "managementnode mn, "
+			       .      "request rq "
+			       . "LEFT JOIN reservation rs ON (rs.requestid = rq.id) "
+			       . "LEFT JOIN computer c ON (rs.computerid = c.id) "
+			       . "LEFT JOIN vmhost vh ON (c.vmhostid = vh.id) "
+			       . "LEFT JOIN computer ch ON (vh.computerid = ch.id) "
+			       . "LEFT JOIN serverrequest srq ON (srq.requestid = rq.id) "
+			       . "LEFT JOIN usergroup aug ON (aug.id = srq.admingroupid) "
+			       . "LEFT JOIN usergroup lug ON (lug.id = srq.logingroupid) "
+			       . "LEFT JOIN state s1 ON (s1.id = rq.stateid) "
+			       . "LEFT JOIN state s2 ON (s2.id = rq.laststateid) "
+			       . "WHERE (srq.admingroupid IN (" . implode(',', array_keys($userdata['groups'])) . ") OR "
+			       .        "srq.logingroupid IN (" . implode(',', array_keys($userdata['groups'])) . ")) AND "
+			       .        "i.id = rs.imageid AND "
+			       .        "mn.id = rs.managementnodeid AND "
+			       .        "rq.userid != {$userdata['id']} "
+			       . "GROUP BY rq.id "
+			       . "ORDER BY rq.start";
+			$qh = doQuery($query, 290);
+			while($row = mysql_fetch_assoc($qh))
+				array_push($requests, $row);
+			$requests = array_reverse($requests);
+			if(! empty($requests)) {
+				print "<h3>Server Reservations User Can Use:</h3>\n";
+				print "<table>\n";
+				$first = 1;
+				foreach($requests as $req) {
+					if($first)
+						$first = 0;
+					else {
+						print "  <tr>\n";
+						print "    <td colspan=2><hr></td>\n";
+						print "  </tr>\n";
+					}
+					print "  <tr>\n";
+					print "    <th align=right>Request ID:</th>\n";
+					print "    <td>{$req['requestid']}</td>\n";
+					print "  </tr>\n";
+					if($req['servername'] != '') {
+						print "  <tr>\n";
+						print "    <th align=right>Reservation Name:</th>\n";
+						print "    <td>{$req['servername']}</td>\n";
+						print "  </tr>\n";
+					}
+					print "  <tr>\n";
+					print "    <th align=right>Image:</th>\n";
+					print "    <td>{$req['prettyimage']}</td>\n";
+					print "  </tr>\n";
+					print "  <tr>\n";
+					print "    <th align=right>State:</th>\n";
+					if($req['state'] == 'pending')
+						print "    <td>{$req['laststate']}</td>\n";
+					else
+						print "    <td>{$req['state']}</td>\n";
+					print "  </tr>\n";
+					print "  <tr>\n";
+					print "    <th align=right>Computer:</th>\n";
+					print "    <td>{$req['computer']}</td>\n";
+					print "  </tr>\n";
+					if(! empty($req['vmhost'])) {
+						print "  <tr>\n";
+						print "    <th align=right>VM Host:</th>\n";
+						print "    <td>{$req['vmhost']}</td>\n";
+						print "  </tr>\n";
+					}
+					print "  <tr>\n";
+					print "    <th align=right>Start:</th>\n";
+					print "    <td>{$req['start']}</td>\n";
+					print "  </tr>\n";
+					print "  <tr>\n";
+					print "    <th align=right>End:</th>\n";
+					if($req['end'] == 'Friday, Jan 1st, 2038, 12:00 AM')
+						print "    <td>(indefinite)</td>\n";
+					else
+						print "    <td>{$req['end']}</td>\n";
+					print "  </tr>\n";
+					if($req['compIP'] != '') {
+						print "  <tr>\n";
+						print "    <th align=right>Node's IP Address:</th>\n";
+						print "    <td>{$req['compIP']}</td>\n";
+						print "  </tr>\n";
+					}
+					if($req['admingroup'] != '') {
+						print "  <tr>\n";
+						print "    <th align=right>Admin Group:</th>\n";
+						print "    <td>{$req['admingroup']}</td>\n";
+						print "  </tr>\n";
+					}
+					if($req['logingroup'] != '') {
+						print "  <tr>\n";
+						print "    <th align=right>Access Group:</th>\n";
+						print "    <td>{$req['logingroup']}</td>\n";
+						print "  </tr>\n";
+					}
+					print "  <tr>\n";
+					print "    <th align=right>Management Node:</th>\n";
+					print "    <td>{$req['managementnode']}</td>\n";
+					print "  </tr>\n";
+				}
+			}
+		}
 	}
 	print "</div>\n";
 }
