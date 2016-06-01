@@ -1351,7 +1351,8 @@ function connectRequestCB(data, ioArgs) {
 }
 
 function endReservation(cont) {
-	dojo.byId('deletecontholder').value = cont;
+	if(dojo.byId('deletecontholder'))
+		dojo.byId('deletecontholder').value = cont;
 	RPCwrapper({continuation: cont}, endReservationCB, 1, 30000);
 }
 
@@ -1374,7 +1375,8 @@ function endReservationCB(data, ioArgs) {
 		dijit.byId('serverdeletedlg').show();
 		return;
 	}
-	if(dijit.byId('serverdeletedlg').open) {
+	if(dijit.byId('serverdeletedlg') && 
+	   dijit.byId('serverdeletedlg').open) {
 		dijit.byId('serverdeletedlg').hide();
 		dijit.byId('serverDeleteDlgBtn').set('disabled', false);
 	}
