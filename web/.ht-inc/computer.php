@@ -94,6 +94,13 @@ class Computer extends Resource {
 			case 'eth1macaddress':
 				$w = 8.5;
 				break;
+			case 'procnumber':
+				$w = 3.5;
+				break;
+			case 'imagerevision':
+			case 'ram':
+				$w = 4.5;
+				break;
 			case 'vmhost':
 			case 'nathost':
 				$w = 8;
@@ -139,6 +146,8 @@ class Computer extends Resource {
 		switch($field) {
 			case 'currentimg':
 				return 'Current Image';
+			case 'imagerevision':
+				return 'Image Revision';
 			case 'nextimg':
 				return 'Next Image';
 			case 'ram':
