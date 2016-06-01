@@ -3767,7 +3767,7 @@ class Computer extends Resource {
 				cleanSemaphore();
 			}
 			if($newstateid == 10 && (count($noaction) || count($changeasap) || count($changenow))) {
-				$comparr = array_merge($noaction, $changeasap);
+				$comparr = array_merge($noaction, $changeasap, $changenow);
 				$allids = implode(',', $comparr);
 				if(count($vmwithhost))
 					$skipids = implode(',', $vmwithhost);
