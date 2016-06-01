@@ -95,7 +95,14 @@ function viewRequests() {
 	$imaging = '';
 	$long = '';
 	$server = '';
-	$pendingcnt = 0;
+
+	$pendingids = array(); # array of all currently pending ids
+	$newreadys = array();# array of ids that were in pending and are now ready
+	if(array_key_exists('pendingreqids', $_SESSION['usersessiondata']))
+		$lastpendingids = $_SESSION['usersessiondata']['pendingreqids'];
+	else
+		$lastpendingids = array(); # array of ids that were pending last time (needs to get set from $pendingids at end of function)
+
 	$reqids = array();
 	if(checkUserHasPerm('View Debug Information'))
 		$nodes = getManagementNodes();
@@ -114,6 +121,12 @@ function viewRequests() {
 			$imageid = $requests[$i]["imageid"];
 			$text .= "  <TR valign=top id=reqrow{$requests[$i]['id']}>\n";
 			if(requestIsReady($requests[$i]) && $requests[$i]['useraccountready']) {
+				if(in_array($requests[$i]['id'], $lastpendingids)) {
+					if(! is_null($requests[$i]['servername']))
+						$newreadys[] = $requests[$i]['servername'];
+					else
+						$newreadys[] = $requests[$i]['prettyimage'];
+				}
 				$connect = 1;
 				# request is ready, print Connect! and End buttons
 				$cont = addContinuationsEntry('AJconnectRequest', $cdata, SECINDAY);
@@ -161,7 +174,7 @@ function viewRequests() {
 					# computer is loading, print Pending... and Delete button
 					# TODO figure out a different way to estimate for reboot and reinstall states
 					# TODO if user account not ready, print accurate information in details
-					$pendingcnt++;
+					$pendingids[] = $requests[$i]['id'];
 					$remaining = 1;
 					if(isComputerLoading($requests[$i], $computers)) {
 						if(datetimeToUnix($requests[$i]["daterequested"]) >=
@@ -916,6 +929,7 @@ function viewRequests() {
 		$text .= "</div>\n";
 
 		print $text;
+		$_SESSION['usersessiondata']['pendingreqids'] = $pendingids;
 	}
 	else {
 		$text = str_replace("\n", ' ', $text);
@@ -928,6 +942,9 @@ function viewRequests() {
 			print "dojo.addClass('noresspan', 'hidden');";
 		if($refresh)
 			print "refresh_timer = setTimeout(resRefresh, 20000);\n";
+		if(count($newreadys))
+			print "notifyResReady('" . implode("\n", $newreadys) . "');";
+		$_SESSION['usersessiondata']['pendingreqids'] = $pendingids;
 		print(setAttribute('subcontent', 'innerHTML', $text));
 		print "AJdojoCreate('subcontent');";
 		if($incPaneDetails) {
@@ -935,8 +952,8 @@ function viewRequests() {
 			print(setAttribute('resStatusText', 'innerHTML', $text));
 		}
 		print "checkResGone(" . json_encode($reqids) . ");";
-		if($pendingcnt)
-			print "document.title = '$pendingcnt Pending :: VCL :: Virtual Computing Lab';";
+		if(count($pendingids))
+			print "document.title = '" . count($pendingids) . " Pending :: VCL :: Virtual Computing Lab';";
 		else
 			print "document.title = 'VCL :: Virtual Computing Lab';";
 		return;

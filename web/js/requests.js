@@ -14,6 +14,9 @@
 * See the License for the specific language governing permissions and
 * limitations under the License.
 */
+if("Notification" in window)
+	window.Notification.requestPermission();
+
 var resSubmitted = 0;
 var suggestTimeData = {}
 var resbtntxt = '';
@@ -1333,6 +1336,14 @@ function showWindow(name) {
 		obj.resize(coords);
 	}
 	obj.show();
+}
+
+function notifyResReady(names) {
+	if(! ("Notification" in window) || ! Notification.permission) {
+		//console.log('notifications not supported');
+		return;
+	}
+	var note = new Notification("VCL Reservations ready", { tag: 'reqready', body: names });
 }
 
 function connectRequest(cont) {
