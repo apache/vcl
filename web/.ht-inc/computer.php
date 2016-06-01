@@ -4783,6 +4783,8 @@ class Computer extends Resource {
 		       .        "c.hostname AS hostname, "
 		       .        "mn.hostname AS managementnode, "
 		       .        "sr.name AS rqname, "
+		       .        "aug.name AS admingroup, "
+		       .        "lug.name AS logingroup, "
 		       .        "CONCAT(u.unityid, '@', a.name) AS username, "
 		       .        "rq.id AS requestid, "
 		       .        "vh.hostname AS vmhost "
@@ -4793,11 +4795,15 @@ class Computer extends Resource {
 		       . "LEFT JOIN managementnode mn ON (rs.managementnodeid = mn.id) "
 		       . "LEFT JOIN request rq ON (rs.requestid = rq.id) "
 		       . "LEFT JOIN serverrequest sr ON (sr.requestid = rq.id) "
+		       . "LEFT JOIN usergroup aug ON (aug.id = sr.admingroupid) "
+		       . "LEFT JOIN usergroup lug ON (lug.id = sr.logingroupid) "
 		       . "LEFT JOIN user u ON (rq.userid = u.id) "
 		       . "LEFT JOIN affiliation a ON (u.affiliationid = a.id) "
 		       . "LEFT JOIN vmhost v ON (c.vmhostid = v.id) "
 		       . "LEFT JOIN computer vh ON (v.computerid = vh.id) "
-		       . "WHERE c.id IN ($complist)";
+		       . "LEFT JOIN state s ON (rq.stateid = s.id) "
+		       . "WHERE c.id IN ($complist) AND "
+		       .       "s.name NOT IN ('timedout','deleted','complete')";
 		$qh = doQuery($query);
 		$data = array();
 		while($row = mysql_fetch_assoc($qh)) {
@@ -4823,6 +4829,10 @@ class Computer extends Resource {
 			$msg .= "Management Node: {$row['managementnode']}<br>";
 			if(! is_null($row['vmhost']))
 				$msg .= "VM Host: {$row['vmhost']}<br>";
+			if($row['admingroup'] != '')
+				$msg .= "Admin Group: {$row['admingroup']}<br>";
+			if($row['logingroup'] != '')
+				$msg .= "Access Group: {$row['logingroup']}<br>";
 			$msg .= "Request ID: {$row['requestid']}<br>";
 			$msg .= "<hr>";
 			$data[] = array('name' => $row['hostname'], 'msg' => $msg);
