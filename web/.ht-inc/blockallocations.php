@@ -2553,7 +2553,7 @@ function AJacceptBlockAllocationSubmit() {
 
 	# send accept email to requestor
 	$message = $emailtext . "\n\nVCL Admins";
-	$mailParams = "-f" . ENVELOPESENDER;
+	$mailParams = "-f" . HELPEMAIL;
 	mail($emailuser, i("VCL Block Allocation Accepted"), $message, '', $mailParams);
 
 	print "clearHideConfirmAccept();";
@@ -2725,7 +2725,7 @@ function AJrejectBlockAllocationSubmit() {
 
 	# send reject email to requestor
 	$message = $emailtext . "\n\nVCL Admins";
-	$mailParams = "-f" . ENVELOPESENDER;
+	$mailParams = "-f" . HELPEMAIL;
 	mail($emailuser, i("VCL Block Allocation Rejected"), $message, '', $mailParams);
 
 	print "clearHideConfirmReject();";
