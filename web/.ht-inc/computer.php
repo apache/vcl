@@ -1052,10 +1052,8 @@ class Computer extends Resource {
 						$olddata['vmprofileid'] == '') {
 						$query = "INSERT INTO vmhost "
 						       .        "(computerid, "
-						       .        "vmlimit, "
 						       .        "vmprofileid) "
 						       . "VALUES ({$data['rscid']}, "
-						       .        "5, "
 						       .        "{$data['vmprofileid']})";
 						doQuery($query);
 					}
@@ -2261,10 +2259,8 @@ class Computer extends Resource {
 			if($data['stateid'] == '20') {
 				$query = "INSERT INTO vmhost "
 				       .        "(computerid, "
-				       .        "vmlimit, "
 				       .        "vmprofileid) "
 				       . "VALUES ($rscid, "
-				       .        "5, "
 				       .        "{$data['vmprofileid']})";
 				doQuery($query);
 			}
@@ -2341,10 +2337,8 @@ class Computer extends Resource {
 				if($data['stateid'] == '20') {
 					$query = "INSERT INTO vmhost "
 					       .        "(computerid, "
-					       .        "vmlimit, "
 					       .        "vmprofileid) "
 					       . "VALUES ($rscid, "
-					       .        "5, "
 					       .        "{$data['vmprofileid']})";
 					doQuery($query);
 				}
@@ -2545,10 +2539,8 @@ class Computer extends Resource {
 			# create vmhost entry
 			$query = "INSERT INTO vmhost "
 			       .        "(computerid, "
-			       .        "vmlimit, "
 			       .        "vmprofileid) "
 			       . "VALUES ($compid, "
-			       .        "5, "
 			       .        "$newprofileid)";
 			doQuery($query);
 		}
