@@ -1907,7 +1907,7 @@ function getUserResources($userprivs, $resourceprivs=array("available"),
                           $groupid=0) {
 	global $user;
 	if(in_array('managementnodeAdmin', $userprivs))
-		$userprivs[] = 'mgmtnodeAdmin';
+		$userprivs[] = 'mgmtNodeAdmin';
 	$key = getKey(array($userprivs, $resourceprivs, $onlygroups, $includedeleted, $userid, $groupid));
 	if(array_key_exists($key, $_SESSION['userresources']))
 		return $_SESSION['userresources'][$key];
