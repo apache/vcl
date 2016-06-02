@@ -309,6 +309,9 @@ function initGlobals() {
 			require_once(".ht-inc/serverprofiles.php");
 			require_once(".ht-inc/requests.php");
 			break;
+		case 'oneClicks':
+			require_once(".ht-inc/oneclick.php");
+			break;
 		default:
 			require_once(".ht-inc/requests.php");
 	}
@@ -6137,6 +6140,7 @@ function getUserRequests($type, $id=0) {
 	       .        "rq.daterequested, "
 	       .        "rq.id, "
 	       .        "o.prettyname AS OS, "
+	       .        "o.type AS ostype, "
 	       .        "o.installtype AS OSinstalltype, "
 	       .        "rq.stateid AS currstateid, "
 	       .        "rq.laststateid, "
@@ -11898,6 +11902,12 @@ function xmlrpccall() {
 	xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCgetUserGroupMembers", "xmlRPChandler");
 	xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCaddUsersToGroup", "xmlRPChandler");
 	xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCremoveUsersFromGroup", "xmlRPChandler");
+	xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCgetOneClickParams", "xmlRPChandler");
+	xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCgetOneClicks", "xmlRPChandler");
+	xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCaddOneClick", "xmlRPChandler");
+	xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCeditOneClick", "xmlRPChandler");
+	xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCdeleteOneClick", "xmlRPChandler");
+	xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCgetIP", "xmlRPChandler");
 	xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCautoCapture", "xmlRPChandler");
 	xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCdeployServer", "xmlRPChandler");
 	xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCgetNodes", "xmlRPChandler");
@@ -12659,6 +12669,9 @@ function getNavMenu($inclogout, $inchome, $homeurl=HOMEURL) {
 		$rt .= "<a href=\"" . BASEURL . SCRIPT . "?mode=dashboard\">";
 		$rt .= i("Dashboard") . "</a></li>\n";
 	}
+	$rt .= menulistLI('oneClick');
+	$rt .= "<a href=\"" . BASEURL . SCRIPT . "?mode=newOneClick\">";
+	$rt .= i("VCL gos") . "</a></li>\n";
 	if(checkUserHasPerm('Site Configuration (global)') ||
 	   checkUserHasPerm('Site Configuration (affiliation only)')) {
 		$rt .= menulistLI('siteconfig');
@@ -12984,6 +12997,16 @@ function getDojoHTML($refresh) {
 			                      'dijit.form.ValidationTextBox',
 			                      'dijit.layout.ContentPane',
 			                      'dojox.layout.FloatingPane',
+			                      'dijit.layout.TabContainer');
+			break;
+		case 'newOneClick':
+		case 'editOneClick':
+		case 'submitOneClick':
+		case 'submitEditOneClick':
+		case 'deleteOneClick':
+			$dojoRequires = array('dojo.parser',
+			                      'dijit.layout.ContentPane',
+			                      'dijit.form.ValidationTextBox',
 			                      'dijit.layout.TabContainer');
 			break;
 		# TODO clean up

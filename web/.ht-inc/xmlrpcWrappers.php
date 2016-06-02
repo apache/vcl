@@ -664,8 +664,10 @@ function XMLRPCgetRequestIds() {
 		             'start' => $start,
 		             'end' => $end,
 		             'OS' => $req['OS'],
+		             'ostype' => $req['ostype'],
 		             'isserver' => $req['server'],
-		             'admin' => $req['serveradmin']);
+		             'admin' => $req['serveradmin'],
+		             'serverowner' => $req['serverowner']);
 		if($req['currstateid'] == 14)
 			$tmp['state'] = $states[$req['laststateid']];
 		else
@@ -3729,5 +3731,395 @@ function XMLRPCfinishBaseImageCapture($ownerid, $resourceid, $virtual=1) {
 	$obj = new Image();
 	$obj->addImagePermissions($ownerdata, $resourceid, $virtual);
 	return array('status' => 'success');
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn XMLRPCgetOneClickParams($oneclickid)
+///
+/// \param $oneclickid - id of the one click
+///
+/// \return an array with at least one index named 'status' which will have
+/// one of these values:\n
+/// \b error - error occurred; there will be 2 additional elements in the array:
+/// \li \b errorcode - error number
+/// \li \b errormsg - error string
+///
+/// \b success - there will be these additional elements:
+/// \li \b name - name of one click
+/// \li \b imageid - id of image
+/// \li \b imagename - name of image
+/// \li \b ostype - type of OS in image
+/// \li \b duration - duration for reservations for this one click
+/// \li \b autologin - whether or not autologin should be used with this one
+/// click
+///
+/// \brief returns the parameters for a one click configuration
+///
+////////////////////////////////////////////////////////////////////////////////
+function XMLRPCgetOneClickParams($oneclickid) {
+	global $user;
+	$oneclickid = processInputData($oneclickid, ARG_NUMERIC);
+	$query = "SELECT o.id, "
+	       .        "o.userid, "
+	       .        "o.imageid, "
+	       .        "i.prettyname AS imagename, "
+	       .        "os.`type` AS ostype, "
+	       .        "o.name, "
+	       .        "o.duration, "
+	       .        "o.autologin "
+	       . "FROM oneclick o "
+	       . "LEFT JOIN image i ON (o.imageid = i.id) "
+	       . "LEFT JOIN OS os ON (i.OSid = os.id) "
+	       . "WHERE o.id = $oneclickid AND "
+	       .       "o.status = 1 AND "
+	       .       "o.userid = {$user['id']}";
+	$qh = doQuery($query);
+	//if nothing returned, oneclick does not exist
+	if(! $row = mysql_fetch_assoc($qh)) {
+		return array('status' => 'error',
+		             'errorcode' => 95,
+		             'errormsg' => "The OneClick with ID $oneclickid does not exist.");
+	}
+	elseif($row['userid'] != $user['id']) {
+		return array('status' => 'error',
+		             'errorcode' => 90,
+		             'errormsg' => "The OneClick with ID $oneclickid does not belong to the user that requested it.");
+	}
+
+	return array('status' => 'success',
+	             'name' => $row['name'],
+	             'imageid' => $row['imageid'],
+	             'imagename' => $row['imagename'],
+	             'ostype' => $row['ostype'],
+	             'duration' => $row['duration'],
+	             'autologin' => $row['autologin']);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn XMLRPCgetOneClicks()
+///
+/// \return an array with 2 indices:\n
+/// \b status - will be 'success'\n
+/// \b oneclicks - will be an array of oneclicks
+///
+/// \brief builds an array of one clicks belonging to user
+///
+////////////////////////////////////////////////////////////////////////////////
+function XMLRPCgetOneClicks() {
+	global $user;
+	$states = "8,28,26,27,19,6,3,25,29";
+	$query = "SELECT o.id oneclickid, "
+	        .       "rq.requestid, "
+	        .       "COALESCE(rq.reqcount, 0) AS reqcount, "
+	        .       "o.userid, "
+	        .       "o.imageid, "
+	        .       "i.prettyname imagename, "
+	        .       "os.`type` ostype, "
+	        .       "o.name, "
+	        .       "o.duration, "
+	        .       "o.autologin, "
+	        .       "rq2.stateid AS currstateid, "
+	        .       "rq2.laststateid "
+	        . "FROM oneclick o "
+	        . "LEFT JOIN image i ON (o.imageid = i.id) "
+	        . "LEFT JOIN OS os ON (i.OSid = os.id) "
+	        . "LEFT JOIN ("
+	        .      "SELECT rs.imageid, "
+	        .             "MAX(rq.id) AS requestid, " 
+	        .             "COUNT(rq.id) AS reqcount " 
+	        .      "FROM reservation rs, "
+	        .           "request rq "
+	        .      "WHERE rs.requestid = rq.id AND "
+	        .            "rq.userid = {$user['id']} AND "
+	        .            "(rq.stateid IN ($states) OR "
+	        .            "(rq.stateid = 14 AND "
+	        .             "rq.laststateid IN (13,$states))) " // also include new state if in pending
+	        .      "GROUP BY rs.imageid) AS rq ON (rq.imageid = i.id) "
+	        . "LEFT JOIN request rq2 ON (rq.requestid = rq2.id) "
+	        . "WHERE o.status = 1 AND "
+	        .       "o.userid = {$user['id']} "
+	        . "ORDER BY o.name";
+	$qh = doQuery($query, 101);
+	if(! $qh) {
+		return array('status' => 'error',
+		             'errorcode' => 94,
+		             'errormsg' => "Unable to retrieve user's OneClicks.");
+	}
+	$result = array();
+	$result['status'] = 'success';
+	$result['oneclicks'] = array();
+	#$allstates = getStates();
+	while($row = mysql_fetch_assoc($qh)) {
+		/*if($row['currstateid'] == 14)
+			$state = $allstates[$row['laststateid']];
+		elseif(! is_null($row['currstateid']))
+			$state = $allstates[$row['currstateid']];
+		else
+			$state = 'none';*/
+		$result['oneclicks'][] = array('oneclickid' => $row['oneclickid'],
+		                               'name' => $row['name'],
+		                               'imageid' => $row['imageid'],
+		                               'imagename' => $row['imagename'],
+		                               'ostype' => $row['ostype'],
+		                               'duration' => $row['duration'],
+		                               'autologin' => $row['autologin'],
+		                               'requestid' => $row['requestid'],
+		                               'reqcount' => $row['reqcount']/*,
+		                               'state' => $state*/);
+	}
+	return $result;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn XMLRPCaddOneClick($name, $imageid, $duration, $autologin)
+///
+/// \param $name - name of new one click
+/// \param $imageid - id of image for new one click
+/// \param $duration - duration for reservations made for this one click
+/// \param $autologin - (?) 1 for autologin, 0 to skip autologin
+///
+/// \return an array with at least one index named 'status' which will have
+/// one of these values:\n
+/// \b error - error occurred; there will be 2 additional elements in the array:
+/// \li \b errorcode - error number
+/// \li \b errormsg - error string
+///
+/// \b success - there will be one additional element in this case:
+/// \li \b oneclickid - id of new one click
+///
+/// \brief adds a new one click to VCL
+///
+////////////////////////////////////////////////////////////////////////////////
+function XMLRPCaddOneClick($name, $imageid, $duration, $autologin) {
+	global $user;
+	$userid = $user['id'];
+	$imageid = processInputData($imageid, ARG_NUMERIC);
+	$name = processInputData($name, ARG_STRING);
+	$duration = processInputData($duration, ARG_NUMERIC);
+	$autologin = processInputData($autologin, ARG_NUMERIC) == 1 ? 1 : 0;
+
+	# validate $imageid
+	$resources = getUserResources(array("imageAdmin", "imageCheckOut"));
+	$images = removeNoCheckout($resources["image"]);
+	if(! array_key_exists($imageid, $images)) {
+		return array('status' => 'error',
+		             'errorcode' => 93,
+		             'errormsg' => "Unable to create OneClick.");
+	}
+
+	# validate $name
+	if(! preg_match('/^([-a-zA-Z0-9\. \(\)]){3,70}$/', $name)) {
+		return array('status' => 'error',
+		             'errorcode' => 93,
+		             'errormsg' => "Unable to create OneClick.");
+	}
+
+	# validate $duration
+	$images = getImages(0, $imageid);
+	$maxlength = $images[$imageid]['maxinitialtime'];
+	$maxtimes = getUserMaxTimes();
+	if($maxlength && $maxlength < $maxtimes['initial'])
+		$maxduration = $maxlength;
+	else
+		$maxduration = $maxtimes['initial'];
+	if($duration > $maxduration) {
+		return array('status' => 'error',
+		             'errorcode' => 93,
+		             'errormsg' => "Unable to create OneClick.");
+	}
+
+	$query = "INSERT INTO oneclick"
+	       .        "(userid, "
+	       .        "imageid, "
+	       .        "name, "
+	       .        "duration, "
+	       .        "autologin, "
+	       .        "status) "
+	       . "VALUES "
+	       .        "($userid, "
+	       .        "$imageid, "
+	       .        "'$name', "
+	       .        "$duration, "
+	       .        "$autologin, "
+	       .        "1) ";
+	$qh = doQuery($query, 101);
+	if(! $qh) {
+		return array('status' => 'error',
+		             'errorcode' => 93,
+		             'errormsg' => "Unable to create OneClick.");
+	}
+	$return = array();
+	$return['oneclickid']= dbLastInsertID();
+	$return['status'] = 'success';
+	return $return;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn XMLRPCeditOneClick($oneclickid, $name, $imageid, $duration, $autologin)
+///
+/// \param $oneclickid - id of the one click
+/// \param $name - name of new one click
+/// \param $imageid - id of image for new one click
+/// \param $duration - duration for reservations made for this one click
+/// \param $autologin - (?) 1 for autologin, 0 to skip autologin
+///
+/// \return an array with at least one index named 'status' which will have
+/// one of these values:\n
+/// \b error - error occurred; there will be 2 additional elements in the array:
+/// \li \b errorcode - error number
+/// \li \b errormsg - error string
+///
+/// \b success - there will be these additional elements:
+/// \li \b name - name of one click
+/// \li \b imageid - id of image
+/// \li \b imagename - name of image
+/// \li \b ostype - type of OS in image
+/// \li \b duration - duration for reservations for this one click
+/// \li \b autologin - whether or not autologin should be used with this one
+/// click
+///
+/// \brief edits the configuration of a one click
+///
+////////////////////////////////////////////////////////////////////////////////
+function XMLRPCeditOneClick($oneclickid, $name, $imageid, $duration, $autologin) {
+	global $user;
+	$oneclickid = processInputData($oneclickid, ARG_NUMERIC);
+	$imageid = processInputData($imageid, ARG_NUMERIC);
+	$name = processInputData($name, ARG_STRING);
+	$duration = processInputData($duration, ARG_NUMERIC);
+	$autologin = processInputData($autologin, ARG_NUMERIC) == 1 ? 1 : 0;
+
+	# validate $imageid
+	$resources = getUserResources(array("imageAdmin", "imageCheckOut"));
+	$images = removeNoCheckout($resources["image"]);
+	if(! array_key_exists($imageid, $images)) {
+		return array('status' => 'error',
+		             'errorcode' => 92,
+		             'errormsg' => "Invalid image specified");
+	}
+
+	# validate $name
+	if(! preg_match('/^([-a-zA-Z0-9\. \(\)]){3,70}$/', $name)) {
+		return array('status' => 'error',
+		             'errorcode' => 96,
+		             'errormsg' => "Invalid name specified - name can be from 3 to 70 characters long and can only contain letters, numbers, spaces, and these characters: - . ( )");
+	}
+
+	# validate $duration
+	$images = getImages(0, $imageid);
+	$maxlength = $images[$imageid]['maxinitialtime'];
+	$maxtimes = getUserMaxTimes();
+	if($maxlength && $maxlength < $maxtimes['initial'])
+		$maxduration = $maxlength;
+	else
+		$maxduration = $maxtimes['initial'];
+	if($duration > $maxduration) {
+		$allowed = prettyLength($maxduration);
+		return array('status' => 'error',
+		             'errorcode' => 97,
+		             'errormsg' => "Specified duration is too long",
+		             'maxduration' => $allowed);
+	}
+	
+	$query = "SELECT id "
+	       . "FROM oneclick "
+	       . "WHERE id = $oneclickid AND "
+	       .       "status = 1 AND "
+	       .       "userid = {$user['id']}";
+	$qh = doQuery($query, 101);
+	//if nothing returned, oneclick does not exist or belongs to another user
+	if(! $row = mysql_fetch_assoc($qh)) {
+		return array('status' => 'error',
+		             'errorcode' => 95,
+		             'errormsg' => "The OneClick with ID $oneclickid does not exist.");
+	}
+	/*elseif($row['userid'] != $user['id']) {
+		return array('status' => 'error',
+		             'errorcode' => 90,
+		             'errormsg' => "The OneClick with ID $oneclickid does not belong to the user that requested it.");
+	}*/
+	
+	$query = "UPDATE oneclick "
+	       . "SET imageid = $imageid, "
+	       .     "name = '$name', "
+	       .     "duration = $duration, "
+	       .     "autologin = $autologin "
+	       . "WHERE id = $oneclickid AND "
+	       .       "userid = {$user['id']}";
+	$qh = doQuery($query, 101);
+	if(! $qh)
+		return array('status' => 'error',
+		             'errorcode' => 98,
+		             'errormsg' => "Unable to update OneClick.");
+
+	return XMLRPCgetOneClickParams($oneclickid);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn XMLRPCdeleteOneClick($oneclickid) {
+///
+/// \param $oneclickid - id of the one click
+///
+/// \return an array with at least one index named 'status' which will have
+/// one of these values:\n
+/// \b error - error occurred; there will be 2 additional elements in the array:
+/// \li \b errorcode - error number
+/// \li \b errormsg - error string
+///
+/// \b success - one click was successfully deleted
+///
+/// \brief deletes a one click
+///
+////////////////////////////////////////////////////////////////////////////////
+function XMLRPCdeleteOneClick($oneclickid) {
+	global $user;
+	$oneclickid = processInputData($oneclickid, ARG_NUMERIC);
+	
+	$query = "SELECT id "
+	       . "FROM oneclick "
+	       . "WHERE id = $oneclickid AND "
+	       .       "userid = {$user['id']}";
+	$qh = doQuery($query, 101);
+	//if nothing returned, oneclick does not exist or belongs to another user
+	if(! $row = mysql_fetch_assoc($qh)) {
+		return array('status' => 'error',
+		             'errorcode' => 95,
+		             'errormsg' => "The OneClick with ID $oneclickid does not exist.");
+	}
+
+	$query = "UPDATE oneclick "
+	       . "SET status = 0 "
+	       . "WHERE id = $oneclickid AND "
+	       .       "userid = {$user['id']}";
+	$qh = doQuery($query, 101);
+	if(! $qh) {
+		return array('status' => 'error',
+		             'errorcode' => 91,
+		             'errormsg' => "Unable to delete OneClick.");
+	}
+	$return = array();
+	$return['status'] = 'success';
+	return $return;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn XMLRPCgetIP()
+///
+/// \return an array with 2 indices:\n
+/// \b status - will be 'success'\n
+/// \b ip - will be the client's IP address as seen by the server\n
+///
+/// \brief this is a function that returns the client's IP address as seen by
+/// the server
+///
+////////////////////////////////////////////////////////////////////////////////
+function XMLRPCgetIP() {
+	return array('status' => 'success', 'ip' => $_SERVER['REMOTE_ADDR']);
 }
 ?>

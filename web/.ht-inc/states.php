@@ -60,6 +60,7 @@ $actions["entry"] = array('main',
                           'RESTresourceDetail',
                           #'testDojoREST',
                           'siteconfig',
+                          'newOneClick',
 );
 
 $noHTMLwrappers = array('sendRDPfile',
@@ -730,4 +731,15 @@ $actions['pages']['shiblogout'] = "misc";
 $actions['pages']['AJvalidateUserid'] = "misc";
 $actions['pages']['changeLocale'] = "misc";
 
+# OneClicks (VCL go)
+$actions['mode']['newOneClick'] = "newOneClick";
+$actions['mode']['submitOneClick'] = "submitOneClick";
+$actions['mode']['deleteOneClick'] = "deleteOneClick";
+$actions['mode']['editOneClick'] = "editOneClick";
+$actions['mode']['submitEditOneClick']= "submitEditOneClick";
+$actions['pages']['newOneClick'] = "oneClicks";
+$actions['pages']['submitOneClick'] = "oneClicks";
+$actions['pages']['deleteOneClick'] = "oneClicks";
+$actions['pages']['editOneClick'] = "oneClicks";
+$actions['pages']['submitEditOneClick'] = "oneClicks";
 ?>
