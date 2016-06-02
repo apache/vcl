@@ -1137,6 +1137,25 @@ CALL AddColumnIfNotExists('OS', 'minram', "MEDIUMINT UNSIGNED NOT NULL DEFAULT '
 -- --------------------------------------------------------
 
 --
+-- Table structure for table `oneclick`
+--
+
+CREATE TABLE IF NOT EXISTS `oneclick` (
+	 `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+	 `userid` mediumint(8) unsigned NOT NULL,
+	 `imageid` smallint(5) unsigned NOT NULL,
+	 `name` varchar(70) NOT NULL,
+	 `duration` int(11) NOT NULL,
+	 `autologin` tinyint(1) NOT NULL DEFAULT '0',
+	 `status` tinyint(4) NOT NULL DEFAULT '1',
+	 PRIMARY KEY (`id`),
+	 KEY `userid` (`userid`),
+	 KEY `imageid` (`imageid`)
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+
+-- --------------------------------------------------------
+
+--
 -- Table structure for table `openstackcomputermap`
 --
 
@@ -2259,6 +2278,15 @@ CALL DropExistingConstraints('natport', 'nathostid');
 CALL AddConstraintIfNotExists('natport', 'connectmethodportid', 'connectmethodport', 'id', 'update', 'CASCADE');
 CALL AddConstraintIfNotExists('natport', 'reservationid', 'reservation', 'id', 'delete', 'CASCADE');
 CALL AddConstraintIfNotExists('natport', 'nathostid', 'nathost', 'id', 'update', 'CASCADE');
+
+-- --------------------------------------------------------
+
+--
+-- Constraints for table `oneclick`
+--
+
+CALL AddConstraintIfNotExists('oneclick', 'imageid', 'image', 'id', 'none', '');
+CALL AddConstraintIfNotExists('oneclick', 'userid', 'user', 'id', 'none', '');
 
 -- --------------------------------------------------------
 
