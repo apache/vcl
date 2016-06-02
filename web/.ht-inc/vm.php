@@ -71,18 +71,6 @@ function editVMInfo() {
 		print "</button><br><br>\n";
 		print "<div id=vmhostdata class=hidden>\n";
 		print "<table summary=\"\">\n";
-		print "  <tr>\n";
-		print "    <th align=right>VM limit:</th>\n";
-		print "    <td>\n";
-		$cont = addContinuationsEntry('updateVMlimit');
-		print "      <input dojoType=\"dijit.form.NumberSpinner\"\n";
-		print "             constraints=\"{min:1,max:" . MAXVMLIMIT . "}\"\n";
-		print "             maxlength=\"3\"\n";
-		print "             id=\"vmlimit\"\n";
-		print "             intermediateChanges=\"true\"\n";
-		print "             onChange=\"updateVMlimit('$cont')\">\n";
-		print "    </td>\n";
-		print "  </tr>\n";
 		#$cont = addContinuationsEntry('changeVMprofile');
 		print "  <tr>\n";
 		print "    <th align=right>VM Profile:</th>\n";
@@ -114,6 +102,7 @@ function editVMInfo() {
 		print "VMs assigned to host:<br>\n";
 		print "<select name=currvms multiple id=currvms size=15 onChange=showVMstate()>\n";
 		print "</select><br>\n";
+		print "Assigned VMs: <span id=\"assignedcnt\">0</span><br>\n";
 		print "State of selected vm:<br>\n";
 		print "<span id=vmstate></span>\n";
 		print "<div id=\"noaccessdiv\" class=\"hidden\"><hr>VMs assigned to ";
@@ -484,8 +473,7 @@ function vmhostdata() {
 	$noaccess = array_merge($noaccess);
 	$freevms = array_merge($freevms);
 	$cont = addContinuationsEntry('AJchangeVMprofile', array(), 3600, 1, 0);
-	$arr = array('vmlimit' => $data[$vmhostid]['vmlimit'],
-	             'profile' => $data[$vmhostid]['vmprofiledata'],
+	$arr = array('profile' => $data[$vmhostid]['vmprofiledata'],
 	             'continuation' => $cont,
 	             'allvms' => $allvms,
 	             'currvms' => $currvms,
@@ -506,7 +494,6 @@ function vmhostdata() {
 /// \b computerid - id of computer\n
 /// \b name - hostname of computer\n
 /// \b hostname - hostname of computer\n
-/// \b vmlimit - maximum number of vm's host can handle\n
 /// \b vmprofileid - id of vm profile\n
 /// \b vmprofiledata - array of data about the vm's profile as returned from
 /// getVMProfiles
@@ -520,7 +507,6 @@ function getVMHostData($id='') {
 	       .        "vh.computerid, " 
 	       .        "c.hostname AS name, "
 	       .        "c.hostname, "
-	       .        "vh.vmlimit, "
 	       .        "vh.vmprofileid "
 	       . "FROM vmhost vh, " 
 	       .      "computer c "
@@ -543,67 +529,6 @@ function getVMHostData($id='') {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
-/// \fn updateVMlimit()
-///
-/// \brief updates the vmlimit for the submitted vmhostid
-///
-////////////////////////////////////////////////////////////////////////////////
-function updateVMlimit() {
-	global $mysql_link_vcl;
-	$vmhostid = processInputVar('vmhostid', ARG_NUMERIC);
-	$newlimit = processInputVar('newlimit', ARG_NUMERIC);
-
-	$data = getVMHostData($vmhostid);
-
-	if($data[$vmhostid]['vmlimit'] == $newlimit) {
-		sendJSON(array('status' => 'SUCCESS'));
-		return;
-	}
-	$resources = getUserResources(array("computerAdmin"), array("administer"));
-	if(! array_key_exists($data[$vmhostid]['computerid'], $resources['computer'])) {
-		$rc = array('status' => 'ERROR',
-		            'msg' => "You do not have access to manage this host.");
-		sendJSON($rc);
-		return;
-	}
-
-	if($newlimit < 0 || $newlimit > MAXVMLIMIT) {
-		$rc = array('status' => 'ERROR',
-		            'msg' => "ERROR: newlimit out of range");
-		sendJSON($rc);
-		return;
-	}
-
-	# get number of vms assigned to vmhost
-	$query = "SELECT COUNT(id) as assigned "
-	       . "FROM computer "
-	       . "WHERE type = 'virtualmachine' AND "
-	       .       "vmhostid = $vmhostid AND "
-	       .       "deleted = 0";
-	$qh = doQuery($query, 101);
-	$row = mysql_fetch_assoc($qh);
-	if($row['assigned'] > $newlimit) {
-		$rc = array('status' => 'LIMIT',
-		            'msg' => "Cannot reduce VM limit below the current number of assigned VMs",
-		            'limit' => $row['assigned']);
-		sendJSON($rc);
-		return;
-	}
-
-	$query = "UPDATE vmhost SET vmlimit = $newlimit WHERE id = $vmhostid";
-	$qh = doQuery($query, 101);
-	if(mysql_affected_rows($mysql_link_vcl) == 0) {
-		$rc = array('status' => 'ERROR',
-		            'msg' => "ERROR: failed to update vmlimit",
-		            'data' => $data);
-		sendJSON($rc);
-		return;
-	}
-	sendJSON(array('status' => 'SUCCESS'));
-}
-
-////////////////////////////////////////////////////////////////////////////////
-///
 /// \fn AJvmToHost()
 ///
 /// \brief adds vm's to a vmhost; prints json data with:\n
@@ -619,17 +544,6 @@ function AJvmToHost() {
 	$resources = getUserResources(array("computerAdmin"), array("administer"));
 	if(! array_key_exists($hostdata[$hostid]['computerid'], $resources['computer'])) {
 		sendJSON(array('failed' => 'nohostaccess'));
-		return;
-	}
-
-	# find out how many vms are currently on the host
-	$query = "SELECT COUNT(id) "
-	       . "FROM computer "
-	       . "WHERE vmhostid = $hostid";
-	$qh = doQuery($query, 101);
-	$row = mysql_fetch_row($qh);
-	if($row[0] >= $hostdata[$hostid]['vmlimit']) {
-		sendJSON(array('failed' => 'vmlimit'));
 		return;
 	}
 

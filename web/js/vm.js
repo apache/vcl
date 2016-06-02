@@ -58,7 +58,6 @@ function VMHostDataCB(data, ioArgs) {
 		document.body.style.cursor = 'default';
 		return;
 	}
-	dojo.byId('vmlimit').value = data.items.vmlimit;
 	dojo.byId('vmhostdata').className = 'shown';
 
 	curprofileid = data.items.profileid;
@@ -102,6 +101,7 @@ function VMHostDataCB(data, ioArgs) {
 	for(var i = 0; i < data.items.currvms.length; i++) {
 		inobj.options[inobj.options.length] = new Option(data.items.currvms[i].name, data.items.currvms[i].id);
 	}
+	dojo.byId('assignedcnt').innerHTML = dojo.byId('currvms').options.length;
 	var outobj = dojo.byId('freevms');
 	for(var i = 0; i < data.items.freevms.length; i++) {
 		outobj.options[outobj.options.length] = new Option(data.items.freevms[i].name, data.items.freevms[i].id);
@@ -131,32 +131,6 @@ function VMHostDataCB(data, ioArgs) {
 
 	//dojo.byId('changevmcont').value = data.items.continuation;
 
-	document.body.style.cursor = 'default';
-}
-
-function updateVMlimit(cont) {
-	var hostid = dojo.byId('vmhostid').value;
-	var newlimit = dojo.byId('vmlimit').value;
-	document.body.style.cursor = 'wait';
-
-	dojo.xhrPost({
-		url: 'index.php',
-		load: updateVMlimitCB,
-		handleAs: "json",
-		error: errorHandler,
-		content: {continuation: cont,
-					 vmhostid: hostid,
-					 newlimit: newlimit},
-		timeout: 15000
-	});
-}
-
-function updateVMlimitCB(data, ioArgs) {
-	if(data.items.status != 'SUCCESS') {
-		if(data.items.status == 'LIMIT')
-			dijit.byId('vmlimit').set('value', data.items.limit);
-		alert(data.items.msg);
-	}
 	document.body.style.cursor = 'default';
 }
 
@@ -237,14 +211,6 @@ function vmToHost(cont) {
 			listids.push(obj.options[i].value);
 		}
 	}
-	//var limit = dijit.byId('vmlimit').value;
-	var limit = dojo.byId('vmlimit').value;
-	var currcnt = dojo.byId('currvms').options.length;
-	if(limit < currcnt + listids.length) {
-		alert('You\'re attempting to add more VMs to this host\nthan the current VM limit.  This is not allowed.');
-		document.body.style.cursor = 'default';
-		return;
-	}
 
 	if(listids.length == 0) {
 		document.body.style.cursor = 'default';
@@ -267,8 +233,6 @@ function vmToHostCB(data, ioArgs) {
 	if(data.items.failed) {
 		if(data.items.failed == 'nohostaccess')
 			alert('You do not have access to manage this VM host.');
-		else if(data.items.failed == 'vmlimit')
-			alert('You\'re attempting to add more VMs to this host\nthan the current VM limit.  This is not allowed.');
 		document.body.style.cursor = 'default';
 		return;
 	}
@@ -342,6 +306,7 @@ function vmToHostCB(data, ioArgs) {
 				lastid = allvms[j].id;
 		}
 	}
+	dojo.byId('assignedcnt').innerHTML = dojo.byId('currvms').options.length;
 	document.body.style.cursor = 'default';
 	if(fails.length) {
 		var msg = '';
@@ -480,6 +445,7 @@ function vmFromHostCB(data, ioArgs) {
 		var func = function() {vmFromHostDelayed(data.items.cont);};
 		setMessageWindow('Delayed Move', 'Move Later', content, func);
 	}
+	dojo.byId('assignedcnt').innerHTML = dojo.byId('currvms').options.length;
 	document.body.style.cursor = 'default';
 }
 
