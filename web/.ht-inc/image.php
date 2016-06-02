@@ -453,11 +453,6 @@ class Image extends Resource {
 
 		$h .= "<div id=\"addeditdlgerrmsg\" class=\"nperrormsg\"></div>\n";
 
-		if(! $add) {
-			$h .= "<div id=revisiondiv>\n";
-			$h .= "</div>\n";
-		}
-
 		$h .= "</div>\n"; # addeditdlgcontent
 
 		$h .= "<div id=\"editdlgbtns\" align=\"center\">\n";
@@ -466,6 +461,12 @@ class Image extends Resource {
 		$script .= "    dijit.registry.filter(function(widget, index){return widget.id.match(/^comments/);}).forEach(function(widget) {widget.destroy();});\n";
 		$h .= dijitButton('', i("Cancel"), $script);
 		$h .= "</div>\n"; # editdlgbtns
+
+		if(! $add) {
+			$h .= "<div id=revisiondiv>\n";
+			$h .= "</div>\n";
+		}
+
 		$h .= "</div>\n"; # addeditdlg
 
 		$h .= "<div dojoType=dijit.Dialog\n";
@@ -1267,6 +1268,7 @@ class Image extends Resource {
 		$revisions = getImageRevisions($imageid);
 		$rt = '';
 		$rt .= "<h3>" . i("Revisions of this Image") . "</h3>\n";
+		$rt .= "(" . i("Changes made in this section take effect immediately; you do <strong>not</strong> need to click \"Submit Changes\" to submit them.") . ")<br>\n";
 		$rt .= "<table summary=\"\"><tr><td>\n";
 		if(count($revisions) > 1 && isImageBlockTimeActive($imageid)) {
 			$rt .= "<font color=\"red\">";
