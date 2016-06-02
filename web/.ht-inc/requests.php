@@ -1259,7 +1259,8 @@ function newReservationHTML() {
 			if(array_key_exists($id, $imagedata) &&
 			   ! $imagedata[$id]["forcheckout"])
 				$images[$id]['checkout'] = 0;
-			if($imagingaccess && array_key_exists($id, $imaging['image'])) {
+			if(array_key_exists($id, $imagedata) &&
+			   $imagingaccess && array_key_exists($id, $imaging['image'])) {
 			   if($imagedata[$id]['rootaccess'] == 1 || $imagedata[$id]['ownerid'] == $user['id'])
 					$images[$id]['imaging'] = 1;
 				else
@@ -1816,6 +1817,8 @@ function AJupdateWaitTime() {
 	   ($type == 'imaging' && ! $imagingaccess) ||
 	   ($type == 'server' && ! $serveraccess))
 		return;
+	if($type == 'imaging')
+		$imaging = 1;
 
 	# process start
 	$start = processInputVar('start', ARG_NUMERIC);
@@ -1938,7 +1941,8 @@ function AJupdateWaitTime() {
 			$cdata['now'] = 1;
 		$cont = addContinuationsEntry('AJshowRequestSuggestedTimes', $cdata);
 		if(array_key_exists('subimages', $images[$imageid]) &&
-		   count($images[$imageid]['subimages'])) {
+		   count($images[$imageid]['subimages']) &&
+		   $type != 'imaging') {
 			print "dojo.byId('suggestcont').value = 'cluster';";
 			print "dijit.byId('newResDlgBtn').set('disabled', true);";
 		}
