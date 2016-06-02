@@ -1414,7 +1414,6 @@ CREATE TABLE IF NOT EXISTS `variable` (
 CREATE TABLE IF NOT EXISTS `vmhost` (
   `id` smallint(5) unsigned NOT NULL auto_increment,
   `computerid` smallint(5) unsigned NOT NULL,
-  `vmlimit` smallint(5) unsigned NOT NULL,
   `vmprofileid` smallint(5) unsigned NOT NULL,
   PRIMARY KEY  (`id`),
   UNIQUE KEY `computerid_vmprofileid` (`computerid`,`vmprofileid`),

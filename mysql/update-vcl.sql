@@ -1461,11 +1461,11 @@ CREATE TABLE IF NOT EXISTS `variable` (
 -- Table structure change for table `vmhost`
 -- 
 
-ALTER TABLE `vmhost` CHANGE `vmlimit` `vmlimit` smallint(5) unsigned NOT NULL;
 ALTER TABLE `vmhost` CHANGE `vmprofileid` `vmprofileid` smallint(5) unsigned NOT NULL;
 CALL AddIndexIfNotExists('vmhost', 'vmprofileid');
 CALL DropColumnIfExists('vmhost', 'vmkernalnic');
 CALL DropColumnIfExists('vmhost', 'vmwaredisk');
+CALL DropColumnIfExists('vmhost', 'vmlimit');
 -- have to drop constraint before dropping index
 CALL DropExistingConstraints('vmhost', 'computerid');
 CALL DropExistingIndices('vmhost', 'computerid');
