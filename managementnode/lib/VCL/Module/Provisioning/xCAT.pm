@@ -1291,9 +1291,10 @@ sub _edit_nodetype {
 	
 	# Create a DataStructure object containing info about the image
 	my $image_data = $self->create_datastructure_object({image_identifier => $image_name}) || return;
-	my $image_architecture = $image_data->get_image_architecture();
-	my $image_os_install_type = $image_data->get_image_os_install_type();
-	my $image_os_name = $image_data->get_image_os_name();
+	
+	my $image_architecture		= $image_data->get_image_architecture();
+	my $image_os_install_type	= $image_data->get_image_os_install_type();
+	my $image_os_name				= $image_data->get_image_os_name();
 	
 	my $request_state_name = $self->data->get_request_state_name();
 	
@@ -1304,13 +1305,13 @@ sub _edit_nodetype {
 	my $command = "$XCAT_ROOT/bin/nodech $computer_node_name nodetype.os=$image_os_name nodetype.arch=$image_architecture nodetype.profile=$image_name";
 	my ($exit_status, $output) = $self->mn_os->execute($command);
 	if (!defined($output)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to execute command to edit xCAT configuration of $computer_node_name");
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to edit xCAT configuration of $computer_node_name: $command");
 		return;
 	}
 	elsif (grep(/Error/i, @$output)) {
 		# If an error occurs the output will look like this:
 		# Error: Invalid nodes and/or groups in noderange: vclh3-00
-		notify($ERRORS{'WARNING'}, 0, "failed to edit xCAT configuration of $computer_node_name, output:\n" . join("\n", @$output));
+		notify($ERRORS{'WARNING'}, 0, "failed to edit xCAT configuration of $computer_node_name, command: '$command'\noutput:\n" . join("\n", @$output));
 		return;
 	}
 	elsif (grep(/\w/, @$output)) {
