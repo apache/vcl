@@ -861,9 +861,15 @@ sub capture {
 	}
 	
 	if ($vmprofile_vmdisk =~ /(local|dedicated)/ && $repository_mounted_on_vmhost) {
+		# See https://issues.apache.org/jira/browse/VCL-633
+		# Don't save copy on VM host's datastore if dedicated, datastore may run out of space
 		notify($ERRORS{'DEBUG'}, 0, "vmx and vmdk files will not be copied or renamed directly on the host, the VM profile disk type is $vmprofile_vmdisk and the image repository is mounted on the host");
 		$vmdk_file_path_renamed = $vmdk_file_path_original;
-		$vmx_file_path_renamed = $vmx_file_path_original;
+		
+		# Need to copy the original vmx to vmx.reference using the base name of the vmdk
+		# copy_vmdk expects a file with this name to exist in order for the reference file to be created in the target directory
+		my $vmdk_file_base_name_renamed = $self->_get_file_base_name($vmdk_file_path_renamed);
+		$vmx_file_path_renamed = "$vmx_directory_path_original/$vmdk_file_base_name_renamed.vmx.reference";
 	}
 	else {
 		# Rename the vmdk to the new image directory and file name
@@ -872,25 +878,27 @@ sub capture {
 			notify($ERRORS{'DEBUG'}, 0, "vmdk files will not be renamed, vmdk file path being captured is already named as the image being captured: '$vmdk_file_path_original'");
 		}
 		else {
+			notify($ERRORS{'DEBUG'}, 0, "vmdk files will be renamed: '$vmdk_file_path_original' --> '$vmdk_file_path_renamed'");
 			if (!$self->copy_vmdk($vmdk_file_path_original, $vmdk_file_path_renamed)) {
 				notify($ERRORS{'WARNING'}, 0, "failed to copy the vmdk files after the VM was powered off: '$vmdk_file_path_original' --> '$vmdk_file_path_renamed'");
 				return;
 			}
 		}
-		
-		# Copy the vmx file to the new image directory for later reference
-		# First check if vmx file already exists (could happen if base image VM was manually created)
-		if ($vmx_file_path_original eq $vmx_file_path_renamed) {
-			notify($ERRORS{'DEBUG'}, 0, "vmx file will not be copied, vmx file path being captured is already named as the image being captured: '$vmx_file_path_original'");
-		}
-		else {
-			if (!$self->vmhost_os->copy_file($vmx_file_path_original, $vmx_file_path_renamed)) {
-				notify($ERRORS{'WARNING'}, 0, "failed to copy the reference vmx file after the VM was powered off: '$vmx_file_path_original' --> '$vmx_file_path_renamed'");
-				return;
-			}
-		}
 	}
 	
+	# Copy the vmx file to the new image directory for later reference
+	# First check if vmx file already exists (could happen if base image VM was manually created)
+	if ($vmx_file_path_original eq $vmx_file_path_renamed) {
+		notify($ERRORS{'DEBUG'}, 0, "vmx file will not be copied, vmx file path being captured is already named as the image being captured: '$vmx_file_path_original'");
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "vmx file will be copied: '$vmx_file_path_original' --> '$vmx_file_path_renamed'");
+		if (!$self->vmhost_os->copy_file($vmx_file_path_original, $vmx_file_path_renamed)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to copy the reference vmx file after the VM was powered off: '$vmx_file_path_original' --> '$vmx_file_path_renamed'");
+			return;
+		}
+	}
+
 	# Copy the vmdk to the image repository if the repository path is defined in the VM profile
 	my $repository_directory_path = $self->get_repository_vmdk_directory_path();
 	if ($repository_directory_path) {
@@ -898,10 +906,9 @@ sub capture {
 		
 		# Check if the image repository path configured in the VM profile is mounted on the host or on the management node
 		if ($repository_mounted_on_vmhost) {
-			notify($ERRORS{'DEBUG'}, 0, "vmdk will be copied directly from VM host $vmhost_name to the image repository in the 2gbsparse disk format");
-			
 			# Files can be copied directly to the image repository and converted while they are copied
 			my $repository_vmdk_file_path = $self->get_repository_vmdk_file_path();
+			notify($ERRORS{'DEBUG'}, 0, "vmdk will be copied directly from VM host $vmhost_name to the image repository in the 2gbsparse disk format: '$vmdk_file_path_renamed' --> '$repository_vmdk_file_path'");
 			if ($self->copy_vmdk($vmdk_file_path_renamed, $repository_vmdk_file_path, '2gbsparse')) {
 				$repository_copy_successful = 1;
 			}
@@ -6161,7 +6168,7 @@ sub copy_vmdk {
 	else {
 		notify($ERRORS{'DEBUG'}, 0, "reference vmx file not copied to vmdk directory because it does not exist: '$source_reference_vmx_file_path'");
 	}
-	
+
 	# Get the size of the copied vmdk files
 	my $search_path = $destination_vmdk_file_path;
 	$search_path =~ s/(\.vmdk)$/\*$1/i;
