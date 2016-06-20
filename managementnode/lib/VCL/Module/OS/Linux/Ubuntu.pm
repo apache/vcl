@@ -310,7 +310,7 @@ sub set_password {
 
 =head2 get_network_configuration
 
- Parameters  : 
+ Parameters  : $no_cache (optional)
  Returns     : hash reference
  Description : Retrieves the network configuration on the Linux computer and
                constructs a hash. The hash reference returned is formatted as
@@ -330,6 +330,11 @@ sub get_network_configuration {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return;
 	}
+	
+	my $no_cache = shift;
+	
+	# Delete previously retrieved data if $no_cache was specified
+	delete $self->{network_configuration} if $no_cache;
 	
 	# Check if the network configuration has already been retrieved and saved in this object
 	return $self->{network_configuration} if ($self->{network_configuration});

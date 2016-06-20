@@ -831,8 +831,8 @@ public DNS server(s): @dns_servers
 EOF
 	
 	# Get the current public IP address being used by the computer
-	# Pass the $ignore_error flag to prevent warnings if not defined
-	my $current_public_ip_address = $self->get_public_ip_address(1);
+	# Use cached data if available (0), ignore errors (1)
+	my $current_public_ip_address = $self->get_public_ip_address(0, 1);
 	if ($current_public_ip_address && $current_public_ip_address eq $computer_public_ip_address) {
 		notify($ERRORS{'DEBUG'}, 0, "static public IP address does not need to be set, $computer_name is already configured to use $current_public_ip_address");
 	}
@@ -2349,13 +2349,16 @@ sub get_network_configuration {
 		return;
 	}
 	
-	my $no_cache = shift;
+	my $no_cache = shift || 0;
+	notify($ERRORS{'DEBUG'}, 0, "attempting to retrieve network configuration, no cache: $no_cache");
 	
 	# Delete previously retrieved data if $no_cache was specified
-	delete $self->{network_configuration} if $no_cache;
-	
-	# Check if the network configuration has already been retrieved and saved in this object
-	return $self->{network_configuration} if ($self->{network_configuration});
+	if ($no_cache) {
+		delete $self->{network_configuration};
+	}
+	elsif ($self->{network_configuration}) {
+		return $self->{network_configuration}
+	}
 	
 	# Run ipconfig
 	my $ifconfig_command = "/sbin/ifconfig -a";

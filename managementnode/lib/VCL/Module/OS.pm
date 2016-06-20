@@ -1279,14 +1279,16 @@ sub update_public_ip_address {
 	if ($public_ip_configuration =~ /dhcp/i) {
 		notify($ERRORS{'DEBUG'}, 0, "IP configuration is set to $public_ip_configuration, attempting to retrieve dynamic public IP address from $computer_node_name");
 		
-		my $retrieved_public_ip_address;
-		
-		# Try to retrieve the public IP address from the OS module
-		if (!$self->can("get_public_ip_address")) {
-			notify($ERRORS{'WARNING'}, 0, "unable to retrieve public IP address from $computer_node_name, OS module " . ref($self) . " does not implement a 'get_public_ip_address' subroutine");
+		# Wait for the computer to be assigned a public IP address
+		# There is sometimes a delay
+		if (!$self->wait_for_public_ip_address()) {
+			notify($ERRORS{'WARNING'}, 0, "unable to update public IP address, $computer_node_name did not receive a public IP address via DHCP");
 			return;
 		}
-		elsif ($retrieved_public_ip_address = $self->get_public_ip_address()) {
+		
+		# Retrieve the public IP address from the OS module
+		my $retrieved_public_ip_address = $self->get_public_ip_address();
+		if ($retrieved_public_ip_address) {
 			notify($ERRORS{'DEBUG'}, 0, "retrieved public IP address from $computer_node_name using the OS module: $retrieved_public_ip_address");
 		}
 		else {
@@ -1442,7 +1444,7 @@ sub get_private_interface_name {
 
 =head2 get_public_interface_name
 
- Parameters  : none
+ Parameters  : $no_cache (optional), $ignore_error (optional)
  Returns     : string
  Description : Determines the public interface name based on the information in
                the network configuration hash returned by
@@ -1457,9 +1459,15 @@ sub get_public_interface_name {
 		return;
 	}
 	
-	my $no_cache = shift;
+	my $no_cache = shift || 0;
+	my $ignore_error = shift || 0;
 	
-	if (defined $self->{public_interface_name} && !$no_cache) {
+	notify($ERRORS{'DEBUG'}, 0, "attempting to determine public interface name, no cache: $no_cache, ignore error: $ignore_error");
+	
+	if ($no_cache) {
+		delete $self->{public_interface_name};
+	}
+	elsif ($self->{public_interface_name}) {
 		#notify($ERRORS{'DEBUG'}, 0, "returning public interface name previously retrieved: $self->{public_interface_name}");
 		return $self->{public_interface_name};
 	}
@@ -1552,7 +1560,7 @@ sub get_public_interface_name {
 		return $self->{public_interface_name};
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to determine the public interface name:\n" . format_data($network_configuration));
+		notify($ERRORS{'WARNING'}, 0, "failed to determine the public interface name:\n" . format_data($network_configuration)) unless $ignore_error;
 		return;
 	}
 }
@@ -1658,7 +1666,70 @@ sub _get_public_interface_name_helper {
 		notify($ERRORS{'WARNING'}, 0, "unable to determine which interface is more likely the public interface, invalid \$condition argument: '$condition'");
 		return;
 	}
+}
+
+#///////////////////////////////////////////////////////////////////////////////
+
+=head2 wait_for_public_ip_address
+
+ Parameters  : $total_wait_seconds (optional), $attempt_delay_seconds (optional)
+ Returns     : boolean
+ Description : Loops until the computer's public interface name can be retrieved
+               or the timeout is reached. The public interface name can only be
+               retrieved if an IP address is assigned to it. The default maximum
+               wait time is 60 seconds.
+
+=cut
+
+sub wait_for_public_ip_address {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
 	
+	# Attempt to get the total number of seconds to wait from the arguments
+	my $total_wait_seconds = shift;
+	if (!defined($total_wait_seconds) || $total_wait_seconds !~ /^\d+$/) {
+		$total_wait_seconds = 60;
+	}
+	
+	# Seconds to wait in between loop attempts
+	my $attempt_delay_seconds = shift;
+	if (!defined($attempt_delay_seconds) || $attempt_delay_seconds !~ /^\d+$/) {
+		$attempt_delay_seconds = 2;
+	}
+	
+	my $computer_node_name = $self->data->get_computer_node_name();
+	
+	# Check if the public IP address was already retrieved
+	# Use cached data if available (0), ignore errors (1)
+	my $public_ip_address = $self->get_public_ip_address(0, 1);
+	if ($public_ip_address) {
+		notify($ERRORS{'DEBUG'}, 0, "$computer_node_name is already assigned a public IP address: $public_ip_address");
+		return 1;
+	}
+	
+	my $sub_ref = $self->can("get_public_ip_address");
+	notify($ERRORS{'DEBUG'}, 0, "");
+	my $message = "waiting for $computer_node_name to get public IP address";
+	
+	return $self->code_loop_timeout(
+		sub {
+			my $public_ip_address = $self->get_public_ip_address(1, 1);
+			if (!defined($public_ip_address)) {
+				return;
+			}
+			else {
+				notify($ERRORS{'DEBUG'}, 0, "$computer_node_name was assigned a public IP address: $public_ip_address");
+				return 1;
+			}
+		},
+		[$self, 1],
+		$message,
+		$total_wait_seconds,
+		$attempt_delay_seconds
+	);
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -1691,8 +1762,8 @@ sub get_private_network_configuration {
 
 =head2 get_public_network_configuration
 
- Parameters  : none
- Returns     : 
+ Parameters  : $no_cache (optional), $ignore_error (optional)
+ Returns     : hash reference
  Description : 
 
 =cut
@@ -1704,9 +1775,14 @@ sub get_public_network_configuration {
 		return;
 	}
 	
-	my $public_interface_name = $self->get_public_interface_name();
+	my $no_cache = shift || 0;
+	my $ignore_error = shift || 0;
+	
+	notify($ERRORS{'DEBUG'}, 0, "attempting to retrieve public network configuration, no cache: $no_cache, ignore error: $ignore_error");
+	
+	my $public_interface_name = $self->get_public_interface_name($no_cache, $ignore_error);
 	if (!$public_interface_name) {
-		notify($ERRORS{'WARNING'}, 0, "unable to retrieve public network configuration, public interface name could not be determined");
+		notify($ERRORS{'WARNING'}, 0, "unable to retrieve public network configuration, public interface name could not be determined") unless $ignore_error;
 		return;
 	}
 	
@@ -1802,7 +1878,7 @@ sub get_public_mac_address {
 
 =head2 get_ip_address
 
- Parameters  : $network_type (optional), $ignore_error (optional)
+ Parameters  : $network_type (optional), $no_cache (optional), $ignore_error (optional)
  Returns     : string
  Description : Returns the IP address of the computer. The $network_type
                argument may either be 'public' or 'private'. If not supplied,
@@ -1825,19 +1901,22 @@ sub get_ip_address {
 		return;
 	}
 	
-	my $ignore_error = shift;
+	my $no_cache = shift || 0;
+	my $ignore_error = shift || 0;
+	
+	notify($ERRORS{'DEBUG'}, 0, "attempting to retrieve IP address, type: $network_type, no cache: $no_cache, ignore error: $ignore_error");
 	
 	# Get the public or private network configuration
 	# Use 'eval' to construct the appropriate subroutine name
-	my $network_configuration = eval "\$self->get_$network_type\_network_configuration()";
+	my $network_configuration = eval "\$self->get_$network_type\_network_configuration($no_cache, $ignore_error)";
 	if ($EVAL_ERROR || !$network_configuration) {
-		notify($ERRORS{'WARNING'}, 0, "unable to retrieve $network_type network configuration");
+		notify($ERRORS{'WARNING'}, 0, "unable to retrieve $network_type network configuration") unless $ignore_error;
 		return;
 	}
 	
 	my $ip_address_info = $network_configuration->{ip_address};
 	if (!defined($ip_address_info)) {
-		notify($ERRORS{'WARNING'}, 0, "$network_type network configuration info does not contain an 'ip_address' key");
+		notify($ERRORS{'WARNING'}, 0, "$network_type network configuration info does not contain an 'ip_address' key") unless $ignore_error;
 		return;
 	}
 	
@@ -1908,7 +1987,7 @@ sub get_ip_addresses {
 
 =head2 get_private_ip_address
 
- Parameters  : $ignore_error (optional)
+ Parameters  : $no_cache (optional), $ignore_error (optional)
  Returns     : string
  Description : Returns the computer's private IP address.
 
@@ -1921,15 +2000,17 @@ sub get_private_ip_address {
 		return;
 	}
 	
+	my $no_cache = shift;
 	my $ignore_error = shift;
-	return $self->get_ip_address('private', $ignore_error);
+	
+	return $self->get_ip_address('private', $no_cache, $ignore_error);
 }
 
 #/////////////////////////////////////////////////////////////////////////////
 
 =head2 get_public_ip_address
 
- Parameters  : $ignore_error (optional)
+ Parameters  : $no_cache (optional), $ignore_error (optional)
  Returns     : string
  Description : Returns the computer's public IP address.
 
@@ -1941,11 +2022,14 @@ sub get_public_ip_address {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return;
 	}
-	my $ignore_error = shift;
-	return $self->get_ip_address('public', $ignore_error);
+	my $no_cache = shift || 0;
+	my $ignore_error = shift || 0;
+	
+	notify($ERRORS{'DEBUG'}, 0, "attempting to retrieve public IP address, no cache: $no_cache, ignore error: $ignore_error");
+	return $self->get_ip_address('public', $no_cache, $ignore_error);
 }
 
-#/////////////////////////////////////////////////////////////////////////////
+#///////////////////////////////////////////////////////////////////////////////
 
 =head2 get_subnet_mask
 

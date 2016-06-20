@@ -5557,8 +5557,10 @@ sub get_network_configuration {
 	
 	my $no_cache = shift;
 	
-	# Check if the network configuration has already been retrieved and saved in this object
-	if (!$no_cache && $self->{network_configuration}) {
+	if ($no_cache) {
+		delete $self->{network_configuration};
+	}
+	elsif ($self->{network_configuration}) {
 		notify($ERRORS{'DEBUG'}, 0, "returning network configuration previously retrieved");
 		return $self->{network_configuration};
 	}
@@ -5683,105 +5685,6 @@ sub get_network_configuration {
 	# Can produce large output, if you need to monitor the configuration setting uncomment the below output statement
 	#notify($ERRORS{'DEBUG'}, 0, "retrieved network configuration:\n" . format_data($self->{network_configuration}));
 	return $self->{network_configuration};
-}
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 get_public_interface_name
-
- Parameters  : none
- Returns     : string
- Description : Retrieves the public interface name on the computer. This may not
-               be determined when the computer is first booting because the
-               interfaces are being initialized. This subroutine will loop for
-               up to 3 minutes.
-
-=cut
-
-sub get_public_interface_name {
-	my $self = shift;
-	if (ref($self) !~ /VCL::Module/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return;
-	}
-	
-	my $computer_node_name   = $self->data->get_computer_node_name();
-	
-	# Try to determine the public interface name
-	my $public_interface_name = $self->SUPER::get_public_interface_name();
-	return $public_interface_name if ($public_interface_name);
-	
-	# Network interfaces may still be initializing
-	return $self->code_loop_timeout(
-		sub {
-			return $self->SUPER::get_public_interface_name(1);
-		},
-		[], "waiting for public interface to initialize on $computer_node_name", 180, 3
-	);
-}
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 get_public_ip_address
-
- Parameters  : none
- Returns     : string
- Description : Retrieves the public IP address from the computer. If the address
-               can't be determined and DHCP is used on the management node, an
-               attempt is made to run 'ipconfig /renew' and retrieve the network
-               configuration again. This will loop for up to 2 minutes.
-
-=cut
-
-sub get_public_ip_address {
-	my $self = shift;
-	if (ref($self) !~ /VCL::Module/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return;
-	}
-	
-	my $computer_node_name   = $self->data->get_computer_node_name();
-	my $public_ip_configuration = $self->data->get_management_node_public_ip_configuration();
-	
-	# Make sure public interface name can be determined
-	my $public_interface_name = $self->get_public_interface_name();
-	if (!$public_interface_name) {
-		notify($ERRORS{'WARNING'}, 0, "unable to determine public IP address assigned to $computer_node_name, public interface name could not be determined");
-		return;
-	}
-	
-	# Call OS.pm::get_ip_address
-	# OS.pm will check for invalid addresses, assume the address is good if a value was returned
-	my $public_ip_address = $self->get_ip_address('public');
-	if ($public_ip_address) {
-		return $public_ip_address;
-	}
-	
-	# If unable to determine public IP on 1st try and DHCP isn't being used, return null
-	if ($public_ip_configuration !~ /dhcp/i) {
-		# Return null if MN is not configured to use DHCP and address could not be determined
-		notify($ERRORS{'WARNING'}, 0, "unable to determine public IP address assigned to $computer_node_name, static public IP address may not have been set yet, management node public IP configuration: $public_ip_configuration");
-		return;
-	}
-			
-	# Management node is configured to use DHCP, failed to determine public IP address on 1st try
-	# Check if DHCP is enabled on what was determined to be the public interface
-	# DHCP should always be enabled or something is wrong
-	# If not enabled, don't enter the loop below
-	# Don't forcefully enable DHCP
-	if (!$self->is_dhcp_enabled($public_interface_name)) {
-		notify($ERRORS{'WARNING'}, 0, "unable to determine public IP address assigned to $computer_node_name, DHCP is not enabled on public interface: '$public_interface_name', management node public IP configuration: $public_ip_configuration");
-				return;
-			}
-	
-	# Network interfaces may still be initializing
-	return $self->code_loop_timeout(
-		sub {
-			$self->ipconfig_renew('public');
-			return $self->get_ip_address('public')
-		},
-		[], "waiting for $computer_node_name to receive public IP address via DHCP", 120, 5
-	);
 }
 
 #/////////////////////////////////////////////////////////////////////////////
