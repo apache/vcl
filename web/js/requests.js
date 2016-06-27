@@ -433,7 +433,9 @@ function getDeployData(waitonly) {
 		}
 		else {
 			var tmp = dojo.byId('deploystartday').value;
-			var date = new Date(tmp * 1000);
+			tmp = new Date(tmp * 1000);
+			var offset = tmp.getTimezoneOffset() * 60000;
+			var date = new Date(tmp.getTime() + offset);
 			var hour = parseInt(dojo.byId('deployhour').value);
 			var m = dojo.byId('deploymeridian').value;
 			if(m == 'pm' && hour < 12)
@@ -616,8 +618,7 @@ function useSuggestedEditSlot() {
 	if(dojo.byId('deploystartday')) {
 		var sel = dojo.byId('deploystartday');
 		for(var i = 0; i < sel.options.length; i++) {
-			var testdate = new Date(parseInt(sel.options[i].value + '000'));
-			if(s.getDay() == testdate.getDay()) {
+			if(s.getDayName() == sel.options[i].innerHTML) {
 				sel.value = sel.options[i].value;
 				break;
 			}

@@ -287,13 +287,14 @@ function getDay(day) {
 function getTime(obj) {
 	var hour = obj.getHours();
 	var min = obj.getMinutes();
+	var tz = dojo.byId('timezonevalue').value;
 	if(hour == 12)
-		return dojox.string.sprintf('12:%02d PM', min);
+		return dojox.string.sprintf('12:%02d PM %s', min, tz);
 	if(hour == 0)
-		return dojox.string.sprintf('12:%02d AM', min);
+		return dojox.string.sprintf('12:%02d AM %s', min, tz);
 	if(parseInt(hour / 12))
-		return dojox.string.sprintf('%d:%02d PM', hour % 12, min);
-	return dojox.string.sprintf('%d:%02d AM', hour, min);
+		return dojox.string.sprintf('%d:%02d PM %s', hour % 12, min, tz);
+	return dojox.string.sprintf('%d:%02d AM %s', hour, min, tz);
 }
 
 function minuteInWeek(val) {

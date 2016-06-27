@@ -100,6 +100,12 @@ function blockAllocationForm() {
 	global $user, $days, $mode;
 	$blockid = getContinuationVar('blockid', '');
 	$data = getBlockAllocationData($blockid);
+	if(array_key_exists('tzoffset', $_SESSION['persistdata']))
+		$now = time() - ($_SESSION['persistdata']['tzoffset'] * 60);
+	else
+		$now = time();
+	print "<input type=\"hidden\" id=\"nowtimestamp\" value=\"$now\">\n";
+	print "<input type=\"hidden\" id=\"timezone\" value=\"" . date('T') . "\">\n";
 	if($mode == 'newBlockAllocation') {
 		$brname = '';
 		$imageid = '';
@@ -222,6 +228,7 @@ function blockAllocationForm() {
 	print "    <td>\n";
 	print "      <input type=\"text\" dojoType=\"dijit.form.DateTextBox\" ";
 	print "required=\"true\" id=\"wkfirstdate\" value=\"{$data['swdate']}\" />\n";
+	print "    <small>(" . date('T') . ")</small>\n";
 	print "    <img src=\"images/helpicon.png\" id=\"wkfdhelp\" />\n";
 	print "    </td>\n";
 	print "  </tr>\n";
@@ -230,6 +237,7 @@ function blockAllocationForm() {
 	print "    <td>\n";
 	print "      <input type=\"text\" dojoType=\"dijit.form.DateTextBox\" ";
 	print "required=\"true\" id=\"wklastdate\" value=\"{$data['ewdate']}\" />\n";
+	print "    <small>(" . date('T') . ")</small>\n";
 	print "    <img src=\"images/helpicon.png\" id=\"wkldhelp\" />\n";
 	print "    </td>\n";
 	print "  </tr>\n";
@@ -250,9 +258,12 @@ function blockAllocationForm() {
 
 	print i("Start") . ":<div type=\"text\" id=\"weeklyaddstart\" dojoType=\"dijit.form.TimeTextBox\" ";
 	print "required=\"true\" onChange=\"blockFormWeeklyAddBtnCheck(1);\" style=\"width: 78px\"></div>\n";
+	print "<small>(" . date('T') . ")</small>\n";
+	print "&nbsp;|&nbsp;&nbsp;";
 	print i("End") . ":<div type=\"text\" id=\"weeklyaddend\" dojoType=\"vcldojo.TimeTextBoxEnd\" ";
 	print "required=\"true\" onChange=\"blockFormWeeklyAddBtnCheck(0);\" startid=\"weeklyaddstart\" ";
 	print "style=\"width: 78px\"></div>\n";
+	print "<small>(" . date('T') . ")</small>\n";
 	print "<button dojoType=\"dijit.form.Button\" type=\"button\" disabled=\"true\" ";
 	print "id=\"requestBlockWeeklyAddBtn\">\n";
 	print i("Add") . "\n";
@@ -289,6 +300,7 @@ function blockAllocationForm() {
 	print "    <td>\n";
 	print "      <input type=\"text\" id=\"mnfirstdate\" dojoType=\"dijit.form.DateTextBox\" ";
 	print "required=\"true\" value=\"{$data['smdate']}\"/>\n";
+	print "    <small>(" . date('T') . ")</small>\n";
 	print "    <img src=\"images/helpicon.png\" id=\"mnfdhelp\" />\n";
 	print "    </td>\n";
 	print "  </tr>\n";
@@ -297,6 +309,7 @@ function blockAllocationForm() {
 	print "    <td>\n";
 	print "      <input type=\"text\" id=\"mnlastdate\" dojoType=\"dijit.form.DateTextBox\" ";
 	print "required=\"true\" value=\"{$data['emdate']}\" />\n";
+	print "    <small>(" . date('T') . ")</small>\n";
 	print "    <img src=\"images/helpicon.png\" id=\"mnldhelp\" />\n";
 	print "    </td>\n";
 	print "  </tr>\n";
@@ -319,9 +332,12 @@ function blockAllocationForm() {
 	print " " . i("of every month") . "<br><br>\n";
 	print i("Start") . ":<div type=\"text\" id=\"monthlyaddstart\" dojoType=\"dijit.form.TimeTextBox\" ";
 	print "required=\"true\" onChange=\"blockFormMonthlyAddBtnCheck(1)\" style=\"width: 78px\"></div>\n";
+	print "<small>(" . date('T') . ")</small>\n";
+	print "&nbsp;|&nbsp;&nbsp;";
 	print i("End") . ":<div type=\"text\" id=\"monthlyaddend\" dojoType=\"vcldojo.TimeTextBoxEnd\" ";
 	print "required=\"true\" onChange=\"blockFormMonthlyAddBtnCheck(0)\" startid=\"monthlyaddstart\" ";
 	print "style=\"width: 78px\"></div>\n";
+	print "<small>(" . date('T') . ")</small>\n";
 	print "<button dojoType=\"dijit.form.Button\" type=\"button\" disabled=\"true\" ";
 	print "id=\"requestBlockMonthlyAddBtn\">\n";
 	print i("Add") . "\n";
@@ -351,10 +367,15 @@ function blockAllocationForm() {
 	print "title=\"" . i("List of Times") . "\" {$data['type2']['list']}>\n";
 	print i("Date") . ":<div type=\"text\" id=\"listadddate\" dojoType=\"dijit.form.DateTextBox\" ";
 	print "required=\"true\" onChange=\"blockFormListAddBtnCheck\" style=\"width: 95px\"></div>\n";
+	print "<small>(" . date('T') . ")</small>\n";
+	print "&nbsp;|&nbsp;&nbsp;";
 	print i("Start") . ":<input type=\"text\" id=\"listaddstart\" dojoType=\"dijit.form.TimeTextBox\" ";
 	print "required=\"true\" onChange=\"blockFormListAddBtnCheck\" />\n";
+	print "<small>(" . date('T') . ")</small>\n";
+	print "&nbsp;|&nbsp;&nbsp;";
 	print i("End") . ":<input type=\"text\" id=\"listaddend\" dojoType=\"vcldojo.TimeTextBoxEnd\" ";
 	print "required=\"true\" onChange=\"blockFormListAddBtnCheck\" startid=\"listaddstart\" />\n";
+	print "<small>(" . date('T') . ")</small>\n";
 	print "<button dojoType=\"dijit.form.Button\" type=\"button\" disabled=\"true\" ";
 	print "id=\"requestBlockListAddBtn\">\n";
 	print i("Add") . "\n";
@@ -1180,7 +1201,12 @@ function getCurrentBlockHTML($listonly=0) {
 		        . "LIMIT 1";
 		$qh2 = doQuery($query2, 101);
 		if($row2 = mysql_fetch_assoc($qh2)) {
-			$blocks[$row['id']]['nextstart'] = $row2['start1'];
+			if(array_key_exists('tzoffset', $_SESSION['persistdata'])) {
+				$tmp = date('n/j/y+g:i=A=T', $row2['unixstart']);
+				$blocks[$row['id']]['nextstart'] = str_replace(array('+', '='), array('<br>', '&nbsp;'), $tmp);
+			}
+			else
+				$blocks[$row['id']]['nextstart'] = $row2['start1'];
 			if(time() > ($row2['unixstart'] - 1800) &&
 			   time() < $row2['unixend'])
 				$blocks[$row['id']]['nextstartactive'] = 1;
@@ -1298,6 +1324,7 @@ function getCurrentBlockHTML($listonly=0) {
 		}
 	}
 	$rt = '';
+	$rt .= "<input type=\"hidden\" id=\"timezone\" value=\"" . date('T') . "\">\n";
 	$rt .= "<table summary=\"lists current block allocations\">\n";
 	$rt .= "  <TR align=center>\n";
 	$rt .= "    <TD colspan=3></TD>\n";
@@ -2835,8 +2862,8 @@ function viewBlockStatus() {
 	}
 	$startunix = datetimeToUnix($data['start']);
 	$endunix = datetimeToUnix($data['end']);
-	$start = strftime('%x %l:%M %P', $startunix);
-	$end = strftime('%x %l:%M %P', $endunix);
+	$start = strftime('%x %l:%M %P %Z', $startunix);
+	$end = strftime('%x %l:%M %P %Z', $endunix);
 	print "<div id=statusdiv>\n";
 	print "<table class=blockStatusData summary=\"lists attributes of block allocation\">\n";
 	print "  <tr>\n";
@@ -3573,6 +3600,7 @@ function AJpopulateBlockStore() {
 ////////////////////////////////////////////////////////////////////////////////
 function viewBlockAllocatedMachines() {
 	print "<h2>" . i("Block Allocated Machines") . "</h2>\n";
+	print "(All times are in " . date('T') . ")<br><br>\n";
 	print i("Start time:") . " \n";
 	$start = unixToDatetime(unixFloor15(time() - 3600));
 	list($sdate, $stime) = explode(' ', $start);

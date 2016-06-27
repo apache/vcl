@@ -43,6 +43,21 @@ define("IMAGEIDERR", 1 << 5);
 ////////////////////////////////////////////////////////////////////////////////
 function viewRequests() {
 	global $user, $inContinuation, $mode, $skin;
+	if(! $inContinuation && ! array_key_exists('tzoffset', $_SESSION['persistdata'])) {
+		if(array_key_exists('offset', $_GET)) {
+			AJsetTZoffset();
+		}
+		else {
+			print "<script type=\"text/javascript\">\n";
+			print "var now = new Date();\n";
+			print "var offset = now.getTimezoneOffset();\n";
+			print "setTimeout(function() {\n";
+			print "   window.location = '" . BASEURL . SCRIPT . "?mode=$mode&offset=' + offset;\n";
+			print "}, 1);\n";
+			print "</script>\n";
+			return;
+		}
+	}
 	if($inContinuation)
 		$lengthchanged = getContinuationVar('lengthchanged', 0);
 	else
@@ -1672,9 +1687,9 @@ function newReservationHTML() {
 	for($i = 1; $i < 13; $i++)
 		$tmpArr[$i] = $i;
 
-	$timestamp = unixFloor15(time() + 4500);
+	$tmp = time() + ($_SESSION['persistdata']['tzoffset'] * 60);
+	$timestamp = unixFloor15($tmp + 4500);
 	$timeArr = explode(',', date('g,i,a', $timestamp));
-
 
 	$h .= selectInputHTML('hour', $tmpArr, 'deployhour', "onChange='setStartLater();'", $timeArr[0]);
 	$minutes = array("0" => "00", "15" => "15", "30" => "30", "45" => "45");
@@ -1690,8 +1705,7 @@ function newReservationHTML() {
 	$h .= "style=\"width: 88px;\"></div>\n";
 	$h .= "<div id=\"deploystarttime\" dojoType=\"dijit.form.TimeTextBox\" ";
 	$h .= "style=\"width: 88px\" onChange=\"setStartLater();\"></div>\n";
-	$h .= "</span>\n";
-	$h .= "<small>(" . date('T') . ")</small><br><br>\n";
+	$h .= "</span><br><br>\n";
 
 	$h .= "<span id=\"endlbl\"";
 	if(! $openend)
@@ -1741,8 +1755,7 @@ function newReservationHTML() {
 		$h .= "id=\"deployenddate\" onChange=\"setEndAt();\" ";
 		$h .= "style=\"width: 88px\"></div>\n";
 		$h .= "<div type=\"text\" id=\"deployendtime\" dojoType=\"dijit.form.TimeTextBox\" ";
-		$h .= "style=\"width: 88px\" onChange=\"setEndAt();\"></div>\n";
-		$h .= "<small>(" . date('T') . ")</small><br>\n";
+		$h .= "style=\"width: 88px\" onChange=\"setEndAt();\"></div><br>\n";
 	}
 	$h .= "</span><br>\n";
 
@@ -2153,6 +2166,7 @@ function AJshowRequestSuggestedTimes() {
 		$cnt = 0;
 		foreach($slots as $key => $slot) {
 			$cnt++;
+			$slot['startts'] += $_SESSION['persistdata']['tzoffset'] * 60;
 			$start = strftime('%x %l:%M %P', $slot['startts']);
 			if(($slot['startts'] - time()) + $slot['startts'] + $slot['duration'] >= 2114402400)
 				# end time >= 2037-01-01 00:00:00
@@ -2164,7 +2178,7 @@ function AJshowRequestSuggestedTimes() {
 			else
 				$html .= "<tr class=\"tablerow1\">";
 			$html .= "<td><input type=\"radio\" name=\"slot\" value=\"$key\" id=\"slot$key\" ";
-			$html .= "onChange=\"setSuggestSlot('{$slot['startts']}');\"></td>";
+			$html .= "onChange=\"setSuggestSlot('{$slots[$key]['startts']}');\"></td>";
 			$html .= "<td><label for=\"slot$key\">$start</label></td>";
 			$html .= "<td style=\"padding-left: 8px;\">";
 			$html .= "<label for=\"slot$key\">$duration</label></td>";
@@ -3152,13 +3166,15 @@ function AJeditRequest() {
 	}
 	// if future, allow start to be modified
 	if($unixstart > $now) {
+		$tzunixstart = $unixstart + ($_SESSION['persistdata']['tzoffset'] * 60);
 		$cdata['modifystart'] = 1;
 		$txt  = i("Modify reservation for") . " <b>{$request['reservations'][0]['prettyimage']}</b> "; 
 		$txt .= i("starting") . " " . prettyDatetime($request["start"]) . ": <br>";
 		$h .= preg_replace("/(.{1,60}([ \n]|$))/", '\1<br>', $txt);
 		$days = array();
-		$startday = date('l', $unixstart);
-		for($cur = time(), $end = $cur + DAYSAHEAD * SECINDAY; 
+		$startday = date('l', $tzunixstart);
+		$cur = time() + ($_SESSION['persistdata']['tzoffset'] * 60);
+		for($end = $cur + DAYSAHEAD * SECINDAY; 
 		    $cur < $end; 
 		    $cur += SECINDAY) {
 			$index = date('Ymd', $cur);
@@ -3175,12 +3191,13 @@ function AJeditRequest() {
 		}
 		$h .= "</select>";
 		$h .= i("&nbsp;At&nbsp;");
-		$tmp = explode(' ' , $request['start']);
+		$tmp = datetimeToUnix($request['start']) + ($_SESSION['persistdata']['tzoffset'] * 60);
+		$tmp = unixToDatetime($tmp);
+		$tmp = explode(' ' , $tmp);
 		$stime = $tmp[1];
 		$h .= "<div type=\"text\" dojoType=\"dijit.form.TimeTextBox\" ";
 		$h .= "id=\"editstarttime\" style=\"width: 78px\" value=\"T$stime\" ";
-		$h .= "onChange=\"resetEditResBtn();\"></div>";
-		$h .= "<small>(" . date('T') . ")</small><br><br>";
+		$h .= "onChange=\"resetEditResBtn();\"></div><br><br>";
 		$durationmatch = 0;
 		if($request['serverrequest']) {
 			$cdata['allowindefiniteend'] = 1;
@@ -3269,7 +3286,10 @@ function AJeditRequest() {
 					$h .= "<br><INPUT type=\"radio\" name=\"ending\" id=\"dateradio\" ";
 					$h .= "checked onChange=\"resetEditResBtn();\">";
 				}
-				$tmp = explode(' ', $request['end']);
+
+				$tmp = datetimeToUnix($request['end']) + ($_SESSION['persistdata']['tzoffset'] * 60);
+				$tmp = unixToDatetime($tmp);
+				$tmp = explode(' ', $tmp);
 				$edate = $tmp[0];
 				$etime = $tmp[1];
 			}
@@ -3282,7 +3302,6 @@ function AJeditRequest() {
 			$h .= "<div type=\"text\" dojoType=\"dijit.form.TimeTextBox\" ";
 			$h .= "id=\"openendtime\" style=\"width: 78px\" value=\"T$etime\" ";
 			$h .= "onChange=\"selectEnding();\"></div>";
-			$h .= "<small>(" . date('T') . ")</small>";
 		}
 		$h .= "<br><br>";
 		$cont = addContinuationsEntry('AJsubmitEditRequest', $cdata, SECINDAY, 1, 0);
@@ -3450,7 +3469,9 @@ function AJeditRequest() {
 		if($request['serverrequest']) {
 			$h .= i("End:");
 			if($endchecked) {
-				$tmp = explode(' ', $request['end']);
+				$tmp = datetimeToUnix($request['end']) + ($_SESSION['persistdata']['tzoffset'] * 60);
+				$tmp = unixToDatetime($tmp);
+				$tmp = explode(' ', $tmp);
 				$edate = $tmp[0];
 				$etime = $tmp[1];
 			}
@@ -3461,7 +3482,9 @@ function AJeditRequest() {
 		}
 		else {
 			$h .= i("Change ending to:");
-			$tmp = explode(' ', $request['end']);
+			$tmp = datetimeToUnix($request['end']) + ($_SESSION['persistdata']['tzoffset'] * 60);
+			$tmp = unixToDatetime($tmp);
+			$tmp = explode(' ', $tmp);
 			$edate = $tmp[0];
 			$etime = $tmp[1];
 		}
@@ -3473,7 +3496,6 @@ function AJeditRequest() {
 		$h .= "<div type=\"text\" dojoType=\"dijit.form.TimeTextBox\" ";
 		$h .= "id=\"openendtime\" style=\"width: 78px\" value=\"T$etime\" ";
 		$h .= "onChange=\"selectEnding();\"></div>";
-		$h .= "<small>(" . date('T') . ")</small>";
 		$h .= "<INPUT type=\"hidden\" name=\"enddate\" id=\"enddate\">";
 		if($request['serverrequest'] && $timeToNext == 0) {
 			$h .= "<br><br><font color=red>";
@@ -3564,7 +3586,7 @@ function AJsubmitEditRequest() {
 		}
 		preg_match('/^([0-9]{4})([0-9]{2})([0-9]{2})$/', $day, $tmp);
 		$startdt = "{$tmp[1]}-{$tmp[2]}-{$tmp[3]} {$matches[1]}:{$matches[4]}:00";
-		$startts = datetimeToUnix($startdt);
+		$startts = datetimeToUnix($startdt) - ($_SESSION['persistdata']['tzoffset'] * 60);
 	}
 	else {
 		$startdt = $request['start'];
@@ -3601,7 +3623,7 @@ function AJsubmitEditRequest() {
 			return;
 		}
 		$enddt = "{$tmp[1]}-{$tmp[2]}-{$tmp[3]} {$tmp[4]}:{$tmp[7]}:00";
-		$endts = datetimeToUnix($enddt);
+		$endts = datetimeToUnix($enddt) - ($_SESSION['persistdata']['tzoffset'] * 60);;
 	}
 	elseif($allowindefiniteend && $endmode == 'indefinite') {
 		$endts = datetimeToUnix('2038-01-01 00:00:00');
@@ -4566,7 +4588,7 @@ function processRequestInput() {
 	if($return['start'] == 0)
 		$start = $now;
 	else
-		$start = $return['start'];
+		$start = $return['start']; # don't need to tz offset conversion due to javascript date object handling it
 	if($return['ending'] == 'endat')
 		$end = $return['end'];
 	if($return['ending'] == 'indefinite')
@@ -4896,9 +4918,12 @@ function addConnectTimeout($resid, $compid) {
 ////////////////////////////////////////////////////////////////////////////////
 function getReserveDayData() {
 	$days = array();
-	for($cur = time(), $end = $cur + DAYSAHEAD * SECINDAY; 
+	$cur = time();
+	if(array_key_exists('tzoffset', $_SESSION['persistdata']))
+		$cur += $_SESSION['persistdata']['tzoffset'] * 60;
+	for($end = $cur + DAYSAHEAD * SECINDAY; 
 	    $cur < $end; 
-		 $cur += SECINDAY) {
+	    $cur += SECINDAY) {
 		$tmp = getdate($cur);
 		$index = $cur;
 		$days[$index] = i($tmp["weekday"]);

@@ -29,6 +29,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 function dashboard() {
 	print "<h2>VCL Dashboard</h2>\n";
+	print "(Times and dates on this page are in " . date('T') . ")<br><br>\n";
 	if(checkUserHasPerm('View Dashboard (global)')) {
 		print "View data for:";
 		$affils = getAffiliations();

@@ -106,10 +106,13 @@ class Schedule extends Resource {
 		$h .= selectInputAutoDijitHTML('startday', $days, 'startday');
 		$h .= "<input type=\"text\" id=\"starttime\" dojoType=\"dijit.form.TimeTextBox\" ";
 		$h .= "required=\"true\" value=\"T00:00:00\"/>\n";
+		$h .= "<small>(" . date('T') . ")</small>\n";
+		$h .= "&nbsp;|&nbsp;&nbsp;";
 		$h .= "End:";
 		$h .= selectInputAutoDijitHTML('endday', $days, 'endday');
 		$h .= "<input type=\"text\" id=\"endtime\" dojoType=\"dijit.form.TimeTextBox\" ";
 		$h .= "required=\"true\" value=\"T00:00:00\" />\n";
+		$h .= "<small>(" . date('T') . ")</small>\n";
 		$h .= dijitButton('addTimeBtn', "Add", "addTime();");
 		$h .= "</div>\n"; # text-align: center
 		$h .= "<div dojoType=\"dojo.data.ItemFileWriteStore\" jsId=\"scheduleStore\" ";
@@ -158,6 +161,8 @@ class Schedule extends Resource {
 		$h .= dijitButton('', "Close", $script);
 		$h .= "</div>\n"; # btn div
 		$h .= "</div>\n"; # groupdlg
+
+		$h .= "<input type=\"hidden\" id=\"timezonevalue\" value=\"" . date('T') . "\">\n";
 
 		return $h;
 	}

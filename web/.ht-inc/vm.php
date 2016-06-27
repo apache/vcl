@@ -460,7 +460,7 @@ function vmhostdata() {
 		$qh = doQuery($query, 101);
 		while($row = mysql_fetch_assoc($qh)) {
 			$movevms[] = array('id' => $row['id'],
-			                 'time' => strtolower($row['start']),
+			                 'time' => strtolower($row['start']) . ' ' . date('T'),
 			                 'hostname' => $currvms[$row['computerid']]['name']);
 			unset($currvms[$row['computerid']]);
 		}
@@ -654,7 +654,7 @@ function AJvmFromHost() {
 		if($row = mysql_fetch_assoc($qh)) {
 			$checks[] = array('id' => $compid,
 			                  'hostname' => $compdata[$compid]['hostname'],
-			                  'end' => strtolower($row['end']),
+			                  'end' => strtolower($row['end']) . ' ' . date('T'),
 			                  'end2' => $row['end2']);
 		}
 		else {

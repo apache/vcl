@@ -1481,7 +1481,7 @@ function userLookup() {
 			foreach($logins as $login) {
 				print "  <tr>\n";
 				print "    <td class=\"logincell\">{$login['authmech']}</td>\n";
-				$ts = prettyDatetime($login['timestamp'], 1);
+				$ts = prettyDatetime($login['timestamp'], 1) . '&nbsp;' . date('T');
 				print "    <td class=\"logincell\">$ts</td>\n";
 				if($login['passfail'])
 					print "    <td class=\"logincell\"><font color=\"#008000\">Pass</font></td>\n";
@@ -1555,11 +1555,11 @@ function userLookup() {
 				}
 				print "  <tr>\n";
 				print "    <th align=right>Start:</th>\n";
-				print "    <td>{$req['start']}</td>\n";
+				print "    <td>{$req['start']} " . date('T') . "</td>\n";
 				print "  </tr>\n";
 				print "  <tr>\n";
 				print "    <th align=right>End:</th>\n";
-				print "    <td>{$req['end']}</td>\n";
+				print "    <td>{$req['end']} " . date('T') . "</td>\n";
 				print "  </tr>\n";
 				if($req['IPaddress'] != '') {
 					print "  <tr>\n";
@@ -1673,14 +1673,14 @@ function userLookup() {
 				}
 				print "  <tr>\n";
 				print "    <th align=right>Start:</th>\n";
-				print "    <td>{$req['start']}</td>\n";
+				print "    <td>{$req['start']} " . date('T') . "</td>\n";
 				print "  </tr>\n";
 				print "  <tr>\n";
 				print "    <th align=right>End:</th>\n";
 				if($req['end'] == 'Friday, Jan 1st, 2038, 12:00 AM')
 					print "    <td>(indefinite)</td>\n";
 				else
-					print "    <td>{$req['end']}</td>\n";
+					print "    <td>{$req['end']} " . date('T') . "</td>\n";
 				print "  </tr>\n";
 				if($req['compIP'] != '') {
 					print "  <tr>\n";
@@ -1801,14 +1801,14 @@ function userLookup() {
 					}
 					print "  <tr>\n";
 					print "    <th align=right>Start:</th>\n";
-					print "    <td>{$req['start']}</td>\n";
+					print "    <td>{$req['start']} " . date('T') . "</td>\n";
 					print "  </tr>\n";
 					print "  <tr>\n";
 					print "    <th align=right>End:</th>\n";
 					if($req['end'] == 'Friday, Jan 1st, 2038, 12:00 AM')
 						print "    <td>(indefinite)</td>\n";
 					else
-						print "    <td>{$req['end']}</td>\n";
+						print "    <td>{$req['end']} " . date('T') . "</td>\n";
 					print "  </tr>\n";
 					if($req['compIP'] != '') {
 						print "  <tr>\n";

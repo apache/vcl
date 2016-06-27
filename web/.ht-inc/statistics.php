@@ -194,6 +194,7 @@ function viewStatistics() {
 		print "<H2>" . i("Statistic Information for") . " $statsfor</H2>\n";
 	elseif($mode2 == 'provisioning')
 		print "<H2>" . i("Statistic Information for") . " {$provs[$provid]}</H2>\n";
+	print "(Times and dates on this page are in " . date('T') . ")<br>\n";
 	print "<H3>";
 	$tmp = mktime(0, 0, 0, $month1, $day1, $year1);
 	$starttime = strftime('%x', $tmp);

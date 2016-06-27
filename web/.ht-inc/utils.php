@@ -798,6 +798,8 @@ function setupSession() {
 		$_SESSION['usersessiondata'] = array();
 	if(! array_key_exists('variables', $_SESSION))
 		$_SESSION['variables'] = array();
+	if(! array_key_exists('persistdata', $_SESSION))
+		$_SESSION['persistdata'] = array();
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -7489,12 +7491,18 @@ function showTimeTable($links) {
 		$stampArr = getdate($stamp);
 		$label = "";
 		if($stampArr["mday"] != $yesterday) {
-			$label = date('n/d/Y+g:i+a', $stamp);
+			if(array_key_exists('tzoffset', $_SESSION['persistdata']))
+				$label = date('n/d/Y+g:i+a', $stamp + $_SESSION['persistdata']['tzoffset'] * 60);
+			else
+				$label = date('n/d/Y+g:i+a', $stamp);
 			$label = str_replace('+', '&nbsp;', $label);
 			$yesterday = $stampArr["mday"];
 		}
 		elseif($stampArr["minutes"] == 0) {
-			$label = date('g:i a', $stamp);
+			if(array_key_exists('tzoffset', $_SESSION['persistdata']))
+				$label = date('g:i a', $stamp + $_SESSION['persistdata']['tzoffset'] * 60);
+			else
+				$label = date('g:i a', $stamp);
 		}
 		print "          <TH align=right>$label</TH>\n";
 		$free = 0;
@@ -9324,6 +9332,8 @@ function prettyDatetime($stamp, $showyear=0) {
 	global $locale;
 	if(! preg_match('/^[\d]+$/', $stamp))
 		$stamp = datetimeToUnix($stamp);
+	if(array_key_exists('tzoffset', $_SESSION['persistdata']))
+		$stamp += $_SESSION['persistdata']['tzoffset'] * 60;
 	if($showyear)
 		$return = strftime('%A, %b&nbsp;%-d,&nbsp;%Y, %l:%M %P', $stamp);
 	else
@@ -9404,6 +9414,25 @@ function prettyLength($minutes) {
 		else
 			return "$hours " . i("hours") . ", $min " . i("minutes");
 	}
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn AJsetTZoffset()
+///
+/// \brief sets tzoffset in persistdata array in session
+///
+////////////////////////////////////////////////////////////////////////////////
+function AJsetTZoffset() {
+	$remtzoffset = processInputVar('offset', ARG_NUMERIC, 0) * -1;
+	if($remtzoffset > 1560 || $remtzoffset < -1560)
+		$remtzoffset = 0;
+	$defaulttz = date_default_timezone_get();
+	$tzobj = timezone_open($defaulttz);
+	$now = date_create('now', timezone_open('UTC'));
+	$mytzoffset = timezone_offset_get($tzobj, $now) / 60; # offset in minutes
+	$diff = $remtzoffset - $mytzoffset;
+	$_SESSION['persistdata']['tzoffset'] = $remtzoffset - $mytzoffset;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -13028,6 +13057,13 @@ function getDojoHTML($refresh) {
 		$customfile = sprintf("<script type=\"text/javascript\" src=\"dojo/dojo/%s?v=$v\"></script>\n", $filename);
 	$rt = '';
 	$jslocale = strtolower(str_replace('_', '-', $locale));
+	$rt .= "<script type=\"text/javascript\">\n";
+	if(array_key_exists('tzoffset', $_SESSION['persistdata']))
+		$rt .= "   var tzoffset = {$_SESSION['persistdata']['tzoffset']};\n";
+	else
+		$rt .= "   var tzoffset = 'unset';\n";
+	$rt .= "   setTimeout(init, 100);\n";
+	$rt .= "</script>\n";
 	switch($mode) {
 
 		case "viewRequests":

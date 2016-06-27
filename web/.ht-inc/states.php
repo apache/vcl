@@ -61,6 +61,7 @@ $actions["entry"] = array('main',
                           #'testDojoREST',
                           'siteconfig',
                           'newOneClick',
+                          'AJsetTZoffset',
 );
 
 $noHTMLwrappers = array('sendRDPfile',
@@ -216,6 +217,7 @@ $noHTMLwrappers = array('sendRDPfile',
                         'AJsaveMessages',
                         'AJdeleteMessages',
                         'AJvalidateMessagesPoll',
+                        'AJsetTZoffset',
 );
 
 # main
@@ -723,6 +725,7 @@ $actions['mode']['clearCache'] = "clearPrivCache";
 $actions['mode']['errorrpt'] = "errorrpt";
 $actions['mode']['AJvalidateUserid'] = "AJvalidateUserid";
 $actions['mode']['changeLocale'] = "changeLocale";
+$actions['mode']['AJsetTZoffset'] = "AJsetTZoffset";
 $actions['pages']['continuationsError'] = "misc";
 $actions['pages']['clearCache'] = "misc";
 $actions['pages']['errorrpt'] = "misc";
@@ -730,6 +733,7 @@ $actions['pages']['logout'] = "misc";
 $actions['pages']['shiblogout'] = "misc";
 $actions['pages']['AJvalidateUserid'] = "misc";
 $actions['pages']['changeLocale'] = "misc";
+$actions['pages']['AJsetTZoffset'] = "misc";
 
 # OneClicks (VCL go)
 $actions['mode']['newOneClick'] = "newOneClick";

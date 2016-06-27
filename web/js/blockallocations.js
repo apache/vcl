@@ -276,7 +276,7 @@ function blockFormAddListSlot() {
 	var endobj = dijit.byId('listaddend');
 	if(! dateobj.isValid() || ! startobj.isValid() || ! endobj.isValid())
 		return;
-	var today = new Date();
+	var today = new Date(dojo.byId('nowtimestamp').value * 1000);
 	today.setHours(0);
 	today.setMinutes(0);
 	today.setSeconds(0);
@@ -1155,19 +1155,19 @@ function sortTimeArray(a, b) {
 }
 
 function gridDateTimePrimary(val) {
-	return val.substr(4, 2) + '/' + val.substr(6, 2) + '/' + val.substr(0, 4);
+	return val.substr(4, 2) + '/' + val.substr(6, 2) + '/' + val.substr(0, 4) + ' ' + dojo.byId('timezone').value;
 }
 
 function gridTimePrimary(val) {
 	var hour = parseInt(val.substr(0, 2), 10);
 	var min = parseInt(val.substr(2, 2), 10);
-	return formatHourMin(hour, min);
+	return formatHourMin(hour, min) + ' ' + dojo.byId('timezone').value;
 }
 
 function timeFromTextBox(time) {
 	var hour = time.getHours();
 	var min = time.getMinutes();
-	return formatHourMin(hour, min);
+	return formatHourMin(hour, min) + ' ' + dojo.byId('timezone').value;
 }
 
 function formatHourMin(hour, min) {
@@ -1262,13 +1262,13 @@ function blockTimesGridDate(val) {
 function blockTimesGridStart(val) {
 	var hour = parseInt(val.substr(11, 2), 10);
 	var min = parseInt(val.substr(14, 2), 10);
-	return formatHourMin(hour, min);
+	return formatHourMin(hour, min) + ' ' + dojo.byId('timezone').value;
 }
 
 function blockTimesGridEnd(val) {
 	var hour = parseInt(val.substr(11, 2), 10);
 	var min = parseInt(val.substr(14, 2), 10);
-	return formatHourMin(hour, min);
+	return formatHourMin(hour, min) + ' ' + dojo.byId('timezone').value;
 }
 
 function ownerFocus() {

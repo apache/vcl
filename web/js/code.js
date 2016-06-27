@@ -35,6 +35,19 @@ function setBrowser() {
 }
 setBrowser();
 
+function init() {
+	if(typeof(dojo) == 'undefined') {
+		setTimeout(init, 250);
+		return;
+	}
+	if(typeof(tzoffset) != undefined && tzoffset == 'unset') {
+		var now = new Date();
+		var data = {mode: 'AJsetTZoffset',
+		            offset: now.getTimezoneOffset()};
+		RPCwrapper(data, null, 0);
+	}
+}
+
 function _(str) {
 	if(typeof usenls == 'undefined' ||
 	   typeof nlsmessages == 'undefined' ||
@@ -42,6 +55,10 @@ function _(str) {
 	   nlsmessages[str] == '')
 		return str;
 	return nlsmessages[str];
+}
+
+Date.prototype.getDayName = function() {
+	return [_('Sunday'), _('Monday'), _('Tuesday'), _('Wednesday'), _('Thursday'), _('Friday'), _('Saturday')][this.getDay()];
 }
 
 function testJS() {
