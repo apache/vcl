@@ -897,7 +897,7 @@ CREATE TABLE IF NOT EXISTS `request` (
   `stateid` tinyint(3) unsigned NOT NULL default '0',
   `userid` mediumint(8) unsigned NOT NULL default '0',
   `laststateid` tinyint(3) unsigned NOT NULL default '0',
-  `logid` int(10) unsigned NOT NULL default '0',
+  `logid` int(10) unsigned default NULL,
   `forimaging` tinyint(1) unsigned NOT NULL default '0',
   `test` tinyint(1) unsigned NOT NULL default '0',
   `preload` tinyint(1) unsigned NOT NULL default '0',

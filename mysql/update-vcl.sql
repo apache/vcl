@@ -1202,6 +1202,15 @@ CREATE TABLE IF NOT EXISTS `provisioningOSinstalltype` (
 -- --------------------------------------------------------
 
 --
+-- Table structure change for table `request`
+--
+
+ALTER TABLE `request` CHANGE `logid` `logid` int(10) unsigned default NULL;
+UPDATE `request` SET `logid` = NULL WHERE `logid` = 0;
+
+-- --------------------------------------------------------
+
+--
 -- Table structure change for table `reservation`
 --
 
