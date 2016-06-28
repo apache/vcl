@@ -90,6 +90,41 @@ our $SOURCE_CONFIGURATION_DIRECTORY = "$TOOLS/Linux";
 
 our $NODE_CONFIGURATION_DIRECTORY = '/root/VCL';
 
+=head2 $CAPTURE_DELETE_FILE_PATHS
+
+ Data type   : Array
+ Description : List of files to be deleted during the image capture process.
+
+=cut
+
+our $CAPTURE_DELETE_FILE_PATHS = [
+	'/root/.ssh/id_rsa',
+	'/root/.ssh/id_rsa.pub',
+	'/etc/sysconfig/iptables*old*',
+	'/etc/sysconfig/iptables_pre*',
+	'/etc/udev/rules.d/70-persistent-net.rules',
+	'/var/log/*.0',
+	'/var/log/*.gz',
+];
+
+=head2 $CAPTURE_CLEAR_FILE_PATHS
+
+ Data type   : Array
+ Description : List of files to be cleared during the image capture process.
+
+=cut
+
+our $CAPTURE_CLEAR_FILE_PATHS = [
+	'/etc/hostname',
+	'/var/log/auth.log*',
+	'/var/log/boot.log*',
+	'/var/log/lastlog',
+	'/var/log/messages',
+	'/var/log/secure',
+	'/var/log/udev',
+	'/var/log/wtmp',
+];
+
 #/////////////////////////////////////////////////////////////////////////////
 
 =head2 get_node_configuration_directory
@@ -336,11 +371,8 @@ sub pre_capture {
 	
 	notify($ERRORS{'OK'}, 0, "beginning Linux-specific image capture preparation tasks");
 	
-	if (!$self->file_exists("/root/.vclcontrol/vcl_exclude_list.sample")) {
-		notify($ERRORS{'DEBUG'}, 0, "/root/.vclcontrol/vcl_exclude_list.sample does not exists");
-		if (!$self->generate_vclcontrol_sample_files()) {
-			notify($ERRORS{'DEBUG'}, 0, "could not create /root/.vclcontrol/vcl_exclude_list.sample");
-		}
+	if (!$self->generate_exclude_list_sample()) {
+		notify($ERRORS{'DEBUG'}, 0, "could not create /root/.vclcontrol/vcl_exclude_list.sample");
 	}
 	
 	# Force user off computer
@@ -353,17 +385,16 @@ sub pre_capture {
 		notify($ERRORS{'OK'}, 0, "deleted user from $computer_node_name");
 	}
 	
+	# Attempt to set the root password to a known value
+	# This is useful for troubleshooting image problems
+	$self->set_password("root", $WINDOWS_ROOT_PASSWORD);
+	
 	if (!$self->configure_default_sshd()) {
 		return;
 	}
 	
 	if (!$self->configure_rc_local()) {
 		return;
-	}
-	
-	# Clean up connection methods
-	if ($self->process_connect_methods("any", 1)) {
-		notify($ERRORS{'OK'}, 0, "processed connection methods on $computer_node_name");
 	}
 	
 	if (!$self->clean_iptables()) {
@@ -420,7 +451,7 @@ sub post_load {
 	notify($ERRORS{'OK'}, 0, "beginning Linux post_load tasks, image: $image_name, computer: $computer_node_name");
 
 	# Wait for computer to respond to SSH
-	if (!$self->wait_for_response(5, 600, 10)) {
+	if (!$self->wait_for_response(5, 600, 5)) {
 		notify($ERRORS{'WARNING'}, 0, "$computer_node_name never responded to SSH");
 		return;
 	}
@@ -1000,10 +1031,106 @@ EOF
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 start_network_interface
+
+ Parameters  : $interface_name
+ Returns     : boolean
+ Description : Calls ifup on the network interface.
+
+=cut
+
+sub start_network_interface {
+	my $self = shift;
+	if (ref($self) !~ /linux/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return 0;
+	}
+	
+	my $interface_name = shift;
+	if (!$interface_name) {
+		notify($ERRORS{'WARNING'}, 0, "unable to start network interface, interface name argument was not supplied");
+		return;
+	}
+	
+	my $computer_name = $self->data->get_computer_short_name();
+	
+	notify($ERRORS{'DEBUG'}, 0, "attempting to start network interface $interface_name on $computer_name");
+	
+	my $command = "/sbin/ifup $interface_name";
+	my ($exit_status, $output) = $self->execute($command);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to start $interface_name interface on $computer_name");
+		return;
+	}
+	elsif (grep(/already configured/i, @$output)) {
+		notify($ERRORS{'DEBUG'}, 0, "$interface_name interface on $computer_name is already started, output:\n" . join("\n", @$output));
+		return 1;
+	}
+	elsif ($exit_status) {
+		notify($ERRORS{'WARNING'}, 0, "failed to start $interface_name interface on $computer_name, exit status: $exit_status, command: '$command', output:\n" . join("\n", @$output));
+		return;
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "started $interface_name interface on $computer_name, output:\n" . join("\n", @$output));
+	}
+	
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 stop_network_interface
+
+ Parameters  : $interface_name
+ Returns     : boolean
+ Description : Calls ifdown on the network interface.
+
+=cut
+
+sub stop_network_interface {
+	my $self = shift;
+	if (ref($self) !~ /linux/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return 0;
+	}
+	
+	my $interface_name = shift;
+	if (!$interface_name) {
+		notify($ERRORS{'WARNING'}, 0, "unable to stop network interface, interface name argument was not supplied");
+		return;
+	}
+	
+	my $computer_name = $self->data->get_computer_short_name();
+	
+	notify($ERRORS{'DEBUG'}, 0, "attempting to stop network interface $interface_name on $computer_name");
+	
+	my $command = "/sbin/ifdown $interface_name";
+	my ($exit_status, $output) = $self->execute($command);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to stop $interface_name interface on $computer_name");
+		return;
+	}
+	elsif (grep(/not configured/i, @$output)) {
+		notify($ERRORS{'DEBUG'}, 0, "$interface_name interface on $computer_name is already stopped, output:\n" . join("\n", @$output));
+		return 1;
+	}
+	elsif ($exit_status) {
+		notify($ERRORS{'WARNING'}, 0, "failed to stop $interface_name interface on $computer_name, exit status: $exit_status, command: '$command', output:\n" . join("\n", @$output));
+		return;
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "stopped $interface_name interface on $computer_name, output:\n" . join("\n", @$output));
+	}
+	
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 =head2 restart_network_interface
 
  Parameters  : $interface_name
- Returns     :
+ Returns     : boolean
  Description : Calls ifdown and then ifup on the network interface.
 
 =cut
@@ -1021,23 +1148,116 @@ sub restart_network_interface {
 		return;
 	}
 	
-	my $computer_name        = $self->data->get_computer_short_name();
-	my $network_scripts_path = "/etc/sysconfig/network-scripts";
+	my $computer_name = $self->data->get_computer_short_name();
 	
-	# Restart the interface
 	notify($ERRORS{'DEBUG'}, 0, "attempting to restart network interface $interface_name on $computer_name");
-	my $interface_restart_command = "$network_scripts_path/ifdown $interface_name ; $network_scripts_path/ifup $interface_name";
-	my ($interface_restart_exit_status, $interface_restart_output) = $self->execute($interface_restart_command);
-	if (!defined($interface_restart_output)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to run command to restart interface $interface_name on $computer_name: '$interface_restart_command'");
+	
+	my $command = "/sbin/ifdown $interface_name ; /sbin/ifup $interface_name";
+	my ($exit_status, $output) = $self->execute($command);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to restart $interface_name interface on $computer_name");
 		return;
 	}
-	elsif ($interface_restart_exit_status) {
-		notify($ERRORS{'WARNING'}, 0, "failed to restart network interface $interface_name on $computer_name, exit status: $interface_restart_exit_status, command: '$interface_restart_command', output:\n" . join("\n", @$interface_restart_output));
+	elsif ($exit_status) {
+		notify($ERRORS{'WARNING'}, 0, "failed to restart $interface_name interface on $computer_name, exit status: $exit_status, command: '$command', output:\n" . join("\n", @$output));
 		return;
 	}
 	else {
-		notify($ERRORS{'DEBUG'}, 0, "restarted network interface $interface_name on $computer_name");
+		notify($ERRORS{'DEBUG'}, 0, "restarted $interface_name interface on $computer_name");
+	}
+	
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 delete_default_gateway
+
+ Parameters  : none
+ Returns     : boolean
+ Description : Deletes the existing default gateway from the routing table.
+
+=cut
+
+sub delete_default_gateway {
+	my $self = shift;
+	if (ref($self) !~ /linux/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return 0;
+	}
+	
+	my $computer_name = $self->data->get_computer_short_name();
+	
+	my $command = "/sbin/route del default";
+	my ($exit_status, $output) = $self->execute($command);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to delete default gateway on $computer_name: $command");
+		return;
+	}
+	elsif (grep(/No such process/i, @$output)) {
+		notify($ERRORS{'DEBUG'}, 0, "default gateway not set on $computer_name");
+	}
+	elsif ($exit_status ne '0') {
+		notify($ERRORS{'WARNING'}, 0, "failed to delete default gateway on $computer_name, exit status: $exit_status, command:\n$command\noutput:\n" . join("\n", @$output));
+		return 0;
+	}
+	else {
+		notify($ERRORS{'OK'}, 0, "deleted default gateway on $computer_name");
+	}
+	
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 set_default_gateway
+
+ Parameters  : $default_gateway, $interface_name (optional)
+ Returns     : boolean
+ Description : Sets the default route. If no interface argument is supplied, the
+               public interface is used.
+
+=cut
+
+sub set_default_gateway {
+	my $self = shift;
+	if (ref($self) !~ /linux/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return 0;
+	}
+	
+	my $default_gateway = shift;
+	if (!defined($default_gateway)) {
+		notify($ERRORS{'WARNING'}, 0, "default gateway argument not supplied");
+		return;
+	}
+	
+	my $computer_name = $self->data->get_computer_short_name();
+	
+	my $interface_name = shift;
+	if (!defined($interface_name)) {
+		$interface_name = $self->get_public_interface_name();
+		if (!$interface_name) {
+			notify($ERRORS{'WARNING'}, 0, "unable to set static default gateway on $computer_name, interface name argument was not supplied and public interface name could not be determined");
+			return;
+		}
+	}
+	
+	# Delete existing default gateway or else error will occur: SIOCADDRT: File exists
+	$self->delete_default_gateway();
+
+	my $command = "/sbin/route add default gw $default_gateway metric 0 $interface_name";
+	my ($exit_status, $output) = $self->execute($command);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to set default gateway on $computer_name: $command");
+		return;
+	}
+	elsif ($exit_status ne '0') {
+		notify($ERRORS{'WARNING'}, 0, "failed to set default gateway on $computer_name to $default_gateway, interface: $interface_name, exit status: $exit_status, command:\n$command\noutput:\n" . join("\n", @$output));
+		return 0;
+	}
+	else {
+		notify($ERRORS{'OK'}, 0, "set default gateway on $computer_name to $default_gateway, interface: $interface_name");
 	}
 	
 	return 1;
@@ -1548,7 +1768,7 @@ sub run_script {
 
 =head2 file_exists
 
- Parameters  : $path
+ Parameters  : $file_path, $display_output (optional)
  Returns     : boolean
  Description : Checks if a file or directory exists on the Linux computer.
 
@@ -1562,17 +1782,22 @@ sub file_exists {
 	}
 	
 	# Get the path from the subroutine arguments and make sure it was passed
-	my $path = shift;
-	if (!$path) {
+	my $file_path = shift;
+	if (!$file_path) {
 		notify($ERRORS{'WARNING'}, 0, "path argument was not specified");
 		return 0;
 	}
 	
+	my $display_output = shift;
+	if (!defined($display_output)) {
+		$display_output = 1;
+	}
+	
 	# Remove any quotes from the beginning and end of the path
-	$path = normalize_file_path($path);
+	$file_path = normalize_file_path($file_path);
 	
 	# Escape all spaces in the path
-	my $escaped_path = escape_file_path($path);
+	my $escaped_path = escape_file_path($file_path);
 	
 	my $computer_short_name = $self->data->get_computer_short_name();
 	
@@ -1581,15 +1806,15 @@ sub file_exists {
 	my $command = "stat $escaped_path";
 	my ($exit_status, $output) = $self->execute($command, 0);
 	if (!defined($output)) {
-		notify($ERRORS{'DEBUG'}, 0, "failed to run command to determine if file or directory exists on $computer_short_name:\npath: '$path'\ncommand: '$command'");
+		notify($ERRORS{'DEBUG'}, 0, "failed to run command to determine if file or directory exists on $computer_short_name:\npath: '$file_path'\ncommand: '$command'");
 		return 0;
 	}
 	elsif (grep(/no such file/i, @$output)) {
-		#notify($ERRORS{'DEBUG'}, 0, "file or directory does not exist on $computer_short_name: '$path'");
+		notify($ERRORS{'DEBUG'}, 0, "file or directory does not exist on $computer_short_name: '$file_path'") if $display_output;
 		return 0;
 	}
 	elsif (grep(/stat: /i, @$output)) {
-		notify($ERRORS{'DEBUG'}, 0, "failed to determine if file or directory exists on $computer_short_name:\npath: '$path'\ncommand: '$command'\nexit status: $exit_status, output:\n" . join("\n", @$output));
+		notify($ERRORS{'DEBUG'}, 0, "failed to determine if file or directory exists on $computer_short_name:\npath: '$file_path'\ncommand: '$command'\nexit status: $exit_status, output:\n" . join("\n", @$output));
 		return 0;
 	}
 	
@@ -1599,11 +1824,11 @@ sub file_exists {
 	my $links_found       = grep(/^\s*Size:.*link$/i,      @$output);
 	
 	if ($files_found || $directories_found || $links_found) {
-		notify($ERRORS{'DEBUG'}, 0, "'$path' exists on $computer_short_name, files: $files_found, directories: $directories_found, links: $links_found");
+		notify($ERRORS{'DEBUG'}, 0, "'$file_path' exists on $computer_short_name, files: $files_found, directories: $directories_found, links: $links_found") if $display_output;
 		return 1;
 	}
 	else {
-		notify($ERRORS{'DEBUG'}, 0, "unexpected output returned while attempting to determine if file or directory exists on $computer_short_name: '$path'\ncommand: '$command'\nexit status: $exit_status, output:\n" . join("\n", @$output));
+		notify($ERRORS{'DEBUG'}, 0, "unexpected output returned while attempting to determine if file or directory exists on $computer_short_name: '$file_path'\ncommand: '$command'\nexit status: $exit_status, output:\n" . join("\n", @$output));
 		return 0;
 	}
 }
@@ -1658,7 +1883,7 @@ sub delete_file {
 	}
 	
 	# Make sure the path does not exist
-	my $file_exists = $self->file_exists($path);
+	my $file_exists = $self->file_exists($path, 0);
 	if (!defined($file_exists)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to confirm file doesn't exist on $computer_short_name: '$path'");
 		return;
@@ -1671,6 +1896,63 @@ sub delete_file {
 		#notify($ERRORS{'DEBUG'}, 0, "confirmed file does not exist on $computer_short_name: '$path'");
 		return 1;
 	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 clear_file
+
+ Parameters  : $file_path
+ Returns     : boolean
+ Description : Clears a file on the computer via 'cat /dev/null'. If the file
+               doesn't exist it is not created and true is returned.
+
+=cut
+
+sub clear_file {
+	my $self = shift;
+	if (ref($self) !~ /module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Get the path argument
+	my $file_path = shift;
+	if (!$file_path) {
+		notify($ERRORS{'WARNING'}, 0, "file path argument was not specified");
+		return;
+	}
+	
+	my $computer_short_name = $self->data->get_computer_short_name();
+	
+	# Check if the file exists
+	if (!$self->file_exists($file_path, 0)) {
+		notify($ERRORS{'DEBUG'}, 0, "file not cleared on $computer_short_name because it doesn't exist: $file_path");
+		return 1;
+	}
+	
+	# Remove any quotes from the beginning and end of the path
+	$file_path = normalize_file_path($file_path);
+	
+	# Escape all spaces in the path
+	my $escaped_file_path = escape_file_path($file_path);
+	
+	# Clear the file
+	my $command = "cat /dev/null > $escaped_file_path";
+	my ($exit_status, $output) = $self->execute($command);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to clear file on $computer_short_name: '$file_path'");
+		return;
+	}
+	elsif ($exit_status ne 0) {
+		notify($ERRORS{'WARNING'}, 0, "error occurred attempting to clear file on $computer_short_name: '$file_path', exit status: $exit_status, command: '$command', output:\n" . join("\n", @$output));
+		return;
+	}
+	else {
+		notify($ERRORS{'OK'}, 0, "cleared file on $computer_short_name: '$file_path'");
+	}
+	
+	return 1;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -3463,10 +3745,16 @@ sub delete_service {
 	my $init_module = ($self->get_init_modules())[$init_module_index];
 	if ($init_module->delete_service($service_name)) {
 		# Delete the cached service name array
+		delete $self->{service_init_module}{$service_name};
 		delete $init_module->{service_names};
 	}
 	else {
 		return;
+	}
+	
+	# Delete external_sshd_config if deleting the ext_sshd service
+	if ($service_name =~ /ext_ssh/) {
+		$self->delete_file('/etc/ssh/external_sshd_config');
 	}
 	
 	return 1;
@@ -4088,8 +4376,10 @@ sub save_firewall_configuration {
 =head2 get_exclude_list
  
  Parameters  : none
- Returns     : array, empty or contents of exclude list
- Description : 
+ Returns     : array
+ Description : Retrieves /root/.vclcontrol/vcl_exclude_list from the computer
+               and constructs an array. Blank lines are ommitted. Spaces at the
+               beginning or end of lines are removed.
  
 =cut
 
@@ -4100,25 +4390,148 @@ sub get_exclude_list {
 		return;
 	}
 	
-	my $computer_node_name = $self->data->get_computer_node_name();
+	my $computer_name = $self->data->get_computer_node_name();
 	
-	# Does /etc/vcl_exclude_list exists
-	my $filename = "/root/.vclcontrol/vcl_exclude_list";
-	if (!$self->file_exists($filename)) {
-		return;
+	# Check if previously retrieved
+	if (defined($self->{exclude_list_lines})) {
+		#notify($ERRORS{'DEBUG'}, 0, "returning previously retrieved exclude list from $computer_name:\n" . join("\n", @{$self->{exclude_list_lines}}));
+		return @{$self->{exclude_list_lines}};
 	}
 	
-	# Get the list
-	my $command = "cat $filename";
-	my ($status, $output) = $self->execute($command);
+	my $exclude_file_path = "/root/.vclcontrol/vcl_exclude_list";
 	
-	if (!defined($output)) {
-		notify($ERRORS{'DEBUG'}, 0, "empty exclude_list from $computer_node_name");
-		return;
+	if (!$self->file_exists($exclude_file_path)) {
+		$self->{exclude_list_lines} = [];
+		return ();
 	}
 	
-	return @$output;
+	# Retrieve the contents of vcl_exclude_list
+	my @exclude_lines = $self->get_file_contents($exclude_file_path);
+	
+	# Check for blank lines and other problems
+	my @exclude_lines_cleaned;
+	my $exclude_lines_cleaned_string = '';
+	for my $exclude_line (@exclude_lines) {
+		# Ignore blank lines
+		if ($exclude_line !~ /\w/) {
+			next;
+		}
+		
+		# Remove leading and trailing spaces
+		$exclude_line =~ s/(^\s+|\s+$)//g;
+		
+		push @exclude_lines_cleaned, $exclude_line;
+		$exclude_lines_cleaned_string .= "'$exclude_line'\n";
+	}
+	
+	$self->{exclude_list_lines} = \@exclude_lines_cleaned;
+	
+	notify($ERRORS{'DEBUG'}, 0, "retrieved and parsed $exclude_file_path on $computer_name:\n$exclude_lines_cleaned_string");
+	return @exclude_lines_cleaned;
+}
 
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_exclude_regex_list
+ 
+ Parameters  : none
+ Returns     : array
+ Description : Assembles a regular expression string based on the contents of
+               each line in /root/.vclcontrol/vcl_exclude_list on the computer.
+               If the file doesn't exist or is empty, an empty array is
+               returned.
+
+=cut
+
+sub get_exclude_regex_list {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $computer_name = $self->data->get_computer_node_name();
+	
+	# Check if previously retrieved
+	if (defined($self->{exclude_regex_list})) {
+		#notify($ERRORS{'DEBUG'}, 0, "returning previously retrieved exclude list regex from $computer_name:\n" . join("\n", @{$self->{exclude_regex_list}}));
+		return @{$self->{exclude_regex_list}};
+	}
+	
+	# Retrieve exclude_list
+	my @exclude_files = $self->get_exclude_list();
+	if (!@exclude_files) {
+		$self->{exclude_regex_list} = [];
+		return ();
+	}
+	
+	my @exclude_regex_list;
+	my $exclude_regex_list_string;
+	for my $exclude_file (@exclude_files) {
+		my $exclude_regex = $exclude_file;
+		
+		# Add ^ to the beginning, remove any leading spaces
+		$exclude_regex =~ s/^[\s\^]*/\^/g;
+		
+		# Add $ to the end, remove any trailing spaces
+		$exclude_regex =~ s/[\s\$]*$/\$/g;
+		
+		# Escape forward slashes and periods
+		$exclude_regex =~ s/\\*([\/\.])/\\$1/g;
+		
+		# Change asterisk to regex: * --> .*
+		$exclude_regex =~ s/\*+/\.\*/g;
+		
+		push @exclude_regex_list, $exclude_regex;
+		$exclude_regex_list_string .= $exclude_regex . "\n";
+	}
+	chop($exclude_regex_list_string);
+	
+	$self->{exclude_regex_list} = \@exclude_regex_list;
+	
+	notify($ERRORS{'DEBUG'}, 0, "assembled regex list from vcl_exclude_list:\n$exclude_regex_list_string");
+	return @exclude_regex_list;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 is_file_in_exclude_list
+ 
+ Parameters  : $file_path
+ Returns     : boolean
+ Description : Checks if the file matches any lines in
+               /root/.vclcontrol/vcl_exclude_list on the computer. If it
+               matches, true is returned meaning the file should not be altered.
+
+ 
+=cut
+
+sub is_file_in_exclude_list {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $file_path = shift;
+	if (!$file_path) {
+		notify($ERRORS{'WARNING'}, 0, "file path argument was not specified");
+		return;
+	}
+	
+	my @exclude_regex_list = $self->get_exclude_regex_list();
+	return 0 unless @exclude_regex_list;
+	
+	for my $exclude_regex (@exclude_regex_list) {
+		if ($file_path =~ /$exclude_regex/i) {
+			my $match = $1;
+			notify($ERRORS{'DEBUG'}, 0, "file matches line in vcl_exclude_list:\nfile path: $file_path\nmatching regex: $exclude_regex");
+			return 1;
+		}
+	}
+	
+	#notify($ERRORS{'DEBUG'}, 0, "file does NOT match any lines in vcl_exclude_list: $file_path");
+	return 0;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -4126,12 +4539,13 @@ sub get_exclude_list {
 =head2 generate_exclude_list_sample
  
  Parameters  : none
- Returns     :boolean
- Description : Generates sample exclude list for users to assist in customizing
+ Returns     : boolean
+ Description : Generates /root/.vclcontrol/vcl_exclude_list.sample to help image
+               creators utilize the file.
  
 =cut
 
-sub generate_vclcontrol_sample_files {
+sub generate_exclude_list_sample {
 	
 	my $self = shift;
 	if (ref($self) !~ /VCL::Module/i) {
@@ -4139,47 +4553,34 @@ sub generate_vclcontrol_sample_files {
 		return;
 	}
 	
-	my $request_id           = $self->data->get_request_id();
-	my $management_node_keys = $self->data->get_management_node_keys();
-	my $computer_short_name  = $self->data->get_computer_short_name();
-	my $computer_node_name   = $self->data->get_computer_node_name();
+	my $exclude_file_name = "vcl_exclude_list";
+	my $exclude_file_path = "/root/.vclcontrol/$exclude_file_name";
+	my $sample_file_path  = "/root/.vclcontrol/$exclude_file_name.sample";
 	
-	my @array2print;
-	
-	push(@array2print, '#' . "\n");
-	push(@array2print, '# /root/.vclcontrol/vcl_exclude_list' . "\n");
-	push(@array2print, '# List any files here that vcld should exclude updating  during the capture process' . "\n");
-	push(@array2print, "# Format is one file per line including the full path name" . "\n");
-	push(@array2print, "\n");
-	
-	# write to tmpfile
-	my $tmpfile = "/tmp/$request_id.vcl_exclude_list.sample";
-	if (open(TMP, ">$tmpfile")) {
-		print TMP @array2print;
-		close(TMP);
-	}
-	else {
-		#print "could not write $tmpfile $!\n";
-		notify($ERRORS{'OK'}, 0, "could not write $tmpfile $!");
-		return 0;
-	}
-	
-	# Make directory
-	my $mkdir = "mkdir /root/.vclcontrol";
-	
-	if ($self->execute($mkdir)) {
-		notify($ERRORS{'DEBUG'}, 0, "created /root/.vclcontrol directory");
-	}
-	
-	# copy to node
-	if (run_scp_command($tmpfile, "$computer_node_name:/root/.vclcontrol/vcl_exclude_list.sample", $management_node_keys)) {
-	}
-	else {
-		return 0;
-	}
-	
-	return 1;
+	my $sample_file_contents = <<"EOF";
+When creating an image, you may create a $exclude_file_path file to prevent VCL from altering certain files during the image capture or load processes. Files listed within $exclude_file_name will not be altered. The $exclude_file_name file does not exist by default. You must create it if you wish to utilize this feature. You can specify full, exact file paths or use asterisk characters as wildcards within $exclude_file_name.
 
+Examples:
+/root/.ssh/id_rsa
+This would only match the file with the exact path:
+/root/.ssh/id_rsa
+
+/root/.ssh/id_rsa*
+This would match all files in the '/root/.ssh' directory with names beginning with 'id_rsa' including:
+/root/.ssh/id_rsa
+/root/.ssh/id_rsa.pub
+
+/root/.ssh/id_rsa.*
+This would match all files in the '/root/.ssh' directory with names beginning with 'id_rsa.' (including the period) including:
+/root/.ssh/id_rsa.pub
+
+In the previous example, '/root/.ssh/id_rsa' would not match because it does not contain a period after 'id_rsa'.
+EOF
+	
+	# Format the string and add comment characters to the beginning of each line
+	$sample_file_contents = wrap_string($sample_file_contents, 80, '# ');
+	
+	return $self->create_text_file($sample_file_path, $sample_file_contents);
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -4605,65 +5006,54 @@ sub get_logged_in_users {
 
 =head2 clean_known_files
 
- Parameters  : 
- Returns     : 1
- Description : Removes or overwrites known files that are not excluded.
+ Parameters  : none
+ Returns     : boolean
+ Description : Clears and deletes files defined for the Linux OS module in the
+               $CAPTURE_CLEAR_FILE_PATHS and $CAPTURE_DELETE_FILE_PATHS class
+               variables.
 
 =cut
 
 sub clean_known_files {
 	my $self = shift;
-	if (ref($self) !~ /linux/i) {
+	if (ref($self) !~ /Linux/i) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return;
-	}
+	}	
 	
-	my $computer_node_name = $self->data->get_computer_node_name();
+	my $error_count = 0;
 	
-	# Try to clear /tmp
-	if ($self->execute("/usr/sbin/tmpwatch -f 0 /tmp; /bin/cp /dev/null /var/log/wtmp")) {
-		notify($ERRORS{'DEBUG'}, 0, "cleared /tmp on $computer_node_name");
-	}
-
-	# Clear /etc/hostname file
-	if($self->file_exists("/etc/hostname")) {
-		if ($self->execute("/bin/cp /dev/null /etc/hostname")) {
-			notify($ERRORS{'DEBUG'}, 0, "cleared /etc/hostname on $computer_node_name");
+	# Clear files
+	my @class_clear_file_path_array_refs = $self->get_class_variable_hierarchy('CAPTURE_CLEAR_FILE_PATHS');
+	for my $class_clear_file_path_array_ref (@class_clear_file_path_array_refs) {
+		for my $file_path (@$class_clear_file_path_array_ref) {
+			if ($self->is_file_in_exclude_list($file_path)) {
+				notify($ERRORS{'DEBUG'}, 0, "file not cleared because it is in the exclude list: $file_path");
+				next;
+			}
+			$self->clear_file($file_path) || $error_count++;
 		}
 	}
 	
-	# Clear SSH idenity keys from /root/.ssh
-	if (!$self->clear_private_keys()) {
-		notify($ERRORS{'WARNING'}, 0, "unable to clear known identity keys");
-	}
-	
-	# Fetch exclude_list
-	my @exclude_list = $self->get_exclude_list();
-	
-	if (@exclude_list) {
-		notify($ERRORS{'DEBUG'}, 0, "skipping files listed in exclude_list\n" . join("\n", @exclude_list));
-	}
-	
-	# Remove files
-	if (!(grep(/70-persistent-net.rules/, @exclude_list))) {
-		if (!$self->delete_file("/etc/udev/rules.d/70-persistent-net.rules")) {
-			notify($ERRORS{'WARNING'}, 0, "unable to remove /etc/udev/rules.d/70-persistent-net.rules");
+	# Delete files
+	my @class_delete_file_path_array_refs = $self->get_class_variable_hierarchy('CAPTURE_DELETE_FILE_PATHS');
+	for my $class_delete_file_path_array_ref (@class_delete_file_path_array_refs) {
+		for my $file_path (@$class_delete_file_path_array_ref) {
+			if ($self->is_file_in_exclude_list($file_path)) {
+				notify($ERRORS{'DEBUG'}, 0, "file not deleted because it is in the exclude list: $file_path");
+				next;
+			}
+			$self->delete_file($file_path) || $error_count++;
 		}
 	}
 	
-	if (!(grep(/\/var\/log\/secure/, @exclude_list))) {
-		if (!$self->delete_file("/var/log/secure")) {
-			notify($ERRORS{'WARNING'}, 0, "unable to remove /var/log/secure");
-		}
+	if ($error_count) {
+		notify($ERRORS{'WARNING'}, 0, "encountered $error_count error" . ($error_count > 1 ? 's' : '') . " clearing and deleting files");
+		return;
 	}
-	
-	if (!(grep(/\/var\/log\/messages/, @exclude_list))) {
-		if (!$self->delete_file("/var/log/messages")) {
-			notify($ERRORS{'WARNING'}, 0, "unable to remove /var/log/secure");
-		}
+	else {
+		return 1;
 	}
-
-	return 1;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -5054,12 +5444,12 @@ sub configure_ext_sshd {
 	
 	my $init_module = ($self->get_init_modules())[$init_module_index];
 	
+	# Delete the cached service name array
+	delete $init_module->{service_names};
+	delete $self->{service_init_module}{ext_sshd};
+	
 	# Add the ext_sshd service
-	if ($init_module->add_ext_sshd_service()) {
-		# Delete the cached service name array
-		delete $init_module->{service_names};
-	}
-	else {
+	if (!$init_module->add_ext_sshd_service()) {
 		notify($ERRORS{'WARNING'}, 0, "unable to configure ext_sshd, failed to add the ext_sshd service to $computer_node_name");
 		return;
 	}
@@ -6599,6 +6989,64 @@ sub remove_matching_fstab_lines {
 	$self->copy_file('/etc/fstab', "/tmp/fstab.$timestamp");
 	
 	return $self->create_text_file('/etc/fstab', $updated_fstab_contents);
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 update_resolv_conf
+
+ Parameters  : none
+ Returns     : boolean
+ Description : Updates /etc/resolv.conf on the computer. Existing nameserver
+               lines are removed and new nameserver lines are added based on the
+               public DNS servers configured for the management node.
+
+=cut
+
+sub update_resolv_conf {
+	my $self = shift;
+	if (ref($self) !~ /linux/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $computer_name = $self->data->get_computer_short_name();
+	my $public_ip_configuration = $self->data->get_management_node_public_ip_configuration();
+	my @public_dns_servers = $self->data->get_management_node_public_dns_servers();
+	
+	if ($public_ip_configuration !~ /static/i) {	
+		notify($ERRORS{'WARNING'}, 0, "unable to update resolv.conf on $computer_name, management node's IP configuration is set to $public_ip_configuration");
+		return;
+	}
+	elsif (!@public_dns_servers) {
+		notify($ERRORS{'WARNING'}, 0, "unable to update resolv.conf on $computer_name, management node's public DNS server is not configured");
+		return;
+	}
+	
+	my $resolv_conf_path = "/etc/resolv.conf";
+	
+	my @resolv_conf_lines_existing = $self->get_file_contents($resolv_conf_path);
+	my @resolv_conf_lines_new;
+	for my $line (@resolv_conf_lines_existing) {
+		if ($line =~ /\sVCL/) {
+			last;
+		}
+		elsif ($line !~ /^\s*nameserver/) {
+			push @resolv_conf_lines_new, $line;
+		}
+	}
+	
+	# Add a comment marking what was added by VCL
+	my $timestamp = POSIX::strftime("%m-%d-%Y %H:%M:%S", localtime);
+	push @resolv_conf_lines_new, "# $timestamp: The following was added by VCL";
+	
+	# Add a nameserver line for each configured DNS server
+	for my $public_dns_server (@public_dns_servers) {
+		push @resolv_conf_lines_new, "nameserver $public_dns_server";
+	}
+	
+	my $resolv_conf_contents_new = join("\n", @resolv_conf_lines_new);
+	return $self->create_text_file($resolv_conf_path, $resolv_conf_contents_new);
 }
 
 ##/////////////////////////////////////////////////////////////////////////////

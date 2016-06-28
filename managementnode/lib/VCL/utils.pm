@@ -283,6 +283,7 @@ our @EXPORT = qw(
 	update_reservation_natlog
 	update_reservation_password
 	update_sublog_ipaddress
+	wrap_string
 	xml_string_to_hash
 	xmlrpc_call
 	yaml_deserialize
@@ -14306,6 +14307,35 @@ sub determine_remote_connection_target {
 		$ENV{remote_connection_target}{$argument} = $argument;
 		return $ENV{remote_connection_target}{$argument};
 	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 wrap_string
+
+ Parameters  : $string, $columns, $prefix
+ Returns     : string
+ Description : Formats a string to limit the number of characters per line. The
+               $prefix argument may be used to add comment characters to the
+               beginning of each line, while still adhering to the line width
+               limit. If $prefix is set to '# ' (not including the single-quote
+               characters), the string returned will be something like:
+               # My first line...
+               # Second line...
+
+=cut
+
+sub wrap_string {
+	my ($string, $columns, $prefix) = @_;
+	return '' unless defined($string);
+	$columns = 80 unless $columns;
+	$prefix = '' unless defined($prefix);
+	
+	# Wrap text for lines
+	local($Text::Wrap::columns) = $columns;
+	
+	my $wrapped_string = wrap($prefix, $prefix, $string);
+	return $wrapped_string;
 }
 
 #/////////////////////////////////////////////////////////////////////////////

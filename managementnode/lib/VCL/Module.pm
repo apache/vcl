@@ -1323,6 +1323,87 @@ sub get_package_hierarchy {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 get_class_variable_hierarchy
+
+ Parameters  : $class_variable
+ Returns     : array
+ Description : VCL objects inherit from multiple parent classes:
+               Ubuntu > Linux > OS > Module
+               
+               This subroutine allows a class variable which is defined in
+               multiple parent class levels to be retrieved for each level. It
+               traverse the object's parent classes from highest to lowest and
+               return an array containing the value of the variable for each
+               level. For example,
+               
+               Linux.pm defines this array reference:
+               our $CAPTURE_DELETE_FILE_PATHS = [
+                  '/root/.ssh/id_rsa',
+                  '/root/.ssh/id_rsa.pub',
+                  '/etc/udev/rules.d/70-persistent-net.rules',
+               ];
+               
+               Ubuntu.pm defines this array reference with the same name:
+               our $CAPTURE_DELETE_FILE_PATHS = [
+                  '/etc/network/interfaces.20*',
+               ];
+               
+               $self->os->get_class_variable_hierarchy('CAPTURE_DELETE_FILE_PATHS') =
+               (
+                  [
+                     "/root/.ssh/id_rsa",
+                     "/root/.ssh/id_rsa.pub",
+                     "/etc/udev/rules.d/70-persistent-net.rules"
+                  ],
+                  [
+                     "/etc/network/interfaces.20*"
+                  ]
+               )
+
+=cut
+
+sub get_class_variable_hierarchy {
+	my $self = shift;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine can only be called as a VCL module object method");
+		return;	
+	}
+	
+	my $class_variable_name = shift;
+	if (!defined($class_variable_name)) {
+		notify($ERRORS{'WARNING'}, 0, "class variable name argument was not supplied");
+		return;
+	}
+	
+	# Get an array containing the names of the Perl packages the OS object is a class of
+	my @package_hierarchy = $self->get_package_hierarchy();
+	
+	# Loop through each classes, retrieve any which have a matching variable defined
+	my @values = ();
+	for my $package_name (@package_hierarchy) {
+		my $value = eval '$' . $package_name . "::$class_variable_name";
+		if ($EVAL_ERROR) {
+			notify($ERRORS{'WARNING'}, 0, "unable to determine value of \$$class_variable_name for $package_name, error:\n$EVAL_ERROR");
+			next;	
+		}
+		elsif (!$value) {
+			notify($ERRORS{'DEBUG'}, 0, "\$$class_variable_name is not defined for $package_name");
+			next;
+		}
+		
+		notify($ERRORS{'DEBUG'}, 0, "\$$class_variable_name for $package_name: " . format_data($value));
+		
+		# Add the value to the return array
+		# Use unshift to add to the beginning to the array
+		unshift @values, $value; 
+	}
+	
+	notify($ERRORS{'DEBUG'}, 0, "retrieved class variable hierarchy for '$class_variable_name':\n" . format_data(\@values));
+	return @values;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 =head2 code_loop_timeout
 
  Parameters  : 1: code reference
