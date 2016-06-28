@@ -4084,11 +4084,13 @@ EOF
 	
 	$vmhost_info->{vmprofile}{vmpath} = $vmhost_info->{vmprofile}{datastorepath} if !$vmhost_info->{vmprofile}{vmpath};
 	$vmhost_info->{vmprofile}{virtualdiskpath} = $vmhost_info->{vmprofile}{vmpath} if !$vmhost_info->{vmprofile}{virtualdiskpath};
-
-	notify($ERRORS{'DEBUG'}, 0, "retrieved VM host $vmhost_identifier info, computer: $vmhost_info->{computer}{hostname}");
-	$ENV{vmhost_info}{$vmhost_identifier} = $vmhost_info;
 	
 	my $vmhost_id = $vmhost_info->{id};
+	
+	notify($ERRORS{'DEBUG'}, 0, "retrieved VM host $vmhost_identifier info, VM host ID: $vmhost_id, computer: $vmhost_info->{computer}{hostname}, computer ID: $vmhost_info->{computer}{id}");
+	$ENV{vmhost_info}{$vmhost_identifier} = $vmhost_info;
+	
+	
 	if ($vmhost_identifier ne $vmhost_id) {
 		$ENV{vmhost_info}{$vmhost_id} = $vmhost_info;
 	}
@@ -7131,6 +7133,8 @@ sub get_computer_info {
 	}
 	#notify($ERRORS{'DEBUG'}, 0, "retrieving info for computer $computer_identifier");
 	
+	my $calling_subroutine = get_calling_subroutine();
+	
 	# Get a hash ref containing the database column names
 	my $database_table_columns = get_database_table_columns();
 	
@@ -7306,24 +7310,34 @@ EOF
 	
 	# Check if the computer associated with this reservation has a vmhostid set
 	if (my $vmhost_id = $computer_info->{vmhostid}) {
-		my $vmhost_info = get_vmhost_info($vmhost_id, $no_cache);
-		
-		if ($vmhost_info) {
-			$computer_info->{vmhost} = $vmhost_info;
+		if ($calling_subroutine !~ /(get_vmhost_info)/) {
+			my $vmhost_info = get_vmhost_info($vmhost_id, $no_cache);
+			
+			if ($vmhost_info) {
+				$computer_info->{vmhost} = $vmhost_info;
+			}
+			else {
+				notify($ERRORS{'WARNING'}, 0, "vmhostid $vmhost_id is set for $computer_hostname but the vmhost info could not be retrieved");
+			}
 		}
 		else {
-			notify($ERRORS{'WARNING'}, 0, "vmhostid $vmhost_id is set for $computer_hostname but the vmhost info could not be retrieved");
+			notify($ERRORS{'DEBUG'}, 0, "skipping retrieval of VM host $vmhost_id info for $computer_hostname to avoid recursion");
 		}
 	}
 	
 	# Check if the computer associated with this reservation is assigned a NAT host
 	if (my $nathost_id = $computer_info->{nathost}{nathostcomputermap}{nathostid}) {
-		my $nathost_info = get_computer_nathost_info($computer_id, $no_cache);
-		if ($nathost_info) {
-			$computer_info->{nathost} = $nathost_info;
+		if ($calling_subroutine !~ /(get_computer_nathost_info)/) {
+			my $nathost_info = get_computer_nathost_info($computer_id, $no_cache);
+			if ($nathost_info) {
+				$computer_info->{nathost} = $nathost_info;
+			}
+			else {
+				notify($ERRORS{'WARNING'}, 0, "$computer_hostname is mapped to NAT host $nathost_id but NAT host info could not be retrieved");
+			}
 		}
 		else {
-			notify($ERRORS{'WARNING'}, 0, "$computer_hostname is mapped to NAT host $nathost_id but NAT host info could not be retrieved");
+			notify($ERRORS{'DEBUG'}, 0, "skipping retrieval of NAT host $nathost_id info for $computer_hostname to avoid recursion");
 		}
 	}
 	
