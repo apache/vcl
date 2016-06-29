@@ -934,20 +934,12 @@ sub post_load {
 			$self->data->set_imagemeta_postoption('');
 		}
 	}
-	
-=item *
-
- Add a line to currentimage.txt indicating post_load has run
-
-=cut
-
-	$self->set_vcld_post_load_status();
 
 =back
 
 =cut
 
-	notify($ERRORS{'OK'}, 0, "returning 1");
+	notify($ERRORS{'DEBUG'}, 0, "Windows common post-load tasks complete");
 	return 1;
 } ## end sub post_load
 

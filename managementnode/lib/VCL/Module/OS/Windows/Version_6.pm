@@ -289,12 +289,19 @@ sub post_load {
 	my $script_path = '$SYSTEMROOT/vcl_post_load.cmd';
 	if (!$self->file_exists($script_path)) {
 		notify($ERRORS{'DEBUG'}, 0, "custom post_load script does NOT exist in image: $script_path");
-		return 1;
 	}
 	else {
 		# Run the post_reserve script
 		$self->run_script($script_path);
 	}
+
+=item *
+
+ Add a line to currentimage.txt indicating post_load has run
+
+=cut
+
+	$self->set_vcld_post_load_status();
 
 =back
 
