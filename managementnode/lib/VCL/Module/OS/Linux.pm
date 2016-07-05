@@ -1359,8 +1359,8 @@ sub reserve {
 
 =head2 grant_access
 
- Parameters  : called as an object
- Returns     : 1 - success , 0 - failure
+ Parameters  : none
+ Returns     : boolean
  Description : adds username to external_sshd_config and and starts sshd with
                custom config
 
@@ -1373,20 +1373,17 @@ sub grant_access {
 		return 0;
 	}
 	
-	my $user_login_id      = $self->data->get_user_login_id();
 	my $computer_node_name = $self->data->get_computer_node_name();
-	my $server_request_id  = $self->data->get_server_request_id();
 	
 	# Process the connection methods, allow firewall access from any address
 	if ($self->process_connect_methods("", 1)) {
-		notify($ERRORS{'DEBUG'}, 0, "processed connection methods on $computer_node_name setting 0.0.0.0 for all allowed ports");
+		notify($ERRORS{'DEBUG'}, 0, "granted access to $computer_node_name by processing the connection methods");
+		return 1;
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to process connection methods on $computer_node_name setting 0.0.0.0 for all allowed ports");
+		notify($ERRORS{'WARNING'}, 0, "failed to grant access to $computer_node_name by processing the connection methods");
 		return;
 	}
-	
-	return 1;
 } ## end sub grant_access
 
 #/////////////////////////////////////////////////////////////////////////////
