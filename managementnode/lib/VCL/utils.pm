@@ -8315,14 +8315,14 @@ EOF
 
 =head2 insert_request
 
- Parameters  : $managementnode_id, $request_state_name, $request_laststate_name, $end_minutes_in_future, $user_unityid, $computer_identifier, $image_id, $imagerevision_id
- Returns     : 1 if successful, 0 if failed
+ Parameters  : $managementnode_id, $request_state_name, $request_laststate_name, $user_unityid, $computer_identifier, $image_id, $imagerevision_id, $start_minutes_in_future, $end_minutes_in_future
+ Returns     : boolean
  Description :
 
 =cut
 
 sub insert_request {
-	my ($managementnode_id, $request_state_name, $request_laststate_name, $request_logid, $user_unityid, $computer_identifier, $image_id, $imagerevision_id, $start_minutes_in_future, $end_minutes_in_future) = @_;
+	my ($managementnode_id, $request_state_name, $request_laststate_name, $user_unityid, $computer_identifier, $image_id, $imagerevision_id, $start_minutes_in_future, $end_minutes_in_future) = @_;
 
 
 	if (!$request_state_name) {
@@ -8374,7 +8374,6 @@ sub insert_request {
       request.stateid,
       request.laststateid,
       request.userid,
-      request.logid,
       request.forimaging,
       request.test,
       request.preload,
@@ -8387,7 +8386,6 @@ sub insert_request {
       (SELECT id FROM state WHERE state.name = '$request_state_name'),
       (SELECT id FROM state WHERE state.name = '$request_laststate_name'),
       (SELECT id FROM user WHERE user.unityid = '$user_unityid'),
-      '$request_logid',
       '0',
       '0',
       '0',
@@ -8506,7 +8504,7 @@ sub insert_reload_request {
 
 	# Attempt to create a new reload request
 	my $request_id_reload;
-	if ($request_id_reload = insert_request($managementnode_id, 'reload', $request_laststate_name, '0', 'vclreload', $computer_id, $image_id, $imagerevision_id, '0', '30')) {
+	if ($request_id_reload = insert_request($managementnode_id, 'reload', $request_laststate_name, 'vclreload', $computer_id, $image_id, $imagerevision_id, '0', '30')) {
 		notify($ERRORS{'OK'}, 0, "$notify_prefix inserted new reload request, id=$request_id_reload nodeid=$computer_id, imageid=$image_id, imagerevision_id=$imagerevision_id");
 		insertloadlog($reservation_id, $computer_id, "info", "$calling_sub: created new reload request");
 	}

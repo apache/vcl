@@ -372,7 +372,6 @@ sub reservation_failed {
 
 	# Get the required data
 	my $request_id                  = $self->data->get_request_id();
-	my $request_logid               = $self->data->get_request_log_id();
 	my $reservation_id              = $self->data->get_reservation_id();
 	my $computer_id                 = $self->data->get_computer_id();
 	my $computer_short_name         = $self->data->get_computer_short_name();
@@ -866,7 +865,7 @@ sub state_exit {
 	my $calling_sub = get_calling_subroutine();
 	
 	my $request_id                 = $self->data->get_request_id();
-	my $request_logid              = $self->data->get_request_log_id();
+	my $request_logid              = $self->data->get_request_log_id(0);
 	my $reservation_id             = $self->data->get_reservation_id();
 	my @reservation_ids            = $self->data->get_reservation_ids();
 	my $reservation_count          = $self->data->get_reservation_count();
@@ -974,7 +973,7 @@ sub state_exit {
 		}
 		
 		# Update log.ending if this is the parent reservation and argument was supplied
-		if ($request_log_ending) {
+		if ($request_logid && $request_log_ending) {
 			if (!update_log_ending($request_logid, $request_log_ending)) {
 				notify($ERRORS{'CRITICAL'}, 0, "failed to set log ending to $request_log_ending, log ID: $request_logid");
 			}

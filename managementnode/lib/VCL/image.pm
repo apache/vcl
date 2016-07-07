@@ -840,7 +840,7 @@ EOF
 	print "   resource.id: $resource_id\n\n";
 	
 	
-	($request_id, $reservation_id) = insert_request($management_node_id, 'image', 'image', 0, $username, $computer_id, $image_id, $imagerevision_id, 0, 60);
+	($request_id, $reservation_id) = insert_request($management_node_id, 'image', 'image', $username, $computer_id, $image_id, $imagerevision_id, 0, 60);
 	if (!defined($request_id) || !defined($reservation_id)) {
 		print "ERROR: failed to insert new imaging request\n";
 		return;
