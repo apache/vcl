@@ -4219,8 +4219,8 @@ sub disable_firewall_port {
 
 	# Check to see if this distro has iptables
 	# If not return 1 so it does not fail
-	if (!($self->service_exists("iptables"))) {
-		notify($ERRORS{'WARNING'}, 0, "iptables does not exist on this OS");
+	if (!$self->service_exists("iptables")) {
+		notify($ERRORS{'DEBUG'}, 0, "iptables does not exist on this OS");
 		return 1;
 	}
 	
@@ -4605,9 +4605,9 @@ sub get_firewall_configuration {
 	my $computer_node_name = $self->data->get_computer_node_name();
 	
 	# Check to see if iptables service exists
-	if (!($self->service_exists("iptables"))) {
-		notify($ERRORS{'WARNING'}, 0, "iptables does not exist on this OS");
-		return 1;
+	if (!$self->service_exists("iptables")) {
+		notify($ERRORS{'DEBUG'}, 0, "iptables does not exist on this OS");
+		return {};
 	}
 	
 	my $port_command = "iptables --line-number -n -L";
