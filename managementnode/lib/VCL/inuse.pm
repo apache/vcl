@@ -223,7 +223,7 @@ sub process {
 			
 			# Notify user when 5 or 10 minutes remain
 			if ($request_remaining_minutes == 5 || $request_remaining_minutes == 10) {
-				$self->_notify_user_endtime_imminent("$request_remaining_minutes minutes");
+				$self->notify_user_endtime_imminent("$request_remaining_minutes minutes");
 			}
 			
 			if ($iteration < $end_time_notify_minutes) {
@@ -233,7 +233,7 @@ sub process {
 		}
 		
 		# Notify user - endtime and image capture has started
-		$self->_notify_user_endtime_reached();
+		$self->notify_user_endtime_reached();
 		
 		# Initiate auto-capture process if this is an imaging request and not a cluster reservation
 		if ($request_forimaging && $reservation_count == 1) {
@@ -255,7 +255,7 @@ sub process {
 		# Check end time for a notice interval - returns 0 if no notice is to be given
 		my $notice_interval = check_endtimenotice_interval($request_end);
 		if ($notice_interval) {
-			$self->_notify_user_future_endtime($notice_interval);
+			$self->notify_user_future_endtime($notice_interval);
 		}
 	}
 	else {
@@ -329,7 +329,7 @@ sub process {
 			# Update reservation lastcheck, otherwise request will be processed immediately again
 			update_reservation_lastcheck($reservation_id);
 			
-			$self->_notify_user_timeout_inactivity();
+			$self->notify_user_timeout_inactivity();
 			$self->state_exit('timeout', 'inuse', 'timeout');
 		}
 	}
