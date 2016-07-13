@@ -491,6 +491,7 @@ sub node_status {
 	
 	# If normal checks require a reload, return it
 	if ($result =~ /reload/i) {
+		notify($ERRORS{'OK'}, 0, "skipping VMware node status checks, parent node_status subroutine returned $result");
 		return $result;
 	}
 	
@@ -4858,6 +4859,10 @@ sub get_vm_virtual_hardware_version {
 		}
 		elsif ($adapter_type =~ /ide/i) {
 			notify($ERRORS{'OK'}, 0, "overriding hardware version $hardware_version --> 7, IDE adapters cannot be used on ESX unless the hardware version is 7 or higher, VMware product: '$vmware_product_name', vmdk adapter type: $adapter_type, vmdk hardware version: $hardware_version");
+			return 7;
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "hardware version $hardware_version is not valid on $vmware_product_name, overriding to version 7");
 			return 7;
 		}
 	}

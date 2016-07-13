@@ -1944,7 +1944,7 @@ sub get_virtual_disk_hardware_version {
 			next;
 		}
 		
-		my ($hardware_version) = $disk_info =~ /\shardwareVersion\s*=\s*(\d+)/i;
+		my ($hardware_version) = $disk_info =~ /\shardwareVersion\s*=\s*(\d+)/ig;
 		if (!$hardware_version) {
 			notify($ERRORS{'WARNING'}, 0, "unable to determine disk hardware version, disk path: $disk_path, disk info section from vim-cmd $vim_cmd_arguments output:\n$disk_info");
 			next;
