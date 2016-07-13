@@ -276,9 +276,6 @@ sub post_load {
 	
 	$self->activate_irapp();
 	
-	# Add a line to currentimage.txt indicating post_load has run
-	$self->set_vcld_post_load_status();
-	
 	notify($ERRORS{'OK'}, 0, "returning 1");
 	return 1;
 
@@ -1650,7 +1647,7 @@ sub get_network_configuration {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 set_vcld_post_load_status
+=head2 set_post_load_status
 
  Parameters  : none
  Returns     : boolean
@@ -1665,7 +1662,7 @@ sub get_network_configuration {
 
 =cut
 
-sub set_vcld_post_load_status {
+sub set_post_load_status {
 	my $self = shift;
 	if (ref($self) !~ /VCL::Module/i) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");

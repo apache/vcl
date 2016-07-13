@@ -291,17 +291,8 @@ sub post_load {
 		notify($ERRORS{'DEBUG'}, 0, "custom post_load script does NOT exist in image: $script_path");
 	}
 	else {
-		# Run the post_reserve script
 		$self->run_script($script_path);
 	}
-
-=item *
-
- Add a line to currentimage.txt indicating post_load has run
-
-=cut
-
-	$self->set_vcld_post_load_status();
 
 =back
 

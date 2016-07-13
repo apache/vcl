@@ -536,7 +536,7 @@ sub node_status {
 
 	$status->{currentimage} = $self->data->get_computer_currentimage_name();
 	my $current_image_name = $status->{currentimage};
-	my $vcld_post_load_status = $self->data->get_computer_currentimage_vcld_post_load();
+	my $vcld_post_load_status = $self->os->get_post_load_status();
 
 	if (!$current_image_revision_id) {
 		notify($ERRORS{'OK'}, 0, "unable to retrieve image name from currentimage.txt on VM $computer_name, returning 'RELOAD'");

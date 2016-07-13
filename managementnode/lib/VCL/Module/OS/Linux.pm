@@ -533,9 +533,6 @@ sub post_load {
 		}
 	}
 	
-	# Add a line to currentimage.txt indicating post_load has run
-	$self->set_vcld_post_load_status();
-	
 	return 1;
 } ## end sub post_load
 
@@ -556,9 +553,9 @@ sub post_reserve {
 		return 0;
 	}
 	
+	my $reservation_id = $self->data->get_reservation_id();
 	my $image_name = $self->data->get_image_name();
 	my $computer_short_name = $self->data->get_computer_short_name();
-	my @post_reserve_script_paths = ('/usr/local/vcl/vcl_post_reserve', '/etc/init.d/vcl_post_reserve');
 	
 	notify($ERRORS{'OK'}, 0, "initiating Linux post_reserve: $image_name on $computer_short_name");
 	
@@ -571,12 +568,9 @@ sub post_reserve {
 	# write contents to local temp file /tmp/resrvationid_post_reserve_userdata
 	# scp tmpfile to ‘/root/.vclcontrol/post_reserve_userdata’
 	# assumes the image has the call in vcl_post_reserve to import/read the user data file
-	
-	my $reservation_id = $self->data->get_reservation_id();
 	my $variable_name = "userdata|$reservation_id"; 
 	my $variable_data;
 	my $target_location = "/root/.vclcontrol/post_reserve_userdata";
-
 	if ($self->data->is_variable_set($variable_name)) {
 		$variable_data = $self->data->get_variable($variable_name);
 		
@@ -600,9 +594,14 @@ sub post_reserve {
 	}
 	
 	# Check if script exists
+	my @post_reserve_script_paths = ('/usr/local/vcl/vcl_post_reserve', '/etc/init.d/vcl_post_reserve');
 	foreach my $script_path (@post_reserve_script_paths) {
-			notify($ERRORS{'DEBUG'}, 0, "script_path $script_path");
 		if ($self->file_exists($script_path)) {
+			# If post_reserve script exists, assume it does user or reservation-specific actions
+			# If the user never connects and the reservation times out, there's no way to revert these actions in order to clean the computer for another user
+			# Tag the image as tainted so it is reloaded
+			$self->set_tainted_status();
+			
 			# Run the vcl_post_reserve script if it exists in the image
 			my $result = $self->run_script($script_path, '1', '300', '1');
 			if (!defined($result)) {

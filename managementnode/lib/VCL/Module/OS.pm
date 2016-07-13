@@ -599,14 +599,10 @@ sub get_current_image_info {
 	# Make sure an empty hash wasn't returned
 	if (defined $current_image_txt_contents{imagerevision_id}) {
 		notify($ERRORS{'DEBUG'}, 0, "user selected content of image currently loaded on $computer_node_name: $current_image_txt_contents{current_image_name}");
-	
+		
 		if (my $imagerevision_info = get_imagerevision_info($current_image_txt_contents{imagerevision_id})) {
 			$self->data->set_computer_currentimage_data($imagerevision_info->{image});
 			$self->data->set_computer_currentimagerevision_data($imagerevision_info);
-			
-			if (defined $current_image_txt_contents{"vcld_post_load"}) {
-				$self->data->set_computer_currentimage_vcld_post_load($current_image_txt_contents{vcld_post_load});
-			}
 		}
 		
 		if (defined($current_image_txt_contents{$input})) {
@@ -948,7 +944,7 @@ sub is_ssh_responding {
 			command => "echo \"testing ssh on $computer_node_name\"",
 			max_attempts => $max_attempts,
 			display_output => 0,
-			timeout_seconds => 10,
+			timeout_seconds => 15,
 		});
 		
 		# The exit status will be 0 if the command succeeded
@@ -1344,13 +1340,226 @@ sub update_public_ip_address {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 set_vcld_post_load_status
+=head2 get_current_image_tag
+
+ Parameters  : $tag_name
+ Returns     : string or array
+ Description : Reads currentimage.txt and attempts to locate a line beginning
+               with the tag name specified by the argument.
+               
+               If found and called in scalar context, the tag value following
+               the = sign is returned. Example currentimage.txt line:
+               mytag=0 (Wed Jun 29 17:47:36 2016)
+               
+               my $x = get_current_image_tag('mytag');
+               $x = 0
+               
+               my ($x, $y) = get_current_image_tag('mytag');
+               $x = 0
+               $y = 'Wed Jun 29 17:47:36 2016'
+               
+               Null is returned if a line with the tag name doesn't exist.
+
+=cut
+
+sub get_current_image_tag {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my ($tag_name) = @_;
+	if (!defined($tag_name)) {
+		notify($ERRORS{'WARNING'}, 0, "property argument was not specified");
+		return;
+	}
+	
+	my $computer_name = $self->data->get_computer_short_name();
+	
+	my $current_image_file_path = 'currentimage.txt';
+	
+	my @lines = $self->get_file_contents($current_image_file_path);
+	for my $line (@lines) {
+		my ($tag_value, $timestamp) = $line =~ /^$tag_name=(.+)\s\((.+)\)$/g;
+		if (defined($tag_value)) {
+			if (wantarray) {
+				notify($ERRORS{'DEBUG'}, 0, "found '$tag_name' tag line in $current_image_file_path: '$line', returning array: ('$tag_value', '$timestamp')");
+				return ($tag_value, $timestamp);
+			}
+			else {
+				notify($ERRORS{'DEBUG'}, 0, "found '$tag_name' tag line in $current_image_file_path: '$line', returning tag value: '$tag_value'");
+				return $tag_value;
+			}
+		}
+	}
+	
+	notify($ERRORS{'DEBUG'}, 0, "'$tag_name' tag is not set in $current_image_file_path, returning null");
+	return;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 set_current_image_tag
+
+ Parameters  : $tag_name, $tag_value
+ Returns     : boolean
+ Description : Adds a line to currentimage.txt in the format:
+               <tag name>=<tag value> (timestamp)
+					
+					The tag value must be a non-empty string and may be the integer
+					0. Example:
+					set_current_image_tag('mytag');
+					
+					Line added:
+					mytag=0 (Wed Jun 29 17:47:36 2016)
+					
+					Any lines which already exist beginning with an identical tag
+					name are removed.
+               
+					indicating a loaded computer is
+					tainted and must be reloaded for any subsequent reservations. The
+					format of the line added is:
+               vcld_tainted=true (<time>)
+               
+					This line is added as a safety measure to prevent a computer
+					which was used for one reservation to ever be reserved for
+					another reservation without being reloaded.
+					
+					This line should be added whenever a user has been given the
+					connection information and had a chance to connect. It's assumed
+					a user connected and the computer is tainted whether or not an
+					actual logged in connection was detected. This is done for
+					safety. The connection/logged in checking mechanisms of different
+					OS's may not be perfect.
+					
+               This line is checked when a computer is reserved to make sure the
+               post_load tasks have run. A computer may be loaded but the
+               post_load tasks may not run if it is loaded manually or by some
+               other means not controlled by vcld.
+
+=cut
+
+sub set_current_image_tag {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my ($tag_name, $tag_value) = @_;
+	if (!$tag_name) {
+		notify($ERRORS{'WARNING'}, 0, "tag name argument was not specified");
+		return;
+	}
+	elsif (!defined($tag_value)) {
+		notify($ERRORS{'WARNING'}, 0, "tag value argument was not specified");
+		return;
+	}
+	elsif (!length($tag_value)) {
+		notify($ERRORS{'WARNING'}, 0, "tag value argument specified is an empty string");
+		return;
+	}
+	
+	my $computer_name = $self->data->get_computer_short_name();
+	
+	my $current_image_file_path = 'currentimage.txt';
+	my $timestamp = localtime;
+	my $tag_line = "$tag_name=$tag_value ($timestamp)";
+	my $updated_contents = '';
+	
+	my @existing_lines = $self->get_file_contents($current_image_file_path);
+	for my $existing_line (@existing_lines) {
+		# Skip blank lines and lines matching the tag name
+		if ($existing_line !~ /\w/ || $existing_line =~ /^$tag_name=/) {
+			next;
+		}
+		$updated_contents .= "$existing_line\n";
+	}
+	$updated_contents .= $tag_line;
+	
+	if ($self->create_text_file($current_image_file_path, $updated_contents)) {
+		notify($ERRORS{'DEBUG'}, 0, "set '$tag_name' tag in $current_image_file_path on $computer_name:\n$updated_contents");
+		return 1;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to set '$tag_name' tag in $current_image_file_path on $computer_name");
+		return 0;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 set_post_load_status
 
  Parameters  : none
  Returns     : boolean
- Description : Adds a line to currentimage.txt indicating the vcld OS post_load
-               tasks have run. The format of the line added is:
-               vcld_post_load=success (<time>)
+ Description : Adds a line to currentimage.txt indicating the post-load tasks
+               have successfully been completed on a loaded computer. The
+               format of the line is:
+               tainted=true (Wed Jun 29 18:00:55 2016)
+
+=cut
+
+sub set_post_load_status {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	return $self->set_current_image_tag('vcld_post_load', 'success');
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_post_load_status
+
+ Parameters  : none
+ Returns     : boolean
+ Description : Checks if a 'vcld_post_load' line exists in currentimage.txt.
+
+=cut
+
+sub get_post_load_status {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $computer_name = $self->data->get_computer_short_name();
+	
+	my ($post_load_value, $timestamp) = $self->get_current_image_tag('vcld_post_load');
+	if (defined($post_load_value)) {
+		notify($ERRORS{'DEBUG'}, 0, "post-load tasks have been completed on $computer_name: $post_load_value ($timestamp)");
+		return 1;
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "post-load tasks have NOT been completed on $computer_name");
+		return 0;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 set_tainted_status
+
+ Parameters  : none
+ Returns     : boolean
+ Description : Adds a line to currentimage.txt indicating a loaded computer is
+               tainted and must be reloaded for any subsequent reservations.
+               
+               This line is added as a safety measure to prevent a computer
+               which was used for one reservation to ever be reserved for
+               another reservation without being reloaded.
+               
+               This line should be added whenever a user has been given the
+               connection information and had a chance to connect. It's assumed
+               a user connected and the computer is tainted whether or not an
+               actual logged in connection was detected. This is done for
+               safety. The connection/logged in checking mechanisms of different
+               OS's may not be perfect.
                
                This line is checked when a computer is reserved to make sure the
                post_load tasks have run. A computer may be loaded but the
@@ -1359,28 +1568,45 @@ sub update_public_ip_address {
 
 =cut
 
-sub set_vcld_post_load_status {
+sub set_tainted_status {
 	my $self = shift;
 	if (ref($self) !~ /VCL::Module/i) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return;
 	}
 	
-	my $file_path = 'currentimage.txt';
-	
-	my $time = localtime;
-	my $post_load_line = "vcld_post_load=success ($time)";
-	
-	my $file_contents;
-	my @existing_lines = $self->get_file_contents($file_path);
-	for my $existing_line (@existing_lines) {
-		if ($existing_line !~ /\w/ || $existing_line =~ /^vcld_post_load/) {
-			next;
-		}
-		$file_contents .= "$existing_line\n";
+	return $self->set_current_image_tag('vcld_tainted', 'true');
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_tainted_status
+
+ Parameters  : none
+ Returns     : boolean
+ Description : Checks if a line exists in currentimage.txt indicated a user may
+               have logged in.
+
+=cut
+
+sub get_tainted_status {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
 	}
-	$file_contents .= $post_load_line;
-	return $self->create_text_file($file_path, $file_contents);
+	
+	my $computer_name = $self->data->get_computer_short_name();
+	
+	my ($tainted_value, $timestamp) = $self->get_current_image_tag('vcld_tainted');
+	if (defined($tainted_value)) {
+		notify($ERRORS{'DEBUG'}, 0, "image currently loaded on $computer_name has been tainted: $tainted_value ($timestamp)");
+		return 1;
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "image currently loaded on $computer_name has NOT been tainted");
+		return 0;
+	}
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -3952,6 +4178,13 @@ sub run_management_node_tools_scripts {
 	if (!@computer_tools_files) {
 		notify($ERRORS{'DEBUG'}, 0, "no custom scripts reside on this management node for $image_name");
 		return 1;
+	}
+	
+	# If post_reserve script exists, assume it does user or reservation-specific actions
+	# If the user never connects and the reservation times out, there's no way to revert these actions in order to clean the computer for another user
+	# Tag the image as tainted so it is reloaded
+	if ($stage =~ /(post_reserve)/) {
+		$self->set_tainted_status();
 	}
 	
 	notify($ERRORS{'DEBUG'}, 0, "attempting to execute custom scripts residing on the management node for $image_name on $computer_node_name:\n" . join("\n", @computer_tools_files));

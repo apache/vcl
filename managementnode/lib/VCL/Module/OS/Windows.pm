@@ -1008,6 +1008,11 @@ sub post_reserve {
 		return 1;
 	}
 	else {
+		# If post_reserve script exists, assume it does user or reservation-specific actions
+		# If the user never connects and the reservation times out, there's no way to revert these actions in order to clean the computer for another user
+		# Tag the image as tainted so it is reloaded
+		$self->set_tainted_status();
+		
 		# Run the post_reserve script
 		$self->run_script($script_path);
 	}
@@ -2413,7 +2418,7 @@ sub import_registry_string {
 
 =head2 reg_query
 
- Parameters  : $registry_key, $registry_value (optional)
+ Parameters  : $registry_key, $registry_value (optional), $suppress_key_missing_error (optional)
  Returns     : If $registry_value argument is specified: scalar
                If $registry_value argument is specified: hash reference
  Description : Queries the registry on the Windows computer. The $registry_key
@@ -2462,6 +2467,8 @@ sub reg_query {
 	}
 	my $value_argument = shift;
 	
+	my $suppress_key_missing_error = shift;
+	
 	# Replace forward slashes and double backslashes with a single backslashes
 	$key_argument =~ s/[\\\/]+/\\/g;
 	
@@ -2501,6 +2508,15 @@ sub reg_query {
 	my ($exit_status, $output) = $self->execute($command, 0);
 	if (!defined($output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to run SSH command to query registry key: $key_argument");
+		return;
+	}
+	elsif (grep(/unable to find the specified registry/, @$output)) {
+		my $message = "registry key or value does not exist:\nkey: '$key_argument'\n";
+		$message .= "value: '$value_argument'\n" if defined($value_argument);
+		$message .= "command: '$command'\n";
+		$message .= "exit status: $exit_status\n";
+		$message .= "output:\n" . join("\n", @{$output});
+		notify($ERRORS{'WARNING'}, 0, $message) unless $suppress_key_missing_error;
 		return;
 	}
 	elsif (!grep(/REG.EXE VERSION|HKEY/, @$output)) {
@@ -3074,7 +3090,7 @@ EOF
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 delete_hklm_run_registry_value
+=head2 delete_hklm_run_registry_key
 
  Parameters  :
  Returns     :
@@ -12214,6 +12230,181 @@ sub _get_os_perl_package {
 	
 	notify($ERRORS{'DEBUG'}, 0, "perl package to use for '$product_name': $perl_package");
 	return $perl_package;
+}
+
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 mount_nfs_windows
+
+ Parameters  : $remote_nfs_share, $drive_letter (optional), $options (optional)
+ Returns     : boolean
+ Description : Mounts an NFS share on the computer using the Windows NFS client.
+
+=cut
+
+sub mount_nfs_windows {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my ($remote_nfs_share, $drive_letter, $options) = @_;
+	if (!defined($remote_nfs_share)) {
+		notify($ERRORS{'WARNING'}, 0, "remote target argument was not supplied");
+		return;
+	}
+	
+	my $system32_path = $self->get_system32_path() || return;
+	my $computer_name = $self->data->get_computer_node_name();
+
+	# Usage:  mount [-o options] [-u:username] [-p:<password | *>] <\\computername\sharename> <devicename | *>
+	# 
+	# -o rsize=size               To set the size of the read buffer in kilobytes.
+	# -o wsize=size               To set the size of the write buffer in kilobytes.
+	# -o timeout=time             To set the timeout value in seconds for an RPC call.
+	# -o retry=number             To set the number of retries for a soft mount.
+	# -o mtype=soft|hard          To set the mount type.
+	# -o lang=euc-jp|euc-tw|euc-kr|shift-jis|big5|ksc5601|gb2312-80|ansi
+	#                             To specify the encoding used for file and directory
+	#                             names.
+	# -o fileaccess=mode          To specify the permission mode of the file.
+	#                             These are used for new files created on NFS
+	#                             servers. Specified using UNIX style mode bits.
+	# -o anon                     To mount as an anonymous user.
+	# -o nolock                   To disable locking.
+	# -o casesensitive=yes|no     To specify case sensitivity of file lookup on server.
+	# -o sec=sys|krb5|krb5i
+
+	# These formats work:
+	#    mount x.x.x.x:/sharename n:
+	#    mount \\x.x.x.x\sharename n:
+	
+	# Windows can't mount directly to a directory, check if a drive letter was passed
+	if (!$drive_letter) {
+		$drive_letter = '*';
+	}
+	elsif ($drive_letter !~ /^[a-z]:?$/i) {
+		notify($ERRORS{'WARNING'}, 0, "invalid drive letter argument was specified: $drive_letter, using next available drive letter");
+		$drive_letter = '*';
+	}
+	
+	# Add a trailing colon
+	$drive_letter =~ s/:*$/:/;
+	
+	my $command = "$system32_path/mount.exe";
+	
+	# Figure out which options to use	
+	# If using Netapp, see: https://library.netapp.com/ecmdocs/ECMP12365051/html/GUID-B7080A75-610D-46E1-A0EE-6CF1716636A0.html
+	# According to doc, must use hard mounts for Netapp
+	if ($options) {
+		# Check if mtype was specified, don't override
+		if ($options !~ /mtype/) {
+			$options .= ",mtype=hard";
+		}
+	}
+	else {
+		$options = "mtype=hard";
+	}
+	$command .= " -o $options";
+	$command .= " $remote_nfs_share $drive_letter";
+	
+	# Escape *
+	$command =~ s/\*/\\\*/g;
+	
+	notify($ERRORS{'DEBUG'}, 0, "attempting to mount NFS share on $computer_name: '$command'");
+	my ($exit_status, $output) = $self->execute($command);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command on $computer_name: '$command'");
+		return;
+	}
+	elsif ($exit_status ne '0') {
+		notify($ERRORS{'WARNING'}, 0, "failed to mount Windows client NFS share on $computer_name, exit status: $exit_status, command:\n$command\noutput:\n" . join("\n", @$output));
+		return 0;
+	}
+	else {
+		notify($ERRORS{'OK'}, 0, "mounted Windows client NFS share on $computer_name: '$command'\noutput:\n" . join("\n", @$output));
+		return 1;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 unmount_nfs_windows
+
+ Parameters  : none
+ Returns     : boolean
+ Description : Unmounts all NFS shares on the computer using the Windows NFS
+               client.
+
+=cut
+
+sub unmount_nfs_windows {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $system32_path = $self->get_system32_path() || return;
+	my $computer_name = $self->data->get_computer_node_name();
+
+	# Usage:  [-f] <-a | drive_letters | network_mounts>
+	# -a      Delete all NFS network mount points
+	# -f      Force delete NFS network mount points
+
+	my $command = "$system32_path/umount.exe -a -f";
+	my ($exit_status, $output) = $self->execute($command);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command on $computer_name: $command");
+		return;
+	}
+	elsif ($exit_status ne '0') {
+		notify($ERRORS{'WARNING'}, 0, "failed to unmount Windows client NFS shares on $computer_name, exit status: $exit_status, command:\n$command\noutput:\n" . join("\n", @$output));
+		return 0;
+	}
+	else {
+		notify($ERRORS{'OK'}, 0, "unmounted Windows client NFS shares on $computer_name: '$command'\noutput:\n" . join("\n", @$output));
+		return 1;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_nfs_mounts_windows
+
+ Parameters  : none
+ Returns     : 
+ Description : Retrieves all currently mounted NFS shares on the computer using
+               the Windows NFS client.
+
+=cut
+
+sub get_nfs_mounts_windows {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $system32_path = $self->get_system32_path() || return;
+	my $computer_name = $self->data->get_computer_node_name();
+	
+	my $command = "$system32_path/mount.exe";
+	my ($exit_status, $output) = $self->execute($command);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command on $computer_name: $command");
+		return;
+	}
+	elsif ($exit_status ne '0') {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve mounted Windows client NFS shares on $computer_name, exit status: $exit_status, command:\n$command\noutput:\n" . join("\n", @$output));
+		return 0;
+	}
+	else {
+		notify($ERRORS{'OK'}, 0, "retrieved mounted Windows client NFS shares on $computer_name, command: '$command', output:\n" . join("\n", @$output));
+		return 1;
+	}
 }
 
 #/////////////////////////////////////////////////////////////////////////////

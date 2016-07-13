@@ -604,10 +604,6 @@ sub get_current_image_info {
 		if (my $imagerevision_info = get_imagerevision_info($current_image_txt_contents{imagerevision_id})) {
 			$self->data->set_computer_currentimage_data($imagerevision_info->{image});
 			$self->data->set_computer_currentimagerevision_data($imagerevision_info);
-			
-			if (defined $current_image_txt_contents{"vcld_post_load"}) {
-				$self->data->set_computer_currentimage_vcld_post_load($current_image_txt_contents{vcld_post_load});
-			}
 		}
 		
 		if (defined($current_image_txt_contents{$input})) {

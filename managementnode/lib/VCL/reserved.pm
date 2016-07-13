@@ -255,6 +255,9 @@ sub process {
 		}
 	}
 	
+	# Add a line to currentimage.txt indicating it's possible a user logged on to the computer
+	$self->os->set_tainted_status();
+	
 	# Update reservation lastcheck, otherwise inuse request will be processed immediately again
 	update_reservation_lastcheck($reservation_id);
 	

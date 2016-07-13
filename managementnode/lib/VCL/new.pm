@@ -466,71 +466,18 @@ sub reload_image {
 	my $server_request_id               = $self->data->get_server_request_id();
 	my $server_request_fixed_ip         = $self->data->get_server_request_fixed_ip();
 	
-	# Try to get the node status if the provisioning engine has implemented a node_status() subroutine
-	my $node_status;
-	my $node_status_string = '';
-	if ($self->provisioner->can("node_status")) {
-		notify($ERRORS{'DEBUG'}, 0, "calling " . ref($self->provisioner) . "->node_status()");
-		insertloadlog($reservation_id, $computer_id, "statuscheck", "checking status of node");
-		
-		# Call node_status(), check the return value
-		$node_status = $self->provisioner->node_status();
-		
-		# Make sure a return value is defined, an error occurred if it is undefined
-		if (!defined($node_status)) {
-			notify($ERRORS{'CRITICAL'}, 0, ref($self->provisioner) . "->node_status() returned an undefined value, returning");
-			return;
-		}
-		
-		# Check what node_status returned and try to get the "status" string
-		# First see if it returned a hashref
-		if (ref($node_status) eq 'HASH') {
-			notify($ERRORS{'DEBUG'}, 0, "node_status returned a hash reference");
-			
-			# Check if the hash contains a key called "status"
-			if (defined $node_status->{status}) {
-				$node_status_string = $node_status->{status};
-				notify($ERRORS{'DEBUG'}, 0, "node_status hash reference contains key {status}=$node_status_string");
-			}
-			else {
-				notify($ERRORS{'DEBUG'}, 0, "node_status hash reference does not contain a key called 'status'");
-			}
-		} ## end if (ref($node_status) eq 'HASH')
-		
-		# Check if node_status returned an array ref
-		elsif (ref($node_status) eq 'ARRAY') {
-			notify($ERRORS{'DEBUG'}, 0, "node_status returned an array reference");
-			
-			# Check if the hash contains a key called "status"
-			if (defined((@{$node_status})[0])) {
-				$node_status_string = (@{$node_status})[0];
-				notify($ERRORS{'DEBUG'}, 0, "node_status array reference contains index [0]=$node_status_string");
-			}
-			else {
-				notify($ERRORS{'DEBUG'}, 0, "node_status array reference is empty");
-			}
-		} ## end elsif (ref($node_status) eq 'ARRAY')  [ if (ref($node_status) eq 'HASH')
-		
-		# Check if node_status didn't return a reference
-		# Assume string was returned
-		elsif (!ref($node_status)) {
-			# Use scalar value of node_status's return value
-			$node_status_string = $node_status;
-			notify($ERRORS{'DEBUG'}, 0, "node_status returned a scalar: $node_status");
-		}
-		
-		else {
-			notify($ERRORS{'CRITICAL'}, 0, ref($self->provisioner) . "->node_status() returned an unsupported reference type: " . ref($node_status) . ", returning");
-			insertloadlog($reservation_id, $computer_id, "failed", "node_status() returned an undefined value");
-			return;
-		}
-	} ## end if ($self->provisioner->can("node_status"))
+	my $node_status_string;
+	insertloadlog($reservation_id, $computer_id, "statuscheck", "checking status of node");
+	
+	# If request state is 'reinstall' or computer state is 'reload', force reload
+	if ($request_state_name eq 'reinstall' || $computer_state_name eq 'reload') {
+		$node_status_string = 'reload';
+		$computer_state_name = 'reload';
+	}
 	else {
-		notify($ERRORS{'OK'}, 0, "node status not checked, node_status() not implemented by " . ref($self->provisioner) . ", assuming load=true");
+		$node_status_string = $self->provisioner->node_status() || 'RELOAD';
 	}
 	
-	# If reinstall state - force reload state
-	$computer_state_name = 'reload' if ($request_state_name eq 'reinstall');
 	
 	if ($computer_state_name eq 'reload') {
 		# Always call load() if state is reload regardless of node_status()
@@ -544,16 +491,16 @@ sub reload_image {
 		# node_status returned 'ready'
 		notify($ERRORS{'OK'}, 0, "node_status returned '$node_status_string', $computer_short_name will not be reloaded");
 	}
-	
 	elsif ($node_status_string =~ /^post_load/i) {
 		notify($ERRORS{'OK'}, 0, "node_status returned '$node_status_string', OS post_load tasks will be performed on $computer_short_name");
 		
-		# Check if the OS module implements a post_load subroutine and that post_load has been run
+		# Check if the OS module implements a post_load subroutine
 		if ($self->os->can('post_load')) {
 			if ($self->os->post_load()) {
-				# Add the vcld_post_load line to currentimage.txt
-				$self->os->set_vcld_post_load_status();
 				$node_status_string = 'READY';
+				
+				# Add a line to currentimage.txt indicating post_load has run
+				$self->os->set_post_load_status();
 			}
 			else {
 				notify($ERRORS{'WARNING'}, 0, "failed to execute OS module's post_load() subroutine, $computer_short_name will be reloaded");
@@ -561,7 +508,8 @@ sub reload_image {
 			}
 		}
 		else {
-			notify($ERRORS{'WARNING'}, 0, "provisioning module's node_status subroutine returned '$node_status' but OS module " . ref($self->os) . " does not implement a post_load() subroutine, $computer_short_name will not be reloaded");
+			$node_status_string = 'READY';
+			notify($ERRORS{'WARNING'}, 0, "provisioning module's node_status subroutine returned '$node_status_string' but OS module " . ref($self->os) . " does not implement a post_load() subroutine, $computer_short_name will not be reloaded");
 		}
 	}
 	
@@ -631,7 +579,10 @@ sub reload_image {
 		# Call provisioning module's load() subroutine
 		notify($ERRORS{'OK'}, 0, "calling " . ref($self->provisioner) . "->load() subroutine");
 		insertloadlog($reservation_id, $computer_id, "info", "calling " . ref($self->provisioner) . "->load() subroutine");
-		if ($self->provisioner->load($node_status)) {
+		if ($self->provisioner->load()) {
+			# Add a line to currentimage.txt indicating post_load has run
+			$self->os->set_post_load_status();
+			
 			notify($ERRORS{'OK'}, 0, "$image_name was successfully reloaded on $computer_short_name");
 			insertloadlog($reservation_id, $computer_id, "loadimagecomplete", "$image_name was successfully reloaded on $computer_short_name");
 		}

@@ -66,7 +66,7 @@ use VCL::utils;
 
 =head2 node_status
 
- Parameters  : $computer_id (optional)
+ Parameters  : none
  Returns     : string
  Description : Checks the status of the computer in order to determine if the
                computer is ready to be reserved or needs to be reloaded. A
@@ -76,6 +76,7 @@ use VCL::utils;
                   * It is accessible
                   * It is loaded with the correct image
                   * OS module's post-load tasks have run
+                  * Computer has not been tagged with a tainted tag
                'POST_LOAD':
                   * Computer is loaded with the correct image
                   * OS module's post-load tasks have not run
@@ -86,135 +87,55 @@ use VCL::utils;
 =cut
 
 sub node_status {
-	my $self;
-	
-	# Get the argument
-	my $argument = shift;
-	
-	# Check if this subroutine was called an an object method or an argument was passed
-	if (ref($argument) =~ /VCL::Module/i) {
-		$self = $argument;
-	}
-	elsif (!ref($argument) || ref($argument) eq 'HASH') {
-		# An argument was passed, check its type and determine the computer ID
-		my $computer_id;
-		if (ref($argument)) {
-			# Hash reference was passed
-			$computer_id = $argument->{id};
-		}
-		elsif ($argument =~ /^\d+$/) {
-			# Computer ID was passed
-			$computer_id = $argument;
-		}
-		else {
-			# Computer name was passed
-			($computer_id) = get_computer_ids($argument);
-		}
-		
-		if ($computer_id) {
-			notify($ERRORS{'DEBUG'}, 0, "computer ID: $computer_id");
-		}
-		else {
-			notify($ERRORS{'DEBUG'}, 0, "unable to determine computer ID from argument:\n" . format_data($argument));
-			return;
-		}
-		
-		# Create a DataStructure object containing data for the computer specified as the argument
-		my $data;
-		eval {
-			$data= new VCL::DataStructure({computer_identifier => $computer_id});
-		};
-		if ($EVAL_ERROR) {
-			notify($ERRORS{'WARNING'}, 0, "failed to create DataStructure object for computer ID: $computer_id, error: $EVAL_ERROR");
-			return;
-		}
-		elsif (!$data) {
-			notify($ERRORS{'WARNING'}, 0, "failed to create DataStructure object for computer ID: $computer_id, DataStructure object is not defined");
-			return;
-		}
-		else {
-			notify($ERRORS{'DEBUG'}, 0, "created DataStructure object  for computer ID: $computer_id");
-		}
-		
-		# Create a provisioning object
-		my $provisioning_module_perl_package = $data->get_computer_provisioning_module_perl_package();
-		if ($self = ($provisioning_module_perl_package)->new({data_structure => $data})) {
-			notify($ERRORS{'DEBUG'}, 0, "created $provisioning_module_perl_package object to check the status of computer ID: $computer_id");
-		}
-		else {
-			notify($ERRORS{'WARNING'}, 0, "failed to create $provisioning_module_perl_package object to check the status of computer ID: $computer_id");
-			return;
-		}
-		
-		# Create an OS object for the provisioning object to access
-		if (!$self->create_os_object()) {
-			notify($ERRORS{'WARNING'}, 0, "failed to create OS object");
-			return;
-		}
+	my $self = shift;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
 	}
 	
-	my $reservation_id = $self->data->get_reservation_id();
 	my $computer_name = $self->data->get_computer_node_name();
 	my $image_name = $self->data->get_image_name();
-	my $request_forimaging = $self->data->get_request_forimaging();
-	my $imagerevision_id = $self->data->get_imagerevision_id();
+	my $reservation_imagerevision_id = $self->data->get_imagerevision_id();
 	
-	notify($ERRORS{'DEBUG'}, 0, "attempting to check the status of computer $computer_name, image: $image_name imagerevision_id; $imagerevision_id");
-	
-	# Create a hash reference and populate it with the default values
-	my $status;
-	$status->{currentimage} = '';
-	$status->{ssh} = 0;
-	$status->{image_match} = 0;
-	$status->{status} = 'RELOAD';
+	notify($ERRORS{'DEBUG'}, 0, "checking if $computer_name is responding and loaded with $image_name, imagerevision ID: $reservation_imagerevision_id");
 	
 	# Check if SSH is available
-	if ($self->os->is_ssh_responding()) {
-		notify($ERRORS{'DEBUG'}, 0, "$computer_name is responding to SSH");
-		$status->{ssh} = 1;
-	}
-	else {
+	if (!$self->os->is_ssh_responding()) {
 		notify($ERRORS{'OK'}, 0, "$computer_name is not responding to SSH, returning 'RELOAD'");
-		$status->{status} = 'RELOAD';
-		$status->{ssh} = 0;
-		
-		# Skip remaining checks if SSH isn't available
-		return $status;
+		return 'RELOAD';
 	}
 	
-	# Get the contents of currentimage.txt and check if currentimage.txt matches the requested image name
+	# Check if the imagerevision ID loaded on the computer matches the reservation
 	my $current_image_revision_id = $self->os->get_current_image_info();
-	$status->{currentimagerevision_id} = $current_image_revision_id;
-
-	$status->{currentimage} = $self->data->get_computer_currentimage_name();
-	my $vcld_post_load_status = $self->data->get_computer_currentimage_vcld_post_load(0);
-	
 	if (!$current_image_revision_id) {
-		notify($ERRORS{'OK'}, 0, "unable to retrieve currentimage.txt contents on $computer_name, returning 'RELOAD'");
-		return $status;
+		notify($ERRORS{'OK'}, 0, "unable to retrieve imagerevision ID from $computer_name, returning 'RELOAD'");
+		return 'RELOAD';
 	}
-	#elsif ($current_image_name eq $image_name) {
-	elsif ($current_image_revision_id eq $imagerevision_id) {
-		notify($ERRORS{'DEBUG'}, 0, "currentimage.txt image $current_image_revision_id ($status->{currentimage}) matches requested image $imagerevision_id ($image_name) on $computer_name");
-		$status->{image_match} = 1;
-	}
-	else {
-		notify($ERRORS{'OK'}, 0, "currentimage.txt image $current_image_revision_id ($status->{currentimage}) does not match requested image name $imagerevision_id ($image_name) on $computer_name, returning 'RELOAD'");
-		return $status;
-	}
-	
-	# Check if the OS post_load tasks have run
-	if ($vcld_post_load_status) {
-		notify($ERRORS{'DEBUG'}, 0, "OS module post_load tasks have been completed on $computer_name");
-		$status->{status} = 'READY';
+	elsif ($current_image_revision_id ne $reservation_imagerevision_id) {
+		notify($ERRORS{'OK'}, 0, "$computer_name is loaded with imagerevision ID: $current_image_revision_id, not $reservation_imagerevision_id, returning 'RELOAD'");
+		return 'RELOAD';
 	}
 	else {
-		notify($ERRORS{'DEBUG'}, 0, "OS module post_load tasks have not been completed on $computer_name, returning 'POST_LOAD'");
-		$status->{status} = 'POST_LOAD';
+		notify($ERRORS{'DEBUG'}, 0, "$computer_name is loaded with the correct imagerevision ID: $current_image_revision_id");
 	}
 	
-	notify($ERRORS{'OK'}, 0, "status of $computer_name: $status->{status}");
-	return $status;
+	# Check if current image has been tagged as tainted
+	my $tainted_status = $self->os->get_tainted_status();
+	if ($tainted_status) {
+		notify($ERRORS{'WARNING'}, 0, "user may have previously had the ability to log in to the image currently loaded on $computer_name, current image is tagged as tainted, returning 'RELOAD'");
+		return 'RELOAD';
+	}
+	
+	# Check if the post-load tasks have been completed
+	my $post_load_status = $self->os->get_post_load_status();
+	if ($post_load_status) {
+		notify($ERRORS{'OK'}, 0, "OS module post_load tasks have been completed on $computer_name, returning 'READY'");
+		return 'READY';
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "OS module post_load tasks have NOT been completed on $computer_name, returning 'POST_LOAD'");
+		return 'POST_LOAD';
+	}
 }
 
 #/////////////////////////////////////////////////////////////////////////////

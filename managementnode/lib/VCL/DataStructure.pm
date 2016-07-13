@@ -311,7 +311,6 @@ $SUBROUTINE_MAPPINGS{computer_currentimage_project} = '$self->request_data->{res
 $SUBROUTINE_MAPPINGS{computer_currentimage_reloadtime} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{currentimage}{reloadtime}';
 $SUBROUTINE_MAPPINGS{computer_currentimage_size} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{currentimage}{size}';
 $SUBROUTINE_MAPPINGS{computer_currentimage_test} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{currentimage}{test}';
-$SUBROUTINE_MAPPINGS{computer_currentimage_vcld_post_load} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{currentimage}{vcld_post_load}';  
 $SUBROUTINE_MAPPINGS{computer_currentimagerevision_comments} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{currentimagerevision}{comments}';
 $SUBROUTINE_MAPPINGS{computer_currentimagerevision_datecreated} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{currentimagerevision}{datecreated}';
 $SUBROUTINE_MAPPINGS{computer_currentimagerevision_deleted} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{currentimagerevision}{deleted}';

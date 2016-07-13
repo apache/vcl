@@ -174,7 +174,11 @@ sub process {
 		
 		# Check if the OS module implements a post_load subroutine
 		if ($self->os->can('post_load')) {
-			if (!$self->os->post_load()) {
+			if ($self->os->post_load()) {
+				# Add a line to currentimage.txt indicating post_load has run
+				$self->os->set_post_load_status();
+			}
+			else {
 				notify($ERRORS{'CRITICAL'}, 0, "failed to create checkpoint of image, unable to complete OS post-load tasks on $computer_shortname after image was captured and computer was powered on");
 				$self->reservation_failed();
 			}

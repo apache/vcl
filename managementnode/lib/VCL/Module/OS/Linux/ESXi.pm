@@ -92,8 +92,6 @@ sub post_load {
 		return 0;
 	}
 	
-	$self->set_vcld_post_load_status();
-	
 	return 1;
 }
 

@@ -177,6 +177,12 @@ sub process {
 		#	$self->insert_reload_and_exit();
 		#}
 		
+		# Check if tainted tag was set in currently loaded image
+		if ($self->os->get_tainted_status()) {
+			notify($ERRORS{'DEBUG'}, 0, "image currently loaded on $computer_shortname was tainted, computer will be reloaded");
+			$self->insert_reload_and_exit();
+		}
+		
 		# Make sure computer current image name was retrieved from the database
 		if (!$computer_currentimage_name) {
 			notify($ERRORS{'WARNING'}, 0, "failed to retrieve computer current image name from the database, computer will be reloaded");
