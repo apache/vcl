@@ -11400,7 +11400,7 @@ EOF
 sub kill_child_processes {
 	my @parent_pids = @_;
 	my $parent_pid = $parent_pids[-1];
-	my $parent_process_string = "parent PID: " . join(">", @parent_pids);
+	my $parent_process_string = "parent PID: " . join(" > ", @parent_pids);
 	
 	# Make sure the parent vcld daemon process didn't call this subroutine for safety
 	# Prevents all reservations being processed from being killed
@@ -11411,25 +11411,27 @@ sub kill_child_processes {
 	
 	notify($ERRORS{'DEBUG'}, 0, "$parent_process_string: attempting to kill child processes");
 	
-	my $command = "pgrep -flP $parent_pid | sort -r";
+	my $command = "ps -h --ppid $parent_pid -o pid,ppid,args | sort -r";
 	my ($exit_status, $output) = run_command($command, 1);
-	
 	for my $line (@$output) {
 		# Make sure the line only contains a PID
-		my ($child_pid, $child_command) = $line =~ /^(\d+)\s+(.*)/;
-		if (!defined($child_pid) || !defined($child_command)) {
-			notify($ERRORS{'WARNING'}, 0, "$parent_process_string: pgrep output line does not contain a PID and command:\nline: '$child_pid'\ncommand: '$command'");
+		my ($child_pid, $parent_pid, $child_command) = $line =~ /^(\d+)\s+(\d+)\s+(.*)/;
+		if (!defined($child_pid)) {
+			notify($ERRORS{'WARNING'}, 0, "$parent_process_string: output line does not contain a PID:\nline: '$line'");
 			next;
 		}
 		elsif ($child_command =~ /$command/) {
 			# Ignore the pgrep command called to determine child processes
+			notify($ERRORS{'DEBUG'}, 0, "ignoring process created by this subroutine: '$line'");
+			next;
+		}
+		elsif ($child_command =~ /ssh -e none/) {
+			# Ignore SSH sessions created for execute_new
+			notify($ERRORS{'DEBUG'}, 0, "ignoring persistent SSH process: '$line'");
 			next;
 		}
 		
-		# Create a string containing the beginning and end of the child process command to make log output more readable
-		my $child_command_summary = join('...', ($child_command =~ /^(.{10,20}).*(.{20,30})$/));
-		
-		notify($ERRORS{'DEBUG'}, 0, "$parent_process_string, found child process: $child_pid '$child_command_summary'");
+		notify($ERRORS{'DEBUG'}, 0, "$parent_process_string, found child process: '$line'");
 		
 		# Recursively kill the child processes of the child process
 		kill_child_processes(@parent_pids, $child_pid);
@@ -11442,7 +11444,6 @@ sub kill_child_processes {
 			notify($ERRORS{'WARNING'}, 0, "$parent_process_string, kill command returned 0 attempting to kill child process: $child_pid");
 		}
 	}
-	
 	return 1;
 }
 
