@@ -111,26 +111,35 @@ sub initialize {
 =cut
 
 sub execute {
-	my $self = shift;
-	unless (ref($self) && $self->isa('VCL::Module')) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine can only be called as an object method");
-		return;
+	my ($argument) = @_;
+	my ($command, $display_output, $timeout_seconds);
+	
+	# Check if this subroutine was called as an object method
+	if (ref($argument) && ref($argument) =~ /VCL::Module/) {
+		# Subroutine was called as an object method ($self->execute)
+		my $self = shift;
+		($argument) = @_;
 	}
 	
-	# Get the command argument
-	my $command = shift;
-	if (!$command) {
-		notify($ERRORS{'WARNING'}, 0, "command argument was not specified");
-		return;
+	# Check the argument type
+	if (ref($argument)) {
+		if (ref($argument) eq 'HASH') {
+			$command = $argument->{command};
+			$display_output = $argument->{display_output};
+			$timeout_seconds = $argument->{timeout_seconds};
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "invalid argument reference type passed: " . ref($argument) . ", if a reference is passed as the argument it may only be a hash or VCL::Module reference");
+			return;
+		}
 	}
-	
-	# Get 2nd display output argument if supplied, or set default value
-	my $display_output = shift || '0';
-	
-	my $timeout_seconds = shift;
+	else {
+		# Argument is not a reference, get the remaining arguments
+		($command, $display_output, $timeout_seconds) = @_;
+	}
 	
 	# Run the command
-	my ($exit_status, $output) = run_command($command, !$display_output, $timeout_seconds);
+	my ($exit_status, $output) = run_command($command, 1, $timeout_seconds);
 	if (defined($exit_status) && defined($output)) {
 		if ($display_output) {
 			notify($ERRORS{'OK'}, 0, "executed command: '$command', exit status: $exit_status, output:\n" . join("\n", @$output)) if $display_output;
