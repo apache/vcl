@@ -5894,8 +5894,8 @@ sub delete_capture_configuration_files {
 		$self->delete_files_by_pattern($system32_path . '/GroupPolicy/User/Scripts', '.*\(Prepare\|prepare\|Cleanup\|cleanup\|post_load\).*');
 		
 		# Remove VCLprepare.cmd and VCLcleanup.cmd lines from scripts.ini file
-		$self->remove_group_policy_script('logon', 'VCLprepare.cmd');
-		$self->remove_group_policy_script('logoff', 'VCLcleanup.cmd');
+		$self->remove_user_group_policy_script('logon', 'VCLprepare.cmd');
+		$self->remove_user_group_policy_script('logoff', 'VCLcleanup.cmd');
 	}
 	
 	# Remove old scripts and utilities
@@ -5922,15 +5922,33 @@ sub delete_capture_configuration_files {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 add_group_policy_script
+=head2 get_user_group_policy_script_info
 
- Parameters  : 
- Returns     :
- Description : 
+ Parameters  : none
+ Returns     : hash reference
+ Description : Parses the script.ini file and constructs a hash reference:
+               {
+                 "logoff" => {
+                   0 => {
+                     "cmdline" => "C:\\logoff.cmd",
+                     "parameters" => ">> C:\\logoff.log"
+                   },
+                   1 => {
+                     "cmdline" => "logoff2.cmd",
+                     "parameters" => ""
+                   },
+                 },
+                 "logon" => {
+                   0 => {
+                     "cmdline" => "logon.cmd",
+                     "parameters" => ""
+                   }
+                 }
+               }
 
 =cut
 
-sub add_group_policy_script {
+sub get_user_group_policy_script_info {
 	my $self = shift;
 	if (ref($self) !~ /windows/i) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
@@ -5939,246 +5957,88 @@ sub add_group_policy_script {
 
 	my $system32_path = $self->get_system32_path() || return;
 	
-	# Get the arguments
-	my $stage_argument = shift;
-	my $cmdline_argument = shift;
-	my $parameters_argument = shift;
-	if (!$stage_argument || $stage_argument !~ /^(logon|logoff)$/i) {
-		notify($ERRORS{'WARNING'}, 0, "stage (logon/logoff) argument was not specified");
-		return;
-	}
-	if (!$cmdline_argument) {
-		notify($ERRORS{'WARNING'}, 0, "CmdLine argument was not specified");
-		return;
-	}
-	if (!$parameters_argument) {
-		$parameters_argument = '';
+	my $scripts_ini_file_path = "$system32_path/GroupPolicy/User/Scripts/scripts.ini";
+	
+	my @lines;
+	if ($self->file_exists($scripts_ini_file_path)) {
+		@lines = $self->get_file_contents($scripts_ini_file_path);
+		notify($ERRORS{'DEBUG'}, 0, "retrieved contents of scripts.ini:\n" . join("\n", @lines));
 	}
 	
-	# Capitalize the first letter of logon/logoff
-	$stage_argument = lc($stage_argument);
-	$stage_argument = "L" . substr($stage_argument, 1);
+	# Format of scripts.ini
+	#     <--- BLANK FIRST LINE
+	# [Logon]
+	# 0CmdLine=logon.cmd
+	# 0Parameters=>> C:\logon.log
+	# 1CmdLine=logon1.cmd
+	# 1Parameters=
+	# [Logoff]
+	# 0CmdLine=C:\logoff.cmd
+	# 0Parameters=>> C:\logoff.log
 	
-	# Store the stage name (logon/logoff) not being modified
-	my $opposite_stage_argument;
-	if ($stage_argument =~ /logon/i) {
-		$opposite_stage_argument = 'Logoff';
-	}
-	else {
-		$opposite_stage_argument = 'Logon';
-	}
-
-	# Path to scripts.ini file
-	my $scripts_ini = $system32_path . '/GroupPolicy/User/Scripts/scripts.ini';
+	my $info = {
+		'logon' => {},
+		'logoff' => {},
+	};
 	
-	# Set the owner of scripts.ini to root
-	my $chown_command = "touch $scripts_ini && chown root $scripts_ini";
-	my ($chown_status, $chown_output) = $self->execute($chown_command);
-	if (defined($chown_status) && $chown_status == 0) {
-		notify($ERRORS{'DEBUG'}, 0, "set root as owner of scripts.ini");
-	}
-	elsif (defined($chown_status)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to set root as owner of scripts.ini, exit status: $chown_status, output:\n@{$chown_output}");
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "unable to run ssh command to set root as owner of scripts.ini");
-	}
-	
-	# Set the permissions of scripts.ini to 664
-	my $chmod_command = "chmod 664 $scripts_ini";
-	my ($chmod_status, $chmod_output) = $self->execute($chmod_command);
-	if (defined($chmod_status) && $chmod_status == 0) {
-		notify($ERRORS{'DEBUG'}, 0, "ran chmod on scripts.ini");
-	}
-	elsif (defined($chmod_status)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to run chmod 664 on scripts.ini, exit status: $chmod_status, output:\n@{$chmod_output}");
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "unable to run ssh command to run chmod 664 on scripts.ini");
-	}
-	
-	# Clear hidden, system, and readonly flags on scripts.ini
-	my $attrib_command = "attrib -H -S -R $scripts_ini";
-	my ($attrib_status, $attrib_output) = $self->execute($attrib_command);
-	if (defined($attrib_status) && $attrib_status == 0) {
-		notify($ERRORS{'DEBUG'}, 0, "ran attrib -H -S -R on scripts.ini");
-	}
-	elsif (defined($attrib_status)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to run attrib -H -S -R on scripts.ini, exit status: $attrib_status, output:\n@{$attrib_output}");
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "unable to run ssh command to run attrib -H -S -R on scripts.ini");
-	}
-	
-	# Get the contents of scripts.ini
-	my $cat_command = "cat $scripts_ini";
-	my ($cat_status, $cat_output) = $self->execute($cat_command, 1);
-	if (defined($cat_status) && $cat_status == 0) {
-		notify($ERRORS{'DEBUG'}, 0, "retrieved scripts.ini contents:\n" . join("\n", @{$cat_output}));
-	}
-	elsif (defined($cat_status)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to cat scripts.ini contents");
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "unable to run ssh command to scripts.ini contents");
-	}
-	
-	# Create a string containing all of the lines in scripts.ini
-	my $scripts_ini_string = join("\n", @{$cat_output}) || '';
-	
-	# Remove any carriage returns to make pattern matching easier
-	$scripts_ini_string =~ s/\r//gs;
-	
-	# Get a string containing just the section being modified (logon/logoff)
-	my ($section_string) = $scripts_ini_string =~ /(\[$stage_argument\][^\[\]]*)/is;
-	$section_string = "[$stage_argument]" if !$section_string;
-	notify($ERRORS{'DEBUG'}, 0, "scripts.ini $stage_argument section:\n" . string_to_ascii($section_string));
-	
-	my ($opposite_section_string) = $scripts_ini_string =~ /(\[$opposite_stage_argument\][^\[\]]*)/is;
-	$opposite_section_string = "[$opposite_stage_argument]" if !$opposite_section_string;
-	notify($ERRORS{'DEBUG'}, 0, "scripts.ini $opposite_stage_argument section:\n" . string_to_ascii($opposite_section_string));
-	
-	my @section_lines = split(/[\r\n]+/, $section_string);
-	notify($ERRORS{'DEBUG'}, 0, "scripts.ini $stage_argument section line count: " . scalar @section_lines);
-	
-	my %scripts_original;
-	for my $section_line (@section_lines) {
-		if ($section_line =~ /(\d+)Parameters\s*=(.*)/i) {
-			my $index = $1;
-			my $parameters = $2;
-			if (!defined $scripts_original{$index}{Parameters}) {
-				$scripts_original{$index}{Parameters} = $parameters;
-				#notify($ERRORS{'DEBUG'}, 0, "found $stage_argument parameters:\nline: '$section_line'\nparameters: '$parameters'\nindex: $index");
-			}
-			else {
-				notify($ERRORS{'WARNING'}, 0, "found duplicate $stage_argument parameters line for index $index");
-			}
-		}
-		elsif ($section_line =~ /(\d+)CmdLine\s*=(.*)/i) {
-			my $index = $1;
-			my $cmdline = $2;
-			if (!defined $scripts_original{$index}{CmdLine}) {
-				$scripts_original{$index}{CmdLine} = $cmdline;
-				#notify($ERRORS{'DEBUG'}, 0, "found $stage_argument cmdline:\nline: '$section_line'\ncmdline: '$cmdline'\nindex: $index");
-			}
-			else {
-				notify($ERRORS{'WARNING'}, 0, "found duplicate $stage_argument CmdLine line for index $index");
-			}
-		}
-		elsif ($section_line =~ /\[$stage_argument\]/i) {
-			#notify($ERRORS{'DEBUG'}, 0, "found $stage_argument heading:\nline: '$section_line'");
-		}
-		else {
-			notify($ERRORS{'WARNING'}, 0, "found unexpected line: '$section_line'");
-		}
-	}
-	
-	my %scripts_modified;
-	my $index_modified = 0;
-	foreach my $index (sort keys %scripts_original) {
-		if (!defined $scripts_original{$index}{CmdLine}) {
-			notify($ERRORS{'WARNING'}, 0, "CmdLine not specified for index $index");
+	my $current_stage;
+	for my $line (@lines) {
+		# Ignore blank lines
+		next unless $line =~ /\w/;
+		
+		# Remove Unicode nul and special characters added to beginning of file
+		$line =~ s/(\x00|\xFE|\xFF)//g;
+		
+		# Find script stage section heading: [Logon] or [Logoff]
+		if ($line =~ /\[(logon|logoff)\]/i) {
+			$current_stage = lc($1);
 			next;
-		}
-		elsif ($scripts_original{$index}{CmdLine} =~ /^\s*$/) {
-			notify($ERRORS{'WARNING'}, 0, "CmdLine blank for index $index");
-			next;
-		}
-		if (!defined $scripts_original{$index}{Parameters}) {
-			notify($ERRORS{'WARNING'}, 0, "Parameters not specified for index $index");
-			$scripts_original{$index}{Parameters} = '';
 		}
 		
-		if ($scripts_original{$index}{CmdLine} =~ /$cmdline_argument/i && $scripts_original{$index}{Parameters} =~ /$parameters_argument/i) {
-			notify($ERRORS{'DEBUG'}, 0, "replacing existing $stage_argument script at index $index:\ncmdline: $scripts_original{$index}{CmdLine}\nparameters: $scripts_original{$index}{Parameters}");
+		# Parse the line, format should be either:
+		# 0CmdLine=logon.cmd
+		# 0Parameters=>> C:\logon.log
+		my ($index, $property, $value) = $line =~ /^\s*(\d+)(\w+)=(.*)$/;
+		if (!defined($index)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to parse scripts.ini, unable to parse line: '$line'\n" . join("\n", @lines));
+			return;
 		}
-		else {
-			notify($ERRORS{'DEBUG'}, 0, "retaining existing $stage_argument script at index $index:\ncmdline: $scripts_original{$index}{CmdLine}\nparameters: $scripts_original{$index}{Parameters}");
-			$scripts_modified{$index_modified}{CmdLine} = $scripts_original{$index}{CmdLine};
-			$scripts_modified{$index_modified}{Parameters} = $scripts_original{$index}{Parameters};
-			$index_modified++;
+		
+		$property = lc($property);
+		
+		if (defined($info->{$current_stage}{$index}{$property})) {
+			notify($ERRORS{'WARNING'}, 0, "failed to parse scripts.ini, multiple [$current_stage] '$property' lines exist for index $index:\n" . join("\n", @lines));
+			return;
+		}
+		
+		$info->{$current_stage}{$index}{$property} = $value;
+	}
+	
+	# Guarantee each script index has both a CmdLine and Parameters entry
+	for my $check_stage (keys %$info) {
+		for my $index (keys %{$info->{$check_stage}}) {
+			$info->{$check_stage}{$index}{'cmdline'} = '' unless defined($info->{$check_stage}{$index}{'cmdline'});
+			$info->{$check_stage}{$index}{'parameters'} = '' unless defined($info->{$check_stage}{$index}{'parameters'});
 		}
 	}
 	
-	# Add the argument script to the hash
-	$scripts_modified{$index_modified}{CmdLine} = $cmdline_argument;
-	$scripts_modified{$index_modified}{Parameters} = $parameters_argument;
-	$index_modified++;
-	
-	#notify($ERRORS{'DEBUG'}, 0, "arguments:\ncmdline: $cmdline_argument\nparameters: $parameters_argument");
-	#notify($ERRORS{'DEBUG'}, 0, "original $stage_argument scripts data:\n" . format_data(\%scripts_original));
-	#notify($ERRORS{'DEBUG'}, 0, "modified $stage_argument scripts data:\n" . format_data(\%scripts_modified));
-	
-	my $section_string_new = "[$stage_argument]\n";
-	foreach my $index_new (sort keys(%scripts_modified)) {
-		$section_string_new .= $index_new . "CmdLine=$scripts_modified{$index_new}{CmdLine}\n";
-		$section_string_new .= $index_new . "Parameters=$scripts_modified{$index_new}{Parameters}\n";
-	}
-	
-	notify($ERRORS{'DEBUG'}, 0, "original $stage_argument scripts section:\n$section_string");
-	notify($ERRORS{'DEBUG'}, 0, "modified $stage_argument scripts section:\n$section_string_new");
-	
-	my $scripts_ini_modified;
-	if ($stage_argument =~ /logon/i) {
-		$scripts_ini_modified = "$section_string_new\n$opposite_section_string";
-	}
-	else {
-		$scripts_ini_modified = "$opposite_section_string\n$section_string_new";
-	}
-	notify($ERRORS{'DEBUG'}, 0, "modified scripts.ini contents:\n$scripts_ini_modified");
-	
-	# Escape quote characters
-	$scripts_ini_modified =~ s/"/\\"/gs;
-	
-	# Echo the modified contents to scripts.ini
-	my $echo_command = "echo \"$scripts_ini_modified\" > $scripts_ini";
-	my ($echo_status, $echo_output) = $self->execute($echo_command);
-	if (defined($echo_status) && $echo_status == 0) {
-		notify($ERRORS{'DEBUG'}, 0, "echo'd modified contents to scripts.ini");
-	}
-	elsif (defined($echo_status)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to echo modified contents to scripts.ini, exit status: $echo_status, output:\n@{$echo_output}");
-		return;
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "unable to run ssh command to echo modified contents to scripts.ini");
-		return;
-	}
-	
-	# Apply Windows-style line endings to scripts.ini
-	$self->set_text_file_line_endings($scripts_ini);
-	
-	# Get the modified contents of scripts.ini
-	my $cat_modified_command = "cat $scripts_ini";
-	my ($cat_modified_status, $cat_modified_output) = $self->execute($cat_modified_command, 1);
-	if (defined($cat_modified_status) && $cat_modified_status == 0) {
-		notify($ERRORS{'DEBUG'}, 0, "retrieved modified scripts.ini contents");
-	}
-	elsif (defined($cat_modified_status)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to cat scripts.ini contents");
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "unable to run ssh command to scripts.ini contents");
-	}
-	
-	## Run gpupdate so the new settings take effect immediately
-	#$self->run_gpupdate();
-	
-	notify($ERRORS{'OK'}, 0, "added '$cmdline_argument' $stage_argument script to scripts.ini\noriginal contents:\n$scripts_ini_string\n-----\nnew contents:\n" . join("\n", @{$cat_modified_output}));
-	return 1;
+	notify($ERRORS{'DEBUG'}, 0, "retrieved user group policy info:\n" . format_data($info));
+	return $info;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 remove_group_policy_script
+=head2 add_user_group_policy_script
 
- Parameters  : 
- Returns     :
- Description : 
+ Parameters  : $stage_argument, $cmdline_argument, $parameters_argument
+ Returns     : boolean
+ Description : Adds a traditional (non-Powershell) user group policy script to
+               the computer to be automatically executed at logon or logoff. The
+               stage argument must either be 'logon' or 'logoff'.
 
 =cut
 
-sub remove_group_policy_script {
+sub add_user_group_policy_script {
 	my $self = shift;
 	if (ref($self) !~ /windows/i) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
@@ -6188,226 +6048,201 @@ sub remove_group_policy_script {
 	my $system32_path = $self->get_system32_path() || return;
 	
 	# Get the arguments
-	my $stage_argument = shift;
-	my $cmdline_argument = shift;
-	if (!$stage_argument || $stage_argument !~ /^(logon|logoff)$/i) {
+	my ($stage_argument, $cmdline_argument, $parameters_argument) = @_;
+	if (!$stage_argument) {
 		notify($ERRORS{'WARNING'}, 0, "stage (logon/logoff) argument was not specified");
 		return;
 	}
-	if (!$cmdline_argument) {
+	elsif (!$stage_argument || $stage_argument !~ /^(logon|logoff)$/i) {
+		notify($ERRORS{'WARNING'}, 0, "stage argument is not valid: $stage_argument, it must be 'logon' or 'logoff'");
+		return;
+	}
+	elsif (!$cmdline_argument) {
 		notify($ERRORS{'WARNING'}, 0, "CmdLine argument was not specified");
 		return;
 	}
 	
-	# Capitalize the first letter of logon/logoff
+	# Use lower case for all comparisons
 	$stage_argument = lc($stage_argument);
-	$stage_argument = "L" . substr($stage_argument, 1);
 	
-	# Store the stage name (logon/logoff) not being modified
-	my $opposite_stage_argument;
-	if ($stage_argument =~ /logon/i) {
-		$opposite_stage_argument = 'Logoff';
+	# Replace slashes with double backslashes
+	$cmdline_argument =~ s/[\\\/]+/\\/g;
+	my $cmdline_argument_escaped = quotemeta($cmdline_argument);
+	
+	# Construct a hash which will be inserted into the scripts.ini info hash
+	my $script_argument = {
+		'cmdline' => $cmdline_argument,
+		'parameters' => $parameters_argument,
+	};
+	
+	# Path to scripts.ini file
+	my $scripts_ini_directory_path = "$system32_path/GroupPolicy/User/Scripts";
+	my $scripts_ini_file_path = "$scripts_ini_directory_path/scripts.ini";
+	
+	my $info = $self->get_user_group_policy_script_info() || return;
+	
+	# Figure out the index to use
+	# Check if a script exists with an idential command line
+	my $add_index;
+	for my $index (sort {$a <=> $b} keys %{$info->{$stage_argument}}) {
+		my $cmdline = $info->{$stage_argument}{$index}{cmdline};
+		my $cmdline_escaped = quotemeta($cmdline);
+		
+		if (lc($cmdline_escaped) eq lc($cmdline_argument_escaped)) {
+			$add_index = $index;
+			notify($ERRORS{'DEBUG'}, 0, "replacing existing $stage_argument script at index $add_index:\n" .
+				"existing script:\n" . format_data($info->{$stage_argument}{$index}) . "\n" .
+				"argument:\n" . format_data($script_argument)
+			);
+			last;
+		}
+		else {
+			notify($ERRORS{'DEBUG'}, 0, "command line of existing $stage_argument script at index $index does not match argument:\n" .
+				"existing: '$cmdline_escaped'\n" .
+				"argument: '$cmdline_argument_escaped'"
+			);
+		}
 	}
-	else {
-		$opposite_stage_argument = 'Logon';
+	if (!defined($add_index)) {
+		# Existing matching script not found, add to end
+		$add_index = scalar keys %{$info->{$stage_argument}};
+		notify($ERRORS{'DEBUG'}, 0, "existing $stage_argument script was not found with command line matching argument, script will be added with index $add_index");
 	}
+	
+	# Add or replace the script defined by the arguments
+	$info->{$stage_argument}{$add_index} = $script_argument;
+	notify($ERRORS{'DEBUG'}, 0, "updated scripts.ini content:\n" . format_data($info));
+	
+	# Assemble the updated scripts.ini content
+	my $updated_contents;
+	for my $stage ('logon', 'logoff') {
+		# Capitalize the first letter and add it to the contents
+		my $stage_uc = ucfirst($stage);
+		$updated_contents .= "[$stage_uc]\n";
+		
+		for my $index (sort {$a <=> $b} keys %{$info->{$stage}}) {
+			my $script = $info->{$stage}{$index};
+			$updated_contents .= $index . "CmdLine=" . $script->{cmdline} . "\n";
+			$updated_contents .= $index . "Parameters=" . $script->{parameters} . "\n";
+		}
+	}
+	notify($ERRORS{'DEBUG'}, 0, "updated $scripts_ini_file_path contents:\n$updated_contents");
+	return $self->create_text_file($scripts_ini_file_path, $updated_contents);
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 remove_user_group_policy_script
+
+ Parameters  : $stage_argument, $cmdline_argument
+ Returns     : boolean
+ Description : Removes a traditional (non-Powershell) user logon or logoff
+               script group policy from the computer. The stage argument must
+               either be 'logon' or 'logoff'.
+
+=cut
+
+sub remove_user_group_policy_script {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+
+	my $system32_path = $self->get_system32_path() || return;
+	
+	# Get the arguments
+	my ($stage_argument, $cmdline_argument, $parameters_argument) = @_;
+	if (!$stage_argument) {
+		notify($ERRORS{'WARNING'}, 0, "stage (logon/logoff) argument was not specified");
+		return;
+	}
+	elsif (!$stage_argument || $stage_argument !~ /^(logon|logoff)$/i) {
+		notify($ERRORS{'WARNING'}, 0, "stage argument is not valid: $stage_argument, it must be 'logon' or 'logoff'");
+		return;
+	}
+	elsif (!$cmdline_argument) {
+		notify($ERRORS{'WARNING'}, 0, "CmdLine argument was not specified");
+		return;
+	}
+	
+	# Use lower case for all comparisons
+	$stage_argument = lc($stage_argument);
+	
+	# Replace slashes with double backslashes
+	$cmdline_argument =~ s/[\\\/]+/\\/g;
+	my $cmdline_argument_escaped = quotemeta($cmdline_argument);
+	
+	# Extract the last part of the command line if a full path was specified
+	my ($cmdline_argument_executable) = $cmdline_argument =~ /([^\\]+)$/;
+	
+	# Path to scripts.ini file
+	my $scripts_ini_directory_path = "$system32_path/GroupPolicy/User/Scripts";
+	my $scripts_ini_file_path = "$scripts_ini_directory_path/scripts.ini";
+	
+	my $info = $self->get_user_group_policy_script_info() || return;
 	
 	# Attempt to delete batch or script files specified by the argument
-	$self->delete_files_by_pattern("$system32_path/GroupPolicy/User/Scripts", ".*$cmdline_argument.*", 2);
-
-	# Path to scripts.ini file
-	my $scripts_ini = $system32_path . '/GroupPolicy/User/Scripts/scripts.ini';
+	if ($cmdline_argument =~ /\\/) {
+		$self->delete_file($cmdline_argument);
+	}
+	else {
+		$self->delete_files_by_pattern("$system32_path/GroupPolicy/User/Scripts", ".*$cmdline_argument.*", 2);
+	}
 	
-	# Set the owner of scripts.ini to root
-	my $chown_command = "touch $scripts_ini && chown root $scripts_ini";
-	my ($chown_status, $chown_output) = $self->execute($chown_command);
-	if (defined($chown_output) && grep(/no such file/i, @$chown_output)) {
-		notify($ERRORS{'DEBUG'}, 0, "scripts.ini file does not exist, nothing to remove");
+	# Find matching scripts, delete from hash if found
+	my $found_match = 0;
+	for my $index (sort {$a <=> $b} keys %{$info->{$stage_argument}}) {
+		my $cmdline = $info->{$stage_argument}{$index}{cmdline};
+		my $cmdline_escaped = quotemeta($cmdline);
+		
+		# Extract the last part of the command line if it contains a full path
+		my ($cmdline_executable) = $cmdline =~ /([^\\]+)$/;
+		
+		if (lc($cmdline_escaped) eq lc($cmdline_argument_escaped)) {
+			$found_match = 1;
+			notify($ERRORS{'DEBUG'}, 0, "existing command line matches argument, removing $stage_argument script at index $index:\n" .
+				"argument: $cmdline_argument\n" .
+				"existing script:\n" . format_data($info->{$stage_argument}{$index})
+			);
+			delete $info->{$stage_argument}{$index};
+			next;
+		}
+		elsif ($cmdline_argument_executable && $cmdline_executable && lc($cmdline_argument_executable) eq lc($cmdline_executable)) {
+			$found_match = 1;
+			notify($ERRORS{'DEBUG'}, 0, "existing command line executable matches argument executable, removing $stage_argument script at index $index:\n" .
+				"argument: $cmdline_argument\n" .
+				"argument executable: $cmdline_argument_executable\n" .
+				"existing script:\n" . format_data($info->{$stage_argument}{$index})
+			);
+			delete $info->{$stage_argument}{$index};
+			next;
+		}
+	}
+	
+	if (!$found_match) {
+		notify($ERRORS{'DEBUG'}, 0, "scripts.ini update not necessary, did not find existing script matching command line argument: $cmdline_argument");
 		return 1;
 	}
-	elsif (defined($chown_status) && $chown_status == 0) {
-		notify($ERRORS{'DEBUG'}, 0, "set root as owner of scripts.ini");
-	}
-	elsif (defined($chown_status)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to set root as owner of scripts.ini, exit status: $chown_status, output:\n@{$chown_output}");
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "unable to run ssh command to set root as owner of scripts.ini");
-	}
 	
-	# Set the permissions of scripts.ini to 664
-	my $chmod_command = "chmod 664 $scripts_ini";
-	my ($chmod_status, $chmod_output) = $self->execute($chmod_command);
-	if (defined($chmod_status) && $chmod_status == 0) {
-		notify($ERRORS{'DEBUG'}, 0, "ran chmod on scripts.ini");
-	}
-	elsif (defined($chmod_status)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to run chmod 664 on scripts.ini, exit status: $chmod_status, output:\n@{$chmod_output}");
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "unable to run ssh command to run chmod 664 on scripts.ini");
-	}
-	
-	# Clear hidden, system, and readonly flags on scripts.ini
-	my $attrib_command = "attrib -H -S -R $scripts_ini";
-	my ($attrib_status, $attrib_output) = $self->execute($attrib_command);
-	if (defined($attrib_status) && $attrib_status == 0) {
-		notify($ERRORS{'DEBUG'}, 0, "ran attrib -H -S -R on scripts.ini");
-	}
-	elsif (defined($attrib_status)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to run attrib -H -S -R on scripts.ini, exit status: $attrib_status, output:\n@{$attrib_output}");
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "unable to run ssh command to run attrib -H -S -R on scripts.ini");
-	}
-	
-	# Get the contents of scripts.ini
-	my $cat_command = "cat $scripts_ini";
-	my ($cat_status, $cat_output) = $self->execute($cat_command, 1);
-	if (defined($cat_status) && $cat_status == 0) {
-		notify($ERRORS{'DEBUG'}, 0, "retrieved scripts.ini contents:\n" . join("\n", @{$cat_output}));
-	}
-	elsif (defined($cat_status)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to cat scripts.ini contents");
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "unable to run ssh command to scripts.ini contents");
-	}
-	
-	# Create a string containing all of the lines in scripts.ini
-	my $scripts_ini_string = join("\n", @{$cat_output}) || '';
-	
-	# Remove any carriage returns to make pattern matching easier
-	$scripts_ini_string =~ s/\r//gs;
-	
-	# Get a string containing just the section being modified (logon/logoff)
-	my ($section_string) = $scripts_ini_string =~ /(\[$stage_argument\][^\[\]]*)/is;
-	$section_string = "[$stage_argument]" if !$section_string;
-	notify($ERRORS{'DEBUG'}, 0, "scripts.ini $stage_argument section:\n" . string_to_ascii($section_string));
-	
-	my ($opposite_section_string) = $scripts_ini_string =~ /(\[$opposite_stage_argument\][^\[\]]*)/is;
-	$opposite_section_string = "[$opposite_stage_argument]" if !$opposite_section_string;
-	notify($ERRORS{'DEBUG'}, 0, "scripts.ini $opposite_stage_argument section:\n" . string_to_ascii($opposite_section_string));
-	
-	my @section_lines = split(/[\r\n]+/, $section_string);
-	notify($ERRORS{'DEBUG'}, 0, "scripts.ini $stage_argument section line count: " . scalar @section_lines);
-	
-	my %scripts_original;
-	for my $section_line (@section_lines) {
-		if ($section_line =~ /(\d+)Parameters\s*=(.*)/i) {
-			my $index = $1;
-			my $parameters = $2;
-			if (!defined $scripts_original{$index}{Parameters}) {
-				$scripts_original{$index}{Parameters} = $parameters;
-				#notify($ERRORS{'DEBUG'}, 0, "found $stage_argument parameters:\nline: '$section_line'\nparameters: '$parameters'\nindex: $index");
-			}
-			else {
-				notify($ERRORS{'WARNING'}, 0, "found duplicate $stage_argument parameters line for index $index");
-			}
-		}
-		elsif ($section_line =~ /(\d+)CmdLine\s*=(.*)/i) {
-			my $index = $1;
-			my $cmdline = $2;
-			if (!defined $scripts_original{$index}{CmdLine}) {
-				$scripts_original{$index}{CmdLine} = $cmdline;
-				#notify($ERRORS{'DEBUG'}, 0, "found $stage_argument cmdline:\nline: '$section_line'\ncmdline: '$cmdline'\nindex: $index");
-			}
-			else {
-				notify($ERRORS{'WARNING'}, 0, "found duplicate $stage_argument CmdLine line for index $index");
-			}
-		}
-		elsif ($section_line =~ /\[$stage_argument\]/i) {
-			#notify($ERRORS{'DEBUG'}, 0, "found $stage_argument heading:\nline: '$section_line'");
-		}
-		else {
-			notify($ERRORS{'WARNING'}, 0, "found unexpected line: '$section_line'");
-		}
-	}
-	
-	my %scripts_modified;
-	my $index_modified = 0;
-	foreach my $index (sort keys %scripts_original) {
-		if (!defined $scripts_original{$index}{CmdLine}) {
-			notify($ERRORS{'WARNING'}, 0, "CmdLine not specified for index $index");
-			next;
-		}
-		elsif ($scripts_original{$index}{CmdLine} =~ /^\s*$/) {
-			notify($ERRORS{'WARNING'}, 0, "CmdLine blank for index $index");
-			next;
-		}
-		if (!defined $scripts_original{$index}{Parameters}) {
-			notify($ERRORS{'WARNING'}, 0, "Parameters not specified for index $index");
-			$scripts_original{$index}{Parameters} = '';
-		}
+	# Assemble the updated scripts.ini content
+	my $updated_contents;
+	for my $stage ('logon', 'logoff') {
+		# Capitalize the first letter and add it to the contents
+		my $stage_uc = ucfirst($stage);
+		$updated_contents .= "[$stage_uc]\n";
 		
-		if ($scripts_original{$index}{CmdLine} =~ /$cmdline_argument/i) {
-			notify($ERRORS{'DEBUG'}, 0, "removing $stage_argument script at index $index:\ncmdline: $scripts_original{$index}{CmdLine}\nparameters: $scripts_original{$index}{Parameters}");
+		# Reindex in case there are now gaps
+		my $new_index = 0;
+		for my $original_index (sort {$a <=> $b} keys %{$info->{$stage}}) {
+			my $script = $info->{$stage}{$original_index};
+			$updated_contents .= $new_index . "CmdLine=" . $script->{cmdline} . "\n";
+			$updated_contents .= $new_index . "Parameters=" . $script->{parameters} . "\n";
+			$new_index++;
 		}
-		else {
-			notify($ERRORS{'DEBUG'}, 0, "retaining existing $stage_argument script at index $index:\ncmdline: $scripts_original{$index}{CmdLine}\nparameters: $scripts_original{$index}{Parameters}");
-			$scripts_modified{$index_modified}{CmdLine} = $scripts_original{$index}{CmdLine};
-			$scripts_modified{$index_modified}{Parameters} = $scripts_original{$index}{Parameters};
-			$index_modified++;
-		}
 	}
-	
-	my $section_string_new = "[$stage_argument]\n";
-	foreach my $index_new (sort keys(%scripts_modified)) {
-		$section_string_new .= $index_new . "CmdLine=$scripts_modified{$index_new}{CmdLine}\n";
-		$section_string_new .= $index_new . "Parameters=$scripts_modified{$index_new}{Parameters}\n";
-	}
-	
-	notify($ERRORS{'DEBUG'}, 0, "original $stage_argument scripts section:\n$section_string");
-	notify($ERRORS{'DEBUG'}, 0, "modified $stage_argument scripts section:\n$section_string_new");
-	
-	my $scripts_ini_modified;
-	if ($stage_argument =~ /logon/i) {
-		$scripts_ini_modified = "$section_string_new\n$opposite_section_string";
-	}
-	else {
-		$scripts_ini_modified = "$opposite_section_string\n$section_string_new";
-	}
-	notify($ERRORS{'DEBUG'}, 0, "modified scripts.ini contents:\n$scripts_ini_modified");
-	
-	$scripts_ini_modified =~ s/"/\\"/gs;
-	
-	# Echo the modified contents to scripts.ini
-	my $echo_command = "echo \"$scripts_ini_modified\" > $scripts_ini";
-	my ($echo_status, $echo_output) = $self->execute($echo_command);
-	if (defined($echo_status) && $echo_status == 0) {
-		notify($ERRORS{'DEBUG'}, 0, "echo'd modified contents to scripts.ini");
-	}
-	elsif (defined($echo_status)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to echo modified contents to scripts.ini, exit status: $echo_status, output:\n@{$echo_output}");
-		return;
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "unable to run ssh command to echo modified contents to scripts.ini");
-		return;
-	}
-	
-	# Apply Windows-style line endings to scripts.ini
-	$self->set_text_file_line_endings($scripts_ini);
-	
-	# Get the modified contents of scripts.ini
-	my $cat_modified_command = "cat $scripts_ini";
-	my ($cat_modified_status, $cat_modified_output) = $self->execute($cat_modified_command, 1);
-	if (defined($cat_modified_status) && $cat_modified_status == 0) {
-		notify($ERRORS{'DEBUG'}, 0, "retrieved modified scripts.ini contents");
-	}
-	elsif (defined($cat_modified_status)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to cat scripts.ini contents");
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "unable to run ssh command to scripts.ini contents");
-	}
-	
-	notify($ERRORS{'OK'}, 0, "removed '$cmdline_argument' $stage_argument script from scripts.ini\noriginal contents:\n$scripts_ini_string\n-----\nnew contents:\n" . join("\n", @{$cat_modified_output}));
-	
-	## Run gpupdate so the new settings take effect immediately
-	#$self->run_gpupdate();
-	
-	return 1;
+	notify($ERRORS{'DEBUG'}, 0, "updated $scripts_ini_file_path contents:\n$updated_contents");
+	return $self->create_text_file($scripts_ini_file_path, $updated_contents);
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -6994,9 +6829,9 @@ sub is_process_running {
 
 =head2 start_service
 
- Parameters  : 
- Returns     :
- Description : 
+ Parameters  : $service_name
+ Returns     : boolean
+ Description : Starts a service on the computer.
 
 =cut
 
@@ -7014,24 +6849,35 @@ sub start_service {
 		notify($ERRORS{'WARNING'}, 0, "service name was not passed as an argument");
 		return;
 	}
+	
+	# The Client for NFS service should be controlled with the nfsadmin.exe utility
+	if ($service_name =~ /^NfsClnt$/) {
+		if ($self->start_nfs_client_service()) {
+			return 1;
+		}
+	}
 
 	my $command = $system32_path . '/net.exe start "' . $service_name . '"';
-	my ($status, $output) = $self->execute($command);
-	if (defined($status) && $status == 0) {
-		notify($ERRORS{'OK'}, 0, "started service: $service_name");
+	my ($exit_status, $output) = $self->execute($command);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to to start service: $service_name");
+		return;
 	}
-	elsif (defined($output) && grep(/already been started/i, @{$output})) {
-		notify($ERRORS{'OK'}, 0, "service has already been started: $service_name");
+	elsif (grep(/is not started/i, @{$output})) {
+		notify($ERRORS{'OK'}, 0, "service is not started: $service_name");
+		return 1;
 	}
-	elsif (defined($status)) {
-		notify($ERRORS{'WARNING'}, 0, "unable to start service: $service_name, exit status: $status, output:\n@{$output}");
+	elsif (grep(/(does not exist|service name is invalid)/i, @$output)) {
+		notify($ERRORS{'WARNING'}, 0, "service could not be started because it does not exist: $service_name, output:\n" . join("\n", @$output));
+		return 0;
+	}
+	elsif ($exit_status || grep(/could not be started/i, @$output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to start service: $service_name, exit status: $exit_status, command:\n$command\noutput:\n" . join("\n", @$output));
 		return 0;
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "unable to run ssh command to to start service: $service_name");
-		return 0;
+		notify($ERRORS{'OK'}, 0, "started service: $service_name" . join("\n", @$output));
 	}
-
 	return 1;
 } ## end sub start_service
 
@@ -7039,9 +6885,9 @@ sub start_service {
 
 =head2 stop_service
 
- Parameters  : 
- Returns     :
- Description : 
+ Parameters  : $service_name
+ Returns     : boolean
+ Description : Stops a service on the computer.
 
 =cut
 
@@ -7059,28 +6905,35 @@ sub stop_service {
 		notify($ERRORS{'WARNING'}, 0, "service name was not passed as an argument");
 		return;
 	}
-
+	
+	# The Client for NFS service should be controlled with the nfsadmin.exe utility
+	if ($service_name =~ /^NfsClnt$/) {
+		if ($self->stop_nfs_client_service()) {
+			return 1;
+		}
+	}
+	
 	my $command = $system32_path . '/net.exe stop "' . $service_name . '"';
-	my ($status, $output) = $self->execute($command);
-	if (defined($status) && $status == 0) {
-		notify($ERRORS{'OK'}, 0, "stopped service: $service_name");
-	}
-	elsif (defined($output) && grep(/is not started/i, @{$output})) {
-		notify($ERRORS{'OK'}, 0, "service is not started: $service_name");
-	}
-	elsif (defined($output) && grep(/does not exist/i, @{$output})) {
-		notify($ERRORS{'WARNING'}, 0, "service was not stopped because it does not exist: $service_name");
+	my ($exit_status, $output) = $self->execute($command);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to to stop service: $service_name");
 		return;
 	}
-	elsif (defined($status)) {
-		notify($ERRORS{'WARNING'}, 0, "unable to stop service: $service_name, exit status: $status, output:\n@{$output}");
+	elsif (grep(/is not started/i, @{$output})) {
+		notify($ERRORS{'OK'}, 0, "service is not started: $service_name");
+		return 1;
+	}
+	elsif (grep(/(does not exist|service name is invalid)/i, @$output)) {
+		notify($ERRORS{'OK'}, 0, "service was not stopped because it does not exist: $service_name, output:\n" . join("\n", @$output));
+		return 1;
+	}
+	elsif ($exit_status || grep(/could not be stopped/i, @$output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to stop service: $service_name, exit status: $exit_status, command:\n$command\noutput:\n" . join("\n", @$output));
 		return 0;
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "unable to run ssh command to to stop service: $service_name");
-		return 0;
+		notify($ERRORS{'OK'}, 0, "stopped service: $service_name" . join("\n", @$output));
 	}
-
 	return 1;
 } ## end sub stop_service
 
@@ -7101,7 +6954,7 @@ sub restart_service {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return;
 	}
-
+	
 	my $system32_path = $self->get_system32_path() || return;
 	
 	my $service_name = shift;
@@ -7110,21 +6963,8 @@ sub restart_service {
 		return;
 	}
 
-	my $command = "$system32_path/net.exe stop \"$service_name\" ; $system32_path/net.exe start \"$service_name\"";
-	my ($status, $output) = $self->execute($command, 1);
-	if (!defined($output)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to run command to restart service: $service_name");
-		return;
-	}
-	elsif ($status == 0) {
-		notify($ERRORS{'OK'}, 0, "restarted service: $service_name, output:\n" . join("\n", @$output));
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to restart service: $service_name, exit status: $status, output:\n" . join("\n", @$output));
-		return 0;
-	}
-
-	return 1;
+	$self->stop_service($service_name);
+	return $self->start_service($service_name);
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -7172,6 +7012,94 @@ sub service_exists {
 		return;
 	}
 
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 start_nfs_client_service
+
+ Parameters  : none
+ Returns     : boolean
+ Description : Starts the Client for NFS (NfsClnt) service on the computer using
+               the nfsadmin.exe utility.
+
+=cut
+
+sub start_nfs_client_service {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+
+	my $system32_path = $self->get_system32_path() || return;
+
+	my $command = $system32_path . '/nfsadmin.exe client start';
+	my ($exit_status, $output) = $self->execute($command);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to to start Client for NFS service");
+		return;
+	}
+	elsif (grep(/already started/i, @$output)) {
+		notify($ERRORS{'OK'}, 0, "Client for NFS service is already started");
+		return 1;
+	}
+	elsif (grep(/no such file/i, @$output)) {
+		notify($ERRORS{'OK'}, 0, "failed to start Client for NFS service using nfsadmin.exe because utility does not exist on computer");
+		return;
+	}
+	elsif ($exit_status) {
+		notify($ERRORS{'WARNING'}, 0, "failed to start Client for NFS service, exit status: $exit_status, command: '$command', output:\n" . join("\n", @$output));
+		return 0;
+	}
+	else {
+		notify($ERRORS{'OK'}, 0, "started Client for NFS service, output:\n" . join("\n", @$output));
+	}
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 stop_nfs_client_service
+
+ Parameters  : none
+ Returns     : boolean
+ Description : Stops the Client for NFS (NfsClnt) service on the computer using
+               the nfsadmin.exe utility.
+
+=cut
+
+sub stop_nfs_client_service {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+
+	my $system32_path = $self->get_system32_path() || return;
+
+	my $command = $system32_path . '/nfsadmin.exe client stop';
+	my ($exit_status, $output) = $self->execute($command);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to to stop Client for NFS service");
+		return;
+	}
+	elsif (grep(/not been started/i, @$output)) {
+		notify($ERRORS{'OK'}, 0, "Client for NFS service is not started");
+		return 1;
+	}
+	elsif (grep(/no such file/i, @$output)) {
+		notify($ERRORS{'OK'}, 0, "failed to stop Client for NFS service using nfsadmin.exe because utility does not exist on computer");
+		return;
+	}
+	elsif ($exit_status) {
+		notify($ERRORS{'WARNING'}, 0, "failed to stop Client for NFS service, exit status: $exit_status, command: '$command', output:\n" . join("\n", @$output));
+		return 0;
+	}
+	else {
+		notify($ERRORS{'OK'}, 0, "stopped Client for NFS service, output:\n" . join("\n", @$output));
+	}
 	return 1;
 }
 
