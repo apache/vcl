@@ -9421,6 +9421,10 @@ sub string_to_ascii {
 			$ascii_value_string .= "\n" if $ascii_code == 10;
 			$previous_code = $ascii_code;
 		}
+		elsif($ascii_code > 126) {
+			$ascii_value_string .= pack("C*", $ascii_code) . "<$ascii_code>";
+			$previous_code = -1;
+		}
 		else {
 			$ascii_value_string .= pack("C*", $ascii_code);
 			$previous_code = -1;
