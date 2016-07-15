@@ -89,11 +89,10 @@ sub initialize {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return;
 	}
-
+	
+	my $request_state_name = $self->data->get_request_state_name();
 	my $node_name = $self->data->get_vmhost_short_name();
-	my $vmhost_username = $self->data->get_vmhost_profile_username();
-	my $vmhost_password = $self->data->get_vmhost_profile_password();
-
+	
 	# Get the absolute path of the libvirt drivers directory
 	my $driver_directory_path = "$FindBin::Bin/../lib/VCL/Module/Provisioning/libvirt";
 	notify($ERRORS{'DEBUG'}, 0, "libvirt driver module directory path: $driver_directory_path");
@@ -134,6 +133,36 @@ sub initialize {
 	if (!$self->driver()) {
 		notify($ERRORS{'WARNING'}, 0, "failed to initialize libvirt provisioning module, driver object could not be created and initialized");
 		return;
+	}
+	
+	# Check if the VM profile virtualswitch0 and virtualswitch1 settings match either a defined network or physical interface on the node
+	if ($request_state_name =~ /(new|reload|reinstall|test)/) {
+		my $virtualswitch0 = $self->data->get_vmhost_profile_virtualswitch0();
+		my $virtualswitch1 = $self->data->get_vmhost_profile_virtualswitch1();
+		
+		my $network_info = $self->get_node_network_info();
+		if (!defined($network_info)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to initialize libvirt provisioning module, network info could not be retrieved from $node_name");
+			return;
+		}
+		
+		my $interface_info = $self->get_node_interface_info();
+		if (!defined($interface_info)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to initialize libvirt provisioning module, interface info could not be retrieved from $node_name");
+			return;
+		}
+		
+		my $vm_network_0_found = (defined($network_info->{$virtualswitch0}) || defined($interface_info->{$virtualswitch0}));
+		my $vm_network_1_found = (defined($network_info->{$virtualswitch1}) || defined($interface_info->{$virtualswitch1}));
+		if (!$vm_network_0_found || !$vm_network_1_found) {
+			notify($ERRORS{'WARNING'}, 0, "failed to initialize libvirt provisioning module, VM network settings in VM host profile do not correspond to a network or physical interface on $node_name\n" .
+				"VM network 0 setting: $virtualswitch0" . ($vm_network_0_found ? '' : ' <-- MISSING!!!') . "\n" .
+				"VM network 1 setting: $virtualswitch1" . ($vm_network_1_found ? '' : ' <-- MISSING!!!') . "\n" .
+				"networks: " . join(', ', sort keys %$network_info) . "\n" .
+				"physical interfaces: " . join(', ', sort keys %$interface_info)
+			);
+			return;
+		}
 	}
 	
 	notify($ERRORS{'DEBUG'}, 0, ref($self) . " provisioning module initialized");
@@ -1628,6 +1657,18 @@ sub generate_domain_xml {
 	my $eth0_source_device = $self->data->get_vmhost_profile_virtualswitch0();
 	my $eth1_source_device = $self->data->get_vmhost_profile_virtualswitch1();
 	
+	my $network_info = $self->get_node_network_info();
+	
+	my $eth0_interface_type = 'bridge';
+	if (defined($network_info->{$eth0_source_device})) {
+		$eth0_interface_type = 'network';
+	}
+	
+	my $eth1_interface_type = 'bridge';
+	if (defined($network_info->{$eth1_source_device})) {
+		$eth1_interface_type = 'network';
+	}
+
 	my $eth0_mac_address;
 	my $is_eth0_mac_address_random = $self->data->get_vmhost_profile_eth0generated(0);
 	if ($is_eth0_mac_address_random) {
@@ -1661,7 +1702,7 @@ sub generate_domain_xml {
 	#    Most operating systems expect the hardware clock to be kept in UTC, and this is the default.
 	#    Windows, however, expects it to be in so called 'localtime'."
 	my $clock_offset = ($image_os_type =~ /windows/) ? 'localtime' : 'utc';
-
+	
 	my $xml_hashref = {
 		'type' => $domain_type,
 		'description' => [$image_display_name],
@@ -1722,12 +1763,12 @@ sub generate_domain_xml {
 				],
 				'interface' => [
 					{
-						'type' => 'bridge',
+						'type' => $eth0_interface_type,
 						'mac' => {
 							'address' => $eth0_mac_address,
 						},
 						'source' => {
-							'bridge' => $eth0_source_device,
+							$eth0_interface_type => $eth0_source_device,
 						},
 						'target' => {
 							'dev' => 'vnet0',
@@ -1737,12 +1778,12 @@ sub generate_domain_xml {
 						},
 					},
 					{
-						'type' => 'bridge',	
+						'type' => $eth1_interface_type,	
 						'mac' => {
 							'address' => $eth1_mac_address,
 						},
 						'source' => {
-							'bridge' => $eth1_source_device,
+							$eth1_interface_type => $eth1_source_device,
 						},
 						'target' => {
 							'dev' => 'vnet1',
@@ -1768,6 +1809,7 @@ sub generate_domain_xml {
 		]
 	};
 	
+	notify($ERRORS{'DEBUG'}, 0, "generated domain XML:\n" . format_data($xml_hashref));
 	return hash_to_xml_string($xml_hashref, 'domain');
 }
 
@@ -2431,6 +2473,225 @@ sub get_repository_image_semaphore {
 	else {
 		notify($ERRORS{'WARNING'}, 0, "unable to obtain semaphore for repository image: $image_name");
 		return;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_node_network_info
+
+ Parameters  : none
+ Returns     : hash reference
+ Description : Retrieves information about all of the networks defined on the
+               node and constructs a hash containing the information. Example:
+               {
+                 "private" => {
+                   "autostart" => "yes",
+                   "persistent" => "yes",
+                   "state" => "active"
+                 },
+                 "public" => {
+                   "autostart" => "yes",
+                   "persistent" => "yes",
+                   "state" => "active"
+                 }
+               }
+
+=cut
+
+sub get_node_network_info {
+	my $self = shift;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $node_name = $self->data->get_vmhost_short_name();
+	
+	my $command = "virsh net-list --all";
+	my ($exit_status, $output) = $self->vmhost_os->execute($command);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute virsh command to list networks on $node_name");
+		return;
+	}
+	elsif ($exit_status ne '0') {
+		notify($ERRORS{'WARNING'}, 0, "failed to list networks on $node_name\ncommand: $command\nexit status: $exit_status\noutput:\n" . join("\n", @$output));
+		return;
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "listed networks on $node_name\ncommand: $command\noutput:\n" . join("\n", @$output));
+	}
+
+	# root@bn17-231:/pools# virsh net-list --all
+	#  Name                 State      Autostart     Persistent
+	# ----------------------------------------------------------
+	#  private              active     yes           yes
+	#  public               active     yes           yes
+
+
+	my $info = {};
+	for my $line (@$output) {
+		my ($name, $state, $autostart, $persistent) = $line =~ /^\s*([\w_]+)\s+(\w+)\s+(\w+)\s+(\w+)$/g;
+		next if (!defined($name) || $name =~ /Name/);
+		
+		$info->{$name}{state} = $state;
+		$info->{$name}{autostart} = $autostart;
+		$info->{$name}{persistent} = $persistent;
+	}
+	
+	notify($ERRORS{'DEBUG'}, 0, "retrieved network info from $node_name:\n" . format_data($info));
+	return $info;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_node_network_xml_string
+
+ Parameters  : $network_name
+ Returns     : string
+ Description : Retrieves the XML definition of a network defined on the node.
+
+=cut
+
+sub get_node_network_xml_string {
+	my $self = shift;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $network_name = shift;
+	if (!defined($network_name)) {
+		notify($ERRORS{'WARNING'}, 0, "network name argument was not specified");
+		return;
+	}
+	
+	my $node_name = $self->data->get_vmhost_short_name();
+	
+	my $command = "virsh net-dumpxml --network \"$network_name\"";
+	my ($exit_status, $output) = $self->vmhost_os->execute($command);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute virsh command to retrieve XML definition for '$network_name' network on $node_name");
+		return;
+	}
+	elsif ($exit_status ne '0') {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve XML definition for '$network_name' network on $node_name\ncommand: $command\nexit status: $exit_status\noutput:\n" . join("\n", @$output));
+		return;
+	}
+	else {
+		my $xml_string = join("\n", @$output);
+		notify($ERRORS{'DEBUG'}, 0, "retrieved XML definition for '$network_name' network on $node_name\n$xml_string");
+		return $xml_string;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_node_interface_info
+
+ Parameters  : none
+ Returns     : hash reference
+ Description : Retrieves information about all of the physical host interfaces
+               on the node and constructs a hash containing the information.
+               Example:
+               {
+                 "br0" => {
+                   "mac_address" => "00:50:56:23:00:1c",
+                   "state" => "active"
+                 },
+                 "br1" => {
+                   "mac_address" => "00:50:56:23:00:1d",
+                   "state" => "active"
+                 },
+                 "lo" => {
+                   "mac_address" => "00:00:00:00:00:00",
+                   "state" => "active"
+                 }
+               }
+
+=cut
+
+sub get_node_interface_info {
+	my $self = shift;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $node_name = $self->data->get_vmhost_short_name();
+	
+	my $command = "virsh iface-list --all";
+	my ($exit_status, $output) = $self->vmhost_os->execute($command);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute virsh command to list physical interfaces on $node_name");
+		return;
+	}
+	elsif ($exit_status ne '0') {
+		notify($ERRORS{'WARNING'}, 0, "failed to list physical interfaces on $node_name\ncommand: $command\nexit status: $exit_status\noutput:\n" . join("\n", @$output));
+		return;
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "listed physical interfaces on $node_name\ncommand: $command\noutput:\n" . join("\n", @$output));
+	}
+
+	# root@bn17-231:/pools# virsh iface-list --all
+	#  Name                 State      MAC Address
+	# ---------------------------------------------------
+	#  br0                  active     00:50:56:23:00:1c
+	#  br1                  active     00:50:56:23:00:1d
+
+	my $info = {};
+	for my $line (@$output) {
+		my ($name, $state, $mac_address) = $line =~ /^\s*(\w+)\s+(\w+)\s+([\w\:]+)$/g;
+		next if (!defined($name) || $name =~ /^(Name|lo)/);
+		
+		$info->{$name}{state} = $state;
+		$info->{$name}{mac_address} = $mac_address;
+	}
+	
+	notify($ERRORS{'DEBUG'}, 0, "retrieved physical interface info from $node_name:\n" . format_data($info));
+	return $info;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_node_interface_xml_string
+
+ Parameters  : $interface_name
+ Returns     : string
+ Description : Retrieves the XML definition of a network defined on the node.
+
+=cut
+
+sub get_node_interface_xml_string {
+	my $self = shift;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $interface_name = shift;
+	if (!defined($interface_name)) {
+		notify($ERRORS{'WARNING'}, 0, "interface name argument was not specified");
+		return;
+	}
+	
+	my $node_name = $self->data->get_vmhost_short_name();
+	
+	my $command = "virsh iface-dumpxml --interface \"$interface_name\"";
+	my ($exit_status, $output) = $self->vmhost_os->execute($command);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute virsh command to retrieve XML definition for '$interface_name' interface on $node_name");
+		return;
+	}
+	elsif ($exit_status ne '0') {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve XML definition for '$interface_name' interface on $node_name\ncommand: $command\nexit status: $exit_status\noutput:\n" . join("\n", @$output));
+		return;
+	}
+	else {
+		my $xml_string = join("\n", @$output);
+		notify($ERRORS{'DEBUG'}, 0, "retrieved XML definition for '$interface_name' interface on $node_name\n$xml_string");
+		return $xml_string;
 	}
 }
 
