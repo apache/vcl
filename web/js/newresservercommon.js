@@ -86,6 +86,8 @@ function int2bstr(a) {
 }
 
 function populateProfileStore(cont) {
+	if(typeof(offsetreloading) != 'undefined' && offsetreloading == 1)
+		return;
 	RPCwrapper({continuation: cont}, populateProfileStoreCB, 1);
 }
 

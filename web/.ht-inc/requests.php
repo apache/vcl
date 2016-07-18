@@ -51,6 +51,7 @@ function viewRequests() {
 			print "<script type=\"text/javascript\">\n";
 			print "var now = new Date();\n";
 			print "var offset = now.getTimezoneOffset();\n";
+			print "var offsetreloading = 1;\n";
 			print "setTimeout(function() {\n";
 			print "   window.location = '" . BASEURL . SCRIPT . "?mode=$mode&offset=' + offset;\n";
 			print "}, 1);\n";
