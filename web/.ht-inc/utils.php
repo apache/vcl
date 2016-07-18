@@ -13058,7 +13058,7 @@ function getDojoHTML($refresh) {
 	$rt = '';
 	$jslocale = strtolower(str_replace('_', '-', $locale));
 	$rt .= "<script type=\"text/javascript\">\n";
-	if(array_key_exists('tzoffset', $_SESSION['persistdata']))
+	if(session_status() === PHP_SESSION_ACTIVE && array_key_exists('tzoffset', $_SESSION['persistdata']))
 		$rt .= "   var tzoffset = {$_SESSION['persistdata']['tzoffset']};\n";
 	else
 		$rt .= "   var tzoffset = 'unset';\n";
