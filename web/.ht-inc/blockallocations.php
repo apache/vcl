@@ -521,7 +521,7 @@ function blockAllocationForm() {
 
 	print "<div dojoType=\"dijit.Tooltip\" connectId=\"grouphelp\">\n";
 	print "<div style=\"width: 440px;\">\n";
-	print i("User in this user group will be able to make reservations for the computers set aside for this block allocation.  If you do not see an applicable user group listed, please select \"<font color=\"blue\">(group not listed)</font>\" and describe the group you need in the <strong>Additional Comments</strong> section at the bottom of the page. If this is for a class, make sure to list the course and section number.");
+	print i("Users in this user group will be able to make reservations for the computers set aside for this block allocation.  If you do not see an applicable user group listed, please select \"<font color=\"blue\">(group not listed)</font>\" and describe the group you need in the <strong>Additional Comments</strong> section at the bottom of the page. If this is for a class, make sure to list the course and section number.");
 	print "</div></div>\n";
 
 	print "<div dojoType=\"dijit.Tooltip\" connectId=\"repeattypehelp\">\n";
@@ -2857,7 +2857,7 @@ function viewBlockStatus() {
 	print "<H2>" . i("Block Allocation") . "</H2>\n";
 	$data = getBlockAllocationStatus($blockid);
 	if(is_null($data)) {
-		print "The selected Block Allocation no longer exists.";
+		print i("The selected Block Allocation no longer exists.");
 		return;
 	}
 	$startunix = datetimeToUnix($data['start']);

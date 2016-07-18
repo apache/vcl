@@ -2386,7 +2386,7 @@ msgid "will be loaded for the Block Allocation.\n"
 msgstr "ブロック割り当てのためにロードされます。\n"
 
 #: comment
-msgid "User in this user group will be able to make reservations<br>\n"
+msgid "Users in this user group will be able to make reservations<br>\n"
 msgstr "このユーザーグループのユーザーが予約を行うことができるようになります<br>\n"
 
 #: comment

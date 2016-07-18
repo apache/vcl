@@ -1527,8 +1527,8 @@ function newReservationHTML() {
 	else
 		$h .= "query=\"{basic: 1, checkout: 1}\" ";
 	$h .= "highlightMatch=\"all\" autoComplete=\"false\" ";
-	$h .= "invalidMessage=\"Please select a valid environment\" ";
-	$h .= "onChange=\"selectEnvironment();\" tabIndex=1></select>\n";
+	$h .= "invalidMessage=\"" . i("Please select a valid environment");
+	$h .= "\" onChange=\"selectEnvironment();\" tabIndex=1></select>\n";
 	$h .= "</span><br><br>\n";
 	$imagenotes = getImageNotes($imageid);
 	$desc = '';
@@ -2607,9 +2607,9 @@ function newReservationConfigHTML() {
 	$h	.= "<span id=\"configvalstring\" class=\"hidden\"><input type=\"text\" ";
 	$h .= "id=\"configvaluestring\" style=\"width: 160px\" ";
 	$h .= "dojoType=\"dijit.form.ValidationTextBox\" ";
-	$h .= "invalidMessage=\"Value can only contain letters, numbers, "; # TODO determine constraints, if any
-	$h .= "spaces, dashes(-), parenthesis, <br>slashes(/), and periods(.) and can be from 3 to 255 characters long\" ";
-	$h .= "regExp=\"^([-a-zA-Z0-9\. \(\)/]){3,255}$\" onChange=\"saveSelectedConfigVar();\">";
+	$h .= "invalidMessage=\"";
+	$h .= i("Value can only contain letters, numbers, spaces, dashes(-), parenthesis, <br>slashes(/), and periods(.) and can be from 3 to 255 characters long"); # TODO determine constraints, if any
+	$h .= "\" regExp=\"^([-a-zA-Z0-9\. \(\)/]){3,255}$\" onChange=\"saveSelectedConfigVar();\">";
 	$h .= "</span>\n";
 	# text
 	$h .= "<span id=\"configvaltext\" class=\"hidden\">";

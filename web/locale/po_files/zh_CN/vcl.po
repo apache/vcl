@@ -141,9 +141,6 @@ msgstr "'预测加载时间： &lt; "
 msgid " minutes';"
 msgstr "分';"
 
-msgid "minutes"
-msgstr ""
-
 #: requests.php:275
 #, php-format
 msgid "'Estimated load time: &lt; %2.0f minutes';"
@@ -401,8 +398,8 @@ msgid "&nbsp;min remaining\n"
 msgstr "分\n"
 
 #: requests.php:761 requests.php:774
-msgid "      <INPUT type=submit value=Delete>\n"
-msgstr "      <INPUT type=submit value=\"删除\">\n"
+msgid "Delete"
+msgstr "删除"
 
 #: requests.php:785
 msgid "      <INPUT type=submit value=Edit>\n"
@@ -646,21 +643,13 @@ msgstr "这个预约已经超过了。所以，"
 msgid "you are not allowed to extend your reservation any further.<br><br>"
 msgstr "您不可再延长预约<br><br>"
 
-#: requests.php:1487 requests.php:1498
-msgid "15 minutes"
-msgstr "15分"
-
 #: requests.php:1489 requests.php:1500 requests.php:2133
-msgid "30 minutes"
-msgstr "30分"
+msgid "minutes"
+msgstr "分"
 
 #: requests.php:1491 requests.php:1504 requests.php:2135 utils.php:6792
 #: utils.php:6839
-msgid "1 hour"
-msgstr "1小时"
-
-#: requests.php:1493 requests.php:1506 requests.php:2137 utils.php:6841
-msgid " hours"
+msgid "hour"
 msgstr "小时"
 
 #: comment
@@ -775,7 +764,7 @@ msgid "Duration"
 msgstr "继续时间："
 
 #: requests.php:2139
-msgid " days"
+msgid "days"
 msgstr "日"
 
 #: requests.php:2145
@@ -1339,8 +1328,8 @@ msgid "          <TH align=right>Confirm Password:</TH>\n"
 msgstr "          <TH align=right>确认用密码：</TH>\n"
 
 #: userpreferences.php:176 userpreferences.php:258
-msgid "      <INPUT type=submit value=\"Submit Changes\">\n"
-msgstr "      <INPUT type=submit value=\"变更\">\n"
+msgid "Submit Changes"
+msgstr "变更"
 
 #: userpreferences.php:184
 msgid "      <legend>RDP</legend>\n"
@@ -2305,7 +2294,7 @@ msgid "will be loaded for the Block Allocation.\n"
 msgstr ""
 
 #: comment
-msgid "User in this user group will be able to make reservations<br>\n"
+msgid "Users in this user group will be able to make reservations<br>\n"
 msgstr ""
 
 #: comment
@@ -2512,3 +2501,86 @@ msgstr ""
 msgid "Click an item to view its current status."
 msgstr ""
 
+#: utils.php:12674
+msgid "VCL gos"
+msgstr ""
+
+#: oneclick.php:125 oneclick.php:178 oneclick.php:369
+msgid "Auto Login"
+msgstr ""
+
+#: oneclick.php:73
+msgid "Choose a name for your new VCL go configuration"
+msgstr ""
+
+#: oneclick.php:132
+msgid "Create VCL go Configuration"
+msgstr ""
+
+#: oneclick.php:119 oneclick.php:166 oneclick.php:171 oneclick.php:175 oneclick.php:341
+msgid "Duration:"
+msgstr ""
+
+#: oneclick.php:189
+msgid "Edit VCL go"
+msgstr ""
+
+#: oneclick.php:228
+msgid "Invalid image submitted."
+msgstr ""
+
+#: oneclick.php:141
+msgid "List of VCL go Configurations"
+msgstr ""
+
+#: oneclick.php:78 oneclick.php:234 oneclick.php:323 oneclick.php:404
+msgid "Name can only contain letters, numbers, spaces, dashes(-), parenthesis, <br>and periods(.) and can be from 3 to 70 characters long"
+msgstr ""
+
+#: oneclick.php:64
+msgid "New VCL go Configuration"
+msgstr ""
+
+#: oneclick.php:86
+msgid "Please select the resource you want to use from the list:"
+msgstr ""
+
+#: oneclick.php:162 oneclick.php:328
+msgid "Resource:"
+msgstr ""
+
+#: oneclick.php:47
+msgid "VCL go Configurator"
+msgstr ""
+
+#: oneclick.php:314
+msgid "VCL go Editor"
+msgstr ""
+
+#: oneclick.php:155 oneclick.php:320
+msgid "VCL go Name:"
+msgstr ""
+
+#: oneclick.php:310
+msgid "VCL go not found"
+msgstr ""
+
+#: oneclick.php:68
+msgid "VCL go successfully created"
+msgstr ""
+
+#: oneclick.php:143
+msgid "VCL go successfully updated"
+msgstr ""
+
+#: oneclick.php:147
+msgid "VCL go successfully deleted"
+msgstr ""
+
+#: oneclick.php:49
+msgid "VCL gos are for use with the %sVCL iOS app%s. VCL gos can be managed here but can only be used from an iOS device."
+msgstr ""
+
+#: oneclick.php:359
+msgid "day"
+msgstr ""
