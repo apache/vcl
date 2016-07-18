@@ -102,6 +102,7 @@ our $CAPTURE_DELETE_FILE_PATHS = [
 	'/root/.ssh/id_rsa.pub',
 	'/etc/sysconfig/iptables*old*',
 	'/etc/sysconfig/iptables_pre*',
+	'/etc/sysconfig/network-scripts/ifcfg-*.20*-*',
 	'/etc/udev/rules.d/70-persistent-net.rules',
 	'/var/log/*.0',
 	'/var/log/*.gz',
@@ -406,8 +407,12 @@ sub pre_capture {
 	}
 	
 	# Configure the private and public interfaces to use DHCP
-	if (!$self->enable_dhcp()) {
-		notify($ERRORS{'WARNING'}, 0, "failed to enable DHCP on the public and private interfaces");
+	if (!$self->enable_dhcp($self->get_private_interface_name())) {
+		notify($ERRORS{'WARNING'}, 0, "failed to enable DHCP on the private interface");
+		return;
+	}
+	if (!$self->enable_dhcp($self->get_public_interface_name())) {
+		notify($ERRORS{'WARNING'}, 0, "failed to enable DHCP on the public interface");
 		return;
 	}
 	
@@ -3287,55 +3292,218 @@ sub enable_dhcp {
 	
 	my $computer_node_name = $self->data->get_computer_node_name();
 	
-	my $interface_name_argument = shift;
-	my @interface_names;
-	if (!$interface_name_argument) {
-		push(@interface_names, $self->get_private_interface_name());
-		push(@interface_names, $self->get_public_interface_name());
-	}
-	elsif ($interface_name_argument =~ /private/i) {
-		push(@interface_names, $self->get_private_interface_name());
-	}
-	elsif ($interface_name_argument =~ /public/i) {
-		push(@interface_names, $self->get_public_interface_name());
-	}
-	else {
-		push(@interface_names, $interface_name_argument);
+	my $interface_name = shift;
+	if (!$interface_name) {
+		notify($ERRORS{'WARNING'}, 0, "interface name argument was not supplied");
+		return;
 	}
 	
-	for my $interface_name (@interface_names) {
-		my $ifcfg_file_path = "/etc/sysconfig/network-scripts/ifcfg-$interface_name";
-		notify($ERRORS{'DEBUG'}, 0, "attempting to enable DHCP on interface: $interface_name\nifcfg file path: $ifcfg_file_path");
-		
-		my $ifcfg_file_contents = <<EOF;
-DEVICE=$interface_name
-BOOTPROTO=dhcp
-ONBOOT=yes
-EOF
-		
-		# Remove any Windows carriage returns
-		$ifcfg_file_contents =~ s/\r//g;
-		
-		# Remove the last newline
-		$ifcfg_file_contents =~ s/\n$//s;
-		
-		# Write the contents to the ifcfg file
-		if ($self->create_text_file($ifcfg_file_path, $ifcfg_file_contents)) {
-			notify($ERRORS{'DEBUG'}, 0, "updated $ifcfg_file_path:\n" . string_to_ascii($ifcfg_file_contents));
+	my $calling_subroutine = get_calling_subroutine();
+	
+	my $ifcfg_directory_path = "/etc/sysconfig/network-scripts";
+	my $ifcfg_file_name = "ifcfg-$interface_name";
+	my $ifcfg_file_path = "$ifcfg_directory_path/$ifcfg_file_name";
+	
+	if ($self->file_exists($ifcfg_file_path)) {
+		my $timestamp = POSIX::strftime("%Y-%m-%d_%H-%M-%S\n", localtime);
+		my $ifcfg_backup_file_path = "$ifcfg_directory_path/$ifcfg_file_name.$timestamp";
+		$self->copy_file($ifcfg_file_path, $ifcfg_backup_file_path);
+	}
+	
+	my $ifcfg_file_info = $self->get_ifcfg_file_info($interface_name) || {};
+	
+	if ($calling_subroutine !~ /enable_dhcp/) {
+		# Check if interface is configured as a bridge
+		my @bridge_interface_names;
+		if ($ifcfg_file_info->{BRIDGE}) {
+			push @bridge_interface_names, $ifcfg_file_info->{BRIDGE};
+		}
+		elsif ($ifcfg_file_info->{TYPE} && $ifcfg_file_info->{TYPE} =~ /Bridge/i) {
+			# For ifcfg-br* files, the name of the physical interface usually isn't listed in the file
+			# Get the network bridge info
+			my $network_bridge_info = $self->get_network_bridge_info();
+			if (defined($network_bridge_info) && defined($network_bridge_info->{$interface_name})) {
+				@bridge_interface_names = @{$network_bridge_info->{$interface_name}{interfaces}};
+			}
+		}
+		for my $bridge_interface_name (@bridge_interface_names) {
+			# Make sure the bridge isn't the same name as the interface being checked to avoid recurive loop
+			next if ($bridge_interface_name eq $interface_name);
+			
+			notify($ERRORS{'DEBUG'}, 0, "$interface_name is bridged, attempting to enable DHCP on bridge interface: $bridge_interface_name");
+			$self->enable_dhcp($bridge_interface_name) || return;
+		}
+	}
+	
+	# Add/overwrite required parameters to file contents
+	my $set_parameters = {
+		'BOOTPROTO' => 'dhcp',
+		'DEVICE' => $interface_name,
+		'NAME' => $interface_name,
+		'ONBOOT' => 'yes',
+	};
+	for my $parameter (keys %$set_parameters) {
+		my $value = $set_parameters->{$parameter};
+		$ifcfg_file_info->{$parameter} = $value;
+	}
+	
+	# Remove parameters which are specific to a particular network or computer
+	my @remove_parameter_patterns = (
+		'ADDR',
+		'BROADCAST',
+		'DNS',
+		'GATEWAY',
+		'HOSTNAME',
+		'METRIC',
+		'NETMASK',
+		'NETWORK',
+		'PREFIX',
+		'UUID',
+	);
+	for my $remove_pattern (@remove_parameter_patterns) {
+		my @matching_properties = grep { $_ =~ /.*$remove_pattern.*/ } sort keys %$ifcfg_file_info;
+		if (@matching_properties) {
+			notify($ERRORS{'DEBUG'}, 0, "removing parameters from ifcfg-$interface_name file matching pattern '$remove_pattern': " . join(', ', @matching_properties));
+			map { delete $ifcfg_file_info->{$_} } @matching_properties;
+		}
+	}
+	
+	# Convert the parameter/value hash to a string
+	my $updated_ifcfg_contents;
+	for my $parameter (sort keys %$ifcfg_file_info) {
+		my $value = $ifcfg_file_info->{$parameter};
+		$updated_ifcfg_contents .= "$parameter=$value\n";
+	}
+	
+	# Create the text file
+	notify($ERRORS{'DEBUG'}, 0, "updated ifcfg-$interface_name contents:\n$updated_ifcfg_contents");
+	return $self->create_text_file($ifcfg_file_path, $updated_ifcfg_contents);
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+=head2 get_ifcfg_file_info
+
+ Parameters  : $interface_name
+ Returns     : hash reference
+ Description : Parses the file:
+               /etc/sysconfig/network-scripts/ifcfg-<interface name>
+               
+               A hash is constructed such as:
+               {
+                 "BOOTPROTO" => "dhcp",
+                 "DEVICE" => "eth0",
+                 "ONBOOT" => "yes"
+               }
+               
+               The hash key names are guaranteed to be uppercase.
+
+=cut
+
+sub get_ifcfg_file_info {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $interface_name = shift;
+	if (!$interface_name) {
+		notify($ERRORS{'WARNING'}, 0, "interface name argument was not supplied");
+		return;
+	}
+	
+	my $ifcfg_file_path = "/etc/sysconfig/network-scripts/ifcfg-$interface_name";
+	
+	my $info = {};
+	my @lines = $self->get_file_contents($ifcfg_file_path);
+	for my $line (@lines) {
+		next if $line =~ /^\s*#/;
+		my ($property, $value) = $line =~ /^\s*([^=]+)\s*=\s*(.*)\s*$/g;
+		if (defined($property)) {
+			$info->{uc($property)} = $value;
 		}
 		else {
-			notify($ERRORS{'WARNING'}, 0, "failed to update $ifcfg_file_path");
+			notify($ERRORS{'WARNING'}, 0, "failed to parse line from $ifcfg_file_path: '$line'");
+		}
+	}
+	
+	notify($ERRORS{'DEBUG'}, 0, "parsed $ifcfg_file_path:\n" . format_data($info));
+	return $info;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+=head2 get_network_bridge_info
+
+ Parameters  : none
+ Returns     : hash reference
+ Description : Executes 'brctl show' and parses the output. A hash is
+               constructed:
+               {
+                 "br1" => {
+                   "bridge_id" => "",
+                   "interfaces" => [
+                     "eth1",
+                     "eth2"
+                   ],
+                   "stp_enabled" => ""
+                 }
+               }
+
+=cut
+
+sub get_network_bridge_info {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $computer_name = $self->data->get_computer_short_name();
+	
+	# It's possible that a bridge will have multiple interfaces:
+	# [root@bn19-183 network-scripts]# brctl show
+	# bridge name     bridge id               STP enabled     interfaces
+	# br1             8000.000c29494c97       no              eth1
+	#                                                         eth2
+	
+	my $command = "brctl show";
+	my ($exit_status, $output) = $self->execute($command);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command on $computer_name: $command");
+		return;
+	}
+	elsif ($exit_status ne '0') {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve network bridge configuration from $computer_name, exit status: $exit_status, command:\n$command\noutput:\n" . join("\n", @$output));
+		return 0;
+	}
+	
+	my $network_bridge_info = {};
+	my $current_bridge_name;
+	for my $line (@$output) {
+		my ($bridge_name, $bridge_id, $stp_enabled, $interface_name) = $line =~ /^([^\s]*)\s+([^\s]*)\s+([^\s]*)\s+([^\s]+)\s*$/g;
+		if (!defined($interface_name)) {
+			notify($ERRORS{'DEBUG'}, 0, "ignoring line, interface name was not found: '$line'");
+			next;
+		}
+		
+		if ($bridge_name) {
+			$current_bridge_name = $bridge_name;
+		}
+		elsif (!$current_bridge_name) {
+			notify($ERRORS{'WARNING'}, 0, "failed to retrieve network bridge configuration from $computer_name, bridge name unknown\n" .
+				"line: '$line'\n" .
+				"output:\n" . join("\n", @$output)
+			);
 			return;
 		}
 		
-		# Remove any leftover ifcfg-*.bak files
-		$self->delete_file('/etc/sysconfig/network-scripts/ifcfg-eth*.bak');
-		
-		# Remove dhclient lease files
-		$self->delete_file('/var/lib/dhclient/*.leases');
+		$network_bridge_info->{$current_bridge_name}{bridge_id} = $bridge_id if defined($bridge_id);
+		$network_bridge_info->{$current_bridge_name}{stp_enabled} = $bridge_id if defined($stp_enabled);
+		push @{$network_bridge_info->{$current_bridge_name}{interfaces}}, $interface_name if defined($interface_name);
 	}
 	
-	return 1;
+	notify($ERRORS{'OK'}, 0, "retrieved network bridge configuration from $computer_name:" . format_data($network_bridge_info));
+	return $network_bridge_info;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -6660,6 +6828,9 @@ sub mount_nfs_share {
 		#    dmesg | tail  or so
 		if (!$self->command_exists('mount.nfs')) {
 			$self->install_package('nfs-utils');
+			
+			# On Ubuntu:
+			$self->install_package('nfs-common');
 		}
 		
 		# Check if the rpcbind service exists, if not, try to install it
