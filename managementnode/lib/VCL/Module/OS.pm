@@ -1718,6 +1718,7 @@ sub get_public_interface_name {
 	INTERFACE: for my $check_interface_name (sort keys %$network_configuration) {
 		
 		my $description = $network_configuration->{$check_interface_name}{description} || '';
+		my $master = $network_configuration->{$check_interface_name}{master};
 		
 		# Check if the interface should be ignored based on the name or description
 		if ($check_interface_name =~ /^(lo|sit\d)$/i) {
@@ -1730,6 +1731,10 @@ sub get_public_interface_name {
 		}
 		elsif ($description =~ /(loopback|afs|tunnel|pseudo|6to4|isatap)/i) {
 			notify($ERRORS{'DEBUG'}, 0, "interface '$check_interface_name' ignored because its description contains '$1'");
+			next INTERFACE;
+		}
+		elsif ($master) {
+			notify($ERRORS{'DEBUG'}, 0, "interface '$check_interface_name' ignored because it is a slave to $master");
 			next INTERFACE;
 		}
 		
@@ -1764,7 +1769,7 @@ sub get_public_interface_name {
 			}
 			else {
 				# Does not match private IP address
-				notify($ERRORS{'DEBUG'}, 0, "'$check_interface_name' could potententially be public interface, not assigned private IP address");
+				notify($ERRORS{'DEBUG'}, 0, "'$check_interface_name' could potentially be public interface, not assigned private IP address");
 				$public_interface_name = $check_interface_name;
 			}
 			

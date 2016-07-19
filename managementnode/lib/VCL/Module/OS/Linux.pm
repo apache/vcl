@@ -102,8 +102,8 @@ our $CAPTURE_DELETE_FILE_PATHS = [
 	'/root/.ssh/id_rsa.pub',
 	'/etc/sysconfig/iptables*old*',
 	'/etc/sysconfig/iptables_pre*',
-	'/etc/sysconfig/network-scripts/ifcfg-*.20*-*',
 	'/etc/udev/rules.d/70-persistent-net.rules',
+	'/tmp/ifcfg-*',
 	'/var/log/*.0',
 	'/var/log/*.gz',
 ];
@@ -389,6 +389,11 @@ sub pre_capture {
 	# Attempt to set the root password to a known value
 	# This is useful for troubleshooting image problems
 	$self->set_password("root", $WINDOWS_ROOT_PASSWORD);
+	
+	# Prevent the "Text Mode Setup Utility" - "Choose a Tool" screen from appearing
+	if ($self->service_exists('firstboot')) {
+		$self->disable_service('firstboot');
+	}
 	
 	if (!$self->configure_default_sshd()) {
 		return;
@@ -824,212 +829,113 @@ sub set_static_public_address {
 		return 0;
 	}
 	
-	my $computer_name           = $self->data->get_computer_short_name();
-	my $server_request_id       = $self->data->get_server_request_id();
-	my $server_request_fixed_ip = $self->data->get_server_request_fixed_ip();
-	
-	# Make sure public IP configuration is static or this is a server request
-	
+	my $computer_name = $self->data->get_computer_short_name();
 	my $ip_configuration = $self->data->get_management_node_public_ip_configuration();
-	if ($ip_configuration !~ /static/i) {
-		if (!$server_request_fixed_ip) {
-			notify($ERRORS{'WARNING'}, 0, "static public address can only be set if IP configuration is static or is a server request, current value: $ip_configuration \nserver_request_fixed_ip=$server_request_fixed_ip");
-			return;
-		}
+	my $public_ip_address = $self->data->get_computer_public_ip_address();
+	my $subnet_mask = $self->data->get_management_node_public_subnet_mask();
+	my $default_gateway = $self->data->get_management_node_public_default_gateway();
+	my @dns_servers = $self->data->get_management_node_public_dns_servers();
+	
+	# TODO: Get this out of here. OS modules shouldn't have to figure this out. $self->data should always return correct value.
+	my $server_request_fixed_ip = $self->data->get_server_request_fixed_ip();
+	if ($server_request_fixed_ip) {
+		$public_ip_address = $server_request_fixed_ip;
+		$subnet_mask = $self->data->get_server_request_netmask();
+		$default_gateway = $self->data->get_server_request_router();
+		@dns_servers = $self->data->get_server_request_dns_servers();
 	}
 	
-	# Get the IP configuration
-	my $interface_name  = $self->get_public_interface_name();
-	if (!$interface_name) {
-		notify($ERRORS{'WARNING'}, 0, "unable to set static public IP address, public interface name could not be determined");
+	# Make sure public IP configuration is static or this is a server request
+	if ($ip_configuration !~ /static/i && !$server_request_fixed_ip) {
+		notify($ERRORS{'WARNING'}, 0, "management node IP configuration is $ip_configuration, static public IP address can only be set if the IP configuration is static or if a fixed IP was requested");
+		return;
+	}
+	elsif (!$public_ip_address) {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve public IP address to assign to $computer_name");
+		return;
+	}
+	elsif (!$subnet_mask) {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve public subnet mask to assign to $computer_name");
+		return;
+	}
+	elsif (!$default_gateway) {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve default gateway to assign to $computer_name");
 		return;
 	}
 	
-	my $computer_public_ip_address  = $self->data->get_computer_public_ip_address()             || '<undefined>';
-	my $subnet_mask                 = $self->data->get_management_node_public_subnet_mask()     || '<undefined>';
-	my $default_gateway             = $self->data->get_management_node_public_default_gateway() || '<undefined>';
-	my @dns_servers                 = $self->data->get_management_node_public_dns_servers();
-	
-	if ($server_request_fixed_ip) {
-		$computer_public_ip_address  = $server_request_fixed_ip;
-		$subnet_mask                 = $self->data->get_server_request_netmask();
-		$default_gateway             = $self->data->get_server_request_router();
-		@dns_servers                 = $self->data->get_server_request_dns_servers();
+	# Determine the public interface name
+	my $public_interface_name  = $self->get_public_interface_name();
+	if (!$public_interface_name) {
+		notify($ERRORS{'WARNING'}, 0, "unable to set static public IP address, public interface name could not be determined");
+		return;
 	}
-	
-	# Assemble a string containing the static IP configuration
-	my $configuration_info_string = <<EOF;
-public IP address: $computer_public_ip_address
-public subnet mask: $subnet_mask
-public default gateway: $default_gateway
-public DNS server(s): @dns_servers
-EOF
-	
+
 	# Get the current public IP address being used by the computer
 	# Use cached data if available (0), ignore errors (1)
 	my $current_public_ip_address = $self->get_public_ip_address(0, 1);
-	if ($current_public_ip_address && $current_public_ip_address eq $computer_public_ip_address) {
+	if ($current_public_ip_address && $current_public_ip_address eq $public_ip_address) {
 		notify($ERRORS{'DEBUG'}, 0, "static public IP address does not need to be set, $computer_name is already configured to use $current_public_ip_address");
 	}
 	else {
 		if ($current_public_ip_address) {
-			notify($ERRORS{'DEBUG'}, 0, "static public IP address needs to be set, public IP address currently being used by $computer_name $current_public_ip_address does NOT match correct public IP address: $computer_public_ip_address");
+			notify($ERRORS{'DEBUG'}, 0, "static public IP address needs to be set, public IP address currently being used by $computer_name $current_public_ip_address does NOT match correct public IP address: $public_ip_address");
 		}
 		else {
 			notify($ERRORS{'DEBUG'}, 0, "static public IP address needs to be set, unable to determine public IP address currently in use on $computer_name");
 		}
 		
-		# Make sure required info was retrieved
-		if ("$computer_public_ip_address $subnet_mask $default_gateway" =~ /undefined/) {
-			notify($ERRORS{'WARNING'}, 0, "failed to retrieve required network configuration for $computer_name:\n$configuration_info_string");
-			return;
-		}
-		else {
-			notify($ERRORS{'OK'}, 0, "attempting to set static public IP address on $computer_name:\n$configuration_info_string");
-		}
 		
 		# Try to ping address to make sure it's available
 		# FIXME  -- need to add other tests for checking ip_address is or is not available.
-		if ((_pingnode($computer_public_ip_address))) {
-			notify($ERRORS{'WARNING'}, 0, "ip_address $computer_public_ip_address is pingable, can not assign to $computer_name ");
+		if (_pingnode($public_ip_address)) {
+			notify($ERRORS{'CRITICAL'}, 0, "ip_address $public_ip_address is pingable, can not assign to $computer_name ");
 			return;
 		}
 		
-		# Assemble the ifcfg file path
-		my $network_scripts_path = "/etc/sysconfig/network-scripts";
-		my $ifcfg_file_path      = "$network_scripts_path/ifcfg-$interface_name";
-		notify($ERRORS{'DEBUG'}, 0, "public interface ifcfg file path: $ifcfg_file_path");
+		notify($ERRORS{'DEBUG'}, 0, "attempting to set static public IP address on $computer_name:\n" .
+			"interface: $public_interface_name\n" .
+			"IP address: $public_ip_address\n" .
+			"subnet mask: $subnet_mask\n" .
+			"default gateway: $default_gateway"
+		);
 		
-		# Assemble the ifcfg file contents
-		my $ifcfg_contents = <<EOF;
-DEVICE=$interface_name
-BOOTPROTO=static
-IPADDR=$computer_public_ip_address
-NETMASK=$subnet_mask
-GATEWAY=$default_gateway
-STARTMODE=onboot
-ONBOOT=yes
-EOF
-	
-		# Echo the contents to the ifcfg file
-		my $echo_ifcfg_command = "echo \"$ifcfg_contents\" > $ifcfg_file_path";
-		my ($echo_ifcfg_exit_status, $echo_ifcfg_output) = $self->execute($echo_ifcfg_command);
-		if (!defined($echo_ifcfg_output)) {
-			notify($ERRORS{'WARNING'}, 0, "failed to run command to recreate $ifcfg_file_path on $computer_name: '$echo_ifcfg_command'");
+		my $ifcfg_parameters = {
+			bootproto => 'static',
+			ipaddr => $public_ip_address,
+			netmask => $subnet_mask,
+			gateway => $default_gateway,
+		};
+		
+		if (!$self->generate_ifcfg_file($public_interface_name, $ifcfg_parameters)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to set static public IP address on $computer_name, ifcfg file could not be created");
 			return;
-		}
-		elsif ($echo_ifcfg_exit_status || grep(/echo:/i, @$echo_ifcfg_output)) {
-			notify($ERRORS{'WARNING'}, 0, "failed to recreate $ifcfg_file_path on $computer_name, exit status: $echo_ifcfg_exit_status, command: '$echo_ifcfg_command', output:\n" . join("\n", @$echo_ifcfg_output));
-			return;
-		}
-		else {
-			notify($ERRORS{'DEBUG'}, 0, "recreated $ifcfg_file_path on $computer_name:\n$ifcfg_contents");
 		}
 		
 		# Restart the interface
-		if (!$self->restart_network_interface($interface_name)) {
-			notify($ERRORS{'WARNING'}, 0, "failed to restart public interface $interface_name on $computer_name");
+		if (!$self->restart_network_interface($public_interface_name)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to restart public interface $public_interface_name on $computer_name");
 			return;
 		}
-		
-		my $ext_sshd_config_file_path = '/etc/ssh/external_sshd_config';
-		if ($self->file_exists($ext_sshd_config_file_path)) {
-			# Remove existing ListenAddress lines from external_sshd_config
-			$self->remove_lines_from_file($ext_sshd_config_file_path, 'ListenAddress') || return;
-			
-			# Add ListenAddress line to the end of the file
-			$self->append_text_file($ext_sshd_config_file_path, "ListenAddress $computer_public_ip_address\n") || return;
-		}
 	}
 	
-	# Delete existing default route
-	my $route_del_command = "/sbin/route del default";
-	my ($route_del_exit_status, $route_del_output) = $self->execute($route_del_command);
-	if (!defined($route_del_output)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to run command to delete the existing default route on $computer_name: '$route_del_command'");
+	# Set default gateway
+	if (!$self->set_default_gateway($default_gateway, $public_interface_name)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to set static public IP address on $computer_name, default gateway could not be set");
 		return;
-	}
-	elsif (grep(/No such process/i, @$route_del_output)) {
-		notify($ERRORS{'DEBUG'}, 0, "existing default route is not set");
-	}
-	elsif ($route_del_exit_status) {
-		notify($ERRORS{'WARNING'}, 0, "failed to delete existing default route on $computer_name, exit status: $route_del_exit_status, command: '$route_del_command', output:\n" . join("\n", @$route_del_output));
-		return;
-	}
-	else {
-		notify($ERRORS{'DEBUG'}, 0, "deleted existing default route on $computer_name, output:\n" . join("\n", @$route_del_output));
-	}
-	
-	# Set default route
-	my $route_add_command = "/sbin/route add default gw $default_gateway metric 0 $interface_name 2>&1 && /sbin/route -n";
-	my ($route_add_exit_status, $route_add_output) = $self->execute($route_add_command);
-	if (!defined($route_add_output)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to run command to add default route to $default_gateway on public interface $interface_name on $computer_name: '$route_add_command'");
-		return;
-	}
-	elsif ($route_add_exit_status) {
-		notify($ERRORS{'WARNING'}, 0, "failed to add default route to $default_gateway on public interface $interface_name on $computer_name, exit status: $route_add_exit_status, command: '$route_add_command', output:\n" . join("\n", @$route_add_output));
-		return;
-	}
-	else {
-		notify($ERRORS{'DEBUG'}, 0, "added default route to $default_gateway on public interface $interface_name on $computer_name, output:\n" . format_data($route_add_output));
 	}
 	
 	# Update resolv.conf if DNS server address is configured for the management node
-	my $resolv_conf_path = "/etc/resolv.conf";
 	if (@dns_servers) {
-		# Get the resolve.conf contents
-		my $cat_resolve_command = "cat $resolv_conf_path";
-		my ($cat_resolve_exit_status, $cat_resolve_output) = $self->execute($cat_resolve_command);
-		if (!defined($cat_resolve_output)) {
-			notify($ERRORS{'WARNING'}, 0, "failed to run command to retrieve existing $resolv_conf_path contents from $computer_name");
+		if (!$self->update_resolv_conf(@dns_servers)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to set static public IP address on $computer_name, DNS servers could not be configured");
 			return;
 		}
-		elsif ($cat_resolve_exit_status || grep(/^(bash:|cat:)/, @$cat_resolve_output)) {
-			notify($ERRORS{'WARNING'}, 0, "failed to retrieve existing $resolv_conf_path contents from $computer_name, exit status: $cat_resolve_exit_status, command: '$cat_resolve_command', output:\n" . join("\n", @$cat_resolve_output));
-			return;
-		}
-		else {
-			notify($ERRORS{'DEBUG'}, 0, "retrieved existing $resolv_conf_path contents from $computer_name:\n" . join("\n", @$cat_resolve_output));
-		}
-		
-		# Remove lines containing nameserver
-		my @resolv_conf_lines = grep(!/nameserver/i, @$cat_resolve_output);
-		
-		# Add a nameserver line for each configured DNS server
-		for my $dns_server_address (@dns_servers) {
-			push @resolv_conf_lines, "nameserver $dns_server_address";
-		}
-		
-		# Remove newlines for consistency
-		map {chomp $_} @resolv_conf_lines;
-		
-		# Assemble the lines into an array
-		my $resolv_conf_contents = join("\n", @resolv_conf_lines);
-		
-		# Echo the updated contents to resolv.conf
-		my $echo_resolve_command = "echo \"$resolv_conf_contents\" > $resolv_conf_path 2>&1 && cat $resolv_conf_path";
-		my ($echo_resolve_exit_status, $echo_resolve_output) = $self->execute($echo_resolve_command);
-		if (!defined($echo_resolve_output)) {
-			notify($ERRORS{'WARNING'}, 0, "failed to run command to update $resolv_conf_path on $computer_name:\n$echo_resolve_command");
-			return;
-		}
-		elsif ($echo_resolve_exit_status) {
-			notify($ERRORS{'WARNING'}, 0, "failed to update $resolv_conf_path on $computer_name, exit status: $echo_resolve_exit_status\ncommand:\n$echo_resolve_command\noutput:\n" . join("\n", @$echo_resolve_output));
-			return;
-		}
-		else {
-			notify($ERRORS{'DEBUG'}, 0, "updated $resolv_conf_path on $computer_name:\n" . join("\n", @$echo_resolve_output));
-		}
-	}
-	else {
-		notify($ERRORS{'DEBUG'}, 0, "$resolv_conf_path not updated  on $computer_name because DNS server address is not configured for the management node");
 	}
 	
 	# Delete cached network configuration info - forces next call to get_network_configuration to retrieve changed network info from computer
 	delete $self->{network_configuration};
 	
-	notify($ERRORS{'OK'}, 0, "successfully set static public IP address on $computer_name");
+	notify($ERRORS{'OK'}, 0, "set static public IP address on $computer_name");
 	return 1;
 }
 
@@ -1260,10 +1166,13 @@ sub set_default_gateway {
 		notify($ERRORS{'WARNING'}, 0, "failed to set default gateway on $computer_name to $default_gateway, interface: $interface_name, exit status: $exit_status, command:\n$command\noutput:\n" . join("\n", @$output));
 		return 0;
 	}
-	else {
-		notify($ERRORS{'OK'}, 0, "set default gateway on $computer_name to $default_gateway, interface: $interface_name");
-	}
 	
+	# Create a route file so default route persists across reboots
+	my $route_file_path = "/etc/sysconfig/network-scripts/route-$interface_name";
+	my $route_file_contents = "default via $default_gateway dev $interface_name";
+	$self->create_text_file($route_file_path, $route_file_contents);
+	
+	notify($ERRORS{'OK'}, 0, "set default gateway on $computer_name to $default_gateway, interface: $interface_name");
 	return 1;
 }
 
@@ -2616,12 +2525,39 @@ EOF
  Description : Retrieves the network configuration on the Linux computer and
                constructs a hash. The hash reference returned is formatted as
                follows:
-               |--%{eth0}
-                  |--%{eth0}{default_gateway} '10.10.4.1'
-                  |--%{eth0}{ip_address}
-                     |--{eth0}{ip_address}{10.10.4.3} = '255.255.240.0'
-                  |--{eth0}{name} = 'eth0'
-                  |--{eth0}{physical_address} = '00:50:56:08:00:f8'
+               {
+                 "eth0" => {
+                   "broadcast_address" => "10.25.15.255",
+                   "ip_address" => {
+                     "10.25.10.194" => "255.255.240.0"
+                   },
+                   "name" => "eth0",
+                   "physical_address" => "00:50:56:23:00:bc"
+                 },
+                 "eth1" => {
+                   "name" => "eth1",
+                   "physical_address" => "00:50:56:23:00:bd"
+                 },
+                 "lo" => {
+                   "name" => "lo"
+                 },
+                 "xbr1" => {
+                   "bridge" => {
+                     "bridge_id" => "8000.0050562300bd",
+                     "interfaces" => [
+                       "eth1"
+                     ],
+                     "stp_enabled" => "8000.0050562300bd"
+                   },
+                   "broadcast_address" => "192.168.53.255",
+                   "default_gateway" => "192.168.53.254",
+                   "ip_address" => {
+                     "152.46.18.135" => "255.255.248.0"
+                   },
+                   "name" => "xbr1",
+                   "physical_address" => "00:50:56:23:00:bd"
+                 }
+               }
 
 =cut
 
@@ -2687,8 +2623,8 @@ sub get_network_configuration {
 			$network_configuration->{$interface_name}{ip_address}{$1} = $2;
 			$network_configuration->{$interface_name}{broadcast_address} = $3;
 		}
-
 	}
+	
 	
 	# Run route
 	my $route_command = "/sbin/route -n";
@@ -2714,6 +2650,34 @@ sub get_network_configuration {
 		else {
 			$network_configuration->{$interface_name}{default_gateway} = $default_gateway;
 			notify($ERRORS{'DEBUG'}, 0, "found default route configured for '$interface_name' interface: $default_gateway");
+		}
+	}
+	
+	# Check if bridge is configured
+	my $network_bridge_info = $self->get_network_bridge_info();
+	for my $bridge_name (keys %$network_bridge_info) {
+		# Add bridge info under 'bridge' key for the bridge
+		if (defined($network_configuration->{$bridge_name})) {
+			$network_configuration->{$bridge_name}{bridge} = $network_bridge_info->{$bridge_name};
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "'$bridge_name' bridge was not found in 'ifconfig' output:" .
+				"ifconfig output:\n" . join("\n", @$ifconfig_output) . "\n" .
+				"network bridge info:\n" . format_data($network_bridge_info)
+			);
+		}
+		
+		# Add name of bridge to 'master' key for the physical interface
+		for my $bridge_interface_name (@{$network_bridge_info->{$bridge_name}{interfaces}}) {
+			if (defined($network_configuration->{$bridge_interface_name})) {
+				$network_configuration->{$bridge_interface_name}{master} = $bridge_name;
+			}
+			else {
+				notify($ERRORS{'WARNING'}, 0, "'$bridge_name' bridge contains '$bridge_interface_name' interface but '$bridge_interface_name' was not found in 'ifconfig' output:\n" .
+					"ifconfig output:\n" . join("\n", @$ifconfig_output) . "\n" .
+					"network bridge info:\n" . format_data($network_bridge_info)
+				);
+			}
 		}
 	}
 	
@@ -3274,12 +3238,10 @@ sub is_file_on_local_disk {
 #/////////////////////////////////////////////////////////////////////////////
 =head2 enable_dhcp
 
- Parameters  : $interface_name (optional)
+ Parameters  : $interface_name
  Returns     : boolean
- Description : Configures the ifcfg-* file(s) to use DHCP. If an interface name
-               argument is specified, only the ifcfg file for that interface
-               will be configured. If no argument is specified, the files for
-               the public and private interfaces will be configured.
+ Description : Configures the ifcfg-* file for the specified interface to use
+               DHCP.
 
 =cut
 
@@ -3290,7 +3252,7 @@ sub enable_dhcp {
 		return;
 	}
 	
-	my $computer_node_name = $self->data->get_computer_node_name();
+	my $computer_name = $self->data->get_computer_node_name();
 	
 	my $interface_name = shift;
 	if (!$interface_name) {
@@ -3298,27 +3260,21 @@ sub enable_dhcp {
 		return;
 	}
 	
-	my $calling_subroutine = get_calling_subroutine();
-	
-	my $ifcfg_directory_path = "/etc/sysconfig/network-scripts";
-	my $ifcfg_file_name = "ifcfg-$interface_name";
-	my $ifcfg_file_path = "$ifcfg_directory_path/$ifcfg_file_name";
-	
-	if ($self->file_exists($ifcfg_file_path)) {
-		my $timestamp = POSIX::strftime("%Y-%m-%d_%H-%M-%S\n", localtime);
-		my $ifcfg_backup_file_path = "$ifcfg_directory_path/$ifcfg_file_name.$timestamp";
-		$self->copy_file($ifcfg_file_path, $ifcfg_backup_file_path);
-	}
+	# Delete existing static route file for the interface if one exists
+	$self->delete_file("/etc/sysconfig/network-scripts/route-$interface_name");
 	
 	my $ifcfg_file_info = $self->get_ifcfg_file_info($interface_name) || {};
 	
+	my $calling_subroutine = get_calling_subroutine();
 	if ($calling_subroutine !~ /enable_dhcp/) {
 		# Check if interface is configured as a bridge
 		my @bridge_interface_names;
-		if ($ifcfg_file_info->{BRIDGE}) {
-			push @bridge_interface_names, $ifcfg_file_info->{BRIDGE};
+		if ($ifcfg_file_info->{bridge}) {
+			# ifcfg file contains something like: BRIDGE=br1
+			push @bridge_interface_names, $ifcfg_file_info->{bridge};
 		}
-		elsif ($ifcfg_file_info->{TYPE} && $ifcfg_file_info->{TYPE} =~ /Bridge/i) {
+		elsif ($ifcfg_file_info->{type} && $ifcfg_file_info->{type} =~ /Bridge/i) {
+			# ifcfg file contains something like: TYPE=Bridge
 			# For ifcfg-br* files, the name of the physical interface usually isn't listed in the file
 			# Get the network bridge info
 			my $network_bridge_info = $self->get_network_bridge_info();
@@ -3335,30 +3291,73 @@ sub enable_dhcp {
 		}
 	}
 	
-	# Add/overwrite required parameters to file contents
-	my $set_parameters = {
-		'BOOTPROTO' => 'dhcp',
-		'DEVICE' => $interface_name,
-		'NAME' => $interface_name,
-		'ONBOOT' => 'yes',
-	};
-	for my $parameter (keys %$set_parameters) {
-		my $value = $set_parameters->{$parameter};
-		$ifcfg_file_info->{$parameter} = $value;
+	return $self->generate_ifcfg_file($interface_name, { 'bootproto' => 'dhcp' });
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+=head2 generate_ifcfg_file
+
+ Parameters  : $interface_name, $parameters
+ Returns     : boolean
+ Description : Creates an interface configuration file in
+               /etc/sysconfig/network-scripts. The parameters argument contains
+               key value pairs and must contain a 'bootproto' key. The key names
+               must be completely lowercase for consistency. The resulting file
+               will contain uppercase parameter names.
+
+=cut
+
+sub generate_ifcfg_file {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
 	}
+	
+	my ($interface_name, $parameters_argument) = @_;
+	if (!$interface_name) {
+		notify($ERRORS{'WARNING'}, 0, "interface name argument was not supplied");
+		return;
+	}
+	elsif (!$parameters_argument) {
+		notify($ERRORS{'WARNING'}, 0, "parameters argument was not supplied");
+		return;
+	}
+	elsif (!ref($parameters_argument) || ref($parameters_argument) ne 'HASH') {
+		notify($ERRORS{'WARNING'}, 0, "parameters argument is not a hash reference:\n" . format_data($parameters_argument));
+		return;
+	}
+	elsif (!$parameters_argument->{bootproto}) {
+		notify($ERRORS{'WARNING'}, 0, "parameters argument must contain a 'bootproto' key:\n" . format_data($parameters_argument));
+		return;
+	}
+	
+	my $computer_name = $self->data->get_computer_node_name();
+	
+	my $ifcfg_directory_path = "/etc/sysconfig/network-scripts";
+	my $ifcfg_file_name = "ifcfg-$interface_name";
+	my $ifcfg_file_path = "$ifcfg_directory_path/$ifcfg_file_name";
+	
+	if ($self->file_exists($ifcfg_file_path)) {
+		my $timestamp = POSIX::strftime("%Y-%m-%d_%H-%M-%S\n", localtime);
+		my $ifcfg_backup_file_path = "/tmp/$ifcfg_file_name.$timestamp";
+		$self->copy_file($ifcfg_file_path, $ifcfg_backup_file_path);
+	}
+	
+	my $ifcfg_file_info = $self->get_ifcfg_file_info($interface_name) || {};
 	
 	# Remove parameters which are specific to a particular network or computer
 	my @remove_parameter_patterns = (
-		'ADDR',
-		'BROADCAST',
-		'DNS',
-		'GATEWAY',
-		'HOSTNAME',
-		'METRIC',
-		'NETMASK',
-		'NETWORK',
-		'PREFIX',
-		'UUID',
+		'addr',
+		'broadcast',
+		'dns',
+		'gateway',
+		'hostname',
+		'metric',
+		'netmask',
+		'network',
+		'prefix',
+		'uuid',
 	);
 	for my $remove_pattern (@remove_parameter_patterns) {
 		my @matching_properties = grep { $_ =~ /.*$remove_pattern.*/ } sort keys %$ifcfg_file_info;
@@ -3368,15 +3367,32 @@ sub enable_dhcp {
 		}
 	}
 	
+	# Add/overwrite required parameters to file contents
+	my $common_parameters = {
+		'device' => $interface_name,
+		'name' => $interface_name,
+		'onboot' => 'yes',
+	};
+	for my $parameter (keys %$common_parameters) {
+		my $value = $common_parameters->{$parameter};
+		$ifcfg_file_info->{$parameter} = $value;
+	}
+	
+	# Add/overwrite parameters specified by argument to file contents
+	for my $parameter (keys %$parameters_argument) {
+		my $value = $parameters_argument->{$parameter};
+		$ifcfg_file_info->{$parameter} = $value;
+	}
+	
 	# Convert the parameter/value hash to a string
 	my $updated_ifcfg_contents;
 	for my $parameter (sort keys %$ifcfg_file_info) {
 		my $value = $ifcfg_file_info->{$parameter};
-		$updated_ifcfg_contents .= "$parameter=$value\n";
+		$updated_ifcfg_contents .= uc($parameter) . "=$value\n";
 	}
 	
 	# Create the text file
-	notify($ERRORS{'DEBUG'}, 0, "updated ifcfg-$interface_name contents:\n$updated_ifcfg_contents");
+	notify($ERRORS{'DEBUG'}, 0, "attempting to generate file on $computer_name: $ifcfg_file_path, contents:\n$updated_ifcfg_contents");
 	return $self->create_text_file($ifcfg_file_path, $updated_ifcfg_contents);
 }
 
@@ -3390,12 +3406,12 @@ sub enable_dhcp {
                
                A hash is constructed such as:
                {
-                 "BOOTPROTO" => "dhcp",
-                 "DEVICE" => "eth0",
-                 "ONBOOT" => "yes"
+                 "bootproto" => "dhcp",
+                 "device" => "eth0",
+                 "onboot" => "yes"
                }
                
-               The hash key names are guaranteed to be uppercase.
+               The hash key names are guaranteed to be lowercase.
 
 =cut
 
@@ -3420,7 +3436,7 @@ sub get_ifcfg_file_info {
 		next if $line =~ /^\s*#/;
 		my ($property, $value) = $line =~ /^\s*([^=]+)\s*=\s*(.*)\s*$/g;
 		if (defined($property)) {
-			$info->{uc($property)} = $value;
+			$info->{lc($property)} = $value;
 		}
 		else {
 			notify($ERRORS{'WARNING'}, 0, "failed to parse line from $ifcfg_file_path: '$line'");
@@ -3439,14 +3455,23 @@ sub get_ifcfg_file_info {
  Description : Executes 'brctl show' and parses the output. A hash is
                constructed:
                {
-                 "br1" => {
-                   "bridge_id" => "",
-                   "interfaces" => [
-                     "eth1",
-                     "eth2"
-                   ],
-                   "stp_enabled" => ""
-                 }
+                  "br0" => {
+                    "bridge_id" => "8000.00505623001c",
+                    "bridge_name" => "br0",
+                    "interfaces" => [
+                      "eth0",
+                    ],
+                    "stp_enabled" => "no"
+                  },
+                  "xbr1" => {
+                    "bridge_id" => "8000.00505623001d",
+                    "bridge_name" => "xbr1",
+                    "interfaces" => [
+                      "eth1",
+                      "vnet1"
+                    ],
+                    "stp_enabled" => "no"
+                  }
                }
 
 =cut
@@ -3466,6 +3491,11 @@ sub get_network_bridge_info {
 	# br1             8000.000c29494c97       no              eth1
 	#                                                         eth2
 	
+	# It's possible to have no interfaces listed:
+	# bridge name     bridge id               STP enabled     interfaces
+	# xbr1            8000.000000000000       no
+
+	
 	my $command = "brctl show";
 	my ($exit_status, $output) = $self->execute($command);
 	if (!defined($output)) {
@@ -3480,26 +3510,52 @@ sub get_network_bridge_info {
 	my $network_bridge_info = {};
 	my $current_bridge_name;
 	for my $line (@$output) {
-		my ($bridge_name, $bridge_id, $stp_enabled, $interface_name) = $line =~ /^([^\s]*)\s+([^\s]*)\s+([^\s]*)\s+([^\s]+)\s*$/g;
-		if (!defined($interface_name)) {
-			notify($ERRORS{'DEBUG'}, 0, "ignoring line, interface name was not found: '$line'");
-			next;
-		}
+		# Ignore blank and heading lines
+		next if ($line !~ /\w/ || $line =~ /(bridge name)/);
 		
-		if ($bridge_name) {
+		my ($bridge_name, $bridge_id, $stp_enabled, $interface_name) = $line =~ /
+			^
+			([^\s]+)
+			\s+
+			([^\s]+)
+			\s+
+			([^\s]+)
+			\s*
+			([^\s]*)
+			$
+		/gx;
+		
+		if (defined($bridge_name)) {
 			$current_bridge_name = $bridge_name;
 		}
-		elsif (!$current_bridge_name) {
-			notify($ERRORS{'WARNING'}, 0, "failed to retrieve network bridge configuration from $computer_name, bridge name unknown\n" .
+		elsif (defined($current_bridge_name)) {
+			# Bridge name not found in line but current bridge name was previously determined
+			# Check if line only contains an interface name:
+			($interface_name) = $line =~ /^\s+([^\s]+)$/gx;
+			if (!defined($interface_name)) {
+				notify($ERRORS{'DEBUG'}, 0, "ignoring line, neither bridge name nor interface name were not found\n" .
+					"line: '$line'\n" .
+					"output:\n" . join("\n", @$output)
+				);
+				next;
+			}
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "ignoring line, it does not contain the bridge name and bridge name was not previously determined\n" .
 				"line: '$line'\n" .
 				"output:\n" . join("\n", @$output)
 			);
-			return;
+			next;
 		}
 		
 		$network_bridge_info->{$current_bridge_name}{bridge_id} = $bridge_id if defined($bridge_id);
-		$network_bridge_info->{$current_bridge_name}{stp_enabled} = $bridge_id if defined($stp_enabled);
-		push @{$network_bridge_info->{$current_bridge_name}{interfaces}}, $interface_name if defined($interface_name);
+		$network_bridge_info->{$current_bridge_name}{stp_enabled} = $stp_enabled if defined($stp_enabled);
+		
+		# Guarantee 'interfaces' key exists
+		if (!defined($network_bridge_info->{$current_bridge_name}{interfaces})) {
+			$network_bridge_info->{$current_bridge_name}{interfaces} = [];
+		}
+		push @{$network_bridge_info->{$current_bridge_name}{interfaces}}, $interface_name if $interface_name;
 	}
 	
 	notify($ERRORS{'OK'}, 0, "retrieved network bridge configuration from $computer_name:" . format_data($network_bridge_info));
@@ -7162,7 +7218,7 @@ sub remove_matching_fstab_lines {
 
 =head2 update_resolv_conf
 
- Parameters  : none
+ Parameters  : @public_dns_servers (optional)
  Returns     : boolean
  Description : Updates /etc/resolv.conf on the computer. Existing nameserver
                lines are removed and new nameserver lines are added based on the
@@ -7179,14 +7235,14 @@ sub update_resolv_conf {
 	
 	my $computer_name = $self->data->get_computer_short_name();
 	my $public_ip_configuration = $self->data->get_management_node_public_ip_configuration();
-	my @public_dns_servers = $self->data->get_management_node_public_dns_servers();
+	my @public_dns_servers = shift || $self->data->get_management_node_public_dns_servers();
 	
 	if ($public_ip_configuration !~ /static/i) {	
 		notify($ERRORS{'WARNING'}, 0, "unable to update resolv.conf on $computer_name, management node's IP configuration is set to $public_ip_configuration");
 		return;
 	}
 	elsif (!@public_dns_servers) {
-		notify($ERRORS{'WARNING'}, 0, "unable to update resolv.conf on $computer_name, management node's public DNS server is not configured");
+		notify($ERRORS{'WARNING'}, 0, "unable to update resolv.conf on $computer_name, DNS server argument was not provided and management node's public DNS server is not configured");
 		return;
 	}
 	
@@ -7213,7 +7269,12 @@ sub update_resolv_conf {
 	}
 	
 	my $resolv_conf_contents_new = join("\n", @resolv_conf_lines_new);
-	return $self->create_text_file($resolv_conf_path, $resolv_conf_contents_new);
+	if ($self->create_text_file($resolv_conf_path, $resolv_conf_contents_new)) {
+		notify($ERRORS{'DEBUG'}, 0, "updated $resolv_conf_path on $computer_name:\n$resolv_conf_contents_new");
+	}
+	else {
+		return 0;
+	}
 }
 
 ##/////////////////////////////////////////////////////////////////////////////
