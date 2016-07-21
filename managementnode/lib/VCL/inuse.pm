@@ -161,6 +161,8 @@ sub process {
 	
 	my $end_time_notify_seconds = $self->os->get_timings('general_end_notice_first');
 	my $end_time_notify_minutes = floor($end_time_notify_seconds / 60);
+	my $second_end_time_notify_seconds = $self->os->get_timings('general_end_notice_second');
+	my $second_end_time_notify_minutes = floor($second_end_time_notify_seconds / 60);
 	
 	my $now_string               = strftime('%H:%M:%S', localtime($now_epoch_seconds));
 	my $request_end_string       = strftime('%H:%M:%S', localtime($request_end_epoch_seconds));
@@ -222,7 +224,7 @@ sub process {
 			}
 			
 			# Notify user when 5 or 10 minutes remain
-			if ($request_remaining_minutes == 5 || $request_remaining_minutes == 10) {
+			if ($request_remaining_minutes == $second_end_time_notify_minutes || $request_remaining_minutes == $end_time_notify_minutes) {
 				$self->notify_user_endtime_imminent("$request_remaining_minutes minutes");
 			}
 			
