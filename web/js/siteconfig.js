@@ -41,6 +41,8 @@ function generalSiteConfigCB(data, ioArgs) {
 		dojo.byId(data.items.msgid).innerHTML = data.items.errmsg;
 		if('btn' in data.items)
 			dijit.byId(data.items.btn).set('disabled', false);
+		if('contid' in data.items && 'savecont' in data.items)
+			dojo.byId(data.items.contid).value = data.items.savecont;
 	}
 	else if(data.items.status == 'noaccess') {
 		alert(data.items.msg);
@@ -212,6 +214,101 @@ function generalEndNotice2() {
 }
 generalEndNotice2.prototype = new TimeVariable();
 var generalEndNotice2 = new generalEndNotice2();
+
+function AffilTextVariable() {}
+
+AffilTextVariable.prototype.addAffiliationSetting = function() {
+	dijit.byId(this.domidbase + 'addbtn').set('disabled', true);
+	var data = {continuation: dojo.byId(this.domidbase + 'addcont').value,
+	            affilid: dijit.byId(this.domidbase + 'newaffilid').value,
+	            value: dijit.byId(this.domidbase + 'newval').value};
+	RPCwrapper(data, generalSiteConfigCB, 1);
+}
+
+AffilTextVariable.prototype.addAffiliationSettingCBextra = function(data) {
+	var span = document.createElement('span');
+	span.setAttribute('id', data.items.id + 'span');
+	var label = document.createElement('label');
+	label.setAttribute('for', data.items.id);
+	label.innerHTML = data.items.affil + ': ';
+	span.appendChild(label);
+	var span2 = document.createElement('span');
+	span2.setAttribute('class', 'labeledform');
+	var text = new dijit.form.ValidationTextBox({
+		id: data.items.id,
+		required: 'true',
+		style: 'width: 200px;',
+		value: data.items.value,
+		regExp: data.items.regexp,
+		invalidMessage: data.items.invalidmsg
+	}, document.createElement('div'));
+	span2.appendChild(text.domNode);
+	span.appendChild(span2);
+	var func = this.deleteAffiliationSetting;
+	var domidbase = this.domidbase;
+	var btn = new dijit.form.Button({
+		id: data.items.id + 'delbtn',
+		label: _('Delete'),
+		onClick: function() {
+			func(data.items.id, domidbase);
+		}
+	}, document.createElement('div'));
+	span.appendChild(btn.domNode);
+	span.appendChild(document.createElement('br'));
+	dojo.byId(this.domidbase + 'affildiv').appendChild(span);
+	dijit.byId(this.domidbase + 'newval').reset();
+	dojo.byId('delete' + this.domidbase + 'cont').value = data.items.deletecont;
+	dojo.byId(this.domidbase + 'cont').value = data.items.savecont;
+	dijit.byId(this.domidbase + 'newaffilid').removeOption({value: data.items.affilid});
+	if(dijit.byId(this.domidbase + 'newaffilid').options.length == 0)
+		dojo.addClass(this.domidbase + 'adddiv', 'hidden');
+	var keys = dojo.byId(this.domidbase + 'savekeys').value.split(',');
+	keys.push(data.items.id);
+	dojo.byId(this.domidbase + 'savekeys').value = keys.join(',');
+}
+
+AffilTextVariable.prototype.saveSettings = function() {
+	var data = {continuation: dojo.byId(this.domidbase + 'cont').value};
+	var keys = dojo.byId(this.domidbase + 'savekeys').value.split(',');
+	for(var i = 0; i < keys.length; i++) {
+		if(! checkValidatedObj(keys[i])) {
+			dijit.byId(keys[i]).focus();
+			return;
+		}
+		data[keys[i]] = dijit.byId(keys[i]).get('value');
+	}
+	dijit.byId(this.domidbase + 'btn').set('disabled', true);
+	RPCwrapper(data, generalSiteConfigCB, 1);
+}
+
+AffilTextVariable.prototype.deleteAffiliationSetting = function(affilid, domidbase) {
+	var data = {affilid: affilid,
+	            continuation: dojo.byId('delete' + domidbase + 'cont').value};
+	RPCwrapper(data, generalSiteConfigCB, 1);
+}
+
+AffilTextVariable.prototype.deleteAffiliationSettingCBextra = function(data) {
+	dijit.byId(data.items.delid).destroy();
+	dijit.byId(data.items.delid + 'delbtn').destroy();
+	dojo.destroy(data.items.delid + 'span');
+	dijit.byId(this.domidbase + 'newaffilid').addOption({value: data.items.affilid, label: data.items.affil});
+	dojo.removeClass(this.domidbase + 'adddiv', 'hidden');
+	var keys = dojo.byId(this.domidbase + 'savekeys').value.split(',');
+	var newkeys = new Array();
+	for(var i = 0; i < keys.length; i++) {
+		if(keys[i] != data.items.delid)
+			newkeys.push(keys[i]);
+	}
+	dojo.byId(this.domidbase + 'savekeys').value = newkeys.join(',');
+	dojo.byId('delete' + this.domidbase + 'cont').value = data.items.delcont;
+}
+
+function affilhelpaddr() {
+	GlobalSingleVariable.apply(this, Array.prototype.slice.call(arguments));
+	this.domidbase = 'affilhelpaddr';
+}
+affilhelpaddr.prototype = new AffilTextVariable();
+var affilhelpaddr = new affilhelpaddr();
 
 function GlobalSingleVariable() {}
 

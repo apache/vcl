@@ -577,6 +577,7 @@ $actions['classmapping']['userpasswordspecialchar'] = 'siteconfig';
 $actions['classmapping']['natportrange'] = 'siteconfig';
 $actions['classmapping']['nfsmounts'] = 'siteconfig';
 $actions['classmapping']['messages'] = 'siteconfig';
+$actions['classmapping']['affilhelpaddress'] = 'siteconfig';
 
 # resource
 $actions['mode']['resource'] = "resource";

@@ -87,6 +87,8 @@ function generalOptions($globalopts) {
 		$obj = new userPasswordSpecialChar();
 		$h .= $obj->getHTML();
 	}
+	$obj = new AffilHelpAddress();
+	$h .= $obj->getHTML($globalopts);
 	$h .= "</td>\n";
 	# -------- end left column ---------
 
@@ -809,6 +811,443 @@ class generalEndNotice2 extends TimeVariable {
 		$this->addmsg = i("End notice time for %s added");
 		$this->updatemsg = i("End notice time values saved");
 		$this->delmsg = i("End notice time for %s deleted");
+	}
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \class AffilTextVariable
+///
+/// \brief base class for text variables assigned per affiliation
+///
+////////////////////////////////////////////////////////////////////////////////
+class AffilTextVariable {
+	var $basecdata;
+	var $name;
+	var $desc;
+	var $values;
+	var $regexp;
+	var $errmsg;
+	var $domidbase;
+	var $jsname;
+	var $addmsg;
+	var $updatemsg;
+	var $delmsg;
+
+	/////////////////////////////////////////////////////////////////////////////
+	///
+	/// \fn __construct()
+	///
+	/// \brief class construstor
+	///
+	/////////////////////////////////////////////////////////////////////////////
+	function __construct() {
+		$this->basecdata = array('obj' => $this);
+		$this->getValues();
+	}
+
+	/////////////////////////////////////////////////////////////////////////////
+	///
+	/// \fn getValues()
+	///
+	/// \brief gets assigned values from database and sets in $this->values
+	///
+	/////////////////////////////////////////////////////////////////////////////
+	function getValues() {
+		$this->values = array();
+	}
+
+	/////////////////////////////////////////////////////////////////////////////
+	///
+	/// \fn setValues($affilid, $value)
+	///
+	/// \param $affilid - affiliationid
+	/// \param $value - value to be set for $affilid
+	///
+	/// \brief sets values in database
+	///
+	/// \return 1 if successfully set values, 0 if error encountered setting
+	/// values
+	///
+	/////////////////////////////////////////////////////////////////////////////
+	function setValue($affilid, $value) {
+		return 1;
+	}
+
+	/////////////////////////////////////////////////////////////////////////////
+	///
+	/// \fn deleteValue()
+	///
+	/// \param $affilid - affiliationid
+	///
+	/// \brief deletes a value from the database
+	///
+	/// \return 1 if successfully deleted value, 0 if error encountered
+	///
+	/////////////////////////////////////////////////////////////////////////////
+	function deleteValue($affilid) {
+		return 1;
+	}
+
+	/////////////////////////////////////////////////////////////////////////////
+	///
+	/// \fn getHTML()
+	///
+	/// \return string of HTML
+	///
+	/// \brief generates HTML for setting text variables
+	///
+	/////////////////////////////////////////////////////////////////////////////
+	function getHTML($globalopts) {
+		global $user;
+		$h  = "<div class=\"configwidget\" style=\"width: 100%;\">\n";
+		$h .= "<h3>{$this->name}</h3>\n";
+		$h .= "<span class=\"siteconfigdesc\">\n";
+		$h .= $this->desc;
+		$h .= "<br><br></span>\n";
+
+		$affils = getAffiliations();
+		$saveids = array();
+
+		if($globalopts) {
+			$id = getAffiliationID('Global');
+			$key = "{$this->domidbase}_$id";
+			$val = $this->values[$id];
+			$label = i('Global');
+			unset_by_val(i('Global'), $affils);
+		}
+		else {
+			$key = "{$this->domidbase}_{$user['affiliationid']}";
+			$val = $this->values[$user['affiliationid']];
+			$label = $user['affiliation'];
+		}
+		$saveids[] = $key;
+		$h .= labeledFormItem($key, $label, 'text', $this->regexp, 1, $val, $this->errmsg, '', '', '200px'); 
+		if($globalopts) {
+			$h .= "<div id=\"{$this->domidbase}affildiv\">\n";
+			foreach($affils as $affil => $name) {
+				if(is_null($this->values[$affil]) || $this->values[$affil] == '')
+					continue;
+				$key = "{$this->domidbase}_$affil";
+				$saveids[] = $key;
+				$h .= "<span id=\"{$key}span\">\n";
+				$h .= labeledFormItem($key, $name, 'text', $this->regexp, 1, $this->values[$affil], $this->errmsg, '', '', '200px', '', 0);
+				$h .= dijitButton("{$key}delbtn", i("Delete"), "{$this->jsname}.deleteAffiliationSetting('$affil', '{$this->domidbase}');") . "<br>\n";
+				$h .= "</span>\n";
+				unset_by_val($name, $affils);
+			}
+			$h .= "</div>\n";
+			$h .= "<div id=\"{$this->domidbase}adddiv\"";
+			if(! count($affils))
+				$h .= " class=\"hidden\"";
+			$h .= ">\n";
+			$h .= selectInputHTML('', $affils, "{$this->domidbase}newaffilid",
+										 "dojoType=\"dijit.form.Select\" maxHeight=\"250\"");
+			$h .= "<input type=\"text\" dojoType=\"dijit.form.ValidationTextBox\" ";
+			$h .= "id=\"{$this->domidbase}newval\" required=\"true\" invalidMessage=\"{$this->errmsg}\" ";
+			$h .= "regExp=\"{$this->regexp}\" style=\"width: 200px;\">\n";
+			$h .= dijitButton("{$this->domidbase}addbtn", i('Add'), "{$this->jsname}.addAffiliationSetting();");
+			$cont = addContinuationsEntry('AJaddAffiliationSetting', $this->basecdata);
+			$h .= "<input type=\"hidden\" id=\"{$this->domidbase}addcont\" value=\"$cont\">\n";
+			$h .= "</div>\n";
+			$cdata = $this->basecdata;
+			$cdata['origvals'] = $this->values;
+			$cont = addContinuationsEntry('AJdeleteAffiliationSetting', $cdata);
+			$h .= "<input type=\"hidden\" id=\"delete{$this->domidbase}cont\" value=\"$cont\">\n";
+		}
+		$h .= "<div id=\"{$this->domidbase}msg\"></div>\n";
+		$saveids = implode(',', $saveids);
+		$h .= "<input type=\"hidden\" id=\"{$this->domidbase}savekeys\" value=\"$saveids\">\n";
+		$h .= dijitButton("{$this->domidbase}btn", i('Submit Changes'), "{$this->jsname}.saveSettings();", 1);
+		$cdata = $this->basecdata;
+		$cdata['origvals'] = $this->values;
+		$cont = addContinuationsEntry('AJupdateAllSettings', $cdata);
+		$h .= "<input type=\"hidden\" id=\"{$this->domidbase}cont\" value=\"$cont\">\n";
+		$h .= "</div>\n";
+		return $h;
+	}
+
+	////////////////////////////////////////////////////////////////////////////////
+	///
+	/// \fn AJaddAffiliationSetting()
+	///
+	/// \brief adds an affiliation specific text setting
+	///
+	////////////////////////////////////////////////////////////////////////////////
+	function AJaddAffiliationSetting() {
+		global $user;
+		if(! checkUserHasPerm('Site Configuration (global)') &&
+		   ! checkUserHasPerm('Site Configuration (affiliation only)')) {
+			$arr = array('status' => 'noaccess',
+			             'msg' => i('You do not have access to modify the submitted setting.'));
+			sendJSON($arr);
+			return;
+		}
+		$affilid = processInputVar('affilid', ARG_NUMERIC);
+		$affils = getAffiliations();
+		if(! array_key_exists($affilid, $affils)) {
+			$arr = array('status' => 'failed',
+			             'msgid' => "{$this->domidbase}msg",
+			             'errmsg' => i('Invalid affiliation submitted.'));
+			sendJSON($arr);
+			return;
+		}
+		$value = processInputVar('value', ARG_STRING);
+		if(! preg_match("/{$this->regexp}/", $value)) {
+			$arr = array('status' => 'failed',
+			             'msgid' => "{$this->domidbase}msg",
+			             'errmsg' => i('Invalid value submitted.'),
+			             'btn' => "{$this->domidbase}addbtn");
+			sendJSON($arr);
+			return;
+		}
+
+		if(! $this->setValue($affilid, $value)) {
+			$arr = array('status' => 'failed',
+			             'msgid' => "{$this->domidbase}msg",
+			             'errmsg' => i('Failed to add submited value'),
+			             'btn' => "{$this->domidbase}addbtn");
+			sendJSON($arr);
+			return;
+		}
+
+		# recreate delete and update continuations
+		$this->getValues();
+		$cdata = $this->basecdata;
+		$cdata['origvals'] = $this->values;
+		$delcont = addContinuationsEntry('AJdeleteAffiliationSetting', $cdata);
+		$savecont = addContinuationsEntry('AJupdateAllSettings', $cdata);
+
+		$affil = $affils[$affilid];
+		$arr = array('status' => 'success',
+		             'msgid' => "{$this->domidbase}msg",
+		             'btn' => "{$this->domidbase}addbtn",
+		             'affil' => $affil,
+		             'affilid' => $affilid,
+		             'value' => $value,
+		             'id' => "{$this->domidbase}_$affilid",
+		             'extrafunc' => "{$this->jsname}.addAffiliationSettingCBextra",
+		             'deletecont' => $delcont,
+		             'savecont' => $savecont,
+		             'regexp' => $this->regexp,
+		             'invalidmsg' => $this->errmsg,
+		             'msg' => sprintf($this->addmsg, $affil));
+		sendJSON($arr);
+	}
+
+	////////////////////////////////////////////////////////////////////////////////
+	///
+	/// \fn AJupdateAllSettings()
+	///
+	/// \brief updates all values for implemented type of AffilTextVariable
+	///
+	////////////////////////////////////////////////////////////////////////////////
+	function AJupdateAllSettings() {
+		if(! checkUserHasPerm('Site Configuration (global)') &&
+		   ! checkUserHasPerm('Site Configuration (affiliation only)')) {
+			$arr = array('status' => 'noaccess',
+			             'msg' => i('You do not have access to modify the submitted settings.'));
+			sendJSON($arr);
+			return;
+		}
+		$origvals = getContinuationVar('origvals');
+		$newvals = array();
+		foreach($origvals as $affilid => $val) {
+			$id = "{$this->domidbase}_$affilid";
+			$newval = processInputVar($id, ARG_STRING);
+			if($newval === NULL)
+				continue;
+			if(! preg_match("/{$this->regexp}/", $newval)) {
+				$affil = getAffiliationName($affilid);
+				$arr = array('status' => 'failed',
+				             'msgid' => "{$this->domidbase}msg",
+				             'btn' => "{$this->domidbase}btn",
+				             'errmsg' => i("Invalid value submitted for ") . $affil);
+				sendJSON($arr);
+				return;
+			}
+			if($newval != $val)
+				$newvals[$affilid] = $newval;
+			$origvals[$affilid] = $newval;
+		}
+		$fails = array();
+		foreach($newvals as $affilid => $val) {
+			if(! $this->setValue($affilid, $val))
+				$fails[] = getAffiliationName($affilid);
+		}
+
+		# recreate save continuation
+		$cdata = $this->basecdata;
+		$cdata['origvals'] = $origvals;
+		$savecont = addContinuationsEntry('AJupdateAllSettings', $cdata);
+
+		if(count($fails)) {
+			$msg = i("Failed to update address for these affiliations: ") . implode(', ', $fails);
+			$arr = array('status' => 'failed',
+			             'msgid' => "{$this->domidbase}msg",
+			             'errmsg' => $msg,
+			             'btn' => "{$this->domidbase}btn",
+			             'contid' => "{$this->domidbase}cont",
+			             'savecont' => $savecont);
+			sendJSON($arr);
+			return;
+		}
+
+		$arr = array('status' => 'success',
+		             'msgid' => "{$this->domidbase}msg",
+		             'msg' => $this->updatemsg,
+		             'btn' => "{$this->domidbase}btn",
+		             'contid' => "{$this->domidbase}cont",
+		             'savecont' => $savecont);
+		sendJSON($arr);
+	}
+
+	////////////////////////////////////////////////////////////////////////////////
+	///
+	/// \fn AJdeleteAffiliationSetting()
+	///
+	/// \brief deletes a text variable for an affiliation
+	///
+	////////////////////////////////////////////////////////////////////////////////
+	function AJdeleteAffiliationSetting() {
+		if(! checkUserHasPerm('Site Configuration (global)') &&
+		   ! checkUserHasPerm('Site Configuration (affiliation only)')) {
+			$arr = array('status' => 'noaccess',
+			             'msg' => i('You do not have access to delete the submitted setting.'));
+			sendJSON($arr);
+			return;
+		}
+		$affilid = processInputVar('affilid', ARG_NUMERIC);
+		$origvals = getContinuationVar('origvals');
+		if(! array_key_exists($affilid, $origvals)) {
+			$arr = array('status' => 'failed',
+			             'msgid' => "{$this->domidbase}msg",
+			             'msg' => i('Invalid data submitted.'));
+			sendJSON($arr);
+			return;
+		}
+
+		$affil = getAffiliationName($affilid);
+		if(! $this->deleteValue($affilid)) {
+			$arr = array('status' => 'failed',
+			             'msgid' => "{$this->domidbase}msg",
+			             'errmsg' => sprintf(i("Failed to delete address for %s"), $affil),
+			             'btn' => "{$this->domidbase}addbtn");
+			sendJSON($arr);
+			return;
+		}
+
+		# recreate delete and update continuations
+		$this->getValues();
+		$cdata = $this->basecdata;
+		$cdata['origvals'] = $this->values;
+		$delcont = addContinuationsEntry('AJdeleteAffiliationSetting', $cdata);
+		$savecont = addContinuationsEntry('AJupdateAllSettings', $cdata);
+
+		$arr = array('status' => 'success',
+		             'msgid' => "{$this->domidbase}msg",
+		             'delid' => "{$this->domidbase}_$affilid",
+		             'affil' => $affil,
+		             'affilid' => $affilid,
+		             'contid' => "{$this->domidbase}cont",
+		             'savecont' => $savecont,
+		             'delcont' => $delcont,
+		             'extrafunc' => "{$this->jsname}.deleteAffiliationSettingCBextra",
+		             'msg' => sprintf($this->delmsg, $affil));
+		sendJSON($arr);
+	}
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \class AffilHelpAddress
+///
+/// \brief extends AffilTextVariable to implement AffilHelpAddress
+///
+////////////////////////////////////////////////////////////////////////////////
+class AffilHelpAddress extends AffilTextVariable {
+	/////////////////////////////////////////////////////////////////////////////
+	///
+	/// \fn __construct()
+	///
+	/// \brief class construstor
+	///
+	/////////////////////////////////////////////////////////////////////////////
+	function __construct() {
+		parent::__construct();
+		$this->name = i("Help Email Address");
+		$this->desc = i("This is the email address used as the from address for emails sent by the VCL system to users.");
+		$this->regexp = '^([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,4},)*([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,4})$';
+		$this->errmsg = i("Invalid email address(es) specified");
+		$this->domidbase = "affilhelpaddr";
+		$this->jsname = "affilhelpaddr";
+		$this->addmsg = i("Help Email Address added for %s");
+		$this->updatemsg = i("Update successful");
+		$this->delmsg = i("Address for %s deleted");
+	}
+
+	/////////////////////////////////////////////////////////////////////////////
+	///
+	/// \fn getValues()
+	///
+	/// \brief gets assigned values from database and sets in $this->values
+	///
+	/////////////////////////////////////////////////////////////////////////////
+	function getValues() {
+		$this->values = array();
+		$query = "SELECT id, helpaddress FROM affiliation ORDER BY name";
+		$qh = doQuery($query);
+		while($row = mysql_fetch_assoc($qh))
+			$this->values[$row['id']] = $row['helpaddress'];
+	}
+
+	/////////////////////////////////////////////////////////////////////////////
+	///
+	/// \fn setValues($affilid, $value)
+	///
+	/// \param $affilid - affiliationid
+	/// \param $value - value to be set for $affilid
+	///
+	/// \brief sets values in database
+	///
+	/// \return 1 if successfully set values, 0 if error encountered setting
+	/// values
+	///
+	/////////////////////////////////////////////////////////////////////////////
+	function setValue($affilid, $value) {
+		global $mysql_link_vcl;
+		$esc_value = mysql_real_escape_string($value);
+		$query = "UPDATE affiliation "
+		       . "SET helpaddress = '$esc_value' "
+		       . "WHERE id = $affilid";
+		doQuery($query);
+		$rc = mysql_affected_rows($mysql_link_vcl);
+		if($rc == 1)
+			return 1;
+		return 0;
+	}
+
+	/////////////////////////////////////////////////////////////////////////////
+	///
+	/// \fn deleteValue()
+	///
+	/// \param $affilid - affiliationid
+	///
+	/// \brief deletes a value from the database
+	///
+	/// \return 1 if successfully deleted value, 0 if error encountered
+	///
+	/////////////////////////////////////////////////////////////////////////////
+	function deleteValue($affilid) {
+		global $mysql_link_vcl;
+		$query = "UPDATE affiliation "
+		       . "SET helpaddress = NULL "
+		       . "WHERE id = $affilid";
+		doQuery($query);
+		$rc = mysql_affected_rows($mysql_link_vcl);
+		if($rc == 1)
+			return 1;
+		return 0;
 	}
 }
 
@@ -1795,7 +2234,7 @@ class Messages {
 			}
 		}
 		if(count($invalids)) {
-			sendJSON(array('status' => 'invalid', 'values' => $invalids));
+			sendJSON(array('status' => 'invalid', 'values' => $invalids, 'query' => $query));
 			return;
 		}
 		sendJSON(array('status' => 'valid'));
