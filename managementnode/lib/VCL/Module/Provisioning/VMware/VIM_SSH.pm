@@ -148,9 +148,24 @@ sub initialize {
 
 =head2 _run_vim_cmd
 
- Parameters  : $vim_arguments, $timeout_seconds (optional)
+ Parameters  : $vim_arguments, $timeout_seconds (optional), $attempt_limit (optional)
  Returns     : array ($exit_status, $output)
- Description : Runs VIM command on the VMware host.
+ Description : Runs vim-cmd command on the VMware host. This was designed to
+               allow it to handle most of the error checking.
+               
+               By default, 5 attempts are made.
+               
+               If the exit status of the vim-cmd command is 0 after any attempt,
+               $exit_status and $output are returned to the calling subroutine.
+               
+               If the exit $attempt_limit > 1 and the status is not 0 after all
+               attempts are made, undefined is returned. This allows the calling
+               subroutine to simply check if result is true if it does not care
+               about the output.
+               
+               There is a special condition if the $attempt_limit is 1 and the
+               exit status is not 0. $exit_status and $output are always
+               returned so calling subroutine can handle the logic.
 
 =cut
 
@@ -168,6 +183,7 @@ sub _run_vim_cmd {
 	}
 	
 	my $timeout_seconds = shift || 60;
+	my $attempt_limit = shift || 5;
 	
 	my $request_state_name = $self->data->get_request_state_name();
 	my $vmhost_computer_name = $self->vmhost_os->data->get_computer_short_name();
@@ -175,7 +191,6 @@ sub _run_vim_cmd {
 	my $command = "$self->{vim_cmd} $vim_arguments";
 	
 	my $attempt = 0;
-	my $attempt_limit = 5;
 	my $wait_seconds = 5;
 	
 	my $connection_reset_errors = 0;
@@ -272,8 +287,8 @@ sub _run_vim_cmd {
 			next ATTEMPT;
 		}
 		elsif ($exit_status != 0) {
-			if (grep(/(Create snapshot failed)/i, @$output)) {
-				notify($ERRORS{'WARNING'}, 0, "attempt $attempt/$attempt_limit: command failed on VM host $vmhost_computer_name, not making another attempt, task error checking will be done by calling subroutine, command: $command, exit status: $exit_status, output:\n" . join("\n", @$output));
+			if ($attempt_limit == 1) {
+				notify($ERRORS{'DEBUG'}, 0, "command failed on VM host $vmhost_computer_name, not making another attempt because attempt limit argument is set to $attempt_limit, error checking will be done by calling subroutine, command: $command, exit status: $exit_status, output:\n" . join("\n", @$output));
 				return ($exit_status, $output);
 			}
 			else {
@@ -1446,7 +1461,7 @@ sub vm_register {
 	
 	$vmx_file_path =~ s/\\* /\\ /g;
 	my $vim_cmd_arguments = "solo/registervm \"$vmx_file_path\"";
-	my ($exit_status, $output) = $self->_run_vim_cmd($vim_cmd_arguments);
+	my ($exit_status, $output) = $self->_run_vim_cmd($vim_cmd_arguments, 60, 1);
 	return if !$output;
 	
 	# Note: registervm does not produce any output if it was successful
@@ -1457,6 +1472,40 @@ sub vm_register {
 	#   faultCause = (vmodl.MethodFault) null,
 	#   msg = "The object or item referred to could not be found.",
 	# }
+	
+	if (grep(/vim.fault.NotFound/i, @$output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to register VM, vmx file was not found: $vmx_file_path, output:\n" . join("\n", @$output));
+		return;
+	}
+	elsif (grep(/vim.fault.AlreadyExists/i, @$output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to register VM on the 1st attempt, an existing invalid VM using the same vmx file path may already already be registered, output:\n" . join("\n", @$output));
+		
+		# If an "invalid" VM exists using the same .vmx path, this fault will be generated:
+		#    (vim.fault.AlreadyExists) {
+		#    faultCause = (vmodl.MethodFault) null,
+		#    name = "51",
+		#    msg = "The specified key, name, or identifier '51' already exists."
+		my ($vm_id) = join("\n", @$output) =~ /name\s*=\s*"(\d+)"/;
+		if ($vm_id) {
+			if ($self->vm_unregister($vm_id)) {
+				notify($ERRORS{'DEBUG'}, 0, "unregistered existing invalid VM $vm_id, making another attempt to register VM: $vmx_file_path");
+			}
+			else {
+				notify($ERRORS{'WARNING'}, 0, "failed to register VM: $vmx_file_path, unable to unregister existing invalid VM $vm_id");
+				return;
+			}
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "failed to register VM: $vmx_file_path, ID of existing invalid VM could not be determined, was expecting a line beginning with 'name = \"<ID>\"' in output:\n" . join("\n", @$output));
+			return;
+		}
+	}
+	
+	if (grep(/fault/i, @$output)) {
+		# Only made 1 attempt so far, try again if fault occurred, allow 4 more attempts
+		($exit_status, $output) = $self->_run_vim_cmd($vim_cmd_arguments, 60, 4);
+		return if !$output;
+	}
 	
 	if (grep(/fault/i, @$output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to register VM: $vmx_file_path, vim-cmd $vim_cmd_arguments output:\n" . join("\n", @$output));
@@ -1478,9 +1527,10 @@ sub vm_register {
 
 =head2 vm_unregister
 
- Parameters  : $vmx_file_path
+ Parameters  : $vm_identifier 
  Returns     : boolean
- Description : Unregisters the VM indicated by the vmx file path argument.
+ Description : Unregisters the VM indicated by the argument which may either be
+               the .vmx file path or VM ID.
 
 =cut
 
@@ -1491,39 +1541,51 @@ sub vm_unregister {
 		return;
 	}
 	
-	# Get the vmx file path argument
-	my $vmx_file_path = shift;
-	if (!$vmx_file_path) {
-		notify($ERRORS{'WARNING'}, 0, "vmx file path argument was not supplied");
+	# Note: allow the VM ID to be passed in case the .vmx file path cannot be determined
+	# This allows an invalid VM with a missing .vmx file to be unregistered
+	
+	my $vm_identifier = shift;
+	if (!$vm_identifier) {
+		notify($ERRORS{'WARNING'}, 0, "VM identifier argument was not supplied");
 		return;
 	}
 	
-	# Check if the VM is not registered
-	if (!$self->is_vm_registered($vmx_file_path)) {
-		notify($ERRORS{'OK'}, 0, "VM not unregistered because it is not registered: $vmx_file_path");
-		return 1;
+	my $vm_id;
+	my $vmx_file_path;
+	if ($vm_identifier =~ /^\d+$/) {
+		$vm_id = $vm_identifier;
 	}
-	
-	# Power of the VM if it is powered on or the unregister command will fail
-	my $vm_power_state = $self->get_vm_power_state($vmx_file_path);
-	if ($vm_power_state && $vm_power_state =~ /on/i) {
-		if (!$self->vm_power_off($vmx_file_path)) {
-			notify($ERRORS{'WARNING'}, 0, "failed to unregister VM because it could not be powered off: $vmx_file_path");
+	else {
+		# Argument should be the vmx file path
+		$vmx_file_path = $vm_identifier;
+		
+		# Check if the VM is not registered
+		if (!$self->is_vm_registered($vmx_file_path)) {
+			notify($ERRORS{'OK'}, 0, "VM not unregistered because it is not registered: $vmx_file_path");
+			return 1;
+		}
+		
+		# Power of the VM if it is powered on or the unregister command will fail
+		my $vm_power_state = $self->get_vm_power_state($vmx_file_path);
+		if ($vm_power_state && $vm_power_state =~ /on/i) {
+			if (!$self->vm_power_off($vmx_file_path)) {
+				notify($ERRORS{'WARNING'}, 0, "failed to unregister VM because it could not be powered off: $vmx_file_path");
+				return;
+			}
+		}
+		
+		$vm_id = $self->_get_vm_id($vmx_file_path);
+		if (!defined($vm_id)) {
+			notify($ERRORS{'OK'}, 0, "unable to unregister VM because VM ID could not be determined for vmx path argument: $vmx_file_path");
 			return;
 		}
-	}
-	
-	my $vm_id = $self->_get_vm_id($vmx_file_path);
-	if (!defined($vm_id)) {
-		notify($ERRORS{'OK'}, 0, "unable to unregister VM because VM ID could not be determined for vmx path: $vmx_file_path");
-		return;
 	}
 	
 	my $vim_cmd_arguments = "vmsvc/unregister $vm_id";
 	my ($exit_status, $output) = $self->_run_vim_cmd($vim_cmd_arguments);
 	
 	# Delete cached .vmx - VM ID mapping if previously retrieved
-	delete $self->{vm_id}{$vmx_file_path};
+	delete $self->{vm_id}{$vm_identifier};
 	
 	return if !$output;
 	
@@ -1535,18 +1597,18 @@ sub vm_unregister {
 	# }
 	
 	if (grep(/fault/i, @$output)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to unregister VM $vm_id: $vmx_file_path\nVIM command arguments: '$vim_cmd_arguments'\noutput:\n" . join("\n", @$output));
+		notify($ERRORS{'WARNING'}, 0, "failed to unregister VM, VIM command arguments: '$vim_cmd_arguments'\noutput:\n" . join("\n", @$output));
 		return;
 	}
 	
 	# Check to make sure the VM is not registered
-	if (!$self->is_vm_registered($vmx_file_path)) {
-		notify($ERRORS{'OK'}, 0, "unregistered VM: $vmx_file_path (ID: $vm_id)");
-		return 1;
+	if ($vmx_file_path && $self->is_vm_registered($vmx_file_path)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to unregister VM: $vmx_file_path (ID: $vm_id), it still appears to be registered");
+		return;
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to unregister VM: $vmx_file_path  (ID: $vm_id), it still appears to be registered");
-		return;
+		notify($ERRORS{'OK'}, 0, "unregistered VM: $vm_identifier");
+		return 1;
 	}
 }
 
@@ -2064,7 +2126,7 @@ sub create_snapshot {
 	}
 	
 	my $vim_cmd_arguments = "vmsvc/snapshot.create $vm_id '$snapshot_name'";
-	my ($exit_status, $output) = $self->_run_vim_cmd($vim_cmd_arguments);
+	my ($exit_status, $output) = $self->_run_vim_cmd($vim_cmd_arguments, 60, 1);
 	return if !$output;
 	
 	notify($ERRORS{'DEBUG'}, 0, "create snapshot output:\n" . join("\n", @$output));
