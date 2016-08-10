@@ -124,7 +124,8 @@ class Computer extends Resource {
 				return '';
 		}
 		if(preg_match('/MSIE/i', $_SERVER['HTTP_USER_AGENT']) ||
-		   preg_match('/Trident/i', $_SERVER['HTTP_USER_AGENT']))
+		   preg_match('/Trident/i', $_SERVER['HTTP_USER_AGENT']) ||
+		   preg_match('/Edge/i', $_SERVER['HTTP_USER_AGENT']))
 			$w = round($w * 11.5) . 'px';
 		else
 			$w = "{$w}em";
@@ -4831,9 +4832,13 @@ class Computer extends Resource {
 		}
 		uasort($data, 'sortKeepIndex');
 		$msg = '';
-		foreach($data as $item)
-			$msg .= $item['msg'];
-		$msg = substr($msg, 0, -4);
+		if(count($data) != 0) {
+			foreach($data as $item)
+				$msg .= $item['msg'];
+			$msg = substr($msg, 0, -4);
+		}
+		else
+			$msg = "No reservations for selected computer(s).";
 
 		$ret = array('status' => 'onestep',
 		             'title' => 'Reservation Information',
@@ -4906,9 +4911,13 @@ class Computer extends Resource {
 			$data[] = array('name' => $row['hostname'], 'msg' => $msg);
 		}
 		$msg = '';
-		foreach($data as $item)
-			$msg .= $item['msg'];
-		$msg = substr($msg, 0, -4);
+		if(count($data) != 0) {
+			foreach($data as $item)
+				$msg .= $item['msg'];
+			$msg = substr($msg, 0, -4);
+		}
+		else
+			$msg = "No reservation history for selected computer(s).";
 
 		$ret = array('status' => 'onestep',
 		             'title' => 'Reservation History',

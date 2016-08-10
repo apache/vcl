@@ -3913,7 +3913,7 @@ function AJconfirmDeleteRequest() {
 	if($fromtimetable)
 		$cdata['ttdata'] = getContinuationVar('ttdata');
 	$cont = addContinuationsEntry('AJsubmitDeleteRequest', $cdata, SECINDAY, 0, 0);
-	$text = preg_replace("/(.{1,70}([ \n]|$))/", '\1<br>', $text) . '<br>';
+	$text .= "<br><br>";
 	$data = array('content' => $text,
 	              'cont' => $cont,
 	              'requestid' => $requestid,

@@ -48,7 +48,7 @@ function viewGroups() {
 	global $user, $mode;
 	$modetype = getContinuationVar("type");
 
-	print "<H2 id=\"startscroll\">User Groups</H2>\n";
+	print "<H2>User Groups</H2>\n";
 	if($modetype == "user") {
 		if($mode == "submitAddGroup") {
 			print "<font color=\"#008000\">User group successfully added";

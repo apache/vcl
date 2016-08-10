@@ -438,7 +438,8 @@ function buildExtraFilters() {
 		store: filterstore,
 		structure: layout,
 		canSort: function() {return false;},
-		onCellClick: combofocus
+		onCellClick: combofocus,
+		autoWidth: true
 	}, document.createElement('div'));
 	dojo.byId('extrafiltersdiv').appendChild(extrafiltergrid.domNode);
 	extrafiltergrid.startup();

@@ -218,10 +218,6 @@ function buildUserFilterStores() {
 			}
 			dijit.byId('editgroupfilter').setStore(editgroupstore, '', {query: {id: '*'}});
 			delete usergroupstore.editgroups;
-			if(firstscroll == 1) {
-				firstscroll = 0;
-				doInitialScroll();
-			}
 		}
 	});
 }
@@ -331,11 +327,6 @@ function buildResourceFilterStores() {
 			}
 		}
 	});
-}
-
-function doInitialScroll() {
-	var pos = dojo.position(dojo.byId('startscroll'));
-	window.scroll(pos.x, pos.y);
 }
 
 function fmtDuration(len, rowIndex, cell) {
