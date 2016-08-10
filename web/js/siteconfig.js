@@ -304,11 +304,18 @@ AffilTextVariable.prototype.deleteAffiliationSettingCBextra = function(data) {
 }
 
 function affilhelpaddr() {
-	GlobalSingleVariable.apply(this, Array.prototype.slice.call(arguments));
+	AffilTextVariable.apply(this, Array.prototype.slice.call(arguments));
 	this.domidbase = 'affilhelpaddr';
 }
 affilhelpaddr.prototype = new AffilTextVariable();
 var affilhelpaddr = new affilhelpaddr();
+
+function affilkmsserver() {
+	AffilTextVariable.apply(this, Array.prototype.slice.call(arguments));
+	this.domidbase = 'affilkmsserver';
+}
+affilkmsserver.prototype = new AffilTextVariable();
+var affilkmsserver = new affilkmsserver();
 
 function GlobalSingleVariable() {}
 

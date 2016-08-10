@@ -109,6 +109,8 @@ function generalOptions($globalopts) {
 		$obj = new NATportRange();
 		$h .= $obj->getHTML();
 	}
+	$obj = new AffilKMSserver();
+	$h .= $obj->getHTML($globalopts);
 	$h .= "</td>\n";
 	# -------- end right column --------
 
@@ -833,6 +835,7 @@ class AffilTextVariable {
 	var $addmsg;
 	var $updatemsg;
 	var $delmsg;
+	var $width;
 
 	/////////////////////////////////////////////////////////////////////////////
 	///
@@ -844,6 +847,7 @@ class AffilTextVariable {
 	function __construct() {
 		$this->basecdata = array('obj' => $this);
 		$this->getValues();
+		$this->width = '200px';
 	}
 
 	/////////////////////////////////////////////////////////////////////////////
@@ -859,7 +863,7 @@ class AffilTextVariable {
 
 	/////////////////////////////////////////////////////////////////////////////
 	///
-	/// \fn setValues($affilid, $value)
+	/// \fn setValue($affilid, $value)
 	///
 	/// \param $affilid - affiliationid
 	/// \param $value - value to be set for $affilid
@@ -922,7 +926,7 @@ class AffilTextVariable {
 			$label = $user['affiliation'];
 		}
 		$saveids[] = $key;
-		$h .= labeledFormItem($key, $label, 'text', $this->regexp, 1, $val, $this->errmsg, '', '', '200px'); 
+		$h .= labeledFormItem($key, $label, 'text', $this->regexp, 1, $val, $this->errmsg, '', '', $this->width); 
 		if($globalopts) {
 			$h .= "<div id=\"{$this->domidbase}affildiv\">\n";
 			foreach($affils as $affil => $name) {
@@ -931,7 +935,7 @@ class AffilTextVariable {
 				$key = "{$this->domidbase}_$affil";
 				$saveids[] = $key;
 				$h .= "<span id=\"{$key}span\">\n";
-				$h .= labeledFormItem($key, $name, 'text', $this->regexp, 1, $this->values[$affil], $this->errmsg, '', '', '200px', '', 0);
+				$h .= labeledFormItem($key, $name, 'text', $this->regexp, 1, $this->values[$affil], $this->errmsg, '', '', $this->width, '', 0);
 				$h .= dijitButton("{$key}delbtn", i("Delete"), "{$this->jsname}.deleteAffiliationSetting('$affil', '{$this->domidbase}');") . "<br>\n";
 				$h .= "</span>\n";
 				unset_by_val($name, $affils);
@@ -945,7 +949,7 @@ class AffilTextVariable {
 										 "dojoType=\"dijit.form.Select\" maxHeight=\"250\"");
 			$h .= "<input type=\"text\" dojoType=\"dijit.form.ValidationTextBox\" ";
 			$h .= "id=\"{$this->domidbase}newval\" required=\"true\" invalidMessage=\"{$this->errmsg}\" ";
-			$h .= "regExp=\"{$this->regexp}\" style=\"width: 200px;\">\n";
+			$h .= "regExp=\"{$this->regexp}\" style=\"width: {$this->width};\">\n";
 			$h .= dijitButton("{$this->domidbase}addbtn", i('Add'), "{$this->jsname}.addAffiliationSetting();");
 			$cont = addContinuationsEntry('AJaddAffiliationSetting', $this->basecdata);
 			$h .= "<input type=\"hidden\" id=\"{$this->domidbase}addcont\" value=\"$cont\">\n";
@@ -1068,7 +1072,6 @@ class AffilTextVariable {
 			}
 			if($newval != $val)
 				$newvals[$affilid] = $newval;
-			$origvals[$affilid] = $newval;
 		}
 		$fails = array();
 		foreach($newvals as $affilid => $val) {
@@ -1078,7 +1081,8 @@ class AffilTextVariable {
 
 		# recreate save continuation
 		$cdata = $this->basecdata;
-		$cdata['origvals'] = $origvals;
+		$this->getValues();
+		$cdata['origvals'] = $this->values;
 		$savecont = addContinuationsEntry('AJupdateAllSettings', $cdata);
 
 		if(count($fails)) {
@@ -1203,7 +1207,7 @@ class AffilHelpAddress extends AffilTextVariable {
 
 	/////////////////////////////////////////////////////////////////////////////
 	///
-	/// \fn setValues($affilid, $value)
+	/// \fn setValue($affilid, $value)
 	///
 	/// \param $affilid - affiliationid
 	/// \param $value - value to be set for $affilid
@@ -1243,6 +1247,209 @@ class AffilHelpAddress extends AffilTextVariable {
 		$query = "UPDATE affiliation "
 		       . "SET helpaddress = NULL "
 		       . "WHERE id = $affilid";
+		doQuery($query);
+		$rc = mysql_affected_rows($mysql_link_vcl);
+		if($rc == 1)
+			return 1;
+		return 0;
+	}
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \class AffilKMSserver
+///
+/// \brief extends AffilTextVariable to implement AffilKMSserver
+///
+////////////////////////////////////////////////////////////////////////////////
+class AffilKMSserver extends AffilTextVariable {
+	/////////////////////////////////////////////////////////////////////////////
+	///
+	/// \fn __construct()
+	///
+	/// \brief class construstor
+	///
+	/////////////////////////////////////////////////////////////////////////////
+	function __construct() {
+		parent::__construct();
+		$this->name = i("KMS Servers");
+		$this->desc = i("These are the KMS servers for activating Windows licensing. Multiple servers are allowed, delimited with a comma (,). Non standard ports can be specified after the server delimited with a colon (:). (ex: kms.example.com,kms2.example.com:2000)");
+		$regbase = '((((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?))|([A-Za-z0-9\-\.]+))(:[0-9]{1,5})?';
+		$this->regexp = "$regbase(,$regbase)*";
+		$this->errmsg = i("Invalid IP or hostname specified");
+		$this->domidbase = "affilkmsserver";
+		$this->jsname = "affilkmsserver";
+		$this->addmsg = i("KMS server added for %s");
+		$this->updatemsg = i("Update successful");
+		$this->delmsg = i("KMS server for %s deleted");
+		$this->width = '350px';
+	}
+
+	/////////////////////////////////////////////////////////////////////////////
+	///
+	/// \fn getValues()
+	///
+	/// \brief gets assigned values from database and sets in $this->values
+	///
+	/////////////////////////////////////////////////////////////////////////////
+	function getValues() {
+		$this->values = array();
+		$query = "SELECT a.id, "
+		       .        "k.address, "
+		       .        "k.port "
+		       . "FROM affiliation a "
+		       . "LEFT JOIN winKMS k ON (k.affiliationid = a.id) "
+		       . "ORDER BY a.id";
+		$qh = doQuery($query);
+		while($row = mysql_fetch_assoc($qh)) {
+			if(is_null($row['address']) && is_null($row['port'])) {
+				$this->values[$row['id']] = NULL;
+				continue;
+			}
+			if($row['port'] != 1688)
+				$addr = "{$row['address']}:{$row['port']}";
+			else
+				$addr = $row['address'];
+			if(array_key_exists($row['id'], $this->values))
+				$this->values[$row['id']] .= ",$addr";
+			else
+				$this->values[$row['id']] = $addr;
+		}
+	}
+
+	/////////////////////////////////////////////////////////////////////////////
+	///
+	/// \fn setValue($affilid, $value)
+	///
+	/// \param $affilid - affiliationid
+	/// \param $value - must be IP address or hostname; optionally can have a
+	/// port added to the end delimited with a colon
+	///
+	/// \brief sets values in database
+	///
+	/// \return 1 if successfully set values, 0 if error encountered setting
+	/// values
+	///
+	/////////////////////////////////////////////////////////////////////////////
+	function setValue($affilid, $value) {
+		global $mysql_link_vcl;
+		$this->getValues();
+		$values = explode(',', $value);
+		# create datastructure of newly submitted hosts
+		$newhosts = array();
+		foreach($values as $host) {
+			if(strpos($host, ':') !== FALSE) {
+				$tmp = explode(':', $host);
+				$address = $tmp[0];
+				$port = $tmp[1];
+			}
+			else {
+				$address = $host;
+				$port = 1688;
+			}
+			$newhosts[$address] = $port;
+		}
+		# create datastructure of old hosts
+		$olddata = $this->values[$affilid];
+		$oldhosts = array();
+		if(! is_null($olddata)) {
+			$oldvalues = explode(',', $olddata);
+			foreach($oldvalues as $host) {
+				if(strpos($host, ':') !== FALSE) {
+					$tmp = explode(':', $host);
+					$address = $tmp[0];
+					$port = $tmp[1];
+				}
+				else {
+					$address = $host;
+					$port = 1688;
+				}
+				$oldhosts[$address] = $port;
+			}
+		}
+		# build set of new hosts
+		$adds = array();
+		foreach($newhosts as $newhost => $port) {
+			if(! array_key_exists($newhost, $oldhosts))
+				$adds[$newhost] = $port;
+		}
+		# build set of hosts with changed port
+		$changes = array();
+		foreach($newhosts as $newhost => $port) {
+			if(array_key_exists($newhost, $oldhosts) &&
+			   $port != $oldhosts[$newhost])
+				$changes[$newhost] = $port;
+		}
+		# build set of deleted hosts
+		$rems = array();
+		foreach($oldhosts as $oldhost => $port) {
+			if(! array_key_exists($oldhost, $newhosts))
+				$rems[$oldhost] = $port;
+		}
+		if(count($adds) == 0 && count($changes) == 0 && count($rems) == 0)
+			return 1;
+		# insert new hosts
+		$values = array();
+		foreach($adds as $host => $port) {
+			$esc_host = mysql_real_escape_string($host);
+			$values[] = "($affilid, '$esc_host', $port)";
+		}
+		$rc1 = 1;
+		if(count($values)) {
+			$query = "INSERT INTO winKMS "
+			       . "(affiliationid, address, port) "
+			       . "VALUES " . implode(',', $values);
+			doQuery($query);
+			$rc1 = mysql_affected_rows($mysql_link_vcl);
+		}
+		# make changes
+		$rc2 = 1;
+		foreach($changes as $host => $port) {
+			$esc_host = mysql_real_escape_string($host);
+			$query = "UPDATE winKMS "
+			       . "SET port = $port "
+			       . "WHERE address = '$esc_host' AND "
+			       .       "affiliationid = $affilid";
+			doQuery($query);
+			$tmp = mysql_affected_rows($mysql_link_vcl);
+			if($rc2)
+				$rc2 = $tmp;
+		}
+		# delete old hosts
+		$values = array();
+		foreach($rems as $host => $port) {
+			$esc_host = mysql_real_escape_string($host);
+			$values[] = "(affiliationid = $affilid AND "
+			          . "address = '$esc_host' AND "
+			          . "port = $port)";
+		}
+		$rc3 = 1;
+		if(count($values)) {
+			$query = "DELETE FROM winKMS "
+			       . "WHERE " . implode(' OR ', $values);
+			doQuery($query);
+			$rc3 = mysql_affected_rows($mysql_link_vcl);
+		}
+		if($rc1 == 0 || $rc2 == 0 || $rc3 == 0)
+			return 0;
+		return 1;
+	}
+
+	/////////////////////////////////////////////////////////////////////////////
+	///
+	/// \fn deleteValue()
+	///
+	/// \param $affilid - affiliationid
+	///
+	/// \brief deletes a value from the database
+	///
+	/// \return 1 if successfully deleted value, 0 if error encountered
+	///
+	/////////////////////////////////////////////////////////////////////////////
+	function deleteValue($affilid) {
+		global $mysql_link_vcl;
+		$query = "DELETE FROM winKMS "
+		       . "WHERE affiliationid = $affilid";
 		doQuery($query);
 		$rc = mysql_affected_rows($mysql_link_vcl);
 		if($rc == 1)

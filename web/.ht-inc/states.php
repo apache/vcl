@@ -578,6 +578,7 @@ $actions['classmapping']['natportrange'] = 'siteconfig';
 $actions['classmapping']['nfsmounts'] = 'siteconfig';
 $actions['classmapping']['messages'] = 'siteconfig';
 $actions['classmapping']['affilhelpaddress'] = 'siteconfig';
+$actions['classmapping']['affilkmsserver'] = 'siteconfig';
 
 # resource
 $actions['mode']['resource'] = "resource";
