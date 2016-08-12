@@ -1598,11 +1598,11 @@ msgid "Comma delimited list of affiliations for which user passwords are not set
 msgstr ""
 
 #: managementnode.php:486
-msgid "message"
+msgid "This is the IP address on the NAT host of the network adapter that is public facing. Users will connect to this IP address."
 msgstr ""
 
 #: managementnode.php:487
-msgid "message 2"
+msgid "This is the IP address on the NAT host of the network adapter that is facing the internal network. This is how the NAT host will pass traffic to the VCL nodes."
 msgstr ""
 
 #: oneclick.php:47

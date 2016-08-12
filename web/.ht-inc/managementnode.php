@@ -483,8 +483,8 @@ class ManagementNode extends Resource {
 		$h .= helpTooltip('dnsserverhelp', i("comma delimited list of IP addresses of DNS servers for public network"));
 		$h .= helpTooltip('availnetshelp', i("This is a list of IP networks, one per line, available to nodes deployed by this management node. Networks should be specified in x.x.x.x/yy form.  It is for deploying servers having a fixed IP address to ensure a node is selected that can actually be on the specified network."));
 		$h .= helpTooltip('federatedauthhelp', i("Comma delimited list of affiliations for which user passwords are not set for Linux image reservations under this management node. Each Linux image is then required to have federated authentication set up so that users' passwords are passed along to the federated authentication system when a user attempts to log in. (for clarity, not set setting user passwords does not mean users have an empty password, but that a federated system must authenticate the users)"));
-		$h .= helpTooltip('natpubliciphelp', i("message"));
-		$h .= helpTooltip('natinternaliphelp', i("message 2"));
+		$h .= helpTooltip('natpubliciphelp', i("This is the IP address on the NAT host of the network adapter that is public facing. Users will connect to this IP address."));
+		$h .= helpTooltip('natinternaliphelp', i("This is the IP address on the NAT host of the network adapter that is facing the internal network. This is how the NAT host will pass traffic to the VCL nodes."));
 		$h .= "</div>\n"; # tooltips
 		return $h;
 	}
