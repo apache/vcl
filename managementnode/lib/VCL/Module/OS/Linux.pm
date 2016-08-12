@@ -3483,6 +3483,11 @@ sub get_network_bridge_info {
 		return;
 	}
 	
+	# This only gets cached if the brctl command does not exist
+	if (defined($self->{network_bridge_info})) {
+		return $self->{network_bridge_info};
+	}
+	
 	my $computer_name = $self->data->get_computer_short_name();
 	
 	# It's possible that a bridge will have multiple interfaces:
@@ -3494,7 +3499,6 @@ sub get_network_bridge_info {
 	# It's possible to have no interfaces listed:
 	# bridge name     bridge id               STP enabled     interfaces
 	# xbr1            8000.000000000000       no
-
 	
 	my $command = "brctl show";
 	my ($exit_status, $output) = $self->execute($command);
@@ -3502,9 +3506,15 @@ sub get_network_bridge_info {
 		notify($ERRORS{'WARNING'}, 0, "failed to execute command on $computer_name: $command");
 		return;
 	}
+	elsif ($exit_status == 127 || grep(/command not found/i, @$output)) {
+		notify($ERRORS{'DEBUG'}, 0, "network bridge configuration does not exist on $computer_name, brctl is not installed");
+		# Cache an empty hash reference so this command isn't needlessly run multiple times
+		$self->{network_bridge_info} = {};
+		return $self->{network_bridge_info};
+	}
 	elsif ($exit_status ne '0') {
 		notify($ERRORS{'WARNING'}, 0, "failed to retrieve network bridge configuration from $computer_name, exit status: $exit_status, command:\n$command\noutput:\n" . join("\n", @$output));
-		return 0;
+		return;
 	}
 	
 	my $network_bridge_info = {};
