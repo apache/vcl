@@ -1,0 +1,499 @@
+/*
+* Licensed to the Apache Software Foundation (ASF) under one or more
+* contributor license agreements.  See the NOTICE file distributed with
+* this work for additional information regarding copyright ownership.
+* The ASF licenses this file to You under the Apache License, Version 2.0
+* (the "License"); you may not use this file except in compliance with
+* the License.  You may obtain a copy of the License at
+*
+*     http://www.apache.org/licenses/LICENSE-2.0
+*
+* Unless required by applicable law or agreed to in writing, software
+* distributed under the License is distributed on an "AS IS" BASIS,
+* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+* See the License for the specific language governing permissions and
+* limitations under the License.
+*/
+@charset "utf-8";
+body {
+	font-size: 14px;
+	font-family: Tahoma, Geneva, sans-serif;
+}
+h2 {
+	font-size: 2.1em;
+}
+h3 {
+	font-size: 1.8em;
+}
+h4 {
+	font-size: 1.5em;
+}
+/* CSS Document */
+@media (max-width: 768px) {
+	#topmenu li {
+		padding-left: 0;
+		margin-left: 0;
+	}
+}
+@media (max-width: 767px) {
+	#topmenu ul.dropdown-menu li a {
+		color: #777777 !important;
+	}
+	#topmenu li {
+		padding-left: 2.2em;
+		margin-left: 1em;
+	}
+}
+@media (min-width: 768px) {
+	#topmenu {
+		white-space: nowrap;
+	}
+}
+#expauthul li {
+	list-style-type: disc;
+}
+#loggedinidbox {
+	float: right;
+	text-transform: none;
+	padding: 6px;
+	line-height: 1em;
+	color: white;
+	background-color: black;
+	font-weight: bold;
+}
+@media (max-width: 767px) {
+	#rightmenubox {
+		display: none;
+	}
+	#logoutlink1 {
+		display: none;
+	}
+	.localeform {
+		display: none;
+	}
+}
+@media (min-width: 768px) {
+	#rightmenubox {
+		float: right;
+		text-align: right;
+		padding-top: 15px;
+		font-size: 0.9em;
+		line-height: 1em;
+		color: #ed1c24;
+		white-space: nowrap;
+	}
+	#logoutlink1 {
+		padding-left:10px;
+	}
+	#logoutlink1 a {
+		color: #000;
+	}
+	#logoutlink2 {
+		display: none;
+	}
+	#mobilelanguagemenu {
+		display: none;
+	}
+}
+#loginbox {
+	margin-left: auto;
+	margin-right: auto;
+	width: 28em;
+}
+#loginlayout {
+	width: auto;
+}
+#loginlayout tbody tr:hover th,
+#loginlayout tbody tr th,
+#loginlayout tbody tr:hover td,
+#loginlayout tbody tr td,
+#addeditdlg tbody tr:hover td,
+#addeditdlg tbody tr td,
+#confdelrescontent tbody tr:hover td,
+#confdelrescontent tbody tr td,
+#groupdlg tbody tr:hover td,
+#groupdlg tbody tr td,
+#addUserPane tbody tr:hover td,
+#addUserPane tbody tr td,
+#addUserGroupPane tbody tr:hover td,
+#addUserGroupPane tbody tr td,
+#addResourceGroupPane tbody tr:hover td,
+#addResourceGroupPane tbody tr td,
+#addNodePane tbody tr:hover td,
+#addNodePane tbody tr td,
+#deleteDialog tbody tr:hover td,
+#deleteDialog tbody tr td,
+#renameDialog tbody tr:hover td,
+#renameDialog tbody tr td {
+	background-color: transparent;
+	border-top: none;
+	padding: 0.2em;
+}
+#groupbyresourcediv table.dojoxGridRowTable tbody tr:hover td {
+	background-color: transparent;
+}
+#groupbyresourcediv div.dojoxGridRowSelected table.dojoxGridRowTable tbody tr td {
+	background-color: black;
+	color: white;
+}
+#addeditdlg tbody tr td.dijitButtonNode {
+	border: 1px solid #c0c0c0;
+}
+#confdelrescontent tbody tr:hover th,
+#confdelrescontent tbody tr th {
+	background-color: transparent;
+	border-top: none;
+	padding: 0.2em;
+	text-align: right;
+}
+#userlookupdata table tbody tr th,
+#userlookupresdata table tbody tr th,
+#vmprofile div.dijitTitlePaneContentInner table tbody tr th,
+#vmprofiledata table tbody tr th {
+	text-align: right;
+}
+#revisiontable {
+	border-top:1px solid;
+}
+#content,
+.dijitDialog,
+.dijitPopup,
+.dijitToolTip {
+	font-size: 0.75em;
+	line-height: 1.2;
+}
+#content {
+	padding-left: 0.3em;
+	padding-right: 0.3em;
+}
+#content table,
+.dijitPopup table,
+.dijitDialog table,
+.dijitToolTip table {
+	margin:0;
+	padding:0;
+	border-spacing:0;
+	border-collapse:collapse;
+	vertical-align:top;
+	border: none;
+	width: auto;
+}
+div.dijitMenuPopup table tbody tr.dijitMenuItemFocused td {
+	background-color: #3559ac;
+}
+#usergroupcontainer,
+#resourcegroupcontainer,
+#gridcontainer,
+#extrafiltersdiv,
+.dijitPopup {
+	box-sizing: content-box;
+	-webkit-box-sizing: content-box;
+	-moz-box-sizing: content-box;
+}
+#usergroupcontainer table,
+#resourcegroupcontainer table,
+#gridcontainer table,
+#extrafiltersdiv table,
+#viewtimesDialog table {
+	width: 0;
+}
+#content table#groupmembershiptbl {
+	border-top: 1px solid;
+}
+#content table tbody tr th,
+#content table tbody tr td,
+#messagestext table tbody tr th,
+#messagestext table tbody tr td,
+#editDialog table tbody tr th,
+#editDialog table tbody tr td,
+#confirmDialog table tbody tr th,
+#confirmDialog table tbody tr td,
+#viewtimesDialog table tbody tr th,
+#viewtimesDialog table tbody tr td,
+#acceptDialog table tbody tr th,
+#acceptDialog table tbody tr td,
+#rejectDialog table tbody tr th,
+#rejectDialog table tbody tr td {
+	border-top: none;
+	background-color: transparent;
+	padding: 0.2em;
+}
+#content tbody tr td.dijitButtonNode {
+	border: 1px solid #c0c0c0;
+}
+#resStatusPane td,
+#messages th,
+#messages td {
+	line-height: 1.1;
+}
+#messagestext table tbody tr th,
+#editDialog table tbody tr th,
+#confirmDialog table tbody tr th,
+#acceptDialog table tbody tr th,
+#rejectDialog table tbody tr th {
+	text-align: right;
+}
+#content fieldset,
+#addeditdlg fieldset {
+	border: 1px solid #808080;
+	padding: 0.3em;
+}
+#content fieldset form p,
+#addeditdlg fieldset form p {
+	margin-bottom: 0.1em;
+}
+#content small,
+.dijitDialog small {
+	font-size: 85%;
+}
+#content input[type="radio"],
+#content input[type="checkbox"] {
+	margin-top: 0;
+	margin-right: 0.6em;
+	margin-bottom: 0;
+	margin-left: 0.6em;
+}
+#content label {
+	margin-bottom: 0;
+}
+#deployprofileslist fieldset legend,
+#uipreffieldsets fieldset legend,
+#addeditdlg fieldset legend,
+#groupprivhelpcell fieldset legend {
+	width: auto;
+	font-size: 1.2em;
+	margin-bottom: 0;
+	padding: 0.3em;
+	margin-left: 0.6em;
+	border: none;
+}
+#widget_deployimage .dijitReset {
+	line-height: 1.4;
+}
+.dijitReset {
+	line-height: 1.4 !important;
+}
+#newResDlgContent {
+	line-height: 1;
+}
+.dijitDialog ul {
+	margin-top: 0.8em;
+	line-height: 1.3;
+}
+.dijitDialog ul li:before {
+	content: none;
+}
+.dijitPopup {
+	font-size: 0.75em;
+}
+#usersDiv table tbody tr:hover,
+#usersDiv table tbody tr th,
+#usersDiv table tbody tr td,
+#usergroupsDiv table tbody tr:hover,
+#usergroupsDiv table tbody tr th,
+#usergroupsDiv table tbody tr td,
+#resourcesDiv table tbody tr:hover,
+#resourcesDiv table tbody tr th,
+#resourcesDiv table tbody tr td,
+#addUserPane table tbody tr:hover,
+#addUserPane table tbody tr th,
+#addUserPane table tbody tr td,
+#addUserGroupPane table tbody tr:hover,
+#addUserGroupPane table tbody tr th,
+#addUserGroupPane table tbody tr td,
+#addResourceGroupPane table tbody tr:hover,
+#addResourceGroupPane table tbody tr th,
+#addResourceGroupPane table tbody tr td {
+	border: 1px solid black;
+}
+#addUserPane table.noborder tbody tr:hover,
+#addUserPane table.noborder tbody tr th,
+#addUserPane table.noborder tbody tr td,
+#addUserGroupPane table.noborder tbody tr:hover,
+#addUserGroupPane table.noborder tbody tr th,
+#addUserGroupPane table.noborder tbody tr td,
+#addResourceGroupPane table.noborder tbody tr:hover,
+#addResourceGroupPane table.noborder tbody tr th,
+#addResourceGroupPane table.noborder tbody tr td {
+	border: none;
+}
+#usersDiv th.privBlock,
+#usersDiv td.privBlock,
+#usergroupsDiv th.privBlock,
+#usergroupsDiv td.privBlock,
+#resourcesDiv th.privBlock,
+#resourcesDiv td.privBlock,
+#addUserPane th.privBlock,
+#addUserPane td.privBlock,
+#addUserPane td.privBlock:hover,
+#addUserGroupPane th.privBlock,
+#addUserGroupPane td.privBlock,
+#addUserGroupPane td.privBlock:hover,
+#addResourceGroupPane th.privBlock,
+#addResourceGroupPane td.privBlock,
+#addResourceGroupPane td.privBlock:hover {
+	background-color: gray !important;
+}
+#usersDiv th.privCascade,
+#usersDiv td.privCascade,
+#usergroupsDiv th.privCascade,
+#usergroupsDiv td.privCascade,
+#resourcesDiv th.privCascade,
+#resourcesDiv td.privCascade,
+#addUserPane th.privCascade,
+#addUserPane td.privCascade,
+#addUserPane td.privCascade:hover,
+#addUserGroupPane th.privCascade,
+#addUserGroupPane td.privCascade,
+#addUserGroupPane td.privCascade:hover,
+#addResourceGroupPane th.privCascade,
+#addResourceGroupPane td.privCascade,
+#addResourceGroupPane td.privCascade:hover {
+	background-color: #008000 !important;
+}
+#content div.dashwidget h3 {
+	background-color: #ed1c24;
+}
+a:hover, a:active {
+  text-decoration: underline;
+}
+a:visited {
+	color: #990000;
+}
+#row1 {
+	background-color:#ffffff;
+}
+img.header-logo {
+    float: left;
+    padding-right: 1em;
+    vertical-align: middle;
+}
+h1.site-title {
+	line-height: 1em;
+	font-size: 1.7em;
+	padding-top: 15px;
+	margin: 0;
+}
+#reslisttable td, #imgreslisttable td, #longreslisttable td {
+	padding-left: 8px;
+	padding-right: 8px;
+}
+#layouttable form {
+	margin: 0 0 0 0;
+}
+#content {
+	margin-left: 8px;
+}
+.screen-reader-text {
+	clip: rect(1px, 1px, 1px, 1px);
+	position: absolute !important;
+}
+.configwidget h3 {
+	background-color: #ed1c24 !important;
+	font-size: 1.6em;
+	padding: 2px;
+}
+.configwidget {
+	font-size: 1.1em;
+}
+#computerdlgcontent label {
+	width: 16em;
+}
+#computerdlgcontent .labeledform {
+	margin-left: 16.5em;
+}
+#advancedoptions label {
+    width: 21em;
+}
+#advancedoptions .labeledform {
+    margin-left: 21.5em;
+}
+#mgmtnodedlgcontent label {
+    width: 24.5em;
+}
+#mgmtnodedlgcontent .labeledform {
+	margin-left: 25em;
+}
+#newreslabelfields label {
+    width: 12em;
+}
+#newreslabelfields .labeledform {
+    margin-left: 12.5em;
+}
+#length {
+	vertical-align: middle;
+}
+#content #ttlayout tbody tr td {
+	padding: 0;
+}
+/* header */
+#siteheader div.container {
+	padding-top: 10px;
+}
+#site-navigation {
+	background-color: #fff;
+	border-top: none;
+	border-left: none;
+	border-right: none;
+	border-bottom: 1px solid #ccc;
+	width: 100%;
+	top: 0;
+	position: relative;
+	z-index: 100;
+}
+#site-navigation div.container {
+	padding-left: 8px;
+	padding-right: 8px;
+}
+#navbar-collapse-main {
+	padding-left: 0;
+	padding-right: 0;
+}
+#topmenu > li > a {
+	color: #000;
+	font-size: 0.9em;
+	font-weight: bold;
+}
+#topmenu > li.active > a {
+	color: #fff;
+}
+.container-fluid {
+	padding-left: 0;
+	padding-right: 0;
+}
+.dropdown-menu {
+	background-color: #ed1c24;
+}
+.dropdown-menu > li > a {
+	color: #fff;
+}
+.dropdown-menu > .active > a,
+.dropdown-menu > .active > a:hover,
+.dropdown-menu > .active > a:focus {
+	background-color: #000;
+}
+.navbar-default .navbar-nav > .active > a,
+.navbar-default .navbar-nav > .active > a:hover {
+	background-color: #ed1c24;
+}
+.localeform {
+	display: inline;
+	color: #000;
+}
+/* footer */
+footer {
+	margin-top: 15px;
+	background-color: #ed1c24;
+}
+footer .row {
+	margin: 0;
+	padding: 15px;
+	text-align: right;
+}
+footer a,
+footer a:visited {
+	color: #ffffff;
+}
+.site-info {
+	color: #000;
+}

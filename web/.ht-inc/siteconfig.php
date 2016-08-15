@@ -68,11 +68,10 @@ function generalOptions($globalopts) {
 	$h .= $obj->getHTML();
 	# ------ end full width ---------
 
-	$h .= "<table summary=\"\" id=siteconfig>\n";
-	$h .= "<tr>\n";
+	$h .= "<div id=\"siteconfiglayout\">\n";
 
 	# -------- left column ---------
-	$h .= "<td style=\"vertical-align: top;\">\n";
+	$h .= "<div id=\"siteconfigleftcol\">\n";
 	$obj = new connectedUserCheck();
 	$h .= $obj->getHTML($globalopts);
 	$obj = new acknowledge();
@@ -89,12 +88,12 @@ function generalOptions($globalopts) {
 	}
 	$obj = new AffilHelpAddress();
 	$h .= $obj->getHTML($globalopts);
-	$h .= "</td>\n";
+	$h .= "</div>\n"; # siteconfigleftcol
 	# -------- end left column ---------
 
 
 	# ---------- right column ---------
-	$h .= "<td style=\"vertical-align: top;\">\n";
+	$h .= "<div id=\"siteconfigrightcol\">\n";
 	$obj = new generalInuse();
 	$h .= $obj->getHTML($globalopts);
 	$obj = new serverInuse();
@@ -111,11 +110,10 @@ function generalOptions($globalopts) {
 	}
 	$obj = new AffilKMSserver();
 	$h .= $obj->getHTML($globalopts);
-	$h .= "</td>\n";
+	$h .= "</div>\n"; # siteconfigrightcol
 	# -------- end right column --------
 
-	$h .= "</tr>\n";
-	$h .= "</table>\n";
+	$h .= "</div>\n"; # siteconfiglayout
 
 	#$h .= "</div>\n";
 	return $h;

@@ -38,30 +38,28 @@ function dashboard() {
 		$affils = array_reverse($affils, TRUE);
 		printSelectInput('affilid', $affils, -1, 0, 0, 'affilid', 'onChange="updateDashboard();"');
 	}
-	print "<table summary=\"\" id=dashboard>\n";
-	print "<tr>\n";
+	print "<div id=\"dashlayout\">\n";
 
 	# -------- left column ---------
-	print "<td valign=\"top\">\n";
+	print "<div id=\"dashleft\">\n";
 	print addWidget('status', 'Current Status');
 	print addWidget('topimages', 'Top 5 Images in Use', '(Reservations &lt; 24 hours long)');
 	print addWidget('toplongimages', 'Top 5 Long Term Images in Use', '(Reservations &gt; 24 hours long)');
 	print addWidget('toppastimages', 'Top 5 Images From Past Day', '(Reservations with a start<br>time within past 24 hours)');
 	print addWidget('topfailedcomputers', 'Top Recent Computer Failures', '(Failed in the last 5 days)');
 	print addWidget('blockallocation', 'Block Allocation Status');
-	print "</td>\n";
+	print "</div>\n"; # dashleft
 	# -------- end left column ---------
 
 	# ---------- right column ---------
-	print "<td valign=\"top\">\n";
+	print "<div id=\"dashright\">\n";
 	print addWidget('managementnodes', 'Management Nodes', '[ ] denotes node in maintenance state');
 	print addWidget('topfailed', 'Top Recent Image Failures', '(Failed in the last 5 days)');
 	print addLineChart('reschart', 'Past 12 Hours of Active Reservations');
-	print "</td>\n";
+	print "</div>\n"; # dashright
 	# -------- end right column --------
 
-	print "</tr>\n";
-	print "</table>\n";
+	print "</div>\n"; # dashlayout
 	print addWidget('newreservations', 'Notable Reservations', '');
 	if(checkUserHasPerm('View Dashboard (global)'))
 		print addWidget('failedimaging', 'Failed Imaging Reservations', '(Imaging Reservations in the maintenance state)');

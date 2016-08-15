@@ -155,9 +155,8 @@ function selectAuth() {
 	print $HTMLheader;
 	$printedHTMLheader = 1;
 	print "<H2>" . i("Welcome to the Virtual Computing Lab") . "</H2>\n";
-	print "<TABLE id=\"loginlayout\">\n";
-	print "<TR>\n";
-	print "<TD nowrap class=rightborder>\n";
+	print "<div id=\"loginlayout\">\n";
+	print "<div id=\"loginform\">\n";
 	print i("Please select an authentication method to use:") . "<br><br>\n";
 	if(strlen($authtype))
 		print "<font color=red>" . i("Selected method failed, please try again") . "</font><br>\n";
@@ -175,16 +174,15 @@ function selectAuth() {
 	print "<label for=remsel>" . i("Remember my selection") . "</label><br>\n";
 	print "<INPUT type=submit value=\"" . i("Proceed to Login") . "\" tabindex=3 name=userid>\n";
 	print "</FORM>\n";
-	print "</TD>\n";
-	print "<TD>\n";
+	print "</div>\n"; # loginform
+	print "<div id=\"loginhelp\">\n";
 	print "<h3>" . i("Explanation of authentication methods:") . "</h3>\n";
 	print "<UL id=expauthul>\n";
 	foreach($authMechs as $mech)
 		print "<LI>{$mech['help']}</LI>\n";
 	print "</UL>\n";
-	print "</TD>\n";
-	print "</TR>\n";
-	print "</TABLE>\n";
+	print "</div>\n"; # loginhelp
+	print "</div>\n"; # loginlayout
 	print getFooter();
 }
 
@@ -483,7 +481,7 @@ function localLogin($userid, $passwd, $authtype) {
 		else
 			setcookie("VCLAUTH", "{$cookie['data']}", 0, "/", COOKIEDOMAIN);
 		//load main page
-		setcookie("VCLSKIN", "default", (time() + (SECINDAY * 31)), "/", COOKIEDOMAIN);
+		setcookie("VCLSKIN", DEFAULTTHEME, (time() + (SECINDAY * 31)), "/", COOKIEDOMAIN);
 		header("Location: " . BASEURL . SCRIPT);
 		dbDisconnect();
 		exit;
@@ -624,7 +622,7 @@ function checkExpiredDemoUser($userid, $groups=0) {
 				updateGroups(array($nodemoid), $userid);
 				checkUpdateServerRequestGroups($groupid);
 				if(empty($skin)) {
-					$skin = 'default';
+					$skin = DEFAULTTHEME;
 					require_once("themes/$skin/page.php");
 				}
 				$mode = 'expiredemouser';

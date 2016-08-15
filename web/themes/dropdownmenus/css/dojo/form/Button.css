@@ -1,0 +1,136 @@
+
+/*****
+		dijit.form.Button
+		dijit.form.DropDownButton
+		dijit.form.ComboButton
+		dijit.form.ComboBox (partial)
+		dijit.form.Spinner (partial) (TODO: create NumberSpinner.css file like claro has)
+ *****/
+
+.dropdownmenus .dijitButtonNode {
+	/* enabled state - inner */
+	border: 1px solid #c0c0c0;
+	border-bottom: 1px solid #9b9b9b;
+	padding: 0.1em 0.2em 0.2em 0.2em;
+	background: #fff url("../images/buttonEnabled.png") repeat-x bottom left;
+}
+.dropdownmenus .dijitButtonText {
+	text-align: center;
+	padding: 0 0.3em;
+}
+
+.dropdownmenus .dijitDisabled .dijitButtonText {
+	color: #7F7F7F;
+}
+
+.dropdownmenus .dijitArrowButton {
+	color: #111;
+}
+
+.dropdownmenus .dijitComboButton .dijitDownArrowButton {
+	padding-right:4px;
+}
+
+.dropdownmenus .dijitTextBoxReadOnly,
+.dropdownmenus .dijitTextBoxReadOnly .dijitButtonNode,
+.dropdownmenus .dijitButtonDisabled .dijitButtonNode,
+.dropdownmenus .dijitToggleButtonDisabled .dijitButtonNode,
+.dropdownmenus .dijitDropDownButtonDisabled .dijitButtonNode,
+.dropdownmenus .dijitComboButtonDisabled .dijitButtonNode,
+.dropdownmenus .dijitTextBoxDisabled,
+.dropdownmenus .dijitTextBoxDisabled .dijitButtonNode {
+	/* disabled state - inner */
+	border-color: #d5d5d5 #d5d5d5 #bdbdbd #d5d5d5;
+	background:#e4e4e4 url("../images/buttonDisabled.png") top repeat-x;
+}
+
+.dropdownmenus .dijitButtonHover .dijitButtonNode,
+.dropdownmenus .dijitButtonNodeHover,
+.dropdownmenus .dijitToggleButtonHover .dijitButtonNode,
+.dropdownmenus .dijitDropDownButtonHover .dijitButtonNode,
+.dropdownmenus .dijitComboButton .dijitButtonContentsHover,
+.dropdownmenus .dijitComboButton .dijitDownArrowButtonHover {
+	/* hover state - inner */
+	/* TODO: change from Hover to Selected so that button is still highlighted while drop down is being used */
+	border-color: #a5beda;
+	border-bottom-color:#5c7590;
+	color:#243C5F;
+	background:#fcfdff url("../images/buttonHover.png") repeat-x bottom;
+}
+.dropdownmenus .dijitDownArrowButtonHover,
+.dropdownmenus .dijitUpArrowButtonHover {
+	/* same as above except don't adjust border color (it's controlled by the containing Spinner/ComboBox) */
+	color:#243C5F;
+	background:#fcfdff url("../images/buttonHover.png") repeat-x bottom;
+}
+
+.dropdownmenus .dijitUpArrowButtonActive,
+.dropdownmenus .dijitDownArrowButtonActive,
+.dropdownmenus .dijitButtonActive .dijitButtonNode,
+.dropdownmenus .dijitToggleButtonActive .dijitButtonNode,
+.dropdownmenus .dijitDropDownButtonActive .dijitButtonNode,
+.dropdownmenus .dijitButtonContentsActive,
+.dropdownmenus .dijitStackController .dijitToggleButtonChecked .dijitButtonNode {
+	/* active state - inner (for when you are pressing a normal button, or
+	 * when a radio-type button is in a depressed state
+	 */
+	border-color:#366dba;
+	background: #ededed url("../images/buttonActive.png") bottom repeat-x;
+}
+
+.dropdownmenus .dijitArrowButtonInner {
+	background:url("../images/spriteArrows.png") no-repeat scroll 0 center;
+	width: 7px;
+	height: 7px;
+	margin: 0 4px 0 4px;
+}
+.dropdownmenus .dijitTextBox .dijitArrowButtonInner {
+	background-position: 0 center;
+}
+.dj_ie6 .dropdownmenus .dijitArrowButtonInner {
+	background-image:url("../images/spriteArrows.gif");
+}
+.dropdownmenus .dijitLeftArrowButton .dijitArrowButtonInner {
+	background-position: -7px center;
+}
+.dropdownmenus .dijitRightArrowButton .dijitArrowButtonInner {
+	background-position: -14px center;
+}
+.dropdownmenus .dijitUpArrowButton .dijitArrowButtonInner {
+	background-position: -21px center;
+}
+
+.dropdownmenus .dijitDisabled .dijitArrowButtonInner {
+	background-position: -28px center;
+}
+.dropdownmenus .dijitDisabled .dijitLeftArrowButton .dijitArrowButtonInner {
+	background-position: -35px center;
+}
+.dropdownmenus .dijitDisabled .dijitRightArrowButton .dijitArrowButtonInner {
+	background-position: -42px center;
+}
+.dropdownmenus .dijitDisabled .dijitUpArrowButton .dijitArrowButtonInner {
+	background-position: -49px center;
+}
+.dj_webkit .dropdownmenus .dijitSpinner .dijitUpArrowButton .dijitArrowButtonInner {
+	margin-top: -1px; /* image has too many blank pixels on top */
+}
+.dj_ie .dropdownmenus .dijitSpinner .dijitDownArrowButton .dijitArrowButtonInner {
+	margin-top: -2px; /* image has too many blank pixels on top */
+}
+.dj_ie8 .dropdownmenus .dijitSpinner .dijitDownArrowButton .dijitArrowButtonInner {
+	margin-top: -1px; /* image has too many blank pixels on top */
+}
+.dropdownmenus .dijitSpinnerButtonContainer {
+	width: auto;
+	padding: 0;
+}
+.dropdownmenus .dijitSpinner .dijitArrowButton {
+	width: 15px;
+}
+.dropdownmenus .dijitSpinner .dijitSpinnerButtonInner {
+	width: 15px;
+}
+.dropdownmenus .dijitSpinner .dijitArrowButtonInner .dijitInputField {
+	padding: 0;
+}

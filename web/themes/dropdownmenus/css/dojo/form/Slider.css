@@ -1,0 +1,147 @@
+.dropdownmenus .dijitSliderProgressBarH {
+	border-color: #aab0bb;
+	background: #c0c2c5 url("../images/sliderFull.png") repeat-x top left;
+}
+
+.dropdownmenus .dijitSliderProgressBarV {
+	border-color: #aab0bb;
+	background: #c0c2c5 url("../images/sliderFullVertical.png") repeat-y bottom left;
+}
+
+.dropdownmenus .dijitSliderFocused .dijitSliderProgressBarH,
+.dropdownmenus .dijitSliderFocused .dijitSliderLeftBumper {
+	background-image:url("../images/sliderFullFocus.png");
+}
+
+.dropdownmenus .dijitSliderFocused .dijitSliderProgressBarV,
+.dropdownmenus .dijitSliderFocused .dijitSliderBottomBumper {
+	background-image:url("../images/sliderFullVerticalFocus.png");
+}
+
+.dropdownmenus .dijitSliderRemainingBarV {
+	border-color: #b4b4b4;
+	background: #dcdcdc url("../images/sliderEmptyVertical.png") repeat-y bottom left;
+}
+
+.dropdownmenus .dijitSliderRemainingBarH {
+	border-color: #b4b4b4;
+	background: #dcdcdc url("../images/sliderEmpty.png") repeat-x top left;
+}
+
+.dropdownmenus .dijitSliderBar {
+	border-style: solid;
+	outline:1px;
+}
+.dropdownmenus .dijitSliderFocused .dijitSliderBar {
+	border-color:#888;
+}
+
+.dropdownmenus .dijitSliderImageHandleH {
+	border:0;
+	width:16px;
+	height:16px;
+	background:url("../images/preciseSliderThumb.png") no-repeat center top;
+}
+.dropdownmenus .dijitSliderFocused .dijitSliderImageHandleH {
+	background-image:url("../images/preciseSliderThumbFocus.png");
+	#background-image:url("../images/preciseSliderThumbFocus.gif");
+}
+
+.dj_ie6 .dropdownmenus .dijitSliderImageHandleH {
+	background-image:url("../images/preciseSliderThumb.gif");
+}
+
+.dropdownmenus .dijitSliderLeftBumper {
+	border-left-width: 1px;
+	border-color: #aab0bb;
+	background: #c0c2c5 url("../images/sliderFull.png") repeat-x top left;
+}
+
+.dropdownmenus .dijitSliderRightBumper {
+	background: #dcdcdc url("../images/sliderEmpty.png") repeat-x top left;
+	border-color: #b4b4b4;
+	border-right-width: 1px;
+}
+
+.dropdownmenus .dijitSliderImageHandleV {
+	border:0;
+	width:16px;
+	height:16px;
+	background:url("../images/sliderThumb.png") no-repeat center center;
+}
+
+.dropdownmenus .dijitSliderFocused .dijitSliderImageHandleV {
+	background-image:url("../images/sliderThumbFocus.png");
+}
+.dj_ie6 .dropdownmenus .dijitSliderFocused .dijitSliderImageHandleV {
+	background-image:url("../images/sliderThumbFocus.gif");
+}
+
+.dropdownmenus .dijitSliderBottomBumper {
+	border-bottom-width: 1px;
+	border-color: #aab0bb;
+	background: #c0c2c5 url("../images/sliderFullVertical.png") repeat-y bottom left;
+}
+
+.dropdownmenus .dijitSliderTopBumper {
+	background: #dcdcdc url("../images/sliderEmptyVertical.png") repeat-y top left;
+	border-color: #b4b4b4;
+	border-top-width: 1px;
+}
+
+.dropdownmenus .dijitSliderDecrementIconH,
+.dropdownmenus .dijitSliderDecrementIconV,
+.dropdownmenus .dijitSliderIncrementIconH,
+.dropdownmenus .dijitSliderIncrementIconV {
+	background-image: url('../images/spriteArrows.png');
+	background-repeat: no-repeat;
+	margin: 5px;
+	height: 7px;
+	width: 7px;
+	font-size: 1px;
+}
+.dj_ie6 .dropdownmenus .dijitSliderDecrementIconH,
+.dj_ie6 .dropdownmenus .dijitSliderDecrementIconV,
+.dj_ie6 .dropdownmenus .dijitSliderIncrementIconH,
+.dj_ie6 .dropdownmenus .dijitSliderIncrementIconV {
+	background-image: url('../images/spriteArrows.gif');
+}
+
+.dropdownmenus .dijitSliderDecrementIconH {
+	background-position: -7px 0;
+}
+.dropdownmenus .dijitSliderIncrementIconH {
+	background-position: -14px 0;
+}
+.dropdownmenus .dijitSliderDecrementIconV {
+	background-position: 0 0;
+}
+.dropdownmenus .dijitSliderIncrementIconV {
+	background-position: -21px 0;
+}
+
+.dropdownmenus .dijitSliderButtonInner {
+	visibility:hidden;
+}
+
+.dropdownmenus .dijitSliderReadOnly *,
+.dropdownmenus .dijitSliderDisabled * {
+	border-color: #d5d5d5 #bdbdbd #bdbdbd #d5d5d5;
+	color: #bdbdbd;
+}
+.dropdownmenus .dijitSliderReadOnly .dijitSliderDecrementIconH,
+.dropdownmenus .dijitSliderDisabled .dijitSliderDecrementIconH {
+	background-position: -35px 0;
+}
+.dropdownmenus .dijitSliderReadOnly .dijitSliderIncrementIconH,
+.dropdownmenus .dijitSliderDisabled .dijitSliderIncrementIconH {
+	background-position: -42px 0;
+}
+.dropdownmenus .dijitSliderReadOnly .dijitSliderDecrementIconV,
+.dropdownmenus .dijitSliderDisabled .dijitSliderDecrementIconV {
+	background-position: -28px 0;
+}
+.dropdownmenus .dijitSliderReadOnly .dijitSliderIncrementIconV,
+.dropdownmenus .dijitSliderDisabled .dijitSliderIncrementIconV {
+	background-position: -49px 0;
+}

@@ -1,0 +1,96 @@
+/* Tree */
+
+.dropdownmenus .dijitTreeNode {
+    background-image : url('images/i.gif');
+    background-repeat : repeat-y;
+    zoom: 1;	/* force layout on IE (TODO: may not be needed anymore) */
+}
+
+/* left vertical line (grid) for all nodes */
+.dropdownmenus .dijitTreeIsLast {
+    background: url('images/i_half.gif') no-repeat;
+}
+
+.dropdownmenus .dijitTreeIsRoot {
+    margin-left: 0;
+    background-image: none;
+}
+
+.dropdownmenus .dijitTreeExpando {
+    width: 18px;
+    height: 18px;
+}
+
+.dropdownmenus .dijitTreeRow {
+	/* so insert line shows up on IE when dropping after a target element */
+	padding-bottom: 2px;
+}
+
+.dropdownmenus .dijitTreeContent {
+    min-height: 18px;
+    min-width: 18px;
+}
+
+.dropdownmenus .dijitTreeRowSelected .dijitTreeLabel {
+	background:#e2ebfe;
+}
+.dropdownmenus .dijitTreeRowHover {
+	/* using a transparent png so that we can still see grid lines, which are (unfortunately) behind the dijitRowNode that we are hovering over */
+	background-image: url(images/treeHover.png);
+	background-repeat: repeat;
+	background-color: transparent !important;
+}
+
+.dropdownmenus .dijitTreeExpandoOpened {
+	background-image: url('images/treeExpand_minus.gif');
+}
+
+.dropdownmenus .dijitTreeExpandoClosed {
+	background-image: url('images/treeExpand_plus.gif');
+}
+
+.dropdownmenus .dijitTreeExpandoLeaf {
+	background-image: url('images/treeExpand_leaf.gif');
+}
+
+.dropdownmenus .dijitTreeExpandoLoading {
+	background-image: url('images/treeExpand_loading.gif');
+}
+
+.dropdownmenus .dijitTreeIcon {
+	width: 16px;
+	height: 16px;
+}
+
+.dropdownmenus .dijitFolderOpened {
+	background: url('images/folderOpened.gif') no-repeat;
+}
+
+.dropdownmenus .dijitFolderClosed {
+	background: url('images/folderClosed.gif') no-repeat;
+}
+
+.dropdownmenus .dijitLeaf {
+	background: url('images/leaf.gif') no-repeat;
+}
+
+/* Drag and Drop on TreeNodes
+ * Put insert line on dijitTreeContent node so it's aligned w/
+ * (ie, indented equally with) target element, even
+ * though dijitTreeRowNode is the actual "drag object"
+ */
+.dropdownmenus .dijitTreeNode .dojoDndItemBefore,
+.dropdownmenus .dijitTreeNode .dojoDndItemAfter {
+	border-bottom: none;
+	border-top: none;
+}
+
+.dropdownmenus .dijitTreeNode .dojoDndItemBefore .dijitTreeContent {
+	/* copied from Common.css */
+	border-top: 2px solid #369;
+}
+
+.dropdownmenus .dijitTreeNode .dojoDndItemAfter .dijitTreeContent {
+	/* copied from Common.css */
+	border-bottom: 2px solid #369;
+}

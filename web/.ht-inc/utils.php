@@ -12359,37 +12359,6 @@ function sendJSON($arr, $identifier='', $REST=0) {
 		print '{} && {"items":' . json_encode($arr) . '}';
 }
 
-
-////////////////////////////////////////////////////////////////////////////////
-///
-/// \fn menulistLI($page)
-///
-/// \param $page - name of a page
-///
-/// \return a list item tag, with the class set to selected if this mode belogs
-/// to this page
-///
-/// \brief determines if the current mode is part of $page and returns a list
-/// item tag with the class set if it is, or just a list item tag if it is not
-///
-////////////////////////////////////////////////////////////////////////////////
-function menulistLI($page) {
-	global $mode, $actions, $inContinuation;
-	$mymode = $mode;
-	if(empty($mymode))
-		$mymode = "main";
-	$testval = $actions['pages'][$mymode];
-	if($inContinuation) {
-		$obj = getContinuationVar('obj');
-		if(! is_null($obj) && isset($obj->restype))
-			$testval = $obj->restype;
-	}
-	if($testval == $page)
-		return "<li class=selected>";
-	else
-		return "<li>";
-}
-
 ////////////////////////////////////////////////////////////////////////////////
 ///
 /// \fn sendHeaders()
@@ -12601,7 +12570,51 @@ function printHTMLHeader() {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function getNavMenu($inclogout, $inchome, $homeurl=HOMEURL) {
-	global $user, $docreaders, $authed, $mode;
+	$menudata = getNavMenuData($homeurl);
+
+	$rt = '';
+	if($inchome) {
+		$rt .= "<li";
+		if($menudata['home']['selected'])
+			$rt .= " class=\"selected\"";
+		$rt .= "><a href=\"{$menudata['home']['url']}\">{$menudata['home']['title']}</a></li>\n";
+		unset($menudata['home']);
+	}
+	foreach($menudata as $page => $item) {
+		if($page == 'authentication')
+			continue;
+		$rt .= "<li";
+		if($menudata[$page]['selected'])
+			$rt .= " class=\"selected\"";
+		$rt .= "><a href=\"{$menudata[$page]['url']}\">{$menudata[$page]['title']}</a></li>\n";
+	}
+	if($inclogout) {
+		$rt .= "<li";
+		if($menudata['authentication']['selected'])
+			$rt .= " class=\"selected\"";
+		$rt .= "><a href=\"{$menudata['authentication']['url']}\">{$menudata['authentication']['title']}</a></li>\n";
+	}
+	return $rt;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn getNavMenuData($homeurl)
+///
+/// \param $homeurl - (optional, defaults to HOMEURL) url for home link
+/// to point to
+///
+/// \return array of menu items where the keys in the array are the page names
+/// from the states.php file, and each item is an array with these keys:\n
+/// \b url - URL menu item should link to\n
+/// \b title - label for menu item\n
+/// \b selected - 0 or 1; whether or not the menu item is currently active
+///
+/// \brief builds the data for the main site menu
+///
+////////////////////////////////////////////////////////////////////////////////
+function getNavMenuData($homeurl=HOMEURL) {
+	global $user, $authed, $mode;
 	if($authed && $mode != 'expiredemouser') {
 		$computermetadata = getUserComputerMetaData();
 		$requests = getUserRequests("all", $user["id"]);
@@ -12609,113 +12622,157 @@ function getNavMenu($inclogout, $inchome, $homeurl=HOMEURL) {
 	else
 		$computermetadata = array("platforms" => array(),
 		                          "schedules" => array());
-	$rt = '';
-	if($inchome) {
-		$rt .= menulistLI('home');
-		$rt .= "<a href=\"$homeurl\">" . i("HOME") . "</a></li>\n";
-	}
+	$menudata = array();
 
-	$rt .= menulistLI('reservations');
-	$rt .= "<a href=\"" . BASEURL . SCRIPT . "?mode=viewRequests\">";
-	$rt .= i("Reservations") . "</a></li>\n";
+	$menudata['home']['url'] = $homeurl;
+	$menudata['home']['title'] = i('HOME');
+	$menudata['home']['selected'] = checkMenuItemSelected('home');
 
-	#$rt .= menulistLI('config');
-	#$rt .= "<a href=\"" . BASEURL . SCRIPT . "?mode=config\">";
-	#$rt .= i("Manage Configs") . "</a></li>\n";
+	$menudata['reservations']['url'] = BASEURL . SCRIPT . "?mode=viewRequests";
+	$menudata['reservations']['title'] = i('Reservations');
+	$menudata['reservations']['selected'] = checkMenuItemSelected('reservations');
 
-	$rt .= menulistLI('blockAllocations');
-	$rt .= "<a href=\"" . BASEURL . SCRIPT . "?mode=blockAllocations\">";
-	$rt .= i("Block Allocations") . "</a></li>\n";
-	$rt .= menulistLI('userPreferences');
-	$rt .= "<a href=\"" . BASEURL . SCRIPT . "?mode=userpreferences\">";
-	$rt .= i("User Preferences") . "</a></li>\n";
+	#$menudata['config']['url'] = BASEURL . SCRIPT . "?mode=config";
+	#$menudata['config']['title'] = i('Manage Configs');
+	#$menudata['config']['selected'] = checkMenuItemSelected('config');
+
+	$menudata['blockAllocations']['url'] = BASEURL . SCRIPT . "?mode=blockAllocations";
+	$menudata['blockAllocations']['title'] = i('Block Allocations');
+	$menudata['blockAllocations']['selected'] = checkMenuItemSelected('blockAllocations');
+
+	$menudata['userPreferences']['url'] = BASEURL . SCRIPT . "?mode=userpreferences";
+	$menudata['userPreferences']['title'] = i('User Preferences');
+	$menudata['userPreferences']['selected'] = checkMenuItemSelected('userPreferences');
+
 	if(in_array("groupAdmin", $user["privileges"])) {
-		$rt .= menulistLI('manageGroups');
-		$rt .= "<a href=\"" . BASEURL . SCRIPT . "?mode=viewGroups\">";
-		$rt .= i("Manage Groups") . "</a></li>\n";
+		$menudata['managegroups']['url'] = BASEURL . SCRIPT . "?mode=viewGroups";
+		$menudata['managegroups']['title'] = i('Manage Groups');
+		$menudata['managegroups']['selected'] = checkMenuItemSelected('manageGroups');
 	}
+
 	if(in_array("imageAdmin", $user["privileges"])) {
-		$rt .= menulistLI('image');
-		$rt .= "<a href=\"" . BASEURL . SCRIPT . "?mode=image\">";
-		$rt .= i("Manage Images") . "</a></li>\n";
+		$menudata['image']['url'] = BASEURL . SCRIPT . "?mode=image";
+		$menudata['image']['title'] = i('Manage Images');
+		$menudata['image']['selected'] = checkMenuItemSelected('image');
 	}
+
 	if(in_array("scheduleAdmin", $user["privileges"])) {
-		$rt .= menulistLI('schedule');
-		$rt .= "<a href=\"" . BASEURL . SCRIPT . "?mode=schedule\">";
-		$rt .= i("Manage Schedules") . "</a></li>\n";
+		$menudata['schedule']['url'] = BASEURL . SCRIPT . "?mode=schedule";
+		$menudata['schedule']['title'] = i('Manage Schedules');
+		$menudata['schedule']['selected'] = checkMenuItemSelected('schedule');
 	}
+
 	if(in_array("computerAdmin", $user["privileges"])) {
-		$rt .= menulistLI('computer');
-		$rt .= "<a href=\"" . BASEURL . SCRIPT . "?mode=computer\">";
-		$rt .= i("Manage Computers") . "</a></li>\n";
+		$menudata['computer']['url'] = BASEURL . SCRIPT . "?mode=computer";
+		$menudata['computer']['title'] = i('Manage Computers');
+		$menudata['computer']['selected'] = checkMenuItemSelected('computer');
 	}
+
 	if(in_array("mgmtNodeAdmin", $user["privileges"])) {
-		$rt .= menulistLI('managementnode');
-		$rt .= "<a href=\"" . BASEURL . SCRIPT . "?mode=managementnode\">";
-		$rt .= i("Management Nodes") . "</a></li>\n";
+		$menudata['managementnode']['url'] = BASEURL . SCRIPT . "?mode=managementnode";
+		$menudata['managementnode']['title'] = i('Management Nodes');
+		$menudata['managementnode']['selected'] = checkMenuItemSelected('managementnode');
 	}
+
 	if(in_array("serverProfileAdmin", $user["privileges"]) ||
 	   in_array("serverCheckOut", $user["privileges"])) {
-		$rt .= menulistLI('serverProfiles');
-		$rt .= "<a href=\"" . BASEURL . SCRIPT;
-		$rt .= "?mode=serverProfiles\">" . i("Server Profiles") . "</a></li>\n";
+		$menudata['serverProfiles']['url'] = BASEURL . SCRIPT . "?mode=serverProfiles";
+		$menudata['serverProfiles']['title'] = i('Server Profiles');
+		$menudata['serverProfiles']['selected'] = checkMenuItemSelected('serverProfiles');
 	}
+
 	if(count($computermetadata["platforms"]) &&
 		count($computermetadata["schedules"])) {
-		$rt .= menulistLI('timeTable');
-		$rt .= "<a href=\"" . BASEURL . SCRIPT . "?mode=pickTimeTable\">";
-		$rt .= i("View Time Table") . "</a></li>\n";
+		$menudata['timeTable']['url'] = BASEURL . SCRIPT . "?mode=pickTimeTable";
+		$menudata['timeTable']['title'] = i('View Time Table');
+		$menudata['timeTable']['selected'] = checkMenuItemSelected('timeTable');
 	}
+
 	if(in_array("userGrant", $user["privileges"]) ||
 		in_array("resourceGrant", $user["privileges"]) ||
 		in_array("nodeAdmin", $user["privileges"])) {
-		$rt .= menulistLI('privileges');
-		$rt .= "<a href=\"" . BASEURL . SCRIPT . "?mode=viewNodes\">";
-		$rt .= i("Privileges") . "</a></li>\n";
+		$menudata['privileges']['url'] = BASEURL . SCRIPT . "?mode=viewNodes";
+		$menudata['privileges']['title'] = i('Privileges');
+		$menudata['privileges']['selected'] = checkMenuItemSelected('privileges');
 	}
+
 	if(checkUserHasPerm('User Lookup (global)') ||
 	   checkUserHasPerm('User Lookup (affiliation only)')) {
-		$rt .= menulistLI('userLookup');
-		$rt .= "<a href=\"" . BASEURL . SCRIPT . "?mode=userLookup\">";
-		$rt .= i("User Lookup") . "</a></li>\n";
+		$menudata['userLookup']['url'] = BASEURL . SCRIPT . "?mode=userLookup";
+		$menudata['userLookup']['title'] = i('User Lookup');
+		$menudata['userLookup']['selected'] = checkMenuItemSelected('userLookup');
 	}
+
 	if(in_array("computerAdmin", $user["privileges"])) {
-		$rt .= menulistLI('vm');
-		$rt .= "<a href=\"" . BASEURL . SCRIPT . "?mode=editVMInfo\">";
-		$rt .= i("Virtual Hosts") . "</a></li>\n";
+		$menudata['vm']['url'] = BASEURL . SCRIPT . "?mode=editVMInfo";
+		$menudata['vm']['title'] = i('Virtual Hosts');
+		$menudata['vm']['selected'] = checkMenuItemSelected('vm');
 	}
+
 	if(checkUserHasPerm('Schedule Site Maintenance')) {
-		$rt .= menulistLI('sitemaintenance');
-		$rt .= "<a href=\"" . BASEURL . SCRIPT . "?mode=siteMaintenance\">";
-		$rt .= i("Site Maintenance") . "</a></li>\n";
+		$menudata['sitemaintenance']['url'] = BASEURL . SCRIPT . "?mode=siteMaintenance";
+		$menudata['sitemaintenance']['title'] = i('Site Maintenance');
+		$menudata['sitemaintenance']['selected'] = checkMenuItemSelected('sitemaintenance');
 	}
-	$rt .= menulistLI('statistics');
-	$rt .= "<a href=\"" . BASEURL . SCRIPT . "?mode=selectstats\">";
-	$rt .= i("Statistics") . "</a></li>\n";
+
+	$menudata['statistics']['url'] = BASEURL . SCRIPT . "?mode=selectstats";
+	$menudata['statistics']['title'] = i('Statistics');
+	$menudata['statistics']['selected'] = checkMenuItemSelected('statistics');
+
 	if(checkUserHasPerm('View Dashboard (global)') ||
 	   checkUserHasPerm('View Dashboard (affiliation only)')) {
-		$rt .= menulistLI('dashboard');
-		$rt .= "<a href=\"" . BASEURL . SCRIPT . "?mode=dashboard\">";
-		$rt .= i("Dashboard") . "</a></li>\n";
+		$menudata['dashboard']['url'] = BASEURL . SCRIPT . "?mode=dashboard";
+		$menudata['dashboard']['title'] = i('Dashboard');
+		$menudata['dashboard']['selected'] = checkMenuItemSelected('dashboard');
 	}
-	$rt .= menulistLI('oneClick');
-	$rt .= "<a href=\"" . BASEURL . SCRIPT . "?mode=newOneClick\">";
-	$rt .= i("VCL gos") . "</a></li>\n";
+
+	$menudata['oneClick']['url'] = BASEURL . SCRIPT . "?mode=newOneClick";
+	$menudata['oneClick']['title'] = i('VCL gos');
+	$menudata['oneClick']['selected'] = checkMenuItemSelected('oneClick');
+
 	if(checkUserHasPerm('Site Configuration (global)') ||
 	   checkUserHasPerm('Site Configuration (affiliation only)')) {
-		$rt .= menulistLI('siteconfig');
-		$rt .= "<a href=\"" . BASEURL . SCRIPT . "?mode=siteconfig\">";
-		$rt .= i("Site Configuration") . "</a></li>\n";
+		$menudata['siteconfig']['url'] = BASEURL . SCRIPT . "?mode=siteconfig";
+		$menudata['siteconfig']['title'] = i('Site Configuration');
+		$menudata['siteconfig']['selected'] = checkMenuItemSelected('siteconfig');
 	}
-	$rt .= menulistLI('codeDocumentation');
-	$rt .= "<a href=\"" . DOCUMENTATIONURL . "\">";
-	$rt .= i("Documentation") . "</a></li>\n";
-	if($inclogout) {
-		$rt .= menulistLI('authentication');
-		$rt .= "<a href=\"" . BASEURL . SCRIPT . "?mode=logout\">";
-		$rt .= i("Logout") . "</a></li>\n";
+
+	$menudata['codeDocumentation']['url'] = DOCUMENTATIONURL;
+	$menudata['codeDocumentation']['title'] = i('Documentation');
+	$menudata['codeDocumentation']['selected'] = checkMenuItemSelected('codeDocumentation');
+
+	$menudata['authentication']['url'] = BASEURL . SCRIPT . "?mode=logout";
+	$menudata['authentication']['title'] = i('Logout');
+	$menudata['authentication']['selected'] = checkMenuItemSelected('authentication');
+
+	return $menudata;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn checkMenuItemSelected($page)
+///
+/// \param $page - name of a page
+///
+/// \return 1 if $page is selected, 0 if not
+///
+/// \brief determines if the current mode is part of $page
+///
+////////////////////////////////////////////////////////////////////////////////
+function checkMenuItemSelected($page) {
+	global $mode, $actions, $inContinuation;
+	$mymode = $mode;
+	if(empty($mymode))
+		$mymode = "main";
+	$testval = $actions['pages'][$mymode];
+	if($inContinuation) {
+		$obj = getContinuationVar('obj');
+		if(! is_null($obj) && isset($obj->restype))
+			$testval = $obj->restype;
 	}
-	return $rt;
+	if($testval == $page)
+		return 1;
+	return 0;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -13257,10 +13314,6 @@ function getDojoHTML($refresh) {
 			$rt .= "       resourcegroupstore.comparatorMap = {};\n";
 			$rt .= "     resourcegroupstore.comparatorMap['name'] = nocasesort;\n";
 			$rt .= "   });\n";
-			if($mode == 'viewGroups')
-				$rt .= "  var firstscroll = 1;\n";
-			else
-				$rt .= " var firstscroll = 0;\n";
 			$rt .= "</script>\n";
 			$rt .= "<script type=\"text/javascript\" src=\"js/groups.js?v=$v\"></script>\n";
 			return $rt;
@@ -13595,8 +13648,8 @@ function getSelectLanguagePulldown() {
 	if(! is_array($user))
 		$user['id'] = 0;
 
-	$rt  = "<form name=\"localeform\" id=\"localeform\" action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
-	$rt .= "<select name=\"continuation\" onChange=\"document.localeform.submit();\">\n";
+	$rt  = "<form name=\"localeform\" class=\"localeform\" action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
+	$rt .= "<select name=\"continuation\" onChange=\"this.form.submit();\" autocomplete=\"off\">\n";
 	$cdata = array('IP' => $remoteIP, 'oldmode' => $mode);
 	if($mode == 'selectauth') {
 		$type = processInputVar('authtype', ARG_STRING);

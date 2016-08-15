@@ -1,0 +1,76 @@
+.dropdownmenus .dijitMenu,
+.dropdownmenus .dijitMenuBar {
+	border: 1px solid #7eabcd;
+	margin: 0;
+	padding: 0;
+	background-color: #f7f7f7;
+}
+
+.dropdownmenus .dijitBorderContainer .dijitMenuBar {
+	border:1px solid #ccc;
+}
+
+.dropdownmenus .dijitMenuItem {
+	font-family: sans-serif;
+	margin: 0;
+}
+
+.dropdownmenus .dijitMenuItem {
+	padding: 4px 5px;
+}
+
+.dropdownmenus .dijitMenuPreviousButton, .dropdownmenus .dijitMenuNextButton {
+	font-style: italic;
+}
+.dropdownmenus .dijitMenuItem td {
+	padding: 2px;
+}
+
+.dropdownmenus .dijitMenuPassive .dijitMenuItemHover,
+.dropdownmenus .dijitMenuItemSelected {
+	background-color: #3559ac;
+	color:#fff;
+}
+
+.dropdownmenus .dijitMenuItemIcon {
+	width: 16px;
+	height: 16px;
+}
+
+.dropdownmenus .dijitMenuExpand {
+	/* arrow to indicate this MenuItem opens a sub-menu */
+	width: 7px;
+	height: 7px;
+	background-image: url('images/spriteArrows.png');
+	background-position: -14px 0;
+}
+.dj_ie6 .dropdownmenus .dijitMenuExpand {
+	background-image: url('images/spriteArrows.gif');
+}
+
+/* separator can be two pixels -- set border of either one to 0 to have only one */
+.dropdownmenus .dijitMenuSeparatorTop {
+	border-bottom: 1px solid #9b9b9b;
+}
+
+.dropdownmenus .dijitMenuSeparatorBottom {
+	border-top: 1px solid #e8e8e8;
+}
+
+/* the checked menu item */
+.dropdownmenus .dijitCheckedMenuItemIconChar {
+	display: none;
+}
+
+.dropdownmenus .dijitCheckedMenuItemIcon {
+	background-image: url('images/checkmark.png');
+	background-position: -80px;
+}
+
+.dj_ie6 .dropdownmenus .dijitCheckedMenuItemIcon {
+	background-image: url('images/checkmark.gif');
+}
+
+.dropdownmenus .dijitCheckedMenuItemChecked .dijitCheckedMenuItemIcon {
+	background-position: -64px;
+}

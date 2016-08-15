@@ -70,6 +70,86 @@ body {
 	background: #ededed;
 }
 
+#loginhelp {
+	border: 1px solid black;
+	background-color: #ddd;
+	padding: 0.2em;
+}
+
+@media (max-width: 768px) {
+	#loginlayout {
+		display: block;
+	}
+
+	#loginform {
+		display: block;
+	}
+
+	#loginhelp {
+		display: block;
+		margin-top: 2em;
+		margin-right: 0.6em;
+	}
+
+	#siteconfiglayout,
+	#siteconfigleftcol,
+	#siteconfigrightcol {
+		display: block;
+	}
+
+	#dashlayout,
+	#dashleft,
+	#dashright {
+		display: block;
+	}
+}
+@media (min-width: 769px) {
+	#loginlayout {
+		display: table;
+		border-spacing: 0.8em;
+		border-collapse: separate;
+	}
+
+	#loginform {
+		display: table-cell;
+		vertical-align: top;
+	}
+
+	#loginhelp {
+		display: table-cell;
+	}
+
+	#siteconfiglayout {
+		display: table;
+	}
+
+	#siteconfigleftcol {
+		display: table-cell;
+		vertical-align: top;
+	}
+
+	#siteconfigrightcol {
+		padding-left: 0.8em;
+		display: table-cell;
+		vertical-align: top;
+	}
+
+	#dashlayout {
+		display: table;
+	}
+
+	#dashleft {
+		display: table-cell;
+		vertical-align: top;
+	}
+
+	#dashright {
+		padding-left: 0.8em;
+		display: table-cell;
+		vertical-align: top;
+	}
+}
+
 .rightborder {
 	border-right: 1px solid #000000;
 }

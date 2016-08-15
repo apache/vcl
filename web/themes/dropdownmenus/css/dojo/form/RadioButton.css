@@ -1,0 +1,52 @@
+
+.dropdownmenus .dijitRadio,			/* stand alone */
+.dropdownmenus .dijitRadioIcon	{		/* inside a toggle button */
+	background-image: url('../images/checkmark.png'); /* checkbox sprite image */
+	background-repeat: no-repeat;
+	width: 16px;
+	height: 16px;
+	margin: 0;
+	padding: 0;
+}
+.dj_ie6 .dropdownmenus .dijitRadio,
+.dj_ie6 .dropdownmenus .dijitRadioIcon	{
+	background-image: url('../images/checkmark.gif'); /* checkbox sprite image */
+}
+
+.dropdownmenus .dijitToggleButton .dijitRadioIcon {
+	/* for checkbox in a toggle button, override above setting to have no border */
+	background-image: url('../images/checkmarkNoBorder.png');
+}
+.dj_ie6 .dropdownmenus .dijitToggleButton .dijitRadioIcon {
+	background-image: url('../images/checkmarkNoBorder.gif');
+}
+
+.dropdownmenus .dijitRadio,
+.dropdownmenus .dijitRadioIcon {
+	/* unselected */
+	background-position: -112px;
+}
+
+.dropdownmenus .dijitRadioDisabled {
+	/* unselected and disabled */
+	background-position: -144px;
+}
+
+.dropdownmenus .dijitRadioHover {
+	/* hovering over an unselected enabled radio button */
+	background-position: -176px;
+}
+
+.dropdownmenus .dijitRadioChecked,
+.dropdownmenus .dijitRadioCheckedHover,
+.dropdownmenus .dijitToggleButtonChecked .dijitRadioIcon {
+	/* selected.  Since clicking a selected radio button doesn't change anything, there's
+	 * no hover effect on selected radio buttons.
+	 */
+	background-position: -96px;
+}
+
+.dropdownmenus .dijitRadioCheckedDisabled {
+	/* selected but disabled */
+	background-position: -128px;
+}
