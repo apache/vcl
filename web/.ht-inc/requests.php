@@ -3891,9 +3891,14 @@ function AJconfirmDeleteRequest() {
 		else {
 			if(datetimeToUnix($request["start"]) <
 				datetimeToUnix($request["daterequested"]))
-				$showstart = prettyDatetime($request["daterequested"]);
+				$dtstart = $request["daterequested"];
 			else
-				$showstart = prettyDatetime($request["start"]);
+				$dtstart = $request["start"];
+			$tsstart = datetimeToUnix($dtstart);
+			if($tsstart < time() - SECINMONTH * 6)
+				$showstart = prettyDatetime($dtstart, 1);
+			else
+				$showstart = prettyDatetime($dtstart);
 			if($notbyowner == 0) {
 				$text = sprintf(i("Are you finished with your reservation for %s that started %s?"),
 				                "<b>{$reservation["prettyimage"]}</b>", $showstart);
