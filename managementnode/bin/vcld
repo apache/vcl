@@ -182,7 +182,8 @@ sub main () {
 		
 		# Get all the requests assigned to this management node
 		# get_management_node_requests() gets a subset of the information available
-		if ($info{request} = get_management_node_requests($management_node_id)) {
+		$info{request} = get_management_node_requests($management_node_id);
+		if (defined($info{request})) {
 			#notify($ERRORS{'DEBUG'}, $LOGFILE, "retrieved request information for management node $management_node_id");
 		}
 		else {
@@ -538,8 +539,18 @@ sub make_new_child {
 		}
 		elsif (defined $pid) {
 			# If here, this is the child process
+			
 			# Child must *NOT* return from this subroutine after this point. It must exit.
 			# If child returns it will become a parent process and spawn off its own children
+			
+			# Close/release the lockfile if the handle is shared with the forked child
+			# This behavior isn't reliable, using the old SysV daemon it doesn't get shared with the child
+			# It does get shared using systemd
+			# If shared, the child keeps the file locked even the the parent vcld process dies
+			# This prevents the parent from being able to start up again until the child dies
+			if (fileno LOCKFILE) {
+				close LOCKFILE;
+			}
 			
 			# Set the process group of this child process to its own PID instead of it's parent PID
 			# This allows any processes forked by this child to be killed when this process is killed
@@ -720,7 +731,7 @@ sub REAPER {
 	my $child_exit_status = $? >> 8;
 	my $signal_number = $? & 127;
 	my $dumped_core = $? & 128;
-	#notify($ERRORS{'DEBUG'}, 0, "REAPER called: signal: $signal, initial value of \$?: $status_save");
+	notify($ERRORS{'DEBUG'}, 0, "REAPER called: signal: $signal, initial value of \$?: $status_save");
 	
 	# Wait for a child processes to die
 	my $dead_pid = -1;
