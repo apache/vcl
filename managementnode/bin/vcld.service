@@ -1,0 +1,15 @@
+[Unit]
+Description=VCL management node daemon
+After=network-online.target
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/sysconfig/vcld
+ExecStart=/usr/local/vcl/bin/vcld $OPTIONS
+ExecStop=/bin/kill ${MAINPID}
+KillMode=process
+Restart=always
+RestartSec=10s
+
+[Install]
+WantedBy=multi-user.target
