@@ -292,9 +292,7 @@ function initPage() {
 		resourcestore.comparatorMap['procspeed'] = resource.nocasesort;
 		resourcestore.comparatorMap['network'] = resource.nocasesort;
 
-		setTimeout(function() {
-			dojo.byId('computercount').innerHTML = 'Computers in table: ' + resourcegrid.rowCount;
-		}, 3000);
+		dojo.connect(resourcegrid, '_onFetchComplete', function() {dojo.byId('computercount').innerHTML = 'Computers in table: ' + resourcegrid.rowCount;});
 	}
 }
 
