@@ -24,6 +24,7 @@ After=network-online.target
 [Service]
 Type=simple
 EnvironmentFile=/etc/sysconfig/vcld
+PIDFile=/var/run/vcld.pid
 ExecStart=/usr/local/vcl/bin/vcld $OPTIONS
 ExecStop=/bin/kill ${MAINPID}
 KillMode=process
