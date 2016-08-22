@@ -1498,13 +1498,13 @@ function userLookup() {
 			print "There are no login attempts by this user.<br>\n";
 		}
 
-
 		# reservation history
 		$requests = array();
 		$query = "SELECT DATE_FORMAT(l.start, '%W, %b %D, %Y, %h:%i %p') AS start, "
 		       .        "DATE_FORMAT(l.finalend, '%W, %b %D, %Y, %h:%i %p') AS end, "
 		       .        "c.hostname, "
 		       .        "i.prettyname AS prettyimage, "
+		       .        "l.remoteIP AS userIP, "
 		       .        "s.IPaddress, "
 		       .        "l.ending, "
 		       .        "l.requestid, "
@@ -1563,8 +1563,14 @@ function userLookup() {
 				print "  </tr>\n";
 				if($req['IPaddress'] != '') {
 					print "  <tr>\n";
-					print "    <th align=right>IP Address:</th>\n";
+					print "    <th align=right>Node's IP Address:</th>\n";
 					print "    <td>{$req['IPaddress']}</td>\n";
+					print "  </tr>\n";
+				}
+				if($req['userIP'] != '') {
+					print "  <tr>\n";
+					print "    <th align=right>User's IP Address:</th>\n";
+					print "    <td>{$req['userIP']}</td>\n";
 					print "  </tr>\n";
 				}
 				print "  <tr>\n";
@@ -1603,8 +1609,8 @@ function userLookup() {
 		       .        "ch.hostname AS vmhost, "
 		       .        "mn.hostname AS managementnode, "
 		       .        "srq.name AS servername, "
-		       .        "aug.name AS admingroup, "
-		       .        "lug.name AS logingroup, "
+		       .        "CONCAT(aug.name, '@', auga.name) AS admingroup, "
+		       .        "CONCAT(lug.name, '@', luga.name) AS logingroup, "
 		       .        "s1.name AS state, "
 		       .        "s2.name AS laststate "
 		       . "FROM image i, "
@@ -1616,7 +1622,9 @@ function userLookup() {
 		       . "LEFT JOIN computer ch ON (vh.computerid = ch.id) "
 		       . "LEFT JOIN serverrequest srq ON (srq.requestid = rq.id) "
 		       . "LEFT JOIN usergroup aug ON (aug.id = srq.admingroupid) "
+		       . "LEFT JOIN affiliation auga ON (aug.affiliationid = auga.id) "
 		       . "LEFT JOIN usergroup lug ON (lug.id = srq.logingroupid) "
+		       . "LEFT JOIN affiliation luga ON (lug.affiliationid = luga.id) "
 		       . "LEFT JOIN state s1 ON (s1.id = rq.stateid) "
 		       . "LEFT JOIN state s2 ON (s2.id = rq.laststateid) "
 		       . "WHERE rq.userid = {$userdata['id']} AND "
@@ -1729,8 +1737,8 @@ function userLookup() {
 			       .        "ch.hostname AS vmhost, "
 			       .        "mn.hostname AS managementnode, "
 			       .        "srq.name AS servername, "
-			       .        "aug.name AS admingroup, "
-			       .        "lug.name AS logingroup, "
+			       .        "CONCAT(aug.name, '@', auga.name) AS admingroup, "
+			       .        "CONCAT(lug.name, '@', luga.name) AS logingroup, "
 			       .        "s1.name AS state, "
 			       .        "s2.name AS laststate "
 			       . "FROM image i, "
@@ -1742,7 +1750,9 @@ function userLookup() {
 			       . "LEFT JOIN computer ch ON (vh.computerid = ch.id) "
 			       . "LEFT JOIN serverrequest srq ON (srq.requestid = rq.id) "
 			       . "LEFT JOIN usergroup aug ON (aug.id = srq.admingroupid) "
+			       . "LEFT JOIN affiliation auga ON (aug.affiliationid = auga.id) "
 			       . "LEFT JOIN usergroup lug ON (lug.id = srq.logingroupid) "
+			       . "LEFT JOIN affiliation luga ON (lug.affiliationid = luga.id) "
 			       . "LEFT JOIN state s1 ON (s1.id = rq.stateid) "
 			       . "LEFT JOIN state s2 ON (s2.id = rq.laststateid) "
 			       . "WHERE (srq.admingroupid IN (" . implode(',', array_keys($userdata['groups'])) . ") OR "
