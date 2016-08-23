@@ -9172,6 +9172,8 @@ function labeledFormItem($id, $label, $type, $constraints='', $required=1,
 			$flat = '';
 			foreach($extra as $key => $val)
 				$flat .= "$key=\"$val\" ";
+			if($width != '')
+				$flat .= "style=\"width: $width;\" ";
 			if($type == 'selectonly')
 				$h .= selectInputHTML('', $constraints, $id, "dojoType=\"dijit.form.Select\" maxHeight=\"250\" $flat", $value);
 			else

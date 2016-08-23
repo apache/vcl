@@ -110,6 +110,8 @@ function generalOptions($globalopts) {
 	}
 	$obj = new AffilKMSserver();
 	$h .= $obj->getHTML($globalopts);
+	$obj = new AffilTheme();
+	$h .= $obj->getHTML($globalopts);
 	$h .= "</div>\n"; # siteconfigrightcol
 	# -------- end right column --------
 
@@ -826,7 +828,7 @@ class AffilTextVariable {
 	var $name;
 	var $desc;
 	var $values;
-	var $regexp;
+	var $constraints;
 	var $errmsg;
 	var $domidbase;
 	var $jsname;
@@ -834,6 +836,8 @@ class AffilTextVariable {
 	var $updatemsg;
 	var $delmsg;
 	var $width;
+	var $vartype;
+	var $allowdelete;
 
 	/////////////////////////////////////////////////////////////////////////////
 	///
@@ -846,6 +850,8 @@ class AffilTextVariable {
 		$this->basecdata = array('obj' => $this);
 		$this->getValues();
 		$this->width = '200px';
+		$this->vartype = 'text';
+		$this->allowdelete = 1;
 	}
 
 	/////////////////////////////////////////////////////////////////////////////
@@ -878,7 +884,7 @@ class AffilTextVariable {
 
 	/////////////////////////////////////////////////////////////////////////////
 	///
-	/// \fn deleteValue()
+	/// \fn deleteValue($affilid)
 	///
 	/// \param $affilid - affiliationid
 	///
@@ -889,6 +895,23 @@ class AffilTextVariable {
 	/////////////////////////////////////////////////////////////////////////////
 	function deleteValue($affilid) {
 		return 1;
+	}
+
+	/////////////////////////////////////////////////////////////////////////////
+	///
+	/// \fn validateValue($value)
+	///
+	/// \param $value - value to be validated
+	///
+	/// \brief validates a submitted value
+	///
+	/// \return 1 if $value is valid, 0 if $value is not valid
+	///
+	/////////////////////////////////////////////////////////////////////////////
+	function validateValue($value) {
+		if(preg_match("/{$this->constraints}/", $value))
+			return 1;
+		return 0;
 	}
 
 	/////////////////////////////////////////////////////////////////////////////
@@ -924,7 +947,7 @@ class AffilTextVariable {
 			$label = $user['affiliation'];
 		}
 		$saveids[] = $key;
-		$h .= labeledFormItem($key, $label, 'text', $this->regexp, 1, $val, $this->errmsg, '', '', $this->width); 
+		$h .= labeledFormItem($key, $label, $this->vartype, $this->constraints, 1, $val, $this->errmsg, '', '', $this->width); 
 		if($globalopts) {
 			$h .= "<div id=\"{$this->domidbase}affildiv\">\n";
 			foreach($affils as $affil => $name) {
@@ -933,8 +956,10 @@ class AffilTextVariable {
 				$key = "{$this->domidbase}_$affil";
 				$saveids[] = $key;
 				$h .= "<span id=\"{$key}span\">\n";
-				$h .= labeledFormItem($key, $name, 'text', $this->regexp, 1, $this->values[$affil], $this->errmsg, '', '', $this->width, '', 0);
-				$h .= dijitButton("{$key}delbtn", i("Delete"), "{$this->jsname}.deleteAffiliationSetting('$affil', '{$this->domidbase}');") . "<br>\n";
+				$h .= labeledFormItem($key, $name, $this->vartype, $this->constraints, 1, $this->values[$affil], $this->errmsg, '', '', $this->width, '', 0);
+				if($this->allowdelete)
+					$h .= dijitButton("{$key}delbtn", i("Delete"), "{$this->jsname}.deleteAffiliationSetting('$affil', '{$this->domidbase}');");
+				$h .= "<br>\n";
 				$h .= "</span>\n";
 				unset_by_val($name, $affils);
 			}
@@ -945,17 +970,26 @@ class AffilTextVariable {
 			$h .= ">\n";
 			$h .= selectInputHTML('', $affils, "{$this->domidbase}newaffilid",
 										 "dojoType=\"dijit.form.Select\" maxHeight=\"250\"");
-			$h .= "<input type=\"text\" dojoType=\"dijit.form.ValidationTextBox\" ";
-			$h .= "id=\"{$this->domidbase}newval\" required=\"true\" invalidMessage=\"{$this->errmsg}\" ";
-			$h .= "regExp=\"{$this->regexp}\" style=\"width: {$this->width};\">\n";
+			switch($this->vartype) {
+				case 'text':
+					$h .= "<input type=\"text\" dojoType=\"dijit.form.ValidationTextBox\" ";
+					$h .= "id=\"{$this->domidbase}newval\" required=\"true\" invalidMessage=\"{$this->errmsg}\" ";
+					$h .= "regExp=\"{$this->constraints}\" style=\"width: {$this->width};\">\n";
+					break;
+				case 'selectonly':
+					$h .= selectInputHTML('', $this->constraints, "{$this->domidbase}newval", "dojoType=\"dijit.form.Select\" maxHeight=\"250\" style=\"width: {$this->width};\"");
+					break;
+			}
 			$h .= dijitButton("{$this->domidbase}addbtn", i('Add'), "{$this->jsname}.addAffiliationSetting();");
 			$cont = addContinuationsEntry('AJaddAffiliationSetting', $this->basecdata);
 			$h .= "<input type=\"hidden\" id=\"{$this->domidbase}addcont\" value=\"$cont\">\n";
 			$h .= "</div>\n";
 			$cdata = $this->basecdata;
 			$cdata['origvals'] = $this->values;
-			$cont = addContinuationsEntry('AJdeleteAffiliationSetting', $cdata);
-			$h .= "<input type=\"hidden\" id=\"delete{$this->domidbase}cont\" value=\"$cont\">\n";
+			if($this->allowdelete) {
+				$cont = addContinuationsEntry('AJdeleteAffiliationSetting', $cdata);
+				$h .= "<input type=\"hidden\" id=\"delete{$this->domidbase}cont\" value=\"$cont\">\n";
+			}
 		}
 		$h .= "<div id=\"{$this->domidbase}msg\"></div>\n";
 		$saveids = implode(',', $saveids);
@@ -995,7 +1029,7 @@ class AffilTextVariable {
 			return;
 		}
 		$value = processInputVar('value', ARG_STRING);
-		if(! preg_match("/{$this->regexp}/", $value)) {
+		if(! $this->validateValue($value)) {
 			$arr = array('status' => 'failed',
 			             'msgid' => "{$this->domidbase}msg",
 			             'errmsg' => i('Invalid value submitted.'),
@@ -1031,9 +1065,12 @@ class AffilTextVariable {
 		             'extrafunc' => "{$this->jsname}.addAffiliationSettingCBextra",
 		             'deletecont' => $delcont,
 		             'savecont' => $savecont,
-		             'regexp' => $this->regexp,
+		             'constraints' => $this->constraints,
 		             'invalidmsg' => $this->errmsg,
-		             'msg' => sprintf($this->addmsg, $affil));
+		             'msg' => sprintf($this->addmsg, $affil),
+		             'vartype' => $this->vartype,
+		             'allowdelete' => $this->allowdelete,
+		             'width' => $this->width);
 		sendJSON($arr);
 	}
 
@@ -1059,7 +1096,7 @@ class AffilTextVariable {
 			$newval = processInputVar($id, ARG_STRING);
 			if($newval === NULL)
 				continue;
-			if(! preg_match("/{$this->regexp}/", $newval)) {
+			if(! $this->validateValue($newval)) {
 				$affil = getAffiliationName($affilid);
 				$arr = array('status' => 'failed',
 				             'msgid' => "{$this->domidbase}msg",
@@ -1179,7 +1216,7 @@ class AffilHelpAddress extends AffilTextVariable {
 		parent::__construct();
 		$this->name = i("Help Email Address");
 		$this->desc = i("This is the email address used as the from address for emails sent by the VCL system to users.");
-		$this->regexp = '^([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,4},)*([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,4})$';
+		$this->constraints = '^([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,4},)*([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,4})$';
 		$this->errmsg = i("Invalid email address(es) specified");
 		$this->domidbase = "affilhelpaddr";
 		$this->jsname = "affilhelpaddr";
@@ -1231,7 +1268,7 @@ class AffilHelpAddress extends AffilTextVariable {
 
 	/////////////////////////////////////////////////////////////////////////////
 	///
-	/// \fn deleteValue()
+	/// \fn deleteValue($affilid)
 	///
 	/// \param $affilid - affiliationid
 	///
@@ -1273,7 +1310,7 @@ class AffilKMSserver extends AffilTextVariable {
 		$this->name = i("KMS Servers");
 		$this->desc = i("These are the KMS servers for activating Windows licensing. Multiple servers are allowed, delimited with a comma (,). Non standard ports can be specified after the server delimited with a colon (:). (ex: kms.example.com,kms2.example.com:2000)");
 		$regbase = '((((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?))|([A-Za-z0-9\-\.]+))(:[0-9]{1,5})?';
-		$this->regexp = "$regbase(,$regbase)*";
+		$this->constraints = "$regbase(,$regbase)*";
 		$this->errmsg = i("Invalid IP or hostname specified");
 		$this->domidbase = "affilkmsserver";
 		$this->jsname = "affilkmsserver";
@@ -1435,7 +1472,7 @@ class AffilKMSserver extends AffilTextVariable {
 
 	/////////////////////////////////////////////////////////////////////////////
 	///
-	/// \fn deleteValue()
+	/// \fn deleteValue($affilid)
 	///
 	/// \param $affilid - affiliationid
 	///
@@ -1451,6 +1488,128 @@ class AffilKMSserver extends AffilTextVariable {
 		doQuery($query);
 		$rc = mysql_affected_rows($mysql_link_vcl);
 		if($rc == 1)
+			return 1;
+		return 0;
+	}
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \class AffilTheme
+///
+/// \brief extends AffilTextVariable to implement AffilTheme
+///
+////////////////////////////////////////////////////////////////////////////////
+class AffilTheme extends AffilTextVariable {
+	/////////////////////////////////////////////////////////////////////////////
+	///
+	/// \fn __construct()
+	///
+	/// \brief class construstor
+	///
+	/////////////////////////////////////////////////////////////////////////////
+	function __construct() {
+		parent::__construct();
+		$this->name = i("Site Theme");
+		$this->desc = i("This controls the theme of the site displayed for each affiliation.");
+		$this->errmsg = i("Invalid theme specified");
+		$this->domidbase = "affiltheme";
+		$this->jsname = "affiltheme";
+		$this->addmsg = i("Theme setting added for %s");
+		$this->updatemsg = i("Update successful");
+		$this->delmsg = i("Theme setting for %s deleted");
+		$this->getValidValues();
+		$this->vartype = 'selectonly';
+		$this->allowdelete = 0;
+	}
+
+	/////////////////////////////////////////////////////////////////////////////
+	///
+	/// \fn getValidValues()
+	///
+	/// \brief builds an array of valid values into $this->constraints
+	///
+	/////////////////////////////////////////////////////////////////////////////
+	function getValidValues() {
+		$this->constraints = array();
+		foreach(glob('themes/*') as $item) {
+			if(! is_dir($item))
+				continue;
+			$tmp = explode('/', $item);
+			$item = $tmp[1];
+			$this->constraints[$item] = $item;
+		}
+	}
+
+	/////////////////////////////////////////////////////////////////////////////
+	///
+	/// \fn getValues()
+	///
+	/// \brief gets assigned values from database and sets in $this->values
+	///
+	/////////////////////////////////////////////////////////////////////////////
+	function getValues() {
+		$this->values = array();
+		$query = "SELECT id, theme FROM affiliation ORDER BY name";
+		$qh = doQuery($query);
+		while($row = mysql_fetch_assoc($qh))
+			$this->values[$row['id']] = $row['theme'];
+	}
+
+	/////////////////////////////////////////////////////////////////////////////
+	///
+	/// \fn setValue($affilid, $value)
+	///
+	/// \param $affilid - affiliationid
+	/// \param $value - value to be set for $affilid
+	///
+	/// \brief sets values in database
+	///
+	/// \return 1 if successfully set values, 0 if error encountered setting
+	/// values
+	///
+	/////////////////////////////////////////////////////////////////////////////
+	function setValue($affilid, $value) {
+		global $mysql_link_vcl;
+		$esc_value = mysql_real_escape_string($value);
+		$query = "UPDATE affiliation "
+		       . "SET theme = '$esc_value' "
+		       . "WHERE id = $affilid";
+		doQuery($query);
+		$rc = mysql_affected_rows($mysql_link_vcl);
+		if($rc == 1)
+			return 1;
+		return 0;
+	}
+
+	/////////////////////////////////////////////////////////////////////////////
+	///
+	/// \fn deleteValue($affilid)
+	///
+	/// \param $affilid - affiliationid
+	///
+	/// \brief deletes a value from the database
+	///
+	/// \return 1 if successfully deleted value, 0 if error encountered
+	///
+	/////////////////////////////////////////////////////////////////////////////
+	function deleteValue($affilid) {
+		return 0;
+	}
+
+	/////////////////////////////////////////////////////////////////////////////
+	///
+	/// \fn validateValue($value)
+	///
+	/// \param $value - value to be validated
+	///
+	/// \brief validates a submitted value
+	///
+	/// \return 1 if $value is valid, 0 if $value is not valid
+	///
+	/////////////////////////////////////////////////////////////////////////////
+	function validateValue($value) {
+		if(in_array($value, $this->constraints))
 			return 1;
 		return 0;
 	}

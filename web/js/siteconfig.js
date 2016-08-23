@@ -234,26 +234,46 @@ AffilTextVariable.prototype.addAffiliationSettingCBextra = function(data) {
 	span.appendChild(label);
 	var span2 = document.createElement('span');
 	span2.setAttribute('class', 'labeledform');
-	var text = new dijit.form.ValidationTextBox({
-		id: data.items.id,
-		required: 'true',
-		style: 'width: 200px;',
-		value: data.items.value,
-		regExp: data.items.regexp,
-		invalidMessage: data.items.invalidmsg
-	}, document.createElement('div'));
-	span2.appendChild(text.domNode);
-	span.appendChild(span2);
-	var func = this.deleteAffiliationSetting;
-	var domidbase = this.domidbase;
-	var btn = new dijit.form.Button({
-		id: data.items.id + 'delbtn',
-		label: _('Delete'),
-		onClick: function() {
-			func(data.items.id, domidbase);
+	if(data.items.vartype == 'text') {
+		var input = new dijit.form.ValidationTextBox({
+			id: data.items.id,
+			required: 'true',
+			style: 'width: ' + data.items.width,
+			value: data.items.value,
+			regExp: data.items.constraints,
+			invalidMessage: data.items.invalidmsg
+		}, document.createElement('div'));
+	}
+	else if(data.items.vartype == 'selectonly') {
+		var options = [];
+		var i = 0;
+		for(var key in data.items.constraints) {
+			options[i] = {label: key, value: key};
+			if(key == data.items.value)
+				options[i].selected = true;
+			i += 1;
 		}
-	}, document.createElement('div'));
-	span.appendChild(btn.domNode);
+		var input = new dijit.form.Select({
+			id: data.items.id,
+			required: 'true',
+			style: 'width: ' + data.items.width,
+			options: options
+		}, document.createElement('div'));
+	}
+	span2.appendChild(input.domNode);
+	span.appendChild(span2);
+	if(data.items.allowdelete) {
+		var func = this.deleteAffiliationSetting;
+		var domidbase = this.domidbase;
+		var btn = new dijit.form.Button({
+			id: data.items.id + 'delbtn',
+			label: _('Delete'),
+			onClick: function() {
+				func(data.items.id, domidbase);
+			}
+		}, document.createElement('div'));
+		span.appendChild(btn.domNode);
+	}
 	span.appendChild(document.createElement('br'));
 	dojo.byId(this.domidbase + 'affildiv').appendChild(span);
 	dijit.byId(this.domidbase + 'newval').reset();
@@ -316,6 +336,13 @@ function affilkmsserver() {
 }
 affilkmsserver.prototype = new AffilTextVariable();
 var affilkmsserver = new affilkmsserver();
+
+function affiltheme() {
+	AffilTextVariable.apply(this, Array.prototype.slice.call(arguments));
+	this.domidbase = 'affiltheme';
+}
+affiltheme.prototype = new AffilTextVariable();
+var affiltheme = new affiltheme();
 
 function GlobalSingleVariable() {}
 
