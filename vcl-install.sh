@@ -32,12 +32,13 @@ function help() {
 	echo "$name [-h|--help] [-d|--database] [-w|--web] [-m|--managementnode]"
 	echo -e "\t\t[--dbhost <hostname> --dbpass <password>] "
 	echo -e "\t\t[--mnhost <hostname>] [--webhost <hostname>]"
+	echo -e "\t\t[-t|--timezone <timezone>]"
 	echo ""
 	echo -e "\t-d|--database - install database server components"
 	echo -e "\t\t--dbpass, --mnhost, --mnip, --webhost, and --adminpass must also be specified"
 	echo ""
 	echo -e "\t-w|--web - install web server components"
-	echo -e "\t\t--dbhost and --dbpass must also be specified"
+	echo -e "\t\t--dbhost, --dbpass, and -t|--timezone must also be specified"
 	echo ""
 	echo -e "\t-m|--managementnode - install management node (vcld) components"
 	echo -e "\t\t--dbhost, --dbpass, and --adminpass must also be specified"
@@ -53,13 +54,15 @@ function help() {
 	echo ""
 	echo -e "\t--adminpass <password> - password for VCL admin user"
 	echo ""
+	echo -e "\t-t|--timezone - timezone for web components"
+	echo ""
 	echo "If no arguments supplied, all components will be install and you"
 	echo "will be prompted for any required additional information."
 	echo ""
 	exit 2
 }
 
-args=$(getopt -q -o dwmh -l database,web,managementnode,help,dbhost:,dbpass:,mnhost:,mnip:,webhost:,adminpass:,rc: -n $0 -- "$@")
+args=$(getopt -q -o dwmht: -l database,web,managementnode,help,dbhost:,dbpass:,mnhost:,mnip:,webhost:,adminpass:,timezone:,rc: -n $0 -- "$@")
 
 if [ $? -ne 0 ]; then help; fi
 
@@ -79,6 +82,7 @@ PEMKEY=`random_string 20`
 ARCHIVE=apache-VCL-$VCL_VERSION.tar.bz2
 ARCHIVEURLPATH="http://vcl.apache.org/downloads/download.cgi?action=download&filename=%2Fvcl%2F$VCL_VERSION%2F"
 SIGPATH="http://www.apache.org/dist/vcl/"
+TZDEFAULT="America/New_York"
 
 DODB=0
 DOWEB=0
@@ -92,6 +96,7 @@ adminpassdefault=1
 webhostdefault=1
 DODHCP=no
 dorc=0
+TIMEZONE=''
 
 while true; do
 	case "$1" in
@@ -138,6 +143,10 @@ while true; do
 		--adminpass)
 			ADMIN_PASSWORD=$2
 			adminpassdefault=0
+			shift 2
+			;;
+		-t|--timezone)
+			TIMEZONE=$2
 			shift 2
 			;;
 		--rc)
@@ -193,11 +202,11 @@ if [[ $DODB -eq 1 && ($DOWEB -eq 0 || $DOMN -eq 0) && ($dbpassdefault -eq 1 || $
 	exit 1
 fi
 
-if [[ $DOWEB -eq 1 && ($DODB -eq 0 || $DOMN -eq 0) && ($dbhostdefault -eq 1 || $dbpassdefault -eq 1) ]]; then
+if [[ $DOWEB -eq 1 && ($DODB -eq 0 || $DOMN -eq 0) && ($dbhostdefault -eq 1 || $dbpassdefault -eq 1 || $TIMEZONE = '') ]]; then
 	echo ""
 	echo "Error missing arguments:"
 	echo ""
-	echo -e "\t-w or --web was specified but one of --dbhost or --dbpass was missing"
+	echo -e "\t-w or --web was specified but one of --dbhost, --dbpass, or -t|--timezone was missing"
 	echo ""
 	exit 1
 fi
@@ -216,6 +225,14 @@ if [[ $adminpassdefault -eq 0 && ($ADMIN_PASSWORD = ^[[:space:]]+$ || $ADMIN_PAS
 	echo ""
 	echo "Invalid value for admin password. Admin password cannot be empty"
 	echo "or contain only whitespace."
+	echo ""
+	exit 1
+fi
+
+if [[ ! $TIMEZONE = '' && ! $TIMEZONE =~ ^[-A-Za-z0-9/\+_]+$ ]]; then
+	echo ""
+	echo "Invalid value for timezone. Timezone can only contain these"
+	echo "characters: A-Z a-z 0-9 / - _ +"
 	echo ""
 	exit 1
 fi
@@ -280,6 +297,26 @@ if [[ $DOALL -eq 1 ]]; then
 		echo "Password cannot be empty or contain only whitespace. Please enter the password."
 		echo -n "Admin Password: "
 		IFS= read ADMIN_PASSWORD
+	done
+fi
+
+if [[ $DOALL -eq 1 && $TIMEZONE = '' ]]; then
+	print_break
+	echo ""
+	echo "Enter the timezone to be used by the web components. A list of timezones supported by"
+	echo "php can be found here: http://php.net/manual/en/timezones.php"
+	echo "(If that URL is no longer valid, do a web search for \"php timezones\")"
+	echo -n "Timezone for web components [$TZDEFAULT]: "
+	IFS= read TIMEZONE
+
+	if [[ $TIMEZONE = ^[[:space:]]+$ || $TIMEZONE = "" ]]; then
+		TIMEZONE=$TZDEFAULT
+	fi
+
+	while [[ ! $TIMEZONE =~ ^[-A-Za-z0-9/\+_]+$ ]]; do
+		echo "Timezone can only contain the following characters: A-Z a-z 0-9 / - _ +"
+		echo -n "Timezone: "
+		IFS= read TIMEZONE
 	done
 fi
 
@@ -696,6 +733,8 @@ if [[ $DOWEB -eq 1 ]]; then
 
 	echo "Configureing conf.php..."
 	/bin/cp -f /var/www/html/vcl/.ht-inc/conf-default.php /var/www/html/vcl/.ht-inc/conf.php
+	if [ $? -ne 0 ]; then echo "Error: Failed to configure conf.php"; exit 1; fi;
+	sed -i -r -e "s~date_default_timezone_set\('America/New_York'\);~date_default_timezone_set('$TIMEZONE');~" /var/www/html/vcl/.ht-inc/conf.php
 	if [ $? -ne 0 ]; then echo "Error: Failed to configure conf.php"; exit 1; fi;
 
 	echo "Generating keys..."
