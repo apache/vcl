@@ -13092,6 +13092,7 @@ function getDojoHTML($refresh) {
 		case 'submitOneClick':
 		case 'submitEditOneClick':
 		case 'deleteOneClick':
+			$filename = 'oneclick.js';
 			$dojoRequires = array('dojo.parser',
 			                      'dijit.layout.ContentPane',
 			                      'dijit.form.ValidationTextBox',
@@ -13564,10 +13565,27 @@ function printHTMLFooter() {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function changeLocale() {
-	global $locale;
-	$newlocale = getContinuationVar('locale');
-	$oldmode = getContinuationVar('oldmode');
-	$authtype = getContinuationVar('authtype', '');
+	global $locale, $authed, $authMechs;
+	if($authed) {
+		$newlocale = getContinuationVar('locale');
+		$oldmode = getContinuationVar('oldmode');
+		$authtype = getContinuationVar('authtype', '');
+	}
+	else {
+		$newlocale = processInputVar('locale', ARG_STRING);
+		$oldmode = processInputVar('oldmode', ARG_STRING);
+		$authtype = processInputVar('authtype', ARG_STRING);
+		if($oldmode != 'selectauth')
+			$oldmode = '';
+		if(! array_key_exists($authtype, $authMechs))
+			$authtype = '';
+		$locales = getFSlocales();
+		if(! array_key_exists($newlocale, $locales)) {
+			header("Location: " . BASEURL . SCRIPT);
+			dbDisconnect();
+			exit;
+		}
+	}
 	$locale = $newlocale;
 	setcookie("VCLLOCALE", $locale, (time() + (86400 * 31)), "/", COOKIEDOMAIN);
 	$extra = '';
@@ -13637,7 +13655,7 @@ function setVCLLocale() {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function getSelectLanguagePulldown() {
-	global $locale, $user, $remoteIP, $mode, $authMechs;
+	global $locale, $user, $remoteIP, $mode, $authMechs, $authed;
 	$tmp = explode('/', $_SERVER['SCRIPT_FILENAME']);
 	array_pop($tmp);
 	array_push($tmp, 'locale');
@@ -13651,24 +13669,46 @@ function getSelectLanguagePulldown() {
 		$user['id'] = 0;
 
 	$rt  = "<form name=\"localeform\" class=\"localeform\" action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
-	$rt .= "<select name=\"continuation\" onChange=\"this.form.submit();\" autocomplete=\"off\">\n";
-	$cdata = array('IP' => $remoteIP, 'oldmode' => $mode);
-	if($mode == 'selectauth') {
-		$type = processInputVar('authtype', ARG_STRING);
-		if(! empty($type) && array_key_exists($type, $authMechs))
-			$cdata['authtype'] = $type;
+	if($authed) {
+		$rt .= "<select name=\"continuation\" onChange=\"this.form.submit();\" autocomplete=\"off\">\n";
+		$cdata = array('IP' => $remoteIP, 'oldmode' => $mode);
+		if($mode == 'selectauth') {
+			$type = processInputVar('authtype', ARG_STRING);
+			if(! empty($type) && array_key_exists($type, $authMechs))
+				$cdata['authtype'] = $type;
+		}
+		foreach($locales as $dir => $lang) {
+			$cdata['locale'] = $dir;
+			$tmp = explode('/', $dir);
+			$testlocale = array_pop($tmp);
+			$cont = addContinuationsEntry('changeLocale', $cdata, 86400);
+			if($locale == $testlocale)
+				$rt .= "<option value=\"$cont\" selected>{$lang}</option>\n";
+			else
+				$rt .= "<option value=\"$cont\">{$lang}</option>\n";
+		}
+		$rt .= "</select>\n";
 	}
-	foreach($locales as $dir => $lang) {
-		$cdata['locale'] = $dir;
-		$tmp = explode('/', $dir);
-		$testlocale = array_pop($tmp);
-		$cont = addContinuationsEntry('changeLocale', $cdata, 86400);
-		if($locale == $testlocale)
-			$rt .= "<option value=\"$cont\" selected>{$lang}</option>\n";
-		else
-			$rt .= "<option value=\"$cont\">{$lang}</option>\n";
+	else {
+		$rt .= "<select name=\"locale\" onChange=\"this.form.submit();\" autocomplete=\"off\">\n";
+		foreach($locales as $dir => $lang) {
+			$tmp = explode('/', $dir);
+			$testlocale = array_pop($tmp);
+			if($locale == $testlocale)
+				$rt .= "<option value=\"$dir\" selected>{$lang}</option>\n";
+			else
+				$rt .= "<option value=\"$dir\">{$lang}</option>\n";
+		}
+		$rt .= "</select>\n";
+		if($mode == 'selectauth') {
+			$type = processInputVar('authtype', ARG_STRING);
+			if(! empty($type) && array_key_exists($type, $authMechs)) {
+				$rt .= "<input type=\"hidden\" name=\"authtype\" value=\"$type\">\n";
+				$rt .= "<input type=\"hidden\" name=\"oldmode\" value=\"selectauth\">\n";
+			}
+		}
+		$rt .= "<input type=\"hidden\" name=\"mode\" value=\"changeLocale\">\n";
 	}
-	$rt .= "</select>\n";
 	$rt .= "</form> \n";
 	return $rt;
 }

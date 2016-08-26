@@ -230,7 +230,7 @@ function printLoginPage($servertimeout=0) {
 	if($userid == i('Proceed to Login'))
 		$userid = '';
 	if(! array_key_exists($authtype, $authMechs)) {
-		// FIXME - hackish
+		header("Location: " . BASEURL . SCRIPT);
 		dbDisconnect();
 		exit;
 	}
@@ -300,9 +300,8 @@ function printLoginPage($servertimeout=0) {
 	print "    <TD colspan=2 align=right><INPUT type=submit value=\"" . i("Login") . "\"></TD>\n";
 	print "  </TR>\n";
 	print "</TABLE>\n";
-	$cdata = array('authtype' => $authtype);
-	$cont = addContinuationsEntry('submitLogin', $cdata);
-	print "<INPUT type=hidden name=continuation value=\"$cont\">\n";
+	print "<input type=\"hidden\" name=\"mode\" value=\"submitLogin\">\n";
+	print "<input type=\"hidden\" name=\"authtype\" value=\"$authtype\">\n";
 	print "</FORM>\n";
 	print "$text2<br>\n";
 	print "</div>\n";

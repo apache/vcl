@@ -62,6 +62,7 @@ $actions["entry"] = array('main',
                           'siteconfig',
                           'newOneClick',
                           'AJsetTZoffset',
+                          'changeLocale',
 );
 
 $noHTMLwrappers = array('sendRDPfile',
