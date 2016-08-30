@@ -129,6 +129,14 @@ h4 {
 	border-top: none;
 	padding: 0.2em;
 }
+div.dijitDialog h2,
+div.dijitDialog h3 {
+	margin-top: 0.1em;
+}
+#confdelcontent h3 {
+	font-size: 1.4em;
+	font-weight: bold;
+}
 #groupbyresourcediv table.dojoxGridRowTable tbody tr:hover td {
 	background-color: transparent;
 }
