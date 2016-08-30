@@ -65,6 +65,7 @@ use Fcntl qw(:DEFAULT :flock);
 use File::Copy;
 use IO::Seekable;
 use Socket;
+use version;
 
 ##############################################################################
 
@@ -858,6 +859,30 @@ sub get_image_size {
                node. Examples:
                Partimage image: /install/image/x86
                Kickstart image: /install/centos5/x86_64
+               
+               The path is constructed from the following database values:
+               * managementnode.installpath
+               * OS.sourcepath
+               * image.architecture
+               
+               If a directory exactly matching OS.sourcepath cannot be located
+               on the managementnode node, an attempt is made to locate an
+               alternate suitable directory matching the distribution and major
+               version. Example, if OS.sourcepath = 'rhel7' and the following
+               directory does not exist:
+               /install/rhel7/x86_64
+               
+               Any of the following paths which exist on the management node may
+               be returned:
+               /install/rhel7.1/x86_64
+               /install/rhels7.2/x86_64
+               /install/rhels7.10/x86_64
+               
+               If all of these paths exist, the path with the highest version is
+               returned:
+               /install/rhels7.10/x86_64
+               
+               Note: for 'rhel', both 'rhel' and 'rhels' are checked.
 
 =cut
 
@@ -870,66 +895,164 @@ sub get_image_repository_directory_path {
 	
 	# Get the image name argument
 	my $image_name = shift || $self->data->get_image_name();
-	if (!$image_name) {
-		notify($ERRORS{'WARNING'}, 0, "image name argument was not specified");
-		return;
-	}
-
+	
+	my $local_management_node_hostname = $self->data->get_management_node_hostname();
+	my $management_node_hostname;
+	
 	# Check if a management node identifier argument was passed
 	my $management_node_identifier = shift;
 	if ($management_node_identifier) {
-		notify($ERRORS{'DEBUG'}, 0, "management node identifier argument was specified: $management_node_identifier");
+		$management_node_hostname = $self->data->get_management_node_hostname($management_node_identifier);
+		if ($management_node_hostname) {
+			notify($ERRORS{'DEBUG'}, 0, "management node identifier argument was specified: $management_node_identifier, hostname: $management_node_hostname");
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "management node hostname could not be determined from argument: $management_node_identifier");
+			return;
+		}
+	}
+	else {
+		$management_node_hostname = $local_management_node_hostname;
 	}
 	
-	my $management_node_hostname = $self->data->get_management_node_hostname($management_node_identifier) || '';
-	return $self->{image_repository_path}{$image_name}{$management_node_hostname} if defined($self->{image_repository_path}{$image_name}{$management_node_hostname});
+	# Check if path has already been determined
+	if (defined($self->{image_repository_path}{$image_name}{$management_node_hostname})) {
+		return $self->{image_repository_path}{$image_name}{$management_node_hostname};
+	}
+	
 	my $management_node_install_path = $self->data->get_management_node_install_path($management_node_identifier);
 	
 	# Create a DataStructure object containing info about the image
 	my $image_data = $self->create_datastructure_object({image_identifier => $image_name}) || return;
-	my $image_id = $image_data->get_image_id() || return;
-	my $image_os_name = $image_data->get_image_os_name() || return;
-	my $image_os_type = $image_data->get_image_os_type() || return;
-	my $image_os_install_type = $image_data->get_image_os_install_type() || return;
-	my $image_os_source_path = $image_data->get_image_os_source_path() || return;
+	my $os_install_type = $image_data->get_image_os_install_type() || return;
+	my $os_source_path = $image_data->get_image_os_source_path() || return;
 	my $image_architecture = $image_data->get_image_architecture() || return;
 	
-	# Remove trailing / from $image_os_source_path if exists
-	$image_os_source_path =~ s/\/$//;
+	# Remove trailing / from $management_node_install_path if exists
+	$management_node_install_path =~ s/\/+$//;
 	
-	#notify($ERRORS{'DEBUG'}, 0, "attempting to determine repository path for image on $management_node_hostname:
-	#	image id:        $image_id
-	#	OS name:         $image_os_name
-	#	OS type:         $image_os_type
-	#	OS install type: $image_os_install_type
-	#	OS source path:  $image_os_source_path\n
-	#	architecture:    $image_architecture
-	#");
+	# Remove trailing / from $os_source_path if exists
+	$os_source_path =~ s/\/+$//;
+
+	notify($ERRORS{'DEBUG'}, 0, "attempting to determine repository path for image on $management_node_hostname:\n" .
+		"install path    : $management_node_install_path\n" .
+		"image name      : $image_name\n" .
+		"OS install type : $os_install_type\n" .
+		"OS source path  : $os_source_path\n" .
+		"architecture    : $image_architecture"
+	);
 	
 	# If image OS source path has a leading /, assume it was meant to be absolute
 	# Otherwise, prepend the install path
 	my $image_install_path;
-	if ($image_os_source_path =~ /^\//) {
-		$image_install_path = $image_os_source_path;
+	if ($os_source_path =~ /^\//) {
+		$image_install_path = $os_source_path;
 	}
 	else {
-		$image_install_path = "$management_node_install_path/$image_os_source_path";
+		$image_install_path = "$management_node_install_path/$os_source_path";
 	}
 
 	# Note: $XCAT_ROOT has a leading /
 	# Note: $image_install_path has a leading /
-	if ($image_os_install_type eq 'kickstart') {
+	if ($os_install_type eq 'kickstart') {
 		# Kickstart installs use the xCAT path for both repo and tmpl paths
-		my $kickstart_repo_path = "$image_install_path/$image_architecture";
-		$self->{image_repository_path}{$management_node_hostname} = $kickstart_repo_path;
-		notify($ERRORS{'DEBUG'}, 0, "kickstart install type, returning $kickstart_repo_path");
-		return $kickstart_repo_path;
+		my $kickstart_repository_path = "$image_install_path/$image_architecture";
+		
+		# If retrieving directory path for local management node, check if it exists
+		# xCAT's copycds command will use something like a /install/rhels6.6 directory
+		# os.sourcepath may be set to rhel6
+		# Creating a symlink doesn't work correctly because xCAT fails to parse directory names which don't contain a period correctly
+		if ($management_node_hostname eq $local_management_node_hostname) {
+			if (!$self->mn_os->file_exists($kickstart_repository_path)) {
+				# Parse the version of the requested OS
+				my ($os_distribution, $os_version_string, $major_os_version_string) = $os_source_path =~ /^([a-z]+)((\d+)[\d\.]*)$/ig;
+				if (!defined($os_distribution) || !defined($os_version_string) || !defined($major_os_version_string)) {
+					notify($ERRORS{'WARNING'}, 0, "failed to locate repository directory path on the local management node for kickstart image $image_name, the OS.sourcepath could not be parsed: $os_source_path, returning default path: $kickstart_repository_path");
+					$self->{image_repository_path}{$management_node_hostname} = $kickstart_repository_path;
+					return $kickstart_repository_path;
+				}
+				notify($ERRORS{'DEBUG'}, 0, "kickstart repository path based on the OS.sourcepath value '$os_source_path' does not exist: $kickstart_repository_path, attempting to locate another suitable path matching distribution: $os_distribution, version: $os_version_string, major version: $major_os_version_string");
+				
+				
+				my @matching_distribution_paths = $self->mn_os->find_files($management_node_install_path, "*", 0, 'd');
+				my $highest_matching_version_string;
+				my $highest_kickstart_repository_path;
+				for my $matching_distribution_path (@matching_distribution_paths) {
+					my $os_distribution_regex = $os_distribution;
+					if ($os_distribution =~ /rhel/) {
+						# Match 'rhel' and 'rhels'
+						$os_distribution_regex = 'rhels?';
+					}
+					
+					if ($matching_distribution_path !~ /$os_distribution_regex/) {
+						#notify($ERRORS{'DEBUG'}, 0, "ignoring directory, it does not match the OS distribution regex '$os_distribution_regex': $matching_distribution_path");
+						next;
+					}
+					
+					
+					my ($matching_version_string, $matching_major_version_string) = $matching_distribution_path =~ /$os_distribution_regex((\d+)[\d\.]*)/;
+					if (!defined($matching_version_string) || !defined($matching_major_version_string)) {
+						notify($ERRORS{'DEBUG'}, 0, "ignoring directory, version could not be determined: $matching_distribution_path");
+						next;
+					}
+					
+					
+					# Make sure the major version matches
+					if ($matching_major_version_string ne $major_os_version_string) {
+						notify($ERRORS{'DEBUG'}, 0, "distribution directory ignored, major version $matching_major_version_string does not match requested major version $major_os_version_string: $matching_distribution_path");
+						next;
+					}
+					
+					# Make sure the correct architecture subdirectory exists
+					my $matching_kickstart_repository_path = "$matching_distribution_path/$image_architecture";
+					if (!$self->mn_os->file_exists($matching_kickstart_repository_path)) {
+						notify($ERRORS{'DEBUG'}, 0, "ignoring directory becuase $image_architecture subdirectory does not exist: $matching_distribution_path");
+						next;
+					}
+					
+					if (!$highest_matching_version_string) {
+						notify($ERRORS{'DEBUG'}, 0, "1st matching distribution directory is possibly an alternate path: $matching_kickstart_repository_path, version: $matching_version_string");
+						$highest_kickstart_repository_path = $matching_kickstart_repository_path;
+						$highest_matching_version_string = $matching_version_string;
+						next;
+					}
+					
+					# Check if the version isn't less than one previously checked
+					# Use version->declare->numify to correctly compare versions, otherwise 6.9 > 6.10
+					my $matching_version_numified = version->declare("$matching_version_string")->numify;
+					my $highest_matching_version_numified = version->declare("$highest_matching_version_string")->numify;
+					if ($highest_matching_version_numified > $matching_version_numified) {
+						notify($ERRORS{'DEBUG'}, 0, "distribution directory ignored, version $matching_version_string ($matching_version_numified) is less than $highest_matching_version_string ($highest_matching_version_numified): $matching_distribution_path");
+						next;
+					}
+					else {
+						notify($ERRORS{'DEBUG'}, 0, "distribution directory version $matching_version_string ($matching_version_numified) is greater than $highest_matching_version_string ($highest_matching_version_numified): $matching_kickstart_repository_path");
+						$highest_kickstart_repository_path = $matching_kickstart_repository_path;
+						$highest_matching_version_string = $matching_version_string;
+						next;
+					}
+				}
+				
+				if ($highest_kickstart_repository_path) {
+					notify($ERRORS{'OK'}, 0, "located alternate repository directory path on the local management node for kickstart image $image_name: $highest_kickstart_repository_path");
+					$kickstart_repository_path = $highest_kickstart_repository_path;
+				}
+				else {
+					notify($ERRORS{'WARNING'}, 0, "failed to locate repository directory path on the local management node for kickstart image $image_name, the OS.sourcepath could not be parsed: $os_source_path, returning default path: $kickstart_repository_path");
+				}
+			}
+		}
+		
+		$self->{image_repository_path}{$management_node_hostname} = $kickstart_repository_path;
+		notify($ERRORS{'DEBUG'}, 0, "kickstart install type, returning $kickstart_repository_path");
+		return $kickstart_repository_path;
 	}
-	
-	my $repo_path = "$image_install_path/$image_architecture";
-	$self->{image_repository_path}{$image_name}{$management_node_hostname} = $repo_path;
-	notify($ERRORS{'DEBUG'}, 0, "returning repository path for $management_node_hostname: $repo_path");
-	return $repo_path;
+	else {
+		my $repo_path = "$image_install_path/$image_architecture";
+		$self->{image_repository_path}{$image_name}{$management_node_hostname} = $repo_path;
+		notify($ERRORS{'DEBUG'}, 0, "returning repository path for $management_node_hostname: $repo_path");
+		return $repo_path;
+	}
 } ## end sub get_image_repository_directory_path
 
 #/////////////////////////////////////////////////////////////////////////////
