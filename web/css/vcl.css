@@ -635,3 +635,8 @@ body {
 .disabledlabel {
 	color: #888888;
 }
+
+#confdelcontent th {
+	text-align: right;
+	padding-right: 0.5em;
+}

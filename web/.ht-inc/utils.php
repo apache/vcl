@@ -12959,6 +12959,7 @@ function getDojoHTML($refresh) {
 			                      'dijit.form.TextBox',
 			                      'dojox.grid.DataGrid',
 			                      'dijit.TitlePane',
+			                      'dijit.Dialog',
 			                      'dijit.Tooltip');
 			break;
 		case 'viewResources':

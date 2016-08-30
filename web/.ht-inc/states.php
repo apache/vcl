@@ -219,6 +219,8 @@ $noHTMLwrappers = array('sendRDPfile',
                         'AJdeleteMessages',
                         'AJvalidateMessagesPoll',
                         'AJsetTZoffset',
+                        'AJconfirmDeleteGroup',
+                        'AJsubmitDeleteGroup',
 );
 
 # main
@@ -344,8 +346,8 @@ $actions['mode']['submitEditGroup'] = "submitEditGroup";
 $actions['mode']['confirmAddGroup'] = "confirmEditOrAddGroup";
 $actions['args']['confirmAddGroup'] = 1;
 $actions['mode']['submitAddGroup'] = "submitAddGroup";
-$actions['mode']['confirmDeleteGroup'] = "confirmDeleteGroup";
-$actions['mode']['submitDeleteGroup'] = "submitDeleteGroup";
+$actions['mode']['AJconfirmDeleteGroup'] = "AJconfirmDeleteGroup";
+$actions['mode']['AJsubmitDeleteGroup'] = "AJsubmitDeleteGroup";
 $actions['mode']['addGroupUser'] = "addGroupUser";
 $actions['mode']['deleteGroupUser'] = "deleteGroupUser";
 $actions['mode']['jsonGetGroupInfo'] = "jsonGetGroupInfo";
@@ -358,8 +360,8 @@ $actions['pages']['confirmEditGroup'] = "manageGroups";
 $actions['pages']['submitEditGroup'] = "manageGroups";
 $actions['pages']['confirmAddGroup'] = "manageGroups";
 $actions['pages']['submitAddGroup'] = "manageGroups";
-$actions['pages']['confirmDeleteGroup'] = "manageGroups";
-$actions['pages']['submitDeleteGroup'] = "manageGroups";
+$actions['pages']['AJconfirmDeleteGroup'] = "manageGroups";
+$actions['pages']['AJsubmitDeleteGroup'] = "manageGroups";
 $actions['pages']['addGroupUser'] = "manageGroups";
 $actions['pages']['deleteGroupUser'] = "manageGroups";
 $actions['pages']['jsonGetGroupInfo'] = "manageGroups";

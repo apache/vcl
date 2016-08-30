@@ -54,10 +54,6 @@ function viewGroups() {
 			print "<font color=\"#008000\">User group successfully added";
 			print "</font><br><br>\n";
 		}
-		elseif($mode == "submitDeleteGroup") {
-			print "<font color=\"#008000\">User group successfully deleted";
-			print "</font><br><br>\n";
-		}
 		elseif($mode == "submitEditGroup") {
 			print "<font color=\"#008000\">User group successfully updated";
 			print "</font><br><br>\n";
@@ -81,11 +77,12 @@ function viewGroups() {
 	# hidden elements
 	$cont = addContinuationsEntry('editGroup', $cdata);
 	print "<input type=\"hidden\" id=\"editgroupcont\" value=\"$cont\">\n";
-	$cont = addContinuationsEntry('confirmDeleteGroup', $cdata);
+	$cont = addContinuationsEntry('AJconfirmDeleteGroup', $cdata);
 	print "<input type=\"hidden\" id=\"deletegroupcont\" value=\"$cont\">\n";
 	$cont = addContinuationsEntry('jsonUserGroupStore');
-	print "<div dojoType=\"dojo.data.ItemFileReadStore\" url=\"" . BASEURL;
-	print SCRIPT . "?continuation=$cont\" jsid=\"usergroupstore\"></div>\n";
+	print "<div dojoType=\"dojo.data.ItemFileWriteStore\" url=\"" . BASEURL;
+	print SCRIPT . "?continuation=$cont\" jsid=\"usergroupstore\" ";
+	print "comparatorMap=\"\{\}\"></div>\n";
 	print "<div dojoType=\"dojo.data.ItemFileWriteStore\"\n";
 	print "data=\"{'identifier':'id', 'label':'name', 'items':[]}\" \n";
 	print "jsid=\"affiliationstore\"></div>\n";
@@ -171,10 +168,6 @@ function viewGroups() {
 			print "<font color=\"#008000\">Resource group successfully added";
 			print "</font><br><br>\n";
 		}
-		elseif($mode == "submitDeleteGroup") {
-			print "<font color=\"#008000\">Resource group successfully deleted";
-			print "</font><br><br>\n";
-		}
 		elseif($mode == "submitEditGroup") {
 			print "<font color=\"#008000\">Resource group successfully updated";
 			print "</font><br><br>\n";
@@ -212,12 +205,12 @@ function viewGroups() {
 	# hidden elements
 	$cont = addContinuationsEntry('editGroup', $cdata);
 	print "<input type=\"hidden\" id=\"editresgroupcont\" value=\"$cont\">\n";
-	$cont = addContinuationsEntry('confirmDeleteGroup', $cdata);
+	$cont = addContinuationsEntry('AJconfirmDeleteGroup', $cdata);
 	print "<input type=\"hidden\" id=\"deleteresgroupcont\" value=\"$cont\">\n";
 	$jscont = addContinuationsEntry('jsonGetGroupInfo');
 	print "<input type=\"hidden\" id=\"jsongroupinfocont\" value=\"$jscont\">\n";
 	$cont = addContinuationsEntry('jsonResourceGroupStore');
-	print "<div dojoType=\"dojo.data.ItemFileReadStore\" url=\"" . BASEURL;
+	print "<div dojoType=\"dojo.data.ItemFileWriteStore\" url=\"" . BASEURL;
 	print SCRIPT . "?continuation=$cont\" jsid=\"resourcegroupstore\"></div>\n";
 	print "<div dojoType=\"dojo.data.ItemFileWriteStore\"\n";
 	print "data=\"{'identifier':'id', 'label':'name', 'items':[]}\" \n";
@@ -282,6 +275,15 @@ function viewGroups() {
 	print "</tr>\n";
 	print "</thead>\n";
 	print "</table>\n";
+	print "</div>\n";
+
+	print "<div id=\"confirmDeleteDialog\" dojoType=\"dijit.Dialog\">\n";
+	print "<h2 id=\"confirmDeleteHeading\"></h2>\n";
+	print "<div id=\"confirmDeleteQuestion\"></div><br>\n";
+	print "<div id=\"confdelcontent\"></div><br>\n";
+	print dijitButton('deleteBtn', i("Delete Group"), "submitDeleteGroup();");
+	print dijitButton('', i("Cancel"), "clearHideConfirmDelete();");
+	print "<input type=hidden id=\"submitdeletecont\">\n";
 	print "</div>\n";
 }
 
@@ -1336,6 +1338,7 @@ function checkForGroupUsage($groupid, $type, &$msg='') {
 			$msg = "$name is currently in use in the following ways. It "
 			     . "cannot be deleted until it is no longer in use.<br><br>\n"
 			     . implode("<br>\n", $msgs);
+			$msg = wordwrap($msg, 75, "<br>");
 			return 1;
 		}
 		return 0;
@@ -1369,6 +1372,7 @@ function checkForGroupUsage($groupid, $type, &$msg='') {
 		$msg = "$name is currently in use in the following ways. It "
 		     . "cannot be deleted until it is no longer in use.<br><br>\n"
 		     . implode("<br>\n", $msgs);
+		$msg = wordwrap($msg, 75, "<br>");
 		return 1;
 	}
 	return 0;
@@ -1561,14 +1565,14 @@ function submitAddGroup() {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
-/// \fn confirmDeleteGroup()
+/// \fn AJconfirmDeleteGroup()
 ///
-/// \brief prints a form to confirm the deletion of an group
+/// \brief generates and sends content prompting user to confirm deletion of
+/// group
 ///
 ////////////////////////////////////////////////////////////////////////////////
-function confirmDeleteGroup() {
+function AJconfirmDeleteGroup() {
 	global $user;
-	$groupid = getContinuationVar("groupid");
 	$type = getContinuationVar("type");
 
 	$usergroups = getUserGroups();
@@ -1576,8 +1580,10 @@ function confirmDeleteGroup() {
 	$groupid = processInputVar('groupid', ARG_NUMERIC);
 	if($type == 'user') {
 		if(! array_key_exists($groupid, $usergroups)) {
-			print "<h2>Delete User Group</h2>\n";
-			print "The selected user group does not exist.\n";
+			$rt = array('status' => 'nogroup',
+			            'title' => _('Delete User Group Error'),
+			            'msg' => _('The selected user group was not found.'));
+			sendJSON($rt);
 			return;
 		}
 		if($usergroups[$groupid]['ownerid'] != $user['id']) {
@@ -1586,14 +1592,18 @@ function confirmDeleteGroup() {
 				if(! checkUserHasPerm('Manage Federated User Groups (global)') &&
 				   (! checkUserHasPerm('Manage Federated User Groups (affiliation only)') ||
 				   $usergroups[$groupid]['groupaffiliationid'] != $user['affiliationid'])) {
-					print "<h2>Delete User Group</h2>\n";
-					print "You do not have access to delete the selected user group.\n";
+					$rt = array('status' => 'noaccess',
+					            'title' => _('Delete User Group Error'),
+					            'msg' => _('You do not have access to delete the selected user group.'));
+					sendJSON($rt);
 					return;
 				}
 			}
 			else {
-				print "<h2>Delete User Group</h2>\n";
-				print "You do not have access to delete the selected user group.\n";
+				$rt = array('status' => 'noaccess',
+				            'title' => _('Delete User Group Error'),
+				            'msg' => _('You do not have access to delete the selected user group.'));
+				sendJSON($rt);
 				return;
 			}
 		}
@@ -1603,8 +1613,10 @@ function confirmDeleteGroup() {
 		   ($checkname == 'Specify End Time' ||
 		   $checkname == 'Allow No User Check' ||
 		   $checkname == 'Default for Editable by')) {
-			print "<h2>Delete User Group</h2>\n";
-			print "{$usergroups[$groupid]['name']} is a system group that cannot be deleted";
+			$rt = array('status' => 'noaccess',
+			            'title' => _('Delete User Group Error'),
+			            'msg' => sprintf(_('%s is a system group that cannot be deleted'), "<strong>{$usergroups[$groupid]['name']}</strong>"));
+			sendJSON($rt);
 			return;
 		}
 	}
@@ -1619,8 +1631,10 @@ function confirmDeleteGroup() {
 			}
 		}
 		if($noaccess) {
-			print "<h2>Delete Resource Group</h2>\n";
-			print "You do not have access to delete the selected resource group.\n";
+			$rt = array('status' => 'noaccess',
+			            'title' => _('Delete Resource Group Error'),
+			            'msg' => _('You do not have access to delete the selected resource group.'));
+			sendJSON($rt);
 			return;
 		}
 	}
@@ -1628,96 +1642,84 @@ function confirmDeleteGroup() {
 	$resourcegroups = getResourceGroups();
 
 	if($type == "user") {
-		$title = "Delete User Group";
-		$usemsg = "This group is currently in use.  You cannot delete it until "
-		        . "it is no longer being used.";
-		$question = "Delete the following user group?";
+		$title = _("Delete User Group");
+		$usemsg = wordwrap(_("This group is currently in use. You cannot delete it until it is no longer being used."), 75, "<br>");
+		$question = _("Delete the following user group?");
 		$name = $usergroups[$groupid]["name"];
 		$target = "";
 	}
 	else {
-		$title = "Delete Resource Group";
-		$usemsg = "This group is currently assigned to at least one node in the "
-		        . "privilege tree.  You cannot delete it until it is no longer "
-		        . "in use.";
-		$question = "Delete the following resource group?";
+		$title = _("Delete Resource Group");
+		$usemsg = wordwrap(_("This group is currently assigned to at least one node in the privilege tree. You cannot delete it until it is no longer in use."), 75, "<br>");
+		$question = _("Delete the following resource group?");
 		list($resourcetype, $name) = 
 			explode('/', $resourcegroups[$groupid]["name"]);
 		$target = "#resources";
 	}
 
 	if(checkForGroupUsage($groupid, $type, $usemsg)) {
-		print "<H2 align=center>$title</H2>\n";
-		print $usemsg;
+		$rt = array('status' => 'inuse',
+		            'title' => $title,
+		            'msg' => $usemsg);
+		sendJSON($rt);
 		return;
 	}
 
-	print "<DIV align=center>\n";
-	print "<H2>$title</H2>\n";
-	print "$question<br><br>\n";
-	print "<TABLE>\n";
+	$cdata = array('type' => $type,
+	               'groupid' => $groupid);
+
+	$cont = addContinuationsEntry('AJsubmitDeleteGroup', $cdata, 3600, 1, 0);
+
+	$rt = array('status' => 'success',
+	            'title' => $title,
+	            'question' => $question,
+	            'cont' => $cont);
+
+	$h = "<TABLE>";
 	if($type == "resource") {
-		print "  <TR>\n";
-		print "    <TH align=right>Type:</TH>\n";
-		print "    <TD>$resourcetype</TD>\n";
-		print "  </TR>\n";
+		$h .= "<TR>";
+		$h .= "<TH align=right>" . _("Type:") . "</TH>";
+		$h .= "<TD>" . _($resourcetype) . "</TD>";
+		$h .= "</TR>";
 	}
-	print "  <TR>\n";
-	print "    <TH align=right>Name:</TH>\n";
-	print "    <TD>$name</TD>\n";
-	print "  </TR>\n";
+	$h .= "<TR>";
+	$h .= "<TH align=right>" . _("Name:") . "</TH>";
+	$h .= "<TD>$name</TD>";
+	$h .= "</TR>";
 	if($type == "resource") {
-		print "  <TR>\n";
-		print "    <TH align=right>Owning User Group:</TH>\n";
-		print "    <TD>" . $resourcegroups[$groupid]["owner"] . "</TD>\n";
-		print "  </TR>\n";
+		$h .= "<TR>";
+		$h .= "<TH align=right>" . _("Owning User Group:") . "</TH>";
+		$h .= "<TD>" . $resourcegroups[$groupid]["owner"] . "</TD>";
+		$h .= "</TR>";
 	}
 	elseif($usergroups[$groupid]['courseroll'] == 1 ||
 	   $usergroups[$groupid]['custom'] == 0) {
-		print "<TR>\n";
-		print "  <TH align=right>Type:</TH>\n";
+		$h .= "<TR>";
+		$h .= "  <TH align=right>" . _("Type:") . "</TH>";
 		if($usergroups[$groupid]['courseroll'] == 1)
-			print "  <TD>Course Roll</TD>\n";
+			$h .= "  <TD>" . _("Course Roll") . "</TD>";
 		elseif($usergroups[$groupid]['custom'] == 0)
-			print "  <TD>Federated</TD>\n";
-		print "</TR>\n";
-		print "<TR>\n";
-		print "  <TD colspan=2><br><strong>Note</strong>: This type of group is ";
-		print "created from external sources<br>and could be recreated from ";
-		print "those sources at any time.<br><br></TD>\n";
-		print "</TR>\n";
+			$h .= "  <TD>" . _("Federated") . "</TD>";
+		$h .= "</TR>";
+		$h .= "<TR>";
+		$h .= "  <TD colspan=2><br><strong>" . _("Note") . "</strong>:";
+		$h .= wordwrap(_("This type of group is created from external sources and could be recreated from those sources at any time."), 75, "<br>");
+		$h .= "</TD>";
+		$h .= "</TR>";
 	}
-	print "</TABLE>\n";
-	print "<TABLE>\n";
-	print "  <TR valign=top>\n";
-	print "    <TD>\n";
-	print "      <FORM action=\"" . BASEURL . SCRIPT . "$target\" method=post>\n";
-	$cdata = array('groupid' => $groupid,
-	               'type' => $type);
-	$cont = addContinuationsEntry('submitDeleteGroup', $cdata);
-	print "      <INPUT type=hidden name=continuation value=\"$cont\">\n";
-	print "      <INPUT type=submit value=Submit>\n";
-	print "      </FORM>\n";
-	print "    </TD>\n";
-	print "    <TD>\n";
-	print "      <FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
-	print "      <INPUT type=hidden name=mode value=viewGroups>\n";
-	print "      <INPUT type=submit value=Cancel>\n";
-	print "      </FORM>\n";
-	print "    </TD>\n";
-	print "  </TR>\n";
-	print "</TABLE>\n";
-	print "</DIV>\n";
+	$h .= "</TABLE>";
+	$rt['content'] = $h;
+	sendJSON($rt);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
-/// \fn submitDeleteGroup()
+/// \fn AJsubmitDeleteGroup()
 ///
-/// \brief deletes an group from the database and notifies the user
+/// \brief deletes a group from the database and notifies the user
 ///
 ////////////////////////////////////////////////////////////////////////////////
-function submitDeleteGroup() {
+function AJsubmitDeleteGroup() {
 	$groupid = getContinuationVar("groupid");
 	$type = getContinuationVar("type");
 	if($type == "user") {
@@ -1733,7 +1735,10 @@ function submitDeleteGroup() {
 			 . "WHERE id = $groupid";
 	doQuery($query, 315);
 	clearPrivCache();
-	viewGroups();
+	$data = array('status' => 'success',
+	              'type' => $type,
+	              'id' => $groupid);
+	sendJSON($data);
 }
 
 ////////////////////////////////////////////////////////////////////////////////

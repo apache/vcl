@@ -90,9 +90,61 @@ function fmtUserGroupDeleteBtn(groupid, rowIndex) {
 }
 
 function confirmDeleteUserGroup(groupid) {
-	// call url with continuation, groupid
-	var cont = dojo.byId('deletegroupcont').value;
-	window.location.href = 'index.php?continuation=' + cont + '&groupid=' + groupid;
+	var data = {continuation: dojo.byId('deletegroupcont').value,
+	            groupid: groupid};
+	RPCwrapper(data, confirmDeleteGroupCB, 1);
+}
+
+function confirmDeleteGroupCB(data, ioArgs) {
+	if(data.items.status == 'nogroup' ||
+	   data.items.status == 'noaccess' ||
+	   data.items.status == 'inuse') {
+		dojo.byId('confirmDeleteHeading').innerHTML = data.items.title;
+		dojo.byId('confirmDeleteQuestion').innerHTML = '';
+		dojo.byId('confdelcontent').innerHTML = data.items.msg;
+		hideDijitButton('deleteBtn');
+	}
+	else {
+		showDijitButton('deleteBtn');
+		dojo.byId('confirmDeleteHeading').innerHTML = data.items.title;
+		dojo.byId('confirmDeleteQuestion').innerHTML = data.items.question;
+		dojo.byId('confdelcontent').innerHTML = data.items.content;
+		dojo.byId('submitdeletecont').value = data.items.cont;
+	}
+	dijit.byId('confirmDeleteDialog').show();
+}
+
+function clearHideConfirmDelete() {
+	dijit.byId('confirmDeleteDialog').hide();
+	dojo.removeClass('deleteBtn', 'hidden');
+	dojo.byId('confirmDeleteHeading').innerHTML = '';
+	dojo.byId('confirmDeleteQuestion').innerHTML = '';
+	dojo.byId('confdelcontent').innerHTML = '';
+}
+
+function submitDeleteGroup() {
+	var data = {continuation: dojo.byId('submitdeletecont').value};
+	RPCwrapper(data, submitDeleteGroupCB, 1);
+}
+
+function submitDeleteGroupCB(data, ioArgs) {
+	clearHideConfirmDelete();
+	if(data.items.type == 'user') {
+		usergroupstore.fetchItemByIdentity({
+			'identity': data.items.id,
+			'onItem': function(item) {
+				usergroupstore.deleteItem(item);
+			}
+		});
+	}
+	else {
+		resourcegroupstore.fetchItemByIdentity({
+			'identity': data.items.id,
+			'onItem': function(item) {
+				resourcegroupstore.deleteItem(item);
+			}
+		});
+	}
 }
 
 function fmtUserGroupEditBtn(groupid, rowIndex) {
@@ -237,9 +289,9 @@ function fmtResourceGroupDeleteBtn(groupid, rowIndex) {
 }
 
 function confirmDeleteResourceGroup(groupid) {
-	// call url with continuation, groupid
-	var cont = dojo.byId('deleteresgroupcont').value;
-	window.location.href = 'index.php?continuation=' + cont + '&groupid=' + groupid;
+	var data = {continuation: dojo.byId('deleteresgroupcont').value,
+	            groupid: groupid};
+	RPCwrapper(data, confirmDeleteGroupCB, 1);
 }
 
 function fmtResourceGroupEditBtn(groupid, rowIndex) {
