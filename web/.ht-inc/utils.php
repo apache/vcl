@@ -4128,7 +4128,9 @@ function isAvailable($images, $imageid, $imagerevisionid, $start, $end,
 	$vmhostcheckdone = 0;
 	$ignorestates = "'maintenance','vmhostinuse','hpc','failed'";
 	if($now)
-		$ignorestates .= ",'reloading','reload','timeout','inuse'";
+		# computers from reservations with a user directed reinstall will be in
+		#   the reloading state, but they will be removed from the list later on
+		$ignorestates .= ",'timeout','inuse'";
 
 	foreach($requestInfo["images"] as $key => $imageid) {
 		# check for max concurrent usage of image
@@ -4341,7 +4343,8 @@ function isAvailable($images, $imageid, $imagerevisionid, $start, $end,
 		       .       "'$endstamp' > rq.start AND "
 		       .       "rq.id != $requestid AND "
 		       .       "rs.requestid = rq.id AND "
-		       .       "rq.stateid NOT IN (1, 5, 12)"; # deleted, failed, complete
+		       .       "rq.stateid NOT IN (5, 12, 19) AND " # failed, complete, reload
+		       .       "(rq.stateid != 14 OR rq.laststateid != 19)"; # pending/reload
 		$qh = doQuery($query, 130);
 		while($row = mysql_fetch_row($qh)) {
 			array_push($usedComputerids, $row[0]);
@@ -4840,7 +4843,8 @@ function getSemaphore($imageid, $imagerevisionid, $mgmtnodeid, $compid, $start,
 		       .       "rs.computerid = $compid AND "
 		       .       "rq.start < '$end' AND "
 		       .       "rq.end > '$start' AND "
-		       .       "rq.stateid NOT IN (1, 5, 12)";
+		       .       "rq.stateid NOT IN (5, 12, 19) AND " # failed, complete, reload
+		       .       "(rq.stateid != 14 OR rq.laststateid != 19)"; # pending/reload
 		if($requestid)
 			$query .= " AND rq.id != $requestid";
 		$qh = doQuery($query);
