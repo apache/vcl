@@ -8114,7 +8114,7 @@ sub setup_vm_host_operations {
 	#print format_data($management_node_vmhost_info) . "\n\n";
 	my $vmhost_id = setup_get_hash_choice($management_node_vmhost_info, 'hostname', 'vmprofile_profilename') || return;
 	#For testing:
-	#my $vmhost_id = 599;
+	#my $vmhost_id = 32;
 	
 	my $vmhost_computer_name = $management_node_vmhost_info->{$vmhost_id}{computer}{SHORTNAME};
 	push @{$ENV{setup_path}}, $vmhost_computer_name;
@@ -9116,12 +9116,20 @@ sub setup_migrate_vm {
 	my $destination_vmhost_computer_name = $management_node_vmhost_info->{$destination_vmhost_id}{computer}{SHORTNAME};
 	print "Destination VM host: $destination_vmhost_computer_name (VM host ID: $destination_vmhost_id)\n";
 	
+	my $suspend_methods = {
+		'vmware'		=> { title => 'VMware-based suspend' },
+		'os'  		=> { title => 'Guest OS hibernate' },
+		'shutdown'	=> { title => 'Guest OS shutdown' },
+	};
+	print "\nSelect how the VM will be suspended prior to the migration:\n";
+	my $suspend_method = setup_get_hash_choice($suspend_methods, 'title') || return;
+
 	for my $vm_computer_id (@vm_computer_ids) {
 		setup_print_break('.');
 		my $vm_computer_name = $source_assigned_vm_info->{$vm_computer_id}{SHORTNAME};
 		print colored("Attempting to migrate $vm_computer_name from $source_vmhost_computer_name to $destination_vmhost_computer_name", 'BOLD CYAN');
 		print "\n";
-		if ($self->migrate_vm($vm_computer_id, $destination_vmhost_id)) {
+		if ($self->migrate_vm($vm_computer_id, $destination_vmhost_id, { revert_destination_on_error => 0, suspend_method => $suspend_method })) {
 			print colored("Successfully migrated $vm_computer_name from $source_vmhost_computer_name to $destination_vmhost_computer_name", 'BOLD GREEN');
 			print "\n";
 		}
@@ -9169,6 +9177,21 @@ sub migrate_vm {
 	my $revert_destination_on_error = 0;
 	if (defined($options->{revert_destination_on_error})) {
 		$revert_destination_on_error = $options->{revert_destination_on_error};
+	}
+	
+	
+	# Used to determine how to suspend or power off the source VM
+	my $suspend_method = 'vmware';
+	if (defined($options->{suspend_method})) {
+		$suspend_method = $options->{suspend_method};
+		$suspend_method = lc($suspend_method);
+		if ($suspend_method !~ /(vmware|os|shutdown)/i) {
+			notify($ERRORS{'WARNING'}, 0, "invalid 'suspend_method' argument specified: '$suspend_method', valid values are 'vmware', 'os', or 'shutdown'");
+			return;
+		}
+	}
+	else {
+		$suspend_method = 'vmware';
 	}
 	
 	if ($SETUP_MODE) {
@@ -9453,12 +9476,15 @@ sub migrate_vm {
 	
 	#...........................................................................
 	# Determine how to suspend or power off the source VM
-	my $suspend_method = 'shutdown';
-	#my $suspend_method = 'vmware';
-	#
-	#if (!$vm_os_responding_before) {
-	#	$suspend_method = 'vmware';
-	#}
+	if (!$vm_os_responding_before) {
+		if ($suspend_method =~ /^(os)$/) {
+			notify($ERRORS{'WARNING'}, 0, "'$suspend_method' suspend method is not possible because VM's OS is not responding before migration, VMware suspend method will be used");
+			$suspend_method = 'vmware';
+		}
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "$suspend_method\-based suspend method will be used");
+	}
 	
 	#my $problematic_suspend_parameters = {
 	#	'mks.enable3d' => 'true',
