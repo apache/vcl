@@ -10902,7 +10902,28 @@ sub setup_get_hash_multiple_choice {
 		else {
 			my @selected_entry_indexes = split(/[\s,]+/, $choice);
 			for my $selected_entry_index (@selected_entry_indexes) {
-				if ($selected_entry_index !~ /^\d+$/ || $selected_entry_index < 1 || $selected_entry_index > $entry_count) {
+				if ($selected_entry_index =~ /^(\d+)-(\d+)$/) {
+					my $start_index = $1;
+					my $end_index = $2;
+					if ($start_index < 1 || $start_index > $entry_count) {
+						print colored("*** Choice ignored: $selected_entry_index, starting index must be an integer between 1 and $entry_count ***", 'YELLOW ON_RED');
+						print "\n";
+						$no_print_entries = 1;
+						next;
+					}
+					elsif ($end_index < $start_index || $end_index > $entry_count) {
+						print colored("*** Choice ignored: $selected_entry_index, ending index must be an integer between " . ($start_index+1) . " and $entry_count ***", 'YELLOW ON_RED');
+						print "\n";
+						$no_print_entries = 1;
+						next;
+					}
+					else {
+						for (my $index = $start_index; $index <= $end_index; $index++) {
+							$entry_index_hash->{$index}{selected} = !$entry_index_hash->{$index}{selected};
+						}
+					}
+				}
+				elsif ($selected_entry_index !~ /^\d+$/ || $selected_entry_index < 1 || $selected_entry_index > $entry_count) {
 					print colored("*** Choice ignored: $selected_entry_index, it must be an integer between 1 and $entry_count ***", 'YELLOW ON_RED');
 					print "\n";
 					$no_print_entries = 1;
