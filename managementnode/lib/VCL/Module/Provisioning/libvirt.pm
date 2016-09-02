@@ -974,7 +974,7 @@ sub get_domain_name {
 	# Request state is not image, construct the domain name
 	my $image_name = $self->data->get_image_name();
 	
-	$self->{domain_name} = "$computer_short_name:$image_name";
+	$self->{domain_name} = "${computer_short_name}__$image_name";
 	notify($ERRORS{'DEBUG'}, 0, "constructed domain name: '$self->{domain_name}'");
 	return $self->{domain_name};
 }
