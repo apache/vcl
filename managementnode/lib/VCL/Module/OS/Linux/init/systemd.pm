@@ -299,7 +299,7 @@ sub enable_service {
 		return;
 	}
 	elsif ($exit_status ne 0 || grep(/(failed)/i, @$output)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to enable '$service_name' service on $computer_node_name, exit status: $exit_status, output:\n" . join("\n", @$output));
+		notify($ERRORS{'WARNING'}, 0, "failed to enable '$service_name' service on $computer_node_name, exit status: $exit_status, command:\n$command\noutput:\n" . join("\n", @$output));
 		return;
 	}
 	else {
@@ -375,24 +375,32 @@ sub delete_service {
 		return 0;
 	}
 	
-	my $service_name = shift;
-	if (!$service_name) {
+	my $service_name_argument = shift;
+	if (!$service_name_argument) {
 		notify($ERRORS{'WARNING'}, 0, "service name argument was not supplied");
 		return;
 	}
 	
 	my $computer_node_name = $self->data->get_computer_node_name();
 	
-	# Disable the service before deleting it
-	if ($self->service_exists($service_name)) {
-		$self->stop_service($service_name) || return;
-		$self->disable_service($service_name) || return;
+	# Attempt to delete both ext_sshd and ext_ssh if the argument is 
+	my @service_names = ($service_name_argument);
+	if ($service_name_argument =~ /ext_ssh/) {
+		@service_names = ('ext_sshd', 'ext_ssh');
 	}
 	
-	# Delete the service configuration file
-	my $service_file_path = "/lib/systemd/system/$service_name.service";
-	if (!$self->os->delete_file($service_file_path)) {
-		return;
+	for my $service_name (@service_names) {
+		# Disable the service before deleting it
+		if ($self->service_exists($service_name)) {
+			$self->stop_service($service_name) || return;
+			$self->disable_service($service_name) || return;
+		}
+		
+		# Delete the service configuration file
+		my $service_file_path = "/lib/systemd/system/$service_name.service";
+		if (!$self->os->delete_file($service_file_path)) {
+			return;
+		}
 	}
 	
 	$self->_daemon_reload();
@@ -570,7 +578,15 @@ sub add_ext_sshd_service {
 	
 	my $computer_node_name = $self->data->get_computer_node_name();
 	
-	my $sshd_service_file_path     = '/lib/systemd/system/sshd.service';
+	# Get the unit file path for the sshd service
+	# Do not automatically assume it is /lib/systemd/system/sshd.service
+	# https://issues.apache.org/jira/browse/VCL-989
+	my $sshd_service_file_path = $self->_get_service_unit_file_path('sshd');
+	if (!$sshd_service_file_path) {
+		$sshd_service_file_path = '/lib/systemd/system/sshd.service';
+	}
+	
+	# Hard-code the ext_sshd file path (intentional)
 	my $ext_sshd_service_file_path = '/lib/systemd/system/ext_sshd.service';
 	
 	# Get the contents of the sshd service configuration file already on the computer
@@ -581,22 +597,36 @@ sub add_ext_sshd_service {
 	}
 	
 	my $ext_sshd_service_file_contents = join("\n", @sshd_service_file_contents);
-	
+
 	# Replace: OpenSSH --> External OpenSSH
 	$ext_sshd_service_file_contents =~ s|(OpenSSH)|external $1|g;
 	
 	# Replace: sshd --> ext_sshd, exceptions:
 	# /bin/sshd
 	# /sshd_config
-	$ext_sshd_service_file_contents =~ s|(?<!bin/)sshd(?!_config)|ext_sshd|g;
+	$ext_sshd_service_file_contents =~ s|(?<!bin/)sshd(?!_config\|-keygen)|ext_sshd|g;
 	
-	# Replace: $OPTIONS --> -f /etc/ssh/external_sshd_config
-	$ext_sshd_service_file_contents =~ s|(ExecStart=.+)\s+\$OPTIONS|$1 -f /etc/ssh/external_sshd_config|g;
+	# Remove ExecStart options variables
+	# ExecStart=/usr/sbin/sshd -D $OPTIONS
+	# ExecStart=/usr/sbin/sshd -D $SSHD_OPTS
+	$ext_sshd_service_file_contents =~ s/^\s*(ExecStart=.+\S)\s+\$\S*OPT\S*(.*)$/$1$2/gm;
+	
+	# Remove explicit -f arguments
+	$ext_sshd_service_file_contents =~ s/^\s*(ExecStart=.+\S)\s+-f\s+\S+(.*)$/$1$2/gm;
+	
+	# Add -f argument
+	$ext_sshd_service_file_contents =~ s|^\s*(ExecStart=.+\S)\s*$|$1 -f /etc/ssh/external_sshd_config|gm;
 	
 	# Set EnvironmentFile to /dev/null, service won't start if the file doesn't exist
 	$ext_sshd_service_file_contents =~ s|(EnvironmentFile)=.*|$1=/dev/null|g;
 	
-	$ext_sshd_service_file_contents .= "\n";
+	# Remove Alias= line which may exist in ssh_config:
+	# Alias=ext_sshd.service
+	# Otherwise, this may occur when attempting to enable the service if the service is named the same as the alias:
+	# Failed to execute operation: Too many levels of symbolic links
+	$ext_sshd_service_file_contents =~ s/^\s*Alias=.*//gm;
+	
+	notify($ERRORS{'DEBUG'}, 0, "$ext_sshd_service_file_path:\n$ext_sshd_service_file_contents");
 	
 	if (!$self->os->create_text_file($ext_sshd_service_file_path, $ext_sshd_service_file_contents)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to create ext_sshd service file on $computer_node_name: $ext_sshd_service_file_path");
@@ -648,6 +678,64 @@ sub _daemon_reload {
 		notify($ERRORS{'DEBUG'}, 0, "reloaded systemd manager configuration on $computer_node_name");
 	}
 	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 _get_service_unit_file_path
+
+ Parameters  : $service_name
+ Returns     : string
+ Description : Determines the unit file for the service specified by the
+               argument. This is needed because the file name is not always
+               $service_name.service. This is the case when a service has alias
+               names configured such as the ssh and sshd services on Ubuntu 16.
+               The file path for the sshd service is ssh.service.
+
+=cut
+
+sub _get_service_unit_file_path {
+	my $self = shift;
+	if (ref($self) !~ /VCL::/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return 0;
+	}
+	
+	my $service_name = shift;
+	if (!$service_name) {
+		notify($ERRORS{'WARNING'}, 0, "service name argument was not supplied");
+		return;
+	}
+	
+	my $computer_node_name = $self->data->get_computer_node_name();
+	
+	my $command = "systemctl show $service_name.service --property=FragmentPath";
+	my ($exit_status, $output) = $self->os->execute($command, 0);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve unit file path for $service_name service on $computer_node_name: $command");
+		return;
+	}
+	elsif ($exit_status ne 0 || grep(/(failed)/i, @$output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve unit file path for $service_name service on $computer_node_name, exit status: $exit_status, output:\n" . join("\n", @$output));
+		return;
+	}
+	
+	# Expected output:
+	# FragmentPath=/lib/systemd/system/ssh.service
+	my ($file_path_line) = grep(/FragmentPath=/, @$output);
+	if (!$file_path_line) {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve unit file path for $service_name service on $computer_node_name, output does not contain a 'FragmentPath=' line, output:\n" . join("\n", @$output));
+		return;
+	}
+	
+	my ($file_path) = $file_path_line =~ /FragmentPath=(.+)\s*$/g;
+	if (!$file_path) {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve unit file path for $service_name service on $computer_node_name, failed to parse 'FragmentPath=' line, output:\n" . join("\n", @$output));
+		return;
+	}
+	
+	notify($ERRORS{'DEBUG'}, 0, "retrieved unit file path for $service_name service on $computer_node_name: $file_path");
+	return $file_path
 }
 
 #/////////////////////////////////////////////////////////////////////////////
