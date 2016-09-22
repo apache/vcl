@@ -197,11 +197,10 @@ function updateLDAPUser($authtype, $userid) {
 	       .        "u.mapserial AS mapserial, "
 	       .        "COALESCE(u.rdpport, 3389) AS rdpport, "
 	       .        "u.showallgroups "
-	       . "FROM user u, "
-	       .      "IMtype i, "
-	       .      "affiliation af "
-	       . "WHERE u.IMtypeid = i.id AND "
-	       .       "af.id = $affilid AND ";
+	       . "FROM affiliation af, "
+	       .      "user u "
+	       . "LEFT JOIN IMtype i ON (u.IMtypeid = i.id) "
+	       . "WHERE af.id = $affilid AND ";
 	if(array_key_exists('numericid', $userData) &&
 	   is_numeric($userData['numericid']))
 		$query = $qbase . "u.uid = {$userData['numericid']}";
@@ -272,11 +271,10 @@ function updateLDAPUser($authtype, $userid) {
 		       .        "u.usepublickeys, "
 		       .        "u.sshpublickeys, "
 		       .        "u.lastupdated AS lastupdated "
-		       . "FROM user u, "
-		       .      "IMtype i, "
-		       .      "affiliation af "
-		       . "WHERE u.IMtypeid = i.id AND "
-		       .       "u.affiliationid = af.id AND "
+		       . "FROM affiliation af, "
+		       .      "user u "
+		       . "LEFT JOIN IMtype i ON (u.IMtypeid = i.id) "
+		       . "WHERE u.affiliationid = af.id AND "
 		       .       "u.id = $id";
 		$qh = doQuery($query, 101);
 		if(! $user = mysql_fetch_assoc($qh))

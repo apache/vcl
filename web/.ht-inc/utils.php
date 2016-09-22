@@ -3631,11 +3631,10 @@ function getUserInfo($id, $noupdate=0, $numeric=0) {
 	       .        "u.usepublickeys, "
 	       .        "u.sshpublickeys, "
 	       .        "af.shibonly "
-	       . "FROM user u, "
-	       .      "IMtype i, "
-	       .      "affiliation af "
-	       . "WHERE u.IMtypeid = i.id AND "
-	       .       "u.affiliationid = af.id AND ";
+	       . "FROM affiliation af, "
+	       .      "user u "
+	       . "LEFT JOIN IMtype i ON (u.IMtypeid = i.id) "
+	       . "WHERE u.affiliationid = af.id AND ";
 	if($numeric)
 		$query .= "u.id = $id";
 	else

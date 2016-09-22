@@ -180,12 +180,11 @@ function updateITECSUser($userid) {
 	       .        "u.mapserial AS mapserial, "
 	       .        "COALESCE(u.rdpport, 3389) AS rdpport, "
 	       .        "u.showallgroups "
-	       . "FROM user u, "
-	       .      "IMtype i, "
-	       .      "affiliation af "
-	       . "WHERE u.IMtypeid = i.id AND "
-	       .       "u.affiliationid = af.id AND "
-		    .       "u.uid = {$userData['uid']}";
+	       . "FROM affiliation af, "
+	       .      "user u "
+	       . "LEFT JOIN IMtype i ON (u.IMtypeid = i.id) "
+	       . "WHERE u.affiliationid = af.id AND "
+	       .       "u.uid = {$userData['uid']}";
 	$qh = doQuery($query, 255);
 	// if get a row
 	//    update db
@@ -233,11 +232,10 @@ function updateITECSUser($userid) {
 		       .        "COALESCE(u.rdpport, 3389) AS rdpport, "
 		       .        "u.showallgroups, "
 		       .        "u.lastupdated AS lastupdated "
-		       . "FROM user u, "
-		       .      "IMtype i, "
-		       .      "affiliation af "
-		       . "WHERE u.IMtypeid = i.id AND "
-		       .       "u.affiliationid = af.id AND "
+		       . "FROM affiliation af, "
+		       .      "user u "
+		       . "LEFT JOIN IMtype i ON (u.IMtypeid = i.id) "
+		       . "WHERE u.affiliationid = af.id AND "
 		       .       "u.id = $id";
 		$qh = doQuery($query, 101);
 		$user = mysql_fetch_assoc($qh);
