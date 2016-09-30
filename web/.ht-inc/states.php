@@ -56,6 +56,7 @@ $actions["entry"] = array('main',
                           'computer',
                           'managementnode',
                           'schedule',
+                          'addomain',
                           'RESTresourceBasic',
                           'RESTresourceDetail',
                           #'testDojoREST',
@@ -596,6 +597,8 @@ $actions['mode']['managementnode'] = "resource";
 $actions['args']['managementnode'] = 'managementnode';
 $actions['mode']['schedule'] = "resource";
 $actions['args']['schedule'] = 'schedule';
+$actions['mode']['addomain'] = "resource";
+$actions['args']['addomain'] = 'addomain';
 $actions['mode']['viewResources'] = "viewResources";
 $actions['mode']['jsonResourceStore'] = "jsonResourceStore";
 $actions['mode']['AJpromptToggleDeleteResource'] = "AJpromptToggleDeleteResource";
@@ -656,6 +659,7 @@ $actions['pages']['image'] = "image";
 $actions['pages']['computer'] = "computer";
 $actions['pages']['managementnode'] = "managementnode";
 $actions['pages']['schedule'] = "schedule";
+$actions['pages']['addomain'] = "addomain";
 $actions['pages']['viewResources'] = "resource";
 $actions['pages']['jsonResourceStore'] = "resource";
 $actions['pages']['AJpromptToggleDeleteResource'] = "resource";

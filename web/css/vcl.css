@@ -591,6 +591,14 @@ body {
 	width: 16.5em;
 }
 
+#addomaindlgcontent label {
+	width: 14.5em;
+}
+
+#addomaindlgcontent .labeledform {
+	margin-left: 15em;
+}
+
 #cfgvartypelbl {
 	margin-top: 6px;
 }

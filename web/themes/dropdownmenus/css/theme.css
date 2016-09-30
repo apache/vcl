@@ -144,6 +144,27 @@ div.dijitDialog h3 {
 	background-color: black;
 	color: white;
 }
+#renameDialog tbody tr:hover td,
+#renameDialog tbody tr td {
+	background-color: transparent;
+	border-top: none;
+	padding: 0.2em;
+}
+div.dijitDialog h2,
+div.dijitDialog h3 {
+	margin-top: 0.1em;
+}
+#confdelcontent h3 {
+	font-size: 1.4em;
+	font-weight: bold;
+}
+#groupbyresourcediv table.dojoxGridRowTable tbody tr:hover td {
+	background-color: transparent;
+}
+#groupbyresourcediv div.dojoxGridRowSelected table.dojoxGridRowTable tbody tr td {
+	background-color: black;
+	color: white;
+}
 #addeditdlg tbody tr td.dijitButtonNode {
 	border: 1px solid #c0c0c0;
 }
@@ -415,6 +436,12 @@ h1.site-title {
 }
 #advancedoptions .labeledform {
     margin-left: 21.5em;
+}
+#imageadauthbox label {
+    width: 16em;
+}
+#imageadauthbox .labeledform {
+    margin-left: 16.5em;
 }
 #mgmtnodedlgcontent label {
     width: 24.5em;

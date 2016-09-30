@@ -300,6 +300,7 @@ function initGlobals() {
 		case 'computer':
 		case 'managementnode':
 		case 'schedule':
+		case 'addomain':
 			require_once(".ht-inc/resource.php");
 			break;
 		case 'storebackend':
@@ -1326,15 +1327,20 @@ function getImages($includedeleted=0, $imageid=0) {
 	       .        "i.lastupdate, "
 	       .        "i.forcheckout, "
 	       .        "i.maxinitialtime, "
-	       .        "i.imagemetaid "
-	       . "FROM image i, "
-	       .      "platform p, "
+	       .        "i.imagemetaid, "
+	       .        "ad.id AS addomainid, "
+	       .        "ad.name AS addomain, "
+	       .        "iadd.baseOU "
+	       . "FROM platform p, "
 	       .      "OS o, "
 	       .      "OStype ot, "
 	       .      "resource r, "
 	       .      "resourcetype t, "
 	       .      "user u, "
-	       .      "affiliation a "
+	       .      "affiliation a, "
+	       .      "image i "
+	       . "LEFT JOIN imageaddomain iadd ON (i.id = iadd.imageid) "
+	       . "LEFT JOIN addomain ad ON (iadd.addomainid = ad.id) "
 	       . "WHERE i.platformid = p.id AND "
 	       .       "r.resourcetypeid = t.id AND "
 	       .       "t.name = 'image' AND "
@@ -1357,6 +1363,9 @@ function getImages($includedeleted=0, $imageid=0) {
 			$imagelist[$includedeleted][$row['id']]['sethostname'] = 0;
 		else
 			$imagelist[$includedeleted][$row['id']]['sethostname'] = 1;
+		$imagelist[$includedeleted][$row['id']]['adauthenabled'] = 0;
+		if($row['addomainid'] != NULL)
+			$imagelist[$includedeleted][$row['id']]['adauthenabled'] = 1;
 		if($row["imagemetaid"] != NULL) {
 			if(array_key_exists($row['imagemetaid'], $allmetadata)) {
 				$metaid = $row['imagemetaid'];
@@ -2998,22 +3007,31 @@ function getResourceGroupMembers($type="all") {
 		$orders = "m.hostname";
 		$types = "'managementnode'";
 	}
+	elseif($type == "addomain") {
+		$names = "ad.name AS addomain ";
+		$joins = "LEFT JOIN addomain ad ON (r.subid = ad.id AND r.resourcetypeid = 19) ";
+		$orders = "ad.name";
+		$types = "'addomain'";
+	}
 	else {
 		$names = "c.hostname AS computer, "
 		       . "c.deleted, "
 		       . "i.prettyname AS image, "
 		       . "i.deleted AS deleted2, "
 		       . "s.name AS schedule, "
-		       . "m.hostname AS managementnode ";
+		       . "m.hostname AS managementnode, "
+		       . "ad.name AS addomain ";
 		$joins = "LEFT JOIN computer c ON (r.subid = c.id AND r.resourcetypeid = 12) "
 		       . "LEFT JOIN image i ON (r.subid = i.id AND r.resourcetypeid = 13) "
 		       . "LEFT JOIN schedule s ON (r.subid = s.id AND r.resourcetypeid = 15) "
-		       . "LEFT JOIN managementnode m ON (r.subid = m.id AND r.resourcetypeid = 16) ";
+		       . "LEFT JOIN managementnode m ON (r.subid = m.id AND r.resourcetypeid = 16) "
+		       . "LEFT JOIN addomain ad ON (r.subid = ad.id AND r.resourcetypeid = 19) ";
 		$orders = "c.hostname, "
 		        . "i.prettyname, "
 		        . "s.name, "
-		        . "m.hostname";
-		$types = "'computer','image','schedule','managementnode'";
+		        . "m.hostname, "
+		        . "ad.name";
+		$types = "'computer','image','schedule','managementnode','addomain'";
 	}
 
 	$query = "SELECT rgm.resourcegroupid, "
@@ -8813,6 +8831,60 @@ function getNATports($resid) {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
+/// \fn getADdomains($addomainid=0)
+///
+/// \param $addomainid - (optional) id of an AD domain
+///
+/// \return array of available AD domains with the following keys:\n
+/// \b id\n
+/// \b resourceid\n
+/// \b name\n
+/// \b ownerid\n
+/// \b owner\n
+/// \b domaindnsname\n
+/// \b domainnetbiosname\n
+/// \b username\n
+/// \b dnsservers\n
+/// \b domaincontrollers\n
+/// \b logindescription
+///
+/// \brief builds an array of AD domains
+///
+////////////////////////////////////////////////////////////////////////////////
+function getADdomains($addomainid=0) {
+	$query = "SELECT ad.id, "
+	       .        "r.id AS resourceid, "
+	       .        "ad.name, "
+	       .        "ad.ownerid, "
+	       .        "CONCAT(u.unityid, '@', a.name) AS owner, "
+	       .        "ad.domainDNSName AS domaindnsname, "
+	       .        "ad.domainNetBIOSName AS domainnetbiosname, "
+	       .        "ad.username, "
+	       .        "ad.dnsServers AS dnsservers, "
+	       .        "ad.domainControllers AS domaincontrollers, "
+	       .        "ad.logindescription "
+	       . "FROM addomain ad, "
+	       .      "affiliation a, "
+	       .      "user u, "
+	       .      "resource r, "
+	       .      "resourcetype rt "
+	       . "WHERE ad.ownerid = u.id AND "
+	       .       "u.affiliationid = a.id AND "
+	       .       "r.subid = ad.id AND "
+	       .       "r.resourcetypeid = rt.id AND "
+	       .       "rt.name = 'addomain'";
+	if($addomainid)
+		$query .= " AND ad.id = $addomainid";
+
+	$qh = doQuery($query);
+	$addomainlist = array();
+	while($row = mysql_fetch_assoc($qh))
+		$addomainlist[$row['id']] = $row;
+	return $addomainlist;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
 /// \fn getBlockTimeData($start, $end)
 ///
 /// \param $start - (optional) start time of blockTimes to get in unix timestamp
@@ -9098,11 +9170,12 @@ function labeledFormItem($id, $label, $type, $constraints='', $required=1,
 		$required = 'false';
 	switch($type) {
 		case 'text':
+		case 'password':
 			if($width == '')
 				$width = '300px';
 			$h .= "<label for=\"$id\">$label:</label>\n";
 			$h .= "<span class=\"labeledform\">\n";
-			$h .= "<input type=\"text\" ";
+			$h .= "<input type=\"$type\" ";
 			$h .=        "dojoType=\"dijit.form.ValidationTextBox\" ";
 			$h .=        "required=\"$required\" ";
 			if($constraints != '')
@@ -11891,6 +11964,26 @@ function validateIPv4addr($ip) {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
+/// \fn validateHostname($name)
+///
+/// \param $name  the hostname to validate
+///
+/// \return 1 if valid hostname else 0
+///
+/// \brief validates a given hostname
+///
+////////////////////////////////////////////////////////////////////////////////
+function validateHostname($name) {
+	if(strlen($name) > 255)
+		return 0;
+	// return 0 if dotted numbers only
+	if(preg_match('/^[0-9]+(\.[0-9]+){3}$/', $name))
+		return 0;
+	return preg_match('/^([A-Za-z0-9]{1,63})(\.[A-Za-z0-9-_]+)*(\.?[A-Za-z0-9])$/', $name);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
 /// \fn validateEmailAddress($addr)
 ///
 /// \param $addr - an email address
@@ -12714,6 +12807,12 @@ function getNavMenuData($homeurl=HOMEURL) {
 		$menudata['vm']['selected'] = checkMenuItemSelected('vm');
 	}
 
+	if(in_array("addomainAdmin", $user["privileges"])) {
+		$menudata['addomain']['url'] = BASEURL . SCRIPT . "?mode=addomain";
+		$menudata['addomain']['title'] = i('AD Domains');
+		$menudata['addomain']['selected'] = checkMenuItemSelected('addomain');
+	}
+
 	if(checkUserHasPerm('Schedule Site Maintenance')) {
 		$menudata['sitemaintenance']['url'] = BASEURL . SCRIPT . "?mode=siteMaintenance";
 		$menudata['sitemaintenance']['title'] = i('Site Maintenance');
@@ -13277,6 +13376,9 @@ function getDojoHTML($refresh) {
 				case 'computer':
 					$jsfile = 'resources/computer.js';
 					break;
+				case 'addomain':
+					$jsfile = 'resources/addomain.js';
+					break;
 			}
 			if(isset($jsfile))
 				$rt .= "<script type=\"text/javascript\" src=\"js/$jsfile?v=$v\"></script>\n";
@@ -13365,6 +13467,9 @@ function getDojoHTML($refresh) {
 					break;
 				case 'computer':
 					$jsfile = 'resources/computer.js';
+					break;
+				case 'addomain':
+					$jsfile = 'resources/addomain.js';
 					break;
 			}
 			$rt .= "<script type=\"text/javascript\" src=\"js/resources.js?v=$v\"></script>\n";

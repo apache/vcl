@@ -43,6 +43,9 @@ function resource($type) {
 		case 'schedule':
 			$obj = new Schedule();
 			break;
+		case 'addomain':
+			$obj = new ADdomain();
+			break;
 	}
 
 	$html = $obj->selectionText();
@@ -69,7 +72,7 @@ class Resource {
 	var $deletetoggled;
 	var $errmsg;
 	var $namefield;
-	var $noadd;
+	var $addable;
 	var $jsondata;
 
 	/////////////////////////////////////////////////////////////////////////////
@@ -288,7 +291,7 @@ class Resource {
 		if($this->deletetoggled) {
 			$h .= "<label for=\"showdeleted\"><strong>";
 			$h .= i("Include Deleted {$this->restypename}s:");
-			$h .= "</strong>:</label>\n";
+			$h .= "</strong></label>\n";
 			$h .= "<input type=\"checkbox\" dojoType=\"dijit.form.CheckBox\" ";
 			$h .= "id=\"showdeleted\" onChange=\"resource.GridFilter();\">\n";
 		}
@@ -306,7 +309,8 @@ class Resource {
 		$h .= "<thead>\n";
 		$h .= "<tr>\n";
 		if(preg_match('/MSIE/i', $_SERVER['HTTP_USER_AGENT']) ||
-		   preg_match('/Trident/i', $_SERVER['HTTP_USER_AGENT']))
+		   preg_match('/Trident/i', $_SERVER['HTTP_USER_AGENT']) ||
+		   preg_match('/Edge/i', $_SERVER['HTTP_USER_AGENT']))
 			$w = array('64px', '38px', '200px');
 		else
 			$w = array('5em', '3.5em', '17em');
@@ -442,7 +446,8 @@ class Resource {
 				return '';
 		}
 		if(preg_match('/MSIE/i', $_SERVER['HTTP_USER_AGENT']) ||
-		   preg_match('/Trident/i', $_SERVER['HTTP_USER_AGENT']))
+		   preg_match('/Trident/i', $_SERVER['HTTP_USER_AGENT']) ||
+		   preg_match('/Edge/i', $_SERVER['HTTP_USER_AGENT']))
 			$w = round($w * 11.5) . 'px';
 		else
 			$w = "{$w}em";
@@ -1602,6 +1607,34 @@ class Resource {
 
 	/////////////////////////////////////////////////////////////////////////////
 	///
+	/// \fn checkExistingField($field, $value, $id=0)
+	///
+	/// \param $field - database field name
+	/// \param $value - value for $field
+	/// \param $id - (optional, default=0) if nonzero, ignore resource with this
+	/// id
+	///
+	/// \return 1 if existing resource with $field set to $value, 0 if not
+	///
+	/// \brief checks to see if there is already a record in the database with
+	/// $field set to $value
+	///
+	/////////////////////////////////////////////////////////////////////////////
+	function checkExistingField($field, $value, $id=0) {
+		$query = "SELECT id FROM {$this->restype} "
+		       . "WHERE `$field` = '$value'";
+		if($this->deletetoggled)
+			$query .= " AND deleted = 0";
+		if($id)
+			$query .= " AND id != $id";
+		$qh = doQuery($query);
+		if(mysql_num_rows($qh))
+			return 1;
+		return 0;
+	}
+
+	/////////////////////////////////////////////////////////////////////////////
+	///
 	/// \fn extraSelectAdminOptions()
 	///
 	/// \return html
@@ -1616,6 +1649,8 @@ class Resource {
 	/////////////////////////////////////////////////////////////////////////////
 	///
 	/// \fn checkResourceInUse($rscid)
+	///
+	/// \param $rscid - id of resource
 	///
 	/// \return empty string if not being used; string of where resource is
 	/// being used if being used

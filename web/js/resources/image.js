@@ -29,13 +29,16 @@ Image.prototype.colformatter = function(value, rowIndex, obj) {
 	   obj.field == 'forcheckout' ||
 	   obj.field == 'checkuser' ||
 	   obj.field == 'rootaccess' ||
-	   obj.field == 'sethostname') {
+	   obj.field == 'sethostname' ||
+	   obj.field == 'adauthenabled') {
 		if(value == "0")
 			return '<span class="rederrormsg">' + _('false') + '</span>';
 		if(value == "1")
 			return '<span class="ready">' + _('true') + '</span>';
 	}
-	if(obj.field == 'maxinitialtime' && value == 0)
+	if((obj.field == 'maxinitialtime' && value == 0) ||
+	   (obj.field == 'addomain' && value == null) ||
+	   (obj.field == 'baseOU' && value == null))
 		return '(unset)';
 	return value;
 }
@@ -70,6 +73,25 @@ function inlineEditResourceCB(data, ioArgs) {
 			dojo.addClass('sethostnamediv', 'hidden');
 		dojo.byId('connectmethodlist').innerHTML = data.items.data.connectmethods.join('<br>');
 		dijit.byId('connectmethodttd').set('href', data.items.data.connectmethodurl);
+		if(data.items.data.ostype == 'windows') {
+			dojo.removeClass('imageadauthbox', 'hidden');
+			if(data.items.data.adauthenabled) {
+				dijit.byId('adauthenable').set('checked', true);
+				dijit.byId('addomainid').set('value', data.items.data.addomainid);
+				dijit.byId('baseou').set('value', data.items.data.baseOU);
+			}
+			else {
+				dijit.byId('adauthenable').set('checked', false);
+				dijit.byId('addomainid').reset();
+				dijit.byId('baseou').reset();
+			}
+		}
+		else {
+			dojo.addClass('imageadauthbox', 'hidden');
+			dijit.byId('adauthenable').set('checked', false);
+			dijit.byId('addomainid').reset();
+			dijit.byId('baseou').reset();
+		}
 		dijit.byId('subimagedlg').set('href', data.items.data.subimageurl);
 		dojo.byId('revisiondiv').innerHTML = data.items.data.revisionHTML;
 		dojo.byId('addeditdlgerrmsg').innerHTML = '';
@@ -111,6 +133,9 @@ function resetEditResource() {
 		dijit.byId('advancedoptions').toggle();
 	dojo.byId('connectmethodlist').innerHTML = '';
 	dojo.byId('addeditdlgerrmsg').innerHTML = '';
+	dijit.byId('adauthenable').reset();
+	dijit.byId('addomainid').reset();
+	dijit.byId('baseou').reset();
 }
 
 function saveResource() {
@@ -166,6 +191,12 @@ function saveResource() {
 		if(! dijit.byId('advancedoptions').open)
 			dijit.byId('advancedoptions').toggle();
 		setTimeout(function() {dijit.byId('reload').focus();}, 300);
+		return;
+	}
+	if(dijit.byId('adauthenable').checked && ! checkValidatedObj('baseou', errobj)) {
+		if(! dijit.byId('advancedoptions').open)
+			dijit.byId('advancedoptions').toggle();
+		setTimeout(function() {dijit.byId('baseou').focus();}, 300);
 		return;
 	}
 
@@ -234,6 +265,16 @@ function saveResource() {
 	data['cpuspeed'] = dijit.byId('cpuspeed').get('value');
 	if(dijit.byId('reload'))
 		data['reload'] = dijit.byId('reload').get('value');
+	if(dijit.byId('adauthenable').checked) {
+		data['adauthenabled'] = 1;
+		data['addomainid'] = dijit.byId('addomainid').get('value');
+		data['baseou'] = dijit.byId('baseou').get('value');
+	}
+	else {
+		data['adauthenabled'] = 0;
+		data['addomainid'] = 0;
+		data['baseou'] = '';
+	}
 
 	submitbtn.set('disabled', true);
 	RPCwrapper(data, saveResourceCB, 1);
@@ -287,6 +328,10 @@ function saveResourceCB(data, ioArgs) {
 					resourcegrid.store.setValue(item, 'rootaccess', parseInt(data.items.data.rootaccess));
 					resourcegrid.store.setValue(item, 'sethostname', parseInt(data.items.data.sethostname));
 					resourcegrid.store.setValue(item, 'reloadtime', data.items.data.reloadtime);
+					resourcegrid.store.setValue(item, 'adauthenabled', data.items.data.adauthenabled);
+					resourcegrid.store.setValue(item, 'addomainid', data.items.data.addomainid);
+					resourcegrid.store.setValue(item, 'addomain', data.items.data.addomain);
+					resourcegrid.store.setValue(item, 'baseOU', data.items.data.baseOU);
 				},
 				onComplete: function(items, result) {
 					// when call resourcegrid.sort directly, the table contents disappear; not sure why
@@ -663,10 +708,17 @@ function startImageCB(data, ioArgs) {
 	}
 	else
 		dojo.addClass('sethostnamediv', 'hidden');
-	if(data.items.ostype == 'windows')
+	dijit.byId('adauthenable').set('checked', false);
+	dijit.byId('addomainid').reset();
+	dijit.byId('baseou').reset();
+	if(data.items.ostype == 'windows') {
 		dojo.removeClass('sysprepdiv', 'hidden');
-	else
+		dojo.removeClass('imageadauthbox', 'hidden');
+	}
+	else {
 		dojo.addClass('sysprepdiv', 'hidden');
+		dojo.addClass('imageadauthbox', 'hidden');
+	}
 
 	if(data.items.checkpoint) {
 		dojo.addClass('imageendrescontent', 'hidden');
@@ -762,4 +814,15 @@ function submitUpdateImageClickthroughCB(data, ioArgs) {
 	dijit.byId('clickthroughdlg').hide();
 	dijit.byId('clickthroughDlgBtn').set('disabled', false);
 	resRefresh();
+}
+
+function toggleADauth() {
+	if(dijit.byId('adauthenable').checked) {
+		dijit.byId('addomainid').set('disabled', false);
+		dijit.byId('baseou').set('disabled', false);
+	}
+	else {
+		dijit.byId('addomainid').set('disabled', true);
+		dijit.byId('baseou').set('disabled', true);
+	}
 }

@@ -87,13 +87,23 @@ class Image extends Resource {
 				$w = 12;
 				break;
 			case 'os':
-				$w = 7;
+				$w = 8;
+				break;
+			case 'addomain':
+				$w = 10;
+				break;
+			case 'baseOU':
+				$w = 12;
+				break;
+			case 'adauthenabled':
+				$w = 9;
 				break;
 			default:
 				return '';
 		}
 		if(preg_match('/MSIE/i', $_SERVER['HTTP_USER_AGENT']) ||
-		   preg_match('/Trident/i', $_SERVER['HTTP_USER_AGENT']))
+		   preg_match('/Trident/i', $_SERVER['HTTP_USER_AGENT']) ||
+		   preg_match('/Edge/i', $_SERVER['HTTP_USER_AGENT']))
 			$w = round($w * 11.5) . 'px';
 		else
 			$w = "{$w}em";
@@ -143,6 +153,12 @@ class Image extends Resource {
 				return i("Admin. Access");
 			case 'sethostname':
 				return i("Set Hostname");
+			case 'adauthenabled':
+				return i("Use AD Authentication");
+			case 'addomain':
+				return i("AD Domain");
+			case 'baseOU':
+				return i("Base OU");
 		}
 		return i(ucfirst($field));
 	}
@@ -434,6 +450,25 @@ class Image extends Resource {
 			$h .= "id=\"connectmethodids\">\n";
 		}
 		$h .= "</div>\n"; #labeledform
+
+		# AD authentication
+		$h .= "<div class=\"boxedoptions hidden\" id=\"imageadauthbox\">\n";
+		# enable toggle
+		$vals = getUserResources(array('addomainAdmin'), array("manageGroup"));
+		$extra = array();
+		if(count($vals['addomain']) == 0)
+			$extra['disabled'] = 'true';
+		$extra['onChange'] = 'toggleADauth();';
+		$h .= labeledFormItem('adauthenable', i('Use AD Authentication'), 'check', '', '', '', '', '', $extra);
+		# AD domain
+		$disabled = array('disabled' => 'true');
+		$h .= labeledFormItem('addomainid', i('AD Domain'), 'select', $vals['addomain'], '', '', '', '', $disabled);
+		# base OU
+		$reg = '^([Oo][Uu])=[^,]+(,([Oo][Uu])=[^,]+)*$';
+		$errmsg = i("Invalid base OU; do not include DC components");
+		$h .= labeledFormItem('baseou', i('Base OU'), 'text', $reg, 0, '', $errmsg, '', $disabled, '230px', helpIcon('baseouhelp')); 
+		$h .= "</div>\n"; # boxedoptions
+
 		# subimages
 		if(! $add) {
 			$h .= "<br>\n";
@@ -488,6 +523,8 @@ class Image extends Resource {
 		$h .= dijitButton('', i("Cancel"), $script);
 		$h .= "   </div>\n";
 		$h .= "</div>\n"; # autoconfirmdlg
+
+		$h .= helpTooltip('baseouhelp', i('OU where nodes deployed with this image will be registered. Do not enter the domain component (ex OU=Computers,OU=VCL)'));
 		return $h;
 	}
 
@@ -758,6 +795,41 @@ class Image extends Resource {
 			       . " WHERE id = {$data['imageid']}";
 			doQuery($query);
 		}
+
+		# ad authentication
+		if($olddata['ostype'] == 'windows') {
+			if($data['adauthenabled'] != $olddata['adauthenabled']) {
+				if($data['adauthenabled']) {
+					$esc_baseou = mysql_real_escape_string($data['baseou']);
+					$query = "INSERT INTO imageaddomain "
+					       .        "(imageid, "
+					       .        "addomainid, "
+					       .        "baseOU) "
+					       . "VALUES "
+					       .        "({$data['imageid']}, "
+					       .        "{$data['addomainid']}, "
+					       .        "'$esc_baseou')";
+					doQuery($query);
+				}
+				else {
+					$query = "DELETE FROM imageaddomain "
+					       . "WHERE imageid = {$data['imageid']}";
+					doQuery($query);
+				}
+			}
+			elseif($data['adauthenabled'] &&
+			       ($data['addomainid'] != $olddata['addomainid'] ||
+			       $data['baseou'] != $olddata['baseOU'])) {
+				$esc_baseou = mysql_real_escape_string($data['baseou']);
+				$query = "UPDATE imageaddomain "
+				       . "SET addomainid = {$data['addomainid']}, "
+				       .     "baseOU = '$esc_baseou' "
+				       . "WHERE imageid = {$data['imageid']}";
+				doQuery($query);
+			}
+		}
+
+		# imagemeta
 		if(empty($olddata['imagemetaid']) &&
 		   ($data['checkuser'] == 0 || $data['rootaccess'] == 0 ||
 		   ($olddata['ostype'] == 'windows' && $data['sethostname'] == 1) ||
@@ -1148,6 +1220,20 @@ class Image extends Resource {
 		       .         "{$data['basedoffrevisionid']})";
 		doQuery($query, 205);
 		$imageid = dbLastInsertID();
+
+		# ad authentication
+		if($data['adauthenabled']) {
+			$esc_baseou = mysql_real_escape_string($data['baseou']);
+			$query = "INSERT INTO imageaddomain "
+			       .        "(imageid, "
+			       .        "addomainid, "
+			       .        "baseOU) "
+			       . "VALUES "
+			       .        "($imageid, "
+			       .        "{$data['addomainid']}, "
+			       .        "'$esc_baseou')";
+			doQuery($query);
+		}
 	
 		// possibly add entry to imagemeta table
 		$imagemetaid = 0;
@@ -1530,6 +1616,9 @@ class Image extends Resource {
 		$return["sethostname"] = processInputVar("sethostname", ARG_NUMERIC);
 		$return["sysprep"] = processInputVar("sysprep", ARG_NUMERIC); # only in add
 		$return["connectmethodids"] = processInputVar("connectmethodids", ARG_STRING); # only in add
+		$return["adauthenabled"] = processInputVar("adauthenabled", ARG_NUMERIC);
+		$return["addomainid"] = processInputVar("addomainid", ARG_NUMERIC);
+		$return["baseou"] = processInputVar("baseou", ARG_STRING);
 
 		$return['requestid'] = getContinuationVar('requestid'); # only in add
 		$return["imageid"] = getContinuationVar('imageid');
@@ -1636,6 +1725,27 @@ class Image extends Resource {
 			$return['error'] = 1;
 			$errormsg[] = i("Use Sysprep must be Yes or No");
 		}
+		if($return['adauthenabled'] != 0 && $return['adauthenabled'] != 1)
+			$return['adauthenabled'] = 0;
+		if($return['adauthenabled'] == 1) {
+			$vals = getUserResources(array('addomainAdmin'), array("manageGroup"));
+			if(! array_key_exists($return['addomainid'], $vals['addomain'])) {
+				$return['error'] = 1;
+				$errormsg[] = i("Invalid AD Domain submitted");
+			}
+			if(! preg_match('/^([Oo][Uu])=[^,]+(,([Oo][Uu])=[^,]+)*$/', $return['baseou'])) {
+				$return['error'] = 1;
+				$errormsg[] = i("Invalid Base OU submitted, must start with OU=");
+			}
+			if(preg_match('/DC=.+(,DC=.+)*$/', $return['baseou'])) {
+				$return['error'] = 1;
+				$errormsg[] = i("Base OU must not contain DC= components");
+			}
+		}
+		else {
+			$return['addomainid'] = 0;
+			$return['baseou'] = NULL;
+		}
 		if(empty($return['desc'])) {
 			$return['error'] = 1;
 			$errormsg[] = i("You must include a description of the image") . "<br>";
@@ -1659,6 +1769,7 @@ class Image extends Resource {
 				$return['connectmethodids'] = implode(',', array_keys($ids));
 			}
 		}
+
 		if($return['error'])
 			$return['errormsg'] = implode('<br>', $errormsg);
 		return $return;
