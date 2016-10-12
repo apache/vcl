@@ -4292,7 +4292,7 @@ sub enable_firewall_port {
 	# They must be deleted in order from highest rule number to lowest
 	# Otherwise, unintended rules will be deleted unless the rule numbers are adjusted
 	my $firewall_configuration = $self->get_firewall_configuration() || return;
-	RULE: for my $rule_number (reverse sort keys %{$firewall_configuration->{$chain}}) {
+	RULE: for my $rule_number (reverse sort {$a <=> $b} keys %{$firewall_configuration->{$chain}}) {
 		my $rule = $firewall_configuration->{$chain}{$rule_number};
 		
 		# Check if the rule matches the protocol and port arguments
@@ -4303,7 +4303,7 @@ sub enable_firewall_port {
 		# Ignore rule is existing scope isn't defined
 		my $existing_scope = $rule->{$protocol}{$port}{scope};
 		if (!defined($existing_scope)) {
-			notify($ERRORS{'DEBUG'}, 0, "ignoring rule $rule_number, existing scope is NOT specified:\n" . format_data($rule->{$protocol}{$port}));
+			notify($ERRORS{'DEBUG'}, 0, "ignoring existing $protocol/$port rule $rule_number, existing scope is NOT specified");
 			next RULE;
 		}
 		$existing_scope_string .= "$existing_scope,";
@@ -4312,7 +4312,7 @@ sub enable_firewall_port {
 		# This helps reduce duplicate rules and the number of individual rules
 		push @commands, "iptables -D $chain $rule_number";
 		
-		notify($ERRORS{'DEBUG'}, 0, "existing $chain chain rule $rule_number matches:\n" . format_data($firewall_configuration->{$chain}{$rule_number}));
+		notify($ERRORS{'DEBUG'}, 0, "existing $protocol/$port $chain chain rule $rule_number matches, existing scope: $existing_scope");
 	}
 	
 	# Combine all of the existing scopes matching the protocol/port
@@ -4381,7 +4381,7 @@ sub enable_firewall_port {
 	for my $scope_string (@new_scope_list) {
 		# Add the new rule to the array of iptables commands
 		my $new_rule_command;
-		$new_rule_command .= "/sbin/iptables -v -I INPUT 1";
+		$new_rule_command .= "iptables -v -I INPUT 1";
 		$new_rule_command .= " -p $protocol";
 		$new_rule_command .= " -j ACCEPT";
 		$new_rule_command .= " -s $scope_string";
@@ -4411,17 +4411,17 @@ sub enable_firewall_port {
 		notify($ERRORS{'WARNING'}, 0, "failed to back up original iptables file to: '$iptables_backup_file_path'");
 	}
 	
-	#notify($ERRORS{'DEBUG'}, 0, "attempting to execute iptables commands on $computer_node_name:\n" . join("\n", @commands));
+	notify($ERRORS{'DEBUG'}, 0, "attempting to execute iptables commands on $computer_node_name:\n" . join("\n&& ", @commands));
 	my ($exit_status, $output) = $self->execute($command, 0);
-	if (!defined $exit_status) {
-		notify($ERRORS{'WARNING'}, 0, "failed to execute iptables commands to enable firewall port on $computer_node_name, protocol: $protocol, port: $port, scope: $new_scope");
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute iptables commands to enable firewall port on $computer_node_name, protocol: $protocol, port: $port, scope: $scope_argument, command:\n$command");
 		return;
 	}
 	elsif ($exit_status == 0) {
-		notify($ERRORS{'DEBUG'}, 0, "enabled firewall port on $computer_node_name, protocol: $protocol, port: $port, scope: $new_scope, command:\n$command");
+		notify($ERRORS{'DEBUG'}, 0, "enabled firewall port on $computer_node_name, protocol: $protocol, port: $port, scope: $scope_argument");
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to enable firewall port on $computer_node_name, protocol: $protocol, port: $port, scope: $new_scope, exit status: $exit_status, command:\n$command\noutput:\n" . join("\n", @$output));
+		notify($ERRORS{'WARNING'}, 0, "failed to enable firewall port on $computer_node_name, protocol: $protocol, port: $port, scope: $scope_argument, exit status: $exit_status, command:\n$command\noutput:\n" . join("\n", @$output));
 		return;
 	}
 	
@@ -4505,7 +4505,7 @@ sub disable_firewall_port {
 	my $existing_scope_string;
 	
 	my $firewall_configuration = $self->get_firewall_configuration() || return;
-	RULE: for my $rule_number (reverse sort keys %{$firewall_configuration->{$chain}}) {
+	RULE: for my $rule_number (reverse sort {$a <=> $b} keys %{$firewall_configuration->{$chain}}) {
 		my $rule = $firewall_configuration->{$chain}{$rule_number};
 		
 		# Check if the rule matches the protocol and port arguments
@@ -4546,7 +4546,7 @@ sub disable_firewall_port {
 	#notify($ERRORS{'DEBUG'}, 0, "attempting to execute iptables commands on $computer_node_name:\n" . join("\n", @commands));
 	my ($exit_status, $output) = $self->execute($command);
 	if (!defined $exit_status) {
-		notify($ERRORS{'WARNING'}, 0, "failed to execute iptables commands to disable firewall port $protocol/$port on $computer_node_name");
+		notify($ERRORS{'WARNING'}, 0, "failed to execute iptables commands to disable firewall port $protocol/$port on $computer_node_name, command:\n$command\nprevious firewall configuration:\n" . format_data($firewall_configuration));
 		return;
 	}
 	elsif ($exit_status == 0) {
@@ -4851,7 +4851,7 @@ sub get_firewall_configuration {
 		return;
 	}
 	
-	#notify($ERRORS{'DEBUG'}, 0, "iptables output:\n" . join("\n", @$output));
+	notify($ERRORS{'DEBUG'}, 0, "iptables output:\n" . join("\n", @$output));
 	
 	# Execute the iptables -L --line-number -n command to retrieve firewall port openings
 	# Expected output:
@@ -5102,7 +5102,7 @@ sub clean_iptables {
 	my $chain = "INPUT";
 	my @commands;
 	my $firewall_configuration = $self->get_firewall_configuration() || return;
-	RULE: for my $rule_number (reverse sort {$a<=>$b} keys %{$firewall_configuration->{$chain}}) {
+	RULE: for my $rule_number (reverse sort {$a <=> $b} keys %{$firewall_configuration->{$chain}}) {
 		my $rule = $firewall_configuration->{$chain}{$rule_number};
 		
 		for my $protocol (keys %$rule) {
@@ -5658,7 +5658,7 @@ sub configure_ext_sshd {
 		notify($ERRORS{'WARNING'}, 0, "unable to configure ext_sshd, failed to restart sshd on $computer_node_name after reconfiguring sshd_config to only listen on private network");
 		return;
 	}
-
+	
 	# Create and configure the ext_sshd service
 	if (!$self->configure_ext_sshd_config_file()) {
 		notify($ERRORS{'WARNING'}, 0, "unable to configure ext_sshd, failed to configure external_sshd_config file on $computer_node_name");
@@ -7285,6 +7285,53 @@ sub update_resolv_conf {
 	else {
 		return 0;
 	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_product_name
+
+ Parameters  : none
+ Returns     : string
+ Description : Retrieves the name of the Linux distribution from
+               /etc/redhat-release. If this file does not exist, null is
+               returned.
+
+=cut
+
+sub get_product_name {
+	my $self = shift;
+	if (ref($self) !~ /linux/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	return $self->{product_name} if defined($self->{product_name});
+	
+	my $computer_name = $self->data->get_computer_short_name();
+	
+	my $release_file_path = '/etc/redhat-release';
+	if (!$self->file_exists($release_file_path)) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine Linux distribution name installed on $computer_name, file does not exist: $release_file_path");
+		return;
+	}
+	
+	my @release_file_lines = $self->get_file_contents($release_file_path);
+	if (!@release_file_lines) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine Linux distribution name installed on $computer_name, failed to retrieve contents of: $release_file_path");
+		return;
+	}
+	
+	# In case there are multiple lines, get the first one with a word character
+	my ($product_name) = grep(/\w/, @release_file_lines);
+	if (!$product_name) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine Linux distribution name installed on $computer_name, $release_file_path does not contain a line with a word character, contents:\n" . join("\n", @release_file_lines));
+		return;
+	}
+	
+	$self->{product_name} = $product_name;
+	notify($ERRORS{'OK'}, 0, "determined Linux distribution name installed on $computer_name: '$self->{product_name}'");
+	return $self->{product_name};
 }
 
 ##/////////////////////////////////////////////////////////////////////////////
