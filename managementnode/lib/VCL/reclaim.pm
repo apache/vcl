@@ -329,6 +329,13 @@ sub call_os_sanitize {
 	
 	my $computer_shortname = $self->data->get_computer_short_name();
 	
+	# Delete the reservation info JSON file
+	my $enable_experimental_features = get_variable('enable_experimental_features', 0);
+	if ($enable_experimental_features && !$self->os->delete_reservation_info_json_file()) {
+		notify($ERRORS{'WARNING'}, 0, "failed to delete reservation info JSON file on $computer_shortname, computer will be reloaded");
+		$self->insert_reload_and_exit();
+	}
+	
 	# Attempt to call OS module's sanitize() subroutine
 	# This subroutine should perform all the tasks necessary to sanitize the OS if it was reserved and not logged in to
 	notify($ERRORS{'DEBUG'}, 0, "calling " . ref($self->os) . "::sanitize() subroutine");

@@ -10973,7 +10973,7 @@ sub run_script {
 		notify($ERRORS{'WARNING'}, 0, "failed to execute script on $computer_node_name: '$script_path', command: '$command'");
 		return;
 	}
-	
+
 	# Create a log file containing the output
 	my $logfile_contents = "$timestamp - $script_path executed by vcld";
 	my $header_line_length = length($logfile_contents);
@@ -12019,6 +12019,30 @@ sub get_cluster_info_file_path {
 	return $self->{cluster_info_file_path};
 }
 
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_reservation_info_json_file_path
+
+ Parameters  : none
+ Returns     : string
+ Description : Returns the location where the files resides on the computer that
+               contains JSON formatted information about the reservation.
+
+=cut
+
+sub get_reservation_info_json_file_path {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module::OS/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	return $self->{reservation_info_json_file_path} if $self->{reservation_info_json_file_path};
+	
+	my $systemroot_value = $self->get_environment_variable_value('SYSTEMDRIVE') || 'C:';
+	$self->{reservation_info_json_file_path} = "$systemroot_value/reservation_info.json";
+	notify($ERRORS{'DEBUG'}, 0, "determined reservation info JSON file path file path for " . ref($self) . " OS module: $self->{reservation_info_json_file_path}");
+	return $self->{reservation_info_json_file_path};
+}
 
 #/////////////////////////////////////////////////////////////////////////////
 

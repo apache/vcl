@@ -200,6 +200,12 @@ sub process {
 		$self->reservation_failed("update_cluster failed");
 	}
 	
+	# Create a JSON file containing the reservation info
+	my $enable_experimental_features = get_variable('enable_experimental_features', 0);
+	if ($enable_experimental_features) {
+		$self->os->create_reservation_info_json_file();
+	}
+	
 	# Check if OS module's post_reserve() subroutine exists
 	if ($self->os->can("post_reserve") && !$self->os->post_reserve()) {
 		$self->reservation_failed("OS module post_reserve failed");

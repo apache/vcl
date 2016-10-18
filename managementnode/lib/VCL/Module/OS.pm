@@ -4510,8 +4510,76 @@ sub get_cluster_info_file_path {
 	return $self->{cluster_info_file_path};
 }
 
-#///////////////////////////////////////////////////////////////////////////
+#/////////////////////////////////////////////////////////////////////////////
 
+=head2 get_reservation_info_json_file_path
+
+ Parameters  : none
+ Returns     : string
+ Description : Returns the location where the files resides on the computer that
+               contains JSON formatted information about the reservation. For
+               Linux computers, the location is /etc/reservation_info.json.
+
+=cut
+
+sub get_reservation_info_json_file_path {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module::OS/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	return $self->{reservation_info_json_file_path} if $self->{reservation_info_json_file_path};
+	$self->{reservation_info_json_file_path} = '/etc/reservation_info.json';
+	notify($ERRORS{'DEBUG'}, 0, "determined reservation info JSON file path file path for " . ref($self) . " OS module: $self->{reservation_info_json_file_path}");
+	return $self->{reservation_info_json_file_path};
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 create_reservation_info_json_file
+
+ Parameters  : none
+ Returns     : boolean
+ Description : Creates a text file on the computer containing reservation data
+               in JSON format.
+
+=cut
+
+sub create_reservation_info_json_file {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module::OS/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $json_file_path = $self->get_reservation_info_json_file_path() || return;
+	my $json_string = $self->data->get_reservation_info_json_string() || return;
+	return $self->create_text_file($json_file_path, $json_string);
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 delete_reservation_info_json_file
+
+ Parameters  : none
+ Returns     : boolean
+ Description : Deletes the text file on the computer containing reservation data
+					in JSON format. This is important when sanitizing a computer.
+
+=cut
+
+sub delete_reservation_info_json_file {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module::OS/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $json_file_path = $self->get_reservation_info_json_file_path() || return;
+	return $self->delete_file($json_file_path);
+}
+
+#///////////////////////////////////////////////////////////////////////////
 1;
 __END__
 

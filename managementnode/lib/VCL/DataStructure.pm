@@ -77,6 +77,7 @@ use diagnostics;
 use English '-no_match_vars';
 
 use Object::InsideOut;
+use JSON qw(to_json);
 use List::Util qw(min max);
 use YAML;
 use Storable qw(dclone);
@@ -2233,6 +2234,63 @@ sub get_image_minram {
 	my $minram = max ($image_minram, $os_minram);
 	#notify($ERRORS{'DEBUG'}, 0, "image minram: $image_minram, OS minram: $os_minram, result: $minram");
 	return $minram;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_reservation_info_json_string
+
+ Parameters  : none
+ Returns     : string
+ Description : Constucts a JSON string based on the reservation data.
+
+=cut
+
+sub get_reservation_info_json_string {
+	my $self = shift;
+	
+	my $reservation_id = $self->reservation_id;
+	my $request_data = $self->request_data;
+	
+	# Clone the hash so that the original isn't altered
+	my $request_data_clone = dclone($request_data);
+	
+	my $json_data = {};
+	
+	# Remove useless keys
+	$request_data_clone = prune_hash_reference($request_data_clone, '.*(resource|current|adminlevel|nextimage|predictive|platform|log|schedule).*');
+	
+	$json_data->{request} 			= prune_hash_child_references($request_data_clone);
+	$json_data->{reservation} 		= prune_hash_child_references($request_data_clone->{reservation}{$reservation_id});
+	$json_data->{imagerevision}	= prune_hash_child_references($request_data_clone->{reservation}{$reservation_id}{imagerevision});
+	$json_data->{image} 				= prune_hash_child_references($request_data_clone->{reservation}{$reservation_id}{image});
+	$json_data->{computer} 			= prune_hash_child_references($request_data_clone->{reservation}{$reservation_id}{computer});
+	
+	if (defined($request_data_clone->{reservation}{$reservation_id}{computer}{vmhost})) {
+		$json_data->{vmhost} 			= prune_hash_child_references($request_data_clone->{reservation}{$reservation_id}{computer}{vmhost});
+		$json_data->{vmhost_computer}	= prune_hash_child_references($request_data_clone->{reservation}{$reservation_id}{computer}{vmhost}{computer});
+	}
+	
+	# TODO: figure out how to handle user info, what structure, etc
+	#$json_data->{users} 				= $request_data_clone->{reservation}{$reservation_id}{users};
+	#$json_data->{user} = $request_data_clone->{user};
+	#$json_data->{user}{username} = $json_data->{user}{unityid};
+	
+	# IMPORTANT: delete vmprofile data and anything else that may contain passwords
+	#delete $json_data->{computer}{vmhost}{vmprofile};
+	
+	# Convert the request data to JSON
+	my $json;
+	eval {
+		$json = to_json($json_data, { pretty => 1 });
+	};
+	if ($EVAL_ERROR) {
+		notify($ERRORS{'WARNING'}, 0, "failed to create convert request data to json, error: $EVAL_ERROR");
+		return;
+	}
+	
+	notify($ERRORS{'DEBUG'}, 0, "constructed JSON string based on reservation infor:\n$json");
+	return $json;
 }
 
 #/////////////////////////////////////////////////////////////////////////////

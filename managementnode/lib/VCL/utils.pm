@@ -70,6 +70,7 @@ use List::Util qw(min max);
 use HTTP::Headers;
 use RPC::XML::Client;
 use Scalar::Util 'blessed';
+use Storable qw(dclone);
 use Data::Dumper;
 use Cwd;
 use Sys::Hostname;
@@ -223,6 +224,9 @@ our @EXPORT = qw(
 	parent_directory_path
 	populate_reservation_natport
 	preplogfile
+	prune_array_reference
+	prune_hash_child_references
+	prune_hash_reference
 	read_file_to_array
 	remove_array_duplicates
 	rename_vcld_process
@@ -2506,7 +2510,7 @@ sub known_hosts {
 =head2 getusergroupmembers
 
  Parameters  : usergroupid
- Returns     : array of user group memebers
+ Returns     : array of user group members
  Description : queries database and collects user members of supplied usergroupid
 
 =cut
@@ -7164,7 +7168,7 @@ sub get_computer_info {
 	# Add the column for predictive module info
    my @columns = @{$database_table_columns->{module}};
    for my $column (@columns) {
-         $select_statement .= "predictivemodule.$column AS 'predictivemodule-$column',\n";
+      $select_statement .= "predictivemodule.$column AS 'predictivemodule-$column',\n";
    }
 	
 	# Remove the comma after the last column line
@@ -14374,6 +14378,159 @@ sub wrap_string {
 	
 	my $wrapped_string = wrap($prefix, $prefix, $string);
 	return $wrapped_string;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 prune_hash_reference
+
+ Parameters  : $hash_ref, $prune_regex
+ Returns     : hash reference
+ Description : 
+
+=cut
+
+sub prune_hash_reference {
+	my ($hash_ref_argument, $prune_regex) = @_;
+	if (!defined($hash_ref_argument)) {
+		notify($ERRORS{'WARNING'}, 0, "hash reference argument was not supplied");
+		return;
+	}
+	elsif (!ref($hash_ref_argument) || ref($hash_ref_argument) ne 'HASH') {
+		notify($ERRORS{'WARNING'}, 0, "argument is not a hash reference:\n" . format_data($hash_ref_argument));
+		return;
+	}
+	elsif (!defined($prune_regex)) {
+		notify($ERRORS{'WARNING'}, 0, "prune regex argument was not supplied, returning original hash reference");
+		return $hash_ref_argument;
+	}
+	
+	# Create a clone if this wasn't recursively called
+	my $calling_subroutine = get_calling_subroutine();
+	my $hash_ref;
+	if ($calling_subroutine =~ /^prune/) {
+		$hash_ref = $hash_ref_argument;
+	}
+	else {
+		$hash_ref = dclone($hash_ref_argument);
+	}
+	
+	my $result = {};
+	for my $key (keys %$hash_ref) {
+		# Don't add keys which match the regex
+		if ($key =~ /$prune_regex/) {
+			next;
+		}
+		
+		my $type = ref($hash_ref->{$key});
+		if (!$type) {
+			# If the value is not a reference, simply add it to the result
+			$result->{$key} = $hash_ref->{$key};
+			next;
+		}
+		elsif ($type eq 'HASH') {
+			$result->{$key} = prune_hash_reference($hash_ref->{$key}, $prune_regex);
+		}
+		elsif ($type eq 'ARRAY') {
+			$result->{$key} = prune_array_reference($hash_ref->{$key}, $prune_regex);
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "unsupported type: $type");
+		}
+	}
+	return $result;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 prune_array_reference
+
+ Parameters  : $array_ref, $prune_regex
+ Returns     : array reference
+ Description : 
+
+=cut
+
+sub prune_array_reference {
+	my ($array_ref_argument, $prune_regex) = @_;
+	if (!defined($array_ref_argument)) {
+		notify($ERRORS{'WARNING'}, 0, "array reference argument was not supplied");
+		return;
+	}
+	elsif (!ref($array_ref_argument) || ref($array_ref_argument) ne 'ARRAY') {
+		notify($ERRORS{'WARNING'}, 0, "argument is not a array reference:\n" . format_data($array_ref_argument));
+		return;
+	}
+	elsif (!defined($prune_regex)) {
+		notify($ERRORS{'WARNING'}, 0, "prune regex argument was not supplied, returning original array reference");
+		return $array_ref_argument;
+	}
+	
+	# Create a clone if this wasn't recursively called
+	my $calling_subroutine = get_calling_subroutine();
+	my $array_ref;
+	if ($calling_subroutine =~ /^prune/) {
+		$array_ref = $array_ref_argument;
+	}
+	else {
+		$array_ref = dclone($array_ref_argument);
+	}
+	
+	my $result = [];
+	for my $element (@$array_ref) {
+		my $type = ref($element);
+		if (!$type) {
+			push @$result, $element;
+		}
+		elsif ($type eq 'ARRAY') {
+			push @$result, prune_array_reference($element, $prune_regex);
+		}
+		elsif ($type eq 'HASH') {
+			push @$result, prune_hash_reference($element, $prune_regex);
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "unsupported type: $type");
+		}
+	}
+	
+	return $result;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 prune_hash_child_references
+
+ Parameters  : $hash_ref
+ Returns     : hash reference
+ Description : Makes a copy of the hash reference. Removes all keys that contain
+               references as data.
+
+=cut
+
+sub prune_hash_child_references {
+	my ($hash_ref_argument) = @_;
+	if (!defined($hash_ref_argument)) {
+		notify($ERRORS{'WARNING'}, 0, "hash reference argument was not supplied");
+		return;
+	}
+	elsif (!ref($hash_ref_argument) || ref($hash_ref_argument) ne 'HASH') {
+		notify($ERRORS{'WARNING'}, 0, "argument is not a hash reference:\n" . format_data($hash_ref_argument));
+		return;
+	}
+	
+	# Create a clone
+	my $hash_ref = dclone($hash_ref_argument);
+	
+	my $result = {};
+	for my $key (keys %$hash_ref) {
+		if (ref($hash_ref->{$key})) {
+			next;
+		}
+		else {
+			$result->{$key} = $hash_ref->{$key};
+		}
+	}
+	return $result;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
