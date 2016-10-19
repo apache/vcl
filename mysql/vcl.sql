@@ -27,6 +27,25 @@ SET SQL_MODE="NO_AUTO_VALUE_ON_ZERO";
 
 -- --------------------------------------------------------
 
+-- Table structure for table `addomain`
+
+CREATE TABLE IF NOT EXISTS `addomain` (
+  `id` tinyint(3) unsigned NOT NULL auto_increment,
+  `name` varchar(30) NOT NULL default '',
+  `ownerid` mediumint(8) unsigned NOT NULL,
+  `domainDNSName` varchar(70) NOT NULL default '',
+  `domainNetBIOSName` varchar(15) default NULL,
+  `username` varchar(64) default NULL,
+  `password` varchar(256) default NULL,
+  `dnsServers` varchar(512) default NULL,
+  `domainControllers` varchar(512) NOT NULL,
+  `logindescription` text,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `domainDNSName` (`domainDNSName`)
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+
+-- --------------------------------------------------------
+
 -- 
 -- Table structure for table `adminlevel`
 -- 
@@ -309,12 +328,12 @@ CREATE TABLE IF NOT EXISTS `computerloadstate` (
 --
 
 CREATE TABLE IF NOT EXISTS connectlog (
-  id int(10) unsigned NOT NULL AUTO_INCREMENT,
-  logid int(10) unsigned NOT NULL,
-  reservationid mediumint(8) unsigned NOT NULL,
-  userid mediumint(8) unsigned DEFAULT NULL,
-  remoteIP varchar(39) NOT NULL,
-  verified tinyint(1) NOT NULL,
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `logid` int(10) unsigned NOT NULL,
+  `reservationid` mediumint(8) unsigned NOT NULL,
+  `userid` mediumint(8) unsigned DEFAULT NULL,
+  `remoteIP` varchar(39) NOT NULL,
+  `verified` tinyint(1) NOT NULL,
   `timestamp` datetime NOT NULL DEFAULT '0000-00-00 00:00:00',
   PRIMARY KEY (id),
   UNIQUE KEY reservationid_1 (reservationid,userid,remoteIP),
@@ -454,6 +473,19 @@ CREATE TABLE IF NOT EXISTS `image` (
   KEY `imagetypeid` (`imagetypeid`),
   KEY `basedoffrevisionid` (`basedoffrevisionid`)
 ) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
+
+-- --------------------------------------------------------
+
+-- 
+-- Table structure for table `imageaddomain`
+-- 
+
+CREATE TABLE IF NOT EXISTS `imageaddomain` (
+  `imageid` smallint(5) unsigned NOT NULL,
+  `addomainid` tinyint(3) unsigned NOT NULL,
+  `baseOU` varchar(512) default NULL,
+  PRIMARY KEY (`imageid`,`addomainid`)
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
 
@@ -1875,6 +1907,7 @@ INSERT IGNORE provisioningOSinstalltype (provisioningid, OSinstalltypeid) SELECT
 -- 
 
 INSERT IGNORE INTO `resourcetype` (`id`, `name`) VALUES 
+(18, 'addomain'),
 (12, 'computer'),
 (13, 'image'),
 (16, 'managementnode'),
@@ -1902,7 +1935,8 @@ INSERT IGNORE INTO `resourcegroup` (`id`, `name`, `ownerusergroupid`, `resourcet
 (8, 'newimages', 4, 12),
 (9, 'newvmimages', 4, 12),
 (10, 'allVMimages', 4, 13),
-(11, 'all profiles', 3, 17);
+(11, 'all profiles', 3, 17),
+(12, 'All AD Domains', 3, 18);
 
 -- 
 -- Dumping data for table `resourcegroupmembers`
@@ -1957,7 +1991,9 @@ INSERT IGNORE INTO `resourcepriv` (`id`, `resourcegroupid`, `privnodeid`, `type`
 (29, 11, 4, 'available'),
 (30, 11, 4, 'administer'),
 (31, 11, 4, 'manageGroup'),
-(32, 11, 4, 'manageMapping');
+(32, 11, 4, 'manageMapping'),
+(33, 12, 4, 'administer'),
+(34, 12, 4, 'manageGroup');
 
 -- 
 -- Dumping data for table `schedule`
@@ -2097,6 +2133,7 @@ INSERT IGNORE INTO `usergrouppriv` (`usergroupid`, `userprivtypeid`) VALUES
 -- 
 
 INSERT IGNORE INTO `userprivtype` (`id`, `name`) VALUES 
+(14, 'addomainAdmin'),
 (1, 'block'),
 (2, 'cascade'),
 (4, 'computerAdmin'),
@@ -2128,6 +2165,7 @@ INSERT IGNORE INTO `userpriv` (`id`, `userid`, `usergroupid`, `privnodeid`, `use
 (12, NULL, 3, 3, 11),
 (18, NULL, 3, 3, 12),
 (15, NULL, 3, 3, 13),
+(25, NULL, 3, 3, 14),
 (1, 1, NULL, 3, 2),
 (6, 1, NULL, 3, 3),
 (2, 1, NULL, 3, 4),
@@ -2139,7 +2177,8 @@ INSERT IGNORE INTO `userpriv` (`id`, `userid`, `usergroupid`, `privnodeid`, `use
 (4, 1, NULL, 3, 10),
 (9, 1, NULL, 3, 11),
 (5, 1, NULL, 3, 12),
-(10, 1, NULL, 3, 13);
+(10, 1, NULL, 3, 13),
+(26, 1, NULL, 3, 14);
 
 -- 
 -- Dumping data for table `variable`

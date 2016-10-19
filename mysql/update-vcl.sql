@@ -865,6 +865,27 @@ ALTER TABLE `computerloadlog` CHANGE `loadstateid` `loadstateid` SMALLINT( 8 ) U
 -- --------------------------------------------------------
 
 --
+-- Table structure for table `addomain`
+--
+
+CREATE TABLE IF NOT EXISTS `addomain` (
+  `id` tinyint(3) unsigned NOT NULL auto_increment,
+  `name` varchar(30) NOT NULL default '',
+  `ownerid` mediumint(8) unsigned NOT NULL,
+  `domainDNSName` varchar(70) NOT NULL default '',
+  `domainNetBIOSName` varchar(15) default NULL,
+  `username` varchar(64) default NULL,
+  `password` varchar(256) default NULL,
+  `dnsServers` varchar(512) default NULL,
+  `domainControllers` varchar(512) NOT NULL,
+  `logindescription` text,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `domainDNSName` (`domainDNSName`)
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+
+-- --------------------------------------------------------
+
+--
 -- Table structure for table `connectmethod`
 --
 
@@ -924,12 +945,12 @@ CREATE TABLE IF NOT EXISTS `connectmethodport` (
 --
 
 CREATE TABLE IF NOT EXISTS connectlog (
-  id int(10) unsigned NOT NULL AUTO_INCREMENT,
-  logid int(10) unsigned NOT NULL,
-  reservationid mediumint(8) unsigned NOT NULL,
-  userid mediumint(8) unsigned DEFAULT NULL,
-  remoteIP varchar(39) NOT NULL,
-  verified tinyint(1) NOT NULL,
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `logid` int(10) unsigned NOT NULL,
+  `reservationid` mediumint(8) unsigned NOT NULL,
+  `userid` mediumint(8) unsigned DEFAULT NULL,
+  `remoteIP` varchar(39) NOT NULL,
+  `verified` tinyint(1) NOT NULL,
   `timestamp` datetime NOT NULL DEFAULT '0000-00-00 00:00:00',
   PRIMARY KEY (id),
   UNIQUE KEY reservationid_2 (reservationid,userid,remoteIP),
@@ -962,6 +983,19 @@ CALL AddIndexIfNotExists('image', 'imagetypeid');
 
 ALTER TABLE `image` CHANGE `basedoffrevisionid` `basedoffrevisionid` mediumint(8) unsigned default NULL;
 CALL AddIndexIfNotExists('image', 'basedoffrevisionid');
+
+-- --------------------------------------------------------
+
+-- 
+--  Table structure for table `imageaddomain`
+--
+
+CREATE TABLE IF NOT EXISTS `imageaddomain` (
+  `imageid` smallint(5) unsigned NOT NULL,
+  `addomainid` tinyint(3) unsigned NOT NULL,
+  `baseOU` varchar(512) default NULL,
+  PRIMARY KEY (`imageid`,`addomainid`)
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
 
@@ -1822,6 +1856,7 @@ CALL AddConnectMethodMapIfNotExists('iRAPP RDP', 'osx', 0, 0, 0, 2);
 --
 
 INSERT IGNORE INTO resourcetype (id, name) VALUES (17, 'serverprofile');
+INSERT IGNORE INTO resourcetype (name) VALUES ('addomain');
 
 -- --------------------------------------------------------
 
@@ -1830,6 +1865,7 @@ INSERT IGNORE INTO resourcetype (id, name) VALUES (17, 'serverprofile');
 --
 
 INSERT IGNORE INTO resourcegroup (name, ownerusergroupid, resourcetypeid) VALUES ('all profiles', 3, 17);
+INSERT IGNORE INTO resourcegroup (name, ownerusergroupid, resourcetypeid) VALUES ('All AD Domains', COALESCE((SELECT id FROM usergroup WHERE name = 'adminUsers'), 3), (SELECT id FROM resourcetype WHERE name = 'addomain'));
 
 -- --------------------------------------------------------
 
@@ -1848,7 +1884,9 @@ INSERT IGNORE INTO resourcepriv (resourcegroupid, privnodeid, `type`) SELECT res
 INSERT IGNORE INTO resourcepriv (resourcegroupid, privnodeid, `type`) SELECT resourcegroup.id, privnode.id, 'available' FROM resourcegroup, privnode WHERE resourcegroup.name = 'allVMimages' AND resourcegroup.resourcetypeid = 13 AND privnode.name = 'admin' AND privnode.parent = 3;
 INSERT IGNORE INTO resourcepriv (resourcegroupid, privnodeid, `type`) SELECT resourcegroup.id, privnode.id, 'administer' FROM resourcegroup, privnode WHERE resourcegroup.name = 'allVMimages' AND resourcegroup.resourcetypeid = 13 AND privnode.name = 'admin' AND privnode.parent = 3;
 INSERT IGNORE INTO resourcepriv (resourcegroupid, privnodeid, `type`) SELECT resourcegroup.id, privnode.id, 'manageGroup' FROM resourcegroup, privnode WHERE resourcegroup.name = 'allVMimages' AND resourcegroup.resourcetypeid = 13 AND privnode.name = 'admin' AND privnode.parent = 3;
-INSERT IGNORE INTO resourcepriv (resourcegroupid, privnodeid, `type`) SELECT resourcegroup.id, privnode.id, 'manageMapping' FROM resourcegroup, privnode WHERE resourcegroup.name = 'allVMimages' AND resourcegroup.resourcetypeid =137 AND privnode.name = 'admin' AND privnode.parent = 3;
+INSERT IGNORE INTO resourcepriv (resourcegroupid, privnodeid, `type`) SELECT resourcegroup.id, privnode.id, 'manageMapping' FROM resourcegroup, privnode WHERE resourcegroup.name = 'allVMimages' AND resourcegroup.resourcetypeid = 13 AND privnode.name = 'admin' AND privnode.parent = 3;
+INSERT IGNORE INTO resourcepriv (resourcegroupid, privnodeid, `type`) SELECT resourcegroup.id, privnode.id, 'administer' FROM resourcegroup, privnode WHERE resourcegroup.name = 'All AD Domains' AND resourcegroup.resourcetypeid = (SELECT id FROM resourcetype WHERE name = 'addomain') AND privnode.name = 'admin' AND privnode.parent = 3;
+INSERT IGNORE INTO resourcepriv (resourcegroupid, privnodeid, `type`) SELECT resourcegroup.id, privnode.id, 'manageGroup' FROM resourcegroup, privnode WHERE resourcegroup.name = 'All AD Domains' AND resourcegroup.resourcetypeid = (SELECT id FROM resourcetype WHERE name = 'addomain') AND privnode.name = 'admin' AND privnode.parent = 3;
 
 -- --------------------------------------------------------
 
@@ -1933,6 +1971,7 @@ INSERT IGNORE usergrouppriv (usergroupid, userprivtypeid) SELECT usergroup.id, u
 
 INSERT IGNORE INTO userprivtype (id, name) VALUES (8, 'serverCheckOut');
 INSERT IGNORE INTO userprivtype (id, name) VALUES (9, 'serverProfileAdmin');
+INSERT IGNORE INTO userprivtype (name) VALUES ('addomainAdmin');
 
 -- --------------------------------------------------------
 
@@ -1942,8 +1981,10 @@ INSERT IGNORE INTO userprivtype (id, name) VALUES (9, 'serverProfileAdmin');
 
 INSERT IGNORE userpriv (userid, privnodeid, userprivtypeid) SELECT user.id, privnode.id, userprivtype.id FROM user, privnode, userprivtype WHERE user.unityid = 'admin' AND user.affiliationid = (SELECT id FROM affiliation WHERE name = 'Local') AND privnode.name = 'admin' AND privnode.parent = 3 AND userprivtype.name = 'serverCheckOut';
 INSERT IGNORE userpriv (userid, privnodeid, userprivtypeid) SELECT user.id, privnode.id, userprivtype.id FROM user, privnode, userprivtype WHERE user.unityid = 'admin' AND user.affiliationid = (SELECT id FROM affiliation WHERE name = 'Local') AND privnode.name = 'admin' AND privnode.parent = 3 AND userprivtype.name = 'serverProfileAdmin';
+INSERT IGNORE userpriv (userid, privnodeid, userprivtypeid) SELECT user.id, privnode.id, userprivtype.id FROM user, privnode, userprivtype WHERE user.unityid = 'admin' AND user.affiliationid = (SELECT id FROM affiliation WHERE name = 'Local') AND privnode.name = 'admin' AND privnode.parent = 3 AND userprivtype.name = 'addomainAdmin';
 INSERT IGNORE userpriv (usergroupid, privnodeid, userprivtypeid) SELECT usergroup.id, privnode.id, userprivtype.id FROM usergroup, privnode, userprivtype WHERE usergroup.name = 'adminUsers' AND usergroup.affiliationid = (SELECT id FROM affiliation WHERE name = 'Local') AND privnode.name = 'admin' AND privnode.parent = 3 AND userprivtype.name = 'serverCheckOut';
 INSERT IGNORE userpriv (usergroupid, privnodeid, userprivtypeid) SELECT usergroup.id, privnode.id, userprivtype.id FROM usergroup, privnode, userprivtype WHERE usergroup.name = 'adminUsers' AND usergroup.affiliationid = (SELECT id FROM affiliation WHERE name = 'Local') AND privnode.name = 'admin' AND privnode.parent = 3 AND userprivtype.name = 'serverProfileAdmin';
+INSERT IGNORE userpriv (usergroupid, privnodeid, userprivtypeid) SELECT usergroup.id, privnode.id, userprivtype.id FROM usergroup, privnode, userprivtype WHERE usergroup.name = 'adminUsers' AND usergroup.affiliationid = (SELECT id FROM affiliation WHERE name = 'Local') AND privnode.name = 'admin' AND privnode.parent = 3 AND userprivtype.name = 'addomainAdmin';
 
 
 -- --------------------------------------------------------
