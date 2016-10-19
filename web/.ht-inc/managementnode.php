@@ -114,7 +114,8 @@ class ManagementNode extends Resource {
 				return '';
 		}
 		if(preg_match('/MSIE/i', $_SERVER['HTTP_USER_AGENT']) ||
-		   preg_match('/Trident/i', $_SERVER['HTTP_USER_AGENT']))
+		   preg_match('/Trident/i', $_SERVER['HTTP_USER_AGENT']) ||
+		   preg_match('/Edge/i', $_SERVER['HTTP_USER_AGENT']))
 			$w = round($w * 11.5) . 'px';
 		else
 			$w = "{$w}em";

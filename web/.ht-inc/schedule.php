@@ -171,6 +171,8 @@ class Schedule extends Resource {
 	///
 	/// \fn checkResourceInUse($rscid)
 	///
+	/// \param $rscid - id of schedule
+	///
 	/// \return empty string if not being used; string of where resource is
 	/// being used if being used
 	///

@@ -52,7 +52,7 @@ class Computer extends Resource {
 	/// \param $sort - (optional) 1 to sort computers; 0 not to
 	/// \b includedeleted - 0 or 1; include deleted images\n
 	/// \b rscid - only return data for resource with this id; pass 0 for all
-	/// (from image table)
+	/// (from computer table)
 	///
 	/// \return array of data as returned from getImages
 	///
