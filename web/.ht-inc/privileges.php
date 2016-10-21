@@ -2285,9 +2285,11 @@ function getResourcePrivRowHTML($privname, $rownum, $privs, $types,
 			$text .= "<TD><img src=images/blank.gif></TD>\n";
 		}
 		// if group type is schedule, don't print available or manageMapping checkboxes
+		// if group type is addomain, don't print available or manageMapping checkboxes
 		// if group type is managementnode, don't print available checkbox
 		// if group type is serverprofile, don't print manageMapping checkbox
 		elseif(($grptype == 'schedule' && ($type == 'available' || $type == 'manageMapping')) ||
+		      ($grptype == 'addomain' && ($type == 'available' || $type == 'manageMapping')) ||
 		      ($grptype == 'managementnode' && $type == 'available') ||
 		      ($grptype == 'serverprofile' && $type == 'manageMapping')) {
 			$text .= "<TD><img src=images/blank.gif></TD>\n";
@@ -2335,9 +2337,7 @@ function jsonGetResourceGroupMembers() {
 			$field = 'hostname';
 		elseif($type == 'image')
 			$field = 'prettyname';
-		elseif($type == 'schedule')
-			$field = 'name';
-		elseif($type == 'serverprofile')
+		else
 			$field = 'name';
 		$query = "SELECT t.$field AS item "
 		       . "FROM $type t, "

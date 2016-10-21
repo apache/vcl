@@ -2985,31 +2985,31 @@ function getResourceGroupMembers($type="all") {
 
 	if($type == "computer") {
 		$names = "c.hostname AS computer, c.deleted ";
-		$joins = "LEFT JOIN computer c ON (r.subid = c.id AND r.resourcetypeid = 12) ";
+		$joins = "LEFT JOIN computer c ON (r.subid = c.id AND r.resourcetypeid = (SELECT id FROM resourcetype WHERE name = 'computer')) ";
 		$orders = "c.hostname";
 		$types = "'computer'";
 	}
 	elseif($type == "image") {
 		$names = "i.prettyname AS image, i.deleted ";
-		$joins = "LEFT JOIN image i ON (r.subid = i.id AND r.resourcetypeid = 13) ";
+		$joins = "LEFT JOIN image i ON (r.subid = i.id AND r.resourcetypeid = (SELECT id FROM resourcetype WHERE name = 'image')) ";
 		$orders = "i.prettyname";
 		$types = "'image'";
 	}
 	elseif($type == "schedule") {
 		$names = "s.name AS schedule ";
-		$joins = "LEFT JOIN schedule s ON (r.subid = s.id AND r.resourcetypeid = 15) ";
+		$joins = "LEFT JOIN schedule s ON (r.subid = s.id AND r.resourcetypeid = (SELECT id FROM resourcetype WHERE name = 'schedule')) ";
 		$orders = "s.name";
 		$types = "'schedule'";
 	}
 	elseif($type == "managementnode") {
 		$names = "m.hostname AS managementnode ";
-		$joins = "LEFT JOIN managementnode m ON (r.subid = m.id AND r.resourcetypeid = 16) ";
+		$joins = "LEFT JOIN managementnode m ON (r.subid = m.id AND r.resourcetypeid = (SELECT id FROM resourcetype WHERE name = 'managementnode')) ";
 		$orders = "m.hostname";
 		$types = "'managementnode'";
 	}
 	elseif($type == "addomain") {
 		$names = "ad.name AS addomain ";
-		$joins = "LEFT JOIN addomain ad ON (r.subid = ad.id AND r.resourcetypeid = 19) ";
+		$joins = "LEFT JOIN addomain ad ON (r.subid = ad.id AND r.resourcetypeid = (SELECT id FROM resourcetype WHERE name = 'addomain')) ";
 		$orders = "ad.name";
 		$types = "'addomain'";
 	}
@@ -3021,11 +3021,11 @@ function getResourceGroupMembers($type="all") {
 		       . "s.name AS schedule, "
 		       . "m.hostname AS managementnode, "
 		       . "ad.name AS addomain ";
-		$joins = "LEFT JOIN computer c ON (r.subid = c.id AND r.resourcetypeid = 12) "
-		       . "LEFT JOIN image i ON (r.subid = i.id AND r.resourcetypeid = 13) "
-		       . "LEFT JOIN schedule s ON (r.subid = s.id AND r.resourcetypeid = 15) "
-		       . "LEFT JOIN managementnode m ON (r.subid = m.id AND r.resourcetypeid = 16) "
-		       . "LEFT JOIN addomain ad ON (r.subid = ad.id AND r.resourcetypeid = 19) ";
+		$joins = "LEFT JOIN computer c ON (r.subid = c.id AND r.resourcetypeid = (SELECT id FROM resourcetype WHERE name = 'computer')) "
+		       . "LEFT JOIN image i ON (r.subid = i.id AND r.resourcetypeid = (SELECT id FROM resourcetype WHERE name = 'image')) "
+		       . "LEFT JOIN schedule s ON (r.subid = s.id AND r.resourcetypeid = (SELECT id FROM resourcetype WHERE name = 'schedule')) "
+		       . "LEFT JOIN managementnode m ON (r.subid = m.id AND r.resourcetypeid = (SELECT id FROM resourcetype WHERE name = 'managementnode')) "
+		       . "LEFT JOIN addomain ad ON (r.subid = ad.id AND r.resourcetypeid = (SELECT id FROM resourcetype WHERE name = 'addomain')) ";
 		$orders = "c.hostname, "
 		        . "i.prettyname, "
 		        . "s.name, "
@@ -4475,7 +4475,7 @@ function isAvailable($images, $imageid, $imagerevisionid, $start, $end,
 			$cnt = mysql_num_rows($qh);
 			if($cnt > 1) {
 				if($now)
-					return debugIsAvailable(-4, 19, $start, $end, $imagerevisionid, $computerids, $currentids, $blockids, array(), $virtual);
+					return debugIsAvailable(-4, 22, $start, $end, $imagerevisionid, $computerids, $currentids, $blockids, array(), $virtual);
 				$requestInfo['ipwarning'] = 1;
 			}
 			elseif($cnt == 1) {
@@ -4625,7 +4625,7 @@ function debugIsAvailable($rc, $loc, $start, $end, $imagerevisionid,
 		case "18":
 			$msg = "requested IP address in use by another computer";
 			break;
-		case "19":
+		case "22":
 			$msg = "at least 2 computers have the requested IP address assigned to them";
 			break;
 		case "11":
@@ -8861,8 +8861,8 @@ function getADdomains($addomainid=0) {
 	       .        "ad.domainNetBIOSName AS domainnetbiosname, "
 	       .        "ad.username, "
 	       .        "ad.dnsServers AS dnsservers, "
-	       .        "ad.domainControllers AS domaincontrollers, "
-	       .        "ad.logindescription "
+	       #.        "ad.logindescription, "
+	       .        "ad.domainControllers AS domaincontrollers "
 	       . "FROM addomain ad, "
 	       .      "affiliation a, "
 	       .      "user u, "

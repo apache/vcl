@@ -202,10 +202,10 @@ class ADdomain extends Resource {
 			if($data['domaincontrollers'] != $olddata['domaincontrollers'])
 				$updates[] = "domainControllers = '{$data['domaincontrollers']}'";
 			# logindescription
-			if($data['logindescription'] != $olddata['logindescription']) {
+			/*if($data['logindescription'] != $olddata['logindescription']) {
 				$esc_desc = mysql_real_escape_string($data['logindescription']);
 				$updates[] = "logindescription = '$esc_desc'";
-			}
+			}*/
 			if(count($updates)) {
 				$query = "UPDATE addomain SET "
 				       . implode(', ', $updates)
@@ -261,8 +261,8 @@ class ADdomain extends Resource {
 		$args['rscid'] = $rscid;
 		$tmp = $this->getData($args);
 		$data = $tmp[$rscid];
-		$login = preg_replace("/<br>/", "\n", $data['logindescription']);
-		$data['logindescription'] = htmlspecialchars_decode($login);
+		/*$login = preg_replace("/<br>/", "\n", $data['logindescription']);
+		$data['logindescription'] = htmlspecialchars_decode($login);*/
 		$cdata = $this->basecdata;
 		$cdata['rscid'] = $rscid;
 		$cdata['olddata'] = $data;
@@ -298,27 +298,27 @@ class ADdomain extends Resource {
 
 		$ownerid = getUserlistID($data['owner']);
 		$esc_pass = mysql_real_escape_string($data['password']);
-		$esc_desc = mysql_real_escape_string($data['logindescription']);
+		#$esc_desc = mysql_real_escape_string($data['logindescription']);
 	
 		$query = "INSERT INTO addomain"
-				.	"(name,"
-				.	"ownerid,"
-				.	"domainDNSName,"
-				.	"domainNetBIOSName,"
-				.	"username,"
-				.	"password,"
-				.	"dnsServers,"
-				.	"domainControllers,"
-				.	"logindescription)"
-				.	"VALUES ('{$data['name']}',"
-				.	"$ownerid,"
-				.	"'{$data['domaindnsname']}',"
-				.	"'{$data['domainnetbiosname']}',"
-				.	"'{$data['username']}',"
-				.	"'$esc_pass',"
-				.	"'{$data['dnsservers']}',"
-				.	"'{$data['domaincontrollers']}',"
-				.	"'$esc_desc')";
+				.	"(name, "
+				.	"ownerid, "
+				.	"domainDNSName, "
+				.	"domainNetBIOSName, "
+				.	"username, "
+				.	"password, "
+				.	"dnsServers, "
+				#.	"logindescription, "
+				.	"domainControllers) "
+				.	"VALUES ('{$data['name']}', "
+				.	"$ownerid, "
+				.	"'{$data['domaindnsname']}', "
+				.	"'{$data['domainnetbiosname']}', "
+				.	"'{$data['username']}', "
+				.	"'$esc_pass', "
+				.	"'{$data['dnsservers']}', "
+				#.	"'$esc_desc', "
+				.	"'{$data['domaincontrollers']}')";
 		doQuery($query);
 
 		$rscid = dbLastInsertID();
@@ -329,7 +329,7 @@ class ADdomain extends Resource {
 		$query = "INSERT INTO resource "
 				 .        "(resourcetypeid, "
 				 .        "subid) "
-				 . "VALUES (19, "
+				 . "VALUES ((SELECT id FROM resourcetype WHERE name = 'addomain'), "
 				 .        "$rscid)";
 		doQuery($query);
 		return $rscid;
@@ -359,8 +359,6 @@ class ADdomain extends Resource {
 		# id
 		$h .= "<input type=\"hidden\" id=\"editresid\">\n";
 
-		# todo consider adding help icons with popups
-
 		$h .= "<div style=\"text-align: center;\">\n";
 		# name
 		$errmsg = i("Name cannot contain single (') or double (&quot;) quotes, less than (&lt;), or greater than (&gt;) and can be from 2 to 30 characters long");
@@ -377,18 +375,17 @@ class ADdomain extends Resource {
 		$hostbase = '([A-Za-z0-9]{1,63})(\.[A-Za-z0-9-_]+)*(\.?[A-Za-z0-9])';
 		$errmsg = i("Domain DNS Name should be in the format domain.tld and can only contain letters, numbers, dashes(-), periods(.), and underscores(_) (e.g. myuniversity.edu)");
 		$h .= labeledFormItem('domaindnsname', i('Domain DNS Name'), 'text', "^$hostbase$",
-		                      1, '', $errmsg, '', '', '200px'); 
+		                      1, '', $errmsg, '', '', '200px', helpIcon('domaindnsnamehelp')); 
 		# domain netbios name
 		$errmsg = i("Domain NetBIOS Name can only contain letters, numbers, dashes(-), periods(.), and underscores(_) and can be up to 15 characters long");
 		$h .= labeledFormItem('domainnetbiosname', i('Domain NetBIOS Name'), 'text', '^[a-zA-Z0-9_][-a-zA-Z0-9_\.]{0,14}$',
-		                      1, '', $errmsg, '', '', '200px'); 
+		                      1, '', $errmsg, '', '', '200px', helpIcon('domainnetbiosnamehelp')); 
 		$h .= "<br>\n";
 		# username
 		$errmsg = i("Username cannot contain single (') or double (&quot;) quotes, less than (&lt;), or greater than (&gt;) and can be from 2 to 64 characters long");
-		$h .= labeledFormItem('username', i('Username'), 'text', '^([A-Za-z0-9-!@#$%^&\*\(\)_=\+\[\]{}\\\|:;,\./\?~` ]){2,30}$',
-		                      1, '', $errmsg, '', '', '200px'); 
+		$h .= labeledFormItem('username', i('Username'), 'text', '^([A-Za-z0-9-!@#$%^&\*\(\)_=\+\[\]{}\\\|:;,\./\?~` ]){2,64}$',
+		                      1, '', $errmsg, '', '', '200px', helpIcon('usernamehelp')); 
 		# password
-		# todo make required for adding
 		$errmsg = i("Password must be at least 4 characters long");
 		$h .= labeledFormItem('password', i('Password'), 'password', '^.{4,256}$', 0, '', $errmsg, '', '', '200px'); 
 		# confirm password
@@ -399,15 +396,15 @@ class ADdomain extends Resource {
 		$reg = "^($ipreg,)*($ipreg)$";
 		$errmsg = i("Invalid IP address specified - must be a valid IPV4 address");
 		$h .= labeledFormItem('dnsservers', i('DNS Server(s)'), 'text', $reg, 0, '', $errmsg,
-		                      '', '', '300px'); 
+		                      '', '', '300px', helpIcon('dnsservershelp')); 
 		# domain controllers list
 		$reg = "$hostbase(,$hostbase){0,4}";
 		$errmsg = i("Invalid Domain Controller specified. Must be comma delimited list of hostnames or IP addresses, with up to 5 allowed");
 		$h .= labeledFormItem('domaincontrollers', i('Domain Controller(s)'), 'text', $reg, 0, '', $errmsg,
-		                      '', '', '300px'); 
+		                      '', '', '300px', helpIcon('domaincontrollershelp')); 
 		# login description
-		$h .= labeledFormItem('logindescription', i('Login Description'), 'textarea', '',
-		                      1, '', '', '', '', '300px'); 
+		/*$h .= labeledFormItem('logindescription', i('Login Description'), 'textarea', '',
+		                      1, '', '', '', '', '300px', helpIcon('logindescriptionhelp'));*/
 
 		$h .= "</div>\n"; # center
 		$h .= "</div>\n"; # addomaindlgcontent
@@ -446,6 +443,16 @@ class ADdomain extends Resource {
 		$h .= "</div>\n"; # btn div
 		$h .= "</div>\n"; # groupdlg
 
+		$h .= "<div id=\"tooltips\">\n";
+		# todo fill in all help contents
+		$h .= helpTooltip('domaindnsnamehelp', i(""));
+		$h .= helpTooltip('domainnetbiosnamehelp', i(""));
+		$h .= helpTooltip('usernamehelp', i("These credentials will be used to register reserved computers with AD."));
+		$h .= helpTooltip('dnsservershelp', i(""));
+		$h .= helpTooltip('domaincontrollershelp', i(""));
+		#$h .= helpTooltip('logindescriptionhelp', i(""));
+		$h .= "</div>\n"; # tooltips
+
 		return $h;
 	}
 
@@ -482,12 +489,12 @@ class ADdomain extends Resource {
 		$return["password2"] = processInputVar("password2", ARG_STRING);
 		$return["dnsservers"] = processInputVar("dnsservers", ARG_STRING);
 		$return["domaincontrollers"] = processInputVar("domaincontrollers", ARG_STRING);
-		$return["logindescription"] = processInputVar("logindescription", ARG_STRING);
+		/*$return["logindescription"] = processInputVar("logindescription", ARG_STRING);
 
 		$return['logindescription'] = preg_replace("/[\n\s]*$/", '', $return['logindescription']);
 		$return['logindescription'] = preg_replace("/\r/", '', $return['logindescription']);
 		$return['logindescription'] = htmlspecialchars($return['logindescription']);
-		$return['logindescription'] = preg_replace("/\n/", '<br>', $return['logindescription']);
+		$return['logindescription'] = preg_replace("/\n/", '<br>', $return['logindescription']);*/
 
 		if(! preg_match("/^([A-Za-z0-9-!@#$%^&\*\(\)_=\+\[\]{}\\\|:;,\.\/\?~` ]){2,30}$/", $return['name'])) {
 			$return['error'] = 1;
@@ -511,7 +518,7 @@ class ADdomain extends Resource {
 			$errormsg[] = i("Domain NetBIOS Name can only contain letters, numbers, dashes(-), periods(.), and underscores(_) and can be up to 15 characters long");
 		}
 
-		if(! preg_match('/^([A-Za-z0-9-!@#$%^&\*\(\)_=\+\[\]{}\\\|:;,\.\/\?~` ]){2,30}$/', $return['username'])) {
+		if(! preg_match('/^([A-Za-z0-9-!@#$%^&\*\(\)_=\+\[\]{}\\\|:;,\.\/\?~` ]){2,64}$/', $return['username'])) {
 			$return['error'] = 1;
 			$errormsg[] = i("Username cannot contain single (') or double (&quot;) quotes, less than (&lt;), or greater than (&gt;) and can be from 2 to 64 characters long");
 		}
@@ -589,64 +596,6 @@ class ADdomain extends Resource {
 			$msg = "This AD Domain cannot be deleted because the following <strong>images</strong> are using it:<br><br>\n" . implode("<br>\n", $images);
 
 		return $msg;
-	}
-
-	/////////////////////////////////////////////////////////////////////////////
-	///
-	/// \fn checkResourceInUse($rscid)
-	///
-	/// \param $rscid - id of resource
-	///
-	/// \return empty string if not being used; string of where resource is
-	/// being used if being used
-	///
-	/// \brief checks to see if resource is being used
-	///
-	/////////////////////////////////////////////////////////////////////////////
-	function checkResourceInUse($rscid) {
-		$msgs = array();
-
-		/*
-		# check reservations
-		$query = "SELECT rq.end "
-		       . "FROM request rq, "
-		       .      "reservation rs "
-		       . "WHERE rs.requestid = rq.id AND "
-		       .       "rs.imageid = $rscid AND "
-		       .       "rq.stateid NOT IN (1, 12) AND "
-		       .       "rq.end > NOW() "
-		       . "ORDER BY rq.end DESC "
-		       . "LIMIT 1";
-		$qh = doQuery($query);
-		if($row = mysql_fetch_assoc($qh))
-			$msgs[] = sprintf(i("There is at least one <strong>reservation</strong> for this image. The latest end time is %s."), prettyDatetime($row['end'], 1));;
-
-		# check blockComputers
-		$query = "SELECT br.name, "
-		       .        "bt.end " 
-		       . "FROM blockRequest br, " 
-		       .      "blockTimes bt, "
-		       .      "blockComputers bc "
-		       . "WHERE bc.imageid = $rscid AND "
-		       .       "bc.blockTimeid = bt.id AND "
-		       .       "bt.blockRequestid = br.id AND "
-		       .       "bt.end > NOW() AND "
-		       .       "bt.skip = 0 AND "
-		       .       "br.status = 'accepted' "
-		       . "ORDER BY bt.end DESC "
-		       . "LIMIT 1";
-		$qh = doQuery($query);
-		if($row = mysql_fetch_assoc($qh))
-			$msgs[] = sprintf(i("There is at least one <strong>Block Allocation</strong> with computers currently allocated with this image. Block Allocation %s has the latest end time which is %s."), $row['name'], prettyDatetime($row['end'], 1));
-
-		if(empty($msgs))
-			return '';
-
-		$msg = i("The selected AD Domain is currently being used in the following ways and cannot be deleted at this time.") . "<br><br>\n";
-		$msg .= implode("<br><br>\n", $msgs) . "<br><br>\n";
-		return $msg;
-		*/
-		return '';
 	}
 }
 
