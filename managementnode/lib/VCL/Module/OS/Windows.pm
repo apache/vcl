@@ -12039,7 +12039,7 @@ sub get_reservation_info_json_file_path {
 	return $self->{reservation_info_json_file_path} if $self->{reservation_info_json_file_path};
 	
 	my $systemroot_value = $self->get_environment_variable_value('SYSTEMDRIVE') || 'C:';
-	$self->{reservation_info_json_file_path} = "$systemroot_value/reservation_info.json";
+	$self->{reservation_info_json_file_path} = "$systemroot_value/Users/Administrator/reservation_info.json";	
 	notify($ERRORS{'DEBUG'}, 0, "determined reservation info JSON file path file path for " . ref($self) . " OS module: $self->{reservation_info_json_file_path}");
 	return $self->{reservation_info_json_file_path};
 }

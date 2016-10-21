@@ -2812,6 +2812,8 @@ sub execute {
 		#notify($ERRORS{'DEBUG'}, 0, "retrieved computer name from reservation data: $computer_name");
 	}
 	
+	my $no_persistent_connection = 0;
+	
 	# Check the argument type
 	if (ref($argument)) {
 		if (ref($argument) eq 'HASH') {
@@ -2827,6 +2829,7 @@ sub execute {
 			$password = $argument->{password};
 			$identity_key = $argument->{identity_key};
 			$ignore_error = $argument->{ignore_error};
+			$no_persistent_connection = $argument->{no_persistent_connection};
 		}
 		else {
 			notify($ERRORS{'WARNING'}, 0, "invalid argument reference type passed: " . ref($argument) . ", if a reference is passed as the argument it may only be a hash or VCL::Module reference");
@@ -2858,7 +2861,7 @@ sub execute {
 	}
 	
 	# TESTING: use the new subroutine if $ENV{execute_new} is set and the command isn't one that's known to fail with the new subroutine
-	if ($ENV{execute_new}) {
+	if ($ENV{execute_new} && !$no_persistent_connection) {
 		my @excluded_commands = $command =~ /(vmkfstools|qemu-img|Convert-VHD|scp|shutdown|reboot)/i;
 		if (@excluded_commands) {
 			notify($ERRORS{'DEBUG'}, 0, "not using execute_new, command: $command\nexcluded commands matched:\n" . join("\n", @excluded_commands));
@@ -4518,7 +4521,7 @@ sub get_cluster_info_file_path {
  Returns     : string
  Description : Returns the location where the files resides on the computer that
                contains JSON formatted information about the reservation. For
-               Linux computers, the location is /etc/reservation_info.json.
+               Linux computers, the location is /root/reservation_info.json.
 
 =cut
 
@@ -4529,7 +4532,7 @@ sub get_reservation_info_json_file_path {
 		return;
 	}
 	return $self->{reservation_info_json_file_path} if $self->{reservation_info_json_file_path};
-	$self->{reservation_info_json_file_path} = '/etc/reservation_info.json';
+	$self->{reservation_info_json_file_path} = '/root/reservation_info.json';
 	notify($ERRORS{'DEBUG'}, 0, "determined reservation info JSON file path file path for " . ref($self) . " OS module: $self->{reservation_info_json_file_path}");
 	return $self->{reservation_info_json_file_path};
 }
@@ -4554,7 +4557,13 @@ sub create_reservation_info_json_file {
 	
 	my $json_file_path = $self->get_reservation_info_json_file_path() || return;
 	my $json_string = $self->data->get_reservation_info_json_string() || return;
-	return $self->create_text_file($json_file_path, $json_string);
+	$self->create_text_file($json_file_path, $json_string) || return;
+	
+	if ($self->can('set_file_permissions')) {
+		$self->set_file_permissions($json_file_path, '600');
+	}
+	
+	return 1;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
