@@ -1370,21 +1370,10 @@ sub update_public_ip_address {
 =head2 get_current_image_tag
 
  Parameters  : $tag_name
- Returns     : string or array
+ Returns     : string
  Description : Reads currentimage.txt and attempts to locate a line beginning
                with the tag name specified by the argument.
-               
-               If found and called in scalar context, the tag value following
-               the = sign is returned. Example currentimage.txt line:
-               mytag=0 (Wed Jun 29 17:47:36 2016)
-               
-               my $x = get_current_image_tag('mytag');
-               $x = 0
-               
-               my ($x, $y) = get_current_image_tag('mytag');
-               $x = 0
-               $y = 'Wed Jun 29 17:47:36 2016'
-               
+               If found, the tag value following the = sign is returned.
                Null is returned if a line with the tag name doesn't exist.
 
 =cut
@@ -1408,17 +1397,11 @@ sub get_current_image_tag {
 	
 	my @lines = $self->get_file_contents($current_image_file_path);
 	for my $line (@lines) {
-		my ($tag_value, $timestamp) = $line =~ /^$tag_name=([^\s]+)\s?\(?(.+)?\)?$/gx;
+		my ($tag_value) = $line =~ /^$tag_name=(.*)$/gx;
 		if (defined($tag_value)) {
-			$timestamp = '' if (!defined($timestamp));
-			if (wantarray) {
-				notify($ERRORS{'DEBUG'}, 0, "found '$tag_name' tag line in $current_image_file_path: '$line', returning array: ('$tag_value', '$timestamp')");
-				return ($tag_value, $timestamp);
-			}
-			else {
-				notify($ERRORS{'DEBUG'}, 0, "found '$tag_name' tag line in $current_image_file_path: '$line', returning tag value: '$tag_value'");
-				return $tag_value;
-			}
+			$tag_value = '' unless length($tag_value);
+			notify($ERRORS{'DEBUG'}, 0, "found '$tag_name' tag line in $current_image_file_path: '$line', returning tag value: '$tag_value'");
+			return $tag_value;
 		}
 	}
 	
@@ -1492,7 +1475,7 @@ sub set_current_image_tag {
 	my $computer_name = $self->data->get_computer_short_name();
 	
 	my $current_image_file_path = 'currentimage.txt';
-	my $timestamp = localtime;
+	my $timestamp = makedatestring();
 	my $tag_line = "$tag_name=$tag_value ($timestamp)";
 	my $updated_contents = '';
 	
@@ -1558,9 +1541,9 @@ sub get_post_load_status {
 	
 	my $computer_name = $self->data->get_computer_short_name();
 	
-	my ($post_load_value, $timestamp) = $self->get_current_image_tag('vcld_post_load');
-	if (defined($post_load_value)) {
-		notify($ERRORS{'DEBUG'}, 0, "post-load tasks have been completed on $computer_name: $post_load_value ($timestamp)");
+	my ($post_load_status) = $self->get_current_image_tag('vcld_post_load');
+	if (defined($post_load_status)) {
+		notify($ERRORS{'DEBUG'}, 0, "post-load tasks have been completed on $computer_name: $post_load_status");
 		return 1;
 	}
 	else {
@@ -1573,7 +1556,7 @@ sub get_post_load_status {
 
 =head2 set_tainted_status
 
- Parameters  : none
+ Parameters  : $reason (optional)
  Returns     : boolean
  Description : Adds a line to currentimage.txt indicating a loaded computer is
                tainted and must be reloaded for any subsequent reservations.
@@ -1603,7 +1586,16 @@ sub set_tainted_status {
 		return;
 	}
 	
-	return $self->set_current_image_tag('vcld_tainted', 'true');
+	my $reason = shift || 'no reason given';
+	
+	# This may be called multiple times for a reservation
+	# It's useful to append concatenate the status rather than overwriting it so you know all of the reasons a computer may be tainted
+	my $previous_tained_status = $self->get_tainted_status();
+	if ($previous_tained_status) {
+		$reason = "$previous_tained_status, $reason";
+	}
+	
+	return $self->set_current_image_tag('vcld_tainted', $reason);
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -1611,7 +1603,7 @@ sub set_tainted_status {
 =head2 get_tainted_status
 
  Parameters  : none
- Returns     : boolean
+ Returns     : string
  Description : Checks if a line exists in currentimage.txt indicated a user may
                have logged in.
 
@@ -1626,10 +1618,10 @@ sub get_tainted_status {
 	
 	my $computer_name = $self->data->get_computer_short_name();
 	
-	my ($tainted_value, $timestamp) = $self->get_current_image_tag('vcld_tainted');
-	if (defined($tainted_value)) {
-		notify($ERRORS{'DEBUG'}, 0, "image currently loaded on $computer_name has been tainted: $tainted_value ($timestamp)");
-		return 1;
+	my $tainted_status = $self->get_current_image_tag('vcld_tainted');
+	if (defined($tainted_status)) {
+		notify($ERRORS{'DEBUG'}, 0, "image currently loaded on $computer_name has been tainted: $tainted_status");
+		return $tainted_status;
 	}
 	else {
 		notify($ERRORS{'DEBUG'}, 0, "image currently loaded on $computer_name has NOT been tainted");
@@ -4263,7 +4255,7 @@ sub run_management_node_tools_scripts {
 	# If the user never connects and the reservation times out, there's no way to revert these actions in order to clean the computer for another user
 	# Tag the image as tainted so it is reloaded
 	if ($stage =~ /(post_reserve)/) {
-		$self->set_tainted_status();
+		$self->set_tainted_status('post-reserve scripts residing on the management node executed');
 	}
 	
 	notify($ERRORS{'DEBUG'}, 0, "attempting to execute custom scripts residing on the management node for $image_name on $computer_node_name:\n" . join("\n", @computer_tools_files));

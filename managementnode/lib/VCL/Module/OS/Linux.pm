@@ -610,7 +610,7 @@ sub post_reserve {
 			# If post_reserve script exists, assume it does user or reservation-specific actions
 			# If the user never connects and the reservation times out, there's no way to revert these actions in order to clean the computer for another user
 			# Tag the image as tainted so it is reloaded
-			$self->set_tainted_status();
+			$self->set_tainted_status('post-reserve scripts residing in the image executed');
 			
 			# Run the vcl_post_reserve script if it exists in the image
 			my $result = $self->run_script($script_path, '1', '300', '1');

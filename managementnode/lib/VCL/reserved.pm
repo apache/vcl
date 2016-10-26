@@ -183,7 +183,7 @@ sub process {
 			notify($ERRORS{'DEBUG'}, 0, "retrieved timestamp of computerloadlog 'initialconnecttimeout' entry inserted by web frontend: $connection_check_start_epoch_seconds");
 		}
 		else {
-			notify($ERRORS{'WARNING'}, 0, "failed to retrieve timestamp of computerloadlog 'initialconnecttimeout' entry, web frontend should have inserted this, inserting new entry");
+			notify($ERRORS{'DEBUG'}, 0, "could not retrieve timestamp of computerloadlog 'initialconnecttimeout' entry, web frontend should have inserted this, inserting new entry");
 			$connection_check_start_epoch_seconds = time;
 			insertloadlog($reservation_id, $computer_id, "initialconnecttimeout", "begin initial connection timeout ($initial_connect_timeout_seconds seconds)");
 		}
@@ -262,7 +262,7 @@ sub process {
 	}
 	
 	# Add a line to currentimage.txt indicating it's possible a user logged on to the computer
-	$self->os->set_tainted_status();
+	$self->os->set_tainted_status('user may have logged in');
 	
 	# Update reservation lastcheck, otherwise inuse request will be processed immediately again
 	update_reservation_lastcheck($reservation_id);

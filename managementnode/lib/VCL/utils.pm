@@ -9071,7 +9071,7 @@ sub get_reservation_computerloadlog_time {
 	# Get all computerloadlog entries for the reservation
 	my @computerloadlog_entries = get_reservation_computerloadlog_entries($reservation_id);
 	if (!@computerloadlog_entries) {
-		notify($ERRORS{'WARNING'}, 0, "failed to retrieve timestamp of computerloadlog '$loadstatename' entry for reservation $reservation_id, computerloadlog entries could not be retrieved");
+		notify($ERRORS{'OK'}, 0, "computerloadlog entry does not exist for reservation $reservation_id");
 		return;
 	}
 	
@@ -9090,7 +9090,7 @@ sub get_reservation_computerloadlog_time {
 		return $timestamp_epoch;
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to retrieve $type timestamp of first '$loadstatename' computerloadlog entry for reservation $reservation_id");
+		notify($ERRORS{'OK'}, 0, "no '$loadstatename' computerloadlog entries exist for reservation $reservation_id");
 		return;
 	}
 }
