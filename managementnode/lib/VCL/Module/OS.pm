@@ -558,65 +558,22 @@ sub get_currentimage_txt_contents {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 get_current_image_info
+=head2 get_current_imagerevision_id
 
- Parameters  : optional 
-               id,computer_hostname,computer_id,current_image_name,imagerevision_datecreated,imagerevision_id,prettyname,vcld_post_load 
- Returns     : If successful: 
-               if no parameter return the imagerevision_id
-               return the value of parameter input
-               If failed: false
- Description : Collects currentimage hash on a computer and returns a
-               value containing of the input paramter or the imagerevision_id if no inputs.
-               This also updates the DataStructure.pm so data matches what is currently loaded.
+ Parameters  : none
+ Returns     : integer
+ Description : Retrieves the imagerevision ID value from currentimage.txt.
+
 =cut
 
-sub get_current_image_info {
+sub get_current_imagerevision_id {
 	my $self = shift;
 	if (ref($self) !~ /VCL::Module/i) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return;
 	}
-
-	my $input = shift;
-
-	if (!defined $input) {
-		$input = "imagerevision_id";
-	}
-
-	my $computer_node_name = $self->data->get_computer_node_name();
-
-	# Get the contents of the currentimage.txt file
-	my %current_image_txt_contents;
-	if (%current_image_txt_contents = $self->get_currentimage_txt_contents()) {
-		notify($ERRORS{'DEBUG'}, 0, "retrieved currentimage.txt contents from $computer_node_name");
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to retrieve currentimage.txt contents from $computer_node_name");
-		return;
-	}
-
-	# Make sure an empty hash wasn't returned
-	if (defined $current_image_txt_contents{imagerevision_id}) {
-		notify($ERRORS{'DEBUG'}, 0, "user selected content of image currently loaded on $computer_node_name: $current_image_txt_contents{current_image_name}");
-		
-		if (my $imagerevision_info = get_imagerevision_info($current_image_txt_contents{imagerevision_id})) {
-			$self->data->set_computer_currentimage_data($imagerevision_info->{image});
-			$self->data->set_computer_currentimagerevision_data($imagerevision_info);
-		}
-		
-		if (defined($current_image_txt_contents{$input})) {
-			return $current_image_txt_contents{$input};
-		}
-		else {
-			notify($ERRORS{'WARNING'}, 0, "$input was not defined in current_image_txt");	
-			return;
-		}
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "empty hash was returned when currentimage.txt contents were retrieved from $computer_node_name");
-		return;
-	}
+	
+	return $self->get_current_image_tag('imagerevision_id');
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -879,15 +836,14 @@ sub wait_for_ssh {
 =head2 is_ssh_responding
 
  Parameters  : $computer_name (optional), $max_attempts (optional)
- Returns     : If computer responds to SSH: 1
-               If computer never responds to SSH: 0
- Description : Checks if the computer is responding to SSH. Ports 22 and 24 are
-               first checked to see if either is open. If neither is open, 0 is
-               returned. If either of the ports is open a test SSH command which
-               simply echo's a string is attempted. The default is to only
-               attempt to run this command once. This can be changed by
-               supplying the $max_attempts argument. If the $max_attempts is
-               supplied but set to 0, only the port checks are done.
+ Returns     : boolean
+ Description : Checks if the computer is responding to SSH. The SSH port is
+					first checked. If not open, 0 is returned. If the port is open a
+					test SSH command which simply echo's a string is attempted. The
+					default is to only attempt to run this command once. This can be
+					changed by supplying the $max_attempts argument. If the
+					$max_attempts is supplied but set to 0, only the port checks are
+					done.
 
 =cut
 
@@ -919,15 +875,17 @@ sub is_ssh_responding {
 	if (!$computer_node_name) {
 		$computer_node_name = $self->data->get_computer_node_name();
 	}
-
+	
+	# If 'ssh_port' key is set in this object use it
+	my $port =  $self->{ssh_port} || 22;
+	
 	# Try nmap to see if any of the ssh ports are open before attempting to run a test command
-	my $port_22_status = nmap_port($computer_node_name, 22) ? "open" : "closed";
-	my $port_24_status = nmap_port($computer_node_name, 24) ? "open" : "closed";
-	if ($port_22_status ne 'open' && $port_24_status ne 'open') {
-		notify($ERRORS{'DEBUG'}, 0, "$computer_node_name is NOT responding to SSH, ports 22 or 24 are both closed");
+	my $nmap_status = nmap_port($computer_node_name, $port) ? "open" : "closed";
+	if ($nmap_status ne 'open') {
+		notify($ERRORS{'DEBUG'}, 0, "$computer_node_name is NOT responding to SSH, port $port is closed");
 		return 0;
 	}
-
+	
 	if ($max_attempts) {
 		# Run a test SSH command
 		#my ($exit_status, $output) = $self->execute({
@@ -949,11 +907,11 @@ sub is_ssh_responding {
 		
 		# The exit status will be 0 if the command succeeded
 		if (defined($output) && grep(/testing/, @$output)) {
-			notify($ERRORS{'DEBUG'}, 0, "$computer_node_name is responding to SSH, port 22: $port_22_status, port 24: $port_24_status");
+			notify($ERRORS{'DEBUG'}, 0, "$computer_node_name is responding to SSH, port $port: $nmap_status");
 			return 1;
 		}
 		else {
-			notify($ERRORS{'DEBUG'}, 0, "$computer_node_name is NOT responding to SSH, SSH command failed, port 22: $port_22_status, port 24: $port_24_status");
+			notify($ERRORS{'DEBUG'}, 0, "$computer_node_name is NOT responding to SSH, SSH command failed, port $port: $nmap_status");
 			return 0;
 		}
 	}
@@ -1022,6 +980,75 @@ sub wait_for_response {
 	insertloadlog($reservation_id, $computer_id, "machinebooted", "$computer_node_name is responding to SSH after $duration seconds");
 	notify($ERRORS{'OK'}, 0, "$computer_node_name is responding to SSH after $duration seconds");
 	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 wait_for_port_open
+
+ Parameters  : $port_number, $connection_target (optional), $total_wait_seconds (optional), $attempt_delay_seconds (optional)
+ Returns     : boolean
+ Description : Uses nmap to check if the port specified is open. Loops until the
+               port is open or $total_wait_seconds is reached.
+
+=cut
+
+sub wait_for_port_open {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $computer_node_name = $self->data->get_computer_node_name();
+	my $calling_subroutine = get_calling_subroutine();
+	
+	my $port_number = shift;
+	if (!defined($port_number)) {
+		notify($ERRORS{'WARNING'}, 0, "port number argument was not supplied");
+		return;
+	}
+	
+	my $connection_target = shift || $computer_node_name;
+	my $total_wait_seconds = shift || 60;
+	my $attempt_delay_seconds = shift || 5;
+	
+	my $mode = ($calling_subroutine =~ /wait_for_port_closed/ ? 'closed' : 'open');
+	
+	my $message = "waiting for port $port_number to be $mode on $connection_target";
+	$message .= " ($computer_node_name)" if ($connection_target ne $computer_node_name);
+	
+	# Essentially perform xnor on nmap_port result and $mode eq open
+	# Both either need to be true or false
+	# $mode eq open:true, nmap_port:true, result:true
+	# $mode eq open:false, nmap_port:true, result:false
+	# $mode eq open:true, nmap_port:false, result:false
+	# $mode eq open:false, nmap_port:false, result:true
+	my $sub_ref = sub{
+		my $nmap_result = nmap_port(@_) || 0;
+		return $mode =~ /open/ == $nmap_result;
+	};
+	return $self->code_loop_timeout($sub_ref, [$connection_target, $port_number], $message, $total_wait_seconds, $attempt_delay_seconds);
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 wait_for_port_closed
+
+ Parameters  : $port_number, $connection_target (optional), $total_wait_seconds (optional), $attempt_delay_seconds (optional)
+ Returns     : boolean
+ Description : Uses nmap to check if the port specified is closed. Loops until
+               the port is open or $total_wait_seconds is reached.
+
+=cut
+
+sub wait_for_port_closed {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	return wait_for_port_open($self, @_);
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -1381,8 +1408,9 @@ sub get_current_image_tag {
 	
 	my @lines = $self->get_file_contents($current_image_file_path);
 	for my $line (@lines) {
-		my ($tag_value, $timestamp) = $line =~ /^$tag_name=(.+)\s\((.+)\)$/g;
+		my ($tag_value, $timestamp) = $line =~ /^$tag_name=([^\s]+)\s?\(?(.+)?\)?$/gx;
 		if (defined($tag_value)) {
+			$timestamp = '' if (!defined($timestamp));
 			if (wantarray) {
 				notify($ERRORS{'DEBUG'}, 0, "found '$tag_name' tag line in $current_image_file_path: '$line', returning array: ('$tag_value', '$timestamp')");
 				return ($tag_value, $timestamp);
@@ -2795,10 +2823,12 @@ sub execute {
 	my ($argument) = @_;
 	my ($computer_name, $command, $display_output, $timeout_seconds, $max_attempts, $port, $user, $password, $identity_key, $ignore_error);
 	
+	my $self;
+	
 	# Check if this subroutine was called as an object method
 	if (ref($argument) && ref($argument) =~ /VCL::Module/) {
 		# Subroutine was called as an object method ($self->execute)
-		my $self = shift;
+		$self = shift;
 		($argument) = @_;
 		
 		#notify($ERRORS{'DEBUG'}, 0, "called as an object method: " . ref($self));
@@ -2871,6 +2901,26 @@ sub execute {
 		}
 	}
 	
+	# If 'ssh_user' key is set in this object, use it
+	# This allows OS modules to specify the username to use
+	if ($self && $self->{ssh_user}) {
+		#notify($ERRORS{'DEBUG'}, 0, "\$self->{ssh_user} is defined: $self->{ssh_user}");
+		$user = $self->{ssh_user};
+	}
+	elsif (!$port) {
+		$user = 'root';
+	}
+	
+	# If 'ssh_port' key is set in this object, use it
+	# This allows OS modules to specify the port to use
+	if ($self && $self->{ssh_port}) {
+		#notify($ERRORS{'DEBUG'}, 0, "\$self->{ssh_port} is defined: $self->{ssh_port}");
+		$port = $self->{ssh_port};
+	}
+	elsif (!$port) {
+		$port = 22;
+	}
+	
 	my $arguments = {
 		node => $computer_name,
 		command => $command,
@@ -2910,10 +2960,12 @@ sub execute_new {
 	my ($argument) = @_;
 	my ($computer_name, $command, $display_output, $timeout_seconds, $max_attempts, $port, $user, $password, $identity_key, $ignore_error);
 	
+	my $self;
+	
 	# Check if this subroutine was called as an object method
 	if (ref($argument) && ref($argument) =~ /VCL::Module/) {
 		# Subroutine was called as an object method ($self->execute)
-		my $self = shift;
+		$self = shift;
 		($argument) = @_;
 		
 		#notify($ERRORS{'DEBUG'}, 0, "called as an object method: " . ref($self));
@@ -2980,8 +3032,26 @@ sub execute_new {
 	$display_output = 0 unless $display_output;
 	$timeout_seconds = 60 unless $timeout_seconds;
 	$max_attempts = 3 unless $max_attempts;
-	$port = 22 unless $port;
-	$user = 'root' unless $user;
+	
+	# If 'ssh_user' key is set in this object, use it
+	# This allows OS modules to specify the username to use
+	if ($self && $self->{ssh_user}) {
+		#notify($ERRORS{'DEBUG'}, 0, "\$self->{ssh_user} is defined: $self->{ssh_user}");
+		$user = $self->{ssh_user};
+	}
+	elsif (!$port) {
+		$user = 'root';
+	}
+	
+	# If 'ssh_port' key is set in this object, use it
+	# This allows OS modules to specify the port to use
+	if ($self && $self->{ssh_port}) {
+		#notify($ERRORS{'DEBUG'}, 0, "\$self->{ssh_port} is defined: $self->{ssh_port}");
+		$port = $self->{ssh_port};
+	}
+	elsif (!$port) {
+		$port = 22;
+	}
 	
 	my $ssh_options = '-o StrictHostKeyChecking=no -o ConnectTimeout=30 -x';
 	
@@ -3026,7 +3096,7 @@ sub execute_new {
 		
 		if (!$ENV{net_ssh_expect}{$remote_connection_target}) {
 			eval {
-				$ssh = Net::SSH::Expect->new(
+				my $expect_options = {
 					host => $remote_connection_target,
 					user => $user,
 					port => $port,
@@ -3034,18 +3104,19 @@ sub execute_new {
 					no_terminal => 1,
 					ssh_option => $ssh_options,
 					#timeout => 5,
-				);
+				};
 				
+				$ssh = Net::SSH::Expect->new(%$expect_options);
 				if ($ssh) {
-					notify($ERRORS{'DEBUG'}, 0, "created " . ref($ssh) . " object to control $computer_string, SSH options: $ssh_options");
+					notify($ERRORS{'DEBUG'}, 0, "created " . ref($ssh) . " object to control $computer_string, options:\n" . format_data($expect_options));
 				}
 				else {
-					notify($ERRORS{'WARNING'}, 0, "failed to create Net::SSH::Expect object to control $computer_string, $!");
+					notify($ERRORS{'WARNING'}, 0, "failed to create Net::SSH::Expect object to control $computer_string, $!, options:\n" . format_data($expect_options));
 					next ATTEMPT;
 				}
 				
 				if (!$ssh->run_ssh()) {
-					notify($ERRORS{'WARNING'}, 0, ref($ssh) . " object failed to fork SSH process to control $computer_string, $!");
+					notify($ERRORS{'WARNING'}, 0, ref($ssh) . " object failed to fork SSH process to control $computer_string, $!, options:\n" . format_data($expect_options));
 					next ATTEMPT;
 				}
 				

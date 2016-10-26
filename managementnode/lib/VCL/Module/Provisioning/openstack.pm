@@ -220,7 +220,7 @@ sub capture {
 	}
 
 	my $reservation_id = $self->data->get_reservation_id() || return;
-	my $current_imagerevision_id = $self->os->get_current_image_info();
+	my $current_imagerevision_id = $self->os->get_current_imagerevision_id();
 	my $computer_id = $self->data->get_computer_id() || return;
 	my $image_name = $self->data->get_image_name() || return;
 	my $computer_name = $self->data->get_computer_short_name() || return;
@@ -531,7 +531,7 @@ sub node_status {
 		return $status;
 	}
 
-	my $current_image_revision_id = $self->os->get_current_image_info();
+	my $current_image_revision_id = $self->os->get_current_imagerevision_id();
 	$status->{currentimagerevision_id} = $current_image_revision_id;
 
 	$status->{currentimage} = $self->data->get_computer_currentimage_name();

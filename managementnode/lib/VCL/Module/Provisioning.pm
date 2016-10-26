@@ -106,7 +106,7 @@ sub node_status {
 	}
 	
 	# Check if the imagerevision ID loaded on the computer matches the reservation
-	my $current_image_revision_id = $self->os->get_current_image_info();
+	my $current_image_revision_id = $self->os->get_current_imagerevision_id();
 	if (!$current_image_revision_id) {
 		notify($ERRORS{'OK'}, 0, "unable to retrieve imagerevision ID from $computer_name, returning 'RELOAD'");
 		return 'RELOAD';

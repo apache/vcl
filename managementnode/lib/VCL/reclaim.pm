@@ -96,7 +96,7 @@ sub process {
 	my $computer_type                       = $self->data->get_computer_type();
 	my $computer_shortname                  = $self->data->get_computer_short_name();
 	my $computer_state_name                 = $self->data->get_computer_state_name();
-	my $computer_currentimage_name          = $self->data->get_computer_currentimage_name(0);
+	my $computer_imagerevision_id           = $self->data->get_computer_imagerevision_id();
 	my $server_request_id                   = $self->data->get_server_request_id();
 	my $public_ip_configuration             = $self->data->get_management_node_public_ip_configuration() || return;
 	my @reservation_ids                     = $self->data->get_reservation_ids();
@@ -183,26 +183,26 @@ sub process {
 			$self->insert_reload_and_exit();
 		}
 		
-		# Make sure computer current image name was retrieved from the database
-		if (!$computer_currentimage_name) {
-			notify($ERRORS{'WARNING'}, 0, "failed to retrieve computer current image name from the database, computer will be reloaded");
+		# Make sure computer current imagerevision ID was retrieved from the database
+		if (!$computer_imagerevision_id) {
+			notify($ERRORS{'WARNING'}, 0, "failed to retrieve computer current imagerevision ID from the database, computer will be reloaded");
 			$self->insert_reload_and_exit();
 		}
 		
-		# Reload the computer if unable to retrieve the current image name
-		my $os_current_image_name = $self->os->get_current_image_info("current_image_name");
-		if (!$os_current_image_name) {
-			notify($ERRORS{'WARNING'}, 0, "failed to retrieve name of image currently loaded on $computer_shortname, computer will be reloaded");
+		# Reload the computer if unable to retrieve the current imagerevision ID from the OS
+		my $os_current_imagerevision_id = $self->os->get_current_imagerevision_id();
+		if (!$os_current_imagerevision_id) {
+			notify($ERRORS{'WARNING'}, 0, "failed to retrieve imagerevision ID currently loaded on $computer_shortname, computer will be reloaded");
 			$self->insert_reload_and_exit();
 		}
 		
-		# Compare the database current image value with what's on the computer
-		if ($computer_currentimage_name eq $os_current_image_name) {
-			notify($ERRORS{'DEBUG'}, 0, "computer table current image name ($computer_currentimage_name) matches image name on computer ($os_current_image_name), computer will be sanitized");
+		# Compare the database current imagerevision ID value with what's on the computer
+		if ($computer_imagerevision_id eq $os_current_imagerevision_id) {
+			notify($ERRORS{'DEBUG'}, 0, "computer table current imagerevision ID ($computer_imagerevision_id) matches imagerevision ID on computer ($os_current_imagerevision_id), computer will be sanitized");
 			$self->call_os_sanitize();
 		}
 		else {
-			notify($ERRORS{'DEBUG'}, 0, "computer table current image name ($computer_currentimage_name) does NOT match image name on computer ($os_current_image_name), computer will be reloaded");
+			notify($ERRORS{'DEBUG'}, 0, "computer table current imagerevision ID ($computer_imagerevision_id) does NOT match imagerevision ID on computer ($os_current_imagerevision_id), computer will be reloaded");
 			$self->insert_reload_and_exit();
 		}
 	}

@@ -1440,7 +1440,7 @@ sub code_loop_timeout {
 		return;
 	}
 	elsif (ref($code_ref) ne 'CODE') {
-		notify($ERRORS{'WARNING'}, 0, "1st argument must be a code reference, not " . ref($code_ref));
+		notify($ERRORS{'WARNING'}, 0, "1st argument must be a code reference, not " . format_data($code_ref));
 		return;
 	}
 	

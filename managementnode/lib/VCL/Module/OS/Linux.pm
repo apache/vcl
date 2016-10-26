@@ -3995,8 +3995,8 @@ sub delete_service {
 =head2 check_connection_on_port
 
  Parameters  : $port
- Returns     : (connected|conn_wrong_ip|timeout|failed)
- Description : uses netstat to see if any thing is connected to the provided port
+ Returns     : boolean (1=connected, 0=not connected, NULL=error)
+ Description : Checks if a connection exists on the port specified.
 
 =cut
 
@@ -4010,15 +4010,15 @@ sub check_connection_on_port {
 	my $computer_node_name          = $self->data->get_computer_node_name();
 	my $remote_ip                   = $self->data->get_reservation_remote_ip();
 	my $computer_public_ip_address  = $self->get_public_ip_address();
-	my $request_state_name          = $self->data->get_request_state_name();
 	
 	my $port = shift;
 	if (!$port) {
 		notify($ERRORS{'WARNING'}, 0, "port variable was not passed as an argument");
-		return "failed";
+		return;
 	}
 	
 	my $port_connection_info = $self->get_port_connection_info();
+	
 	for my $protocol (keys %$port_connection_info) {
 		if (!defined($port_connection_info->{$protocol}{$port})) {
 			next;
@@ -4028,27 +4028,28 @@ sub check_connection_on_port {
 			my $connection_local_ip = $connection->{local_ip};
 			my $connection_remote_ip = $connection->{remote_ip};
 			
-			if ($connection_local_ip ne $computer_public_ip_address) {
-				notify($ERRORS{'DEBUG'}, 0, "ignoring connection, not connected to public IP address ($computer_public_ip_address): $connection_remote_ip --> $connection_local_ip:$port ($protocol)");
+			if (defined($computer_public_ip_address) && $connection_local_ip ne $computer_public_ip_address) {
+				notify($ERRORS{'DEBUG'}, 0, "ignoring connection to $computer_node_name, not connected to public IP address ($computer_public_ip_address): $connection_remote_ip --> $connection_local_ip:$port ($protocol)");
 				next;
 			}
 			
 			if ($connection_remote_ip eq $remote_ip) {
-				notify($ERRORS{'DEBUG'}, 0, "connection detected from reservation remote IP: $connection_remote_ip --> $connection_local_ip:$port ($protocol)");
+				notify($ERRORS{'DEBUG'}, 0, "connection to $computer_node_name detected from reservation remote IP: $connection_remote_ip --> $connection_local_ip:$port ($protocol)");
 				return 1;
 			}
 			
 			# Connection is not from reservation remote IP address, check if user is logged in
 			if ($self->user_logged_in()) {
-				notify($ERRORS{'DEBUG'}, 0, "connection detected from different remote IP address than current reservation remote IP ($remote_ip): $connection_remote_ip --> $connection_local_ip:$port ($protocol), updating reservation remote IP to $connection_remote_ip");
+				notify($ERRORS{'DEBUG'}, 0, "connection to $computer_node_name detected from different remote IP address than current reservation remote IP ($remote_ip): $connection_remote_ip --> $connection_local_ip:$port ($protocol), updating reservation remote IP to $connection_remote_ip");
 				$self->data->set_reservation_remote_ip($connection_remote_ip);
 				return 1;
 			}
 			
-			notify($ERRORS{'DEBUG'}, 0, "ignoring connection, user is not logged in and remote IP address does not match current reservation remote IP ($remote_ip): $connection_remote_ip --> $connection_local_ip:$port ($protocol)");
+			notify($ERRORS{'DEBUG'}, 0, "ignoring connection to $computer_node_name, user is not logged in and remote IP address does not match current reservation remote IP ($remote_ip): $connection_remote_ip --> $connection_local_ip:$port ($protocol)");
 		}
 	}
 	
+	notify($ERRORS{'DEBUG'}, 0, "connection to $computer_node_name NOT detected on port $port");
 	return 0;
 }
 
@@ -5834,7 +5835,7 @@ sub notify_user_console {
 
 	my $computer_node_name = $self->data->get_computer_node_name();
 
-	my $cmd = "echo $message \| write $username";
+	my $cmd = "echo \"$message\" \| write $username";
 	my ($exit_status, $output) = $self->execute($cmd, 1);
 	if (!defined($output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to execute command to determine if the '$cmd' shell command exists on $computer_node_name");
