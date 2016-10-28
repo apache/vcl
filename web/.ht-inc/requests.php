@@ -622,6 +622,7 @@ function viewRequests() {
 		$text .= "   <div id=\"editResDlgContent\"></div>\n";
 		$text .= "   <input type=\"hidden\" id=\"editrescont\">\n";
 		$text .= "   <input type=\"hidden\" id=\"editresid\">\n";
+		$text .= "   <div id=\"editResDlgPartialMsg\" class=\"ready\"></div>\n";
 		$text .= "   <div id=\"editResDlgErrMsg\" class=\"rederrormsg\"></div>\n";
 		$text .= "   <div align=\"center\">\n";
 		$text .= "   <button id=\"editResDlgBtn\" dojoType=\"dijit.form.Button\">\n";
@@ -3372,6 +3373,8 @@ function AJeditRequest() {
 	if($request['forimaging'] && $maxtimes['total'] < 720) # make sure at least 12 hours available for imaging reservations
 		$maxtimes['total'] = 720;
 	if($timeToNext == -1) {
+		if($nousercheck)
+			$lengths["0"] = "No change";
 		// there is no following reservation
 		if((($reslen + 15) <= $maxtimes["total"]) && (15 <= $maxtimes["extend"]))
 			$lengths["15"] = "15 " . i("minutes");
@@ -3389,6 +3392,8 @@ function AJeditRequest() {
 			$lengths[$i] = $i / 10080 . " " . i("weeks");
 	}
 	else {
+		if($nousercheck)
+			$lengths["0"] = "No change";
 		if($timeToNext >= 15 && (($reslen + 15) <= $maxtimes["total"]) && (15 <= $maxtimes["extend"]))
 			$lengths["15"] = "15 " . i("minutes");
 		if($timeToNext >= 30 && (($reslen + 30) <= $maxtimes["total"]) && (30 <= $maxtimes["extend"]))
@@ -3407,7 +3412,7 @@ function AJeditRequest() {
 	$cdata['lengths'] = array_keys($lengths);
 	if($timeToNext == -1 || $timeToNext >= $maxtimes['total']) {
 		if($openend) {
-			if(! empty($lengths)) {
+			if(($nousercheck == 0 && ! empty($lengths)) || ($nousercheck == 1 && count($lengths) > 1)) {
 				$m = i("You can extend this reservation by a selected amount or change the end time to a specified date and time.");
 				$h .= preg_replace("/(.{1,55}([ \n]|$))/", '\1<br>', $m) . "<br>";
 			}
@@ -3454,7 +3459,7 @@ function AJeditRequest() {
 			}
 			$h .= "<label for=\"dateradio\">";
 		}
-		elseif(! empty($lengths)) {
+		elseif(($nousercheck == 0 && ! empty($lengths)) || ($nousercheck == 1 && count($lengths) > 1)) {
 			$h .= "<INPUT type=\"radio\" name=\"ending\" id=\"lengthradio\" ";
 			$h .= "checked onChange=\"resetEditResBtn();\">";
 			$h .= "<label for=\"lengthradio\">" . i("Extend reservation by:") . "</label>";
@@ -3489,7 +3494,9 @@ function AJeditRequest() {
 			$edate = $tmp[0];
 			$etime = $tmp[1];
 		}
-		if(! empty($lengths) || $request['serverrequest'])
+		if(($nousercheck == 0 && ! empty($lengths)) ||
+		   ($nousercheck == 1 && count($lengths) > 1) ||
+		   $request['serverrequest'])
 			$h .= "</label>";
 		$h .= "<div type=\"text\" dojoType=\"dijit.form.DateTextBox\" ";
 		$h .= "id=\"openenddate\" style=\"width: 78px\" value=\"$edate\" ";
@@ -3684,6 +3691,57 @@ function AJsubmitEditRequest() {
 		}
 	}
 
+	$updateusercheck = 0;
+	$otherupdatesokay = 0;
+	if($updategroups || $updateservername || $allownousercheck) {
+		$serversets = array();
+		$reqsets = array();
+		if($updategroups && $request['laststateid'] != 24) {
+			if($admingroupid == 0)
+				$admingroupid = 'NULL';
+			if($logingroupid == 0)
+				$logingroupid = 'NULL';
+			$serversets[] = "admingroupid = $admingroupid";
+			$serversets[] = "logingroupid = $logingroupid";
+			addChangeLogEntryOther($request['logid'], "event:usergroups|admingroupid:$admingroupid|logingroupid:$logingroupid");
+			$reqsets[] = "stateid = 29";
+			$reqsets[] = "datemodified = NOW()";
+		}
+
+		if($updateservername)
+			$serversets[] = "name = '$servername'";
+
+		if($allownousercheck) {
+			$newnousercheck = processInputVar('newnousercheck', ARG_NUMERIC);
+			if(($newnousercheck == 1 || $newnousercheck == 0) &&
+				($newnousercheck == $request['checkuser'])) {
+				$reqsets[] = "checkuser = (1 - checkuser)";
+				$updateusercheck = 1;
+			}
+		}
+
+		if(count($serversets)) {
+			$sets = implode(',', $serversets);
+			$query = "UPDATE serverrequest "
+			       . "SET $sets "
+			       . "WHERE requestid = $requestid";
+			doQuery($query);
+			$otherupdatesokay = 1;
+		}
+		if(count($reqsets)) {
+			$sets = implode(',', $reqsets);
+			$query = "UPDATE request "
+			       . "SET $sets "
+			       . "WHERE id = $requestid";
+			doQuery($query);
+			$otherupdatesokay = 1;
+		}
+		if($startdt == $request['start'] && $enddt == $request['end']) {
+			sendJSON(array('status' => 'success'));
+			return;
+		}
+	}
+
 	$h = '';
 	$max = getMaxOverlap($user['id']);
 	if(checkOverlap($startts, $endts, $max, $requestid)) {
@@ -3698,7 +3756,10 @@ function AJsubmitEditRequest() {
 		}
 		$cdata = getContinuationVar();
 		$cont = addContinuationsEntry('AJsubmitEditRequest', $cdata, SECINDAY, 1, 0);
-		sendJSON(array('status' => 'error', 'errmsg' => $h, 'cont' => $cont));
+		$arr = array('status' => 'error', 'errmsg' => $h, 'cont' => $cont);
+		if($otherupdatesokay)
+			$arr['partialupdate'] = i("Settings not related to start/end time were successfully updated.");
+		sendJSON($arr);
 		return;
 	}
 
@@ -3750,6 +3811,8 @@ function AJsubmitEditRequest() {
 		$data['status'] = 'conflict';
 		$data['errmsg'] = $h;
 		$data['cont'] = $cont;
+		if($otherupdatesokay)
+			$data['partialupdate'] = i("Settings not related to start/end time were successfully updated.");
 		sendJSON($data);
 		return;
 	}
@@ -3761,6 +3824,8 @@ function AJsubmitEditRequest() {
 		$data['status'] = 'conflict';
 		$data['errmsg'] = $h;
 		$data['cont'] = $cont;
+		if($otherupdatesokay)
+			$data['partialupdate'] = i("Settings not related to start/end time were successfully updated.");
 		sendJSON($data);
 		return;
 	}
@@ -3772,49 +3837,13 @@ function AJsubmitEditRequest() {
 		$data['status'] = 'conflict';
 		$data['errmsg'] = $h;
 		$data['cont'] = $cont;
+		if($otherupdatesokay)
+			$data['partialupdate'] = i("Settings not related to start/end time were successfully updated.");
 		sendJSON($data);
 		return;
 	}
 	elseif($rc > 0) {
 		updateRequest($requestid);
-		$serversets = array();
-		$reqsets = array();
-		if($updategroups && $request['laststateid'] != 24) {
-			if($admingroupid == 0)
-				$admingroupid = 'NULL';
-			if($logingroupid == 0)
-				$logingroupid = 'NULL';
-			$serversets[] = "admingroupid = $admingroupid";
-			$serversets[] = "logingroupid = $logingroupid";
-			addChangeLogEntryOther($request['logid'], "event:usergroups|admingroupid:$admingroupid|logingroupid:$logingroupid");
-			$reqsets[] = "stateid = 29";
-		}
-
-		if($updateservername)
-			$serversets[] = "name = '$servername'";
-
-		if($allownousercheck) {
-			$newnousercheck = processInputVar('newnousercheck', ARG_NUMERIC);
-			if(($newnousercheck == 1 || $newnousercheck == 0) &&
-				($newnousercheck == $request['checkuser'])) {
-				$reqsets[] = "checkuser = (1 - checkuser)";
-			}
-		}
-
-		if(count($serversets)) {
-			$sets = implode(',', $serversets);
-			$query = "UPDATE serverrequest "
-			       . "SET $sets "
-			       . "WHERE requestid = $requestid";
-			doQuery($query);
-		}
-		if(count($reqsets)) {
-			$sets = implode(',', $reqsets);
-			$query = "UPDATE request "
-			       . "SET $sets "
-			       . "WHERE id = $requestid";
-			doQuery($query);
-		}
 		sendJSON(array('status' => 'success'));
 		cleanSemaphore();
 		return;
@@ -3827,6 +3856,8 @@ function AJsubmitEditRequest() {
 		$data['status'] = 'conflict';
 		$data['errmsg'] = $h;
 		$data['cont'] = $cont;
+		if($otherupdatesokay)
+			$data['partialupdate'] = i("Settings not related to start/end time were successfully updated.");
 		sendJSON($data);
 	}
 }

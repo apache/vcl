@@ -591,6 +591,7 @@ function showSuggestedTimesCB(data, ioArgs) {
 	else if(data.items.status == 'noextend') {
 		dijit.byId('suggestedTimes').hide();
 		dojo.byId('editResDlgContent').innerHTML = data.items.html;
+		dojo.byId('editResDlgPartialMsg').innerHTML = '';
 		dojo.byId('editResDlgErrMsg').innerHTML = '';
 		dijit.byId('editResDlgBtn').set('style', 'display: none');
 		dijit.byId('editResCancelBtn').set('label', _('Okay'));
@@ -1458,6 +1459,7 @@ function editReservationCB(data, ioArgs) {
 		return;
 	}
 	dojo.byId('editResDlgContent').innerHTML = data.items.html;
+	dojo.byId('editResDlgPartialMsg').innerHTML = '';
 	dojo.byId('editResDlgErrMsg').innerHTML = '';
 	AJdojoCreate('editResDlgContent');
 	if(data.items.status == 'nomodify') {
@@ -1503,6 +1505,7 @@ function hideEditResDlg() {
 		dijit.byId('logingrpsel').destroy();
 	if(dijit.byId('newnousercheck'))
 		dijit.byId('newnousercheck').destroy();
+	dojo.byId('editResDlgPartialMsg').innerHTML = '';
 	dojo.byId('editResDlgErrMsg').innerHTML = '';
 	dojo.byId('editrescont').value = '';
 	dojo.byId('editresid').value = '';
@@ -1510,6 +1513,7 @@ function hideEditResDlg() {
 }
 
 function resetEditResBtn() {
+	dojo.byId('editResDlgPartialMsg').innerHTML = '';
 	dojo.byId('editResDlgErrMsg').innerHTML = '';
 	dijit.byId('editResDlgBtn').set('label', _('Modify Reservation'));
 }
@@ -1600,6 +1604,10 @@ function submitEditReservation() {
 
 function submitEditReservationCB(data, ioArgs) {
    document.body.style.cursor = 'default';
+	if(data.items.status != 'success' && 'partialupdate' in data.items) {
+		dojo.byId('editResDlgPartialMsg').innerHTML = '<br>' + data.items.partialupdate + '<br><br>';
+		resRefresh();
+	}
 	if(data.items.status == 'error') {
 		dojo.byId('editResDlgErrMsg').innerHTML = data.items.errmsg;
 		dojo.byId('editrescont').value = data.items.cont;
@@ -1654,6 +1662,7 @@ function resGone(type) {
 		dojo.byId('editResDlgContent').innerHTML = _('The reservation you selected<br>to reinstall has expired.<br><br>');
 	}
 	dojo.byId('editresid').value = '';
+	dojo.byId('editResDlgPartialMsg').innerHTML = '';
 	dojo.byId('editResDlgErrMsg').innerHTML = '';
 	dijit.byId('editResDlgBtn').set('style', 'display: none');
 	dijit.byId('editResCancelBtn').set('label', _('Okay'));
