@@ -67,7 +67,6 @@ define("DEFAULTGROUP", "adminUsers"); // if a user is in no groups, use reservat
 define("DEFAULT_AFFILID", 1);
 define("DAYSAHEAD", 4);       // number of days after today that can be scheduled
 define("DEFAULT_PRIVNODE", 2);
-define("MAXVMLIMIT", 100);
 define("SCHEDULER_ALLOCATE_RANDOM_COMPUTER", 0); // set this to 1 to have the scheduler assign a randomly allocated
                                                  // computer of those available; set to 0 to assign the computer with
                                                  // the best combination of specs
