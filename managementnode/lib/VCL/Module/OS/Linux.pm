@@ -569,6 +569,12 @@ sub post_reserve {
 	
 	notify($ERRORS{'OK'}, 0, "initiating Linux post_reserve: $image_name on $computer_short_name");
 	
+	# Run custom post_reserve scripts on the management node
+	my $enable_experimental_features = get_variable('enable_experimental_features', 0);
+	if ($enable_experimental_features) {
+		$self->run_management_node_stage_scripts('post_reserve');
+	}
+	
 	# Run custom post_reserve scripts residing on the management node
 	$self->run_management_node_tools_scripts('post_reserve');
 
@@ -652,18 +658,18 @@ sub post_reservation {
 	my $script_path = '/usr/local/vcl/vcl_post_reservation';
 	
 	# Check if script exists
-	if (!$self->file_exists($script_path)) {
-		notify($ERRORS{'DEBUG'}, 0, "script does NOT exist: $script_path");
-		return 1;
-	}
-	
-	# Run the vcl_post_reserve script if it exists in the image
-	my $result = $self->run_script($script_path, '1', '300', '1');
-	if (!defined($result)) {
-		notify($ERRORS{'WARNING'}, 0, "error occurred executing $script_path");
+	if ($self->file_exists($script_path)) {
+		# Run the vcl_post_reserve script if it exists in the image
+		$self->run_script($script_path, '1', '300', '1');
 	}
 	else {
-		notify($ERRORS{'DEBUG'}, 0, "executed $script_path");
+		notify($ERRORS{'DEBUG'}, 0, "script does NOT exist: $script_path");
+	}
+	
+	# Run custom post_reserve scripts on the management node
+	my $enable_experimental_features = get_variable('enable_experimental_features', 0);
+	if ($enable_experimental_features) {
+		$self->run_management_node_stage_scripts('post_reservation');
 	}
 	
 	return 1;
