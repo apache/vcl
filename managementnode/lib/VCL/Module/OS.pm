@@ -151,7 +151,10 @@ sub pre_capture {
 	}
 	
 	# Run custom pre_capture scripts on the management node
-	$self->run_management_node_stage_scripts('pre_capture');
+	my $enable_experimental_features = get_variable('enable_experimental_features', 0);
+	if ($enable_experimental_features) {
+		$self->run_management_node_stage_scripts('pre_capture');
+	}
 	
 	# Run custom pre_capture scripts on the computer
 	$self->run_management_node_tools_scripts('pre_capture');
