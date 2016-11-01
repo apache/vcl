@@ -229,6 +229,10 @@ EOF
 		notify($ERRORS{'WARNING'}, 0, "image table could not be updated for image=$image_id");
 	}
 	
+	# Call the OS module's post_capture subroutine
+	# This call might be relocated to each provisioning module's process subroutine like the call to pre_capture
+	$self->os->post_capture();
+	
 	$self->reservation_successful($image_size);
 } ## end sub process
 
