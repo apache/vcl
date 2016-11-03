@@ -5574,22 +5574,18 @@ function getRequestInfo($id, $returnNULL=0) {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
-/// \fn updateRequest($requestid)
+/// \fn updateRequest($requestid, $nowfuture)
 ///
 /// \param $requestid - the id of the request to be updated
+/// \param $nowfuture (optional) - "now" or "future"; whether the 
 ///
 /// \brief updates an entry to the request and reservation tables
 ///
 ////////////////////////////////////////////////////////////////////////////////
-function updateRequest($requestid) {
+function updateRequest($requestid, $nowfuture="now") {
 	global $requestInfo;
 	$startstamp = unixToDatetime($requestInfo["start"]);
 	$endstamp = unixToDatetime($requestInfo["end"]);
-
-	if($requestInfo["start"] <= time())
-		$nowfuture = "now";
-	else
-		$nowfuture = "future";
 
 	$query = "SELECT logid FROM request WHERE id = $requestid";
 	$qh = doQuery($query, 146);

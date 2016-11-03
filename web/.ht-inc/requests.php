@@ -3843,7 +3843,11 @@ function AJsubmitEditRequest() {
 		return;
 	}
 	elseif($rc > 0) {
-		updateRequest($requestid);
+		$oldstartts = datetimeToUnix($request['start']);
+		$nowfuture = 'now';
+		if($oldstartts > time())
+			$nowfuture = 'future';
+		updateRequest($requestid, $nowfuture);
 		sendJSON(array('status' => 'success'));
 		cleanSemaphore();
 		return;

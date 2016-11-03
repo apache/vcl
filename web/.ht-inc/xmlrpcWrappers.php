@@ -1049,7 +1049,7 @@ function XMLRPCextendRequest($requestid, $extendtime) {
 		             'errormsg' => 'cannot extend at this time');
 	}
 	// success
-	updateRequest($requestid);
+	updateRequest($requestid, 'now');
 	cleanSemaphore();
 	return array('status' => 'success');
 }
@@ -1215,7 +1215,7 @@ function XMLRPCsetRequestEnding($requestid, $end) {
 		             'errormsg' => 'cannot extend at this time');
 	}
 	// success
-	updateRequest($requestid);
+	updateRequest($requestid, 'now');
 	cleanSemaphore();
 	return array('status' => 'success');
 }
