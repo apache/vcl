@@ -1843,6 +1843,7 @@ function userLookup() {
 					print "    <td>{$req['managementnode']}</td>\n";
 					print "  </tr>\n";
 				}
+				print "</table>\n";
 			}
 		}
 	}

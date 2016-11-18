@@ -142,7 +142,7 @@ function viewGroups() {
 	if(preg_match('/MSIE/i', $_SERVER['HTTP_USER_AGENT']) ||
 	   preg_match('/Trident/i', $_SERVER['HTTP_USER_AGENT']) ||
 	   preg_match('/Edge/i', $_SERVER['HTTP_USER_AGENT']))
-		$w = array('54px', '38px', '200px', '142px', '65px', '142px', '59px', '58px', '63px', '73px');
+		$w = array('54px', '43px', '200px', '142px', '65px', '142px', '59px', '58px', '63px', '73px');
 	else
 		$w = array('4.8em', '3.5em', '17em', '12em', '5em', '12em', '5em', '5em', '5.6em', '6.3em');
 	print "<th field=\"id\" width=\"{$w[0]}\" formatter=\"fmtUserGroupDeleteBtn\">&nbsp;</th>\n";
@@ -261,7 +261,7 @@ function viewGroups() {
 	if(preg_match('/MSIE/i', $_SERVER['HTTP_USER_AGENT']) ||
 	   preg_match('/Trident/i', $_SERVER['HTTP_USER_AGENT']) ||
 	   preg_match('/Edge/i', $_SERVER['HTTP_USER_AGENT']))
-		$w = array('54px', '38px', '108px', '240px', '250px', '24px');
+		$w = array('54px', '43px', '108px', '240px', '250px', '24px');
 	else
 		$w = array('4.5em', '3.5em', '9em', '20em', '21em', '1.6em');
 
@@ -700,7 +700,7 @@ function editOrAddGroup($state) {
 			print "  <TR>\n";
 			print "    <TH align=right>Name:</TH>\n";
 			print "    <TD><INPUT type=text name=name value=\"{$data['name']}\" ";
-			print "maxlength=30>";
+			print "maxlength=60 size=60>";
 			if($data['type'] == 'user' && $selectAffil) {
 				print "@";
 				printSelectInput('affiliationid', $affils, $data['affiliationid']);
@@ -1009,16 +1009,16 @@ function processGroupInput($checks=1) {
 	
 	if($return['custom'] == 1 && $return['courseroll'] == 0 && $editname) {
 		if($return['type'] == 'user' &&
-		   ! preg_match('/^[-a-zA-Z0-9_\.: ]{3,30}$/', $return["name"])) {
+		   ! preg_match('/^[-a-zA-Z0-9_\.: ]{3,60}$/', $return["name"])) {
 			$submitErr |= GRPNAMEERR;
-			$submitErrMsg[GRPNAMEERR] = "Name must be between 3 and 30 characters "
+			$submitErrMsg[GRPNAMEERR] = "Name must be between 3 and 60 characters "
 			                          . "and can only contain letters, numbers, "
 			                          . "spaces, and these characters: - . _ :";
 		}
 		elseif($return['type'] == 'resource' &&
-		   ! preg_match('/^[-a-zA-Z0-9_\. ]{3,30}$/', $return["name"])) {
+		   ! preg_match('/^[-a-zA-Z0-9_\. ]{3,60}$/', $return["name"])) {
 			$submitErr |= GRPNAMEERR;
-			$submitErrMsg[GRPNAMEERR] = "Name must be between 3 and 30 characters "
+			$submitErrMsg[GRPNAMEERR] = "Name must be between 3 and 60 characters "
 			                          . "and can only contain letters, numbers, "
 			                          . "spaces, and these characters: - . _";
 		}

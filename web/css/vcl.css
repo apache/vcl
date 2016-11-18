@@ -613,6 +613,16 @@ body {
 	margin-left: 10.5em;
 }
 
+.logincol {
+	border-right: 1px solid #000000;
+}
+
+.logincell {
+	padding-right: 5px;
+	padding-left: 5px;
+	text-align: center;
+}
+
 #configvariables {
 	border: 1px solid black;
 	margin: 3px;

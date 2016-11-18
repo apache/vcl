@@ -117,7 +117,7 @@ function getHeader($refresh) {
 		$rt .= "              <li><a href=\"#\" class=\"dropdown-toggle\" data-toggle=\"dropdown\" data-target=\"#\">" . i('Manage') . "<b class=\"caret\"></b></a>\n";
 		$rt .= "                <ul class=\"dropdown-menu\">\n";
 		foreach($menu as $page => $item) {
-			if(in_array($page, array('dashboard', 'statistics', 'reservations', 'home', 'authentication', 'codeDocumentation')))
+			if(in_array($page, array('dashboard', 'statistics', 'reservations', 'home', 'authentication', 'codeDocumentation', 'userLookup')))
 				continue;
 			$selected = '';
 			if($item['selected'])
@@ -128,14 +128,13 @@ function getHeader($refresh) {
 		$rt .= "              </li>\n";
 		$rt .= "              <li><a href=\"#\" class=\"dropdown-toggle\" data-toggle=\"dropdown\" data-target=\"#\">" . i('Reporting') . "<b class=\"caret\"></b></a>\n";
 		$rt .= "                <ul class=\"dropdown-menu\">\n";
-		$selected = '';
-		if($menu['dashboard']['selected'])
-			$selected = ' class="active"';
-		$rt .= "                  <li$selected><a href=\"{$menu['dashboard']['url']}\">{$menu['dashboard']['title']}</a></li>\n";
-		$selected = '';
-		if($menu['statistics']['selected'])
-			$selected = ' class="active"';
-		$rt .= "                  <li$selected><a href=\"{$menu['statistics']['url']}\">{$menu['statistics']['title']}</a></li>\n";
+		$items = array('dashboard', 'statistics', 'userLookup');
+		foreach($items as $item) {
+			$selected = '';
+			if($menu[$item]['selected'])
+				$selected = ' class="active"';
+			$rt .= "                  <li$selected><a href=\"{$menu[$item]['url']}\">{$menu[$item]['title']}</a></li>\n";
+		}
 		$rt .= "                </ul>\n";
 		$rt .= "              </li>\n";
 		$rt .= "              <li><a href=\"{$menu['codeDocumentation']['url']}\">{$menu['codeDocumentation']['title']}</a></li>\n";

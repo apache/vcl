@@ -121,12 +121,14 @@ function XMLRPCgetImages() {
 	$resources = getUserResources(array("imageAdmin", "imageCheckOut"));
 	$resources["image"] = removeNoCheckout($resources["image"]);
 	$return = array();
+	$images = getImages();
 	foreach($resources['image'] as $key => $val) {
 		$notes = getImageNotes($key);
 		$tmp = array('id' => $key,
 		             'name' => $val,
 		             'description' => $notes['description'],
-		             'usage' => $notes['usage']);
+		             'usage' => $notes['usage'],
+		             'ostype' => $images[$key]['ostype']);
 		array_push($return, $tmp);
 	}
 	return $return;

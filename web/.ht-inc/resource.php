@@ -311,7 +311,7 @@ class Resource {
 		if(preg_match('/MSIE/i', $_SERVER['HTTP_USER_AGENT']) ||
 		   preg_match('/Trident/i', $_SERVER['HTTP_USER_AGENT']) ||
 		   preg_match('/Edge/i', $_SERVER['HTTP_USER_AGENT']))
-			$w = array('64px', '38px', '200px');
+			$w = array('64px', '43px', '200px');
 		else
 			$w = array('5em', '3.5em', '17em');
 		$h .= "<th field=\"id\" id=\"delcolth\" width=\"{$w[0]}\" formatter=\"resource.DeleteBtn\" styles=\"text-align: center;\">&nbsp;</th>\n";

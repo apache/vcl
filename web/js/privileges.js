@@ -73,6 +73,7 @@ function updateNodeLabels(nodename) {
 	dojo.byId('addChildNodeName').innerHTML = 'Node: <strong>' + nodename + '</strong>';
 	dojo.byId('deleteNodeName').innerHTML = 'Node: <strong>' + nodename + '</strong>';
 	dojo.byId('renameNodeName').innerHTML = 'Node: <strong>' + nodename + '</strong>';
+	dijit.byId('newNodeName').set('value', nodename);
 }
 
 function isChildFocused(focusid, nodes) {

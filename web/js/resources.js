@@ -136,9 +136,9 @@ Resource.prototype.updateFieldCookie = function(field, selected) {
 	var data = dojo.cookie(this.restype + 'selfields');
 	if(typeof data === 'undefined') {
 		if(selected)
-			dojo.cookie(this.restype + 'selfields', field + ':1');
+			dojo.cookie(this.restype + 'selfields', field + ':1', {expires: 365});
 		else
-			dojo.cookie(this.restype + 'selfields', field + ':0');
+			dojo.cookie(this.restype + 'selfields', field + ':0', {expires: 365});
 	}
 	else {
 		var items = data.split('|');
@@ -159,7 +159,7 @@ Resource.prototype.updateFieldCookie = function(field, selected) {
 				items.push(field + ':0');
 		}
 		data = items.join('|');
-		dojo.cookie(this.restype + 'selfields', data);
+		dojo.cookie(this.restype + 'selfields', data, {expires: 365});
 	}
 }
 

@@ -542,7 +542,7 @@ function viewRequests() {
 		$text .= "      resizable=true\n";
 		$text .= "      closable=true\n";
 		$text .= "      title=\"" . i("Detailed Reservation Status") . "\"\n";
-		$text .= "      style=\"width: 350px; ";
+		$text .= "      style=\"width: 380px; ";
 		$text .=               "height: 300px; ";
 		$text .=               "position: absolute; ";
 		$text .=               "left: 0px; ";

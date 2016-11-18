@@ -371,6 +371,7 @@ function checkAccess() {
 			}
 		}
 		if(! array_key_exists('HTTP_X_PASS', $_SERVER) || strlen($_SERVER['HTTP_X_PASS']) == 0) {
+			addLoginLog($xmluser, 'unknown', $user['affilid'], 0);
 			printXMLRPCerror(3);   # access denied
 			dbDisconnect();
 			exit;
@@ -380,6 +381,7 @@ function checkAccess() {
 			$xmlpass = stripslashes($xmlpass);
 		$apiver = processInputData($_SERVER['HTTP_X_APIVERSION'], ARG_NUMERIC, 1);
 		if($apiver == 1) {
+			addLoginLog($xmluser, 'unknown', $user['affilid'], 0);
 			printXMLRPCerror(8);   # unsupported API version
 			dbDisconnect();
 			exit;
@@ -394,6 +396,7 @@ function checkAccess() {
 			}
 			if(empty($authtype)) {
 				print "No authentication mechanism found for passed in X-User";
+				addLoginLog($xmluser, 'unknown', $user['affilid'], 0);
 				dbDisconnect();
 				exit;
 			}
@@ -401,6 +404,7 @@ function checkAccess() {
 				$auth = $authMechs[$authtype];
 				$ds = ldap_connect("ldaps://{$auth['server']}/");
 				if(! $ds) {
+					addLoginLog($xmluser, $authtype, $user['affilid'], 0);
 					printXMLRPCerror(5);    # failed to connect to auth server
 					dbDisconnect();
 					exit;
@@ -889,6 +893,7 @@ function abort($errcode, $query="") {
 			error_log($query);
 		}
 		print "ERROR($errcode): " . $ERRORS["$errcode"] . "<BR>\n";
+		error_log("===========================================================================");
 		error_log("ERROR($errcode): " . $ERRORS["$errcode"]);
 		$backtrace = getBacktraceString(FALSE);
 		print "<pre>\n";
@@ -4060,6 +4065,7 @@ function isAvailable($images, $imageid, $imagerevisionid, $start, $end,
 	$requestInfo["imageid"] = $imageid;
 	$requestInfo["ipwarning"] = 0;
 	$allocatedcompids = array(0);
+	$debug = getContinuationVar('debug', 0);
 
 	if(! is_array($imagerevisionid))
 		$imagerevisionid = array($imageid => array($imagerevisionid));
@@ -4220,6 +4226,10 @@ function isAvailable($images, $imageid, $imagerevisionid, $start, $end,
 			return debugIsAvailable(0, 6, $start, $end, $imagerevisionid);
 		}
 		$mappedcomputers = implode(',', $compids);
+		if($debug) {
+			$cnt = count($compids);
+			print "console.log('mapped computers: $cnt');";
+		}
 
 		// if $ip specified, only look at computers under management nodes that can
 		#   handle that network
@@ -4295,6 +4305,10 @@ function isAvailable($images, $imageid, $imagerevisionid, $start, $end,
 				                              array("available"), 0, 0, $userid);
 				$usercomputers = implode("','", array_keys($resources["computer"]));
 				$usercomputers = "'$usercomputers'";
+				if($debug) {
+					$cnt = count($resources['computer']);
+					print "console.log('computers available to user: $cnt');";
+				}
 			}
 			$alloccompids = implode(",", $allocatedcompids);
 
@@ -9391,10 +9405,12 @@ function printArray($array) {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
-/// \fn prettyDatetime($stamp, $showyear=0)
+/// \fn prettyDatetime($stamp, $showyear=0, $notzoffset=0)
 ///
 /// \param $stamp - a timestamp in unix or mysql datetime format
 /// \param $showyear (optional, default=0) - set to 1 to include year
+/// \param $notzoffset (optional, default=0) - set to 1 to prevent timezone
+/// conversion
 ///
 /// \return date/time in html format of [Day of week], [month] [day of month],
 /// [HH:MM] [am/pm]
@@ -9402,11 +9418,11 @@ function printArray($array) {
 /// \brief reformats the datetime to look better
 ///
 ////////////////////////////////////////////////////////////////////////////////
-function prettyDatetime($stamp, $showyear=0) {
+function prettyDatetime($stamp, $showyear=0, $notzoffset=0) {
 	global $locale;
 	if(! preg_match('/^[\d]+$/', $stamp))
 		$stamp = datetimeToUnix($stamp);
-	if(array_key_exists('tzoffset', $_SESSION['persistdata']))
+	if(! $notzoffset && array_key_exists('tzoffset', $_SESSION['persistdata']))
 		$stamp += $_SESSION['persistdata']['tzoffset'] * 60;
 	if($showyear)
 		$return = strftime('%A, %b&nbsp;%-d,&nbsp;%Y, %l:%M %P', $stamp);
@@ -13191,7 +13207,7 @@ function getDojoHTML($refresh) {
 		case 'submitOneClick':
 		case 'submitEditOneClick':
 		case 'deleteOneClick':
-			$filename = 'oneclick.js';
+			$filename = 'vclgos.js';
 			$dojoRequires = array('dojo.parser',
 			                      'dijit.layout.ContentPane',
 			                      'dijit.form.ValidationTextBox',
@@ -13217,7 +13233,7 @@ function getDojoHTML($refresh) {
 	$rt = '';
 	$jslocale = strtolower(str_replace('_', '-', $locale));
 	$rt .= "<script type=\"text/javascript\">\n";
-	if(session_status() === PHP_SESSION_ACTIVE && array_key_exists('tzoffset', $_SESSION['persistdata']))
+	if(isset($_SESSION['persistdata']) && array_key_exists('tzoffset', $_SESSION['persistdata']))
 		$rt .= "   var tzoffset = {$_SESSION['persistdata']['tzoffset']};\n";
 	else
 		$rt .= "   var tzoffset = 'unset';\n";

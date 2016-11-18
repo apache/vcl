@@ -2598,7 +2598,7 @@ class Messages {
 			}
 		}
 		if(count($invalids)) {
-			sendJSON(array('status' => 'invalid', 'values' => $invalids, 'query' => $query));
+			sendJSON(array('status' => 'invalid', 'values' => $invalids));
 			return;
 		}
 		sendJSON(array('status' => 'valid'));

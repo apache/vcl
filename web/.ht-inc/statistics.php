@@ -439,6 +439,7 @@ function viewStatistics() {
 		print "  </TR>\n";
 	}
 	print "</TABLE>\n";
+	print "<br>\n";
 
 	print "<TABLE>\n";
 	print "  <TR>\n";

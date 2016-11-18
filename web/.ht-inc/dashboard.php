@@ -692,8 +692,8 @@ function getNewReservationData() {
 	       . "LEFT JOIN user u ON (u.id = rq.userid) "
 	       . "LEFT JOIN user u2 ON (u2.id = c.ownerid) "
 	       . "LEFT JOIN affiliation af ON (af.id = u.affiliationid) "
-	       . "WHERE ((rq.stateid IN (6, 13, 19) AND rq.start < NOW()) OR "
-	       .       "(rq.stateid = 14 AND rq.laststateid IN (6, 13, 16, 19) AND "
+	       . "WHERE ((rq.stateid IN (6, 13, 16, 19, 24) AND rq.start < NOW()) OR "
+	       .       "(rq.stateid = 14 AND rq.laststateid IN (6, 13, 16, 19, 24) AND "
 			 .       "rq.start < DATE_ADD(NOW(), INTERVAL 1 HOUR))) ";
 	if($affilid)
 		$query .= "AND (u.affiliationid = $affilid OR u2.affiliationid = $affilid) ";

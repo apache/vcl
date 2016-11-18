@@ -299,6 +299,11 @@ function printLoginPage($servertimeout=0) {
 	print "  <TR>\n";
 	print "    <TD colspan=2 align=right><INPUT type=submit value=\"" . i("Login") . "\"></TD>\n";
 	print "  </TR>\n";
+	print "  <TR>\n";
+	print "    <TD colspan=2 align=center><br><br><small>";
+	print "<a href=\"" . BASEURL . SCRIPT . "?mode=selectauth&clearselection=1\">";
+	print i("Select a different authentication method") . "</a></small></TD>\n";
+	print "  </TR>\n";
 	print "</TABLE>\n";
 	print "<input type=\"hidden\" name=\"mode\" value=\"submitLogin\">\n";
 	print "<input type=\"hidden\" name=\"authtype\" value=\"$authtype\">\n";

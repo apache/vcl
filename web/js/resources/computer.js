@@ -260,7 +260,7 @@ function initPage() {
 		buildExtraFilters();
 		
 		// set width of first column
-		resourcegrid.setCellWidth(0, '18px');
+		resourcegrid.setCellWidth(0, '21px');
 		resourcegrid.layout.cells[0].view.update();
 
 		// connect selection
@@ -365,7 +365,7 @@ function buildExtraFilters() {
 			litem['name'] = cells[i].name;
 		litem['hidden'] = cells[i].hidden;
 		if(i == 0)
-			litem['width'] = '18px';
+			litem['width'] = '21px';
 		else if(typeof cells[i].width != 'undefined')
 			litem['width'] = cells[i].width;
 		litem['editable'] = false;
@@ -408,7 +408,8 @@ function buildExtraFilters() {
 					autoComplete: false,
 					labelFunc: cbformatter,
 					labelType: 'html',
-					searchAttr: 'value'
+					searchAttr: 'value',
+					fetchProperties: {sort: [{attribute:"value"}]}
 				});
 				if(typeof item.width != 'undefined') {
 					if(item.width.match(/px/))
@@ -923,6 +924,7 @@ function saveResourceCB(data, ioArgs) {
 					resourcegrid.store.setValue(item, 'platform', data.items.data.platform);
 					resourcegrid.store.setValue(item, 'schedule', data.items.data.schedule);
 					resourcegrid.store.setValue(item, 'currentimg', data.items.data.currentimg);
+					resourcegrid.store.setValue(item, 'imagerevision', data.items.data.imagerevision);
 					resourcegrid.store.setValue(item, 'nextimg', data.items.data.nextimg);
 					resourcegrid.store.setValue(item, 'ram', data.items.data.ram);
 					resourcegrid.store.setValue(item, 'procnumber', data.items.data.procnumber);
