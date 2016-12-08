@@ -349,8 +349,8 @@ class Image extends Resource {
 		if(! $add)
 			$h .= "<div style=\"width: 80%; margin-left: 10%; overflow: auto; height: 80%;\">\n";
 		# name
-		$errmsg = i("Name cannot contain dashes (-), single (') or double (&quot;) quotes, less than (&lt;), or greater than (&gt;) and can be from 2 to 60 characters long");
-		$h .= labeledFormItem('name', i('Name'), 'text', '^([A-Za-z0-9!@#$%^&\*\(\)_=\+\[\]{}\\\|:;,\./\?~` ]){2,60}$',
+		$errmsg = i("Name cannot contain single (') or double (&quot;) quotes, less than (&lt;), or greater than (&gt;) and can be from 2 to 60 characters long");
+		$h .= labeledFormItem('name', i('Name'), 'text', '^([-A-Za-z0-9!@#$%^&\*\(\)_=\+\[\]{}\\\|:;,\./\?~` ]){2,60}$',
 		                      1, '', $errmsg); 
 		# owner
 		$extra = array('onKeyPress' => 'setOwnerChecking');
@@ -1654,10 +1654,10 @@ class Image extends Resource {
 			$return['mode'] = 'edit';
 
 		$errormsg = array();
-		if(preg_match("/[-'\"]/", $return["name"]) ||
+		if(preg_match("/['\"]/", $return["name"]) ||
 			strlen($return["name"]) > 60 || strlen($return["name"]) < 2) {
 			$return['error'] = 1;
-			$errormsg[] = i("Name must be from 2 to 60 characters and cannot contain any dashes (-), single (') or double (\") quotes.");
+			$errormsg[] = i("Name must be from 2 to 60 characters and cannot contain any single (') or double (\") quotes.");
 		}
 		elseif(! preg_match('/^[\x20-\x7E]+$/', $return["name"])) {
 			$return['error'] = 1;
