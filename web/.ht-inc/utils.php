@@ -11320,22 +11320,6 @@ function timeToNextReservation($request) {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
-/// \fn getImageText($text)
-///
-/// \param $text - text to be in the image
-///
-/// \return a text string
-///
-/// \brief creates an image src line that calls textimage.php to print an
-/// image with $text in it
-///
-////////////////////////////////////////////////////////////////////////////////
-function getImageText($text) {
-	return "<img alt=\"$text\" src=\"" . BASEURL . "/images/textimage.php?text=$text\">";
-}
-
-////////////////////////////////////////////////////////////////////////////////
-///
 /// \fn weekOfYear($ts)
 ///
 /// \param $ts - unix timestamp
@@ -12964,6 +12948,8 @@ function getDojoHTML($refresh) {
 			$dojoRequires = array('dojo.parser',
 			                      'dojo.data.ItemFileWriteStore',
 			                      'dijit.Tree',
+			                      'dijit.tree.ForestStoreModel',
+			                      'dijit.tree.dndSource',
 			                      'dijit.form.Button',
 			                      'dijit.form.CheckBox',
 			                      'dijit.form.TextBox',
@@ -13555,6 +13541,7 @@ function getDojoHTML($refresh) {
 			foreach($dojoRequires as $req)
 				$rt .= "   dojo.require(\"$req\");\n";
 			$rt .= "      document.onmousemove = updateMouseXY;\n";
+			$rt .= "      dojo.connect(document, 'onmouseup', mouseRelease);\n";
 			$rt .= "   });\n";
 			$rt .= "</script>\n";
 			return $rt;

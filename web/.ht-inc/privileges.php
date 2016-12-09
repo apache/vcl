@@ -58,10 +58,24 @@ function viewNodes() {
 		print "<div id=\"privtreetab\" dojoType=\"dijit.layout.ContentPane\" title=\"Privilege Tree\">\n";
 	}
 	print "<H2>Privilege Tree</H2>\n";
+	print "<script type=\"text/javascript\">\n";
+	$nodedrop = nodeDropData();
+	print "var $nodedrop";
+	print "</script>\n";
+	$cont = addContinuationsEntry('AJrefreshNodeDropData');
+	print "<INPUT type=hidden id=refreshnodedropdatacont value=\"$cont\"\n>";
 	$cont = addContinuationsEntry('JSONprivnodelist');
-	print "<div dojoType=\"dojo.data.ItemFileWriteStore\" url=\"" . BASEURL . SCRIPT . "?continuation=$cont\" jsid=\"nodestore\" id=\"nodestore\"></div>\n";
+	print "<div dojoType=\"dojo.data.ItemFileWriteStore\" url=\"" . BASEURL . SCRIPT . "?continuation=$cont\" jsId=\"nodestore\" id=\"nodestore\">\n";
+	print "  <script type=\"dojo/connect\" event=\"onSet\" args=\"node\">\n";
+	print "     moveNode(node);\n";
+	print "  </script>\n";
+	print "</div>\n";
+	$cont = addContinuationsEntry('AJmoveNode');
+	print "<INPUT type=hidden id=movenodecont value=\"$cont\"\n>";
 	print "<div class=privtreediv>\n";
-	print "<div dojoType=\"dijit.Tree\" store=\"nodestore\" showRoot=\"false\" id=privtree>\n";
+	print "<div dojoType=\"dijit.tree.ForestStoreModel\" jsId=\"nodemodel\" store=\"nodestore\" query=\"{name: '*'}\"></div>\n";
+	print "<div id=\"privtreeparent\">\n";
+	print "<div dojoType=\"dijit.Tree\" model=\"nodemodel\" showRoot=\"false\" id=privtree dndController=\"dijit.tree.dndSource\">\n";
 	print "  <script type=\"dojo/connect\" event=\"focusNode\" args=\"node\">\n";
 	print "    nodeSelect(node);\n";
 	print "  </script>\n";
@@ -78,19 +92,42 @@ function viewNodes() {
 	print "    }else{\n";
 	print "      this._expandNode(node);\n";
 	print "    }\n";
-	print "    if(addclass || node.item.name == focusid)\n";
-	print "      dojo.addClass(node.labelNode, 'privtreeselected');\n";
 	print "  </script>\n";
 	print "  <script type=\"dojo/connect\" event=\"startup\" args=\"item\">\n";
 	print "    focusFirstNode($activeNode);\n";
 	print "  </script>\n";
+	print "  <script type=\"dojo/method\" event=\"checkAcceptance\" args=\"tree, domnodes\">\n";
+	print "    return checkCanMove(tree, domnodes);\n";
+	print "  </script>\n";
+	print "  <script type=\"dojo/method\" event=\"checkItemAcceptance\" args=\"domnode, tree, position\">\n";
+	print "    return checkNodeDrop(domnode, tree, position);\n";
+	print "  </script>\n";
+	print "  <script type=\"dojo/connect\" event=\"_onNodeMouseEnter\" args=\"item, evt\">\n";
+	print "    dragnode.hoverid = item.item.name[0];\n";
+	print "  </script>\n";
+	print "  <script type=\"dojo/connect\" event=\"_onNodeMouseLeave\" args=\"item, evt\">\n";
+	print "    dragnode.hoverid = 0;\n";
+	print "  </script>\n";
+	print "  <script type=\"dojo/connect\" event=\"onMouseDown\" args=\"evt\">\n";
+	print "    mouseDown(evt);\n";
+	print "  </script>\n";
+	print "  <script type=\"dojo/connect\" event=\"onMouseUp\" args=\"evt\">\n";
+	print "    mouseRelease(evt);\n";
+	print "  </script>\n";
+	print "  <script type=\"dojo/connect\" event=\"onMouseLeave\" args=\"evt\">\n";
+	print "    mouseontree = 0;\n";
+	print "  </script>\n";
+	print "  <script type=\"dojo/connect\" event=\"onMouseEnter\" args=\"evt\">\n";
+	print "    mouseontree = 1;\n";
+	print "  </script>\n";
 	print "</div>\n";
+	print "</div>\n"; # privtreeparent
 	print "</div>\n";
 	print "<div id=treebuttons>\n";
+	print "<TABLE summary=\"\" cellspacing=\"\" cellpadding=\"\">\n";
+	print "  <TR valign=top>\n";
 	if($hasNodeAdmin) {
-		print "<TABLE summary=\"\" cellspacing=\"\" cellpadding=\"\">\n";
-		print "  <TR valign=top>\n";
-		print "    <TD><FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
+		print "    <TD>\n";
 		print "    <button id=addNodeBtn dojoType=\"dijit.form.Button\">\n";
 		print "      Add Child\n";
 		print "      <script type=\"dojo/method\" event=onClick>\n";
@@ -98,8 +135,8 @@ function viewNodes() {
 		print "        return false;\n";
 		print "      </script>\n";
 		print "    </button>\n";
-		print "    </FORM></TD>\n";
-		print "    <TD><FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
+		print "    </TD>\n";
+		print "    <TD>\n";
 		print "    <button id=deleteNodeBtn dojoType=\"dijit.form.Button\">\n";
 		print "      Delete Node and Children\n";
 		print "      <script type=\"dojo/method\" event=onClick>\n";
@@ -107,8 +144,8 @@ function viewNodes() {
 		print "        return false;\n";
 		print "      </script>\n";
 		print "    </button>\n";
-		print "    </FORM></TD>\n";
-		print "    <TD><FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
+		print "    </TD>\n";
+		print "    <TD>\n";
 		print "    <button id=renameNodeBtn dojoType=\"dijit.form.Button\">\n";
 		print "      Rename Node\n";
 		print "      <script type=\"dojo/method\" event=onClick>\n";
@@ -116,11 +153,18 @@ function viewNodes() {
 		print "        return false;\n";
 		print "      </script>\n";
 		print "    </button>\n";
-		print "    </FORM></TD>\n";
-		print "    <td></td>\n";
-		print "  </TR>\n";
-		print "</TABLE>\n";
+		print "    </TD>\n";
 	}
+	print "    <td>\n";
+	print "    <button id=\"revertMoveNodeBtn\" dojoType=\"dijit.form.Button\" disabled=\"true\">\n";
+	print "      Undo Move\n";
+	print "      <script type=\"dojo/method\" event=onClick>\n";
+	print "        dijit.byId('revertMoveNodeDlg').show();\n";
+	print "      </script>\n";
+	print "    </button>\n";
+	print "    </td>\n";
+	print "  </TR>\n";
+	print "</TABLE>\n";
 	print "</div>\n";
 	$cont = addContinuationsEntry('selectNode');
 	print "<INPUT type=hidden id=nodecont value=\"$cont\">\n";
@@ -128,7 +172,6 @@ function viewNodes() {
 	# privileges
 	print "<H2>Privileges at Selected Node</H2>\n";
 	$node = $activeNode;
-
 	$nodeInfo = getNodeInfo($node);
 	$privs = getNodePrivileges($node);
 	$cascadePrivs = getNodeCascadePrivileges($node);
@@ -156,8 +199,7 @@ function viewNodes() {
 		foreach($usertypes["users"] as $type) {
 			if($type == 'configAdmin')
 				continue;
-			$img = getImageText($type);
-			print "    <TD>$img</TD>\n";
+			print "    <TH class=\"privheader\"><div><span>$type</span></div></TH>\n";
 		}
 		print "  </TR>\n";
 		$users = array_unique(array_merge(array_keys($privs["users"]), 
@@ -205,8 +247,7 @@ function viewNodes() {
 		foreach($usertypes["users"] as $type) {
 			if($type == 'configAdmin')
 				continue;
-			$img = getImageText($type);
-			print "    <TH>$img</TH>\n";
+			print "    <TH class=\"privheader\"><div><span>$type</span></div></TH>\n";
 		}
 		print "  </TR>\n";
 		$groupids = array_unique(array_merge(array_keys($privs["usergroups"]), 
@@ -266,8 +307,7 @@ function viewNodes() {
 		foreach($resourcetypes as $type) {
 			if($type == 'block' || $type == 'cascade')
 				continue;
-			$img = getImageText("$type");
-			print "    <TH>$img</TH>\n";
+			print "    <TH class=\"privheader\"><div><span>$type</span></div></TH>\n";
 		}
 		print "  </TR>\n";
 		$resources = array_unique(array_merge(array_keys($privs["resources"]), 
@@ -327,10 +367,8 @@ function viewNodes() {
 	print "    <TD></TD>\n";
 	print "    <TH class=\"privBlock\" bgcolor=gray style=\"color: black;\">Block<br>Cascaded<br>Rights</TH>\n";
 	print "    <TH class=\"privCascade\" bgcolor=\"#008000\" style=\"color: black;\">Cascade<br>to Child<br>Nodes</TH>\n";
-	foreach($usertypes["users"] as $type) {
-		$img = getImageText($type);
-		print "    <TD>$img</TD>\n";
-	}
+	foreach($usertypes["users"] as $type)
+		print "    <TH class=\"privheader\"><div><span>$type</span></div></TH>\n";
 	print "  </TR>\n";
 	print "  <TR>\n";
 	print "    <TD><INPUT type=text id=newuser name=newuser size=15";
@@ -393,10 +431,8 @@ function viewNodes() {
 	print "    <TD></TD>\n";
 	print "    <TH class=\"privBlock\" bgcolor=gray style=\"color: black;\">Block<br>Cascaded<br>Rights</TH>\n";
 	print "    <TH class=\"privCascade\" bgcolor=\"#008000\" style=\"color: black;\">Cascade<br>to Child<br>Nodes</TH>\n";
-	foreach($usertypes["users"] as $type) {
-		$img = getImageText($type);
-		print "    <TD>$img</TD>\n";
-	}
+	foreach($usertypes["users"] as $type)
+		print "    <TH class=\"privheader\"><div><span>$type</span></div></TH>\n";
 	print "  </TR>\n";
 	print "  <TR>\n";
 	print "    <TD>\n";
@@ -464,8 +500,7 @@ function viewNodes() {
 	foreach($resourcetypes as $type) {
 		if($type == 'block' || $type == 'cascade')
 			continue;
-		$img = getImageText("$type");
-		print "    <TH>$img</TH>\n";
+		print "    <TH class=\"privheader\"><div><span>$type</span></div></TH>\n";
 	}
 	print "  </TR>\n";
 	print "  <TR>\n";
@@ -636,6 +671,71 @@ function viewNodes() {
 	print "</div>\n";
 	print "</div>\n";
 
+	print "<div dojoType=dijit.Dialog\n";
+	print "     id=moveDialog\n";
+	print "     title=\"Move Node(s)\"\n";
+	print "     duration=250\n";
+	print "     draggable=true>\n";
+	print "Move the following node and all of its children?<br><br>\n";
+	print "<label for=moveNodeName>Node:</label>\n";
+	print "<span id=moveNodeName></span><br>\n";
+	print "<label for=moveNodeOldParentName>Old Parent:</label>\n";
+	print "<span id=moveNodeOldParentName></span><br>\n";
+	print "<label for=moveNodeNewParentName>New Parent:</label>\n";
+	print "<span id=moveNodeNewParentName></span><br><br>\n";
+	print "<div align=center>\n";
+	print "<TABLE summary=\"\"><TR>\n";
+	print "<TD>\n";
+	print "  <button id=submitMoveNodeBtn dojoType=\"dijit.form.Button\">\n";
+	print "    Move Node(s)\n";
+	print "    <script type=\"dojo/method\" event=onClick>\n";
+	print "      submitMoveNode();\n";
+	print "    </script>\n";
+	print "  </button>\n";
+	print "</TD>\n";
+	print "<TD>\n";
+	print "  <button id=cancelMoveNodeBtn dojoType=\"dijit.form.Button\">\n";
+	print "    Cancel\n";
+	print "    <script type=\"dojo/method\" event=onClick>\n";
+	print "      revertNodeMove();\n";
+	print "      dijit.byId('moveDialog').hide();\n";
+	print "    </script>\n";
+	print "  </button>\n";
+	print "</TD>\n";
+	print "</TR></TABLE>\n";
+	print "<INPUT type=hidden id=movenodesubmitcont>\n";
+	print "</div>\n";
+	print "</div>\n";
+
+	print "<div dojoType=dijit.Dialog\n";
+	print "     id=revertMoveNodeDlg\n";
+	print "     title=\"Undo Move Node(s)\"\n";
+	print "     duration=250\n";
+	print "     draggable=true>\n";
+	print "Undo the previous node move?<br><br>\n";
+	print "<div align=center>\n";
+	print "<TABLE summary=\"\"><TR>\n";
+	print "<TD>\n";
+	print "  <button id=submitRevertMoveNodeBtn dojoType=\"dijit.form.Button\">\n";
+	print "    Undo Move\n";
+	print "    <script type=\"dojo/method\" event=onClick>\n";
+	print "      submitRevertMoveNode();\n";
+	print "    </script>\n";
+	print "  </button>\n";
+	print "</TD>\n";
+	print "<TD>\n";
+	print "  <button dojoType=\"dijit.form.Button\">\n";
+	print "    Cancel\n";
+	print "    <script type=\"dojo/method\" event=onClick>\n";
+	print "      dijit.byId('revertMoveNodeDlg').hide();\n";
+	print "    </script>\n";
+	print "  </button>\n";
+	print "</TD>\n";
+	print "</TR></TABLE>\n";
+	print "<INPUT type=\"hidden\" id=\"revertmovenodecont\">\n";
+	print "</div>\n";
+	print "</div>\n";
+
 	print "<div dojoType=dijit.Dialog id=workingDialog duration=250 refocus=False>\n";
 	print "Loading...\n";
 	print "  <script type=\"dojo/connect\" event=_setup>\n";
@@ -732,9 +832,9 @@ function selectNode() {
 	$hasNodeAdmin = checkUserHasPriv("nodeAdmin", $user["id"], $node, $privs,
 	                                 $cascadePrivs);
 
+	$text .= "<TABLE>";
+	$text .= "  <TR valign=top>";
 	if($hasNodeAdmin) {
-		$text .= "<TABLE>";
-		$text .= "  <TR valign=top>";
 		$text .= "    <TD><FORM action=\"" . BASEURL . SCRIPT . "\" method=post>";
 		$text .= "    <button id=addNodeBtn dojoType=\"dijit.form.Button\">";
 		$text .= "      Add Child";
@@ -762,12 +862,21 @@ function selectNode() {
 		$text .= "      </script>";
 		$text .= "    </button>";
 		$text .= "    </FORM></TD>";
-		$text .= "  </TR>";
-		$text .= "</TABLE>";
 	}
+	$text .= "    <td>";
+	$text .= "    <button id=\"revertMoveNodeBtn\" dojoType=\"dijit.form.Button\" disabled=\"true\">";
+	$text .= "      Undo Move";
+	$text .= "      <script type=\"dojo/method\" event=onClick>";
+	$text .= "        dijit.byId(\"revertMoveNodeDlg\").show();";
+	$text .= "      </script>";
+	$text .= "    </button>";
+	$text .= "    </td>";
+	$text .= "  </TR>";
+	$text .= "</TABLE>";
 	$return .= "if(dijit.byId('addNodeBtn')) dijit.byId('addNodeBtn').destroy();";
 	$return .= "if(dijit.byId('deleteNodeBtn')) dijit.byId('deleteNodeBtn').destroy();";
 	$return .= "if(dijit.byId('renameNodeBtn')) dijit.byId('renameNodeBtn').destroy();";
+	$return .= "if(dijit.byId('revertMoveNodeBtn')) dijit.byId('revertMoveNodeBtn').destroy();";
 	$return .= setAttribute('treebuttons', 'innerHTML', $text);
 	$return .= "AJdojoCreate('treebuttons');";
 
@@ -783,10 +892,8 @@ function selectNode() {
 		$text .= "    <TD></TD>";
 		$text .= "    <TH class=\"privBlock\" bgcolor=gray style=\"color: black;\">Block<br>Cascaded<br>Rights</TH>";
 		$text .= "    <TH class=\"privCascade\" bgcolor=\"#008000\" style=\"color: black;\">Cascade<br>to Child<br>Nodes</TH>";
-		foreach($usertypes["users"] as $type) {
-			$img = getImageText($type);
-			$text .= "    <TD>$img</TD>";
-		}
+		foreach($usertypes["users"] as $type)
+			$text .= "    <TH class=\"privheader\"><div><span>$type</span></div></TH>";
 		$text .= "  </TR>";
 		$users = array_unique(array_merge(array_keys($privs["users"]), 
 		                      array_keys($cascadePrivs["users"])));
@@ -833,10 +940,8 @@ function selectNode() {
 		$text .= "    <TD></TD>";
 		$text .= "    <TH class=\"privBlock\" bgcolor=gray style=\"color: black;\">Block<br>Cascaded<br>Rights</TH>";
 		$text .= "    <TH class=\"privCascade\" bgcolor=\"#008000\" style=\"color: black;\">Cascade<br>to Child<br>Nodes</TH>";
-		foreach($usertypes["users"] as $type) {
-			$img = getImageText($type);
-			$text .= "    <TH>$img</TH>";
-		}
+		foreach($usertypes["users"] as $type)
+			$text .= "    <TH class=\"privheader\"><div><span>$type</span></div></TH>";
 		$text .= "  </TR>";
 		$groupids = array_unique(array_merge(array_keys($privs["usergroups"]), 
 		                         array_keys($cascadePrivs["usergroups"])));
@@ -898,8 +1003,7 @@ function selectNode() {
 		foreach($resourcetypes as $type) {
 			if($type == 'block' || $type == 'cascade')
 				continue;
-			$img = getImageText("$type");
-			$text .= "    <TH>$img</TH>";
+			$text .= "    <TH class=\"privheader\"><div><span>$type</span></div></TH>";
 		}
 		$text .= "  </TR>";
 		$resources = array_unique(array_merge(array_keys($privs["resources"]), 
@@ -943,6 +1047,9 @@ function selectNode() {
 	$return .= setAttribute('resourcesDiv', 'innerHTML', $text);
 	$return .= "AJdojoCreate('resourcesDiv');";
 
+	$js .= "if(typeof moveitem != 'undefined') ";
+	$js .= "{dijit.byId('revertMoveNodeBtn').set('disabled', false);}";
+
 	print $return;
 	print $js;
 }
@@ -977,7 +1084,8 @@ function JSONprivnodelist() {
 function JSONprivnodelist2($nodelist) {
 	$data = '';
 	foreach(array_keys($nodelist) as $id) {
-		$data .= "{name:'$id', display:'{$nodelist[$id]['name']}' ";
+		$nodeinfo = getNodeInfo($id);
+		$data .= "{name:'$id', display:'{$nodelist[$id]['name']}', parent:'{$nodeinfo['parent']}'";
 		$children = getChildNodes($id);
 		if(count($children))
 			$data .= ", children: [ " . JSONprivnodelist2($children) . "]},";
@@ -986,6 +1094,44 @@ function JSONprivnodelist2($nodelist) {
 	}
 	$data = rtrim($data, ',');
 	return $data;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn nodeDropData()
+///
+/// \return string for setting value of nodedropdata to a javascript object
+///
+/// \brief generates a string to define a javascript object that contains all
+/// privtree node ids with each having a value of 0 or 1 depending on whether or
+/// not they can be moved and dropped on
+///
+////////////////////////////////////////////////////////////////////////////////
+function nodeDropData() {
+	global $user;
+	$query = "SELECT id, parent FROM privnode WHERE id > " . DEFAULT_PRIVNODE;
+	$qh = doQuery($query);
+	$data = 'nodedropdata = {';
+	while($row = mysql_fetch_assoc($qh))
+		if(checkUserHasPriv('nodeAdmin', $user['id'], $row['id']) &&
+		   ($row['parent'] == DEFAULT_PRIVNODE || checkUserHasPriv('nodeAdmin', $user['id'], $row['parent'])))
+			$data .= "{$row['id']}: '1',";
+		else
+			$data .= "{$row['id']}: '0',";
+	rtrim($data, ',');
+	$data .= '}';
+	return $data;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn AJrefreshNodeDropData()
+///
+/// \brief prints output from nodeDropData
+///
+////////////////////////////////////////////////////////////////////////////////
+function AJrefreshNodeDropData() {
+	print nodeDropData();
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1051,7 +1197,7 @@ function AJsubmitAddChildNode() {
 		array_push($privs, "cascade");
 		updateUserOrGroupPrivs($user["id"], $nodeid, $privs, array(), "user");
 	}
-	print "addChildNode('$newnode', $nodeid);";
+	print "addChildNode('$newnode', $nodeid, $parent);";
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1172,6 +1318,123 @@ function AJsubmitRenameNode() {
 	       . "WHERE id = $activeNode";
 	doQuery($query, 101);
 	$arr = array('newname' => $newname, 'node' => $activeNode);
+	sendJSON($arr);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn AJmoveNode()
+///
+/// \brief handles saving a moved node
+///
+////////////////////////////////////////////////////////////////////////////////
+function AJmoveNode() {
+	global $user;
+	$moveid = processInputVar('moveid', ARG_NUMERIC);
+	$oldparentid = processInputVar('oldparentid', ARG_NUMERIC);
+	$newparentid = processInputVar('newparentid', ARG_NUMERIC);
+
+	if(! checkUserHasPriv("nodeAdmin", $user["id"], $moveid) ||
+	   ! checkUserHasPriv("nodeAdmin", $user["id"], $newparentid) ||
+	   ! checkUserHasPriv("nodeAdmin", $user["id"], $oldparentid)) {
+		$arr = array('status' => 'noaccess',
+		             'moveid' => $moveid,
+		             'oldparentid' => $oldparentid,
+		             'newparentid' => $newparentid);
+		sendJSON($arr);
+		return;
+	}
+
+	if($oldparentid == $newparentid) {
+		$arr = array('status' => 'nochange');
+		sendJSON($arr);
+		return;
+	}
+
+	# check for name collision at parent
+	$query = "SELECT p2.id "
+	       . "FROM privnode p1, "
+	       .      "privnode p2 "
+	       . "WHERE p1.id = $moveid AND "
+	       .       "p2.parent = $newparentid AND "
+	       .       "p2.name = p1.name";
+	$qh = doQuery($query);
+	if($row = mysql_num_rows($qh)) {
+		$arr = array('status' => 'collision',
+		             'moveid' => $moveid,
+		             'oldparentid' => $oldparentid,
+		             'newparentid' => $newparentid);
+		sendJSON($arr);
+		return;
+	}
+
+	$nodeinfo = getNodeInfo($moveid);
+	$oldnodeinfo = getNodeInfo($oldparentid);
+	$newnodeinfo = getNodeInfo($newparentid);
+	$cdata = array('moveid' => $moveid,
+	               'newparentid' => $newparentid,
+	               'oldparentid' => $oldparentid);
+	$cont = addContinuationsEntry('AJsubmitMoveNode', $cdata, 300);
+	$revertcont = addContinuationsEntry('AJrevertMoveNode', $cdata);
+	$arr = array('status' => 'success',
+	             'movename' => $nodeinfo['name'],
+	             'oldparent' => $oldnodeinfo['name'],
+	             'newparent' => $newnodeinfo['name'],
+	             'moveid' => $moveid,
+	             'oldparentid' => $oldparentid,
+	             'newparentid' => $newparentid,
+	             'continuation' => $cont,
+	             'revertcont' => $revertcont);
+	sendJSON($arr);
+	return;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn AJsubmitMoveNode()
+///
+/// \brief handles saving a moved node
+///
+////////////////////////////////////////////////////////////////////////////////
+function AJsubmitMoveNode() {
+	$moveid = getContinuationVar('moveid');
+	$newparentid = getContinuationVar('newparentid');
+	$oldparentid = getContinuationVar('oldparentid');
+
+	$query = "UPDATE privnode "
+	       . "SET parent = $newparentid "
+	       . "WHERE id = $moveid AND "
+	       .       "parent = $oldparentid";
+	doQuery($query);
+
+	clearPrivCache();
+
+	$arr = array('status' => 'success',
+	             'newparentid' => $newparentid);
+	sendJSON($arr);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn AJrevertMoveNode()
+///
+/// \brief handles reverting a moved node
+///
+////////////////////////////////////////////////////////////////////////////////
+function AJrevertMoveNode() {
+	$moveid = getContinuationVar('moveid');
+	$newparentid = getContinuationVar('newparentid');
+	$oldparentid = getContinuationVar('oldparentid');
+
+	$query = "UPDATE privnode "
+	       . "SET parent = $oldparentid "
+	       . "WHERE id = $moveid AND "
+	       .       "parent = $newparentid";
+	doQuery($query);
+
+	clearPrivCache();
+
+	$arr = array('status' => 'success');
 	sendJSON($arr);
 }
 
@@ -2815,6 +3078,9 @@ function AJchangeUserPrivs() {
 	}
 	updateUserOrGroupPrivs($newuser, $node, $adds, $removes, "user");
 	$_SESSION['dirtyprivs'] = 1;
+	$userid = getUserlistID($newuser);
+	if($userid == $user['id'] && in_array($newpriv, array('nodeAdmin', 'block', 'cascade')))
+		print "refreshNodeDropData();";
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -2870,6 +3136,9 @@ function AJchangeUserGroupPrivs() {
 	}
 	updateUserOrGroupPrivs($newusergrpid, $node, $adds, $removes, "group");
 	$_SESSION['dirtyprivs'] = 1;
+	if(array_key_exists($newusergrpid, $user['groups']) &&
+	   in_array($newpriv, array('nodeAdmin', 'block', 'cascade')))
+		print "refreshNodeDropData();";
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -2993,6 +3262,12 @@ function AJsubmitAddUserPriv() {
 	clearPrivCache();
 	print "refreshPerms(); ";
 	print "addUserPaneHide(); ";
+	$userid = getUserlistID($newuser);
+	if($userid == $user['id'] && 
+	   (in_array('nodeAdmin', $perms) ||
+	   in_array('cascade', $perms) ||
+	   in_array('block', $perms)))
+		print nodeDropData();
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -3042,6 +3317,11 @@ function AJsubmitAddUserGroupPriv() {
 	clearPrivCache();
 	print "refreshPerms(); ";
 	print "addUserGroupPaneHide(); ";
+	if(array_key_exists($newgroupid, $user['groups']) &&
+	   (in_array('nodeAdmin', $perms) ||
+	   in_array('cascade', $perms) ||
+	   in_array('block', $perms)))
+		print nodeDropData();
 }
 
 ////////////////////////////////////////////////////////////////////////////////

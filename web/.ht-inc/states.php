@@ -79,6 +79,10 @@ $noHTMLwrappers = array('sendRDPfile',
                         'AJsubmitAddChildNode',
                         'AJsubmitDeleteNode',
                         'AJsubmitRenameNode',
+                        'AJmoveNode',
+                        'AJsubmitMoveNode',
+                        'AJrevertMoveNode',
+                        'AJrefreshNodeDropData',
                         'AJupdateWaitTime',
                         'AJviewRequests',
                         'AJnewRequest',
@@ -418,6 +422,10 @@ $actions['mode']['AJsubmitAddChildNode'] = "AJsubmitAddChildNode";
 $actions['mode']['submitDeleteNode'] = "submitDeleteNode";
 $actions['mode']['AJsubmitDeleteNode'] = "AJsubmitDeleteNode";
 $actions['mode']['AJsubmitRenameNode'] = "AJsubmitRenameNode";
+$actions['mode']['AJmoveNode'] = "AJmoveNode";
+$actions['mode']['AJsubmitMoveNode'] = "AJsubmitMoveNode";
+$actions['mode']['AJrevertMoveNode'] = "AJrevertMoveNode";
+$actions['mode']['AJrefreshNodeDropData'] = "AJrefreshNodeDropData";
 $actions['mode']['viewNodePrivs'] = "viewNodePrivs";
 $actions['mode']['selectNode'] = "selectNode";
 $actions['mode']['changeUserPrivs'] = "changeUserPrivs";
@@ -447,6 +455,10 @@ $actions['pages']['AJsubmitAddChildNode'] = "privileges";
 $actions['pages']['submitDeleteNode'] = "privileges";
 $actions['pages']['AJsubmitDeleteNode'] = "privileges";
 $actions['pages']['AJsubmitRenameNode'] = "privileges";
+$actions['pages']['AJmoveNode'] = "privileges";
+$actions['pages']['AJsubmitMoveNode'] = "privileges";
+$actions['pages']['AJrevertMoveNode'] = "privileges";
+$actions['pages']['AJrefreshNodeDropData'] = "privileges";
 $actions['pages']['viewNodePrivs'] = "privileges";
 $actions['pages']['selectNode'] = "privileges";
 $actions['pages']['changeUserPrivs'] = "privileges";

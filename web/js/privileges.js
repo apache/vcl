@@ -15,6 +15,24 @@
 * limitations under the License.
 */
 var currentOver = '';
+var saveMoveNode = 0;
+var moveitem;
+var nomove = 0;
+var dragnode = {hoverid: 0, dragid: 0, startX: 0, startY: 0};
+var mouseontree = 0;
+var dragging = 0;
+
+function moveData() {
+	this.oldparentid = '';
+	this.oldparentobj = '';
+	this.oldparentset = 0;
+	this.newparentid = '';
+	this.newparentobj = '';
+	this.newparentset = 0;
+	this.moveid = '';
+	this.moveobj = '';
+	this.moveset = 0;
+}
 
 function generalPrivCB(data, ioArgs) {
 	eval(data);
@@ -26,7 +44,6 @@ function setLoading2(duration) {
    document.body.style.cursor = 'wait';
 	if(dijit.byId('workingDialog')) {
 		var obj = dijit.byId('workingDialog');
-		//dojo.addClass(obj.titleBar, 'hidden');
 		obj.show();
 	}
 }
@@ -41,7 +58,6 @@ function nodeSelect(node) {
 	/* for some reason, _onLabelFocus does not get set up for tree nodes by
 	 * Safari; so, we perform the same operations here */
 	if(dojo.isSafari) {
-		//dojo.addClass(node.labelNode, "dijitTreeLabelFocused");
 		node.tree._onNodeFocus(node);
 	}
 	var nodeid = node.item.name;
@@ -49,21 +65,31 @@ function nodeSelect(node) {
 		return;
 	var nodename = node.item.display;
 	var tree = dijit.byId('privtree');
-	if(tree.lastLabel)
-		dojo.removeClass(tree.lastLabel, 'privtreeselected');
-	tree.lastLabel = node.labelNode;
-	dojo.addClass(node.labelNode, 'privtreeselected');
+	tree.lastFocused = node;
 	updateNodeLabels(nodename);
 	setLoading2(250);
-	/*if(dojo.byId('activeNodeAdd'))
-		dojo.byId('activeNodeAdd').value = nodeid;
-	if(dojo.byId('activeNodeDel'))
-		dojo.byId('activeNodeDel').value = nodeid;*/
 	dojo.cookie('VCLACTIVENODE', nodeid, {expires: 365, path: '/', domain: cookiedomain});
 	var obj = dojo.byId('nodecont');
 	var data = {continuation: obj.value,
 		        node: nodeid};
 	RPCwrapper(data, generalPrivCB, 0);
+}
+
+function mouseDown(evt) {
+	dragging = 1;
+	dragnode.dragid = dragnode.hoverid;
+	dragnode.startX = mouseX;
+	dragnode.startY = mouseY;
+}
+
+function mouseRelease(evt) {
+	if(dragging == 0)
+		return;
+	dragging = 0;
+	if(mouseX == dragnode.startX && mouseY == dragnode.startY)
+		return;
+	if(nodedropdata[dragnode.dragid] == 0 || nodedropdata[dragnode.hoverid] == 0 || mouseontree == 0)
+		setSelected(dijit.byId('privtree').lastFocused.item.name[0]);
 }
 
 function updateNodeLabels(nodename) {
@@ -94,27 +120,19 @@ function showPrivPane(name) {
 function focusFirstNode(id) {
 	var tree = dijit.byId('privtree');
 	if(tree._itemNodesMap && tree._itemNodesMap[id]) {
-		var children = tree.rootNode.getChildren();
-		var fc = children[0];
-		if(fc !== tree._itemNodesMap[id][0]) {
-			fc.setSelected(false);
-		}
-		tree._onNodeFocus(tree._itemNodesMap[id][0]);
-		tree.lastLabel = tree._itemNodesMap[id][0].labelNode;
-		dojo.addClass(tree._itemNodesMap[id][0].labelNode, 'privtreeselected');
+		setSelected(id);
+		updateNodeLabels(tree._itemNodesMap[id][0].label);
 		tree.lastFocused = tree._itemNodesMap[id][0];
-		var nodename = tree.lastLabel.innerHTML;
-		updateNodeLabels(nodename);
 	}
 	else if(tree._itemNodesMap &&
 	        tree.model.root.children &&
 	        tree._itemNodesMap[tree.model.root.children[0].name[0]]) {
 		var pnodeids = new Array();
-		var node = tree.store._itemsByIdentity[id];
+		var node = tree.model.store._itemsByIdentity[id];
 		while(node._RRM) {
 			for(var pid in node._RRM) {
 				pnodeids.push(pid);
-				node = tree.store._itemsByIdentity[pid];
+				node = tree.model.store._itemsByIdentity[pid];
 			}
 		}
 		var pid;
@@ -144,21 +162,40 @@ function submitAddChildNode() {
 	RPCwrapper(data, generalPrivCB, 0);
 }
 
-function addChildNode(name, id) {
+function addChildNode(name, id, parentid) {
 	var tree = dijit.byId('privtree');
-	var store = tree.store;
+	var store = tree.model.store;
 	// determine selected node
 	var parentnode = tree.lastFocused.item;
 	// add new node to selected node
-	var nodedata = {name: id, display: name};
+	var nodedata = {name: id, display: name, parent: parentid};
 	var parentdata = {parent: parentnode, attribute: 'children'};
 	var newnode = store.newItem(nodedata, parentdata);
+	var parentitem = tree._itemNodesMap[parentid][0].item;
+	positionNode(newnode, parentitem);
 
 	// hide addNodePane
 	dojo.byId('childNodeName').value = '';
 	dojo.byId('addChildNodeStatus').innerHTML = '';
 	setTimeout(function() {dijit.byId('addNodePane').hide();}, 100);
-	
+	nodedropdata[id] = 1;
+}
+
+function positionNode(node, parent) {
+	var index = 0;
+	var decr = 0;
+	for(var i = 0; i < parent.children.length; i++) {
+		if(node.display[0].localeCompare(parent.children[i].display[0]) == 0)
+			decr = 1;
+		if(node.display[0].localeCompare(parent.children[i].display[0]) == -1)
+			break;
+	}
+	index = i;
+	if(decr)
+		index--;
+	nomove = 1;
+	nodemodel.pasteItem(node, parent, parent, 0, index);
+	nomove = 0;
 }
 
 function deleteNodes() {
@@ -171,10 +208,8 @@ function deleteNodes() {
 
 function setSelectedPrivNode(nodeid) {
 	var tree = dijit.byId('privtree');
-	var store = tree.store;
-	dojo.addClass(tree._itemNodesMap[nodeid][0].labelNode, 'privtreeselected');
-	tree.lastLabel = tree._itemNodesMap[nodeid][0].labelNode;
-	tree.lastLabel.focus();
+	var store = tree.model.store;
+	setSelected(nodeid);
 	tree.lastFocused = tree._itemNodesMap[nodeid][0];
 	updateNodeLabels(tree.lastFocused.label);
 	setLoading2(250);
@@ -190,7 +225,12 @@ function removeNodesFromTree(idlist) {
 	var tree = dijit.byId('privtree');
 	var ids = idlist.split(',');
 	for(var i in ids) {
-		tree.store.fetchItemByIdentity({
+		if(typeof(moveitem) !== 'undefined' &&
+		   ids[i] == moveitem.oldparentid) {
+			moveitem = undefined;
+			dijit.byId('revertMoveNodeBtn').set('disabled', true);
+		}
+		tree.model.store.fetchItemByIdentity({
 			identity: ids[i],
 			onItem: removeNodesFromTreeCB
 		});
@@ -200,18 +240,22 @@ function removeNodesFromTree(idlist) {
 function removeNodesFromTreeCB(item, request) {
 	if(item) {
 		var tree = dijit.byId('privtree');
-		tree.store.deleteItem(item);
+		nomove = 1;
+		tree.model.store.deleteItem(item);
+		nomove = 0;
 	}
 }
 
 function renameNode() {
 	var tree = dijit.byId('privtree');
 	var contid = dojo.byId('renamecont').value;
-	var newname = dojo.byId('newNodeName').value;
+	dijit.byId('submitRenameNodeBtn').focus();
+	var newname = dijit.byId('newNodeName').value;
 	var curname = tree.lastFocused.item.display[0];
 	if(! newname.length)
 		return;
-	if(newname == tree.lastFocused.item.display[0]) {
+	if(newname == curname) {
+		dijit.byId('newNodeName').focus();
 		dojo.byId('renameNodeStatus').innerHTML = 'You must enter a different name';
 		return;
 	}
@@ -236,13 +280,18 @@ function renameNodeCB(data, ioArgs) {
 	var newname = data.items.newname;
 	var nodeid = data.items.node;
 	var tree = dijit.byId('privtree');
-	tree.store.fetchItemByIdentity({
+	tree.model.store.fetchItemByIdentity({
 		identity: nodeid,
 		onItem: function(item, request) {
 			var tree = dijit.byId('privtree');
-			var store = tree.store;
+			var store = tree.model.store;
+			nomove = 1;
 			store.setValue(item, 'display', newname);
-			dojo.addClass(tree.lastLabel, 'privtreeselected');
+			nomove = 0;
+			setTimeout(function() {
+				var parentitem = tree._itemNodesMap[item.parent[0]][0].item;
+				positionNode(item, parentitem);
+			}, 500);
 		}
 	});
 	clearRenameBox();
@@ -593,4 +642,213 @@ function hideUserGroupPrivs() {
 	dojo.addClass('usergroupprivs', 'groupprivshidden');
 	dijit.byId('usergroupcopyprivsbtn').setAttribute('disabled', true);
 	dijit.byId('usergroupsaveprivsbtn').setAttribute('disabled', true);
+}
+
+function moveNode(node) {
+	if(nomove)
+		return;
+	if(saveMoveNode == 0) {
+		saveMoveNode = node.name[0];
+		return;
+	}
+	var node1 = saveMoveNode;
+	var node2 = node.name[0];
+	if(node1 == node2) {
+		var tree = dijit.byId('privtree');
+		var nodeitem = tree._itemNodesMap[dragnode.dragid][0].item;
+		var parentid = nodeitem.parent[0];
+		var parentitem = tree._itemNodesMap[parentid][0].item;
+		positionNode(nodeitem, parentitem);
+		if(nodeitem != tree.lastFocused.item)
+			setSelected(tree.lastFocused.item.name[0]);
+		saveMoveNode = 0;
+		return;
+	}
+
+	var tree = dijit.byId('privtree');
+	var moveid = dragnode.dragid;
+	var oldparentid = tree._itemNodesMap[dragnode.dragid][0].item.parent[0];
+	if(oldparentid == node1)
+		var newparentid = node2;
+	else
+		var newparentid = node1;
+
+	var nodeitem = tree._itemNodesMap[moveid][0].item;
+	var parentitem = tree._itemNodesMap[newparentid][0].item;
+	positionNode(nodeitem, parentitem);
+
+	var movename = nodeitem.display[0];
+	for(var i = 0; i < parentitem.children.length; i++) {
+		var child = parentitem.children[i];
+		if(movename == child.display[0] && newparentid == child.parent[0]) {
+			var oldparentitem = tree._itemNodesMap[oldparentid][0].item;
+			nomove = 1;
+			nodemodel.pasteItem(nodeitem, parentitem, oldparentitem, 0, 0);
+			positionNode(nodeitem, oldparentitem);
+			nomove = 0;
+			alert('Another node with the same name and parent as the node being moved already exists.');
+			saveMoveNode = 0;
+			return;
+		}
+	}
+
+	var data = {continuation: dojo.byId('movenodecont').value,
+	            moveid: moveid,
+	            oldparentid: oldparentid,
+	            newparentid: newparentid}
+	RPCwrapper(data, moveNodeCB, 1);
+	saveMoveNode = 0;
+}
+
+function moveNodeCB(data, ioArgs) {
+	moveitem = new moveData();
+	moveitem.moveid = data.items.moveid;
+	moveitem.oldparentid = data.items.oldparentid;
+	moveitem.newparentid = data.items.newparentid;
+	if(data.items.status == 'invaliddata') {
+		alert('Error: invalid data submitted');
+		revertNodeMove();
+		return;
+	}
+	else if(data.items.status == 'noaccess') {
+		alert('You do not have access to move the selected nodes to the selected location.');
+		revertNodeMove();
+		return;
+	}
+	else if(data.items.status == 'collision') {
+		alert('Another node with the same name and parent as the node being moved already exists.');
+		revertNodeMove();
+		return;
+	}
+	else if(data.items.status == 'nochange') {
+		return;
+	}
+	dojo.byId('revertmovenodecont').value = data.items.revertcont;
+	dojo.byId('moveNodeName').innerHTML = data.items.movename;
+	dojo.byId('moveNodeOldParentName').innerHTML = data.items.oldparent;
+	dojo.byId('moveNodeNewParentName').innerHTML = data.items.newparent;
+	dojo.byId('movenodesubmitcont').value = data.items.continuation;
+	dijit.byId('moveDialog').show();
+}
+
+function submitMoveNode() {
+	var data = {continuation: dojo.byId('movenodesubmitcont').value};
+	RPCwrapper(data, submitMoveNodeCB, 1);
+}
+
+function submitMoveNodeCB(data, ioArgs) {
+	dijit.byId('moveDialog').hide();
+	dijit.byId('revertMoveNodeBtn').set('disabled', false);
+	nodestore.fetchItemByIdentity({
+		identity: moveitem.moveid,
+		onItem: function(item, request) {
+			nomove = 1;
+			dijit.byId('privtree').model.store.setValue(item, 'parent', data.items.newparentid);
+			nomove = 0;
+			var selnode = dijit.byId('privtree').selectedNode;
+			if(selnode.item == item) {
+				nodeSelect(selnode);
+			}
+		}
+	});
+	refreshNodeDropData();
+}
+
+function submitRevertMoveNode() {
+	var data = {continuation: dojo.byId('revertmovenodecont').value};
+	RPCwrapper(data, submitRevertMoveNodeCB, 1);
+}
+
+function submitRevertMoveNodeCB(data, ioArgs) {
+	revertNodeMove();
+	dijit.byId('revertMoveNodeDlg').hide();
+	dijit.byId('revertMoveNodeBtn').set('disabled', true);
+	moveitem = undefined;
+	refreshNodeDropData();
+}
+
+function revertNodeMove() {
+	nodestore.fetchItemByIdentity({
+		identity: moveitem.moveid,
+		onItem: function(item, request) {
+			revertNodeMoveCB('movenode', item);
+		}
+	});
+	nodestore.fetchItemByIdentity({
+		identity: moveitem.oldparentid,
+		onItem: function(item, request) {
+			revertNodeMoveCB('oldparent', item);
+		}
+	});
+	nodestore.fetchItemByIdentity({
+		identity: moveitem.newparentid,
+		onItem: function(item, request) {
+			revertNodeMoveCB('newparent', item);
+		}
+	});
+}
+
+function revertNodeMoveCB(type, item) {
+	if(type == 'movenode') {
+		moveitem.moveobj = item;
+		moveitem.moveset = 1;
+	}
+	else if(type == 'oldparent') {
+		moveitem.oldparentobj = item;
+		moveitem.oldparentset = 1;
+	}
+	else if(type == 'newparent') {
+		moveitem.newparentobj = item;
+		moveitem.newparentset = 1;
+	}
+	if(moveitem.oldparentset == 1 &&
+	   moveitem.newparentset == 1 &&
+	   moveitem.moveset == 1) {
+		var index = -1;
+		if('children' in moveitem.oldparentobj) {
+			for(var i = 0; i < moveitem.oldparentobj.children.length; i++) {
+				if(moveitem.moveobj.display[0].localeCompare(moveitem.oldparentobj.children[i].display[0]) == -1) {
+					break;
+				}
+			}
+		}
+		index = i;
+		nomove = 1;
+		nodemodel.pasteItem(moveitem.moveobj, moveitem.newparentobj, moveitem.oldparentobj, 0, index);
+		dijit.byId('privtree').model.store.setValue(moveitem.moveobj, 'parent', moveitem.oldparentobj.name[0]);
+		nodeSelect(dijit.byId('privtree')._itemNodesMap[moveitem.moveobj.name[0]][0]);
+		nomove = 0;
+	}
+}
+
+function setSelected(nodeid) {
+	var tree = dijit.byId('privtree');
+	var selpath = [];
+	while(typeof(tree._itemNodesMap[nodeid]) !== 'undefined') {
+		selpath.unshift(tree._itemNodesMap[nodeid][0].item);
+		nodeid = tree._itemNodesMap[nodeid][0].item.parent[0];
+	}
+	selpath.unshift(tree.model.root);
+	tree.attr('path', selpath);
+}
+
+function checkCanMove(tree, domnodes) {
+	var node = dijit.getEnclosingWidget(domnodes[0]);
+	var nodeid = node.item.name[0];
+	if(nodedropdata[nodeid] == 0)
+		return false;
+	return true;
+}
+
+function checkNodeDrop(domnode, tree, position) {
+	var node = dijit.getEnclosingWidget(domnode);
+	var nodeid = node.item.name[0];
+	if(nodedropdata[nodeid] == 0)
+		return false;
+	return true;
+}
+
+function refreshNodeDropData() {
+	var data = {continuation: dojo.byId('refreshnodedropdatacont').value};
+	RPCwrapper(data, generalPrivCB, 0);
 }
