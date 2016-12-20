@@ -58,10 +58,6 @@ function viewNodes() {
 		print "<div id=\"privtreetab\" dojoType=\"dijit.layout.ContentPane\" title=\"Privilege Tree\">\n";
 	}
 	print "<H2>Privilege Tree</H2>\n";
-	print "<script type=\"text/javascript\">\n";
-	$nodedrop = nodeDropData();
-	print "var $nodedrop";
-	print "</script>\n";
 	$cont = addContinuationsEntry('AJrefreshNodeDropData');
 	print "<INPUT type=hidden id=refreshnodedropdatacont value=\"$cont\"\n>";
 	$cont = addContinuationsEntry('JSONprivnodelist');
@@ -123,12 +119,13 @@ function viewNodes() {
 	print "</div>\n";
 	print "</div>\n"; # privtreeparent
 	print "</div>\n";
+	print "<div id=ddloading>Loading Drag and Drop data...</div>\n";
 	print "<div id=treebuttons>\n";
 	print "<TABLE summary=\"\" cellspacing=\"\" cellpadding=\"\">\n";
 	print "  <TR valign=top>\n";
 	if($hasNodeAdmin) {
 		print "    <TD>\n";
-		print "    <button id=addNodeBtn dojoType=\"dijit.form.Button\">\n";
+		print "    <button id=addNodeBtn dojoType=\"dijit.form.Button\" disabled=\"true\">\n";
 		print "      Add Child\n";
 		print "      <script type=\"dojo/method\" event=onClick>\n";
 		print "        showPrivPane('addNodePane');\n";
@@ -1131,6 +1128,7 @@ function nodeDropData() {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function AJrefreshNodeDropData() {
+	print "if(typeof(nodedropdata) == 'number') {initDropData();}";
 	print nodeDropData();
 }
 

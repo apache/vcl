@@ -21,6 +21,7 @@ var nomove = 0;
 var dragnode = {hoverid: 0, dragid: 0, startX: 0, startY: 0};
 var mouseontree = 0;
 var dragging = 0;
+var nodedropdata = 0;
 
 function moveData() {
 	this.oldparentid = '';
@@ -83,6 +84,8 @@ function mouseDown(evt) {
 }
 
 function mouseRelease(evt) {
+	if(typeof nodedropdata == 'number')
+		return;
 	if(dragging == 0)
 		return;
 	dragging = 0;
@@ -90,6 +93,12 @@ function mouseRelease(evt) {
 		return;
 	if(nodedropdata[dragnode.dragid] == 0 || nodedropdata[dragnode.hoverid] == 0 || mouseontree == 0)
 		setSelected(dijit.byId('privtree').lastFocused.item.name[0]);
+}
+
+function initDropData() {
+	if(dijit.byId('addNodeBtn'))
+		dijit.byId('addNodeBtn').set('disabled', false);
+	dojo.addClass('ddloading', 'hidden');
 }
 
 function updateNodeLabels(nodename) {
@@ -120,6 +129,7 @@ function showPrivPane(name) {
 function focusFirstNode(id) {
 	var tree = dijit.byId('privtree');
 	if(tree._itemNodesMap && tree._itemNodesMap[id]) {
+		refreshNodeDropData();
 		setSelected(id);
 		updateNodeLabels(tree._itemNodesMap[id][0].label);
 		tree.lastFocused = tree._itemNodesMap[id][0];
@@ -833,6 +843,8 @@ function setSelected(nodeid) {
 }
 
 function checkCanMove(tree, domnodes) {
+	if(typeof nodedropdata == 'number')
+		return false;
 	var node = dijit.getEnclosingWidget(domnodes[0]);
 	var nodeid = node.item.name[0];
 	if(nodedropdata[nodeid] == 0)
@@ -841,6 +853,8 @@ function checkCanMove(tree, domnodes) {
 }
 
 function checkNodeDrop(domnode, tree, position) {
+	if(typeof nodedropdata == 'number')
+		return false;
 	var node = dijit.getEnclosingWidget(domnode);
 	var nodeid = node.item.name[0];
 	if(nodedropdata[nodeid] == 0)
@@ -850,5 +864,5 @@ function checkNodeDrop(domnode, tree, position) {
 
 function refreshNodeDropData() {
 	var data = {continuation: dojo.byId('refreshnodedropdatacont').value};
-	RPCwrapper(data, generalPrivCB, 0);
+	RPCwrapper(data, generalPrivCB, 0, 60000);
 }
