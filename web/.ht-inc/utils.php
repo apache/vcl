@@ -69,6 +69,8 @@ function initGlobals() {
 	define("SECINWEEK", 604800);
 	define("SECINMONTH", 2678400);
 	define("SECINYEAR", 31536000);
+	if(! defined('QUERYLOGGING'))
+		define('QUERYLOGGING', 1);
 	# TODO validate security of this
 	if(array_key_exists("PATH_INFO", $_SERVER)) {
 		$pathdata = explode("/", $_SERVER["PATH_INFO"]);
@@ -1141,8 +1143,8 @@ function dbDisconnect() {
 function doQuery($query, $errcode=101, $db="vcl", $nolog=0) {
 	global $mysql_link_vcl, $mysql_link_acct, $user, $mode, $ENABLE_ITECSAUTH;
 	if($db == "vcl") {
-		if((! defined('QUERYLOGGING') || QUERYLOGGING != 0) &&
-		   (! $nolog) && preg_match('/^(UPDATE|INSERT|DELETE)/', $query) &&
+		if(QUERYLOGGING != 0 && (! $nolog) && 
+		   preg_match('/^(UPDATE|INSERT|DELETE)/', $query) &&
 		   strpos($query, 'UPDATE continuations SET expiretime = ') === FALSE) {
 			$logquery = str_replace("'", "\'", $query);
 			$logquery = str_replace('"', '\"', $logquery);
@@ -1922,7 +1924,7 @@ function getUserResources($userprivs, $resourceprivs=array("available"),
                           $onlygroups=0, $includedeleted=0, $userid=0,
                           $groupid=0) {
 	global $user;
-	if(in_array('managementnodeAdmin', $userprivs))
+	if(isset($userprivs['managementnodeAdmin']))
 		$userprivs[] = 'mgmtNodeAdmin';
 	$key = getKey(array($userprivs, $resourceprivs, $onlygroups, $includedeleted, $userid, $groupid));
 	if(array_key_exists($key, $_SESSION['userresources']))
@@ -2026,11 +2028,11 @@ function getUserResources($userprivs, $resourceprivs=array("available"),
 		# check to see if resource groups has any of $resourceprivs at this node
 		foreach(array_keys($nodeprivs[$nodeid]["resources"]) as $resourceid) {
 			foreach($resourceprivs as $priv) {
-				if(in_array($priv, $nodeprivs[$nodeid]["resources"][$resourceid])) {
+				if(isset($nodeprivs[$nodeid]["resources"][$resourceid][$priv])) {
 					list($type, $name, $id) = explode('/', $resourceid);
 					if(! array_key_exists($type, $resourcegroups))
 						$resourcegroups[$type] = array();
-					if(! in_array($name, $resourcegroups[$type]))
+					if(! isset($resourcegroups[$type][$name]))
 						$resourcegroups[$type][$id] = $name;
 				}
 			}
@@ -2038,13 +2040,13 @@ function getUserResources($userprivs, $resourceprivs=array("available"),
 		# check to see if resource groups has any of $resourceprivs cascaded to this node
 		foreach(array_keys($nodeprivs[$nodeid]["cascaderesources"]) as $resourceid) {
 			foreach($resourceprivs as $priv) {
-				if(in_array($priv, $nodeprivs[$nodeid]["cascaderesources"][$resourceid]) &&
+				if(isset($nodeprivs[$nodeid]["cascaderesources"][$resourceid][$priv]) &&
 					! (array_key_exists($resourceid, $nodeprivs[$nodeid]["resources"]) &&
-					in_array("block", $nodeprivs[$nodeid]["resources"][$resourceid]))) {
+					isset($nodeprivs[$nodeid]["resources"][$resourceid]["block"]))) {
 					list($type, $name, $id) = explode('/', $resourceid);
 					if(! array_key_exists($type, $resourcegroups))
 						$resourcegroups[$type] = array();
-					if(! in_array($name, $resourcegroups[$type]))
+					if(! isset($resourcegroups[$type][$name]))
 						$resourcegroups[$type][$id] = $name;
 				}
 			}
@@ -2207,7 +2209,7 @@ function addNodeUserResourcePrivs(&$nodeprivs, $id, $lastid, $userid,
 	$groupkeys = array_keys($nodeprivs[$id]);
 	if($lastid) {
 		foreach(array_keys($nodeprivs[$lastid]) as $groupid) {
-			if(in_array($groupid, $groupkeys))
+			if(isset($groupkeys[$groupid]))
 				continue;
 			$nodeprivs[$id][$groupid] = $basearray;
 		}
@@ -2555,12 +2557,21 @@ function getKey($data) {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function encryptData($data) {
-	global $cryptkey;
+	global $cryptkey, $cryptiv;
 	if(! $data)
 		return false;
-	$aes = new Crypt_AES();
-	$aes->setKey($cryptkey);
-	$cryptdata = $aes->encrypt($data);
+	if(! function_exists('openssl_encrypt')) {
+		$aes = new Crypt_AES();
+		$aes->setKey($cryptkey);
+		$cryptdata = $aes->encrypt($data);
+	}
+	else {
+		static $key;
+		static $iv;
+		$key = base64_decode($cryptkey);
+		$iv = base64_decode($cryptiv);
+		$cryptdata = openssl_encrypt($data, 'AES-128-CBC', $key, OPENSSL_RAW_DATA, $iv);
+	}
 	return trim(base64_encode($cryptdata));
 }
  
@@ -2576,13 +2587,22 @@ function encryptData($data) {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function decryptData($data) {
-	global $cryptkey;
+	global $cryptkey, $cryptiv;
 	if(! $data)
 		return false;
-	$aes = new Crypt_AES();
-	$aes->setKey($cryptkey);
 	$cryptdata = base64_decode($data);
-	$decryptdata = $aes->decrypt($cryptdata);
+	if(! function_exists('openssl_encrypt')) {
+		$aes = new Crypt_AES();
+		$aes->setKey($cryptkey);
+		$decryptdata = $aes->decrypt($cryptdata);
+	}
+	else {
+		static $key;
+		static $iv;
+		$key = base64_decode($cryptkey);
+		$iv = base64_decode($cryptiv);
+		$decryptdata = openssl_decrypt($cryptdata, 'AES-128-CBC', $key, OPENSSL_RAW_DATA, $iv);
+	}
 	return trim($decryptdata);
 }
 
@@ -2636,7 +2656,7 @@ function getParentNodes($node) {
 		$node = $nodeinfo["parent"];
 		if($node == NULL)
 			break;
-		array_push($nodelist, $node);
+		$nodelist[] = $node;
 	}
 	$nodeparents[$node] = $nodelist;
 	return $nodelist;
