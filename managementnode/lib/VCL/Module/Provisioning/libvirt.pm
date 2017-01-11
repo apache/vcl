@@ -959,7 +959,7 @@ sub get_domain_name {
 	
 	# If request state is image the domain name will be that of the image used as the base image, not the image being created
 	# Must find existing loaded domain on node in order to determine name
-	if ($request_state_name =~ /image|checkpoint/) {
+	if ($request_state_name =~ /(image|checkpoint)/) {
 		if (my $active_domain_name = $self->get_active_domain_name()) {
 			notify($ERRORS{'DEBUG'}, 0, "retrieved name of domain being captured: '$active_domain_name'");
 			$self->{domain_name} = $active_domain_name;
@@ -974,7 +974,7 @@ sub get_domain_name {
 	# Request state is not image, construct the domain name
 	my $image_name = $self->data->get_image_name();
 	
-	$self->{domain_name} = "${computer_short_name}__$image_name";
+	$self->{domain_name} = $computer_short_name . '_' . $image_name;
 	notify($ERRORS{'DEBUG'}, 0, "constructed domain name: '$self->{domain_name}'");
 	return $self->{domain_name};
 }
@@ -1517,8 +1517,16 @@ sub delete_existing_domains {
 	my $domain_info = $self->get_domain_info();
 	
 	for my $domain_name (keys %$domain_info) {
-		next if ($domain_name !~ /^$computer_name:/);
+		my $pattern = '^' . $computer_name . '[:_]';
+		if ($domain_name !~ /$pattern/) {
+			# Display a message only if the existing domain name contains the computer name but does not match the pattern
+			if ($domain_name =~ /$computer_name/i) {
+				notify($ERRORS{'DEBUG'}, 0, "ignoring domain: '$domain_name', it does not match computer name pattern: '$pattern'");
+			}
+			next;
+		}
 		
+		notify($ERRORS{'DEBUG'}, 0, "deleting domain: '$domain_name', it matches computer name pattern: '$pattern'");
 		if (!$self->delete_domain($domain_name)) {
 			notify($ERRORS{'WARNING'}, 0, "failed to delete existing domains created for $computer_name on $node_name, '$domain_name' domain could not be deleted");
 			return;
@@ -1582,7 +1590,7 @@ sub delete_domain {
 		}
 	}
 	
-	my ($computer_name) = $domain_name =~ /^([^:]+):/;
+	my ($computer_name) = $domain_name =~ /^([^:_]+)[:_]/;
 	if ($request_state_name eq 'image' || $computer_name) {
 		# Delete disks assigned to to domain
 		my @disk_file_paths = $self->get_domain_disk_file_paths($domain_name);
@@ -1597,7 +1605,6 @@ sub delete_domain {
 				notify($ERRORS{'DEBUG'}, 0, "deleting disk assigned to domain: $disk_file_path");
 				if (!$self->vmhost_os->delete_file($disk_file_path)) {
 					notify($ERRORS{'WARNING'}, 0, "failed to delete '$domain_name' domain on $node_name, '$disk_file_path' disk could not be deleted");
-					return;
 				}
 			}
 		}
@@ -1605,7 +1612,7 @@ sub delete_domain {
 	else {
 		notify($ERRORS{'WARNING'}, 0, "unable to determine computer name from domain name '$domain_name' on $node_name, disks assigned domain will NOT be deleted for safety");
 	}
-	
+
 	# Undefine the domain
 	my $command = "virsh undefine \"$domain_name\" --managed-save --snapshots-metadata";
 	my ($exit_status, $output) = $self->vmhost_os->execute($command);
