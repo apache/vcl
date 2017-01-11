@@ -456,6 +456,16 @@ EOF
 		return;
 	}
 	
+	# Save the domain XML definition to a file in the master image directory
+	my $master_xml_file_path = $self->get_master_xml_file_path();
+	if ($self->vmhost_os->create_text_file($master_xml_file_path, $domain_xml_string)) {
+		notify($ERRORS{'OK'}, 0, "saved domain XML definition text file to master image directory: $master_xml_file_path");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to capture image on $node_name, unable to save domain XML definition text file: $master_xml_file_path");
+		return;
+	}
+
 	# Update the image name in the database
 	if ($old_image_name ne $new_image_name && !update_image_name($image_id, $imagerevision_id, $new_image_name)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to update image name in the database: $old_image_name --> $new_image_name");
@@ -487,7 +497,7 @@ EOF
 		notify($ERRORS{'WARNING'}, 0, "found multiple disks defined in the XML definition for $domain_name, only domains with a single disk may be captured:\n" . format_data(\@disk_file_paths));
 		return;
 	}
-	
+
 	# Copy the linked clone to create a new master image file
 	my $linked_clone_file_path = $disk_file_paths[0];
 	notify($ERRORS{'DEBUG'}, 0, "retrieved linked clone file path from domain $domain_name: $linked_clone_file_path");
@@ -508,16 +518,6 @@ EOF
 			return;
 		}
 		
-		## Save the domain XML definition to a file in the master image directory
-		#my $master_xml_file_path = $self->get_master_xml_file_path();
-		#if ($self->vmhost_os->create_text_file($master_xml_file_path, $domain_xml)) {
-		#	notify($ERRORS{'OK'}, 0, "saved domain XML definition text file to master image directory: $master_xml_file_path");
-		#}
-		#else {
-		#	notify($ERRORS{'WARNING'}, 0, "failed to capture image on $node_name, unable to save domain XML definition text file: $master_xml_file_path");
-		#	return;
-		#}
-		
 		# Copy the master image to the repository if the repository path is configured in the VM host profile
 		if ($repository_image_file_path) {
 			if (my $semaphore = $self->get_repository_image_semaphore()) {
@@ -534,15 +534,15 @@ EOF
 				return;
 			}
 			
-			## Save the domain XML definition to a file in the repository image directory
-			#my $repository_xml_file_path = $self->get_repository_xml_file_path();
-			#if ($self->vmhost_os->create_text_file($repository_xml_file_path, $domain_xml)) {
-			#	notify($ERRORS{'OK'}, 0, "saved domain XML definition text file to repository image directory: $master_xml_file_path");
-			#}
-			#else {
-			#	notify($ERRORS{'WARNING'}, 0, "failed to capture image on $node_name, unable to save domain XML definition text file to repository image directory: $master_xml_file_path");
-			#	return;
-			#}
+			# Save the domain XML definition to a file in the repository image directory
+			my $repository_xml_file_path = $self->get_repository_xml_file_path();
+			if ($self->vmhost_os->create_text_file($repository_xml_file_path, $domain_xml_string)) {
+				notify($ERRORS{'OK'}, 0, "saved domain XML definition text file to repository image directory: $master_xml_file_path");
+			}
+			else {
+				notify($ERRORS{'WARNING'}, 0, "failed to capture image on $node_name, unable to save domain XML definition text file to repository image directory: $master_xml_file_path");
+				return;
+			}
 		}
 	}
 	
@@ -1233,6 +1233,10 @@ sub get_master_image_file_path {
 	
 	# Check if the master image file exists on the VM host
 	my @master_image_files_found = $self->vmhost_os->find_files($master_image_directory_path, "$image_name.*");
+	
+	# Prune known metadata files - otherwise if only a .xml file exists for the image, the .xml path will be returned
+	@master_image_files_found = grep(!/\.(xml|reference)$/i, @master_image_files_found);
+	
 	if (@master_image_files_found == 1) {
 		$self->{master_image_file_path} = $master_image_files_found[0];
 		notify($ERRORS{'DEBUG'}, 0, "found master image file on $node_name: $self->{master_image_file_path}");
@@ -1241,7 +1245,7 @@ sub get_master_image_file_path {
 	
 	# File was not found, construct it
 	my $datastore_imagetype = $self->data->get_vmhost_datastore_imagetype_name();
-	my  $master_image_file_path = "$master_image_directory_path/$image_name.$datastore_imagetype";
+	my $master_image_file_path = "$master_image_directory_path/$image_name.$datastore_imagetype";
 	notify($ERRORS{'DEBUG'}, 0, "constructed master image file path: $master_image_file_path");
 	return $master_image_file_path;
 }
@@ -1660,6 +1664,7 @@ sub generate_domain_xml {
 	my $copy_on_write_file_path = $self->get_copy_on_write_file_path();
 	my $image_type = $self->data->get_vmhost_datastore_imagetype_name();
 	my $disk_driver_name = $self->driver->get_disk_driver_name();
+	my $disk_bus_type = $self->get_master_xml_disk_bus_type();
 	
 	my $eth0_source_device = $self->data->get_vmhost_profile_virtualswitch0();
 	my $eth1_source_device = $self->data->get_vmhost_profile_virtualswitch1();
@@ -1695,6 +1700,8 @@ sub generate_domain_xml {
 	else {
 		$eth1_mac_address = $self->data->get_computer_eth1_mac_address();
 	}
+	
+	my $interface_model_type = $self->get_master_xml_interface_model_type();
 	
 	my $cpu_count = $self->data->get_image_minprocnumber() || 1;
 	
@@ -1763,7 +1770,7 @@ sub generate_domain_xml {
 							'file' => $copy_on_write_file_path,
 						},
 						'target' => {
-							'bus' => 'ide',
+							'bus' => $disk_bus_type,
 							'dev' => 'vda'
 						},
 					}
@@ -1781,7 +1788,7 @@ sub generate_domain_xml {
 							'dev' => 'vnet0',
 						},
 						'model' => {
-							#'type' => 'rtl8139',
+							'type' => $interface_model_type,
 						},
 					},
 					{
@@ -1796,7 +1803,7 @@ sub generate_domain_xml {
 							'dev' => 'vnet1',
 						},
 						'model' => {
-							#'type' => 'rtl8139',
+							'type' => $interface_model_type,
 						},
 					}
 				],
@@ -2701,6 +2708,124 @@ sub get_node_interface_xml_string {
 		return $xml_string;
 	}
 }
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_master_xml_info
+
+ Parameters  : none
+ Returns     : hash reference
+ Description : Retrieves the XML definition from the file saved when the image
+               was captured.
+
+=cut
+
+sub get_master_xml_info {
+	my $self = shift;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	if (defined($self->{master_xml_info})) {
+		return $self->{master_xml_info};
+	}
+	
+	# Save the domain XML definition to a file in the master image directory
+	my $master_xml_file_path = $self->get_master_xml_file_path();
+	if (!$self->vmhost_os->file_exists($master_xml_file_path)) {
+		notify($ERRORS{'DEBUG'}, 0, "master XML file does not exist: $master_xml_file_path");
+		$self->{master_xml_info} = {};
+		return $self->{master_xml_info};
+	}
+	
+	my $master_xml_file_contents = $self->vmhost_os->get_file_contents($master_xml_file_path);
+	if (!$master_xml_file_contents) {
+		notify($ERRORS{'WARNING'}, 0, "master XML file contents could not be retrieved");
+		$self->{master_xml_info} = {};
+		return $self->{master_xml_info};
+	}
+	
+	my $master_xml_hashref = xml_string_to_hash($master_xml_file_contents);
+	if ($master_xml_hashref) {
+		$self->{master_xml_info} = $master_xml_hashref;
+		#notify($ERRORS{'DEBUG'}, 0, "retrieved master XML info:\n" . format_data($self->{master_xml_info}));
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "retrieved master XML info could not be parsed");
+		$self->{master_xml_info} = {};
+	}
+	return $self->{master_xml_info};
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_master_xml_disk_bus_type
+
+ Parameters  : none
+ Returns     : string
+ Description : Retrieves the disk bus type from the master XML file saved when
+               the image was captured.
+
+=cut
+
+sub get_master_xml_disk_bus_type {
+	my $self = shift;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	return $self->{master_xml_disk_bus_type} if defined($self->{master_xml_disk_bus_type});
+	
+	$self->{master_xml_disk_bus_type} = 'ide';
+	my $master_xml_info = $self->get_master_xml_info() || return $self->{master_xml_disk_bus_type};
+	
+	my $type = $master_xml_info->{devices}->[0]->{disk}->[0]->{target}->[0]->{bus};
+	if ($type) {
+		$self->{master_xml_disk_bus_type} = $type;
+		notify($ERRORS{'DEBUG'}, 0, "retrieved disk bus type from master XML info: $self->{master_xml_disk_bus_type}");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve disk bus type (->{devices}->[0]->{disk}->[0]->{target}->[0]->{bus}) from master XML info:\n" . format_data($master_xml_info));
+	}
+	return $self->{master_xml_disk_bus_type};
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_master_xml_interface_model_type
+
+ Parameters  : none
+ Returns     : string
+ Description : Retrieves the interface model type from the master XML file saved
+               when the image was captured.
+
+=cut
+
+sub get_master_xml_interface_model_type {
+	my $self = shift;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	return $self->{master_xml_interface_model_type} if defined($self->{master_xml_interface_model_type});
+	
+	$self->{master_xml_interface_model_type} = 'rtl8139';
+	my $master_xml_info = $self->get_master_xml_info() || return $self->{master_xml_interface_model_type};
+	
+	my $type = $master_xml_info->{devices}->[0]->{interface}->[0]->{model}->[0]->{type};
+	if ($type) {
+		$self->{master_xml_interface_model_type} = $type;
+		notify($ERRORS{'DEBUG'}, 0, "retrieved interface model type from master XML info: $self->{master_xml_interface_model_type}");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve interface model type () from master XML info:\n" . format_data($master_xml_info));
+	}
+	return $self->{master_xml_interface_model_type};
+}
+
 
 #/////////////////////////////////////////////////////////////////////////////
 
