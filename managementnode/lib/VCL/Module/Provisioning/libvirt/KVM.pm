@@ -525,6 +525,14 @@ sub copy_virtual_disk {
 		return;
 	}
 	
+	# Copy the XML file if it exists (saved 'virsh dumpxml' from image capture)
+	my ($source_file_name, $source_directory_path, $source_file_extension) = fileparse($source_file_paths[0], qr/\.[^.]*/);
+	my $source_xml_file_path = "$source_directory_path/$source_file_name.xml";
+	if ($self->vmhost_os->file_exists($source_xml_file_path)) {
+		my $destination_xml_file_path = "$destination_directory_path/$destination_file_name.xml";
+		$self->vmhost_os->copy_file($source_xml_file_path, $destination_xml_file_path)
+	}
+	
 	my $source_file_count = scalar(@source_file_paths);
 	my $source_file_paths_string;
 	my $raw_file_directory_path;

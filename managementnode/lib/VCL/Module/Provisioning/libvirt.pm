@@ -1740,14 +1740,20 @@ sub generate_domain_xml {
 		'memory' => [$memory_kb],
 		'vcpu'   => [$cpu_count],
 		'cpu' => [
+			
 			{
-				'topology' => [
-					{
-						'sockets' => $cpu_count,
-						'cores' => '2',
-						'threads' => '2',
-					}
-				],
+				mode => 'host-model',		# Required, some images won't boot on different hosts without
+				model => {
+					'fallback' => 'allow',
+				},
+				#'topology' => [
+				#	{
+				#		'sockets' => $cpu_count,
+				#		'cores' => '2',
+				#		'threads' => '2',
+				#	}
+				#],
+				
 			}
 		],
 		'clock' => [
@@ -1764,14 +1770,14 @@ sub generate_domain_xml {
 						'driver' => {
 							'name' => $disk_driver_name,
 							'type' => $image_type,
-							'cache' => 'none',
+							#'cache' => 'none',
 						},
 						'source' => {
 							'file' => $copy_on_write_file_path,
 						},
 						'target' => {
 							'bus' => $disk_bus_type,
-							'dev' => 'vda'
+							'dev' => 'vda',	# Required
 						},
 					}
 				],
@@ -1784,9 +1790,9 @@ sub generate_domain_xml {
 						'source' => {
 							$eth0_interface_type => $eth0_source_device,
 						},
-						'target' => {
-							'dev' => 'vnet0',
-						},
+						#'target' => {
+						#	'dev' => 'vnet0',
+						#},
 						'model' => {
 							'type' => $interface_model_type,
 						},
@@ -1799,9 +1805,9 @@ sub generate_domain_xml {
 						'source' => {
 							$eth1_interface_type => $eth1_source_device,
 						},
-						'target' => {
-							'dev' => 'vnet1',
-						},
+						#'target' => {
+						#	'dev' => 'vnet1',
+						#},
 						'model' => {
 							'type' => $interface_model_type,
 						},
@@ -1810,13 +1816,11 @@ sub generate_domain_xml {
 				'graphics' => [
 					{
 						'type' => 'vnc',
-					}
-				],
-				'video' => [
-					{
-						'model' => {
-							'type' => 'cirrus',
-						}
+						#'type' => 'spice',
+						#'autoport' => 'yes',
+						#'port' => '-1',
+						#'tlsPort' => '-1',
+						
 					}
 				],
 			}
