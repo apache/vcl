@@ -39,7 +39,7 @@ Image.prototype.colformatter = function(value, rowIndex, obj) {
 	if((obj.field == 'maxinitialtime' && value == 0) ||
 	   (obj.field == 'addomain' && value == null) ||
 	   (obj.field == 'baseOU' && value == null))
-		return '(unset)';
+		return '(' + _('unset') + ')';
 	return value;
 }
 
