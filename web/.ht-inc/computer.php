@@ -681,7 +681,7 @@ class Computer extends Resource {
 		$profiles = getVMProfiles();
 		uasort($profiles, 'sortKeepIndex');
 		$h .= "<div id=\"vmprofilespan\">\n";
-		$h .= labeledFormItem('vmprofileid', i('VM Host Porfile'), 'select', $profiles);
+		$h .= labeledFormItem('vmprofileid', i('VM Host Profile'), 'select', $profiles);
 		$h .= "</div>\n";
 
 		# platform
