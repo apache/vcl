@@ -560,7 +560,7 @@ body {
 }
 
 #newreslabelfields label {
-	width: 10em;
+	width: 15em;
 }
 
 #addeditdlgcontent .labeledform {
@@ -610,7 +610,7 @@ body {
 }
 
 #newreslabelfields .labeledform {
-	margin-left: 10.5em;
+	margin-left: 15.5em;
 }
 
 .logincol {
