@@ -2736,7 +2736,7 @@ sub get_master_xml_info {
 	}
 	
 	# Save the domain XML definition to a file in the master image directory
-	my $master_xml_file_path = $self->get_master_xml_file_path();
+	my $master_xml_file_path = $self->get_master_xml_file_path() || return;
 	if (!$self->vmhost_os->file_exists($master_xml_file_path)) {
 		notify($ERRORS{'DEBUG'}, 0, "master XML file does not exist: $master_xml_file_path");
 		$self->{master_xml_info} = {};
@@ -2753,7 +2753,8 @@ sub get_master_xml_info {
 	my $master_xml_hashref = xml_string_to_hash($master_xml_file_contents);
 	if ($master_xml_hashref) {
 		$self->{master_xml_info} = $master_xml_hashref;
-		#notify($ERRORS{'DEBUG'}, 0, "retrieved master XML info:\n" . format_data($self->{master_xml_info}));
+		notify($ERRORS{'DEBUG'}, 0, "retrieved master XML info from $master_xml_file_path");
+		#notify($ERRORS{'DEBUG'}, 0, "retrieved master XML info from $master_xml_file_path:\n" . format_data($self->{master_xml_info}));
 	}
 	else {
 		notify($ERRORS{'WARNING'}, 0, "retrieved master XML info could not be parsed");
@@ -2764,12 +2765,85 @@ sub get_master_xml_info {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 get_master_xml_device_info
+
+ Parameters  : $device_name (optional)
+ Returns     : hash reference
+ Description : Retrieves the device portion of the XML definition from the file
+               saved when the image was captured.
+               
+               If $device_name is specified, an array reference containing info
+               for the specific device is returned.
+               
+               If $device_name is not specified, a hash reference is returned.
+               Each key represents a device name.
+
+=cut
+
+sub get_master_xml_device_info {
+	my $self = shift;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $device_name = shift;
+	
+	my $master_xml_file_path = $self->get_master_xml_file_path();
+	
+	if (!defined($self->{master_xml_device_info})) {
+		my $master_xml_info = $self->get_master_xml_info() || return;
+		
+		# Should always be a 'devices' key which contains an array ref with a single array value: $master_xml_info->{devices}->[0]
+		my $devices_array_ref = $master_xml_info->{devices};
+		if (!$devices_array_ref) {
+			notify($ERRORS{'WARNING'}, 0, "failed to retrieve device info from master XML file: $master_xml_file_path, 'devices' key is missing:\n" . format_data($master_xml_info));
+			return;
+		}
+		elsif(!ref($devices_array_ref) || ref($devices_array_ref) ne 'ARRAY') {
+			notify($ERRORS{'WARNING'}, 0, "failed to retrieve device info from master XML file: $master_xml_file_path, 'devices' key is not an array reference:\n" . format_data($master_xml_info));
+			return;
+		}
+		elsif(scalar(@$devices_array_ref) == 0) {
+			notify($ERRORS{'WARNING'}, 0, "failed to retrieve device info from master XML file: $master_xml_file_path, 'devices' array reference is empty:\n" . format_data($master_xml_info));
+			return;
+		}
+		elsif(scalar(@$devices_array_ref) > 1) {
+			notify($ERRORS{'WARNING'}, 0, "retrieved device info from master XML file: $master_xml_file_path, 'devices' array reference contains multiple values:\n" . format_data($devices_array_ref));
+		}
+		
+		$self->{master_xml_device_info} = @$devices_array_ref[0];
+		notify($ERRORS{'DEBUG'}, 0, "retrieved device info from master XML file: $master_xml_file_path, hash reference keys:\n" . format_hash_keys($self->{master_xml_device_info}));	
+	}
+	
+	if ($device_name) {
+		if (defined($self->{master_xml_device_info}{$device_name})) {
+			## Only display the info once to reduce vcld.log noise
+			#if (!defined($self->{master_xml_device_info_displayed}{$device_name})) {
+			#	notify($ERRORS{'DEBUG'}, 0, "retrieved '$device_name' device info from master XML file: $master_xml_file_path:\n" . format_data($self->{master_xml_device_info}{$device_name}));
+			#	$self->{master_xml_device_info_displayed}{$device_name} = 1;
+			#}
+			return $self->{master_xml_device_info}{$device_name};
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "'$device_name' key does not exist in device info from master XML file: $master_xml_file_path:\n" . format_hash_keys($self->{master_xml_device_info}));
+			return;
+		}
+	}
+	else {
+		return $self->{master_xml_device_info};
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 =head2 get_master_xml_disk_bus_type
 
  Parameters  : none
  Returns     : string
  Description : Retrieves the disk bus type from the master XML file saved when
-               the image was captured.
+               the image was captured. If unable to determine from master XML,
+               'ide' is returned.
 
 =cut
 
@@ -2783,17 +2857,28 @@ sub get_master_xml_disk_bus_type {
 	return $self->{master_xml_disk_bus_type} if defined($self->{master_xml_disk_bus_type});
 	
 	$self->{master_xml_disk_bus_type} = 'ide';
-	my $master_xml_info = $self->get_master_xml_info() || return $self->{master_xml_disk_bus_type};
 	
-	my $type = $master_xml_info->{devices}->[0]->{disk}->[0]->{target}->[0]->{bus};
-	if ($type) {
-		$self->{master_xml_disk_bus_type} = $type;
+	my $disk_array_ref = $self->get_master_xml_device_info('disk') || return $self->{master_xml_disk_bus_type};
+	
+	for my $disk (@$disk_array_ref) {
+		# Make sure the device type is 'disk', ignore others such as 'cdrom'
+		my $device_type = $disk->{device} || '<unknown>';
+		if ($device_type ne 'disk') {
+			notify($ERRORS{'DEBUG'}, 0, "ignoring disk, type is $device_type:\n" . format_data($disk));
+			next;
+		}
+		
+		unless (defined($disk->{target}) && defined($disk->{target}->[0]) && defined($disk->{target}->[0]->{bus})) {
+			notify($ERRORS{'DEBUG'}, 0, "ignoring disk, '->{target}->[0]->{bus}' value is missing:\n" . format_data($disk));
+			next;
+		}
+		$self->{master_xml_disk_bus_type} = $disk->{target}->[0]->{bus};
 		notify($ERRORS{'DEBUG'}, 0, "retrieved disk bus type from master XML info: $self->{master_xml_disk_bus_type}");
+		return $self->{master_xml_disk_bus_type};
 	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to retrieve disk bus type (->{devices}->[0]->{disk}->[0]->{target}->[0]->{bus}) from master XML info:\n" . format_data($master_xml_info));
-	}
-	return $self->{master_xml_disk_bus_type};
+	
+	notify($ERRORS{'DEBUG'}, 0, "unable to determine disk bus type from master XML info, returning default value: $self->{master_xml_disk_bus_type}");
+	$self->{master_xml_disk_bus_type};
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -2803,7 +2888,8 @@ sub get_master_xml_disk_bus_type {
  Parameters  : none
  Returns     : string
  Description : Retrieves the interface model type from the master XML file saved
-               when the image was captured.
+               when the image was captured. If unable to determine from master
+               XML, 'rtl8139' is returned.
 
 =cut
 
@@ -2817,17 +2903,21 @@ sub get_master_xml_interface_model_type {
 	return $self->{master_xml_interface_model_type} if defined($self->{master_xml_interface_model_type});
 	
 	$self->{master_xml_interface_model_type} = 'rtl8139';
-	my $master_xml_info = $self->get_master_xml_info() || return $self->{master_xml_interface_model_type};
 	
-	my $type = $master_xml_info->{devices}->[0]->{interface}->[0]->{model}->[0]->{type};
-	if ($type) {
-		$self->{master_xml_interface_model_type} = $type;
+	my $interface_array_ref = $self->get_master_xml_device_info('interface') || return $self->{master_xml_interface_model_type};
+	
+	for my $interface (@$interface_array_ref) {
+		unless (defined($interface->{model}) && defined($interface->{model}->[0]) && defined($interface->{model}->[0]->{type})) {
+			notify($ERRORS{'DEBUG'}, 0, "ignoring interface, '->{model}->[0]->{type}' value is missing:\n" . format_data($interface));
+			next;
+		}
+		$self->{master_xml_interface_model_type} = $interface->{model}->[0]->{type};
 		notify($ERRORS{'DEBUG'}, 0, "retrieved interface model type from master XML info: $self->{master_xml_interface_model_type}");
+		return $self->{master_xml_interface_model_type};
 	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to retrieve interface model type () from master XML info:\n" . format_data($master_xml_info));
-	}
-	return $self->{master_xml_interface_model_type};
+	
+	notify($ERRORS{'DEBUG'}, 0, "unable to determine interface model type from master XML info, returning default value: $self->{master_xml_interface_model_type}");
+	$self->{master_xml_interface_model_type};
 }
 
 
