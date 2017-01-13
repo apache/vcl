@@ -163,7 +163,7 @@ function getHeader($refresh) {
 		$rt .= "                </ul>\n";
 	}
 
-	if(! $authed && $mode != 'selectauth' && $mode != 'submitLogin')
+	if(! $authed && $mode != 'selectauth' && $mode != 'submitLogin' &&  $mode != 'inmaintenance')
 		$rt .= "              <li><a href=\"" . BASEURL . SCRIPT . "?mode=selectauth\">" . i('Log in') . "</a></li>\n";
 	elseif($authed)
 		$rt .= "              <li id=\"logoutlink2\"><a href=\"" . BASEURL . SCRIPT . "?mode=logout\">" . i('Log out') . "</a></li>\n";
