@@ -134,7 +134,7 @@ class Schedule extends Resource {
 		$h .= "<div id=\"addeditdlgerrmsg\" class=\"nperrormsg\"></div>\n";
 		$h .= "<div id=\"editdlgbtns\" align=\"center\">\n";
 		$h .= dijitButton('addeditbtn', "Confirm", "saveResource();");
-		$h .= dijitButton('', "Cancel", "addEditDlgHide();");
+		$h .= dijitButton('', _("Cancel"), "addEditDlgHide();");
 		$h .= "</div>\n"; # editdlgbtns
 		$h .= "</div>\n"; # addeditdlg
 
