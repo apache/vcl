@@ -449,12 +449,6 @@ h1.site-title {
 #mgmtnodedlgcontent .labeledform {
 	margin-left: 25em;
 }
-#newreslabelfields label {
-    width: 12em;
-}
-#newreslabelfields .labeledform {
-    margin-left: 12.5em;
-}
 #length {
 	vertical-align: middle;
 }
