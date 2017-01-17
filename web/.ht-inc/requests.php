@@ -1439,27 +1439,33 @@ function newReservationHTML() {
 		$showradios = 1;
 	if($showradios)
 		$h .= i("Reservation type:") . "<br>\n";
-	$h .= "<span";
+	$h .= "<div";
 	if(! $baseaccess || $showradios == 0)
-		$h .= " class=\"hidden\"";
+		$h .= " style=\"display: none;\"";
+	else
+		$h .= " style=\"display: inline-block;\"";
 	$h .= "><input type=\"radio\" id=\"basicrdo\" name=\"restype\" ";
 	$h .= "onclick=\"selectResType();\" {$chk['base']}>\n";
 	$h .= "<label for=\"basicrdo\">" . i("Basic Reservation");
-	$h .= "</label></span>\n";
-	$h .= "<span";
+	$h .= "</label></div>\n";
+	$h .= "<div";
 	if(! $imagingaccess || $showradios == 0)
-		$h .= " class=\"hidden\"";
+		$h .= " style=\"display: none;\"";
+	else
+		$h .= " style=\"display: inline-block;\"";
 	$h .= "><input type=\"radio\" id=\"imagingrdo\" name=\"restype\" ";
 	$h .= "onclick=\"selectResType();\" {$chk['imaging']}>\n";
 	$h .= "<label for=\"imagingrdo\">" . i("Imaging Reservation");
-	$h .= "</label></span>\n";
-	$h .= "<span";
+	$h .= "</label></div>\n";
+	$h .= "<div";
 	if(! $serveraccess || $showradios == 0)
-		$h .= " class=\"hidden\"";
+		$h .= " style=\"display: none;\"";
+	else
+		$h .= " style=\"display: inline-block;\"";
 	$h .= "><input type=\"radio\" id=\"serverrdo\" name=\"restype\" ";
 	$h .= "onclick=\"selectResType();\" {$chk['server']}>\n";
 	$h .= "<label for=\"serverrdo\">" . i("Server Reservation");
-	$h .= "</label></span>\n";
+	$h .= "</label></div>\n";
 	if($showradios)
 		$h .= "<br><br>\n";
 
@@ -1542,11 +1548,11 @@ function newReservationHTML() {
 	$h .= "<div id=imgdesc>$desc</div>\n";
 
 	# name
-	$h .= "<div id=\"newreslabelfields\">\n";
+	$h .= "<div id=\"newreslabelfields\" style=\"width: 47.5em; margin-right: 5px;\">\n";
 	$h .= "<span id=\"nrnamespan\" class=\"hidden\">\n";
 	$h .= "<label for=\"deployname\">" . i("Reservation Name:") . "</label>\n";
 	$h .= "<span class=\"labeledform\">\n";
-	$h .= "<input type=\"text\" id=\"deployname\" style=\"width: 400px\" ";
+	$h .= "<input type=\"text\" id=\"deployname\" style=\"width: 31em\" ";
 	$h .= "dojoType=\"dijit.form.ValidationTextBox\" ";
 	$h .= "regExp=\"^([-a-zA-Z0-9_\. ]){0,255}$\" invalidMessage=\"";
 	$h .= i('The reservation name can only contain letters, numbers, spaces, dashes(-), underscores(_), and periods(.) and can be up to 255 characters long');
@@ -1562,7 +1568,7 @@ function newReservationHTML() {
 	$h .= i("Admin User Group:") . "</label><span class=\"labeledform\">";
 	if(USEFILTERINGSELECT && count($admingroups) < FILTERINGSELECTTHRESHOLD) {
 		$h .= "<select dojoType=\"dijit.form.FilteringSelect\" id=\"deployadmingroup\" ";
-		$h .= "style=\"width: 400px\" queryExpr=\"*\${0}*\" required=\"true\" ";
+		$h .= "style=\"width: 31em\" queryExpr=\"*\${0}*\" required=\"true\" ";
 		$h .= "highlightMatch=\"all\" autoComplete=\"false\">\n";
 	}
 	else
@@ -1576,7 +1582,7 @@ function newReservationHTML() {
 	$h .= "</select></span><br>\n";
 
 	$h .= "<div id=\"admingrpnote\" class=\"hidden\" ";
-	$h .= "style=\"width: 400px; margin: 3px 0 3px 10.5em; padding: 1px; border: 1px solid;\">";
+	$h .= "style=\"width: 31em; margin: 3px 0 3px 10.5em; padding: 1px; border: 1px solid;\">";
 	$h .= i("Administrative access has been disabled for this image. Users in the Admin User Group will have control of the reservaion on the Reservations page but will not have administrative access within the reservation.");
 	$h .= "</div>\n";
 
@@ -1586,7 +1592,7 @@ function newReservationHTML() {
 	$h .= i("Access User Group:") . "</label><span class=\"labeledform\">";
 	if(USEFILTERINGSELECT && count($logingroups) < FILTERINGSELECTTHRESHOLD) {
 		$h .= "<select dojoType=\"dijit.form.FilteringSelect\" id=\"deploylogingroup\" ";
-		$h .= "style=\"width: 400px\" queryExpr=\"*\${0}*\" required=\"true\" ";
+		$h .= "style=\"width: 31em\" queryExpr=\"*\${0}*\" required=\"true\" ";
 		$h .= "highlightMatch=\"all\" autoComplete=\"false\">\n";
 	}
 	else
