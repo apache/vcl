@@ -144,5 +144,6 @@ nlsmessages = {
 'Message type %s for affiliation %s successfully deleted':'',
 'Invalid item submitted to save':'',
 'Message successfully saved':'',
-'No changes to submitted message. Nothing saved.':''
+'No changes to submitted message. Nothing saved.':'',
+'unset':''
 }
