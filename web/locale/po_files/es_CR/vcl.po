@@ -1,0 +1,5195 @@
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+msgid ""
+msgstr ""
+"Project-Id-Version: Apache VCL 2.5\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2016-07-14 22:19-0400\n"
+"PO-Revision-Date: 2017-01-02 11:26-0600\n"
+"Last-Translator: Luis Zárate <luis.zarate@solvosoft.com>\n"
+"Language-Team: \n"
+"Language: es_CR\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"X-Generator: Poedit 1.6.10\n"
+
+#: authentication.php:157 utils.php:828
+msgid "Welcome to the Virtual Computing Lab"
+msgstr "Bienvenido al Laboratorio Virtual de Cómputo"
+
+#: authentication.php:161
+msgid "Please select an authentication method to use:"
+msgstr "Por favor seleccione el método de autenticación:"
+
+#: authentication.php:163
+msgid "Selected method failed, please try again"
+msgstr "Fallo método de selección, intente de nuevo"
+
+#: authentication.php:175
+msgid "Remember my selection"
+msgstr "Recordar mi selección"
+
+#: authentication.php:176 authentication.php:232
+msgid "Proceed to Login"
+msgstr "Conectarse"
+
+#: authentication.php:180
+msgid "Explanation of authentication methods:"
+msgstr "Explicación de los métodos de autenticación:"
+
+#: authentication.php:244
+msgid "(unable to connect to authentication server)"
+msgstr "(No se pudo conectar al servidor de autenticación)"
+
+#: authentication.php:282
+msgid "Userid"
+msgstr "Usuario"
+
+#: authentication.php:283
+msgid "Password"
+msgstr "Contraseña"
+
+#: authentication.php:284
+msgid "Login with"
+msgstr "Autenticarse con"
+
+#: authentication.php:291
+msgid "Login failed"
+msgstr "Fallo conexión"
+
+#: authentication.php:302
+msgid "Login"
+msgstr "Conectar"
+
+#: blockallocations.php:36 utils.php:12628
+msgid "Block Allocations"
+msgstr "Reservación en Bloque"
+
+#: blockallocations.php:37
+msgid ""
+"Block Allocations are a way to have a set of machines preloaded with a "
+"particular environment at specified times and made available to a specific "
+"group of users. This is very useful for classroom use and for workshops. "
+"They can be made available on a repeating schedule such as when a course "
+"meets each week. Block Allocations only allocate machines for the group of "
+"users - they do not create the actual, end user reservations for the "
+"machines. All users still must log in to the VCL web site and make their own "
+"reservations DURING the period a block allocation is active. The forms here "
+"provide a way for you to submit a request for a Block Allocation for review "
+"by a sysadmin. If you just need to use a machine through VCL, use the New "
+"Reservation page for that."
+msgstr ""
+"Reservaciones en bloques es una manera de tener un conjunto de máquinas "
+"precargadas con un ambiente particular en momentos determinados y puestos a "
+"disposición a un grupo específico de usuarios. Esto es muy útil para "
+"utilizar en clase y para los talleres. Estas pueden estar disponibles en un "
+"horario repitiendo tal como cuando un curso cumple cada semana. Las "
+"reservaciones en bloques sólo asignan máquinas para el grupo de usuarios - "
+"no crean las reservaciones para los usuarios finales de las máquinas. Todos "
+"los usuarios aún deben iniciar sesión en el sitio web del Laboratorio "
+"Virtual y hacer sus propias reservaciones durante el período en el que una "
+"reservación en bloque está activa. Las formas aquí proporcionan una forma "
+"para que usted presente una solicitud de asignación de bloques para su "
+"revisión por un administrador de sistemas. Si usted sólo tiene que utilizar "
+"una máquina en el Laboratorio Virtual, utilice la página de Nueva "
+"reservación para eso."
+
+#: blockallocations.php:39
+msgid ""
+"Please submit Block Allocation requests at least one full business day in "
+"advance to allow time for them to be approved."
+msgstr ""
+"Por realice la reservación en bloque por lo menos un día hábil antes para "
+"que de tiempo de que sea aprobada"
+
+#: blockallocations.php:41 blockallocations.php:118 blockallocations.php:833
+msgid "Request New Block Allocation"
+msgstr "Solicitar una nueva reservación en bloque"
+
+#: blockallocations.php:49 blockallocations.php:1641
+msgid "Manage Block Allocations"
+msgstr "Administrar reservación en bloque"
+
+#: blockallocations.php:52
+msgid "View Block Allocated Machines"
+msgstr "Ver máquinas en bloque reservadas"
+
+#: blockallocations.php:57
+msgid "Create New Block Allocation"
+msgstr "Crear nueva reservación en bloque"
+
+#: blockallocations.php:63
+msgid "Block Allocation Requests"
+msgstr "Solicitud de reservación en bloque"
+
+#: blockallocations.php:81
+msgid "Your Active Block Allocations"
+msgstr "Sus reservaciones en bloque"
+
+#: blockallocations.php:82
+msgid "You are currently a member of the following Block Allocations."
+msgstr ""
+"Actualmente usted es miembro de las siguientes reservaciones en bloque."
+
+#: blockallocations.php:83
+msgid "Click an item to view its current status."
+msgstr "Seleccione un elemento para ver su estatus actual"
+
+#: blockallocations.php:112
+msgid "New Block Allocation"
+msgstr "Nueva reservación en bloque"
+
+#: blockallocations.php:115
+msgid "Edit Block Allocation"
+msgstr "Editar reservación en bloque"
+
+#: blockallocations.php:119
+msgid ""
+"Complete the following form to request a new block allocation. Your request "
+"will need to be approved by a VCL admin before it is created."
+msgstr ""
+"Llene las forma siguiente para solicitar una nueva reservación en bloque. Su "
+"solicitud debe de ser aprobada por un administrador de los Laboratorios "
+"Virtuales para que sea creada"
+
+#: blockallocations.php:127 blockallocations.php:1392
+#: blockallocations.php:2056 oneclick.php:75
+msgid "Name:"
+msgstr "Nombre:"
+
+#: blockallocations.php:131
+msgid ""
+"Name can only contain letters, numbers, spaces, dashes(-), parenthesis, and "
+"periods(.) and can be from 3 to 80 characters long"
+msgstr ""
+"Nombre solo puede contener letras, numeros, espacios, guiones(-), parentesis "
+"y puntos (.) y puede tener de 3 a 80 caracteres de longitud"
+
+#: blockallocations.php:137 blockallocations.php:1396 requests.php:1178
+msgid "Owner:"
+msgstr "Dueño"
+
+#: blockallocations.php:143 computer.php:606 image.php:341
+#: managementnode.php:301 schedule.php:91
+msgid "Unknown user"
+msgstr "Usuario desconocido"
+
+#: blockallocations.php:149 blockallocations.php:457 blockallocations.php:1332
+#: blockallocations.php:1647 blockallocations.php:1698
+#: blockallocations.php:1817 blockallocations.php:2874 requests.php:411
+#: requests.php:428 requests.php:446
+msgid "Environment"
+msgstr "Ambiente"
+
+#: blockallocations.php:168 blockallocations.php:461 blockallocations.php:1702
+msgid "User group"
+msgstr "Grupo de usuarios"
+
+#: blockallocations.php:180
+msgid "group not listed"
+msgstr "No existe el grupo"
+
+#: blockallocations.php:199
+msgid "Number of seats"
+msgstr "Número de lugares"
+
+#: blockallocations.php:209
+msgid "Specify dates/times by:\n"
+msgstr "Especificar fechas/horarios por:\n"
+
+#: blockallocations.php:212 blockallocations.php:224
+msgid "Repeating Weekly"
+msgstr "Repetir semanalmente"
+
+#: blockallocations.php:214 blockallocations.php:296
+msgid "Repeating Monthly"
+msgstr "Repetir mensualmente"
+
+#: blockallocations.php:216
+msgid "List of Dates/Times"
+msgstr "Lista de días/horarios"
+
+#: blockallocations.php:227 blockallocations.php:299
+msgid "First Date of Usage"
+msgstr "Fecha de Inicio"
+
+#: blockallocations.php:236 blockallocations.php:308
+msgid "Last Date of Usage"
+msgstr "Fecha de Término"
+
+#: blockallocations.php:247
+msgid "Days"
+msgstr "Días"
+
+#: blockallocations.php:248
+msgid "Times"
+msgstr "Horarios"
+
+#: blockallocations.php:259 blockallocations.php:281 blockallocations.php:333
+#: blockallocations.php:356 blockallocations.php:372 blockallocations.php:397
+#: blockallocations.php:1458 blockallocations.php:1753 computer.php:599
+#: requests.php:3185
+msgid "Start"
+msgstr "Inicia"
+
+#: blockallocations.php:263 blockallocations.php:283 blockallocations.php:337
+#: blockallocations.php:358 blockallocations.php:376 blockallocations.php:399
+#: blockallocations.php:1459 blockallocations.php:1755 computer.php:600
+msgid "End"
+msgstr "Fin"
+
+#: blockallocations.php:269 blockallocations.php:343 blockallocations.php:381
+#: computer.php:554 requests.php:2545 resource.php:806 resource.php:984
+#: resource.php:1184 resource.php:1378 siteconfig.php:342 siteconfig.php:1241
+msgid "Add"
+msgstr "Agregar"
+
+#: blockallocations.php:284 blockallocations.php:359 blockallocations.php:400
+#: requests.php:1032 resource.php:813 resource.php:991 resource.php:1193
+#: resource.php:1385
+msgid "Remove"
+msgstr "Borrar"
+
+#: blockallocations.php:317 blockallocations.php:2203
+#: blockallocations.php:2314 blockallocations.php:2383
+#: blockallocations.php:2638
+msgid "1st"
+msgstr "1er"
+
+#: blockallocations.php:318 blockallocations.php:2204
+#: blockallocations.php:2315 blockallocations.php:2384
+#: blockallocations.php:2639
+msgid "2nd"
+msgstr "2nd"
+
+#: blockallocations.php:319 blockallocations.php:2205
+#: blockallocations.php:2316 blockallocations.php:2385
+#: blockallocations.php:2640
+msgid "3rd"
+msgstr "3"
+
+#: blockallocations.php:320 blockallocations.php:2206
+#: blockallocations.php:2317 blockallocations.php:2386
+#: blockallocations.php:2641
+msgid "4th"
+msgstr "4"
+
+#: blockallocations.php:321 blockallocations.php:2207
+#: blockallocations.php:2318 blockallocations.php:2387
+#: blockallocations.php:2642
+msgid "5th"
+msgstr "5"
+
+#: blockallocations.php:322 utils.php:102
+msgid "Sunday"
+msgstr "Domingo"
+
+#: blockallocations.php:323 utils.php:102
+msgid "Monday"
+msgstr "Lunes"
+
+#: blockallocations.php:324 utils.php:102
+msgid "Tuesday"
+msgstr "Martes"
+
+#: blockallocations.php:325 utils.php:102
+msgid "Wednesday"
+msgstr "Miércoles"
+
+#: blockallocations.php:326 utils.php:102
+msgid "Thursday"
+msgstr "Jueves"
+
+#: blockallocations.php:327 utils.php:102
+msgid "Friday"
+msgstr "Viernes"
+
+#: blockallocations.php:328 utils.php:102
+msgid "Saturday"
+msgstr "Sábado"
+
+#: blockallocations.php:329
+msgid "Repeat on the"
+msgstr "Repetir el"
+
+#: blockallocations.php:332
+msgid "of every month"
+msgstr "de cada mes"
+
+#: blockallocations.php:367
+msgid "List of Times"
+msgstr "Lista de horarios"
+
+#: blockallocations.php:368 blockallocations.php:395 blockallocations.php:1457
+#: blockallocations.php:1751
+msgid "Date"
+msgstr "Fecha"
+
+#: blockallocations.php:411
+msgid "Additional comments"
+msgstr "Comentarios adicionales"
+
+#: blockallocations.php:420
+msgid "Submit Block Allocation Request"
+msgstr "Enviar solicitud de Reservación en bloque"
+
+#: blockallocations.php:424
+msgid "Submit New Block Allocation"
+msgstr "Enviar nueva reservación en bloque"
+
+#: blockallocations.php:428
+msgid "Submit Block Allocation Changes"
+msgstr "Enviar cambios en reservación en bloque"
+
+#: blockallocations.php:440 blockallocations.php:441
+msgid "Confirm Block Allocation"
+msgstr "Confirmar reservación en bloque"
+
+#: blockallocations.php:443
+msgid ""
+"Please confirm the following values and then click <strong>Submit Block "
+"Allocation Request</strong>"
+msgstr ""
+"Por favor revise los valores siguientes y seleccione <strong>Enviar "
+"reservación en bloque</strong>"
+
+#: blockallocations.php:445
+#, php-format
+msgid "Please confirm the following values and then click <strong>%s</strong>"
+msgstr ""
+"Por favor revise los valores siguientes y seleccione <strong>%s</strong>"
+
+#: blockallocations.php:465 blockallocations.php:1706
+msgid "Seats"
+msgstr "Lugares"
+
+#: blockallocations.php:469 blockallocations.php:1335
+#: blockallocations.php:1650 blockallocations.php:1710
+#: blockallocations.php:1820
+msgid "Repeating"
+msgstr "Repitiendo"
+
+#: blockallocations.php:489
+msgid "Your additional comments will be submitted."
+msgstr "Sus comentarios adicionales serán enviados"
+
+#: blockallocations.php:509 blockallocations.php:1439
+#: blockallocations.php:2084 blockallocations.php:2153 image.php:462
+#: image.php:488 oneclick.php:382 requests.php:581 requests.php:605
+#: requests.php:634 requests.php:670 requests.php:700 requests.php:727
+#: requests.php:732 requests.php:776 requests.php:871 requests.php:939
+#: requests.php:1778 requests.php:3033 resource.php:346 siteconfig.php:1615
+#: userpreferences.php:453
+msgid "Cancel"
+msgstr "Cancelar"
+
+#: blockallocations.php:519
+msgid ""
+"This is the number of environments that will be loaded for the Block "
+"Allocation."
+msgstr ""
+"Este es el número de ambientes que se cargarán para la reservación en bloque."
+
+#: blockallocations.php:524
+msgid ""
+"Users in this user group will be able to make reservations for the computers "
+"set aside for this block allocation.  If you do not see an applicable user "
+"group listed, please select \"<font color=\"blue\">(group not listed)</font>"
+"\" and describe the group you need in the <strong>Additional Comments</"
+"strong> section at the bottom of the page. If this is for a class, make sure "
+"to list the course and section number."
+msgstr ""
+"Los usuarios en este grupo de usuarios podrán hacer sus reservaciones para "
+"las computadoras de esta reservación en bloque.  Si no ve un grupo de "
+"usuarios en la lista, por favor seleccione \"<font color=\"blue\">(grupo no "
+"en la lista)</font>\" y describa el grupo que necesita en los "
+"<strong>Comentarios adicionales</strong> al final de esta página. Si este es "
+"para una clase, asegúrese de incluir el curso y el número de grupo."
+
+#: blockallocations.php:529
+msgid ""
+"For repeating block allocations, there are three ways you can enter the "
+"dates and times:"
+msgstr ""
+"Para repetir una reservación en bloque, existen tres maneras en que puede "
+"ingresas fechas y horarios:"
+
+#: blockallocations.php:531
+msgid ""
+"Repeating Weekly - Use this if the block allocation needs to occur every "
+"week."
+msgstr ""
+"Repetir semanalmente -use esta opción si requiere que su reservación en "
+"bloque se repita cada semana."
+
+#: blockallocations.php:532
+msgid ""
+"You can make it repeat on a single day each week or on multiple days.  The "
+"time(s) that it occurs will be the same on all days. You can list as many "
+"times as needed."
+msgstr ""
+"Puede escoger que se repita un solo día o varios días. Los horarios pueden "
+"ser el misma para todos los días. Puede seleccionar tantos horarios como "
+"necesite."
+
+#: blockallocations.php:533
+msgid ""
+"Repeating Monthly - Use this if the block allocation needs to occur on a "
+"certain day of the month (i.e. 2nd Tuesday each month). You can list as many "
+"times as needed for that day of the month."
+msgstr ""
+"Repetir mensualmente - Use esta opción de reservación en bloque si necesita "
+"un día específico del mes (i.e. 2do Martes de cada mes). puede seleccionar "
+"los horarios que necesite para ese día del mes."
+
+#: blockallocations.php:534
+msgid ""
+"List of Dates/Times - Use this to specify any other cases, including single "
+"events."
+msgstr ""
+"Lista de fechas/horarios - Use esta opción para cualquier otro caso, "
+"incluyendo eventos individuales."
+
+#: blockallocations.php:535
+msgid "You can specify as many date/time combinations as needed."
+msgstr "Puedes especificar tantas fechas/horarios que necesite."
+
+#: blockallocations.php:540 blockallocations.php:558
+msgid "This is the first date the block allocation will be used.\n"
+msgstr "Esta es la fecha inicial en que se usará la reservación en bloque.\n"
+
+#: blockallocations.php:544 blockallocations.php:562
+msgid "This is the last date the block allocation will be used.\n"
+msgstr "Esta es la fecha final en que la reservación en bloque será usada.\n"
+
+#: blockallocations.php:549
+msgid ""
+"Select the checkbox for each of the days you would like the block allocation "
+"to occur. For example, check Monday, Wednesday, and Friday for a class that "
+"meets on those days."
+msgstr ""
+"Seleccione el botón de cada día que necesite para su reservación en bloque. "
+"Por ejemplo seleccione Lunes, Martes y Viernes para una clase que sea estos "
+"días."
+
+#: blockallocations.php:554
+msgid ""
+"Here you specify the start and end times of the block allocation. The times "
+"will occur on each of the selected days. You might specify more than one "
+"start/end combination if you had multiple sections that met on the same day."
+msgstr ""
+"Aqui especifique le horario de inicio y final de la reservación en bloque. "
+"Los Horarios se repetirán en cada día seleccionado. Puede especificar más de "
+"una combinación de incio/fin si tiene multiples sesiones en el mismo día."
+
+#: blockallocations.php:567
+msgid ""
+"Here you specify the start and end times of the block allocation. You might "
+"specify more than one start/end combination if you had multiple sections "
+"that met on the same day."
+msgstr ""
+"Aqui especifique le horario de inicio y final de la reservación en bloque. "
+"Puede especificar más de una combinación de incio/fin si tiene multiples "
+"sesiones en el mismo día."
+
+#: blockallocations.php:572
+msgid ""
+"Specify individual dates and times during which the block allocation will "
+"occur."
+msgstr ""
+"fechas y horarios individuales en los cuales se usará la reservación en "
+"bloque."
+
+#: blockallocations.php:577
+msgid ""
+"Enter any additional information about this block allocation. &lt; and &gt; "
+"are not allowed. If you selected \"<font color=\"blue\">(group not listed)</"
+"font>\" as the User group, make sure to clearly describe the requirements of "
+"a new user group that will be created for this block allocation."
+msgstr ""
+"Ingrese cualquier información adicional de esta reservación en bloque. &lt; "
+"y &gt; no son permitidos. Si usted seleccionó \"<font color=\"blue\">(grupo "
+"no en la lista)</font>\" como grupo de usuarios, asegurese de explicar "
+"claramente los requisitos del nuevo grupo de usuarios que se debe crear para "
+"esta reservación en bloque."
+
+#: blockallocations.php:598 blockallocations.php:2507
+msgid "Error encountered while trying to create block allocation:"
+msgstr ""
+"Error encontrado mientras se trataba de crear una reservación en bloque"
+
+#: blockallocations.php:599
+msgid ""
+"No active management nodes were found. Please try creating the block "
+"allocation at a later time."
+msgstr ""
+"No se encontró un nodo de control activo. Por favor trate de crear una "
+"reservación en bloque más tarde"
+
+#: blockallocations.php:688
+msgid "awaiting approval"
+msgstr "esperando aprobación"
+
+#: blockallocations.php:834
+msgid "Your request for a Block Allocation has been submitted for approval."
+msgstr ""
+"Su solicitud para la reservación en bloque ha sido enviada para su "
+"aprobación."
+
+#: blockallocations.php:836
+msgid ""
+"You should be notified within a few business days of its acceptance or "
+"rejection."
+msgstr ""
+"Se le avisará dentro de algunos días hábiles de su aceptación o rechazo."
+
+#: blockallocations.php:839 blockallocations.php:2072
+msgid "Note:"
+msgstr "Nota:"
+
+#: blockallocations.php:840
+msgid ""
+"You do not have an email address registered with VCL. Therefore, you will "
+"not receive automatic notification when this block allocation is accepted or "
+"rejected."
+msgstr ""
+"Usted no tiene registrada una dirección de correo electrónico<br>. Por lo "
+"que no recibirá una notificación automática cuando su reservación en "
+"bloque<br> haya sido aceptada o rechazada."
+
+#: blockallocations.php:1217
+msgid "none found"
+msgstr "No encontrado"
+
+#: blockallocations.php:1331 blockallocations.php:1646
+#: blockallocations.php:1690 blockallocations.php:2870 computer.php:593
+#: image.php:337 managementnode.php:296 requests.php:464 requests.php:3094
+#: resource.php:275 resource.php:315 resource.php:653 schedule.php:86
+msgid "Name"
+msgstr "Nombre"
+
+#: blockallocations.php:1333 blockallocations.php:1648
+msgid "Reserved<br>Machines"
+msgstr "Máquinas<br>reservadas"
+
+#: blockallocations.php:1334 blockallocations.php:1649
+msgid "Reserved<br>For"
+msgstr "Reservada<br>por"
+
+#: blockallocations.php:1336
+msgid "Next Start Time"
+msgstr "Próxima hora de inicio "
+
+#: blockallocations.php:1342 requests.php:1074
+msgid "Edit"
+msgstr "Editar"
+
+#: blockallocations.php:1351 oneclick.php:196 siteconfig.php:318
+#: siteconfig.php:1204
+msgid "Delete"
+msgstr "Borrar"
+
+#: blockallocations.php:1360 blockallocations.php:1666
+msgid "View Times"
+msgstr "Ver horarios"
+
+#: blockallocations.php:1386 blockallocations.php:1387
+msgid "Confirm Delete Block Allocation"
+msgstr "Confirme borrado de reservación en bloque"
+
+#: blockallocations.php:1388
+msgid ""
+"Please confirm the following values and then click <strong>Delete Block "
+"Allocation</strong>"
+msgstr ""
+"Por favor confirme los siguientes valores y seleccione <strong> Eliminar "
+"reservación en bloque</strong>"
+
+#: blockallocations.php:1400 blockallocations.php:1996
+#: blockallocations.php:2100 requests.php:1179
+msgid "Environment:"
+msgstr "Ambiente:"
+
+#: blockallocations.php:1404 blockallocations.php:2028
+#: blockallocations.php:2038 blockallocations.php:2104
+msgid "User Group:"
+msgstr "Grupo de usuario"
+
+#: blockallocations.php:1408 blockallocations.php:2000
+#: blockallocations.php:2108
+msgid "Seats:"
+msgstr "Lugares:"
+
+#: blockallocations.php:1412 blockallocations.php:2004
+#: blockallocations.php:2112
+msgid "Repeating:"
+msgstr "Repitiendo"
+
+#: blockallocations.php:1433
+msgid "Delete Block Allocation"
+msgstr "Eliminar reservación en bloque"
+
+#: blockallocations.php:1448 blockallocations.php:1449
+#: blockallocations.php:1741 blockallocations.php:1742
+msgid "Block Allocation Times"
+msgstr "Horario de reservación en bloque"
+
+#: blockallocations.php:1460 blockallocations.php:1756
+msgid "Skip"
+msgstr "Saltar"
+
+#: blockallocations.php:1466 blockallocations.php:1482
+#: blockallocations.php:1732 blockallocations.php:1762 requests.php:795
+#: requests.php:813 requests.php:911 requests.php:1417 requests.php:2631
+#: requests.php:4990
+msgid "Close"
+msgstr "Cerrar"
+
+#: blockallocations.php:1476
+msgid "Block Allocation Usage"
+msgstr "Uso de la reservación en bloque"
+
+#: blockallocations.php:1479
+msgid "This block allocation has never been used."
+msgstr "Esta reservación en bloque nunca ha sido usada"
+
+#: blockallocations.php:1538
+msgid "(unspecified)"
+msgstr "(sin especificar)"
+
+#: blockallocations.php:1656
+msgid "View"
+msgstr "Ver"
+
+#: blockallocations.php:1687 blockallocations.php:2857
+msgid "Block Allocation"
+msgstr "Reservación en bloque"
+
+#: blockallocations.php:1694 computer.php:605 image.php:341
+#: managementnode.php:300 resource.php:656 schedule.php:90
+msgid "Owner"
+msgstr "Dueño"
+
+#: blockallocations.php:1818
+msgid "Requested by"
+msgstr "Solicitado por"
+
+#: blockallocations.php:1819
+msgid "Reserved Machines"
+msgstr "Máquinas reservadas"
+
+#: blockallocations.php:1821
+msgid "Start Date"
+msgstr "Fecha de inicio"
+
+#: blockallocations.php:1822
+msgid "End Date"
+msgstr "Fecha de fin"
+
+#: blockallocations.php:1955
+msgid "Accept..."
+msgstr "Aceptar"
+
+#: blockallocations.php:1964
+msgid "Reject..."
+msgstr "Descartar"
+
+#: blockallocations.php:1983
+msgid "There are currently no pending block allocation requests."
+msgstr "No hay solicitudes de reserva de bloques pendientes"
+
+#: blockallocations.php:1990 blockallocations.php:1991
+#: blockallocations.php:2078
+msgid "Accept Block Allocation"
+msgstr "Aceptar reservación en bloque"
+
+#: blockallocations.php:1992
+msgid ""
+"Please review the following information, fill in the additional fields, and "
+"click <strong>Accept Block Allocation</strong>."
+msgstr ""
+"Por favor revise la siguiente información, llene en el campo adicional y "
+"seleccione <strong>Aceptar reservación en bloque</strong>"
+
+#: blockallocations.php:2060
+msgid ""
+"Name can only contain letters, numbers, spaces, dashes(-), and periods(.) "
+"and can be from 3 to 80 characters long"
+msgstr ""
+"Nombre solo puede contener letras, numeros, espacios, guiones y puntos y "
+"puede tener de 3 a 80 caracteres"
+
+#: blockallocations.php:2067 blockallocations.php:2137
+#, php-format
+msgid "The following text will be emailed to %s:"
+msgstr "El siguiente texto será enviado por correo a %s:"
+
+#: blockallocations.php:2073
+msgid ""
+"The requesting user does not have an email address registered with VCL. "
+"Therefore, the user cannot be notified automatically."
+msgstr ""
+"El usuario solicitante no tiene un correo electrónico registrado en VCL. Por "
+"lo tanto, el usuario no podrá ser notificado automáticamente."
+
+#: blockallocations.php:2094 blockallocations.php:2095
+#: blockallocations.php:2147
+msgid "Reject Block Allocation"
+msgstr "Rechazar reservación en bloque"
+
+#: blockallocations.php:2096
+msgid ""
+"Please review the following information, add a reason for rejecting the "
+"block allocation, and click <strong>Reject Block Allocation</strong>."
+msgstr ""
+"Por favor revise la siguiente información, agrege una razón para rechazar la "
+"reservación en bloque y seleccione <strong>Rechazar reservación en bloque</"
+"strong>"
+
+#: blockallocations.php:2140
+msgid ""
+"The requesting user does not have an email address registered with VCL. "
+"Therefore, the user cannot be notified automatically. However, for archival "
+"purposes, fill in a reason for rejecting the request:"
+msgstr ""
+"El usuarios solicitante no tiene un correo electrónico registrado en VCL. "
+"Por lo tanto el usuario no será notificado automáticamente. Sin embargo, "
+"para fines de archivo, llene el motivo de rechazo de la solicitud:"
+
+#: blockallocations.php:2374
+#, php-format
+msgid ""
+"The VCL Block Allocation you requested for %d seats of %s repeating on a "
+"weekly schedule has been accepted."
+msgstr ""
+"Su reservación en bloque para %d lugares de %s repeticiones en el calendario "
+"semanal ha sido aceptada."
+
+#: blockallocations.php:2396
+#, php-format
+msgid ""
+"The VCL Block Allocation you requested for %d seats of %s repeating on a "
+"monthly schedule has been accepted."
+msgstr ""
+"Su reservación en bloque para %d lugares de %s repeticiones en el calendario "
+"mensual ha sido aceptada."
+
+#: blockallocations.php:2411
+#, php-format
+msgid ""
+"The VCL Block Allocation you requested for %d seats of %s during the "
+"following time periods has been accepted:"
+msgstr ""
+"Su reservación en bloque para %d lugares de %s durante el siguiente periodo "
+"de tiempo ha sido aceptada:"
+
+#: blockallocations.php:2428
+msgid ""
+"Warning: The requested user group does not currently have access to the "
+"requested image."
+msgstr ""
+"Atención: El grupo de usuarios actualmente no tiene permisos para solicitar "
+"a la imagen."
+
+#: blockallocations.php:2485 blockallocations.php:3080
+msgid ""
+"The name can only contain letters, numbers, spaces, dashes(-), and "
+"periods(.) and can be from 3 to 80 characters long"
+msgstr ""
+"El nombre solo puede contener letas, números, espacios, guiones(-), y "
+"puntos(.) y debe formarse de 3 a 80 caracteres de longitud."
+
+#: blockallocations.php:2492 blockallocations.php:2714
+msgid "<>\\'s and pipes (|) are not allowed in the email text."
+msgstr "<>\\'s and pipes (|) no son permitidos en los textos de correo."
+
+#: blockallocations.php:2496 blockallocations.php:2721
+msgid "Something must be filled in for the email text."
+msgstr "Algo debe ser llenado en el texto del correo"
+
+#: blockallocations.php:2502
+msgid "Invalid user group submitted."
+msgstr "Grupo de usuarios inválidos."
+
+#: blockallocations.php:2508
+msgid ""
+"No active management nodes were found. Please try accepting the block "
+"allocation at a later time."
+msgstr ""
+"No se encuentras nodos de manejo activos. Por favor trate aceptando el "
+"bloque de asignación mas tarde."
+
+#: blockallocations.php:2517
+msgid ""
+"Warning: The selected user group does not currently have access to the "
+"requested image. You can accept the Block Allocation again to ignore this "
+"warning."
+msgstr ""
+"Advertencia: el grupo de usuario no tiene actualmente acceso a la imagen "
+"requerida. Puede aceptar la asignación en bloque otra vez para ignorar esta "
+"advertencia"
+
+#: blockallocations.php:2539 blockallocations.php:2740
+msgid "Error encountered while updating status of block allocation."
+msgstr ""
+"Error encontrado mientras se cargaba el estado de asignación de bloques"
+
+#: blockallocations.php:2584
+msgid "VCL Block Allocation Accepted"
+msgstr "Reservación en bloque en VCL aceptada"
+
+#: blockallocations.php:2629
+#, php-format
+msgid ""
+"The VCL Block Allocation you requested for %d seats of %s repeating on a "
+"weekly schedule has been rejected."
+msgstr ""
+"Su reservación en bloque en VCL para %d lugares de %s repeticiones en un "
+"calendario semanal ha sido rechazada."
+
+#: blockallocations.php:2651
+#, php-format
+msgid ""
+"The VCL Block Allocation you requested for %d seats of %s repeating on a "
+"monthly schedule has been rejected."
+msgstr ""
+"Su reservación en bloque en VCL para %d lugares de %s repeticiones en un "
+"calendario mensual ha sido rechazada"
+
+#: blockallocations.php:2666
+#, php-format
+msgid ""
+"The VCL Block Allocation you requested for %d seats of %s during the "
+"following time periods has been rejected."
+msgstr ""
+"Su reservación en bloque en VCL para %d lugares de %s durante el siguiente "
+"periodo de tiempo ha sido rechazada"
+
+#: blockallocations.php:2707
+msgid ""
+"Please include a reason for rejecting the block allocation in the email."
+msgstr ""
+"Por favor incluya una razón para rechazar la asignación en bloque el correo "
+"electrónico."
+
+#: blockallocations.php:2716
+msgid "<>\\'s and pipes (|) are not allowed in the reject reason."
+msgstr ""
+"<>\\'s y tuberías (|) no están permitidas en texto de la razón de rechazo."
+
+#: blockallocations.php:2723
+msgid "Something must be filled in for the reject reason."
+msgstr "Algo deber ser llenado para la condición de rechazo"
+
+#: blockallocations.php:2756
+msgid "VCL Block Allocation Rejected"
+msgstr "Su reservación en bloque rechazada"
+
+#: blockallocations.php:2813
+msgid "Invalid block time submitted"
+msgstr "El bloque de tiempo enviado es inválido"
+
+#: blockallocations.php:2818
+msgid ""
+"The end time for the submitted block allocation time has passed. Therefore, "
+"it can no longer be modified."
+msgstr ""
+"El final del tiempo para el enviado de los tiempos de asignaciones en bloque "
+"ha pasado, por eso no pueden ser modificados."
+
+#: blockallocations.php:2860
+msgid "The selected Block Allocation no longer exists."
+msgstr "El bloque se asignación seleccionado no existe."
+
+#: blockallocations.php:2878
+msgid "Resources"
+msgstr "Recursos"
+
+#: blockallocations.php:2885 requests.php:412 requests.php:429
+#: requests.php:447
+msgid "Starting"
+msgstr "Inicia"
+
+#: blockallocations.php:2889 requests.php:413 requests.php:430
+#: requests.php:448 requests.php:465
+msgid "Ending"
+msgstr "Termina"
+
+#: blockallocations.php:2907
+msgid "Current status of computers"
+msgstr "Estado actual de las computadoras"
+
+#: blockallocations.php:2943
+msgid "Current status of clusters:"
+msgstr "Estado actual de los clusters:"
+
+#: blockallocations.php:2947
+msgid "Available"
+msgstr "Disponible"
+
+#: blockallocations.php:2951
+msgid "Reloading"
+msgstr "Cargando"
+
+#: blockallocations.php:2955
+msgid "Reserved/In use"
+msgstr "Reservada/en uso"
+
+#: blockallocations.php:2959 requests.php:1195
+msgid "Failed"
+msgstr "Falló"
+
+#: blockallocations.php:3086
+msgid "The submitted image is invalid."
+msgstr "La imágen enviada es inválida"
+
+#: blockallocations.php:3090
+msgid "The submitted owner is invalid."
+msgstr "El dueño enviado es inválido."
+
+#: blockallocations.php:3100
+msgid "The submitted user group is invalid."
+msgstr "El grupo de usuarios enviado es inválido"
+
+#: blockallocations.php:3106
+#, php-format
+msgid "The submitted number of seats must be between %d and %d."
+msgstr "Le número de espacios debe ser entre %d y %d"
+
+#: blockallocations.php:3113
+#, php-format
+msgid ""
+"The selected image can only have %d concurrent reservations. Please reduce "
+"the number of requested seats to %d or less."
+msgstr ""
+"La imagen seleccionada solo puede contener %d reservaciones. Por favor "
+"reduce el número de campos requeridos a %d o menos."
+
+#: blockallocations.php:3125
+msgid ""
+"WARNING - The selected user group does not currently have access to the "
+"selected environment. You can submit the Block Allocation again to ignore "
+"this warning."
+msgstr ""
+"ADVERTENCIA - El grupo de usuarios seleccionado actualmente no tiene acceso "
+"al entorno seleccionado. Puede enviar la asignación en bloque de nuevo para "
+"ignorar esta advertencia"
+
+#: blockallocations.php:3130
+msgid ""
+"You must select one of \"Repeating Weekly\", \"Repeating Monthly\", or "
+"\"List of Dates/Times\"."
+msgstr ""
+"Debe seleccionar una opción \" repetición semanal\", \"repetición mensual\" "
+"o \"lista de fechas\""
+
+#: blockallocations.php:3142
+msgid "Invalid date/time submitted."
+msgstr "Fecha/Hora enviada inválida"
+
+#: blockallocations.php:3150
+msgid "The date must be today or later."
+msgstr "La fecha debe ser de hoy o después."
+
+#: blockallocations.php:3174
+msgid ""
+"The Last Date of Usage must be the same or later than the First Date of "
+"Usage."
+msgstr ""
+"La última fecha de uso debe ser la misma o posterior a la primera fecha de "
+"uso."
+
+#: blockallocations.php:3178
+msgid "The start date must be today or later."
+msgstr "La fecha de inicio debe ser hoy o más tarde."
+
+#: blockallocations.php:3188
+msgid "Invalid start/end time submitted"
+msgstr "Hora de inicio/fin inválida"
+
+#: blockallocations.php:3195 requests.php:3584
+msgid "Invalid start time submitted"
+msgstr "Horario de inicio inválido"
+
+#: blockallocations.php:3202
+msgid "Invalid end time submitted"
+msgstr "Hora de fin inválida"
+
+#: blockallocations.php:3209
+msgid "Each start time must be less than the corresponding end time."
+msgstr "Cada hora de inicio debe ser menor que su correspondiente hora de fin"
+
+#: blockallocations.php:3231
+msgid "Invalid day submitted."
+msgstr "Día inválido"
+
+#: blockallocations.php:3239
+msgid "No valid days submitted for the specified date range."
+msgstr "Días enviados son inválidos para el rango de fechas especificado."
+
+#: blockallocations.php:3247
+msgid "Invalid week number submitted."
+msgstr "Número de semana inválido"
+
+#: blockallocations.php:3251
+msgid "Invalid day of week submitted."
+msgstr "Día de la semana inválido"
+
+#: blockallocations.php:3257
+msgid "Specified day of month not found in date range."
+msgstr "Día del mes especificado no existe en el rango de fechas."
+
+#: blockallocations.php:3267
+msgid "<>\\'s are not allowed in the comments."
+msgstr "<>\\'s  no están permitidos en los comentarios."
+
+#: blockallocations.php:3509
+msgid "Error: Failed to fetch start/end times for block allocation."
+msgstr ""
+"Error: error al recuperar las horas de inicio/fin para la asignación de "
+"bloques."
+
+#: blockallocations.php:3602
+msgid "Block Allocated Machines"
+msgstr "Máquinas asignadas en bloque"
+
+#: blockallocations.php:3604
+msgid "Start time:"
+msgstr "Hora de inicio:"
+
+#: blockallocations.php:3613
+msgid "Update Charts"
+msgstr "Actualizar gráficos"
+
+#: blockallocations.php:3618
+msgid "Bare Machines"
+msgstr "Máquina sin sistema operativo"
+
+#: blockallocations.php:3621
+msgid "Virtual Machines"
+msgstr "Máquinas virtuales"
+
+#: computer.php:220
+msgid "Actions for selected computers"
+msgstr "Acciones para equipos seleccionados"
+
+#: computer.php:229 computer.php:725
+msgid "Connect Using NAT"
+msgstr "Conectar usando NAT"
+
+#: computer.php:232 computer.php:728
+msgid "NAT Host"
+msgstr "Máquina NAT"
+
+#: computer.php:592
+msgid ""
+"Name can only contain letters, numbers, dashes(-), periods(.), and "
+"underscores(_). It can be from 1 to 36 characters long."
+msgstr ""
+"El nombre puede sólo letras contener, números, guiones (-), puntos y guiones "
+"bajos (_) (.). Puede ser de 1 a 36 caracteres de longitud."
+
+#: computer.php:613
+msgid "Type"
+msgstr "Tipo"
+
+#: computer.php:620
+msgid "Invalid Public IP address specified - must be a valid IPV4 address"
+msgstr ""
+"La dirección IP pública especificada no es válida  - Debe ser una dirección "
+"IPv4 válida"
+
+#: computer.php:621
+msgid "Public IP Address"
+msgstr "Dirección IP pública"
+
+#: computer.php:624
+msgid "Invalid Private IP address specified - must be a valid IPV4 address"
+msgstr ""
+"La dirección de IP privada especificada es inválida. Debe ser una dirección "
+"IPv4 válida."
+
+#: computer.php:625
+msgid "Private IP Address"
+msgstr "Dirección IP privada"
+
+#: computer.php:629
+msgid "Invalid Public MAC address specified"
+msgstr "Dirección MAC Publica especificada inválida"
+
+#: computer.php:630
+msgid "Public MAC Address"
+msgstr "Dirección MAC pública"
+
+#: computer.php:633
+msgid "Invalid Private MAC address specified"
+msgstr "Dirección MAC Privada especificada inválida"
+
+#: computer.php:634
+msgid "Private MAC Address"
+msgstr "Dirección MAC privada"
+
+#: computer.php:641
+msgid ""
+"Invalid Start Public IP Address specified - must be a valid IPV4 address"
+msgstr ""
+"La dirección de IP pública de inicio es inválida. Debe ser una dirección "
+"IPv4 válida."
+
+#: computer.php:642
+msgid "Start Public IP Address"
+msgstr "Inicio dirección IP pública"
+
+#: computer.php:645
+msgid "Invalid End Public IP Address specified - must be a valid IPV4 address"
+msgstr ""
+"La dirección de IP pública final es inválida. Debe ser una dirección IPv4 "
+"válida."
+
+#: computer.php:646
+msgid "End Public IP Address"
+msgstr "Fin dirección IP pública"
+
+#: computer.php:649
+msgid ""
+"Invalid Start Private IP Address specified - must be a valid IPV4 address"
+msgstr ""
+"La dirección de IP privada de inicio es inválida. Debe ser una dirección "
+"IPv4 válida."
+
+#: computer.php:650
+msgid "Start Private IP Address"
+msgstr "Inicio dirección IP privada"
+
+#: computer.php:653
+msgid "Invalid End Private IP Address specified - must be a valid IPV4 address"
+msgstr ""
+"La dirección de IP privada final es inválida. Debe ser una dirección IPv4 "
+"válida."
+
+#: computer.php:654
+msgid "End Private IP Address"
+msgstr "Fin dirección IP privada"
+
+#: computer.php:657
+msgid "Invalid Start MAC Address specified"
+msgstr "Inicio de dirección MAC especificada inválida"
+
+#: computer.php:658
+msgid "Start MAC Address"
+msgstr "Inicio Dirección MAC"
+
+#: computer.php:664
+msgid "Provisioning Engine"
+msgstr "Ingeniería de aprovisionamiento"
+
+#: computer.php:672 managementnode.php:314 requests.php:2711
+msgid "State"
+msgstr "Estado"
+
+#: computer.php:676
+msgid "Reason for Maintenance"
+msgstr "Necesita mantenimiento"
+
+#: computer.php:683
+msgid "VM Host Porfile"
+msgstr "Perfil de la Maquina virtual"
+
+#: computer.php:688
+msgid "Platform"
+msgstr "Plataforma"
+
+#: computer.php:693
+msgid "Schedule"
+msgstr "Calendarizar"
+
+#: computer.php:703
+msgid "RAM (MB)"
+msgstr "RAM (MB)"
+
+#: computer.php:707
+msgid "Cores"
+msgstr "Nucleos"
+
+#: computer.php:711
+msgid "Processor Speed (MHz)"
+msgstr "Velocidad del procesador (MHz)"
+
+#: computer.php:715
+msgid "Network"
+msgstr "Red"
+
+#: computer.php:719
+msgid "Predictive Loading Module"
+msgstr "Carga de módulo predictiva"
+
+#: computer.php:735 managementnode.php:423
+msgid "Use as NAT Host"
+msgstr "Use como máquina NAR"
+
+#: computer.php:737 managementnode.php:425
+msgid "Invalid NAT Public IP address specified - must be a valid IPV4 address"
+msgstr ""
+"La dirección IP pública NAT especificada no es válida  - Debe ser una "
+"dirección IPv4 válida"
+
+#: computer.php:738 managementnode.php:426
+msgid "NAT Public IP Address"
+msgstr "Dirección pública NAT"
+
+#: computer.php:740 managementnode.php:429
+msgid ""
+"Invalid NAT Internal IP address specified - must be a valid IPV4 address"
+msgstr ""
+"La dirección IP interna especificada no es válida  - Debe ser una dirección "
+"IPv4 válida"
+
+#: computer.php:741 managementnode.php:430
+msgid "NAT Internal IP Address"
+msgstr "Dirección interna NAT"
+
+#: computer.php:751
+msgid ""
+"Location can be up to 255 characters long and may contain letters, numbers, "
+"spaces, and these characters: - , . _ @ # ( )"
+msgstr ""
+"Puede contener hasta 255 caracteres de longitud, entre letras, números, "
+"espacios y personajes tesis: -. _ @ # ()"
+
+#: computer.php:752
+msgid "Location"
+msgstr "Ubicación"
+
+#: help.php:216 help.php:248
+msgid "Authentication Method"
+msgstr "Métodos de autenticación"
+
+#: help.php:217 help.php:249
+msgid "Timestamp"
+msgstr "Marca de tiempo"
+
+#: help.php:218 help.php:250
+msgid "Result"
+msgstr "Resultado"
+
+#: help.php:219 help.php:251
+msgid "Remote IP"
+msgstr "IP remota"
+
+#: help.php:220 help.php:252
+msgid "Extra Info"
+msgstr "Info extra"
+
+#: help.php:221 help.php:222
+msgid "Pass"
+msgstr "Pasar"
+
+#: help.php:223 help.php:224
+msgid "Fail"
+msgstr "Falla"
+
+#: image.php:117
+msgid "OS"
+msgstr "OS"
+
+#: image.php:119
+msgid "Install Type"
+msgstr "Tipo de instalación"
+
+#: image.php:121
+msgid "OS Type"
+msgstr "Tipo de OS"
+
+#: image.php:123 image.php:379
+msgid "Required RAM"
+msgstr "RAM requerida"
+
+#: image.php:125 image.php:383
+msgid "Required Cores"
+msgstr "Nucleos requeridos"
+
+#: image.php:127 image.php:387
+msgid "Processor Speed"
+msgstr "Velocidad del procesador"
+
+#: image.php:129
+msgid "Min. Network Speed"
+msgstr "Min. velocidad de red"
+
+#: image.php:131 image.php:398
+msgid "Max Concurrent Usage"
+msgstr "Max uso concurrente"
+
+#: image.php:133
+msgid "Est. Reload Time"
+msgstr "Est. tiempo de recarga"
+
+#: image.php:135
+msgid "Last Updated"
+msgstr "Última actualización"
+
+#: image.php:137 image.php:409
+msgid "Available for Checkout"
+msgstr "Listo para salir"
+
+#: image.php:139
+msgid "Max Initial Time"
+msgstr "Max tiempo de inicio"
+
+#: image.php:141
+msgid "Check Logged in User"
+msgstr "Verifique el usuario conectado"
+
+#: image.php:143
+msgid "Admin. Access"
+msgstr "Acceso administrativo"
+
+#: image.php:145
+msgid "Set Hostname"
+msgstr "Asignar nombre de la máquina"
+
+#: image.php:175
+#, php-format
+msgid ""
+"There is at least one <strong>reservation</strong> for this image. The "
+"latest end time is %s."
+msgstr ""
+"Existe al menos un <strong>reservation</strong> para esta imagen. La última "
+"hora de finalización es% s."
+
+#: image.php:193
+#, php-format
+msgid ""
+"There is at least one <strong>Block Allocation</strong> with computers "
+"currently allocated with this image. Block Allocation %s has the latest end "
+"time which is %s."
+msgstr ""
+"Existe al menos un <strong>Block Allocation</strong> con computadoras "
+"asignadas para esta imagen. Asignación en bloques % s cuenta con la última "
+"hora de finalización, la cual es % s."
+
+#: image.php:209
+#, php-format
+msgid ""
+"There is at least one <strong>Block Allocation</strong> configured to use "
+"this image. Block Allocation %s has the latest end time which is %s."
+msgstr ""
+"Existe al menos un <strong>Block Allocation</strong> configuradas para usar "
+"esta imagen. Asignación en bloques % s cuenta con la última hora de "
+"finalización, la cual es % s."
+
+#: image.php:220
+msgid ""
+"The following <strong>Server Profiles</strong> are configured to use this "
+"image:"
+msgstr ""
+"El siguiente <strong>Server Profiles</strong> esta configurada para usar "
+"esta imagen."
+
+#: image.php:235
+msgid ""
+"The following <strong>images</strong> have the selected image assigned as a "
+"<strong>subimage</strong>:"
+msgstr ""
+"La siguiente <strong>images</strong> ha seleccionado la imagen signada como "
+"un <strong>subimage</strong>:"
+
+#: image.php:245
+msgid ""
+"The following <strong>VM Host Profiles</strong> have the this image selected:"
+msgstr ""
+"El siguiente <strong>VM Host Profiles</strong> tiene esta imagen "
+"selecccionada:"
+
+#: image.php:250
+msgid ""
+"The selected image is currently being used in the following ways and cannot "
+"be deleted at this time."
+msgstr ""
+"The selected image is currently being used in the following ways and cannot "
+"be deleted at this time."
+
+#: image.php:303 requests.php:749 requests.php:790
+msgid "Create / Update an Image"
+msgstr "Cree / Actualice una imagen"
+
+#: image.php:336
+msgid ""
+"Name cannot contain dashes (-), single (') or double (&quot;) quotes, less "
+"than (&lt;), or greater than (&gt;) and can be from 2 to 60 characters long"
+msgstr ""
+"El nombre no puede contener guiones (-), simples ( ') o dobles (' ') de las "
+"cotizaciones, menor que (& lt;), más que el oro (& gt;) y puede ser de 2 a "
+"60 caracteres"
+
+#: image.php:349 requests.php:1538 requests.php:2050
+msgid "Image Description"
+msgstr "Descripción del ambiente"
+
+#: image.php:350
+msgid ""
+"Description of image (required - users will see this on the <strong>New "
+"Reservations</strong> page):"
+msgstr ""
+"Descripción de la imagen (obligatorio -  los usuarios lo verán en <strong> "
+"New Reservation </ strong>):"
+
+#: image.php:357
+msgid "Usage Notes"
+msgstr "Notas de uso"
+
+#: image.php:358
+msgid ""
+"Optional notes to the user explaining how to use the image (users will see "
+"this on the <strong>Connect!</strong> page):"
+msgstr ""
+"Nota opcional que explica al usuario cómo utilizar la imagen (los usuarios a "
+"pueden ver en <strong> Conectar </ strong>!):"
+
+#: image.php:365
+msgid "Revision Comments"
+msgstr "Comentarios de revisión"
+
+#: image.php:366
+msgid ""
+"Notes for yourself and other admins about how the image was setup/installed. "
+"These are optional and are not visible to end users."
+msgstr ""
+"Notas para ti mismo y demás administradores acerca de cómo la imagen fue de "
+"configurada/instalada / instalación. Estas son opcionales y no son visibles "
+"para los usuarios finales."
+
+#: image.php:374
+msgid ""
+"Advanced Options - leave default values unless you really know what you are "
+"doing (click to expand)"
+msgstr ""
+"Opciones avanzadas - dejar los valores por defecto a menos que realmente "
+"sepa lo que está haciendo (clic para ampliar)"
+
+#: image.php:395
+msgid "Minimum Network Speed"
+msgstr "Velocidad mínima de red"
+
+#: image.php:399
+msgid "(0 = unlimited)"
+msgstr "(0 = ilimitado)"
+
+#: image.php:403
+msgid "Estimated Reload Time"
+msgstr "Tiempo estimado de recarga"
+
+#: image.php:411
+msgid "Check for Logged in User"
+msgstr "Confirmar que el usuario esté conectado."
+
+#: image.php:413
+msgid "Users Have Administrative Access"
+msgstr "Usuarios tienen acceso administrativo"
+
+#: image.php:416
+msgid "Set Computer Hostname"
+msgstr "Definir nombre de host del ordenador"
+
+#: image.php:421
+msgid "Use Sysprep"
+msgstr "Uso de la herramienta Sysprep"
+
+#: image.php:425
+msgid "Connect Methods:"
+msgstr "Conectar métodos"
+
+#: image.php:428 image.php:509
+msgid "Modify Connection Methods"
+msgstr "Modificar métodos de esclavitud"
+
+#: image.php:442
+msgid "Manage Subimages"
+msgstr "Gestionar subimágenes"
+
+#: image.php:459
+msgid "Confirm"
+msgstr "Confirm"
+
+#: image.php:474
+msgid "Confirm Manual Install"
+msgstr "Confirmar instalación manual"
+
+#: image.php:479
+msgid ""
+"This method cannot be automatically added to the image by VCL. The image "
+"must be created with the software for this method already installed. If this "
+"image already has software for this method installed in it, please click "
+"<strong>Software is Manually Installed</strong>. Otherwise, click cancel."
+msgstr ""
+"Este método no se puede añadir automáticamente a la imagen de VCL. La imagen "
+"debe ser creado con el software ya instalado para este método. Si esta "
+"imagen ya tiene software para este método instalado en ella, por favor haga "
+"clic en <strong> El Software es instalado manualmente</ strong>. De lo "
+"contrario, haga clic en cancelar."
+
+#: image.php:485
+msgid "Software is Manually Installed"
+msgstr "El software es instalado manualmente"
+
+#: image.php:511
+msgid "Selected Revision ID:"
+msgstr "Revisión de identidad seleccionada"
+
+#: image.php:540
+msgid "Add Method"
+msgstr "agregar métodos"
+
+#: image.php:542
+msgid "Current Methods"
+msgstr "Métodos actuales"
+
+#: image.php:545
+msgid "Remove Selected Methods(s)"
+msgstr "Remover métodos seleccionados"
+
+#: image.php:561
+msgid ""
+"NOTE: Connection Method changes take effect immediately; you do <strong>not</"
+"strong> need to click \"Submit Changes\" to submit them."
+msgstr ""
+"NOTA: Los cambios en el método de conexión toman efecto inmediatamente; lo "
+"hace <strong> no </ strong> tiene que hacer clic en \"Enviar cambios\" para "
+"enviarlos."
+
+#: image.php:581
+msgid "You do not have access to add any subimages to this image."
+msgstr "No puede agregar ninguna sub-imagen a la imagen"
+
+#: image.php:585
+msgid "Add New Subimage"
+msgstr "Agregar nuevas sub-imágenes"
+
+#: image.php:593
+msgid "Add Subimage"
+msgstr "Agregar subimágenes"
+
+#: image.php:595
+msgid "Current Subimages"
+msgstr "Sub-imágenes actuales"
+
+#: image.php:612
+msgid "(None)"
+msgstr "(Ninguno)"
+
+#: image.php:615
+msgid "total subimages:"
+msgstr "total de subimágenes"
+
+#: image.php:616
+msgid "Remove Selected Subimage(s)"
+msgstr "Remover la (s) sub-imágenes seleccionada (s)."
+
+#: image.php:631
+msgid ""
+"NOTE: Subimage changes take effect immediately; you do <strong>not</strong> "
+"need to click \"Submit Changes\" to submit them."
+msgstr ""
+"NOTA: Los cambios en las subimágenes toma efecto inmediato; se hace <strong> "
+"no </ strong> tiene que hacer clic en \"Enviar cambios\" para enviarlos."
+
+#: image.php:867
+msgid ""
+"Error encountered while trying to create new image.<br>Please contact an "
+"admin for assistance."
+msgstr ""
+"Los cambios en las subimágenes toman efecto inmediatamente.<br>Por favor "
+"contacte a un administrador para recibir asistencia."
+
+#: image.php:1270
+msgid "Revisions of this Image"
+msgstr "Revisión de esta imagen"
+
+#: image.php:1271
+msgid ""
+"Changes made in this section take effect immediately; you do <strong>not</"
+"strong> need to click \"Submit Changes\" to submit them."
+msgstr ""
+"Los cambios en esta sección toman efecto inmediatamente; se hace "
+"<strong>not</strong> tiene que hacer click en \"Submit Changes\" para enviar "
+"los cambios."
+
+#: image.php:1275
+msgid ""
+"WARNING: This image is part of an active block allocation. Changing the "
+"production revision of the image at this time will result in new "
+"reservations under the block allocation to have full reload times instead of "
+"a &lt; 1 minutes wait."
+msgstr ""
+"Advertencia: esta imagen es parte activa de una asignación en bloque. "
+"Cambiar la revisión de producción de la imagen en este momento resultará en "
+"nuevas reservaciones bajo la asignación en bloque para tener todas las "
+"posibilidades de recargar en vez de &lt; 1 minutos de espera"
+
+#: image.php:1282
+msgid "Revision"
+msgstr "Revisión"
+
+#: image.php:1283 requests.php:4130
+msgid "Creator"
+msgstr "Creador"
+
+#: image.php:1284 requests.php:4131
+msgid "Created"
+msgstr "Creada"
+
+#: image.php:1285
+msgid "In Production"
+msgstr "En producción"
+
+#: image.php:1286
+msgid "Comments (click to edit)"
+msgstr "Comentarios (click para editar)"
+
+#: image.php:1330
+msgid "Delete selected revisions"
+msgstr "Borrar imágenes seleccionadas"
+
+#: image.php:1351 image.php:1418
+msgid "You do not have access to manage this image."
+msgstr "Usted no tiene acceso para manejar esta imágen"
+
+#: image.php:1358
+msgid "You do not have access to add this subimage."
+msgstr "Usted no tiene acceso para agregar esta subimagen"
+
+#: image.php:1427
+msgid "Non-numeric data was submitted for an image id."
+msgstr "Dato no numérico enviado para el id de la imágen"
+
+#: image.php:1434
+msgid "Invalid infomation in database. Contact your system administrator."
+msgstr ""
+"Información en la base de datos inválida.  Contacte su administrador de "
+"sistema"
+
+#: image.php:1571
+msgid ""
+"Name must be from 2 to 60 characters and cannot contain any dashes (-), "
+"single (') or double (\") quotes."
+msgstr ""
+"Name must be from 2 to 60 characters and cannot contain any dashes El nombre "
+"debe contener de 2 a 6 caracteres y no pueden ser guiones(-), comillas "
+"simples (') o dobles (\") ."
+
+#: image.php:1575
+msgid "Name can only contain alphabets, numbers, signs, and spaces."
+msgstr ""
+"El nombre solo puede contener caracteres alfanuméricos, signos y espacios."
+
+#: image.php:1584
+msgid "An image already exists with this name."
+msgstr "Una imagen ya existe con este nombre"
+
+#: image.php:1589
+msgid "RAM must be between 0 and 8388607"
+msgstr "RAM debe estar entre 0 y 8388607"
+
+#: image.php:1593
+msgid "Cores must be between 0 and 255"
+msgstr "Núcleos deben estar entre de 0 y 255"
+
+#: image.php:1597
+msgid "Processor Speed must be between 0 and 20000"
+msgstr "Velocidad de procesador debe estar entre 0 y 20000"
+
+#: image.php:1602
+msgid "Invalid value submitted for network speed"
+msgstr "Valor inválido para la velocidad de la red"
+
+#: image.php:1607
+msgid "Max concurrent usage must be between 0 and 255"
+msgstr "Máximo uso concurrente debe estar entre 0 y 255"
+
+#: image.php:1612
+msgid "Estimated Reload Time must be between 0 and 120"
+msgstr "Tiempo estimado de recarga debe estar entre 0 y 120"
+
+#: image.php:1616
+msgid "Submitted ID is not valid"
+msgstr "ID enviado no es válido"
+
+#: image.php:1620
+msgid "Available for Checkout must be Yes or No"
+msgstr "Disponible para revisar debe ser Si o no"
+
+#: image.php:1624
+msgid "Check for Logged in User must be Yes or No"
+msgstr "Verificación para usuario conectado debe ser Si o No"
+
+#: image.php:1628
+msgid "Users Have Administrative Access must be Yes or No"
+msgstr "El usuario tiene acceso administrativo debe ser Si o No"
+
+#: image.php:1632
+msgid "Set Computer Hostname must be Yes or No"
+msgstr "Conjunto de nombres de computadoras debe ser Si o No"
+
+#: image.php:1637
+msgid "Use Sysprep must be Yes or No"
+msgstr "Usa Sysprep debe ser Si o No"
+
+#: image.php:1641
+msgid "You must include a description of the image"
+msgstr "Usted debe incluir una descripción de la imágen"
+
+#: image.php:1938
+msgid "Invalid method submitted."
+msgstr "el método presentado es inválido"
+
+#: image.php:1944 image.php:2034
+msgid "Invalid revision id submitted."
+msgstr "la revisión id presentada es inválida"
+
+#: image.php:2027
+msgid "Non-numeric data was submitted for a connection method id."
+msgstr "Dato no numérico enviado para el id del método de conexión  "
+
+#: image.php:2175
+msgid "The following revisions are in use and cannot be deleted at this time:"
+msgstr ""
+"La siguientes revisiones están en uso y no pueden ser borradas en este "
+"momento"
+
+#: managementnode.php:295
+msgid ""
+"Name can only contain letters, numbers, dashes(-), periods(.), and "
+"underscores(_). It can be from 1 to 50 characters long."
+msgstr ""
+"El nombre puede contener letras, números, guiones (-), puntos (.) y guión "
+"bajo (_). Puede ser de 1 a 50 caracteres de longitud."
+
+#: managementnode.php:309
+msgid "Invalid IP address specified - must be a valid IPV4 address"
+msgstr "Dirección de IP inválido. Debe ser una dirección IPV4 válida."
+
+#: managementnode.php:310
+msgid "IP Address"
+msgstr "Dirección IP"
+
+#: managementnode.php:318
+msgid "Invalid email address(es) specified"
+msgstr "Correo(s) electrónico(s) inválidos"
+
+#: managementnode.php:319
+msgid "SysAdmin Email Address(es)"
+msgstr "Correo(s) electrónico(s) de SysAdmin "
+
+#: managementnode.php:324
+msgid "Invalid email address specified"
+msgstr "Correo electrónico inválido"
+
+#: managementnode.php:325
+msgid "Address for Shadow Emails"
+msgstr "Dirección para correos sombra"
+
+#: managementnode.php:330
+msgid "Check-in Interval (sec)"
+msgstr "Intervalo de registro (sec)"
+
+#: managementnode.php:335
+msgid "Invalid install path specified"
+msgstr "ruta de instalación especificada inválida"
+
+#: managementnode.php:336
+msgid "Install Path"
+msgstr "Instalar ruta"
+
+#: managementnode.php:341
+msgid ""
+"Invalid time server(s) specified. Must be comman delimited list of hostnames "
+"or IP addresses, with up to 5 allowed"
+msgstr ""
+"El tiempo del servidor es inválido. La lista de hostnames o direcciones de "
+"IP deber ser delimitada por comas, máximo 5."
+
+#: managementnode.php:343
+msgid "Time Server(s)"
+msgstr "Hora del servidor (es)"
+
+#: managementnode.php:348
+msgid "Invalid path to identity key files"
+msgstr "Ruta de los archivos de llave de identidad inválidos"
+
+#: managementnode.php:349
+msgid "End Node SSH Identity Key Files"
+msgstr "Nodo final de los archivos de claves de identidad SSH"
+
+#: managementnode.php:354
+msgid "SSH Port for this Node"
+msgstr "Puerto SSH para este Nodo"
+
+#: managementnode.php:361
+msgid "Enable Image Library"
+msgstr "Habilitar biblioteca de imágenes "
+
+#: managementnode.php:367
+msgid "Image Library Management Node Group"
+msgstr "Biblioteca de imágenes en el grupo de nodo de control "
+
+#: managementnode.php:372
+msgid "Invalid image library user"
+msgstr "Biblioteca de imágenes de usuario inválida"
+
+#: managementnode.php:373
+msgid "Image Library User"
+msgstr "Biblioteca de imágenes de usuario"
+
+#: managementnode.php:378
+msgid "Invalid image library identity key"
+msgstr "llave de identidad de biblioteca de imagen inválida"
+
+#: managementnode.php:379
+msgid "Image Library SSH Identity Key File"
+msgstr "Archivo de clave de identidad SSH de la biblioteca de imagen"
+
+#: managementnode.php:390
+msgid "Public NIC Configuration Method"
+msgstr "Método de configuración de la NIC pública"
+
+#: managementnode.php:394
+msgid "Invalid public netmask"
+msgstr "Máscara de red pública inválida "
+
+#: managementnode.php:395
+msgid "Public Netmask"
+msgstr "Mascara de red públic"
+
+#: managementnode.php:400
+msgid "Invalid public gateway"
+msgstr "Puerta de salida inválida"
+
+#: managementnode.php:401
+msgid "Public Gateway"
+msgstr "Puerta de salida pública"
+
+#: managementnode.php:406
+msgid "Invalid public DNS server"
+msgstr "servidor DNS publico inválido"
+
+#: managementnode.php:407
+msgid "Public DNS Server"
+msgstr "Servidor DNS público"
+
+#: managementnode.php:412
+msgid "Available Public Networks"
+msgstr "Redes públicas disponibles"
+
+#: managementnode.php:416
+msgid "Affiliations Using Federated Authentication for Linux Images"
+msgstr "Afiliaciones usando autenticación federada para imágenes Linux."
+
+#: managementnode.php:469
+msgid ""
+"Comma delimited list of email addresses for sysadmins who should receive "
+"error emails from this management node. Leave empty to disable this feature."
+msgstr ""
+"Listas de direcciones de correo para sysadmin que podrian recibir errores de "
+"correos electrónico para este nodo de gestión. Deje el campo vacío para "
+"deshabilitar esa función."
+
+#: managementnode.php:470
+msgid ""
+"Single email address to which copies of all user emails should be sent. This "
+"is a high traffic set of emails. Leave empty to disable this feature."
+msgstr ""
+"Única dirección de correo electrónico a cual las copias de todos los "
+"usuarios se envían. Funcionalidad de alto tráfico. Deje el campo vacío para "
+"deshabillitar esta función."
+
+#: managementnode.php:471
+msgid ""
+"the number of seconds that this management node will wait before checking "
+"the database for tasks."
+msgstr ""
+"El número de segundos que este nodo de gestión debe esperar antes de revisar "
+"la base de datos por tareas."
+
+#: managementnode.php:472
+msgid ""
+"path to parent directory of image repository directories (typically /"
+"install) - only needed with bare metal installs or VMWare with local disk"
+msgstr ""
+"ruta de acceso al directorio principal de los directorios de imagen del "
+"repositorio (típicamente / instalar) - afectan exclusivamente con metal "
+"desnudo instala o VMWare con disco local- sólo se necesita en instalaciones  "
+"de maquinas sin sistema operativo o en máquinas virtuales en disco duro."
+
+#: managementnode.php:473
+msgid "comma delimited list of time servers for this management node"
+msgstr ""
+"Lista separada por comas del tiempo de del servidor para este nodo de gestión"
+
+#: managementnode.php:474
+msgid ""
+"comma delimited list of full paths to ssh identity keys to try when "
+"connecting to end nodes (optional)"
+msgstr ""
+"Lista separada por comas de las rutas de acceso a las claves  de identidad "
+"SSH  para intentar cuando se conecten los nodos finales(opcional)"
+
+#: managementnode.php:475
+msgid "SSH port this node is listening on for image file transfers"
+msgstr ""
+"Puerto SSH este puerto esta conectado para las transferencia de archivos de "
+"imágen"
+
+#: managementnode.php:476
+msgid ""
+"Enable sharing of images between management nodes. This allows a management "
+"node to attempt fetching files for a requested image from other management "
+"nodes if it does not have them."
+msgstr ""
+"Habilitar el uso compartido de imágenes entre nodos de gestión. Esto permite "
+"a un nodo de administración tratar de encontrar los archivos solicitados "
+"para una imagen requerida de otros nodos de gestión, si estos no los tienen."
+
+#: managementnode.php:477
+msgid ""
+"This management node will try to get image files from other nodes in the "
+"selected group."
+msgstr ""
+"Este nodo de gestión intentará obtener archivos de imágen de otros nodos en "
+"el grupo seleccionado."
+
+#: managementnode.php:478
+msgid ""
+"userid to use for scp when copying image files from another management node"
+msgstr ""
+"Identificación del usuario para SCP, al copiar archivos  de imágen desde  "
+"otro nodo de gestión."
+
+#: managementnode.php:479
+msgid ""
+"path to ssh identity key file to use for scp when copying image files from "
+"another management node"
+msgstr ""
+"Ruta de acceso al archivo clave ssh a uilizar para scp al copiar arcivos de "
+"imágenes de otro nodo de gestión."
+
+#: managementnode.php:480
+msgid ""
+"Method by which public NIC on nodes controlled by this management node "
+"recive their network configuration <ul><li>Dynamic DHCP - nodes receive an "
+"address via DHCP from a pool of addresses</li><li>Manual DHCP - nodes always "
+"receive the same address via DHCP</li><li>Static - VCL will configure the "
+"public address of the node</li></ul>"
+msgstr ""
+"Método por el cual una NIC pública controlada por este nodo de gestión "
+"controlados por este nodo de gestión recibe su configuración de red <ul> "
+"<li> DHCP dinámico - nodos reciben una dirección a través de DHCP de un "
+"conjunto de direcciones </ li> <li> DHCP Manual - nodos reciben siempre la "
+"misma dirección a través de DHCP </ li> <li> estático - VCL configurará la "
+"dirección pública del nodo </ li> </ ul>"
+
+#: managementnode.php:481
+msgid "Netmask for public NIC"
+msgstr "Mascara de red para la NIC pública"
+
+#: managementnode.php:482
+msgid "IP address of gateway for public NIC"
+msgstr "Dirección IP de la máscara de red para la NIC pública"
+
+#: managementnode.php:483
+msgid "comma delimited list of IP addresses of DNS servers for public network"
+msgstr ""
+"Lista separada por comas de direcciones de IP de servidores DNS para redes "
+"públicas."
+
+#: managementnode.php:484
+msgid ""
+"This is a list of IP networks, one per line, available to nodes deployed by "
+"this management node. Networks should be specified in x.x.x.x/yy form.  It "
+"is for deploying servers having a fixed IP address to ensure a node is "
+"selected that can actually be on the specified network."
+msgstr ""
+"Esta es una lista de las redes IP, una por línea, disponible para los nodos "
+"desplegados por este nodo de gestión. Redes deben especificarse en forma  x."
+"x.x.x/ aa . Es para la implementación de servidores con dirección IP fija "
+"para asegurar que un nodo seleccionado puede estar en la red específicada."
+
+#: managementnode.php:485
+msgid ""
+"Comma delimited list of affiliations for which user passwords are not set "
+"for Linux image reservations under this management node. Each Linux image is "
+"then required to have federated authentication set up so that users' "
+"passwords are passed along to the federated authentication system when a "
+"user attempts to log in. (for clarity, not set setting user passwords does "
+"not mean users have an empty password, but that a federated system must "
+"authenticate the users)"
+msgstr ""
+"Lista separada por comas de afiliaciones de aquellas contraseñas de usuario "
+"que no están establecidas para hacer reservaciones de imágenes de  Linux "
+"bajo este nodo de gestión. Cada imagen de Linux es necesaria para la "
+"autenticación federada-de manera que las contraseñas de usuario hayan pasado "
+"por el sistema de autenticación federada cuando un usuario intenta "
+"conectarse. (Para mayor claridad, no establecer las contraseñas de usuario "
+"no implica usuarios tendrán una contraseña vacía, pero el sistema federado "
+"deberá autenticar a los usuarios)"
+
+#: managementnode.php:486
+msgid ""
+"This is the IP address on the NAT host of the network adapter that is public "
+"facing. Users will connect to this IP address."
+msgstr ""
+"Esta es la dirección IP en el host NAT del adaptador de red que está "
+"orientada al público. Los usuarios podrán conectarse a esta dirección IP."
+
+#: managementnode.php:487
+msgid ""
+"This is the IP address on the NAT host of the network adapter that is facing "
+"the internal network. This is how the NAT host will pass traffic to the VCL "
+"nodes."
+msgstr ""
+"Esta es la dirección IP en el host NAT del adaptador de red que muestra la "
+"vista de red interna. Así es como el NAT host pasará el tráfico a los nodos "
+"VCL."
+
+#: oneclick.php:47
+msgid "VCL go Configurator"
+msgstr "Configurador de VCL go"
+
+#: oneclick.php:49
+#, php-format
+msgid ""
+"VCL gos are for use with the %sVCL iOS app%s. VCL gos can be managed here "
+"but can only be used from an iOS device."
+msgstr ""
+"VCL gos se usan con %sVCL iOS app%s. VCL gos pueden ser administrados aquí, "
+"pero deben ser usados de un dispositivo iOS."
+
+#: oneclick.php:64
+msgid "New VCL go Configuration"
+msgstr "Nueva configuración VCL go"
+
+#: oneclick.php:68
+msgid "VCL go successfully created"
+msgstr "VCL go creada satisfactoriamente"
+
+#: oneclick.php:73
+msgid "Choose a name for your new VCL go configuration"
+msgstr "Escoja el nombre de la nueva consfiguración de VCL go."
+
+#: oneclick.php:78 oneclick.php:234 oneclick.php:323 oneclick.php:404
+msgid ""
+"Name can only contain letters, numbers, spaces, dashes(-), parenthesis, "
+"<br>and periods(.) and can be from 3 to 70 characters long"
+msgstr ""
+"El nombre solo puede contener letras, números, espacios, guiones, paréntesis "
+"y puntos. Puede contener de 3 a 70 caracteres de longitud."
+
+#: oneclick.php:86
+msgid "Please select the resource you want to use from the list:"
+msgstr "Por favor seleccione el recurso que quiere usar de la lista:"
+
+#: oneclick.php:111 oneclick.php:166 oneclick.php:345 requests.php:2013
+#: requests.php:3225 requests.php:3230 requests.php:3377 requests.php:3379
+#: requests.php:3381 requests.php:3393 requests.php:3395 requests.php:3397
+#: utils.php:9357 utils.php:9404 utils.php:9413 utils.php:9415 utils.php:10237
+#: utils.php:10239 utils.php:10264 utils.php:10287
+msgid "minutes"
+msgstr "minutos"
+
+#: oneclick.php:113 oneclick.php:171 oneclick.php:351 requests.php:3235
+#: utils.php:9413
+msgid "hour"
+msgstr "hora"
+
+#: oneclick.php:115 oneclick.php:353 requests.php:3240 requests.php:3385
+#: requests.php:3401 utils.php:9361 utils.php:9363 utils.php:9365
+#: utils.php:9408 utils.php:9415 utils.php:10243 utils.php:10268
+#: utils.php:10292 utils.php:10295
+msgid "hours"
+msgstr "horas"
+
+#: oneclick.php:117 oneclick.php:361 requests.php:3245 requests.php:3387
+#: requests.php:3403 utils.php:10245 utils.php:10270 utils.php:10297
+msgid "days"
+msgstr "días"
+
+#: oneclick.php:119 oneclick.php:166 oneclick.php:171 oneclick.php:175
+#: oneclick.php:341
+msgid "Duration:"
+msgstr "Duración"
+
+#: oneclick.php:125 oneclick.php:178 oneclick.php:369
+msgid "Auto Login"
+msgstr "inicio automático"
+
+#: oneclick.php:132
+msgid "Create VCL go Configuration"
+msgstr "Crear configuración para VCL go"
+
+#: oneclick.php:141
+msgid "List of VCL go Configurations"
+msgstr "Lista de configuraciones VCL go"
+
+#: oneclick.php:143
+msgid "VCL go successfully updated"
+msgstr "VCL go actualizado correctamente"
+
+#: oneclick.php:147
+msgid "VCL go successfully deleted"
+msgstr "VCL go eliminado correctamente"
+
+#: oneclick.php:155 oneclick.php:320
+msgid "VCL go Name:"
+msgstr "Nombre VCL go"
+
+#: oneclick.php:162 oneclick.php:328
+msgid "Resource:"
+msgstr "Recurso:"
+
+#: oneclick.php:175 oneclick.php:359
+msgid "day"
+msgstr "Día"
+
+#: oneclick.php:178 requests.php:4145 userpreferences.php:225
+#: userpreferences.php:380 userpreferences.php:384 userpreferences.php:388
+msgid "Yes"
+msgstr "Si"
+
+#: oneclick.php:178 requests.php:4147 userpreferences.php:225
+#: userpreferences.php:378 userpreferences.php:382 userpreferences.php:386
+msgid "No"
+msgstr "No"
+
+#: oneclick.php:189
+msgid "Edit VCL go"
+msgstr "Edtar VCL go"
+
+#: oneclick.php:228
+msgid "Invalid image submitted."
+msgstr "Imágen enviada inválida"
+
+#: oneclick.php:310
+msgid "VCL go not found"
+msgstr "No existe VCL go"
+
+#: oneclick.php:314
+msgid "VCL go Editor"
+msgstr "Editor de VCL go"
+
+#: oneclick.php:376 siteconfig.php:143 siteconfig.php:357 siteconfig.php:884
+#: siteconfig.php:1159 userpreferences.php:167 userpreferences.php:258
+msgid "Submit Changes"
+msgstr "Realizar Cambios"
+
+#: privileges.php:1094
+msgid ""
+"Node names can only contain letters, numbers, spaces,<br>dashes(-), dots(.), "
+"and underscores(_)."
+msgstr ""
+"El nombre de los nodos solo puede contener letras, números, espacios, "
+"<br>guiones(-), punto(.), y raya abajo (_)."
+
+#: privileges.php:1164
+msgid "A sibling node of that name currently exists"
+msgstr "Existe un nodo relacionado con ese nombre"
+
+#: requests.php:79 requests.php:1387 requests.php:1410
+msgid "New Reservation"
+msgstr "Nueva reservación"
+
+#: requests.php:87
+msgid "Current Reservations"
+msgstr "Reservaciones Actuales"
+
+#: requests.php:93
+msgid ""
+"You have no current reservations and do not have access to create new ones."
+msgstr "No tiene reservaciones actuales y no tiene acceso para crear nuevas"
+
+#: requests.php:95
+msgid "You have no current reservations."
+msgstr "Actualmente no tiene ninguna reservación"
+
+#: requests.php:222
+msgid "<br>Est:&nbsp;"
+msgstr "<br>Est:&nbsp;"
+
+#: requests.php:222
+msgid "&nbsp;min remaining\n"
+msgstr "&nbsp;min faltantes\n"
+
+#: requests.php:400
+msgid "You currently have the following <strong>normal</strong> reservations:"
+msgstr ""
+"Actualmente tiene las siguientes reservaciones </strong>normales</strong>:"
+
+#: requests.php:402
+msgid "You currently have the following normal reservations:"
+msgstr "Actualmente tiene las siguientes reservaciones normales:"
+
+#: requests.php:405
+msgid ""
+"NOTE: The maximum allowed reservation length for one of these reservations "
+"was less than the length you submitted, and the length of that reservation "
+"has been adjusted accordingly."
+msgstr ""
+"NOTA: La longitud máxima permitida para una de estas reservaciones es menor "
+"que la longitud que ha enviado, y la longitud de esa reservación ha sido "
+"ajustada en consecuencia."
+
+#: requests.php:414 requests.php:431 requests.php:449
+msgid "Initially requested"
+msgstr "Solicitado inicialmente"
+
+#: requests.php:416 requests.php:469
+msgid "Req ID"
+msgstr "Req ID"
+
+#: requests.php:424
+msgid "You currently have the following <strong>imaging</strong> reservations:"
+msgstr ""
+"Actualmente tiene las siguientes <strong>ambientes</strong> reservados:"
+
+#: requests.php:442
+msgid ""
+"You currently have the following <strong>long term</strong> reservations:"
+msgstr ""
+"Actualmente tiene las siguientes reservaciones de <strong>largo plazo</"
+"strong>:"
+
+#: requests.php:460
+msgid "You currently have the following <strong>server</strong> reservations:"
+msgstr ""
+"Actualmente usted tiene las siguientes reservaciones en el <strong>servidor</"
+"strong>:"
+
+#: requests.php:467
+msgid "Details"
+msgstr "Detalles"
+
+#: requests.php:478
+msgid ""
+"Click the <b>Connect!</b> button to get further information about connecting "
+"to the reserved system. You must click the button from a web browser running "
+"on the same computer from which you will be connecting to the remote "
+"computer; otherwise, you may be denied access to the machine."
+msgstr ""
+"Seleccione el botón de <b>¡Conectar!</b> para obtener más Información para "
+"conectarse al sistema reservado. Deberá seleccionar el botón desde un "
+"navegador en la misma computadora desde la cual se conectará a la "
+"computadora remota de otra forma se le negará el acceso a la computadora "
+"remota."
+
+#: requests.php:483
+msgid ""
+"This page will automatically update every 20 seconds until the <font "
+"color=red><i>Pending...</i></font> reservation is ready."
+msgstr ""
+"Esta página se actualizará automáticamente cada 20 segundos hasta que el "
+"mensaje de <font color=red><i>Cargando...</i></font>cambie a reservación "
+"lista."
+
+#: requests.php:488
+msgid ""
+"An error has occurred that has kept one of your reservations from being "
+"processed. We apologize for any inconvenience this may have caused."
+msgstr ""
+"Ha ocurrido un error en alguna de sus reservaciones lamentamos este "
+"inconveniente. Nos disculpamos por cualquier inconveniente que esto haya "
+"podido causar."
+
+#: requests.php:544
+msgid "Detailed Reservation Status"
+msgstr "Estado detallado de la reservación"
+
+#: requests.php:566 requests.php:575 requests.php:1005 requests.php:3007
+#: requests.php:3019 requests.php:3027 requests.php:3921
+msgid "Delete Reservation"
+msgstr "Borrar Reservación"
+
+#: requests.php:592 requests.php:599
+msgid "Remove Reservation"
+msgstr "Borrar reservación"
+
+#: requests.php:616 requests.php:628
+msgid "Modify Reservation"
+msgstr "Modificar reservación"
+
+#: requests.php:644 requests.php:664
+msgid "Reboot Reservation"
+msgstr "Reiniciar reservación"
+
+#: requests.php:651
+msgid ""
+"You can select either a soft or a hard reboot. A soft reboot issues a reboot "
+"command to the operating system. A hard reboot is akin to toggling the power "
+"switch on a computer. After issuing the reboot, it may take several minutes "
+"before the machine is available again. It is also possible that it will not "
+"come back up at all. Are you sure you want to continue?"
+msgstr ""
+"Puede seleccionar entre un reinicio duro o uno suave. Un reinicio suave "
+"emite una orden de reinicio del sistema operativo. Un reinicio duro es "
+"similar a alternar el interruptor de encendido en un ordenador. Después de "
+"emitir el reinicio, pueden pasar varios minutos antes de que el motor esté "
+"disponible de nuevo. Es también posible que el sistema no vuelva a subir. "
+"¿Seguro que desea continuar?"
+
+#: requests.php:656
+msgid "Soft Reboot"
+msgstr "Reiniciar sistema operativo"
+
+#: requests.php:658
+msgid "Hard Reboot"
+msgstr "Reiniciar equipo"
+
+#: requests.php:680 requests.php:694
+msgid "Reinstall Reservation"
+msgstr "Reinstalar reservación"
+
+#: requests.php:688 requests.php:715
+msgid "Loading..."
+msgstr "Cargando..."
+
+#: requests.php:710
+msgid "Available Times"
+msgstr "Horarios disponibles"
+
+#: requests.php:721
+msgid "Use Selected Time"
+msgstr "Usar tiempo seleccionado"
+
+#: requests.php:742 requests.php:786
+msgid "Create / Update Image"
+msgstr "Crear/actualizar imagen"
+
+#: requests.php:752
+msgid "Keep Reservation &amp; Create / Update an Image"
+msgstr "Mantener reservación &amp; Crear / Actualizar una imágen"
+
+#: requests.php:753
+msgid ""
+"This process will create a new image or new revision of the image while "
+"allowing you to keep your reservation. The node will be taken "
+"<strong>offline</strong> during the image capture process."
+msgstr ""
+"Este proceso creará una nueva imagen o nueva revisión de la imagen mientras "
+"permite mantener la reservación. Este nodo estará <strong>fuera de línea</"
+"strong> durante el proceso de imagen de captura."
+
+#: requests.php:755
+msgid ""
+"NOTE: The same sanitizing that occurs during normal image capture will take "
+"place. This includes things such as deleting temporary files, cleaning out "
+"firewall rules, removing user home space, and removing user accounts."
+msgstr ""
+"NOTA: El mismo refinamiento que se produce durante una captura de imagen "
+"normal tomará lugar. Esto incluye cosas tales como la eliminación de "
+"archivos temporales, la limpieza de las reglas del cortafuegos, quitar "
+"espacio de la casa del usuario, y eliminación de cuentas de usuario."
+
+#: requests.php:757
+msgid ""
+"After the imaging occurs, you will be able to connect to the reservation "
+"again. The image will appear to you as if you had just made a new "
+"reservation for it."
+msgstr ""
+"Después que la imagen aparezca, será capaz de conectar a la reservación otra "
+"vez. La imagen aparecerá apenas haga la nueva reservación."
+
+#: requests.php:761
+msgid "Are you creating a new image or updating an existing image?"
+msgstr "¿Esta creando una nueva imagen o actualizando una imagen existente?"
+
+#: requests.php:763
+msgid "Creating New Image"
+msgstr "crear nueva imagen"
+
+#: requests.php:766 requests.php:846
+msgid "Update Existing Image"
+msgstr "Actual imagen existente"
+
+#: requests.php:770 requests.php:865 requests.php:3960 resource.php:185
+#: statistics.php:126 userpreferences.php:446
+msgid "Submit"
+msgstr "Enviar"
+
+#: requests.php:791
+msgid ""
+"You cannot create new images from this image because the owner of the image "
+"has set \"Users have administrative access\" to No under the Advanced "
+"Options of the image."
+msgstr "Duración:"
+
+#: requests.php:805
+msgid "Connect"
+msgstr "Conectar"
+
+#: requests.php:824
+msgid "Reservation Timed Out"
+msgstr "La reservación a expirado"
+
+#: requests.php:827
+msgid "This reservation has timed out and is no longer available."
+msgstr "La reservación ha expirado y ya no es válida."
+
+#: requests.php:832
+msgid "Okay"
+msgstr "Correcto"
+
+#: requests.php:853
+msgid "New Revision Comments"
+msgstr "Nuevo comentario de reservación"
+
+#: requests.php:855
+msgid ""
+"Enter any notes for yourself and other admins about the current state of the "
+"image. These are optional and are not visible to end users:"
+msgstr ""
+"Ingrese una nota para si mismo u otro administrador del estado actual de la "
+"imagen. Esto es opcional y no es visible para los usuarios."
+
+#: requests.php:860
+msgid "Previous Revision Comments"
+msgstr "Comentarios de revisión anteriores"
+
+#: requests.php:890
+msgid "I agree"
+msgstr "estoy de acuerdo"
+
+#: requests.php:896
+msgid "I do not agree"
+msgstr "no estoy de acuerdo"
+
+#: requests.php:926
+msgid ""
+"WARNING: You are not the owner of this reservation. You have been granted "
+"access to manage this reservation by another user. Hover over the details "
+"icon to see who the owner is. You should not delete this reservation unless "
+"the owner is aware that you are deleting it."
+msgstr ""
+"ADVERTENCIA: No eres el dueño de esta reservación. Se le ha concedido acceso "
+"para administrar esta reservación por otro usuario. Pase sobre el icono para "
+"ver los detalles acerca quién es el dueño. No deberías eliminar este libro "
+"menos que el propietario es consciente."
+
+#: requests.php:933
+msgid "Confirm Delete Reservation"
+msgstr "Confirmar borrar reservación"
+
+#: requests.php:998
+msgid "Connect!"
+msgstr "¡Conectar!"
+
+#: requests.php:1018 requests.php:1023
+msgid "Reservation failed"
+msgstr "Falló reservación"
+
+#: requests.php:1042
+msgid "Reservation has timed out"
+msgstr "La reservación ha expirado"
+
+#: requests.php:1051 requests.php:1056
+msgid "Pending..."
+msgstr "Cargando..."
+
+#: requests.php:1067
+msgid "More Options"
+msgstr "Más opciones"
+
+#: requests.php:1082 requests.php:1090
+msgid "End Reservation & Create Image"
+msgstr "Finalizar reservación y crear ambiente"
+
+#: requests.php:1097 requests.php:1105
+msgid "Keep Reservation & Create Image"
+msgstr "Mantenga la reservación y crea una imagen"
+
+#: requests.php:1112 requests.php:1122
+msgid "Reboot"
+msgstr "Reiniciar"
+
+#: requests.php:1129 requests.php:1139
+msgid "Reinstall"
+msgstr "Reinstalar"
+
+#: requests.php:1146
+msgid "(Testing)"
+msgstr "(Probando)"
+
+#: requests.php:1159 requests.php:1187
+msgid "(none)"
+msgstr "(ninguno)"
+
+#: requests.php:1180
+msgid "Start Time:"
+msgstr "Horario de inicio:"
+
+#: requests.php:1181
+msgid "Initially Requested:"
+msgstr "Solicitud inicial:"
+
+#: requests.php:1183 requests.php:1185 requests.php:1561
+msgid "Admin User Group:"
+msgstr "Grupo de administración:"
+
+#: requests.php:1183
+msgid "none"
+msgstr "Ninguno"
+
+#: requests.php:1187 requests.php:1189 requests.php:1585
+msgid "Access User Group:"
+msgstr "Grupo de usuarios:"
+
+#: requests.php:1191 requests.php:1193 requests.php:1195 requests.php:1197
+#: requests.php:1199 requests.php:1201 requests.php:1203 requests.php:1205
+#: requests.php:1207 requests.php:1209
+msgid "Status:"
+msgstr "Estado:"
+
+#: requests.php:1191 requests.php:1207
+msgid "In Use"
+msgstr "En uso"
+
+#: requests.php:1193
+msgid "Checkpointing"
+msgstr "Puntos de control"
+
+#: requests.php:1197
+msgid "New"
+msgstr "Nueva"
+
+#: requests.php:1199
+msgid "Hard Rebooting"
+msgstr "Reiniciar equipo"
+
+#: requests.php:1201
+msgid "Soft Rebooting"
+msgstr "Reiniciar sistema operativo"
+
+#: requests.php:1203
+msgid "Reinstalling"
+msgstr "Reinstalando"
+
+#: requests.php:1205
+msgid "Loading"
+msgstr "Cargando"
+
+#: requests.php:1209
+msgid "Timed Out"
+msgstr "Desconexión"
+
+#: requests.php:1413
+msgid "You do not have access to any images."
+msgstr "No tiene acceso a ninguna imagen"
+
+#: requests.php:1440
+msgid "Reservation type:"
+msgstr "Tipo de reservación:"
+
+#: requests.php:1446
+msgid "Basic Reservation"
+msgstr "Reservación básica"
+
+#: requests.php:1453
+msgid "Imaging Reservation"
+msgstr "Reservación de imágen"
+
+#: requests.php:1460
+msgid "Server Reservation"
+msgstr "Servidor de reservaciónes"
+
+#: requests.php:1468
+msgid "Profile:"
+msgstr "Perfil"
+
+#: requests.php:1472
+msgid "Description:"
+msgstr "Descripción"
+
+#: requests.php:1477
+msgid "Apply Profile"
+msgstr "Aplicar perfil"
+
+#: requests.php:1489
+msgid "Please select the environment you want to use from the list:"
+msgstr "Por favor seleccione el ambiente que quiere usar de la lista:"
+
+#: requests.php:1530
+msgid "Please select a valid environment"
+msgstr "Por favor seleccione un ambiente valido"
+
+#: requests.php:1546
+msgid "Reservation Name:"
+msgstr "Nombre de la reservación"
+
+#: requests.php:1551 requests.php:4619
+msgid ""
+"The reservation name can only contain letters, numbers, spaces, dashes(-), "
+"underscores(_), and periods(.) and can be up to 255 characters long"
+msgstr ""
+"La reservación solo puede contener letras, números, espacios, guiones "
+"simple, bajo y punto"
+
+#: requests.php:1579 requests.php:3133
+msgid ""
+"Administrative access has been disabled for this image. Users in the Admin "
+"User Group will have control of the reservaion on the Reservations page but "
+"will not have administrative access within the reservation."
+msgstr ""
+"El acceso administrativo ha sido deshabilitado para esta imagen. Los "
+"usuarios en el grupo de usuarios de administración tendrán que tener el "
+"control de la reservacion en la página de reservaciones pero no tendrán "
+"acceso administrativo dentro de la reservación."
+
+#: requests.php:1623
+msgid "Fixed IP Address:"
+msgstr "Dirección IP fija:"
+
+#: requests.php:1627
+msgid "(optional)"
+msgstr "(opcional)"
+
+#: requests.php:1629
+msgid "Netmask:"
+msgstr "Máscara de red"
+
+#: requests.php:1636
+msgid "Router:"
+msgstr "Enrutador"
+
+#: requests.php:1642
+msgid "DNS Server(s):"
+msgstr "Servidor(es) de DNS"
+
+#: requests.php:1658 requests.php:3165
+msgid "Disable timeout for disconnected users"
+msgstr "Deshabilitar fin del tiempo (timeout) para usuarios desconectados"
+
+#: requests.php:1662
+msgid "When would you like to use the environment?"
+msgstr "Cuando le gustaría usar el ambiente?"
+
+#: requests.php:1665
+msgid "When would you like to start the imaging process?"
+msgstr "Cuando le gustaría comenzar a procesar las imágenes?"
+
+#: requests.php:1668
+msgid "When would you like to deploy the server?"
+msgstr "Cuando gusta implementar el servidor?"
+
+#: requests.php:1676
+msgid "Now"
+msgstr "ahora"
+
+#: requests.php:1680
+msgid "Later:"
+msgstr "Después:"
+
+#: requests.php:1686
+msgid "At"
+msgstr "At"
+
+#: requests.php:1714
+msgid "Ending:"
+msgstr "Termina:"
+
+#: requests.php:1724 requests.php:2163 requests.php:3260
+msgid "Duration"
+msgstr "Duración"
+
+#: requests.php:1741
+msgid "Indefinite"
+msgstr "Indefinido"
+
+#: requests.php:1754
+msgid "At this time:"
+msgstr "En este momento:"
+
+#: requests.php:1777
+msgid "Create Reservation"
+msgstr "Crear Reservación"
+
+#: requests.php:1876
+msgid "The end time must be later than the start time."
+msgstr "la hora final debe de ser posterior a la hora inicial"
+
+#: requests.php:1888
+msgid "Invalid IP address specified."
+msgstr "Dirección IP especificada inválida."
+
+#: requests.php:1897 requests.php:4681
+msgid ""
+"There are no management nodes that can deploy the selected image with the "
+"specified IP address."
+msgstr ""
+"No hay nodos de gestión que puede desplegar la imagen seleccionada con la "
+"dirección IP especificada."
+
+#: requests.php:1937 requests.php:2297
+msgid "The selected time overlaps with another reservation you have."
+msgstr "El horario seleccionado traslapa con otra reservación suya."
+
+#: requests.php:1940 requests.php:2300
+msgid "You cannot have any overlapping reservations."
+msgstr "No se permiten reservaciones traslapadas."
+
+#: requests.php:1942 requests.php:2302
+#, php-format
+msgid "You can have up to %d overlapping reservations."
+msgstr "Puede tener hasta-% d reservas superpuestas."
+
+#: requests.php:1982
+msgid ""
+"Selection not currently available due to scheduled system downtime for "
+"maintenance"
+msgstr ""
+"Esa selección no esta disponible actualmente debido a un horario de "
+"mantenimiento"
+
+#: requests.php:1984
+msgid "IP address not available for selected time"
+msgstr "La dirección de IP no está disponible para el tiempo seleccionado."
+
+#: requests.php:1986
+msgid "IP address not available"
+msgstr "Dirección IP no disponible"
+
+#: requests.php:1990
+msgid ""
+"Selection not currently available. Times cannot be suggested for cluster "
+"reservations."
+msgstr ""
+"Selección no disponible en este momento.  Tiempos no pueden ser sugeridos "
+"para las reservaciones de los cluster"
+
+#: requests.php:1992
+msgid "Selection not currently available"
+msgstr "Selección no disponible actualmente"
+
+#: requests.php:1995 requests.php:2004
+msgid "Estimated load time:"
+msgstr "Tiempo estimado de creación:"
+
+#: requests.php:1998
+msgid "1 minute"
+msgstr "1 minuto"
+
+#: requests.php:2001 requests.php:2018
+msgid "Ready at start of reservation"
+msgstr "listo al comienzo de la reservación"
+
+#: requests.php:2016
+msgid "Ready at"
+msgstr "Listo "
+
+#: requests.php:2024
+msgid ""
+"WARNING: Current conflict with specified IP address. If the conflict is not "
+"resolved by the start of your reservation, the reservation will fail."
+msgstr ""
+"ADVERTENCIA: conflicto actual con la dirección IP especificada. Si el "
+"conflicto no se resuelve reiniciando la reservación, la reservación "
+"producirá un error."
+
+#: requests.php:2096
+msgid "There are no available times that the selected image can be used."
+msgstr ""
+"No hay horarios disponibles para que el ambiente seleccionado pueda ser "
+"usado."
+
+#: requests.php:2110
+msgid ""
+"This reservation can no longer be extended due to a reservation immediately "
+"following yours."
+msgstr ""
+"La reservación no puede ampliarse debido a que existe una reservación "
+"inmediatamente después de la suya."
+
+#: requests.php:2118
+msgid "End Time"
+msgstr "Hora final"
+
+#: requests.php:2119
+msgid "Extend By"
+msgstr "Ampliada por"
+
+#: requests.php:2162
+msgid "Start Time"
+msgstr "Horario de inicio"
+
+#: requests.php:2165
+msgid "Comp. ID"
+msgstr "ID Comp."
+
+#: requests.php:2316
+msgid ""
+"The IP address you specified is assigned to another VCL node and cannot be "
+"used at this time. Submitting a time in the future may allow you to make the "
+"reservation, but if the IP remains assigned to the other node, the "
+"reservation will fail at deploy time."
+msgstr ""
+"La dirección IP que ha especificado fue asignada a nodo VCL y no se puede "
+"utilizar en este momento. La presentación de una primera vez, permite hacer "
+"la reservación en el futuro, pero si la reservación permanece asignado a "
+"otro nodo, la reserva se producirá un error en el momento de implementarse."
+
+#: requests.php:2323
+msgid ""
+"The IP or MAC address you specified overlaps with another reservation using "
+"the same IP or MAC address you specified. Please use a different IP or MAC "
+"or select a different time to deploy the server."
+msgstr ""
+"La dirección IP que ha especificado se traspone con otra reservación suya "
+"usando la misma dirección IP o MAC. Por favor use una dirección IP o MAC "
+"diferente o seleccione una hora diferente para implementar el sistema."
+
+#: requests.php:2330
+msgid "The time you requested overlaps with a maintenance window."
+msgstr "El horario que solicitó se traslapa con una ventana de mantenimiento."
+
+#: requests.php:2338
+msgid ""
+"You have requested an environment that is limited in the number of "
+"concurrent reservations that can be made. No further reservations for the "
+"environment can be made for the time you have selected."
+msgstr ""
+"Ha seleccionado un ambiente que está limitado en el número de reservaciones "
+"concurrentes que se pueden hacer.  No se puede hacer más reservaciones en el "
+"horario que seleccionó."
+
+#: requests.php:2515
+msgid "Configure System"
+msgstr "Configure el sistema"
+
+#: requests.php:2570
+msgid "Type:"
+msgstr "Type:"
+
+#: requests.php:2571
+msgid "Apply this config:"
+msgstr "Aplicar esta configuración"
+
+#: requests.php:2576
+msgid "View Config Data"
+msgstr "Ver datos de configuración"
+
+#: requests.php:2582
+msgid "Config variables:"
+msgstr "Configurar variables:"
+
+#: requests.php:2589
+msgid "Key:"
+msgstr "llave"
+
+#: requests.php:2590
+msgid "Value:"
+msgstr "Valor:"
+
+#: requests.php:2611
+msgid ""
+"Value can only contain letters, numbers, spaces, dashes(-), parenthesis, "
+"<br>slashes(/), and periods(.) and can be from 3 to 255 characters long"
+msgstr ""
+"Valores solo pueden contener letras, números, espacio, guiones, paréntesis, "
+"barra inclinada y puntos y puede contener de 3 a 255 caracteres."
+
+#: requests.php:2621
+msgid "Required:"
+msgstr "Requerido:"
+
+#: requests.php:2664
+msgid ""
+"The selected reservation is no longer available. You can request a new "
+"reservation or select another one that is available."
+msgstr ""
+"La reservación seleccionada no está disponible. Puede solicitar una nueva "
+"reservación o seleccionar otra que esté disponible"
+
+#: requests.php:2671
+msgid "The selected reservation has timed out and is no longer available."
+msgstr "La reservación seleccionada ha acabado el tiempo y no está disponible."
+
+#: requests.php:2688
+msgid "No detailed loading information is available for this reservation."
+msgstr "No existe información detallada para esta reservación"
+
+#: requests.php:2712 requests.php:2713
+msgid "Time"
+msgstr "Tiempo"
+
+#: requests.php:2737
+msgid "problem at state"
+msgstr "problema en estado"
+
+#: requests.php:2747
+msgid "retrying at state"
+msgstr "reintentando en estado"
+
+#: requests.php:2838
+msgid "No detailed information is available for this reservation."
+msgstr "No existe información detallada para esta."
+
+#: requests.php:2852
+msgid "failed:"
+msgstr "falló: "
+
+#: requests.php:3103
+msgid "Admin User Group"
+msgstr "Grupo de administración"
+
+#: requests.php:3121 userpreferences.php:217 userpreferences.php:374
+msgid "None"
+msgstr "Ninguno"
+
+#: requests.php:3139
+msgid "Access User Group"
+msgstr "Grupo de usuarios"
+
+#: requests.php:3172
+msgid "Modify reservation for"
+msgstr "Modificar Reservación por"
+
+#: requests.php:3173
+msgid "starting"
+msgstr "iniciando"
+
+#: requests.php:3194
+msgid "&nbsp;At&nbsp;"
+msgstr "&nbsp;At&nbsp;"
+
+#: requests.php:3213 requests.php:3442 requests.php:3450
+msgid "Indefinite Ending"
+msgstr "Final indefinido"
+
+#: requests.php:3298 requests.php:3471 utils.php:718
+msgid "End:"
+msgstr "Fin:"
+
+#: requests.php:3322
+#, php-format
+msgid ""
+"You are only allowed to extend your reservation such that it has a total "
+"length of %s. "
+msgstr ""
+"Usted solo está autorizado para extender su reservación tal que tenga un "
+"tamaño total de %s."
+
+#: requests.php:3323
+msgid ""
+"This reservation already meets that length. Therefore, you are not allowed "
+"to extend your reservation any further."
+msgstr ""
+"Esta reservación ya conoce el tamaño. Además, usted no está autorizado para "
+"extender su reservación en el futuro."
+
+#: requests.php:3360
+msgid ""
+"The computer you are using has another reservation immediately following "
+"yours. Therefore, you cannot extend your reservation because it would "
+"overlap with the next one."
+msgstr ""
+"La computadora que usted esta usando tiene otra reservación inmediatamente "
+"después de la suya. Por lo que no se puede extender su reservación ya que se "
+"traslaparía con la siguiente."
+
+#: requests.php:3383 requests.php:3399 utils.php:9359 utils.php:9406
+#: utils.php:10241 utils.php:10266 utils.php:10289
+msgid "1 hour"
+msgstr "1 hora"
+
+#: requests.php:3389 requests.php:3405 utils.php:10247 utils.php:10271
+#: utils.php:10298
+msgid "weeks"
+msgstr "semanas"
+
+#: requests.php:3411
+msgid ""
+"You can extend this reservation by a selected amount or change the end time "
+"to a specified date and time."
+msgstr ""
+"Usted puede extender esta reservación por el tiempo seleccionado o cambiar "
+"el horario final a un día y horario específico."
+
+#: requests.php:3415
+msgid "Modify the end time for this reservation:"
+msgstr "Modificar la hora final de esta reservación:"
+
+#: requests.php:3422
+#, php-format
+msgid ""
+"You can extend this reservation by up to %s but not exceeding %s for your "
+"total reservation time."
+msgstr ""
+"Usted puedes extender esta reservación hasta %s pero no más de %s tiempo "
+"total de reservación."
+
+#: requests.php:3428
+#, php-format
+msgid ""
+"The computer you are using has another reservation following yours. "
+"Therefore, you can only extend this reservation for another %s."
+msgstr ""
+"La computadora que usted está usando tiene una reservación después de la "
+"suya. Por lo que solo puede extender esta reservación por otra %s."
+
+#: requests.php:3460 requests.php:3523
+msgid "Extend reservation by:"
+msgstr "Extender reservación por:"
+
+#: requests.php:3485
+msgid "Change ending to:"
+msgstr "Cambiar finalizar a:"
+
+#: requests.php:3503 requests.php:3513 requests.php:4151
+#: userpreferences.php:337
+msgid "NOTE:"
+msgstr "NOTA:"
+
+#: requests.php:3504
+msgid ""
+"Due to an upcoming reservation on the same computer, you cannot extend this "
+"reservation."
+msgstr ""
+"Debido a una reservación entrante en la misma computadora, no puedo extender "
+"esta reservación."
+
+#: requests.php:3514
+#, php-format
+msgid ""
+"Due to an upcoming reservation on the same computer, you can only extend "
+"this reservation until %s."
+msgstr ""
+"Debido a una reservación entrante en la misma computadora, solo extender "
+"esta reservación hasta %s."
+
+#: requests.php:3564
+msgid "The selected reservation no longer exists."
+msgstr "La reservación seleccionada ya no existe."
+
+#: requests.php:3575
+msgid "Invalid start day submitted"
+msgstr "Día inicial inválido"
+
+#: requests.php:3603
+msgid "Invalid duration submitted"
+msgstr "Duración inválida"
+
+#: requests.php:3622
+msgid "Invalid end date/time submitted"
+msgstr "Fecha/horario inválido"
+
+#: requests.php:3637 requests.php:4503 requests.php:4518
+msgid "Invalid data submitted"
+msgstr "Datos inválidos"
+
+#: requests.php:3659
+msgid "Invalid user group submitted"
+msgstr "Grupo de usuarios inválidos"
+
+#: requests.php:3677
+msgid ""
+"The name can only contain letters, numbers, spaces, dashes(-), and "
+"periods(.) and can be from 3 to 255 characters long"
+msgstr ""
+"El nombre solo puede contener letras, números, espacios, guiones(-). y "
+"puntos(.) y puede ser de 3 a 255 caracteres de largo"
+
+#: requests.php:3691
+msgid ""
+"The time you requested overlaps with another reservation you currently have. "
+"You are only allowed to have a single reservation at any given time. Please "
+"select another time for the reservation."
+msgstr "El tiempo requerido se sobrepone"
+
+#: requests.php:3695
+#, php-format
+msgid ""
+"The time you requested overlaps with another reservation you currently have. "
+"You are allowed to have %s overlapping reservations at any given time. "
+"Please select another time for the reservation."
+msgstr ""
+"El horario requerido se traspone con otra reservación propia. Tiene "
+"permitido %s de reservaciones traspuestas en cualquier momento. Por favor "
+"selecciones otro horario de reservación."
+
+#: requests.php:3746
+#, php-format
+msgid ""
+"The reserved IP (%s) or MAC address (%s) conflicts with another reservation "
+"using the same IP or MAC address. Please select a different time to use the "
+"image."
+msgstr ""
+"La IP reservada (%s) o dirección MAC (%s) entró en conflicto con otra "
+"reservación usando el mismo IP o dirección MAC. Por favor seleccione otro "
+"momento para usar la imagen."
+
+#: requests.php:3757
+msgid ""
+"The time you requested overlaps with a maintenance window. Please select a "
+"different time to use the image."
+msgstr ""
+"El horario que solicitó se traslapa con una ventana de mantenimiento. Por "
+"favor seleccione otro horario para usar el ambiente."
+
+#: requests.php:3768
+msgid ""
+"The reservation you are modifying is for an environment limited in the "
+"number of concurrent reservations that can be made. The time or duration you "
+"have requested overlaps with too many other reservations for the same image. "
+"Please select another time or duration for the reservation."
+msgstr ""
+"La reservación que está modificando está ambientalmente limitada en el "
+"número de reservación actuales que se pueden hacer. El momento o la duración "
+"requerida se traslapa con muchas reservaciones para la misma imagen. Por "
+"favor selecciones otro momento o duración de la reservación."
+
+#: requests.php:3823
+msgid ""
+"The time period you have requested is not available. Please select a "
+"different time."
+msgstr ""
+"El horario que selecciono no está disponible. Por favor seleccione otro "
+"horario."
+
+#: requests.php:3853 requests.php:3999
+msgid "The specified reservation no longer exists."
+msgstr "La reservación seleccionada ya no existe."
+
+#: requests.php:3862 requests.php:4220
+msgid ""
+"This reservation has timed out due to lack of user activity and is no longer "
+"available."
+msgstr ""
+"Esta reservación ha expirado debido a una falta de actividad del usuario y "
+"ya no está disponible."
+
+#: requests.php:3882
+#, php-format
+msgid "Delete reservation for %s starting %s?"
+msgstr "Eliminar reservación para %s iniciando en %s ?"
+
+#: requests.php:3898
+#, php-format
+msgid "Are you finished with your reservation for %s that started %s?"
+msgstr "¿Ha finalizado su reservación para %s que empezaba %s?"
+
+#: requests.php:3903
+#, php-format
+msgid "Delete reservation by %s for %s that started %s?"
+msgstr "Eliminando la reservación de %s para %s que inicia el %s?"
+
+#: requests.php:3938
+msgid "End Reservation/Make Production"
+msgstr "Finalizar reservación/Ponerla en producción"
+
+#: requests.php:3939
+msgid ""
+"Are you satisfied that this environment is ready to be made production and "
+"replace the current production version, or would you just like to end this "
+"reservation and test it again later?"
+msgstr ""
+"Usted está satisfecho con el ambiente y piensa está listo para hacerlo de "
+"producción y reemplazar el actual, o desearía solo terminar esta reservación "
+"y probarla más tarde?"
+
+#: requests.php:3943
+msgid ""
+"WARNING: This environment is part of an active block allocation. Changing "
+"the production version of the environment at this time will result in new "
+"reservations under the block allocation to have full reload times instead of "
+"a &lt; 1 minutes wait. You can change the production version later by going "
+"to Manage Images-&gt;Edit Image Profiles and clicking Edit for this "
+"environment."
+msgstr ""
+"Advertencia: Este ambiente es parte de una asignación en bloque. Los cambios "
+"en la versión de producción del entorno en este momento, resultará en nuevas "
+"reservaciones bajo la asignación en bloque que tendrán reinicio completo en "
+"lugar de &lt; 1 minuto de espero. Puede cambiar la versión de producción "
+"despues por medio de manejar  Images-&gt; Editar perfiles de imágenes y "
+"escoger edición para este ambiente"
+
+#: requests.php:3951
+msgid "Make this the production version"
+msgstr "Poner esta versión en producción"
+
+#: requests.php:3956
+msgid "Just end the reservation"
+msgstr "Unicamente finalizar la reservación"
+
+#: requests.php:4007
+msgid "The reservation is no longer failed or timed out."
+msgstr "La reservación ya no es válida o a expirado."
+
+#: requests.php:4014
+msgid "Remove timed out reservation from list of current reservations?"
+msgstr "¿Borrar reservaciones expiradas de la lista de reservaciones actuales?"
+
+#: requests.php:4018
+msgid "Remove failed reservation from list of current reservations?"
+msgstr "¿Borrar reservaciones fallidas de la lista de reservaciones actuales?"
+
+#: requests.php:4124
+msgid ""
+"This will cause the reserved machine to be reinstalled. You may select which "
+"version of the environment you would like to use for the reinstall. The "
+"currently installed version is initally selected."
+msgstr ""
+"Esto puede causar que la máquina reservada sea reinstalada. Debe seleccionar "
+"la versión del ambiente que usted quiere que sea reinstalado. La versión "
+"actual es inicialmente "
+
+#: requests.php:4129
+msgid "Version"
+msgstr "Versión"
+
+#: requests.php:4132
+msgid "Currently in Production"
+msgstr "Actualmente en producción"
+
+#: requests.php:4154
+msgid "This will cause the reserved machine to be reinstalled."
+msgstr "Esto hará que la máquina reservada sea reinstalada."
+
+#: requests.php:4155
+msgid ""
+"Any data saved only to the reserved machine <strong>will be lost</strong>."
+msgstr ""
+"Cualquier información que tenga en la máquina reservada <strong>se perderá</"
+"strong>."
+
+#: requests.php:4156
+msgid "Are you sure you want to continue?"
+msgstr "¿Esta seguro de que desea continuar?"
+
+#: requests.php:4213
+msgid "This reservation is no longer available."
+msgstr "Esta reservación no está disponible."
+
+#: requests.php:4244 utils.php:715
+msgid "NOTICE:"
+msgstr "AVISO:"
+
+#: requests.php:4245
+msgid ""
+"Later in this process, you must accept a <a>click-through agreement</a> "
+"about software licensing."
+msgstr ""
+"Posteriormente en este proceso, deberá de aceptar <a>click-through "
+"agreement</a> la licencia del software."
+
+#: requests.php:4251
+msgid "Notes on using this environment:"
+msgstr "Notas en el uso de este ambiente:"
+
+#: requests.php:4259
+msgid "Cluster Reservation"
+msgstr "Reservación de Cluster"
+
+#: requests.php:4260
+msgid ""
+"This is a cluster reservation. Depending on the makeup of the cluster, you "
+"may need to use different methods to connect to the different environments "
+"in your cluster."
+msgstr ""
+"Esta es una reservación de un cluster. Dependiendo de la configuración del "
+"cluster,usted necesitará usar un método distinto para conectarse a los "
+"distintos ambientes en su cluster."
+
+#: requests.php:4292
+msgid "(use your campus password)"
+msgstr "(use su contraseña del campus)"
+
+#: requests.php:4294 requests.php:4296
+msgid "Connect to reservation using"
+msgstr "Conectarse a la reservación usando"
+
+#: requests.php:4342
+msgid "Get RDP File"
+msgstr "Descargar el archivo de RDP"
+
+#: requests.php:4510
+msgid "No access to submitted reservation type"
+msgstr "No hay acceso al tipo de reservación enviada."
+
+#: requests.php:4525
+msgid "No access to submitted end type"
+msgstr "Sin acceso al final del tipo enviado."
+
+#: requests.php:4543
+msgid "No access to submitted environment"
+msgstr "Sin acceso al ambiente enviado"
+
+#: requests.php:4601
+msgid "The submitted start time is in the past."
+msgstr "El tiempo de inicio enviado está en el pasado."
+
+#: requests.php:4606
+msgid "The end time must be at least 15 minutes later than the start time."
+msgstr ""
+"El tiempo final debe ser al menos 15 minutos después que el tiempo de inicio."
+
+#: requests.php:4629
+msgid ""
+"Invalid IP address. Must be w.x.y.z with each of w, x, y, and z being "
+"between 1 and 255 (inclusive)"
+msgstr ""
+"Dirección de IP invalida. Debe existir w.x.y.z para cada uno de w,x,y, y z "
+"estando entre 1 y 255 (inclusive)"
+
+#: requests.php:4637
+msgid "Invalid netmask specified"
+msgstr "Máscara de red inválida"
+
+#: requests.php:4644
+msgid ""
+"Invalid router address. Must be w.x.y.z with each of w, x, y, and z being "
+"between 1 and 255 (inclusive)"
+msgstr "Dirección del router "
+
+#: requests.php:4650
+msgid ""
+"IP address and router are not on the same subnet based on the specified "
+"netmask."
+msgstr ""
+"La direccipon de IP y router no están sobre las misma subred basada en la "
+"máscara de red específica"
+
+#: requests.php:4663
+msgid "Too many DNS servers specified - up to 3 are allowed."
+msgstr "Demasiados servidores DNS especificados, no son permitidos más de 3"
+
+#: requests.php:4668
+msgid "Invalid DNS server specified."
+msgstr "Servidor DNS inválido"
+
+#: requests.php:4690
+msgid ""
+"Invalid MAC address. Must be XX:XX:XX:XX:XX:XX with each pair of XX being "
+"from 00 to FF (inclusive)"
+msgstr ""
+"Dirección MAC inválida. Debe ser XX:XX:XX:XX:XX:XX con cada par de XX de 00 "
+"a FF (Inclusive)"
+
+#: requests.php:4715
+msgid "You do not have access to use the specified admin user group."
+msgstr "no tiene acceso para usar el usuario administrador especificado"
+
+#: requests.php:4723
+msgid "You do not have access to use the specified access user group."
+msgstr "no tiene acceso para usar el usuario de grupo especificado"
+
+#: requests.php:4951 requests.php:4984
+msgid "Change Test Image to Production"
+msgstr "Cambiar test de imagen a producción"
+
+#: requests.php:4952
+#, php-format
+msgid ""
+"This will update %s so that new reservations for it will be for the newly "
+"created revision. Are you sure it works correctly and is ready to be made "
+"the production revision?"
+msgstr ""
+"Esto actualizará el %s por lo que nuevas reservaciones serán para la "
+"nuevamente creada revisión. Está seguro que trabaja correctamente y está "
+"listo para ser puesto en revisión de producción?"
+
+#: requests.php:4958
+msgid "Make Production"
+msgstr "Ponerla en producción"
+
+#: requests.php:4981
+#, php-format
+msgid ""
+"%s is now in the process of being updated to use the newly created revision."
+msgstr ""
+"%s  está ahora en el proceso de actualización para usar nuevamente "
+"revisiones creadas."
+
+#: resource.php:172
+msgid "Edit Grouping &amp; Mapping"
+msgstr "Editar agrupación &amp; mapeo"
+
+#: resource.php:174
+msgid "Edit Grouping"
+msgstr "Editar agraupación"
+
+#: resource.php:272
+msgid "Filters (click to expand)"
+msgstr "Filtros (click para expandir)"
+
+#: resource.php:282
+msgid "Apply Name Filter"
+msgstr "Aplicar nombre de filtro"
+
+#: resource.php:286
+msgid "Displayed Fields"
+msgstr "Desplegar campos"
+
+#: resource.php:778
+msgid ""
+"Select an item from the drop-down box and click \"Get Groups\" to see all of "
+"the groups it is in. Then, select a group it is in and click the Remove "
+"button to remove it from that group, or select a group it is not in and "
+"click the Add button to add it to that group."
+msgstr ""
+"Seleccione un elemento del cuadro desplegable y haga clic en \"Obtener grupos"
+"\" para ver todos los grupos en los que se encuentra. Luego, seleccione un "
+"grupo en el que se encuentre y haga clic en el botón Eliminar para "
+"eliminarlo del grupo o seleccione un grupo si no está en y haga clic en el "
+"botón Agregar para agregarlo a ese grupo."
+
+#: resource.php:786
+msgid "Get Groups"
+msgstr "Obtener grupos"
+
+#: resource.php:792
+#, php-format
+msgid "Groups %s is in:"
+msgstr "Porcentaje de grupos %s presente:"
+
+#: resource.php:821
+#, php-format
+msgid "Groups %s is not in:"
+msgstr "Grupos %s no está presente:  "
+
+#: resource.php:953
+msgid "Group By Group"
+msgstr "Grupo por grupo"
+
+#: resource.php:957
+msgid "Group:"
+msgstr "Grupo"
+
+#: resource.php:1152
+msgid "You don't have access to manage any mappings for this resource type."
+msgstr ""
+"No tiene acceso para gestionar las asignaciones para este tipo de recurso."
+
+#: resource.php:1649
+msgid "The reservation you selected to image has expired."
+msgstr "La reservación seleccionada ha expirado."
+
+#: resource.php:1680
+msgid ""
+"There was an error in starting the imaging process. Please contact a system "
+"administrator."
+msgstr ""
+"Hay en un error en el procesamiento de la imágen. Porfavor contacte al "
+"servidor."
+
+#: resource.php:1728
+#, php-format
+msgid "These are the comments from the previous revision (%s):"
+msgstr "Hay comentarios de la revisión previa  (%s):"
+
+#: resource.php:1734
+msgid "The previous revision did not have any comments."
+msgstr "La revisión previa no tuvo ningún comentario."
+
+#: schedule.php:85
+msgid ""
+"Name cannot contain single (') or double (&quot;) quotes, less than (&lt;), "
+"or greater than (&gt;) and can be from 2 to 30 characters long"
+msgstr ""
+"El nombre no puede contener parentésis simples ('), ni dobles (&quot;) menor "
+"que (&lt;), o mayor que (&gt;) y pueden contener de 2 a 30 caracteres."
+
+#: siteconfig.php:29 siteconfig.php:34 utils.php:12708
+msgid "Site Configuration"
+msgstr "Configuración del sitio"
+
+#: siteconfig.php:135
+msgid "Time Source"
+msgstr "Fuente de tiempo"
+
+#: siteconfig.php:137
+msgid ""
+"Set the default list of time servers to be used on installed nodes. These "
+"can be overridden for each management node under the settings for a given "
+"management node. Separate hostnames using a comma (,)."
+msgstr ""
+"Establezca la lista por defecto de tiempo de servidores para ser usado en "
+"nodos instalados. Esto puede ser sobremanejado para cada nodo de gestión  "
+"bajo las condiciones dadas para un nodo de gestión. Separe los nombres de "
+"los host usando comas(,)"
+
+#: siteconfig.php:141
+msgid "Time Servers"
+msgstr "Tiempo en los servidores"
+
+#: siteconfig.php:160
+msgid "You do not have access to set the global Time Server setting."
+msgstr "No tiene permiso para modificar la hora en el servidor global"
+
+#: siteconfig.php:178
+msgid "Invalid server(s) specified."
+msgstr "Servidor inválido"
+
+#: siteconfig.php:189
+msgid "Time Server successfully updated"
+msgstr "El servidor fue actualizado exitosamente"
+
+#: siteconfig.php:227
+#, php-format
+msgid "Time out for %s added"
+msgstr "Tiempo muerto para el  %s agregado"
+
+#: siteconfig.php:228
+msgid "Time out values saved"
+msgstr "Se acabó el tiempo, valores guardados"
+
+#: siteconfig.php:229
+#, php-format
+msgid "Time out for %s deleted"
+msgstr "Tiempo muerto para el  %s borrado"
+
+#: siteconfig.php:272 siteconfig.php:273
+msgid "Global"
+msgstr "Global"
+
+#: siteconfig.php:377
+msgid "You do not have access to modify settings for other affiliations."
+msgstr "No tiene permisos para modificar ajustes de otras afiliaciones"
+
+#: siteconfig.php:386
+msgid "Invalid affiliation submitted."
+msgstr "afiliación inválida"
+
+#: siteconfig.php:394
+msgid "Invalid value submitted."
+msgstr "Valores suministrados inválidos"
+
+#: siteconfig.php:444 siteconfig.php:902 siteconfig.php:1327
+msgid "You do not have access to modify the submitted settings."
+msgstr "No puede modificar los ajustes presentados"
+
+#: siteconfig.php:462 siteconfig.php:1364
+msgid "Invalid value submitted for "
+msgstr "valor inválido para ser enviado"
+
+#: siteconfig.php:499
+msgid "You do not have access to delete the submitted setting."
+msgstr "No tiene permisos para borrar los ajustes"
+
+#: siteconfig.php:508
+msgid "Invalid data submitted."
+msgstr "Información inválida suministrada"
+
+#: siteconfig.php:558
+msgid "Connected User Check Threshold"
+msgstr ""
+"30/5000\n"
+"Umbral de comprobación de usuario conectado"
+
+#: siteconfig.php:560
+msgid ""
+"Do not perform user-logged-in time out checks if reservation duration is "
+"greater than the specified value (in hours)."
+msgstr ""
+"No efectúe comprobaciones de tiempo de espera registradas por el usuario si "
+"la duración de la reserva es mayor que el valor especificado (en horas)."
+
+#: siteconfig.php:588
+msgid "Acknowledge Reservation Timeout"
+msgstr "Confirmar el tiempo de espera de la reserva"
+
+#: siteconfig.php:590
+msgid ""
+"Once a reservation is ready, users have this long to click the Connect "
+"button before the reservation is timed out (in minutes, does not apply to "
+"Server Reservations)."
+msgstr ""
+"Una vez que la reservación esté lista, los usuarios tendrán tiempo para "
+"hacer clic en el botón Conectar antes de que se agote el tiempo de "
+"reservación(en minutos, no se aplica a las reservas del servidor)."
+
+#: siteconfig.php:616
+msgid "Connect To Reservation Timeout"
+msgstr "Conectarse al tiempo de espera de la reserva"
+
+#: siteconfig.php:618
+msgid ""
+"After clicking the Connect button for a reservation, users have this long to "
+"connect to a reserved node before the reservation is timed out (in minutes, "
+"does not apply to Server Reservations)."
+msgstr ""
+"Después de hacer clic en el botón Conectar para realizar una reserva, los "
+"usuarios disponen de este tiempo para conectarse a un nodo reservado antes "
+"de que se haya agotado el tiempo de reservación (en minutos, no se aplica a "
+"las reservaciones del servidor)."
+
+#: siteconfig.php:644
+msgid "Reconnect To Reservation Timeout"
+msgstr "Volver a conectar al tiempo de espera de reserva"
+
+#: siteconfig.php:646
+msgid ""
+"After disconnecting from a reservation, users have this long to reconnect to "
+"a reserved node before the reservation is timed out (in minutes, does not "
+"apply to Server Reservations)."
+msgstr ""
+"Después de desconectarse de una reservación, los usuarios disponen de este "
+"tiempo para conectarse a un nodo reservado antes de que se haya agotado el "
+"tiempo de reservación (en minutos, no se aplica a las reservaciones del "
+"servidor)."
+
+#: siteconfig.php:672
+msgid "In-Use Reservation Check"
+msgstr "Comprobación de la reserva en uso"
+
+#: siteconfig.php:674
+msgid ""
+"Frequency at which a general check of each reservation is done (in minutes)."
+msgstr ""
+"Frecuencia en la que se realiza un chequeo general de cada reserva (en "
+"minutos)."
+
+#: siteconfig.php:681 siteconfig.php:713 siteconfig.php:745
+#, php-format
+msgid "In-Use check for %s added"
+msgstr "Comprobación en uso para % s añadido"
+
+#: siteconfig.php:682 siteconfig.php:714 siteconfig.php:746
+msgid "In-Use check values saved"
+msgstr "Los valores de comprobación en uso guardados"
+
+#: siteconfig.php:683 siteconfig.php:715 siteconfig.php:747
+#, php-format
+msgid "In-Use check for %s deleted"
+msgstr "In-Use check for %s deleted"
+
+#: siteconfig.php:704
+msgid "In-Use Reservation Check (servers)"
+msgstr "Comprobación de la reserva en uso (servidores)"
+
+#: siteconfig.php:706
+msgid ""
+"Frequency at which a general check of each server reservation is done (in "
+"minutes)."
+msgstr ""
+"Frecuencia en la que se realiza un chequeo general de cada reserva de "
+"servidor (en minutos)."
+
+#: siteconfig.php:736
+msgid "In-Use Reservation Check (clusters)"
+msgstr "Comprobación de reserva en uso (clusters)"
+
+#: siteconfig.php:738
+msgid ""
+"Frequency at which a general check of each cluster reservation is done (in "
+"minutes)."
+msgstr ""
+"Frecuencia en la que se realiza un chequeo general de cada grupo de "
+"reservaciones de cluster (en minutos)."
+
+#: siteconfig.php:768
+msgid "First Notice For Reservation Ending"
+msgstr "Primer aviso para finalizar reservación"
+
+#: siteconfig.php:770
+msgid ""
+"Users are notified two times that their reservations are going to end when "
+"getting close to the end time. This is the time before the end that the "
+"first of those notices should be sent."
+msgstr ""
+"Los usuarios son notificados dos veces que sus reservas van a terminar al "
+"acercarse a la hora final. Este es el tiempo antes del final que la primera "
+"de esas notificaciones sea enviada"
+
+#: siteconfig.php:777 siteconfig.php:809
+#, php-format
+msgid "End notice time for %s added"
+msgstr "Última notificación de tiempo para %s añadido"
+
+#: siteconfig.php:778 siteconfig.php:810
+msgid "End notice time values saved"
+msgstr "Valores del tiempo de aviso final guardados"
+
+#: siteconfig.php:779 siteconfig.php:811
+#, php-format
+msgid "End notice time for %s deleted"
+msgstr "Última notificación de tiempo para %s borrado"
+
+#: siteconfig.php:800
+msgid "Second Notice For Reservation Ending"
+msgstr "Segundo aviso para la finalización de la reservación"
+
+#: siteconfig.php:802
+msgid ""
+"Users are notified two times that their reservations are going to end when "
+"getting close to the end time. This is the time before the end that the "
+"second of those notices should be sent."
+msgstr ""
+"Los usuarios son notificados dos veces que sus reservas van a terminar al "
+"acercarse a la hora final. Éste es el momento antes del final para que el  "
+"segundo de esos avisos sea enviado."
+
+#: siteconfig.php:843
+msgid "New value saved"
+msgstr "Nuevo valor guardado"
+
+#: siteconfig.php:913 siteconfig.php:924 siteconfig.php:944 siteconfig.php:955
+#: siteconfig.php:1269 siteconfig.php:1388
+msgid "Invalid value submitted"
+msgstr "valor inválido"
+
+#: siteconfig.php:935
+msgid "unsupported type"
+msgstr "tipo no soportado"
+
+#: siteconfig.php:997
+msgid "User Reservation Password Length"
+msgstr "Longitud de la contraseña de reservación del usuario"
+
+#: siteconfig.php:999
+msgid "Password Length"
+msgstr "Longitud de la contraseña"
+
+#: siteconfig.php:1000
+msgid ""
+"For reservations not using federated authentication, VCL generates random "
+"user passwords. This specifies how many characters should be in the password."
+msgstr ""
+"Para las reservaciones que no utilizan la autenticación federada, VCL genera "
+"contraseñas de usuario aleatorias. Esto especifica cuántos caracteres debe "
+"tener la contraseña"
+
+#: siteconfig.php:1029
+msgid "User Reservation Password Special Characters"
+msgstr "Contraseña de reservaciones de usuario Caractéres especiales"
+
+#: siteconfig.php:1031
+msgid "Include Special Characters"
+msgstr "Incluye caracteres especiales"
+
+#: siteconfig.php:1032
+msgid ""
+"For reservations not using federated authentication, VCL generates random "
+"user passwords. This specifies if characters other than letters and numbers "
+"should be included in the passwords."
+msgstr ""
+"Para las reservas que no utilizan la autenticación federada, VCL genera "
+"contraseñas de usuario aleatorias. Esto especifica si los caracteres que no "
+"sean letras y números deben incluirse en las contraseñas."
+
+#: siteconfig.php:1058 siteconfig.php:1060
+msgid "NAT Port Ranges"
+msgstr "Ámbito de puerto NAT"
+
+#: siteconfig.php:1061
+msgid ""
+"Port ranges available for use on NAT servers. Type of port (TCP/UDP) is not "
+"specified. List ranges one per line (ex: 10000-20000)."
+msgstr ""
+"Ámbito de puerto disponible para usar servidores NAT. El tipo de puerto(TCP/"
+"UDP) no esta específicado.Enliste los ámbitos uno por línea(ex: 10000-20000)."
+
+#: siteconfig.php:1067
+msgid ""
+"Invalid value submitted. Must be numeric ranges of ports of the form "
+"10000-20000, one per line."
+msgstr ""
+"Valor inválido. Debe ser un ambito numérico de puertos de 10000-20000, uno "
+"por línea."
+
+#: siteconfig.php:1118
+msgid "Values updated"
+msgstr "Valores acrualizados"
+
+#: siteconfig.php:1261
+msgid "Invalid item selected for new value"
+msgstr "Item inválido para el nuevo valor seleccionado"
+
+#: siteconfig.php:1302 siteconfig.php:1682
+msgid "Invalid item submitted for deletion"
+msgstr "Item inválido para la cancelación"
+
+#: siteconfig.php:1432
+msgid "NFS Mounts"
+msgstr "Montar NFS"
+
+#: siteconfig.php:1445
+msgid ""
+"NFS Mounts are NFS exports that are to be mounted within each reservation "
+"deployed by a given management node.<br>Values must be like"
+msgstr ""
+"Los montajes NFS son exportaciones NFS que se deben montar dentro de cada "
+"reserva desplegada por un nodo de administración determinado.<br> Los "
+"valores deben ser como"
+
+#: siteconfig.php:1454
+msgid "Invalid value - must be in the form"
+msgstr "Valor invalido- debe ser en la forma"
+
+#: siteconfig.php:1516
+msgid "Messages"
+msgstr "Mensajes"
+
+#: siteconfig.php:1517
+#, php-format
+msgid ""
+"This section allows for configuration of messages that are sent to users and "
+"administrators about things such as reservations and image management. Every "
+"message has a default. Additionally, separate messages can be configured for "
+"each affiliation. Most of the messages will have parts that are in square "
+"brackets. These parts will have data substituted for them before the message "
+"is sent. A list of what can be used in squeare brackets can be found at the "
+"<a href=\"%s\">Apache VCL web site</a>. Some messages also have a short form "
+"that may be sent such as in the form of a popup within a reservation when "
+"the reservation is about to end."
+msgstr ""
+"Esta sección permite la configuración de mensajes que se envían a los "
+"usuarios y administradores sobre cosas tales como reservas y gestión de "
+"imágenes. Cada mensaje tiene un valor predeterminado. Además, se pueden "
+"configurar mensajes separados para cada afiliación. La mayoría de los "
+"mensajes tendrán partes que están entre corchetes. Estas partes tendrán los "
+"datos sustituidos antes de que se envíe el mensaje. Se puede encontrar una "
+"lista de lo que se puede usar en corchetes en el <a href=\"%s\"> sitio web "
+"de Apache VCL </a>. Algunos mensajes también tienen un formulario corto que "
+"puede ser enviado como en forma de un popup dentro de una reserva cuando la "
+"reserva está a punto de terminar."
+
+#: siteconfig.php:1582
+msgid ""
+"There is no message set specifically for this affiliation. The default "
+"message is being used and is displayed below."
+msgstr ""
+"No hay ningún mensaje establecido específicamente para esta afiliación. Se "
+"utiliza el mensaje predeterminado y se muestra a continuación."
+
+#: siteconfig.php:1593
+msgid "Save Message"
+msgstr "guardar mensaje"
+
+#: siteconfig.php:1594
+msgid "Delete Message and Use Default"
+msgstr "Borrar mensaje y usar el sugerido"
+
+#: siteconfig.php:1598 siteconfig.php:1609
+msgid "Delete Message"
+msgstr "borrar mensaje"
+
+#: siteconfig.php:1627
+msgid "Invalid Message Fields"
+msgstr "Campos de mensaje inválidos"
+
+#: siteconfig.php:1642
+msgid ""
+"The following messages have invalid items included for substitution. Please "
+"correct the message contents and save them again for the backend to validate."
+msgstr ""
+"Los siguientes mensajes tienen elementos no válidos incluidos por "
+"sustitución. Corrija el contenido del mensaje y guárdelos de nuevo para que "
+"el backend lo valide."
+
+#: siteconfig.php:1695
+#, php-format
+msgid "Message type %s for affiliation %s successfully deleted"
+msgstr "Tipo de mensaje% s para la afiliación% s eliminado correctamente"
+
+#: siteconfig.php:1724
+msgid "Invalid item submitted to save"
+msgstr "Item inválido para ser guardado"
+
+#: siteconfig.php:1756
+msgid "Message successfully saved"
+msgstr "Mensaje exitosamente guardado"
+
+#: siteconfig.php:1759
+msgid "No changes to submitted message. Nothing saved."
+msgstr "No hay cambios en el mensaje enviado. Nada se guardó"
+
+#: statistics.php:44
+msgid "Statistic Information"
+msgstr "Información Estadística"
+
+#: statistics.php:59
+msgid "Select a starting date:"
+msgstr "Seleccione la fecha Inicial:"
+
+#: statistics.php:83
+msgid "Select an ending date:"
+msgstr "Seleccione la fecha final:"
+
+#: statistics.php:96
+msgid "View General Statistics"
+msgstr "Ver estadísticas generales"
+
+#: statistics.php:97
+msgid "Select an affiliation:"
+msgstr "Seleccione la Afiliación:"
+
+#: statistics.php:119
+msgid "View Statistics by provisioning engine"
+msgstr "Ver estadísticas por motor de aprovisionamiento"
+
+#: statistics.php:169
+msgid "All Affiliations"
+msgstr "Todas las afilciones"
+
+#: statistics.php:177
+msgid "The selected start date is not valid. Please select a valid date."
+msgstr ""
+"La fecha de inicio no es válida. Por favor seleccione una fecha válida."
+
+#: statistics.php:181
+msgid "The selected end date is not valid. Please select a valid date."
+msgstr "La fecha final no es válida. Por favor select a valid date."
+
+#: statistics.php:185
+msgid ""
+"The selected end date is before the selected start date. Please select an "
+"end date equal to or greater than the start date."
+msgstr ""
+"La fecha final es anterior a la fecha inicial. Por favor seleccione un fecha "
+"final igual o mayor que la fecha inicial."
+
+#: statistics.php:194 statistics.php:196
+msgid "Statistic Information for"
+msgstr "Información estadística para"
+
+#: statistics.php:203
+#, php-format
+msgid "Reservation information between %s and %s:"
+msgstr "Información de reservaciones entre %s y %s:"
+
+#: statistics.php:397
+msgid "Total Reservations:"
+msgstr "Total de Reservaciones:"
+
+#: statistics.php:401
+msgid "Total Hours Used:"
+msgstr "Total de Horas Usadas:"
+
+#: statistics.php:405
+msgid "\"Now\" Reservations:"
+msgstr "\"Ahora\" Reservaciones:"
+
+#: statistics.php:409
+msgid "\"Later\" Reservations:"
+msgstr "\"Después\" Reservaciones:"
+
+#: statistics.php:413
+msgid "Unavailable:"
+msgstr "No Disponible:"
+
+#: statistics.php:417
+msgid "Load times &lt; 2 minutes:"
+msgstr "Tiempo de carga &lt; 2 minutos:"
+
+#: statistics.php:420
+msgid "Load times 2-6 minutes:"
+msgstr "Recargando de 2-6 minutos"
+
+#: statistics.php:423
+msgid "Load times 6-8 minutes:"
+msgstr "Recargando de 6-8 minutos"
+
+#: statistics.php:426
+msgid "Load times &gt;= 8 minutes:"
+msgstr "Tiempo de recarga  &gt;=  8 minutos"
+
+#: statistics.php:430
+msgid "Total Unique Users:"
+msgstr "Total de Usuarios únicos:"
+
+#: statistics.php:436
+#, php-format
+msgid "Unique Users of %s:"
+msgstr "Usuarios únicos de %s:"
+
+#: statistics.php:446 utils.php:12620
+msgid "Reservations"
+msgstr "Reservaciones"
+
+#: statistics.php:447
+msgid "Unique Users"
+msgstr "Usuarios únicos"
+
+#: statistics.php:448
+msgid "Hours Used"
+msgstr "Horas usadas"
+
+#: statistics.php:449
+msgid "&lt; 2 min wait"
+msgstr "&lt; 2 minutos de espera"
+
+#: statistics.php:450
+msgid "2-6 min wait"
+msgstr "De 2 a 6 minutos de espera"
+
+#: statistics.php:451
+msgid "6-8 min wait"
+msgstr "De 6-8 minutos de espera"
+
+#: statistics.php:452
+msgid "&gt;= 8 min wait"
+msgstr "&gt;= 8 minutos de espera"
+
+#: statistics.php:453
+msgid "Failures"
+msgstr "Fallidas"
+
+#: statistics.php:483
+msgid "Durations:"
+msgstr "Duraciones:"
+
+#: statistics.php:486
+msgid "0 - 30 Min:"
+msgstr "0 - 30 Min:"
+
+#: statistics.php:490
+msgid "30 Min - 1 Hour:"
+msgstr "30 Min - 1 Hora:"
+
+#: statistics.php:494
+msgid "1 Hour - 2 Hours:"
+msgstr "1 Hora - 2 Horas:"
+
+#: statistics.php:498
+msgid "2 Hours - 4 Hours:"
+msgstr "2 Horas - 4 Horas:"
+
+#: statistics.php:502
+msgid "4 Hours - 6 Hours:"
+msgstr "4 Horas - 6 Horas:"
+
+#: statistics.php:506
+msgid "6 Hours - 8 Hours:"
+msgstr "6 Horas - 8 Horas:"
+
+#: statistics.php:510
+msgid "8 Hours - 10 Hours:"
+msgstr "8 Horas - 10 Horas:"
+
+#: statistics.php:514
+msgid "&gt; 10 Hours:"
+msgstr "&gt; 10 Horas:"
+
+#: statistics.php:519
+msgid "Ending information:"
+msgstr "Información de finalización:"
+
+#: statistics.php:522
+msgid "Deleted:"
+msgstr "Canceladas:"
+
+#: statistics.php:525
+msgid "(Future reservation deleted before start time reached)"
+msgstr "(Reservaciones futuras cancelada antes de la hora de inicio)"
+
+#: statistics.php:528
+msgid "Released:"
+msgstr "Liberadas:"
+
+#: statistics.php:530
+msgid "(Reservation released before end time reached)"
+msgstr "(Reservaciones liberadas andes del final del horario)"
+
+#: statistics.php:533
+msgid "Not Acknowledged:"
+msgstr "No se conectaron:"
+
+#: statistics.php:535
+msgid "(\"Connect!\" button never clicked)"
+msgstr "(Nunca se seleccionó el botón \"¡Conectar!\")"
+
+#: statistics.php:538
+msgid "No Login:"
+msgstr "No se conecto a la computadora remota:"
+
+#: statistics.php:540
+msgid "(User never logged in)"
+msgstr "(El usuario no se conecto a la computadora remota)"
+
+#: statistics.php:543
+msgid "End of Reservation:"
+msgstr "Fin de la reservación"
+
+#: statistics.php:545
+msgid "(End of reservation reached)"
+msgstr "(Se termino el tiempo de reservación)"
+
+#: statistics.php:548
+msgid "Timed Out:"
+msgstr "Desconexión:"
+
+#: statistics.php:550
+msgid "(Disconnect and no reconnection within 15 minutes)"
+msgstr "(Se desconecto y no se reconecto en 15 minutos)"
+
+#: statistics.php:553
+msgid "Failed:"
+msgstr "Fallida:"
+
+#: statistics.php:555
+msgid "(Reserved computer failed to get prepared for user)"
+msgstr "(La computadora reservada no pudo ser preparada para el usuario)"
+
+#: statistics.php:570
+msgid "Reservations by Day"
+msgstr "Reservaciones por día"
+
+#: statistics.php:571
+msgid "(Reservations with start time on given day)"
+msgstr "(Reservaciones con horario de inicio en una fecha"
+
+#: statistics.php:577
+msgid "Max Concurrent Reservations By Day"
+msgstr "Máximo de reservaciones concurrentes por día"
+
+#: statistics.php:583
+msgid "Max Concurrent Blade Reservations By Day"
+msgstr "Max. número de blades o servidores de vmware  concurrentes por día"
+
+#: statistics.php:589
+msgid "Max Concurrent Virtual Machine Reservations By Day"
+msgstr "Máximo número de reservaciones de máquinas virtuales por día"
+
+#: statistics.php:595
+msgid "Reservations by Hour"
+msgstr "Reservaciones por Horario"
+
+#: statistics.php:596
+msgid "Active reservations during given hour averaged over selected dates"
+msgstr "Reservaciones activas a la hora seleccionada en fechas seleccionadas"
+
+#: statistics.php:956 statistics.php:1100 statistics.php:1278
+msgid "(too much computational time required to generate this graph)"
+msgstr "(se requiere mucho tiempo de computadora para generar esta gráfica)"
+
+#: userpreferences.php:55
+msgid "<H2 align=center>User Preferences</H2>\n"
+msgstr "<H2 align=center>Preferencias de usuario</H2>\n"
+
+#: userpreferences.php:58
+msgid "User preferences successfully updated"
+msgstr "Han sido actualizadas las preferencias del usuario"
+
+#: userpreferences.php:71 userpreferences.php:392
+msgid "Personal Information"
+msgstr "Información Personal"
+
+#: userpreferences.php:75 userpreferences.php:406
+msgid "RDP Preferences"
+msgstr "Preferencias del RDP"
+
+#: userpreferences.php:78 userpreferences.php:265
+msgid "General Preferences"
+msgstr "Preferencias Generales"
+
+#: userpreferences.php:86
+msgid "Personal"
+msgstr "Personal"
+
+#: userpreferences.php:92
+msgid "First Name:"
+msgstr "Primer nombre"
+
+#: userpreferences.php:99
+msgid "Last Name:"
+msgstr "Nombre:"
+
+#: userpreferences.php:107 userpreferences.php:396
+msgid "Preferred Name:"
+msgstr "Nombre preferido"
+
+#: userpreferences.php:119
+msgid "Email Address:"
+msgstr "Correo electrónico:"
+
+#: userpreferences.php:126
+msgid "Change Password"
+msgstr "Cambiar contraseña"
+
+#: userpreferences.php:129
+msgid "Current Password:"
+msgstr "Contraseña actual"
+
+#: userpreferences.php:139
+msgid "New Password:"
+msgstr "Nueva contraseña"
+
+#: userpreferences.php:148
+msgid "Confirm Password:"
+msgstr "Confirmar contraseña"
+
+#: userpreferences.php:175
+msgid "RDP"
+msgstr "RDP"
+
+#: userpreferences.php:182
+msgid ""
+"Try decreasing <em>Resolution</em> or <em>Color Depth</em> to speed up your "
+"connection if things seem slow when connected to a remote computer."
+msgstr ""
+"Disminuya la <em>Resolución</em> o <em> el Número de colores</em> para "
+"mejorar la velocidad br>cuando se conecte a la computadora remota."
+
+#: userpreferences.php:186 userpreferences.php:410
+msgid "Resolution:"
+msgstr "Resolución:"
+
+#: userpreferences.php:207 userpreferences.php:414
+msgid "Color Depth:"
+msgstr "Número de colores:"
+
+#: userpreferences.php:215 userpreferences.php:419
+msgid "Audio:"
+msgstr "Audio:"
+
+#: userpreferences.php:217 userpreferences.php:376
+msgid "Use my speakers"
+msgstr "Usar mis bocinas"
+
+#: userpreferences.php:223 userpreferences.php:423
+msgid "Map Local Drives:"
+msgstr "Mapear mis discos locales:"
+
+#: userpreferences.php:231 userpreferences.php:427
+msgid "Map Local Printers:"
+msgstr "Mapear mis impresoras locales:"
+
+#: userpreferences.php:238 userpreferences.php:431
+msgid "Map Local Serial Ports:"
+msgstr "Mapear mis puertos seriales:"
+
+#: userpreferences.php:245 userpreferences.php:435
+msgid "RDP Port"
+msgstr "RDP Puerto"
+
+#: userpreferences.php:277
+msgid "View User Groups:"
+msgstr "Ver grupos de usuario:"
+
+#: userpreferences.php:279
+msgid "matching my affiliation"
+msgstr "Sólo de mi afiliación"
+
+#: userpreferences.php:282
+msgid "from all affiliations"
+msgstr "De todas las afiliaciones"
+
+#: userpreferences.php:292
+msgid "Send email notifications about reservations:"
+msgstr "Enviar correo electrónico notificando las reservaciones:"
+
+#: userpreferences.php:294 userpreferences.php:322
+msgid "Enabled"
+msgstr "Activado"
+
+#: userpreferences.php:297 userpreferences.php:325
+msgid "Disabled"
+msgstr "Desactivado"
+
+#: userpreferences.php:319
+msgid "Use public key authentication for SSH logins:"
+msgstr "Use claves públicas para autenticar se en  SSH:"
+
+#: userpreferences.php:326
+msgid "Public keys:"
+msgstr "Claves públicas"
+
+#: userpreferences.php:330
+msgid ""
+"Public keys can only contain letters, numbers, spaces, and these characters: "
+"+ / @ . ="
+msgstr ""
+"Las claves públicas sólo pueden contener letras, números, espacios y estos "
+"caracteres: + / @. ="
+
+#: userpreferences.php:338
+msgid ""
+"Images using network storage (such as AFS) may not work well with public key "
+"authentication. In some cases, you may still be prompted for a password. In "
+"other cases, you may need to run additional commands after logging in to "
+"gain access to the network storage."
+msgstr ""
+"Las imágenes que utilizan almacenamiento en red (como AFS) pueden no "
+"funcionar bien con la autenticación de clave pública. En algunos casos, es "
+"posible que se le solicite una contraseña. En otros casos, es posible que "
+"deba ejecutar comandos adicionales después de iniciar sesión para obtener "
+"acceso al almacenamiento en red."
+
+#: userpreferences.php:344
+msgid "Submit General Preferences"
+msgstr "Enviar preferencias generales"
+
+#: userpreferences.php:393 userpreferences.php:407
+msgid "Submit the following changes?"
+msgstr "¿Realizar los siguientes cambios?"
+
+#: userpreferences.php:402
+msgid "New password will be submitted"
+msgstr "La contraseña nueva será guardada"
+
+#: userpreferences.php:614
+msgid "Preferred name can only be up to 25 characters"
+msgstr "El nombre preferido debe de ser de menos de 25 caracteres"
+
+#: userpreferences.php:618
+msgid "Preferred name can only contain letters and spaces"
+msgstr "El nombre preferido solo puede contener letras y espacios"
+
+#: userpreferences.php:632
+msgid "Password incorrect"
+msgstr "Contraseña incorrecta"
+
+#: userpreferences.php:638
+msgid "Passwords do not match"
+msgstr "Las contraseñas no concuerdan"
+
+#: userpreferences.php:658
+msgid "RDP Port cannot be changed while you have active reservations"
+msgstr ""
+"El puerto no puede ser cambiado mientras se tengan reservaciones activas"
+
+#: userpreferences.php:664
+msgid "RDP Port must be between 1024 and 65535"
+msgstr "El puerto RDP debe encontrar se entre 1024 y 65535"
+
+#: utils.php:216
+msgid "Failed to get user info from database. userid was "
+msgstr "Fallo en obtener el usuario de la base de la datos."
+
+#: utils.php:674
+msgid "Site Currently Under Maintenance"
+msgstr "El servicio esta actualmente en mantenimiento"
+
+#: utils.php:681
+msgid "This site is currently in maintenance."
+msgstr "Este servicio esta actualmente en mantenimiento."
+
+#: utils.php:683
+#, php-format
+msgid "The maintenance is scheduled to end <strong>%s</strong>."
+msgstr "El mantenimiento esta programado para finalizar <strong>%s</strong>."
+
+#: utils.php:716
+msgid "This site will be down for maintenance during the following times:"
+msgstr ""
+"Este servicio será dado de baja por mantenimiento durante los siguientes "
+"horarios:"
+
+#: utils.php:717
+msgid "Start:"
+msgstr "Inicio:"
+
+#: utils.php:720
+msgid ""
+"You will be able to access your reserved machines during this maintenance. "
+"However, you will not be able to access information on how to connect to "
+"them."
+msgstr ""
+"Usted podrá tener acceso a sus computadora reservadas durante este "
+"mantenimiento. Sin embargo no tendrá acceso a la information on how to "
+"connect to them."
+
+#: utils.php:723
+msgid ""
+"You will not be able to access any of your reservations during this "
+"maintenance."
+msgstr ""
+"No podrá acceder a ninguna de sus reservaciones durante el mantenimiento"
+
+#: utils.php:831 utils.php:833
+msgid "Hello"
+msgstr "Hola"
+
+#: utils.php:845
+msgid "You currently have 1 reservation."
+msgstr "Actualmente tiene 1 reservación."
+
+#: utils.php:847
+#, php-format
+msgid "You currently have %d reservations."
+msgstr "Actualmente tiene %d reservaciónes."
+
+#: utils.php:850
+msgid "You do not have any current reservations."
+msgstr "Usted no tiene ninguna reservación."
+
+#: utils.php:852
+msgid "Please make a selection from the menu to continue."
+msgstr "Por favor haga una selección del menú para continuar."
+
+#: utils.php:855
+msgid "Please log in to start using the VCL system."
+msgstr "Por favor regisrese en el inicio usando el sistema VCL"
+
+#: utils.php:928 utils.php:11627
+msgid "Problem With VCL"
+msgstr "Problema con VCL"
+
+#: utils.php:930 utils.php:11641
+#, php-format
+msgid ""
+"An error has occurred. If this problem persists, please email %s for further "
+"assistance. Please include the steps you took that led up to this problem in "
+"your email message."
+msgstr ""
+"Se ha producido un error. Si el problema persiste, envíe un correo "
+"electrónico a% s para obtener más ayuda. Por favor, incluya los pasos  que "
+"le llevaron a este problema en su mensaje de correo electrónico."
+
+#: utils.php:5477
+msgid "OOPS! - Reservation Has Expired"
+msgstr "UPS! - La reservación ha expirado"
+
+#: utils.php:5478
+msgid ""
+"The selected reservation is no longer available. Go to <a>Reservations</a> "
+"to request a new reservation or select another one that is available."
+msgstr ""
+"La reserva seleccionada ya no está disponible. Vaya a <a> Reservaciones </a> "
+"para solicitar una nueva reserva o seleccione otra que esté disponible."
+
+#: utils.php:7385
+msgid "Time Table"
+msgstr "Tabla de Horarios"
+
+#: utils.php:7422
+msgid ""
+"There are currently no computers available that can run the application you "
+"selected."
+msgstr ""
+"Actualmente no hay computadoras disponibles que puedan ejecutar el ambiente "
+"que usted seleccionó."
+
+#: utils.php:7425
+msgid "There are no computers that meet the specified criteria"
+msgstr "No existen computadoras que cumplan el criterio especificado"
+
+#: utils.php:7430
+msgid ""
+"The time you have requested to use the environment is not available. You may "
+"select from the green blocks of time to select an available time slot to "
+"make a reservation."
+msgstr ""
+"El tiempo que ha solicitado para utilizar el entorno no está disponible. "
+"Puede seleccionar entre los bloques verdes de tiempo para seleccionar una "
+"franja de tiempo disponible para realizar una reserva."
+
+#: utils.php:7450 utils.php:7608
+msgid "Previous"
+msgstr "Anterior"
+
+#: utils.php:7469 utils.php:7627
+msgid "Next"
+msgstr "Siguiente"
+
+#: utils.php:7567
+msgid "User:"
+msgstr "Usuario:"
+
+#: utils.php:7568
+msgid "Image:"
+msgstr "Ambiente:"
+
+#: utils.php:11631 utils.php:11636 utils.php:11640
+msgid "Error: Invalid Input"
+msgstr "Error: Entrada inválida"
+
+#: utils.php:11632
+#, php-format
+msgid ""
+"You submitted input invalid for this web site. If you have no idea why this "
+"happened and the problem persists, please email %s for further assistance. "
+"Please include the steps you took that led up to this problem in your email "
+"message."
+msgstr ""
+"Usted envió la entrada inválida para este sitio web. Si no tiene idea de por "
+"qué sucedió esto y el problema persiste, envíe un correo electrónico a% s "
+"para obtener más ayuda. Por favor, incluya los pasos que tomó que le "
+"llevaron a este problema en su mensaje de correo electrónico."
+
+#: utils.php:11637
+msgid ""
+"You submitted expired data to this web site. Please restart the steps you "
+"were following without using your browser's <strong>Back</strong> button."
+msgstr ""
+"Los datos que envió han expirado. Por favor reinicie los pasos que siguió "
+"sin usar la opción <strong>Atrás</strong> de su navegador."
+
+#: utils.php:12615
+msgid "HOME"
+msgstr "INICIO"
+
+#: utils.php:12631
+msgid "User Preferences"
+msgstr "Preferencias Usuario"
+
+#: utils.php:12635
+msgid "Manage Groups"
+msgstr "Administrar Grupos"
+
+#: utils.php:12640
+msgid "Manage Images"
+msgstr "Administrar Ambientes"
+
+#: utils.php:12645
+msgid "Manage Schedules"
+msgstr "Administrar Horarios"
+
+#: utils.php:12650
+msgid "Manage Computers"
+msgstr "Administrar Computadoras"
+
+#: utils.php:12655
+msgid "Management Nodes"
+msgstr "Administrar Nodos"
+
+#: utils.php:12661
+msgid "Server Profiles"
+msgstr "Perfil del servidor"
+
+#: utils.php:12667
+msgid "View Time Table"
+msgstr "Ver Tabla de Horarios"
+
+#: utils.php:12674
+msgid "Privileges"
+msgstr "Privilegios"
+
+#: utils.php:12680
+msgid "User Lookup"
+msgstr "Buscar Usuario"
+
+#: utils.php:12685
+msgid "Virtual Hosts"
+msgstr ""
+
+#: utils.php:12832
+msgid "AD Domains"
+msgstr "Dominios AD"
+
+#: utils.php:12690
+msgid "Site Maintenance"
+msgstr "Mantenimiento del sitio"
+
+#: utils.php:12694
+msgid "Statistics"
+msgstr "Estadísticas"
+
+#: utils.php:12699
+msgid "Dashboard"
+msgstr "Tablero"
+
+#: utils.php:12703
+msgid "VCL gos"
+msgstr "VCL gos"
+
+#: utils.php:12712
+msgid "Documentation"
+msgstr "Documentación"
+
+#: utils.php:12716
+msgid "Logout"
+msgstr "Salir"
+
+#: vm.php:324
+msgid ""
+"Resource Path only needs to be configured if VMware vCenter is used. It "
+"defines the location where VMs will be created in the vCenter inventory "
+"tree. The inventory tree contains at least one Datacenter, and may also "
+"contain Folders, Clusters, and Resource Pools.<br>Example: /DatacenterA/"
+"Folder1/Cluster2/ResourcePool3"
+msgstr ""
+"La ruta de recursos sólo debe configurarse si se utiliza VMware vCenter. "
+"Define la ubicación donde se crearán las máquinas virtuales en el árbol de "
+"inventario de vCenter. El árbol de inventario contiene al menos un "
+"Datacenter y también puede contener carpetas, clústeres y grupos de "
+"recursos. <br> Ejemplo: / DatacenterA / Folder1 / Cluster2 / ResourcePool3"
+
+#: vm.php:326
+msgid ""
+"Folder Path only needs to be configured if VMware vCenter is used. It "
+"defines the location where VMs will reside according to the vSphere Client's "
+"'VMs and Templates' inventory view. This view will contain at least 1 "
+"Datacenter at the root level of the tree. Underneath each Datacenter, VMs "
+"may optionally be organized into VM Folders. Example: /DatacenterA/VCL_VMs"
+msgstr ""
+"La ruta de carpeta solo debe configurarse si se utiliza VMware vCenter. "
+"Define la ubicación en la que residirán las máquinas virtuales de acuerdo "
+"con la vista de inventario \"VMs y plantillas\" del vSphere Client. Esta "
+"vista contendrá al menos 1 Datacenter en el nivel raíz del árbol. Debajo de "
+"cada Datacenter, las máquinas virtuales pueden organizarse opcionalmente en "
+"carpetas de VM. Ejemplo: / DatacenterA / VCL_VMs"
+
+#: vm.php:329
+msgid ""
+"(Optional) The path where master copies of images are stored which are used "
+"to transfer images to VM host datastores or to other repositories. This is "
+"required if multiple management nodes need to share images. VMs do not run "
+"directly off of the images stored in the repository. It can refer to and be "
+"mounted on either the management node or VM host."
+msgstr ""
+"(Opcional) La ruta donde se almacenan las copias maestras de imágenes que se "
+"utilizan para transferir imágenes a almacenes de datos de host de VM oa "
+"otros repositorios. Esto es necesario si varios nodos de administración "
+"necesitan compartir imágenes. Las máquinas virtuales no se ejecutan "
+"directamente de las imágenes almacenadas en el repositorio. Puede referirse "
+"y montarse en el nodo de gestión o en el host VM."
+
+#: vm.php:332 vm.php:338
+msgid "Virtual disk type of the images stored here."
+msgstr "Tipo de disco virtual de las imágenes almacenadas aquí."
+
+#: vm.php:335
+msgid ""
+"The location where master copies of images are stored which are used by "
+"running VMs. It can be either on local or network storge. If on network "
+"storage, it can be shared among multiple hosts."
+msgstr ""
+"La ubicación donde se almacenan las copias maestras de las imágenes que se "
+"usan al ejecutar VM. Puede ser en local o en la red storge. Si está en el "
+"almacenamiento en red, puede compartirse entre varios hosts."
+
+#: vm.php:341
+msgid ""
+"Defines whether the Virtual Disk Path storage is dedicated to a single host "
+"or shared among multiple hosts. If set to dedicated, Repository Path must be "
+"definied and VCL will remove copies of images in the Virtual Disk Path to "
+"free up space if they are not being used."
+msgstr ""
+"Define si el almacenamiento de Virtual Disk Path está dedicado a un único "
+"host o compartido entre varios hosts. Si se establece en dedicado, se debe "
+"definir la ruta del repositorio y VCL eliminará las copias de las imágenes "
+"en la ruta del disco virtual para liberar espacio si no se están utilizando."
+
+#: vm.php:344
+msgid ""
+"(Optional) This is the path on VM host where VM working directories will "
+"reside. If not configured, the Datastore Path location will be used. It can "
+"be either on local or network storge. It should be dedicated for each VM "
+"host and should be optimized for read-write performance."
+msgstr ""
+"(Opcional) Esta es la ruta en el host VM donde residirán los directorios de "
+"trabajo de VM. Si no está configurado, se utilizará la ubicación de ruta del "
+"almacén de datos. Puede ser en local o en la red storge. Debe ser dedicado "
+"para cada host VM y debe ser optimizado para el rendimiento de lectura-"
+"escritura."
+
+#: vm.php:347
+msgid ""
+"The VM Network parameters should match the network names configured on the "
+"VM host. For ESXi, the Virtual Switch parameters must match the Virtual "
+"Machine Port Group Network Labels configured in the vSphere Client. VM "
+"Network 0 should be your public or private network."
+msgstr ""
+"Los parámetros de la red VM deben coincidir con los nombres de red "
+"configurados en el host VM. Para ESXi, los parámetros de Virtual Switch "
+"deben coincidir con las etiquetas de red del grupo de puertos de máquina "
+"virtual configuradas en vSphere Client. VM Network 0 debe ser su red pública "
+"o privada."
+
+#: vm.php:350
+msgid ""
+"The VM Network parameters should match the network names configured on the "
+"VM host. For ESXi, the Virtual Switch parameters must match the Virtual "
+"Machine Port Group Network Labels configured in the vSphere Client. VM "
+"Network 1 should be your public or private network."
+msgstr ""
+"Los parámetros de la red VM deben coincidir con los nombres de red "
+"configurados en el host VM. Para ESXi, los parámetros de Virtual Switch "
+"deben coincidir con las etiquetas de red del grupo de puertos de máquina "
+"virtual configuradas en vSphere Client. VM Network 1 debe ser su red pública "
+"o privada."
+
+#: vm.php:353
+msgid ""
+"(Optional) The VM Network parameters should match the network names "
+"configured on the VM host. For ESXi, the Virtual Switch parameters must "
+"match the Virtual Machine Port Group Network Labels configured in the "
+"vSphere Client. VM Network 2 is optional for connecting the VM to additional "
+"networks."
+msgstr ""
+"(Opcional) Los parámetros de la red VM deben coincidir con los nombres de "
+"red configurados en el host VM. Para ESXi, los parámetros de Virtual Switch "
+"deben coincidir con las etiquetas de red del grupo de puertos de máquina "
+"virtual configuradas en vSphere Client. VM Network 2 es opcional para "
+"conectar la VM a redes adicionales."
+
+#: vm.php:356
+msgid ""
+"(Optional) The VM Network parameters should match the network names "
+"configured on the VM host. For ESXi, the Virtual Switch parameters must "
+"match the Virtual Machine Port Group Network Labels configured in the "
+"vSphere Client. VM Network 3 is optional for connecting the VM to additional "
+"networks."
+msgstr ""
+"(Opcional) Los parámetros de la red VM deben coincidir con los nombres de "
+"red configurados en el host VM. Para ESXi, los parámetros de Virtual Switch "
+"deben coincidir con las etiquetas de red del grupo de puertos de máquina "
+"virtual configuradas en vSphere Client. VM Network 3 es opcional para "
+"conectar la VM a redes adicionales."
+
+#: vm.php:359 vm.php:362
+msgid ""
+"Specifies whether VMs are assigned MAC addresses defined in the VCL database "
+"or if random MAC addresses should be assigned."
+msgstr ""
+"Especifica si se asignan direcciones MAC a las máquinas virtuales definidas "
+"en la base de datos VCL o si se deben asignar direcciones MAC aleatorias."
+
+#: vm.php:365
+msgid ""
+"(Optional) In order to encrypt the VM Host password in the database, create "
+"an RSA public/private key pair on the relevant management node. Enter the "
+"public key here. Note that while this value will be available to every "
+"management node in your system, only those management nodes with the "
+"designated private key will be able to decrypt the password."
+msgstr ""
+"(Opcional) Para cifrar la contraseña de VM Host en la base de datos, cree un "
+"par de claves públicas / privadas RSA en el nodo de administración "
+"relevante. Introduzca la clave pública aquí. Tenga en cuenta que aunque este "
+"valor estará disponible para todos los nodos de gestión de su sistema, sólo "
+"los nodos de gestión con la clave privada designada podrán descifrar la "
+"contraseña."
+
+#: vm.php:368
+msgid ""
+"(Optional) In order to decrypt an encrypted VM Host password, enter the path "
+"to a private key on the management node. Any management node without this "
+"private key will not be able to decrypt the password."
+msgstr ""
+"(Optional) In order to decrypt an encrypted VM Host password, enter the path "
+"to a private key on the management node. Any management node without this "
+"private key will not be able to decrypt the password."
+
+#: vm.php:371
+msgid "Name of the administrative or root user residing on the VM host."
+msgstr "Nombre del usuario administrativo o root que reside en el host VM."
+
+#: vm.php:374
+msgid "Password of the administrative or root user residing on the VM host."
+msgstr "Contraseña del usuario administrativo o root que reside en el host VM."
+
+msgid "Image Profiles"
+msgstr "Perfiles de imagen"
+
+msgid "You don't have access to manage any images."
+msgstr "No tiene permisos de edición de ninguna imágen"
+
+msgid "Edit Image Profiles"
+msgstr "Editar perfiles de imagen"
+
+msgid "Add New Image"
+msgstr "Agregar nueva imagen"
+
+msgid "Add Image"
+msgstr "Agregar imagen"
+
+msgid "No Images found to which you have access."
+msgstr "Ninguna imagen encontrada a la que tengas acceso"
+
+msgid "Include Deleted Images:"
+msgstr "Incluye imágenes borradas"
+
+msgid "Delete Image"
+msgstr "borrar imagen"
+
+msgid "Confirm Delete Image"
+msgstr "confirmar borrar imagen"
+
+msgid "Delete the following image?"
+msgstr "¿Eliminar la siguiente imagen?"
+
+msgid "Confirm Undelete Image"
+msgstr "Confirmar eliminación de imágenes"
+
+msgid "Undelete the following image?"
+msgstr "¿Desea recuperar la imagen siguiente?"
+
+msgid "Undelete Image"
+msgstr "Recuperar imagen"
+
+msgid "Group By Image"
+msgstr "Agrupar por imagen"
+
+msgid ""
+"Select a group from the drop-down box and click \"Get Images\" to see all of "
+"the resources in it. Then, select a resource in it and click the Remove "
+"button to remove it from that group, or select a resource that is not in it "
+"and click the Add button to add it to that group."
+msgstr ""
+"Seleccione un grupo en el cuadro desplegable y haga clic en \"Obtener "
+"imágenes\" para ver todos los recursos que contiene. A continuación, "
+"seleccione un recurso y haga clic en el botón Eliminar para eliminarlo de "
+"ese grupo o seleccione un recurso que no esté en él y haga clic en el botón "
+"Agregar para agregarlo a ese grupo."
+
+msgid "Map By Image Group"
+msgstr "Mapa por grupo de imágen"
+
+msgid "Image Group:"
+msgstr "Grupo de imágenes:"
+
+msgid ""
+"Select an item from the drop-down box and click \"Get Image Groups\" to see "
+"all of the groups it maps to. Then, select a group it does not map to and "
+"click the Add button to map it to that group, or select a group it maps to "
+"and click the Remove button to unmap it from that group."
+msgstr ""
+"Seleccione un elemento del cuadro desplegable y haga clic en \"Obtener "
+"grupos de imágenes\" para ver todos los grupos a los que se asigna. A "
+"continuación, seleccione un grupo al que no se asigna y haga clic en el "
+"botón Agregar para asignarlo a ese grupo o seleccione un grupo al que se "
+"asigna y haga clic en el botón Eliminar para desmarcarlo de ese grupo."
+
+msgid "Get Image Groups"
+msgstr "Obtener grupos de imágenes"
+
+msgid "Image Groups %s maps to:"
+msgstr "Grupos de imágenes% s maps to:"
+
+msgid "Image Groups %s does not map to:"
+msgstr "Grupos de imágenes% s no se asigna a:"
+
+msgid "Edit Image"
+msgstr "Editar imágen"
+
+msgid "Computer:"
+msgstr "Computadora:"
+
+msgid "Computer Profiles"
+msgstr "Perfiles de computadora"
+
+msgid "You don't have access to manage any computers."
+msgstr "No tiene un acceso para manejar ninguna computadora"
+
+msgid "Edit Computer Profiles"
+msgstr "Editar perfiles de computadora"
+
+msgid "Add New Computer"
+msgstr "Agregar nueva computadora"
+
+msgid "Add Computer"
+msgstr "Agregar computadora"
+
+msgid "No Computers found to which you have access."
+msgstr "No hay equipos encontrados a los que tiene acceso."
+
+msgid "Include Deleted Computers:"
+msgstr "Incluir computadoras borradas"
+
+msgid "Delete Computer"
+msgstr "Borrar computadoras"
+
+msgid "Confirm Delete Computer"
+msgstr "Confirmar computador borrada"
+
+msgid "Delete the following computer?"
+msgstr "Borrar la siguiente computadora?"
+
+msgid "Confirm Undelete Computer"
+msgstr "Confirmar no-borrado de la computadora"
+
+msgid "Undelete the following computer?"
+msgstr "Recuperar la siguiente computadora?"
+
+msgid "Undelete Computer"
+msgstr "Recuperar computadora"
+
+msgid "Group By Computer"
+msgstr "Agrupar por ordenador"
+
+msgid ""
+"Select a group from the drop-down box and click \"Get Computers\" to see all "
+"of the resources in it. Then, select a resource in it and click the Remove "
+"button to remove it from that group, or select a resource that is not in it "
+"and click the Add button to add it to that group."
+msgstr ""
+"Seleccione un grupo en el cuadro desplegable y haga clic en \"Obtener "
+"ordenadores\" para ver todos los recursos en él. A continuación, seleccione "
+"un recurso y haga clic en el botón Eliminar para eliminarlo de ese grupo o "
+"seleccione un recurso que no esté en él y haga clic en el botón Agregar para "
+"agregarlo a ese grupo."
+
+msgid "Map By Computer Group"
+msgstr "Mapa por grupo de ordenadores"
+
+msgid "Computer Group:"
+msgstr "Grupo de computadoras"
+
+msgid ""
+"Select an item from the drop-down box and click \"Get Computer Groups\" to "
+"see all of the groups it maps to. Then, select a group it does not map to "
+"and click the Add button to map it to that group, or select a group it maps "
+"to and click the Remove button to unmap it from that group."
+msgstr ""
+"Seleccione un elemento del cuadro desplegable y haga clic en \"Obtener "
+"grupos de equipos\" para ver todos los grupos a los que se correlaciona. A "
+"continuación, seleccione un grupo al que no se asigna y haga clic en el "
+"botón Agregar para asignarlo a ese grupo o seleccione un grupo al que se "
+"asigna y haga clic en el botón Eliminar para desmarcarlo de ese grupo."
+
+msgid "Get Computer Groups"
+msgstr "Obtenga Grupos de Computadoras"
+
+msgid "Computer Groups %s maps to:"
+msgstr "Grupos de computadoras % a asignar:"
+
+msgid "Computer Groups %s does not map to:"
+msgstr "Los grupos de ordenadores% s no se asignan a:"
+
+msgid "Edit Computer"
+msgstr "Editar computadora"
+
+msgid "Management Node:"
+msgstr "Nodo de gestión"
+
+msgid "Management Node Profiles"
+msgstr "Perfiles de nodos de gestión "
+
+msgid "You don't have access to manage any management nodes."
+msgstr "No tiene permisos para manejar nodos de gestión"
+
+msgid "Edit Management Node Profiles"
+msgstr "Editar perfiles de nodos de gestión"
+
+msgid "Add New Management Node"
+msgstr "Agregue un nuevo nodo de gestión"
+
+msgid "Add Management Node"
+msgstr "Agregue nodo de gestión"
+
+msgid "No Management Nodes found to which you have access."
+msgstr "No se ha encontrado nodo de gestión al que tienes acceso"
+
+msgid "Include Deleted Management Nodes:"
+msgstr "Incluir nodos de gestión borrados"
+
+msgid "Delete Management Node"
+msgstr "Borrar nodos de gestión"
+
+msgid "Confirm Delete Management Node"
+msgstr "Confirme que desea borrar nodo de gestión?"
+
+msgid "Delete the following management node?"
+msgstr "Quiere borrar el siguiente nodo de gestión?"
+
+msgid "Confirm Undelete Management Node"
+msgstr "Confirmar restaurar nodo de gestión"
+
+msgid "Undelete the following management node?"
+msgstr "Recuperar el siguiente nodo de gestión?"
+
+msgid "Undelete Management Node"
+msgstr "Recuperar nodo de gestión"
+
+msgid "Group By Management Node"
+msgstr "Agrupar por nodo de gestión"
+
+msgid ""
+"Select a group from the drop-down box and click \"Get Management Nodes\" to "
+"see all of the resources in it. Then, select a resource in it and click the "
+"Remove button to remove it from that group, or select a resource that is not "
+"in it and click the Add button to add it to that group."
+msgstr ""
+"Seleccione un grupo en el cuadro desplegable y haga clic en \"Obtener nodos "
+"de administración\" para ver todos los recursos que contiene. A "
+"continuación, seleccione un recurso y haga clic en el botón Eliminar para "
+"eliminarlo de ese grupo o seleccione un recurso que no esté en él y haga "
+"clic en el botón Agregar para agregarlo a ese grupo."
+
+msgid "Map By Management Node Group"
+msgstr "Mapa por grupo de nodos de administración"
+
+msgid "Management Node Group:"
+msgstr "Grupo de nodos de gestión"
+
+msgid ""
+"Select an item from the drop-down box and click \"Get Management Node Groups"
+"\" to see all of the groups it maps to. Then, select a group it does not map "
+"to and click the Add button to map it to that group, or select a group it "
+"maps to and click the Remove button to unmap it from that group."
+msgstr ""
+"Seleccione un elemento del cuadro desplegable y haga clic en \"Obtener "
+"grupos de nodos de administración\" para ver todos los grupos a los que se "
+"correlaciona. A continuación, seleccione un grupo al que no se asigna y haga "
+"clic en el botón Agregar para asignarlo a ese grupo o seleccione un grupo al "
+"que se asigna y haga clic en el botón Eliminar para desmarcarlo de ese grupo"
+
+msgid "Get Management Node Groups"
+msgstr "Obtener grupos de nodos de administración"
+
+msgid "Management Node Groups %s maps to:"
+msgstr "Grupos de nodos de administración % s por asignar:"
+
+msgid "Management Node Groups %s does not map to:"
+msgstr "Grupos de nodos de administración% s no se asigna a:"
+
+msgid "Edit Management Node"
+msgstr "Editar nodo de gestión"
+
+msgid "Schedule:"
+msgstr "Calendario"
+
+msgid "Schedule Profiles"
+msgstr "Perfil de calendario"
+
+msgid "You don't have access to manage any schedules."
+msgstr "No tiene permiso para editar horarios"
+
+msgid "Edit Schedule Profiles"
+msgstr "Editar perfiles de horarios"
+
+msgid "Add New Schedule"
+msgstr "Agregar nuevo horario"
+
+msgid "Add Schedule"
+msgstr "Agregar calendario"
+
+msgid "No Schedules found to which you have access."
+msgstr "No se han encontrado horarios a los que tenga acceso."
+
+msgid "Include Deleted Schedules:"
+msgstr "Incluye horarios borrados"
+
+msgid "Delete Schedule"
+msgstr "Borrar horario"
+
+msgid "Confirm Delete Schedule"
+msgstr "Confirmar borrar horario"
+
+msgid "Delete the following schedule?"
+msgstr "Quiere borrar el siguiente horario?"
+
+msgid "Confirm Undelete Schedule"
+msgstr "Confirme que desea recuperar horario"
+
+msgid "Undelete the following schedule?"
+msgstr "Recuperar el siguiente horario?"
+
+msgid "Undelete Schedule"
+msgstr "Recuperar horario"
+
+msgid "Group By Schedule"
+msgstr "Agrupar por horario"
+
+msgid ""
+"Select a group from the drop-down box and click \"Get Schedules\" to see all "
+"of the resources in it. Then, select a resource in it and click the Remove "
+"button to remove it from that group, or select a resource that is not in it "
+"and click the Add button to add it to that group."
+msgstr ""
+"Seleccione un grupo en el cuadro desplegable y haga clic en \"Obtener "
+"horarios\" para ver todos los recursos en él. A continuación, seleccione un "
+"recurso y haga clic en el botón Eliminar para eliminarlo de ese grupo o "
+"seleccione un recurso que no esté en él y haga clic en el botón Agregar para "
+"agregarlo a ese grupo."
+
+msgid "Map By Schedule Group"
+msgstr "Mapa por grupo de horario"
+
+msgid "Schedule Group:"
+msgstr "Calendario de grupo"
+
+msgid ""
+"Select an item from the drop-down box and click \"Get Schedule Groups\" to "
+"see all of the groups it maps to. Then, select a group it does not map to "
+"and click the Add button to map it to that group, or select a group it maps "
+"to and click the Remove button to unmap it from that group."
+msgstr ""
+"Seleccione un elemento del cuadro desplegable y haga clic en \"Obtener "
+"grupos de programación\" para ver todos los grupos a los que se asigna. A "
+"continuación, seleccione un grupo al que no se asigna y haga clic en el "
+"botón Agregar para asignarlo a ese grupo o seleccione un grupo al que se "
+"asigna y haga clic en el botón Eliminar para desmarcarlo de ese grupo."
+
+msgid "Get Schedule Groups"
+msgstr "Obtener horario del grupo"
+
+msgid "Schedule Groups %s maps to:"
+msgstr "Grupos programados % se asigna a:"
+
+msgid "Schedule Groups %s does not map to:"
+msgstr "Grupos programados % s no se asigna a:"
+
+msgid "Edit Schedule"
+msgstr "Editar calendario"
+
+msgid "Sysprep"
+msgstr "Sysprep"
+
+msgid "Deleted"
+msgstr "Borrado"
+
+msgid "Test"
+msgstr "Prueba"
+
+msgid "list"
+msgstr "lista"
+
+msgid "weekly"
+msgstr "semanalmente"
+
+msgid "monthly"
+msgstr "mensualmente"
+
+msgid "starting install process"
+msgstr "Iniciando proceso de instalación"
+
+msgid "image loading"
+msgstr "Cargando imagen"
+
+msgid "rebooting node for reinstall"
+msgstr "Reiniciando nodo para reinstalación"
+
+msgid "ready for Connect"
+msgstr "Listo para conectar"
+
+msgid "starting reload process"
+msgstr "Proceso de recarga iniciado"
+
+msgid "confirming image exists locally"
+msgstr "Confirmar si la imagen existe localmente"
+
+msgid "transferring image files to host server"
+msgstr "transferir archivos de imagen al host del servidor"
+
+msgid "creating configuration file"
+msgstr "Creando archivos de configuración"
+
+msgid "starting load process"
+msgstr "Iniciar el proceso de carga"
+
+msgid "adding user account"
+msgstr "Agregar cuenta de usuario"
+
+msgid "resource ready"
+msgstr "recursos listos"
+
+msgid "machine booting"
+msgstr "arranque de la máquina"
+
+msgid "computer status check"
+msgstr "Revisar el estado de la computadora"
+
+msgid "Copy Image from Partner Management node"
+msgstr "Copiar imagen desde el nodo de administración de socios"
+
+msgid "running post configuration"
+msgstr "Corriendo configuración posterior"
+
+msgid "starting virtual machine"
+msgstr "Iniciar máquina virtual"
+
+msgid "Log in"
+msgstr "Iniciar sesión"
+
+msgid "Log out"
+msgstr "Cerrar Sesión"
