@@ -357,8 +357,7 @@ function privChange(checked, row, col, type) {
 
 function nodeCheck(checked, row, col, type) {
 	var objname = "cell" + row + ":" + col;
-	var color = dojo.byId(objname).bgColor;
-	if(color == '#008000') {
+	if(dojo.hasClass(objname, 'privCascade')) {
 		objname = "ck" + row + ":" + col;
 		var obj = dijit.byId(objname);
 		obj.setAttribute('checked', true);
@@ -371,11 +370,9 @@ function nodeCheck(checked, row, col, type) {
 function changeCascadedRights(checked, row, count, fromclick, type) {
 	var i;
 	var objname;
-	var color;
 	var value;
 	var obj;
 	var obj2;
-	var namearr;
 	for(i = 1; i < count; i++) {
 		objname = "ck" + row + ":" + i;
 		obj = dijit.byId(objname);
@@ -388,7 +385,7 @@ function changeCascadedRights(checked, row, count, fromclick, type) {
 				obj2 = dojo.byId(objname);
 				if(! obj2)
 					continue;
-				obj2.bgColor = '#FFFFFF';
+				dojo.removeClass(objname, 'privCascade');
 				if(value == 'cascade') {
 					objname = "ck" + row + ":" + i;
 					obj = dijit.byId(objname)
@@ -405,7 +402,7 @@ function changeCascadedRights(checked, row, count, fromclick, type) {
 				obj2 = dojo.byId(objname);
 				if(! obj2)
 					continue;
-				obj2.bgColor = '#008000';
+				dojo.addClass(objname, 'privCascade');
 			}
 		}
 	}
