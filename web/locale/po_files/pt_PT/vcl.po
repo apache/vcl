@@ -947,7 +947,7 @@ msgid "Reason for Maintenance"
 msgstr ""
 
 #: computer.php:683
-msgid "VM Host Porfile"
+msgid "VM Host Profile"
 msgstr ""
 
 #: computer.php:688
@@ -3624,6 +3624,10 @@ msgstr "Grupo do Utilizador"
 msgid "Virtual Hosts"
 msgstr "Anfitriões Virtuais"
 
+#: utils.php:12832
+msgid "AD Domains"
+msgstr ""
+
 #: utils.php:12690
 msgid "Site Maintenance"
 msgstr "Manutenção de Site"
@@ -4056,3 +4060,9 @@ msgstr ""
 
 msgid "The selected Block Allocation no longer exists."
 msgstr "O Bloco de Alocação escolhido já não existe."
+
+msgid "Log in"
+msgstr ""
+
+msgid "Log out"
+msgstr ""

@@ -1035,6 +1035,10 @@ msgstr "查找用户</a></li>\n"
 msgid "Virtual Hosts</a></li>\n"
 msgstr "虚拟主机</a></li>\n"
 
+#: utils.php:12832
+msgid "AD Domains"
+msgstr ""
+
 #: utils.php:8959
 msgid "Site Maintenance</a></li>\n"
 msgstr "网络维护</a></li>\n"
@@ -2583,4 +2587,10 @@ msgstr ""
 
 #: oneclick.php:359
 msgid "day"
+msgstr ""
+
+msgid "Log in"
+msgstr ""
+
+msgid "Log out"
 msgstr ""

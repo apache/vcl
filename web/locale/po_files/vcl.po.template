@@ -942,7 +942,7 @@ msgid "Reason for Maintenance"
 msgstr ""
 
 #: computer.php:683
-msgid "VM Host Porfile"
+msgid "VM Host Profile"
 msgstr ""
 
 #: computer.php:688
@@ -3627,6 +3627,10 @@ msgstr ""
 msgid "Virtual Hosts"
 msgstr ""
 
+#: utils.php:12832
+msgid "AD Domains"
+msgstr ""
+
 #: utils.php:12690
 msgid "Site Maintenance"
 msgstr ""
@@ -4052,4 +4056,10 @@ msgid "running post configuration"
 msgstr ""
 
 msgid "starting virtual machine"
+msgstr ""
+
+msgid "Log in"
+msgstr ""
+
+msgid "Log out"
 msgstr ""

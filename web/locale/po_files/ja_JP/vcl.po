@@ -1117,6 +1117,10 @@ msgstr "ユーザ参照</a></li>\n"
 msgid "Virtual Hosts</a></li>\n"
 msgstr "仮想ホスト</a></li>\n"
 
+#: utils.php:12832
+msgid "AD Domains"
+msgstr ""
+
 #: utils.php:8959
 msgid "Site Maintenance</a></li>\n"
 msgstr "サイトメンテナンス</a></li>\n"
@@ -2593,3 +2597,8 @@ msgstr "あなたは現在、次のブロックの割り当てのメンバーで
 msgid "Click an item to view its current status."
 msgstr "現在のステータスを表示するには、項目をクリックします。"
 
+msgid "Log in"
+msgstr ""
+
+msgid "Log out"
+msgstr ""
