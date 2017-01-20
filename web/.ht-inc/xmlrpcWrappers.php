@@ -2130,17 +2130,14 @@ function XMLRPCgetResourceGroupPrivs($name, $type, $nodeid) {
 		$np = getNodePrivileges($nodeid, 'resources');
 		$cnp = getNodeCascadePrivileges($nodeid, 'resources'); 
 		$key = "$type/$name/$groupid";
-		if(array_key_exists($key, $np['resources']) &&
-			(in_array('block', $np['resources'][$key]) ||
-		   ! array_key_exists($key, $cnp['resources'])))
-			$privs = $np['resources'][$key];
-		elseif(array_key_exists($key, $cnp['resources']) &&
-		   array_key_exists($key, $np['resources'])) {
+		if(isset($np['resources'][$key]['block']) || ! isset($cnp['resources'][$key]))
+			$privs = array_keys($np['resources'][$key]);
+		elseif(isset($cnp['resources'][$key]) && isset($np['resources'][$key])) {
 			$allprivs = array_merge($cnp['resources'][$key], $np['resources'][$key]);
-			$privs = array_unique($allprivs);
+			$privs = array_keys($allprivs);
 		}
-		elseif(array_key_exists($key, $cnp['resources']))
-			$privs = $cnp['resources'][$key];
+		elseif(isset($cnp['resources'][$key]))
+			$privs = array_keys($cnp['resources'][$key]);
 		else
 			$privs = array();
 		return array('status' => 'success',
@@ -2283,10 +2280,8 @@ function _XMLRPCchangeResourceGroupPriv_sub($mode, $name, $type, $nodeid,
 	$key = "$type/$name/$groupid";
 	$cnp = getNodeCascadePrivileges($nodeid, "resources");
 	$np = getNodePrivileges($nodeid, 'resources');
-	if(array_key_exists($key, $cnp['resources']) &&
-	   (! array_key_exists($key, $np['resources']) ||
-	   ! in_array('block', $np['resources'][$key]))) {
-		$intersect = array_intersect($cnp['resources'][$key], $changeperms);
+	if(isset($cnp['resources'][$key]) && ! isset($np['resources'][$key]['block'])) {
+		$intersect = array_intersect(array_keys($cnp['resources'][$key]), $changeperms);
 		if(count($intersect)) {
 			return array('status' => 'error',
 			             'errorcode' => 80,
@@ -2295,7 +2290,9 @@ function _XMLRPCchangeResourceGroupPriv_sub($mode, $name, $type, $nodeid,
 	}
 
 	if($mode == 'remove') {
-		$diff = array_diff($np['resources'][$key], $changeperms);
+		if(! isset($np['resources'][$key]))
+			return array('status' => 'success');
+		$diff = array_diff(array_keys($np['resources'][$key]), $changeperms);
 		if(count($diff) == 1 && in_array("cascade", $diff))
 			$changeperms[] = 'cascade';
 	}

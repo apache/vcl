@@ -364,8 +364,11 @@ function viewNodes() {
 	print "    <TD></TD>\n";
 	print "    <TH class=\"privBlock\" bgcolor=gray style=\"color: black;\">Block<br>Cascaded<br>Rights</TH>\n";
 	print "    <TH class=\"privCascade\" bgcolor=\"#008000\" style=\"color: black;\">Cascade<br>to Child<br>Nodes</TH>\n";
-	foreach($usertypes["users"] as $type)
+	foreach($usertypes["users"] as $type) {
+		if($type == 'configAdmin')
+			continue;
 		print "    <TH class=\"privheader\"><div><span>$type</span></div></TH>\n";
+	}
 	print "  </TR>\n";
 	print "  <TR>\n";
 	print "    <TD><INPUT type=text id=newuser name=newuser size=15";
@@ -384,6 +387,8 @@ function viewNodes() {
 	# normal rights
 	$j = 1;
 	foreach($usertypes["users"] as $type) {
+		if($type == 'configAdmin')
+			continue;
 		print "    <TD align=center id=usercell0:$j><INPUT type=checkbox ";
 		print "dojoType=dijit.form.CheckBox name=\"$type\" id=userck0:$j></TD>\n";
 		$j++;
@@ -428,8 +433,11 @@ function viewNodes() {
 	print "    <TD></TD>\n";
 	print "    <TH class=\"privBlock\" bgcolor=gray style=\"color: black;\">Block<br>Cascaded<br>Rights</TH>\n";
 	print "    <TH class=\"privCascade\" bgcolor=\"#008000\" style=\"color: black;\">Cascade<br>to Child<br>Nodes</TH>\n";
-	foreach($usertypes["users"] as $type)
+	foreach($usertypes["users"] as $type) {
+		if($type == 'configAdmin')
+			continue;
 		print "    <TH class=\"privheader\"><div><span>$type</span></div></TH>\n";
+	}
 	print "  </TR>\n";
 	print "  <TR>\n";
 	print "    <TD>\n";
@@ -450,6 +458,8 @@ function viewNodes() {
 	# normal rights
 	$j = 1;
 	foreach($usertypes["users"] as $type) {
+		if($type == 'configAdmin')
+			continue;
 		print "    <TD align=center id=usergrpcell0:$j><INPUT type=checkbox ";
 		print "dojoType=dijit.form.CheckBox name=\"$type\" id=usergrpck0:$j></TD>\n";
 		$j++;
@@ -889,8 +899,11 @@ function selectNode() {
 		$text .= "    <TD></TD>";
 		$text .= "    <TH class=\"privBlock\" bgcolor=gray style=\"color: black;\">Block<br>Cascaded<br>Rights</TH>";
 		$text .= "    <TH class=\"privCascade\" bgcolor=\"#008000\" style=\"color: black;\">Cascade<br>to Child<br>Nodes</TH>";
-		foreach($usertypes["users"] as $type)
+		foreach($usertypes["users"] as $type) {
+			if($type == 'configAdmin')
+				continue;
 			$text .= "    <TH class=\"privheader\"><div><span>$type</span></div></TH>";
+		}
 		$text .= "  </TR>";
 		$users = array_unique(array_merge(array_keys($privs["users"]), 
 		                      array_keys($cascadePrivs["users"])));
@@ -937,8 +950,11 @@ function selectNode() {
 		$text .= "    <TD></TD>";
 		$text .= "    <TH class=\"privBlock\" bgcolor=gray style=\"color: black;\">Block<br>Cascaded<br>Rights</TH>";
 		$text .= "    <TH class=\"privCascade\" bgcolor=\"#008000\" style=\"color: black;\">Cascade<br>to Child<br>Nodes</TH>";
-		foreach($usertypes["users"] as $type)
+		foreach($usertypes["users"] as $type) {
+			if($type == 'configAdmin')
+				continue;
 			$text .= "    <TH class=\"privheader\"><div><span>$type</span></div></TH>";
+		}
 		$text .= "  </TR>";
 		$groupids = array_unique(array_merge(array_keys($privs["usergroups"]), 
 		                         array_keys($cascadePrivs["usergroups"])));
@@ -2171,7 +2187,7 @@ function printUserPrivRow($privname, $rownum, $privs, $types,
 		$disabled = '';
 
 	# block rights
-	if(array_key_exists($privname, $privs) && 
+	if(isset($privs[$privname]) && 
 	   (($usergroup == 'user' &&
 	   isset($privs[$privname]['block'])) ||
 	   ($usergroup == 'group' &&
@@ -2198,7 +2214,7 @@ function printUserPrivRow($privname, $rownum, $privs, $types,
 	print "$count, 1, $usergroup);\" $checked $disabled></TD>\n";
 
 	#cascade rights
-	if(array_key_exists($privname, $privs) && 
+	if(isset($privs[$privname]) && 
 	   (($usergroup == 1 &&
 	   isset($privs[$privname]['cascade'])) ||
 	   ($usergroup == 2 &&
@@ -2221,17 +2237,17 @@ function printUserPrivRow($privname, $rownum, $privs, $types,
 		$checked = "";
 		$value = "";
 		$cascaded = 0;
-		if(array_key_exists($privname, $cascadeprivs) && 
+		if(isset($cascadeprivs[$privname]) && 
 		   (($usergroup == 1 &&
 		   isset($cascadeprivs[$privname][$type])) ||
 		   ($usergroup == 2 &&
 		   isset($cascadeprivs[$privname]['privs'][$type])))) {
-			$bgcolor = "class=\"privCascade\" bgcolor=\"#008000\"";
+			$bgcolor = "class=\"privCascade\"";
 			$checked = "checked";
 			$value = "value=cascade";
 			$cascaded = 1;
 		}
-		if(array_key_exists($privname, $privs) && 
+		if(isset($privs[$privname]) && 
 		   (($usergroup == 1 &&
 		   isset($privs[$privname][$type])) ||
 		   ($usergroup == 2 &&
@@ -2304,7 +2320,7 @@ function getUserPrivRowHTML($privname, $rownum, $privs, $types,
 		$disabled = '';
 
 	# block rights
-	if(array_key_exists($privname, $privs) && 
+	if(isset($privs[$privname]) && 
 	   (($usergroup == 'user' &&
 	   isset($privs[$privname]["block"])) ||
 	   ($usergroup == 'group' &&
@@ -2328,7 +2344,7 @@ function getUserPrivRowHTML($privname, $rownum, $privs, $types,
 	$text .= "(this.checked, $rownum, $count, 1, $usergroup)\"></TD>";
 
 	#cascade rights
-	if(array_key_exists($privname, $privs) && 
+	if(isset($privs[$privname]) && 
 	   (($usergroup == 1 &&
 	   isset($privs[$privname]["cascade"])) ||
 	   ($usergroup == 2 &&
@@ -2345,21 +2361,23 @@ function getUserPrivRowHTML($privname, $rownum, $privs, $types,
 	# normal rights
 	$j = 1;
 	foreach($types as $type) {
+		if($type == 'configAdmin')
+			continue;
 		$bgcolor = "";
 		$checked = "";
 		$value = "";
 		$cascaded = 0;
-		if(array_key_exists($privname, $cascadeprivs) && 
+		if(isset($cascadeprivs[$privname]) && 
 		   (($usergroup == 1 &&
 		   isset($cascadeprivs[$privname][$type])) ||
 		   ($usergroup == 2 &&
 		   isset($cascadeprivs[$privname]['privs'][$type])))) {
-			$bgcolor = "class=\"privCascade\" bgcolor=\"#008000\"";
+			$bgcolor = "class=\"privCascade\"";
 			$checked = "checked";
 			$value = "value=cascade";
 			$cascaded = 1;
 		}
-		if(array_key_exists($privname, $privs) && 
+		if(isset($privs[$privname]) && 
 		   (($usergroup == 1 &&
 		   isset($privs[$privname][$type])) ||
 		   ($usergroup == 2 &&
@@ -2483,8 +2501,7 @@ function getResourcePrivRowHTML($privname, $rownum, $privs, $types,
 		$disabled = '';
 
 	# block rights
-	if(array_key_exists($privname, $privs) && 
-	   isset($privs[$privname]["block"])) {
+	if(isset($privs[$privname]["block"])) {
 		$checked = "checked";
 		$blocked = 1;
 	}
@@ -2500,8 +2517,7 @@ function getResourcePrivRowHTML($privname, $rownum, $privs, $types,
 	$text .= "(this.checked, $rownum, $count, 1, 3)\"></TD>\n";
 
 	#cascade rights
-	if(array_key_exists($privname, $privs) && 
-	   isset($privs[$privname]["cascade"]))
+	if(isset($privs[$privname]["cascade"]))
 		$checked = "checked";
 	else
 		$checked = "";
@@ -2520,15 +2536,13 @@ function getResourcePrivRowHTML($privname, $rownum, $privs, $types,
 		$checked = "";
 		$value = "";
 		$cascaded = 0;
-		if(array_key_exists($privname, $cascadeprivs) && 
-		   isset($cascadeprivs[$privname][$type])) {
-			$bgcolor = "class=\"privCascade\" bgcolor=\"#008000\"";
+		if(isset($cascadeprivs[$privname][$type])) {
+			$bgcolor = "class=\"privCascade\"";
 			$checked = "checked";
 			$value = "value=cascade";
 			$cascaded = 1;
 		}
-		if(array_key_exists($privname, $privs) && 
-		   isset($privs[$privname][$type])) {
+		if(isset($privs[$privname][$type])) {
 			if($cascaded) {
 				$value = "value=cascadesingle";
 			}
@@ -2671,7 +2685,7 @@ function jsonGetResourceGroupMembers() {
 function getNodePrivileges($node, $type="all", $privs=0) {
 	global $user;
 	$key = getKey(array($node, $type, $privs));
-	if(array_key_exists($key, $_SESSION['nodeprivileges']))
+	if(isset($_SESSION['nodeprivileges'][$key]))
 		return $_SESSION['nodeprivileges'][$key];
 	if(! $privs)
 		$privs = array("resources" => array(),
@@ -2692,16 +2706,14 @@ function getNodePrivileges($node, $type="all", $privs=0) {
 		       . "ORDER BY p.privnodeid";
 		$qh = doQuery($query, 350);
 		while($row = mysql_fetch_assoc($qh)) {
-			if(! array_key_exists($row['privnodeid'], $resourcedata))
-				$resourcedata[$row['privnodeid']] = array();
 			$resourcedata[$row['privnodeid']][] = $row;
 		}
 	}
 	if($type == "resources" || $type == "all") {
-		if(array_key_exists($node, $resourcedata)) {
+		if(isset($resourcedata[$node])) {
 			foreach($resourcedata[$node] as $data) {
 				$name = "{$data["type"]}/{$data["name"]}/{$data["id"]}";
-				$privs["resources"][$name][] = $data["privtype"];
+				$privs["resources"][$name][$data["privtype"]] = 1;
 			}
 		}
 	}
@@ -2739,7 +2751,7 @@ function getNodePrivileges($node, $type="all", $privs=0) {
 		       . "ORDER BY g.name";
 		$qh = doQuery($query, 352);
 		while($row = mysql_fetch_assoc($qh)) {
-			if(array_key_exists($row["id"], $privs["usergroups"]))
+			if(isset($privs["usergroups"][$row["id"]]))
 				$privs["usergroups"][$row["id"]]['privs'][$row['priv']] = 1;
 			else
 				$privs["usergroups"][$row["id"]] = array('id' => $row['id'],
@@ -2797,7 +2809,7 @@ function getNodePrivileges($node, $type="all", $privs=0) {
 ////////////////////////////////////////////////////////////////////////////////
 function getNodeCascadePrivileges($node, $type="all", $privs=0) {
 	$key = getKey(array($node, $type, $privs));
-	if(array_key_exists($key, $_SESSION['cascadenodeprivileges']))
+	if(isset($_SESSION['cascadenodeprivileges'][$key]))
 		return $_SESSION['cascadenodeprivileges'][$key];
 	if(! $privs)
 		$privs = array("resources" => array(),
@@ -2822,7 +2834,7 @@ function getNodeCascadePrivileges($node, $type="all", $privs=0) {
 		       .       "p.type = 'block'";
 		$qh = doQuery($query);
 		while($row = mysql_fetch_assoc($qh)) {
-			if(! array_key_exists($row['privnodeid'], $allblockdata))
+			if(! isset($allblockdata[$row['privnodeid']]))
 				$allblockdata[$row['privnodeid']] = array();
 			# TODO adding the id at the end will fix the bug where blocking cascaded resource
 			#   privileges are only blocked at the node and the block is not cascaded to
@@ -2836,7 +2848,7 @@ function getNodeCascadePrivileges($node, $type="all", $privs=0) {
 	$inlist = implode(',', $nodelist);
 	$blockdata = array();
 	foreach($nodelist as $nodeid) {
-		if(array_key_exists($nodeid, $allblockdata))
+		if(isset($allblockdata[$nodeid]))
 			$blockdata[$nodeid] = $allblockdata[$nodeid];
 	}
 
@@ -2861,7 +2873,7 @@ function getNodeCascadePrivileges($node, $type="all", $privs=0) {
 		       .       "p2.type = 'cascade'";
 		$qh = doQuery($query);
 		while($row = mysql_fetch_assoc($qh)) {
-			if(! array_key_exists($row['privnodeid'], $allcascadedata))
+			if(! isset($allcascadedata[$row['privnodeid']]))
 				$allcascadedata[$row['privnodeid']] = array();
 			$allcascadedata[$row['privnodeid']][] =
 			   array('name' => "{$row["type"]}/{$row["name"]}/{$row["id"]}",
@@ -2872,7 +2884,7 @@ function getNodeCascadePrivileges($node, $type="all", $privs=0) {
 	# get all privs for users with cascaded privs
 	$cascadedata = array();
 	foreach($nodelist as $nodeid) {
-		if(array_key_exists($nodeid, $allcascadedata))
+		if(isset($allcascadedata[$nodeid]))
 			$cascadedata[$nodeid] = $allcascadedata[$nodeid];
 	}
 
@@ -2882,13 +2894,13 @@ function getNodeCascadePrivileges($node, $type="all", $privs=0) {
 		while(count($mynodelist)) {
 			$mynode = array_pop($mynodelist);
 			# get all resource groups with block set at this node and remove any cascaded privs
-			if(array_key_exists($mynode, $blockdata)) {
+			if(isset($blockdata[$mynode])) {
 				foreach($blockdata[$mynode] as $name)
 					unset($privs["resources"][$name]);
 			}
 
 			# get all privs for users with cascaded privs
-			if(array_key_exists($mynode, $cascadedata)) {
+			if(isset($cascadedata[$mynode])) {
 				foreach($cascadedata[$mynode] as $data) {
 					$privs["resources"][$data['name']][$data["type"]] = 1;
 				}
@@ -3078,8 +3090,7 @@ function AJchangeUserPrivs() {
 
 	if($newprivval == 'true') {
 		// if $newuser already has $newpriv cascaded to it, do nothing
-		if(array_key_exists($newuser, $cascadePrivs['users']) &&
-		   isset($cascadePrivs['users'][$newuser][$newpriv]))
+		if(isset($cascadePrivs['users'][$newuser][$newpriv]))
 			return;
 		// add priv
 		$adds = array($newpriv);
@@ -3136,8 +3147,7 @@ function AJchangeUserGroupPrivs() {
 
 	if($newprivval == 'true') {
 		// if $newusergrp already has $newpriv cascaded to it, do nothing
-		if(array_key_exists($newusergrp, $cascadePrivs['usergroups']) &&
-		   isset($cascadePrivs['usergroups'][$newusergrp]['privs'][$newpriv]))
+		if(isset($cascadePrivs['usergroups'][$newusergrp]['privs'][$newpriv]))
 			return;
 		// add priv
 		$adds = array($newpriv);
@@ -3150,7 +3160,7 @@ function AJchangeUserGroupPrivs() {
 	}
 	updateUserOrGroupPrivs($newusergrpid, $node, $adds, $removes, "group");
 	$_SESSION['dirtyprivs'] = 1;
-	if(array_key_exists($newusergrpid, $user['groups']) &&
+	if(isset($user['groups'][$newusergrpid]) &&
 	   in_array($newpriv, array('nodeAdmin', 'block', 'cascade')))
 		print "refreshNodeDropData();";
 }
@@ -3176,7 +3186,7 @@ function AJchangeResourcePrivs() {
 	$newprivval = processInputVar('value', ARG_STRING);
 
 	$allprivs = getResourcePrivs();
-	if(! isset($allprivs[$newpriv])) {
+	if(! in_array($newpriv, $allprivs)) {
 		$text = "Invalid resource privilege submitted.";
 		print "alert('$text');";
 		return;
@@ -3211,13 +3221,14 @@ function AJchangeResourcePrivs() {
 		return;
 	}
 
-	# get cascade privs at this node
+	# get privs at this node
+	$privs = getNodePrivileges($node, 'resources');
 	$cascadePrivs = getNodeCascadePrivileges($node, "resources");
 
 	if($newprivval == 'true') {
 		// if $resourcegrp already has $newpriv cascaded to it, do nothing
-		if(array_key_exists($resourcegrp, $cascadePrivs['resources']) &&
-		   isset($cascadePrivs['resources'][$resourcegrp][$newpriv]))
+		if(isset($cascadePrivs['resources'][$resourcegrp][$newpriv]) &&
+		   ! isset($privs['resources'][$resourcegrp]['block']))
 			return;
 		// add priv
 		$adds = array($newpriv);
@@ -3262,7 +3273,7 @@ function AJsubmitAddUserPriv() {
 	array_push($usertypes["users"], "cascade");
 	$newuserprivs = array();
 	foreach($usertypes["users"] as $type) {
-		if(isset($perms[$type]))
+		if(in_array($type, $perms))
 			array_push($newuserprivs, $type);
 	}
 	if(empty($newuserprivs) || (count($newuserprivs) == 1 && 
@@ -3317,7 +3328,7 @@ function AJsubmitAddUserGroupPriv() {
 	array_push($usertypes["users"], "cascade");
 	$newgroupprivs = array();
 	foreach($usertypes["users"] as $type) {
-		if(isset($perms[$type]))
+		if(in_array($type, $perms))
 			array_push($newgroupprivs, $type);
 	}
 	if(empty($newgroupprivs) || (count($newgroupprivs) == 1 && 
@@ -3331,7 +3342,7 @@ function AJsubmitAddUserGroupPriv() {
 	clearPrivCache();
 	print "refreshPerms(); ";
 	print "addUserGroupPaneHide(); ";
-	if(array_key_exists($newgroupid, $user['groups']) &&
+	if(isset($user['groups'][$newgroupid]) &&
 	   (isset($perms['nodeAdmin']) ||
 	   isset($perms['cascade']) ||
 	   isset($perms['block'])))
@@ -3370,7 +3381,7 @@ function AJsubmitAddResourcePriv() {
 	}
 
 	list($newtype, $tmp) = explode('/', $groupdata[$newgroupid]['name']);
-	if(! array_key_exists($newgroupid, $resourcegroups[$newtype])) {
+	if(! isset($resourcegroups[$newtype][$newgroupid])) {
 		$text = "You do not have rights to manage the specified resource group.";
 		print "addResourceGroupPaneHide(); ";
 		print "alert('$text');";
@@ -3381,11 +3392,11 @@ function AJsubmitAddResourcePriv() {
 	$privtypes = getResourcePrivs();
 	$newgroupprivs = array();
 	foreach($privtypes as $type) {
-		if(isset($perms[$type]))
+		if(in_array($type, $perms))
 			array_push($newgroupprivs, $type);
 	}
 	if(empty($newgroupprivs) || (count($newgroupprivs) == 1 && 
-	   isset($newgroupprivs["cascade"]))) {
+	   in_array("cascade", $newgroupprivs))) {
 		$text = "<font color=red>No resource group privileges were specified</font>";
 		print setAttribute('addResourceGroupPrivStatus', 'innerHTML', $text);
 		return;
@@ -3417,7 +3428,7 @@ function AJsubmitAddResourcePriv() {
 function checkUserHasPriv($priv, $uid, $node, $privs=0, $cascadePrivs=0) {
 	global $user;
 	$key = getKey(array($priv, $uid, $node, $privs, $cascadePrivs));
-	if(array_key_exists($key, $_SESSION['userhaspriv']))
+	if(isset($_SESSION['userhaspriv'][$key]))
 		return $_SESSION['userhaspriv'][$key];
 	if($user["id"] != $uid) {
 		$_user = getUserInfo($uid, 0, 1);
@@ -3438,12 +3449,9 @@ function checkUserHasPriv($priv, $uid, $node, $privs=0, $cascadePrivs=0) {
 	}
 	// if user (has $priv at this node) || 
 	# (has cascaded $priv && ! have block at this node) return 1
-	if((array_key_exists($affilUserid, $privs["users"]) &&
-	   isset($privs["users"][$affilUserid][$priv])) ||
-	   ((array_key_exists($affilUserid, $cascadePrivs["users"]) &&
-	   isset($cascadePrivs["users"][$affilUserid][$priv])) &&
-	   (! array_key_exists($affilUserid, $privs["users"]) ||
-	   ! isset($privs["users"][$affilUserid]['block'])))) {
+	if(isset($privs["users"][$affilUserid][$priv]) ||
+	   (isset($cascadePrivs["users"][$affilUserid][$priv]) &&
+	   ! isset($privs["users"][$affilUserid]['block']))) {
 		$_SESSION['userhaspriv'][$key] = 1;
 		return 1;
 	}
@@ -3451,12 +3459,9 @@ function checkUserHasPriv($priv, $uid, $node, $privs=0, $cascadePrivs=0) {
 	foreach($_user["groups"] as $groupid => $groupname) {
 		// if group (has $priv at this node) ||
 		# (has cascaded $priv && ! have block at this node) return 1
-		if((array_key_exists($groupid, $privs["usergroups"]) &&
-		   isset($privs["usergroups"][$groupid]['privs'][$priv])) ||
-		   ((array_key_exists($groupid, $cascadePrivs["usergroups"]) &&
-		   isset($cascadePrivs["usergroups"][$groupid]['privs'][$priv])) &&
-		   (! array_key_exists($groupid, $privs["usergroups"]) ||
-		   (! isset($privs["usergroups"][$groupid]['privs']['block']))))) {
+		if(isset($privs["usergroups"][$groupid]['privs'][$priv]) ||
+		   (isset($cascadePrivs["usergroups"][$groupid]['privs'][$priv]) &&
+		   ! isset($privs["usergroups"][$groupid]['privs']['block']))) {
 			$_SESSION['userhaspriv'][$key] = 1;
 			return 1;
 		}

@@ -1306,8 +1306,6 @@ function getImages($includedeleted=0, $imageid=0) {
 	while($row = mysql_fetch_assoc($qh)) {
 		$id = $row['imageid'];
 		unset($row['imageid']);
-		if(! array_key_exists($id, $allrevisiondata))
-			$allrevisiondata[$id] = array();
 		$allrevisiondata[$id][$row['id']] = $row;
 	}
 	$query = "SELECT i.id AS id,"
@@ -1374,7 +1372,7 @@ function getImages($includedeleted=0, $imageid=0) {
 		if($row['addomainid'] != NULL)
 			$imagelist[$includedeleted][$row['id']]['adauthenabled'] = 1;
 		if($row["imagemetaid"] != NULL) {
-			if(array_key_exists($row['imagemetaid'], $allmetadata)) {
+			if(isset($allmetadata[$row['imagemetaid']])) {
 				$metaid = $row['imagemetaid'];
 				$imagelist[$includedeleted][$row['id']]['checkuser'] = $allmetadata[$metaid]['checkuser'];
 				$imagelist[$includedeleted][$row['id']]['rootaccess'] = $allmetadata[$metaid]['rootaccess'];
@@ -1394,7 +1392,7 @@ function getImages($includedeleted=0, $imageid=0) {
 			else
 				$imagelist[$includedeleted][$row["id"]]["imagemetaid"] = NULL;
 		}
-		if(array_key_exists($row['id'], $allrevisiondata))
+		if(isset($allrevisiondata[$row['id']]))
 			$imagelist[$includedeleted][$row['id']]['imagerevision'] = $allrevisiondata[$row['id']];
 		$imagelist[$includedeleted][$row['id']]['connectmethods'] = getImageConnectMethods($row['id']);
 	}
@@ -1431,7 +1429,7 @@ function getImages($includedeleted=0, $imageid=0) {
 ////////////////////////////////////////////////////////////////////////////////
 function getServerProfiles($id=0) {
 	$key = getKey(array('getServerProfiles', $id));
-	if(array_key_exists($key, $_SESSION['usersessiondata']))
+	if(isset($_SESSION['usersessiondata'][$key]))
 		return $_SESSION['usersessiondata'][$key];
 
 	$fixeddata = array();
@@ -1475,7 +1473,7 @@ function getServerProfiles($id=0) {
 	$profiles = array();
 	while($row = mysql_fetch_assoc($qh)) {
 		$profiles[$row['id']] = $row;
-		if(array_key_exists($row['id'], $fixeddata)) {
+		if(isset($fixeddata[$row['id']])) {
 			$profiles[$row['id']]['netmask'] = $fixeddata[$row['id']]['netmask'];
 			$profiles[$row['id']]['router'] = $fixeddata[$row['id']]['router'];
 			$profiles[$row['id']]['dns'] = implode(',', $fixeddata[$row['id']]['dns']);
@@ -1504,7 +1502,7 @@ function getServerProfiles($id=0) {
 ////////////////////////////////////////////////////////////////////////////////
 function getServerProfileImages($userid) {
 	$key = getKey(array('getServerProfileImages', $userid));
-	if(array_key_exists($key, $_SESSION['usersessiondata']))
+	if(isset($_SESSION['usersessiondata'][$key]))
 		return $_SESSION['usersessiondata'][$key];
 	$resources = getUserResources(array('serverCheckOut', 'serverProfileAdmin'),
 	                              array('available', 'administer'));
@@ -1621,7 +1619,7 @@ function getImageNotes($imageid) {
 ////////////////////////////////////////////////////////////////////////////////
 function getImageConnectMethods($imageid, $revisionid=0, $nostatic=0) {
 	$key = getKey(array('getImageConnectMethods', (int)$imageid, (int)$revisionid));
-	if(array_key_exists($key, $_SESSION['usersessiondata']))
+	if(isset($_SESSION['usersessiondata'][$key]))
 		return $_SESSION['usersessiondata'][$key];
 	if($revisionid == 0)
 		$revisionid = getProductionRevisionid($imageid, $nostatic);
@@ -1633,54 +1631,68 @@ function getImageConnectMethods($imageid, $revisionid=0, $nostatic=0) {
 	static $allmethods = array();
 	if($nostatic)
 		$allmethods = array();
+
 	if(empty($allmethods)) {
-		$query = "SELECT DISTINCT c.id, "
-		      .                  "c.description, "
-		      .                  "cm.disabled, "
-		      .                  "i.id AS imageid, "
-		      .                  "cm.imagerevisionid AS cmimagerevisionid, "
-		      .                  "ir.id AS imagerevisionid, "
-		      .                  "ir.imagename "
-		      . "FROM image i "
-		      . "LEFT JOIN OS o ON (o.id = i.OSid) "
-		      . "LEFT JOIN OStype ot ON (ot.name = o.type) "
-		      . "LEFT JOIN imagerevision ir ON (ir.imageid = i.id) "
-		      . "LEFT JOIN connectmethodmap cm ON (cm.OStypeid = ot.id OR "
-		      .                                   "cm.OSid = o.id OR "
-		      .                                   "cm.imagerevisionid = ir.id) "
-		      . "LEFT JOIN connectmethod c ON (cm.connectmethodid = c.id) "
-		      . "WHERE cm.autoprovisioned IS NULL  "
-		      . "ORDER BY i.id, "
-		      .          "cm.disabled, "
-		      .          "c.description";
+		$query = "DROP TEMPORARY TABLE IF EXISTS imageconnectmethods";
+		doQuery($query);
+		$query = "CREATE TEMPORARY TABLE imageconnectmethods ( "
+		       .    "imageid smallint(5) unsigned NOT NULL, "
+		       .    "imagerevisionid mediumint(8) unsigned NOT NULL, "
+		       .    "connectmethodid tinyint unsigned NOT NULL, "
+		       .    "description varchar(255) NOT NULL, "
+		       .    "disabled tinyint(1) unsigned NOT NULL, "
+		       .    "UNIQUE KEY (imagerevisionid, connectmethodid, disabled) "
+		       . ") ENGINE=MEMORY";
+		doQuery($query, 101);
+
+		$qbase = "INSERT IGNORE INTO imageconnectmethods "
+		       . "SELECT DISTINCT i.id, "
+		       .                 "ir.id, "
+		       .                 "c.id, "
+		       .                 "c.description, "
+		       .                 "cm.disabled "
+		       . "FROM image i "
+		       . "LEFT JOIN OS o ON (o.id = i.OSid) "
+		       . "LEFT JOIN OStype ot ON (ot.name = o.type) "
+		       . "LEFT JOIN imagerevision ir ON (ir.imageid = i.id) "
+		       . "LEFT JOIN connectmethodmap cm ON (%s) "
+		       . "LEFT JOIN connectmethod c ON (cm.connectmethodid = c.id) "
+		       . "WHERE cm.autoprovisioned IS NULL "
+		       . "HAVING c.id IS NOT NULL "
+		       . "ORDER BY i.id, "
+		       .          "cm.disabled, "
+		       .          "c.description";
+		$query = sprintf($qbase, "cm.OStypeid = ot.id");
+		doQuery($query);
+		$query = sprintf($qbase, "cm.OSid = o.id");
+		doQuery($query);
+		$query = sprintf($qbase, "cm.imagerevisionid = ir.id");
+		doQuery($query);
+
+		$query = "SELECT imageid, "
+		       .        "imagerevisionid, "
+		       .        "connectmethodid, "
+		       .        "description, "
+		       .        "disabled "
+		       . "FROM imageconnectmethods "
+		       . "ORDER BY imagerevisionid, "
+		       .          "connectmethodid, "
+		       .          "disabled";
+
 		$qh = doQuery($query);
 		while($row = mysql_fetch_assoc($qh)) {
-			$_imageid = $row['imageid'];
-			$_revid = $row['imagerevisionid'];
-			unset($row['imageid']);
-			unset($row['imagerevisionid']);
-			if(! array_key_exists($_imageid, $allmethods))
-				$allmethods[$_imageid] = array();
-			if(! array_key_exists($_revid, $allmethods[$_imageid]))
-				$allmethods[$_imageid][$_revid] = array();
-			$allmethods[$_imageid][$_revid][] = $row;
+			if($row['disabled'] &&
+			   isset($allmethods[$row['imageid']][$row['imagerevisionid']][$row['connectmethodid']]))
+				unset($allmethods[$row['imageid']][$row['imagerevisionid']][$row['connectmethodid']]);
+			else
+				$allmethods[$row['imageid']][$row['imagerevisionid']][$row['connectmethodid']] = $row['description'];
 		}
 	}
-	if(! array_key_exists($imageid, $allmethods) ||
-	   ! array_key_exists($revisionid, $allmethods[$imageid])) {
+	if(! isset($allmethods[$imageid][$revisionid])) {
 		$_SESSION['usersessiondata'][$key] = array();
 		return array();
 	}
-	$methods = array();
-	foreach($allmethods[$imageid][$revisionid] as $data) {
-		if($data['disabled']) {
-		  if(array_key_exists($data['id'], $methods))
-			unset($methods[$data['id']]);
-		}
-		else
-			$methods[$data['id']] = $data['description'];
-	}
-
+	$methods = $allmethods[$imageid][$revisionid];
 	$_SESSION['usersessiondata'][$key] = $methods;
 	return $methods;
 }
@@ -1746,7 +1758,7 @@ function getImageConnectMethodTexts($imageid, $revisionid=0) {
 	$qh = doQuery($query, 101);
 	while($row = mysql_fetch_assoc($qh)) {
 		if($row['disabled']) {
-		  if(array_key_exists($row['id'], $methods))
+		  if(isset($methods[$row['id']]))
 			unset($methods[$row['id']]);
 		}
 		else
@@ -1845,7 +1857,7 @@ function getProductionRevisionid($imageid, $nostatic=0) {
 	if($nostatic)
 		$alldata = array();
 	if(! empty($alldata))
-		if(array_key_exists($imageid, $alldata))
+		if(isset($alldata[$imageid]))
 			return $alldata[$imageid];
 		else
 			return '';
@@ -1874,7 +1886,7 @@ function getProductionRevisionid($imageid, $nostatic=0) {
 function removeNoCheckout($images) {
 	$allimages = getImages();
 	foreach(array_keys($images) as $id) {
-		if(array_key_exists($id, $allimages) && ! $allimages[$id]["forcheckout"])
+		if(isset($allimages[$id]) && ! $allimages[$id]["forcheckout"])
 			unset($images[$id]);
 	}
 	return $images;
@@ -1927,7 +1939,7 @@ function getUserResources($userprivs, $resourceprivs=array("available"),
 	if(isset($userprivs['managementnodeAdmin']))
 		$userprivs[] = 'mgmtNodeAdmin';
 	$key = getKey(array($userprivs, $resourceprivs, $onlygroups, $includedeleted, $userid, $groupid));
-	if(array_key_exists($key, $_SESSION['userresources']))
+	if(isset($_SESSION['userresources'][$key]))
 		return $_SESSION['userresources'][$key];
 	#FIXME this whole function could be much more efficient
 	$bygroup = 0;
@@ -1970,11 +1982,8 @@ function getUserResources($userprivs, $resourceprivs=array("available"),
 	       .       "u.userid = $userid AND "
 	       .       "t.name IN ('block','cascade',$inlist)";
 	$qh = doQuery($query);
-	while($row = mysql_fetch_assoc($qh)) {
-		if(! array_key_exists($row['privnodeid'], $privdataset['user']))
-			$privdataset['user'][$row['privnodeid']] = array();
+	while($row = mysql_fetch_assoc($qh))
 		$privdataset['user'][$row['privnodeid']][] = $row['name'];
-	}
 	$query = "SELECT t.name, "
 	       .        "u.usergroupid, "
 	       .        "u.privnodeid "
@@ -1992,11 +2001,8 @@ function getUserResources($userprivs, $resourceprivs=array("available"),
 	       . "ORDER BY u.privnodeid, "
 	       .          "u.usergroupid";
 	$qh = doQuery($query, 101);
-	while($row = mysql_fetch_assoc($qh)) {
-		if(! array_key_exists($row['privnodeid'], $privdataset['usergroup']))
-			$privdataset['usergroup'][$row['privnodeid']] = array();
+	while($row = mysql_fetch_assoc($qh))
 		$privdataset['usergroup'][$row['privnodeid']][] = array('name' => $row['name'], 'groupid' => $row['usergroupid']);
-	}
 
 	# travel up tree looking at privileges granted at parent nodes
 	foreach($startnodes as $nodeid) {
@@ -2030,7 +2036,7 @@ function getUserResources($userprivs, $resourceprivs=array("available"),
 			foreach($resourceprivs as $priv) {
 				if(isset($nodeprivs[$nodeid]["resources"][$resourceid][$priv])) {
 					list($type, $name, $id) = explode('/', $resourceid);
-					if(! array_key_exists($type, $resourcegroups))
+					if(! isset($resourcegroups[$type]))
 						$resourcegroups[$type] = array();
 					if(! isset($resourcegroups[$type][$name]))
 						$resourcegroups[$type][$id] = $name;
@@ -2041,10 +2047,9 @@ function getUserResources($userprivs, $resourceprivs=array("available"),
 		foreach(array_keys($nodeprivs[$nodeid]["cascaderesources"]) as $resourceid) {
 			foreach($resourceprivs as $priv) {
 				if(isset($nodeprivs[$nodeid]["cascaderesources"][$resourceid][$priv]) &&
-					! (array_key_exists($resourceid, $nodeprivs[$nodeid]["resources"]) &&
-					isset($nodeprivs[$nodeid]["resources"][$resourceid]["block"]))) {
+					! (isset($nodeprivs[$nodeid]["resources"][$resourceid]["block"]))) {
 					list($type, $name, $id) = explode('/', $resourceid);
-					if(! array_key_exists($type, $resourcegroups))
+					if(! isset($resourcegroups[$type]))
 						$resourcegroups[$type] = array();
 					if(! isset($resourcegroups[$type][$name]))
 						$resourcegroups[$type][$id] = $name;
@@ -2070,7 +2075,7 @@ function getUserResources($userprivs, $resourceprivs=array("available"),
 	if(! $bygroup)
 		addOwnedResources($resources, $includedeleted, $userid);
 	$noimageid = getImageId('noimage');
-	if(array_key_exists($noimageid, $resources['image']))
+	if(isset($resources['image'][$noimageid]))
 		unset($resources['image'][$noimageid]);
 	$_SESSION['userresources'][$key] = $resources;
 	return $resources;
@@ -2102,7 +2107,7 @@ function getUserResourcesUp(&$nodeprivs, $nodeid, $userid,
 	$lastid = 0;
 	while(count($nodelist)) {
 		$id = array_pop($nodelist);
-		if(array_key_exists($id, $nodeprivs))
+		if(isset($nodeprivs[$id]))
 			continue;
 
 		addNodeUserResourcePrivs($nodeprivs, $id, $lastid, $userid, $resourceprivs, $privdataset);
@@ -2131,7 +2136,7 @@ function getUserResourcesDown(&$nodeprivs, $nodeid, $userid,
                               $resourceprivs, $privdataset) {
 	# FIXME can we check for cascading and if not there, don't descend?
 	$children = getChildNodes($nodeid);
-	foreach(array_keys($children) as $id) {
+	foreach($children as $id => $tmp) {
 		addNodeUserResourcePrivs($nodeprivs, $id, $nodeid, $userid, $resourceprivs, $privdataset);
 		getUserResourcesDown($nodeprivs, $id, $userid, $resourceprivs, $privdataset);
 	}
@@ -2164,7 +2169,7 @@ function addNodeUserResourcePrivs(&$nodeprivs, $id, $lastid, $userid,
 
 	# add permissions for user
 	$block = 0;
-	if(array_key_exists($id, $privdataset['user'])) {
+	if(isset($privdataset['user'][$id])) {
 		foreach($privdataset['user'][$id] as $name) {
 			if($name != 'block')
 				$nodeprivs[$id]['user'][$name] = 1;
@@ -2198,23 +2203,22 @@ function addNodeUserResourcePrivs(&$nodeprivs, $id, $lastid, $userid,
 	                   "block" => 0);
 	foreach($resourceprivs as $priv)
 		$basearray[$priv] = 0;
-	if(array_key_exists($id, $privdataset['usergroup'])) {
+	if(isset($privdataset['usergroup'][$id])) {
 		foreach($privdataset['usergroup'][$id] as $data) {
-			if(! array_key_exists($data["groupid"], $nodeprivs[$id]))
+			if(! isset($nodeprivs[$id][$data["groupid"]]))
 				$nodeprivs[$id][$data["groupid"]] = $basearray;
 			$nodeprivs[$id][$data["groupid"]][$data["name"]] = 1;
 		}
 	}
 	# add groups from $lastid if it is not 0
-	$groupkeys = array_keys($nodeprivs[$id]);
 	if($lastid) {
-		foreach(array_keys($nodeprivs[$lastid]) as $groupid) {
-			if(isset($groupkeys[$groupid]))
+		foreach($nodeprivs[$lastid] as $groupid => $tmp) {
+			if(isset($nodeprivs[$id][$groupid]))
 				continue;
 			$nodeprivs[$id][$groupid] = $basearray;
 		}
 	}
-	foreach(array_keys($nodeprivs[$id]) as $groupid) {
+	foreach($nodeprivs[$id] as $groupid => $tmp) {
 		if(! is_numeric($groupid))
 			continue;
 		// if don't have anything in $resourceprivs, set cascade = 0
@@ -2230,7 +2234,7 @@ function addNodeUserResourcePrivs(&$nodeprivs, $id, $lastid, $userid,
 		// if group not blocking at this node, and group had cascade at previous 
 		# node
 		if($lastid && ! $nodeprivs[$id][$groupid]["block"] && 
-		   array_key_exists($groupid, $nodeprivs[$lastid]) &&
+		   isset($nodeprivs[$lastid][$groupid]) &&
 		   $nodeprivs[$lastid][$groupid]["cascade"]) {
 			# set cascade = 1
 			$nodeprivs[$id][$groupid]["cascade"] = 1;
@@ -2336,7 +2340,7 @@ function addOwnedResources(&$resources, $includedeleted, $userid) {
 			$query .= " AND deleted = 0";
 		$qh = doQuery($query, 101);
 		while($row = mysql_fetch_assoc($qh)) {
-			if(! array_key_exists($row["id"], $resources[$type]))
+			if(! isset($resources[$type][$row["id"]]))
 				$resources[$type][$row["id"]] = $row[$field];
 		}
 	}
@@ -2370,7 +2374,7 @@ function addOwnedResourceGroups(&$resourcegroups, $userid) {
 	       .       "g.ownerusergroupid IN ($groupids)";
 	$qh = doQuery($query, 101);
 	while($row = mysql_fetch_assoc($qh)) {
-		if(! array_key_exists($row["id"], $resourcegroups[$row["type"]]))
+		if(! isset($resourcegroups[$row["type"]][$row["id"]]))
 			$resourcegroups[$row["type"]][$row["id"]] = $row["name"];
 	}
 }
@@ -2647,7 +2651,7 @@ function encryptDataAsymmetric($data, $public_key){
 ////////////////////////////////////////////////////////////////////////////////
 function getParentNodes($node) {
 	global $nodeparents;
-	if(array_key_exists($node, $nodeparents))
+	if(isset($nodeparents[$node]))
 		return $nodeparents[$node];
 
 	$nodelist = array();
@@ -2676,7 +2680,7 @@ function getParentNodes($node) {
 ////////////////////////////////////////////////////////////////////////////////
 function getChildNodes($parent=DEFAULT_PRIVNODE) {
 	global $cache;
-	if(! array_key_exists('nodes', $cache))
+	if(! isset($cache['nodes']))
 		# call getNodeInfo to populate $cache['nodes']
 		getNodeInfo($parent);
 
@@ -2684,12 +2688,10 @@ function getChildNodes($parent=DEFAULT_PRIVNODE) {
 	if(empty($allnodes)) {
 		foreach($cache['nodes'] as $id => $node) {
 			unset($node['id']);
-			if(! array_key_exists($node['parent'], $allnodes))
-				$allnodes[$node['parent']] = array();
 			$allnodes[$node['parent']][$id] = $node;
 		}
 	}
-	if(array_key_exists($parent, $allnodes))
+	if(isset($allnodes[$parent]))
 		return $allnodes[$parent];
 	else
 		return array();
@@ -2730,7 +2732,7 @@ function getChildNodes($parent=DEFAULT_PRIVNODE) {
 function getUserGroups($groupType=0, $affiliationid=0) {
 	global $user;
 	$key = getKey(array($groupType, $affiliationid, $user['showallgroups']));
-	if(array_key_exists($key, $_SESSION['usersessiondata']))
+	if(isset($_SESSION['usersessiondata'][$key]))
 		return $_SESSION['usersessiondata'][$key];
 	$return = array();
 	$query = "SELECT ug.id, "
@@ -2965,14 +2967,8 @@ function getResourceGroupMemberships($type="all") {
 		       .       "gm.resourceid = r.id AND "
 		       .       "r.resourcetypeid = t.id";
 		$qh = doQuery($query, 282);
-		while($row = mysql_fetch_assoc($qh)) {
-			if(array_key_exists($row["id"], $return[$type])) {
-				array_push($return[$type][$row["id"]], $row["groupid"]);
-			}
-			else {
-				$return[$type][$row["id"]] = array($row["groupid"]);
-			}
-		}
+		while($row = mysql_fetch_assoc($qh))
+			$return[$type][$row["id"]][] = $row["groupid"];
 	}
 	return $return;
 }
@@ -3004,7 +3000,7 @@ function getResourceGroupMemberships($type="all") {
 ////////////////////////////////////////////////////////////////////////////////
 function getResourceGroupMembers($type="all") {
 	$key = getKey(array('getResourceGroupMembers', $type));
-	if(array_key_exists($key, $_SESSION['userresources']))
+	if(isset($_SESSION['userresources'][$key]))
 		return $_SESSION['userresources'][$key];
 	$return = array();
 
@@ -3076,14 +3072,10 @@ function getResourceGroupMembers($type="all") {
 	       .          $orders;
 	$qh = doQuery($query, 282);
 	while($row = mysql_fetch_assoc($qh)) {
-		if(array_key_exists('deleted', $row) && $row['deleted'] == 1)
+		if(isset($row['deleted']) && $row['deleted'] == 1)
 			continue;
-		if(array_key_exists('deleted2', $row) && $row['deleted2'] == 1)
+		if(isset($row['deleted2']) && $row['deleted2'] == 1)
 			continue;
-		if(! array_key_exists($row['resourcetype'], $return))
-			$return[$row['resourcetype']] = array();
-		if(! array_key_exists($row['resourcegroupid'], $return[$row['resourcetype']]))
-			$return[$row['resourcetype']][$row['resourcegroupid']] = array();
 		$return[$row['resourcetype']][$row['resourcegroupid']][$row['resourceid']] =
 		      array('subid' => $row['subid'],
 		            'name' => $row[$row['resourcetype']]);
@@ -3258,9 +3250,9 @@ function getAffiliations() {
 ////////////////////////////////////////////////////////////////////////////////
 function getUserUnityID($userid) {
 	global $cache;
-	if(! array_key_exists('unityids', $cache))
+	if(! isset($cache['unityids']))
 		$cache['unityids'] = array();
-	if(array_key_exists($userid, $cache['unityids']))
+	if(isset($cache['unityids'][$userid]))
 		return $cache['unityids'][$userid];
 	$query = "SELECT unityid FROM user WHERE id = $userid";
 	$qh = doQuery($query, 101);
@@ -3837,7 +3829,7 @@ function getUsersGroupPerms($usergroupids) {
 function checkUserHasPerm($perm, $userid=0) {
 	global $user;
 	if($userid == 0) {
-		if(is_array($user) && array_key_exists('groupperms', $user))
+		if(isset($user['groupperms']))
 			$perms = $user['groupperms'];
 		else
 			return 0;
@@ -7865,8 +7857,6 @@ function findAvailableTimes($start, $end, $imageid, $userid, $usedaysahead,
 				if($row['duration'] > $reqduration)
 					$row['duration'] = $reqduration;
 				$row['endts'] = $row['startts'] + $row['duration'];
-				if(! array_key_exists($row['compid'], $slots))
-					$slots[$row['compid']] = array();
 				$slots[$row['compid']][] = $row;
 				if($row['startts'] < $minstart)
 					$minstart = $row['startts'];
@@ -7923,8 +7913,6 @@ function findAvailableTimes($start, $end, $imageid, $userid, $usedaysahead,
 				$row['duration'] = $reqduration;
 			$row['start'] = $startdt;
 			$row['startts'] = $start;
-			if(! array_key_exists($row['compid'], $slots))
-				$slots[$row['compid']] = array();
 			$slots[$row['compid']][] = $row;
 			if($row['endts'] > $maxend)
 				$maxend = $row['endts'];
@@ -7980,8 +7968,6 @@ function findAvailableTimes($start, $end, $imageid, $userid, $usedaysahead,
 		}
 		$row['endts'] = $row['startts'] + $reqduration;
 		$row['duration'] = $reqduration;
-		if(! array_key_exists($row['compid'], $slots))
-			$slots[$row['compid']] = array();
 		$slots[$row['compid']][] = $row;
 		if($row['endts'] > $maxend)
 			$maxend = $row['endts'];
@@ -8011,7 +7997,7 @@ function findAvailableTimes($start, $end, $imageid, $userid, $usedaysahead,
 	$query .=      "bc.computerid IN ($newincompids)";
 	$qh = doQuery($query);
 	while($row = mysql_fetch_assoc($qh)) {
-		if(array_key_exists($row['compid'], $slots))
+		if(isset($slots[$row['compid']]))
 			fATremoveOverlaps($slots, $row['compid'], $row['start'], $row['end'], 0);
 	}
 
@@ -8040,7 +8026,7 @@ function findAvailableTimes($start, $end, $imageid, $userid, $usedaysahead,
 			$query .=   "s.fixedIP = '$mac'";
 		$qh = doQuery($query);
 		while($row = mysql_fetch_assoc($qh)) {
-			if(array_key_exists($row['compid'], $slots))
+			if(isset($slots[$row['compid']]))
 				fATremoveOverlaps($slots, $row['compid'], $row['start'], $row['end'], 0);
 		}
 	}
@@ -8081,7 +8067,7 @@ function findAvailableTimes($start, $end, $imageid, $userid, $usedaysahead,
 				                     $imgdata[$imageid]['maxconcurrent'], $ignorestates,
 				                     $extendonly, $reqid))
 				continue;
-			if(array_key_exists($data['startts'], $options)) {
+			if(isset($options[$data['startts']])) {
 				if($data['duration'] > $options[$data['startts']]['duration']) {
 					$options[$data['startts']]['duration'] = $data['duration'];
 					if(checkUserHasPerm('View Debug Information'))
@@ -9141,11 +9127,11 @@ function selectInputHTML($name, $dataArr, $domid="", $extra="", $selectedid=-1,
 		   $h .= "        <option value=\"$id\" selected=\"selected\">";
 		else
 		   $h .= "        <option value=\"$id\">";
-		if(is_array($dataArr[$id]) && array_key_exists("prettyname", $dataArr[$id]))
+		if(isset($dataArr[$id]['prettyname']))
 			$h .= $dataArr[$id]["prettyname"] . "</option>\n";
-		elseif(is_array($dataArr[$id]) && array_key_exists("name", $dataArr[$id]))
+		elseif(isset($dataArr[$id]['name']))
 			$h .= $dataArr[$id]["name"] . "</option>\n";
-		elseif(is_array($dataArr[$id]) && array_key_exists("hostname", $dataArr[$id]))
+		elseif(isset($dataArr[$id]['hostname']))
 			$h .= $dataArr[$id]["hostname"] . "</option>\n";
 		else
 			$h .= $dataArr[$id] . "</option>\n";
@@ -9442,7 +9428,7 @@ function prettyDatetime($stamp, $showyear=0, $notzoffset=0) {
 	global $locale;
 	if(! preg_match('/^[\d]+$/', $stamp))
 		$stamp = datetimeToUnix($stamp);
-	if(! $notzoffset && array_key_exists('tzoffset', $_SESSION['persistdata']))
+	if(! $notzoffset && isset($_SESSION['persistdata']['tzoffset']))
 		$stamp += $_SESSION['persistdata']['tzoffset'] * 60;
 	if($showyear)
 		$return = strftime('%A, %b&nbsp;%-d,&nbsp;%Y, %l:%M %P', $stamp);
@@ -9832,7 +9818,7 @@ function getMaintItems($id=0) {
 ////////////////////////////////////////////////////////////////////////////////
 function getMaintItemsForTimeTable($start, $end) {
 	$key = getKey(array('getMaintItemsForTimeTable', $start, $end));
-	if(array_key_exists($key, $_SESSION['usersessiondata']))
+	if(isset($_SESSION['usersessiondata'][$key]))
 		return $_SESSION['usersessiondata'][$key];
 	$startdt = unixToDatetime($start);
 	$enddt = unixToDatetime($end);
@@ -11057,14 +11043,14 @@ function getConfigSubimages($configs) {
 ////////////////////////////////////////////////////////////////////////////////
 function getNodeInfo($nodeid) {
 	global $cache;
-	if(! array_key_exists('nodes', $cache))
+	if(! isset($cache['nodes']))
 		$cache['nodes'] = array();
-	if(array_key_exists($nodeid, $cache['nodes']))
+	if(isset($cache['nodes'][$nodeid]))
 		return $cache['nodes'][$nodeid];
 	$qh = doQuery("SELECT id, parent, name FROM privnode", 330);
 	while($row = mysql_fetch_assoc($qh))
 		$cache['nodes'][$row['id']] = $row;
-	if(array_key_exists($nodeid, $cache['nodes']))
+	if(isset($cache['nodes'][$nodeid]))
 		return $cache['nodes'][$nodeid];
 	else
 		return NULL;
@@ -11112,7 +11098,7 @@ function getNodePath($nodeid) {
 ////////////////////////////////////////////////////////////////////////////////
 function sortKeepIndex($a, $b) {
 	if(is_array($a)) {
-		if(array_key_exists("prettyname", $a)) {
+		if(isset($a["prettyname"])) {
 			if(preg_match('/[0-9]-[0-9]/', $a['prettyname']) ||
 			   preg_match('/\.edu$|\.com$|\.net$|\.org$/', $a['prettyname']) ||
 			   preg_match('/[0-9]-[0-9]/', $b['prettyname']) ||
@@ -11120,7 +11106,7 @@ function sortKeepIndex($a, $b) {
 				return compareDashedNumbers($a["prettyname"], $b["prettyname"]);
 			return strcasecmp($a["prettyname"], $b["prettyname"]);
 		}
-		elseif(array_key_exists("name", $a)) {
+		elseif(isset($a["name"])) {
 			if(preg_match('/[0-9]-[0-9]/', $a['name']) ||
 			   preg_match('/\.edu$|\.com$|\.net$|\.org$/', $a['name']) ||
 			   preg_match('/[0-9]-[0-9]/', $b['name']) ||
