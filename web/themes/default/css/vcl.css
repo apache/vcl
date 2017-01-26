@@ -426,3 +426,11 @@ form {
 	float: none;
 	display: block;
 }
+
+#usersDiv th.privheader > div,
+#usergroupsDiv th.privheader > div,
+#resourcesDiv th.privheader > div {
+	transform:
+	  translate(0px, 130px)
+	  rotate(270deg);
+}
