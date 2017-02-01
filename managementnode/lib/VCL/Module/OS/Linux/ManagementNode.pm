@@ -57,6 +57,26 @@ use VCL::utils;
 
 ##############################################################################
 
+=head1 CLASS VARIABLES
+
+=cut
+
+=head2 $MN_STAGE_SCRIPTS_DIRECTORY
+
+ Data type   : String
+ Description : Location on the management node where scripts reside which are
+               executed on the management node at various stages of a
+               reservation.
+               
+               Example:
+               /usr/local/vcl/tools/mn_stage_scripts
+
+=cut
+
+our $MN_STAGE_SCRIPTS_DIRECTORY = "$TOOLS/mn_stage_scripts";
+
+##############################################################################
+
 =head1 OBJECT METHODS
 
 =cut
@@ -278,6 +298,183 @@ sub get_file_contents {
 	else {
 		return join('', @lines);
 	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_management_node_reservation_info_json_file_path
+
+ Parameters  : none
+ Returns     : string
+ Description : Returns the location where the files resides on the management
+               node that contains JSON formatted information about the
+               reservation. For Linux computers, the location is:
+               /tmp/<reservation ID>.json.
+
+=cut
+
+sub get_management_node_reservation_info_json_file_path {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module::OS/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	my $reservation_id = $self->data->get_reservation_id();
+	return "/tmp/$reservation_id.json";
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 create_management_node_reservation_info_json_file
+
+ Parameters  : none
+ Returns     : boolean
+ Description : Creates a text file on the the management node containing
+               reservation data in JSON format.
+
+=cut
+
+sub create_management_node_reservation_info_json_file {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module::OS/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $json_file_path = $self->get_management_node_reservation_info_json_file_path();
+	
+	# IMPORTANT: Use $self->os->data here to retrieve DataStructure info for the computer being loaded
+	# If $self->data->get_reservation_info_json_string is used, the computer info will be that of the management node, not the computer being loaded
+	my $json_string = $self->os->data->get_reservation_info_json_string() || return;
+	
+	return $self->create_text_file($json_file_path, $json_string);
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 delete_management_node_reservation_info_json_file
+
+ Parameters  : none
+ Returns     : boolean
+ Description : Deletes the text file on the management node containing
+               reservation data in JSON format.
+
+=cut
+
+sub delete_management_node_reservation_info_json_file {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module::OS/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $json_file_path = $self->get_management_node_reservation_info_json_file_path();
+	return $self->delete_file($json_file_path);
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 run_management_node_stage_scripts
+
+ Parameters  : $stage
+ Returns     : boolean
+ Description : Runs scripts on the management node intended for the state
+               specified by the argument. This is useful if you need to
+               configure something such as a storage unit or firewall device
+               specifically for each reservation.
+               
+               The stage argument may be any of the
+               following:
+               -pre_capture
+               -post_capture
+               -post_load
+               -post_reserve
+               -post_initial_connection
+               -post_reservation
+               
+               The scripts are stored on the management node under:
+               /usr/local/vcl/tools/mn_stage_scripts
+               
+               No scripts exist by default. When the vcld process reaches the
+               stage specified by the argument, it will check the subdirectory
+               with a name that matches the stage name. For example:
+               /usr/local/vcl/tools/mn_stage_scripts/post_capture
+               
+               It will attempt to execute any files under this directory.
+               
+               Prior to executing the scripts, a JSON file is created under /tmp
+               with information regarding the reservation. The actual file path
+               will be:
+               /tmp/<reservation ID>.json
+               
+               Information about the reservation can be retrieved within the
+               script by simply using grep or using something to parse JSON such
+               as jsawk. Sample script:
+               
+               JSON_FILE="$1"
+               echo "JSON file: ${JSON_FILE}"
+               PRIVATE_IP=`cat ${JSON_FILE} | jsawk 'return this.computer.privateIPaddress'`
+               echo "computer private IP: ${PRIVATE_IP}"
+
+=cut
+
+sub run_management_node_stage_scripts {
+	my $self = shift;
+	if (ref($self) !~ /VCL::/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Get the stage argument
+	my $stage = shift;
+	if (!$stage) {
+		notify($ERRORS{'WARNING'}, 0, "stage argument was not supplied");
+		return;
+	}
+	elsif ($stage !~ /(pre_capture|post_capture|post_load|post_reserve|post_initial_connection|post_reservation)/) {
+		notify($ERRORS{'WARNING'}, 0, "invalid stage argument was supplied: $stage");
+		return;
+	}
+	
+	# Override the die handler 
+	local $SIG{__DIE__} = sub{};
+	
+	my $reservation_id = $self->data->get_reservation_id();
+	my $management_node_short_name = $self->data->get_management_node_short_name();
+	
+	my $scripts_directory_path = "$MN_STAGE_SCRIPTS_DIRECTORY/$stage";
+	my @script_file_paths = $self->find_files($scripts_directory_path, '*');
+	if (!@script_file_paths) {
+		notify($ERRORS{'DEBUG'}, 0, "no files exist in directory: $scripts_directory_path");
+		return 1;
+	}
+	
+	# Sort the files so they can be executed in a known order
+	@script_file_paths = sort_by_file_name(@script_file_paths);
+	
+	my $script_count = scalar(@script_file_paths);
+	notify($ERRORS{'DEBUG'}, 0, "found $script_count files under $scripts_directory_path:\n" . join("\n", @script_file_paths));
+	
+	# Create a JSON file on the management node containing reservation info
+	$self->create_management_node_reservation_info_json_file();
+	
+	my $mn_json_file_path = $self->get_management_node_reservation_info_json_file_path();
+	
+	# Execute the scripts
+	for my $script_file_path (@script_file_paths) {
+		my $command = "chmod +x $script_file_path && $script_file_path $mn_json_file_path";
+		my ($exit_status, $output) = $self->execute($command);
+		if (!defined($output)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to execute script on management node: $command");
+			return;
+		}
+		else {
+			notify($ERRORS{'DEBUG'}, 0, "executed script on management node $management_node_short_name, exit status: $exit_status, command:\n$command\noutput:\n" . join("\n", @$output));
+		}
+	}
+	
+	#$self->delete_management_node_reservation_info_json_file();
+	return 1;
 }
 
 #/////////////////////////////////////////////////////////////////////////////

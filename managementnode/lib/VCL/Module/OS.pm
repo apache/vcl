@@ -60,26 +60,6 @@ use VCL::utils;
 
 ##############################################################################
 
-=head1 CLASS VARIABLES
-
-=cut
-
-=head2 $MN_STAGE_SCRIPTS_DIRECTORY
-
- Data type   : String
- Description : Location on the management node where scripts reside which are
-               executed on the management node at various stages of a
-               reservation.
-               
-               Example:
-               /usr/local/vcl/tools/mn_stage_scripts
-
-=cut
-
-our $MN_STAGE_SCRIPTS_DIRECTORY = "$TOOLS/mn_stage_scripts";
-
-##############################################################################
-
 =head1 OBJECT METHODS
 
 =cut
@@ -153,7 +133,7 @@ sub pre_capture {
 	# Run custom pre_capture scripts on the management node
 	my $enable_experimental_features = get_variable('enable_experimental_features', 0);
 	if ($enable_experimental_features) {
-		$self->run_management_node_stage_scripts('pre_capture');
+		$self->mn_os->run_management_node_stage_scripts('pre_capture');
 	}
 	
 	# Run custom pre_capture scripts on the computer
@@ -186,7 +166,7 @@ sub post_capture {
 	# Run custom post_capture scripts on the management node
 	my $enable_experimental_features = get_variable('enable_experimental_features', 0);
 	if ($enable_experimental_features) {
-		$self->run_management_node_stage_scripts('post_capture');
+		$self->mn_os->run_management_node_stage_scripts('post_capture');
 	}
 	
 	return 1;
@@ -2513,6 +2493,98 @@ sub get_public_default_gateway {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 get_dns_servers
+
+ Parameters  : $network_type
+ Returns     : array
+ Description : Retrieves a list of DNS servers currently configured on the
+               computer. The $network_type argument may either be 'private' or
+               'public'. The default is to retrieve the DNS servers configured
+               for the public interface.
+
+=cut
+
+sub get_dns_servers {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Check if a 'public' or 'private' network type argument was specified
+	# Assume 'public' if not specified
+	my $network_type = lc(shift()) || 'public';
+	if ($network_type && $network_type !~ /(public|private)/i) {
+		notify($ERRORS{'WARNING'}, 0, "network type argument can only be 'public' or 'private'");
+		return;
+	}
+
+	# Get the public or private network configuration
+	# Use 'eval' to construct the appropriate subroutine name
+	my $network_configuration = eval "\$self->get_$network_type\_network_configuration()";
+	if ($EVAL_ERROR || !$network_configuration) {
+		notify($ERRORS{'WARNING'}, 0, "unable to retrieve $network_type network configuration");
+		return;
+	}
+	
+	if (!defined($network_configuration->{dns_servers})) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine $network_type DNS servers, 'dns_servers' key does not exist in the network configuration info: \n" . format_data($network_configuration));
+		return;
+	}
+	elsif (!ref($network_configuration->{dns_servers}) || ref($network_configuration->{dns_servers}) ne 'ARRAY') {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine $network_type DNS servers, 'dns_servers' key is not an array reference in the network configuration info: \n" . format_data($network_configuration));
+		return;
+	}
+	
+	my @dns_servers = @{$network_configuration->{dns_servers}};
+	notify($ERRORS{'DEBUG'}, 0, "returning $network_type DNS servers: " . join(", ", @dns_servers));
+	return @dns_servers;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_private_dns_servers
+
+ Parameters  : none
+ Returns     : array
+ Description : Retrieves a list of DNS servers currently configured for the
+               private interface on the computer. 
+
+=cut
+
+sub get_private_dns_servers {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	return $self->get_dns_servers('private');
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_public_dns_servers
+
+ Parameters  : none
+ Returns     : array
+ Description : Retrieves a list of DNS servers currently configured for the
+               public interface on the computer. 
+
+=cut
+
+sub get_public_dns_servers {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	return $self->get_dns_servers('public');
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 =head2 create_text_file
 
  Parameters  : $file_path, $file_contents, $append
@@ -3472,8 +3544,7 @@ sub process_connect_methods {
 				}
 			}
 			else {
-				notify($ERRORS{'CRITICAL'}, 0, "NAT not configured on $nathost_hostname, " . ref($self->nathost_os->firewall) . " does not implement a 'configure_nat' subroutine");
-				return;
+				notify($ERRORS{'DEBUG'}, 0, "NAT not configured on $nathost_hostname, " . ref($self->nathost_os->firewall) . " does not implement a 'configure_nat' subroutine");
 			}
 		}
 		else {
@@ -3488,8 +3559,7 @@ sub process_connect_methods {
 			}
 		}
 		else {
-			notify($ERRORS{'CRITICAL'}, 0, "NAT not configured on $nathost_hostname for this reservation, " . ref($self->nathost_os->firewall) . " does not implement a 'configure_nat_reservation' subroutine");
-			return;
+			notify($ERRORS{'DEBUG'}, 0, "NAT not configured on $nathost_hostname for this reservation, " . ref($self->nathost_os->firewall) . " does not implement a 'configure_nat_reservation' subroutine");
 		}
 	}
 	
@@ -4332,111 +4402,6 @@ sub run_management_node_tools_scripts {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 run_management_node_stage_scripts
-
- Parameters  : $stage
- Returns     : boolean
- Description : Runs scripts on the management node intended for the state
-               specified by the argument. This is useful if you need to
-               configure something such as a storage unit or firewall device
-               specifically for each reservation.
-               
-               The stage argument may be any of the
-               following:
-               -pre_capture
-               -post_capture
-               -post_load
-               -post_reserve
-               -post_initial_connection
-               -post_reservation
-               
-               The scripts are stored on the management node under:
-               /usr/local/vcl/tools/mn_stage_scripts
-               
-               No scripts exist by default. When the vcld process reaches the
-               stage specified by the argument, it will check the subdirectory
-               with a name that matches the stage name. For example:
-               /usr/local/vcl/tools/mn_stage_scripts/post_capture
-               
-               It will attempt to execute any files under this directory.
-               
-               Prior to executing the scripts, a JSON file is created under /tmp
-               with information regarding the reservation. The actual file path
-               will be:
-               /tmp/<reservation ID>.json
-               
-               Information about the reservation can be retrieved within the
-               script by simply using grep or using something to parse JSON such
-               as jsawk. Sample script:
-               
-               JSON_FILE="$1"
-               echo "JSON file: ${JSON_FILE}"
-               PRIVATE_IP=`cat ${JSON_FILE} | jsawk 'return this.computer.privateIPaddress'`
-               echo "computer private IP: ${PRIVATE_IP}"
-
-=cut
-
-sub run_management_node_stage_scripts {
-	my $self = shift;
-	if (ref($self) !~ /VCL::/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return;
-	}
-	
-	# Get the stage argument
-	my $stage = shift;
-	if (!$stage) {
-		notify($ERRORS{'WARNING'}, 0, "stage argument was not supplied");
-		return;
-	}
-	elsif ($stage !~ /(pre_capture|post_capture|post_load|post_reserve|post_initial_connection|post_reservation)/) {
-		notify($ERRORS{'WARNING'}, 0, "invalid stage argument was supplied: $stage");
-		return;
-	}
-	
-	# Override the die handler 
-	local $SIG{__DIE__} = sub{};
-	
-	my $reservation_id = $self->data->get_reservation_id();
-	my $management_node_short_name = $self->data->get_management_node_short_name();
-	
-	my $scripts_directory_path = "$MN_STAGE_SCRIPTS_DIRECTORY/$stage";
-	my @script_file_paths = $self->mn_os->find_files($scripts_directory_path, '*');
-	if (!@script_file_paths) {
-		notify($ERRORS{'DEBUG'}, 0, "no files exist in directory: $scripts_directory_path");
-		return 1;
-	}
-	
-	# Sort the files so they can be executed in a known order
-	@script_file_paths = sort_by_file_name(@script_file_paths);
-	
-	my $script_count = scalar(@script_file_paths);
-	notify($ERRORS{'DEBUG'}, 0, "found $script_count files under $scripts_directory_path:\n" . join("\n", @script_file_paths));
-	
-	# Create a JSON file on the management node containing reservation info
-	$self->create_management_node_reservation_info_json_file();
-	
-	my $mn_json_file_path = $self->get_management_node_reservation_info_json_file_path();
-	
-	# Execute the scripts
-	for my $script_file_path (@script_file_paths) {
-		my $command = "chmod +x $script_file_path && $script_file_path $mn_json_file_path";
-		my ($exit_status, $output) = $self->mn_os->execute($command);
-		if (!defined($output)) {
-			notify($ERRORS{'WARNING'}, 0, "failed to execute script on management node: $command");
-			return;
-		}
-		else {
-			notify($ERRORS{'DEBUG'}, 0, "executed script on management node $management_node_short_name, exit status: $exit_status, command:\n$command\noutput:\n" . join("\n", @$output));
-		}
-	}
-	
-	#$self->delete_management_node_reservation_info_json_file();
-	return 1;
-}
-
-#/////////////////////////////////////////////////////////////////////////////
-
 =head2 get_connect_method_remote_ip_addresses
 
  Parameters  : none
@@ -4809,79 +4774,6 @@ sub delete_reservation_info_json_file {
 	
 	my $json_file_path = $self->get_reservation_info_json_file_path() || return;
 	return $self->delete_file($json_file_path);
-}
-
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 get_management_node_reservation_info_json_file_path
-
- Parameters  : none
- Returns     : string
- Description : Returns the location where the files resides on the management
-               node that contains JSON formatted information about the
-               reservation. For Linux computers, the location is:
-               /tmp/<reservation ID>.json.
-
-=cut
-
-sub get_management_node_reservation_info_json_file_path {
-	my $self = shift;
-	if (ref($self) !~ /VCL::Module::OS/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return;
-	}
-	my $reservation_id = $self->data->get_reservation_id();
-	return "/tmp/$reservation_id.json";
-}
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 create_management_node_reservation_info_json_file
-
- Parameters  : none
- Returns     : boolean
- Description : Creates a text file on the the management node containing
-               reservation data in JSON format.
-
-=cut
-
-sub create_management_node_reservation_info_json_file {
-	my $self = shift;
-	if (ref($self) !~ /VCL::Module::OS/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return;
-	}
-	
-	# Note: it would make sense to put this and the related subroutines in ManagementNode.pm
-	# However, this sub in particular needs to remain here or else the information returned by get_reservation_info_json_string will be wrong
-	# The DataStructure available in $self->mn_os gets altered. Computer info is replaced with info for the management node.
-	
-	my $json_file_path = $self->get_management_node_reservation_info_json_file_path();
-	my $json_string = $self->data->get_reservation_info_json_string() || return;
-	return $self->mn_os->create_text_file($json_file_path, $json_string);
-}
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 delete_management_node_reservation_info_json_file
-
- Parameters  : none
- Returns     : boolean
- Description : Deletes the text file on the management node containing
-               reservation data in JSON format.
-
-=cut
-
-sub delete_management_node_reservation_info_json_file {
-	my $self = shift;
-	if (ref($self) !~ /VCL::Module::OS/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return;
-	}
-	
-	my $json_file_path = $self->get_management_node_reservation_info_json_file_path();
-	return $self->mn_os->delete_file($json_file_path);
 }
 
 #///////////////////////////////////////////////////////////////////////////
