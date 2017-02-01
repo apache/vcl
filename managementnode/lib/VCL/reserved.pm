@@ -449,7 +449,7 @@ sub notify_user_ready {
 
  Parameters  : none
  Returns     : boolean
- Description : Notifies the user that the request has timed out becuase no
+ Description : Notifies the user that the request has timed out because no
                initial connection was made. An e-mail and/or IM message will
                be sent to the user.
 
@@ -487,7 +487,7 @@ sub notify_user_timeout_no_initial_connection {
 
  Parameters  : none
  Returns     : boolean
- Description : Notifies the user that the request has timed out becuase no
+ Description : Notifies the user that the request has timed out because no
                initial connection was made. An e-mail and/or IM message will
                be sent to the user.
 
