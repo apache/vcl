@@ -58,13 +58,12 @@ use 5.008000;
 use strict;
 use warnings;
 use diagnostics;
+
 use English qw( -no_match_vars );
 use IO::File;
-use Fcntl qw(:DEFAULT :flock);
+use Fcntl qw(:flock);
 
 use VCL::utils;
-
-no warnings 'redefine';
 
 ##############################################################################
 
@@ -196,86 +195,89 @@ sub open_lockfile {
 		return;
 	}
 	
-	# Determine which process is locking the file
-	my @locking_pids = $self->get_lockfile_owning_pid($file_path);
-	if (@locking_pids) {
-		if (grep { $_ eq $PID } @locking_pids) {
-			# The current process already has an exclusive lock on the file
-			# This could happen if open_lockfile is called more than once for the same file in the same scope
-			notify($ERRORS{'WARNING'}, 0, "file is already locked by this process: @locking_pids");
-			return;
-		}
-		else {
-			# Attempt to retrieve the names of the locking process(es)
-			my ($ps_exit_status, $ps_output) = run_command("ps -o pid=,cmd= @locking_pids", 1);
-			if (defined($ps_output) && !grep(/(ps:)/, @$ps_output)) {
-				notify($ERRORS{'DEBUG'}, 0, "file is locked by another process: @locking_pids\n" . join("\n", @$ps_output));
-			}
-			else {
-				notify($ERRORS{'DEBUG'}, 0, "file is locked by another process: @locking_pids");
-			}
-			return;
-		}
-	}
-	else {
-		notify($ERRORS{'DEBUG'}, 0, "unable to determine PIDs of processes which prevented an exclusive lock to be obtained on $file_path, lock may have been released before lsof command was executed");
-	}
+	# Don't use get_lockfile_owning_pid or anything that uses lsof on the management node
+	# Not safe - seems to send ALRM some time after command seems to have run
+	## Determine which process is locking the file
+	#my @locking_pids = $self->get_lockfile_owning_pid($file_path);
+	#if (@locking_pids) {
+	#	if (grep { $_ eq $PID } @locking_pids) {
+	#		# The current process already has an exclusive lock on the file
+	#		# This could happen if open_lockfile is called more than once for the same file in the same scope
+	#		notify($ERRORS{'WARNING'}, 0, "file is already locked by this process: @locking_pids");
+	#		return;
+	#	}
+	#	else {
+	#		# Attempt to retrieve the names of the locking process(es)
+	#		my ($ps_exit_status, $ps_output) = run_command("ps -o pid=,cmd= @locking_pids", 1);
+	#		if (defined($ps_output) && !grep(/(ps:)/, @$ps_output)) {
+	#			notify($ERRORS{'DEBUG'}, 0, "file is locked by another process: @locking_pids\n" . join("\n", @$ps_output));
+	#		}
+	#		else {
+	#			notify($ERRORS{'DEBUG'}, 0, "file is locked by another process: @locking_pids");
+	#		}
+	#		return;
+	#	}
+	#}
+	#else {
+	#	notify($ERRORS{'DEBUG'}, 0, "unable to determine PIDs of processes which prevented an exclusive lock to be obtained on $file_path, lock may have been released before lsof command was executed");
+	#}
 	
 	return;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
-
-=head2 get_lockfile_owning_pid
-
- Parameters  : $file_path
- Returns     : integer
- Description : Runs lsof to determine if a process has an exclusive lock on the
-               lockfile.
-
-=cut
-
-sub get_lockfile_owning_pid {
-	my $self = shift;
-	unless (ref($self) && $self->isa('VCL::Module')) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return;
-	}
-	
-	# Get the file path argument
-	my ($file_path) = @_;
-	if (!$file_path) {
-		notify($ERRORS{'WARNING'}, 0, "file path argument was not supplied");
-		return;
-	}
-	
-	# Run lsof to determine which process is locking the file
-	my ($exit_status, $output) = $self->mn_os->execute("/usr/sbin/lsof -Fp $file_path", 0, 10);
-	if (!defined($output)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to run lsof command to determine which process is locking the file: $file_path");
-		return;
-	}
-	elsif (grep(/no such file/i, @$output)) {
-		notify($ERRORS{'WARNING'}, 0, "lsof command reports that the file does not exist: $file_path");
-		return;
-	}
-	
-	# Parse the lsof output to determine the PID
-	my @locking_pids = map { /^p(\d+)/ } @$output;
-	my $locking_pid_count = scalar(@locking_pids);
-	if (@locking_pids) {
-		notify($ERRORS{'DEBUG'}, 0, "$file_path is locked by process" . ($locking_pid_count == 1 ? '' : 'es') . ": @locking_pids");
-		return @locking_pids;
-	}
-	elsif (grep(/\w/, @$output)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to determine owning PID of lockfile: $file_path, unable to determine PIDs from lsof output\n:" . join("\n", @$output));
-		return;
-	}
-	else {
-		notify($ERRORS{'DEBUG'}, 0, "file is not locked: $file_path");
-		return ();
-	}
-}
+#
+#=head2 get_lockfile_owning_pid
+#
+# Parameters  : $file_path
+# Returns     : integer
+# Description : Runs lsof to determine if a process has an exclusive lock on the
+#               lockfile.
+#
+#=cut
+#
+#sub get_lockfile_owning_pid {
+#	my $self = shift;
+#	unless (ref($self) && $self->isa('VCL::Module')) {
+#		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+#		return;
+#	}
+#	
+#	# Get the file path argument
+#	my ($file_path) = @_;
+#	if (!$file_path) {
+#		notify($ERRORS{'WARNING'}, 0, "file path argument was not supplied");
+#		return;
+#	}
+#	
+#	# Run lsof to determine which process is locking the file
+#	#my ($exit_status, $output) = $self->mn_os->execute("/usr/sbin/lsof -S 2 -O -Fp $file_path", 1, 10);
+#	my ($exit_status, $output) = $self->mn_os->execute("/usr/sbin/lsof -Fp $file_path", 0, 10);
+#	if (!defined($output)) {
+#		notify($ERRORS{'WARNING'}, 0, "failed to run lsof command to determine which process is locking the file: $file_path");
+#		return;
+#	}
+#	elsif (grep(/no such file/i, @$output)) {
+#		notify($ERRORS{'WARNING'}, 0, "lsof command reports that the file does not exist: $file_path");
+#		return;
+#	}
+#	
+#	# Parse the lsof output to determine the PID
+#	my @locking_pids = map { /^p(\d+)/ } @$output;
+#	my $locking_pid_count = scalar(@locking_pids);
+#	if (@locking_pids) {
+#		notify($ERRORS{'DEBUG'}, 0, "$file_path is locked by process" . ($locking_pid_count == 1 ? '' : 'es') . ": @locking_pids");
+#		return @locking_pids;
+#	}
+#	elsif (grep(/\w/, @$output)) {
+#		notify($ERRORS{'WARNING'}, 0, "failed to determine owning PID of lockfile: $file_path, unable to determine PIDs from lsof output\n:" . join("\n", @$output));
+#		return;
+#	}
+#	else {
+#		notify($ERRORS{'DEBUG'}, 0, "file is not locked: $file_path");
+#		return ();
+#	}
+#}
 
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -312,6 +314,10 @@ sub release_lockfile {
 	my $fileno = $file_handle->fileno;
 	if (!$fileno) {
 		notify($ERRORS{'WARNING'}, 0, "file is not opened: $file_path");
+	}
+	
+	if (!flock($file_handle, LOCK_UN)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to unlock file: $file_path, reason: $!");
 	}
 	
 	# Close the file
