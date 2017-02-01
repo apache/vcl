@@ -122,18 +122,18 @@ sub process {
 		}
 	}
 
-	# Make sure image does not exist in the repository
+	# Make sure image does not already exist
 	my $image_already_exists = $self->provisioner->does_image_exist();
 	if ($image_already_exists) {
-		notify($ERRORS{'CRITICAL'}, 0, "image $image_name already exists in the repository");
+		notify($ERRORS{'CRITICAL'}, 0, "image $image_name already exists");
 		$self->reservation_failed();
 	}
 	elsif (!defined($image_already_exists)) {
-		notify($ERRORS{'CRITICAL'}, 0, "image $image_name already partially exists in the repository");
+		notify($ERRORS{'CRITICAL'}, 0, "failed to determine if image $image_name already exists");
 		$self->reservation_failed();
 	}
 	else {
-		notify($ERRORS{'OK'}, 0, "image $image_name does not exist in the repository");
+		notify($ERRORS{'OK'}, 0, "image $image_name does not exist");
 	}
 	
 	# Get the current timestamp
