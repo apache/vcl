@@ -173,6 +173,13 @@ sub initialize {
 		$self->reservation_failed("failed to create OS object");
 	}
 	
+	# Set the os under mn_os to the OS object for the computer being loaded
+	# This allows the $self->mn_os object to call $self->os to retrieve the OS object for the computer being loaded
+	# This is useful because the DataStructure object changes when mn_os is created and it would otherwise not have access to the original data
+	if ($self->mn_os()) {
+		$self->mn_os->set_os($self->os);
+	}
+	
 	# Create a VM host OS object if vmhostid is set for the computer
 	my $vmhost_os;
 	if ($is_vm) {
