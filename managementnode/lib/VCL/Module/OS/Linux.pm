@@ -100,6 +100,7 @@ our $NODE_CONFIGURATION_DIRECTORY = '/root/VCL';
 our $CAPTURE_DELETE_FILE_PATHS = [
 	'/root/.ssh/id_rsa',
 	'/root/.ssh/id_rsa.pub',
+	'/root/*-v*.xml',
 	'/etc/sysconfig/iptables*old*',
 	'/etc/sysconfig/iptables_pre*',
 	'/etc/udev/rules.d/70-persistent-net.rules',
@@ -572,7 +573,7 @@ sub post_reserve {
 	# Run custom post_reserve scripts on the management node
 	my $enable_experimental_features = get_variable('enable_experimental_features', 0);
 	if ($enable_experimental_features) {
-		$self->run_management_node_stage_scripts('post_reserve');
+		$self->mn_os->run_management_node_stage_scripts('post_reserve');
 	}
 	
 	# Run custom post_reserve scripts residing on the management node
@@ -669,7 +670,7 @@ sub post_reservation {
 	# Run custom post_reserve scripts on the management node
 	my $enable_experimental_features = get_variable('enable_experimental_features', 0);
 	if ($enable_experimental_features) {
-		$self->run_management_node_stage_scripts('post_reservation');
+		$self->mn_os->run_management_node_stage_scripts('post_reservation');
 	}
 	
 	return 1;
@@ -6998,17 +6999,17 @@ sub unmount_nfs_share {
 	
 	my $computer_name = $self->data->get_computer_node_name();
 	
-	my $umount_command = "umount -v \"$local_mount_directory\" -v";
+	my $umount_command = "umount -v \"$local_mount_directory\"";
 	my ($umount_exit_status, $umount_output) = $self->execute({
 		command => $umount_command,
 		timeout_seconds => 30,
-		max_attempts => 2,
+		max_attempts => 1,
 	});
 	if (!defined($umount_exit_status)) {
 		notify($ERRORS{'CRITICAL'}, 0, "failed to execute command to umount NFS share on $computer_name: $umount_command");
 		return;
 	}
-	elsif ($umount_exit_status eq 0) {
+	elsif ($umount_exit_status eq 0 || grep(/\sumounted/, @$umount_output)) {
 		notify($ERRORS{'OK'}, 0, "unmounted NFS share on $computer_name: $local_mount_directory, output:\n" . join("\n", @$umount_output));
 		return 1;
 	}
@@ -7016,9 +7017,22 @@ sub unmount_nfs_share {
 		notify($ERRORS{'OK'}, 0, "NFS share is not mounted on $computer_name: $local_mount_directory");
 		return 1;
 	}
-	else {
+	
+	notify($ERRORS{'WARNING'}, 0, "lazy unmount will be attempted after failing to perform normal NFS unmount on $computer_name: $local_mount_directory, command: '$umount_command', exit status: $umount_exit_status, output:\n" . join("\n", @$umount_output));
+	my $umount_lazy_command = "umount -v -l \"$local_mount_directory\"";
+	my ($umount_lazy_exit_status, $umount_lazy_output) = $self->execute({
+		command => $umount_lazy_command,
+		timeout_seconds => 30,
+		max_attempts => 1,
+	});
+	
+	if ($self->is_nfs_share_mounted('.*', $local_mount_directory)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to unmount NFS share on $computer_name: $local_mount_directory, command: '$umount_command', exit status: $umount_exit_status, output:\n" . join("\n", @$umount_output));
-		return;
+		return 0;
+	}
+	else {
+		notify($ERRORS{'OK'}, 0, "lazy unmounted of NFS share on $computer_name: $local_mount_directory");
+		return 1;
 	}
 }
 
@@ -7111,6 +7125,7 @@ sub get_nfs_mount_string {
 	}
 	
 	for my $line (@$output) {
+		# 10.1.2.3:/share/data /tmp/data nfs4 rw,relatime,vers=4,rsize=524288,wsize=524288,namlen=255,hard,proto=tcp,port=0,timeo=600,retrans=2,sec=sys,clientaddr=10.25.10.194,minorversion=0,local_lock=none,addr=10.1.2.3 0 0
 		if ($line =~ m|^$remote_nfs_share\/?\s+$local_mount_directory\/?\s|) {
 			notify($ERRORS{'DEBUG'}, 0, "found NFS share line in /proc/mounts on $computer_name: $remote_nfs_share --> $local_mount_directory\n$line");
 			return $line;
