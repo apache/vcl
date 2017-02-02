@@ -145,6 +145,7 @@ our @EXPORT = qw(
 	get_current_subroutine_name
 	get_file_size_info_string
 	get_group_name
+	get_image_active_directory_domain_info
 	get_image_info
 	get_imagemeta_info
 	get_imagerevision_cleanup_info
@@ -197,6 +198,7 @@ our @EXPORT = qw(
 	help
 	hostname_to_ip_address
 	insert_nathost
+	insert_natport
 	insert_reload_request
 	insert_request
 	insert_reservation
@@ -283,6 +285,7 @@ our @EXPORT = qw(
 	update_preload_flag
 	update_request_checkuser
 	update_request_state
+	update_reservation_addomain
 	update_reservation_lastcheck
 	update_reservation_natlog
 	update_reservation_password
@@ -647,7 +650,10 @@ sub notify {
 	$string =~ s/(^\s+)|(\s+$)//gs;
 	
 	# Remove any spaces from the beginning or end of the each line
-	$string =~ s/\s*\n\s*/\n/gs;
+	#$string =~ s/\s*\n\s*/\n/gs;
+	
+	# Remove blank lines
+	$string =~ s/\n{2,}/\n/gs;
 	
 	# Replace consecutive spaces with a single space to keep log file concise as long as string doesn't contain a quote
 	if ($string !~ /[\'\"]/gs && $string !~ /\s:\s/gs) {
@@ -3121,17 +3127,6 @@ EOF
 			$request_info->{checkuser} = 0;
 		}
 		
-		$request_info->{reservation}{$reservation_id}{serverrequest}{id} ||= 0;
-		$request_info->{reservation}{$reservation_id}{serverrequest}{fixedIP} ||= 0;
-		$request_info->{reservation}{$reservation_id}{serverrequest}{fixedMAC} ||= 0;
-		$request_info->{reservation}{$reservation_id}{serverrequest}{router} ||= 0;
-		$request_info->{reservation}{$reservation_id}{serverrequest}{netmask} ||= 0;
-		$request_info->{reservation}{$reservation_id}{serverrequest}{DNSservers} ||= 0;
-		$request_info->{reservation}{$reservation_id}{serverrequest}{admingroupid} ||= 0;
-		$request_info->{reservation}{$reservation_id}{serverrequest}{logingroupid} ||= 0;
-		$request_info->{reservation}{$reservation_id}{serverrequest}{monitored} ||= 0;
-		$request_info->{reservation}{$reservation_id}{serverrequest}{ALLOW_USERS} ||= 0;
-		
 		$request_info->{reservation}{$reservation_id}{READY} = '0';
 	}
 	
@@ -3589,6 +3584,11 @@ EOF
 	if ($management_node_info) {
 		$image_info->{IDENTITY} = $management_node_info->{keys};
 	}
+	
+	# Retrieve AD info if configured for the image
+	my $image_id = $image_info->{id};
+	my $domain_info = get_image_active_directory_domain_info($image_id);
+	$image_info->{imagedomain} = $domain_info;
 	
 	#notify($ERRORS{'DEBUG'}, 0, "retrieved info for image '$image_identifier':\n" . format_data($image_info));
 	$ENV{image_info}{$image_identifier} = $image_info;
@@ -6421,6 +6421,10 @@ sub switch_state {
 	if (!$request_log_ending) {
 		notify($ERRORS{'DEBUG'}, 0, "log table id=$request_logid will not be updated");
 	}
+	elsif (!$request_logid) {
+		# Log ID may not be defined for base image captures
+		notify($ERRORS{'DEBUG'}, 0, "log table ending will not be updated, log ID is not defined");
+	}
 	elsif (!$is_parent_reservation) {
 		notify($ERRORS{'DEBUG'}, 0, "child reservation, log table id=$request_logid will not be updated");
 	}
@@ -7582,7 +7586,7 @@ sub get_natport_ranges {
 		push @natport_ranges, [$start_port, $end_port];
 	}
 	
-	notify($ERRORS{'DEBUG'}, 0, "parsed natport_ranges variable: " . join(', ', @natport_ranges));
+	notify($ERRORS{'DEBUG'}, 0, "parsed natport_ranges variable:\n" . format_data(@natport_ranges));
 	$ENV{natport_ranges} = \@natport_ranges;
 	return @natport_ranges;
 }
@@ -7754,7 +7758,7 @@ sub insert_natport {
 	}
 	
 	my $insert_statement = <<EOF;
-INSERT INTO
+INSERT IGNORE INTO
 natport
 (
    reservationid,
@@ -7769,6 +7773,7 @@ VALUES
    $connect_method_port_id,
    $public_port
 )
+ON DUPLICATE KEY UPDATE publicport = $public_port
 EOF
 
 	my $result = database_execute($insert_statement);
@@ -13190,7 +13195,7 @@ sub yaml_serialize {
 	$serialized_data =~ s/\\/\\\\/g;
 	
 	# Escape all single quote characters with a backslash
-	#   or else the SQL statement will fail becuase it is wrapped in single quotes
+	#   or else the SQL statement will fail because it is wrapped in single quotes
 	$serialized_data =~ s/'/\\'/g;
 	
 	return $serialized_data;
@@ -13202,14 +13207,27 @@ sub yaml_serialize {
 
  Parameters  : @array
  Returns     : array
- Description : Removes duplicates from the array and returns a sorted array.
+ Description : Removes duplicates from the array. Retains order.
 
 =cut
 
 sub remove_array_duplicates {
 	my @array = @_;
-	my %hash = map { $_ => 1 } @array;
-	return sort keys %hash;
+	
+	my $seen = {};
+	my @pruned;
+	for (my $i=0; $i < scalar(@array); $i++) {
+		my $value = $array[$i];
+		if (ref($value)) {
+			notify($ERRORS{'WARNING'}, 0, "unable to remove duplicates from an array containing references, returning original array");
+			return @array;
+		}
+		if (!defined($seen->{$value})) {
+			$seen->{$value} = 1;
+			push @pruned, $value;
+		}
+	}
+	return @pruned
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -14534,6 +14552,147 @@ sub prune_hash_child_references {
 }
 
 #/////////////////////////////////////////////////////////////////////////////
+
+=head2 update_reservation_addomain
+
+ Parameters  : $reservation_id, $addomainid
+ Returns     : boolean
+ Description : Updates reservation.addomainid in the database.
+
+=cut
+
+sub update_reservation_addomain {
+	my $reservation_id = shift;
+	my $addomain_id = shift;
+	
+	if (!$reservation_id) {
+		notify($ERRORS{'WARNING'}, 0, "reservation ID argument was not specified");
+		return;
+	}
+	
+	if (!$addomain_id) {
+		notify($ERRORS{'WARNING'}, 0, "addomain ID argument was not specified");
+		return;
+	}
+	
+	my $statement = <<EOF;
+INSERT IGNORE INTO 
+reservation
+(
+	id,
+	addomainid
+)
+VALUES
+(
+	'$reservation_id',
+	'$addomain_id'
+)
+ON DUPLICATE KEY UPDATE addomainid = '$addomain_id'
+EOF
+
+	if (database_execute($statement)) {
+		#notify($ERRORS{'OK'}, 0, "executed $statement $reservation_id $addomain_id");
+		return 1;
+	}
+	else {
+		notify($ERRORS{'OK'}, 0, "failed to to execute statement to update reservation table:\n$statement");
+		return 0;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_image_active_directory_domain_info
+
+ Parameters  : $image_id
+ Returns     : Hash containing image domain columns
+ Description : Gets the imagedomain information from the database
+
+=cut
+
+sub get_image_active_directory_domain_info {
+	my ($image_id) = @_;
+	if (!$image_id) {
+		notify($ERRORS{'WARNING'}, 0, "image ID argument was not specified");
+		return;
+	}
+	
+	return $ENV{image_active_directory_domain_info} if defined($ENV{image_active_directory_domain_info});
+	
+	# Get a hash ref containing the database column names
+	my $database_table_columns = get_database_table_columns();
+	
+	my @tables = (
+		'addomain',
+		'imageaddomain',
+	);
+	
+	# Construct the select statement
+	my $select_statement = "SELECT DISTINCT\n";
+	
+	# Get the column names for each table and add them to the select statement
+	for my $table (@tables) {
+		my @columns = @{$database_table_columns->{$table}};
+		for my $column (@columns) {
+			$select_statement .= "$table.$column AS '$table-$column',\n";
+		}
+	}
+	
+	# Remove the comma after the last column line
+	$select_statement =~ s/,$//;
+	
+	# Complete the select statement
+	$select_statement .= <<EOF;
+FROM
+imageaddomain,
+addomain
+WHERE
+imageaddomain.imageid = $image_id
+AND imageaddomain.addomainid = addomain.id
+EOF
+	
+	# Call the database select subroutine
+	my @selected_rows = database_select($select_statement);
+
+	# Check to make sure 1 row was returned
+	if (scalar @selected_rows == 0) {
+		notify($ERRORS{'DEBUG'}, 0, "image $image_id is not configured for Active Directory");
+		return;
+	}
+
+	# Get the single row returned from the select statement
+	my $row = $selected_rows[0];
+	
+	# Loop through all the columns returned
+	my $info;
+	for my $key (keys %$row) {
+		my $value = $row->{$key};
+		
+		# Split the table-column names
+		my ($table, $column) = $key =~ /^([^-]+)-(.+)/;
+		
+		if ($value && $column =~ /(dnsServers|domainControllers)/) {
+			my @value_array = split(/[,;]+/, $value);
+			$value = \@value_array;
+		}
+		
+		# Add the values for the primary table to the hash
+		# Add values for other tables under separate keys
+		if ($table eq $tables[0]) {
+			$info->{$column} = $value;
+		}
+		else {
+			$info->{$table}{$column} = $value;
+		}
+	}
+	
+	$ENV{image_active_directory_domain_info} = $info;
+	notify($ERRORS{'DEBUG'}, 0, "retrieved Active Directory info for image $image_id:\n" . format_data($info));
+	return $info;
+} ## end sub get_image_active_directory_domain_info
+
+#/////////////////////////////////////////////////////////////////////////////
+
 
 1;
 __END__

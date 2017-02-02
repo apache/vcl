@@ -412,47 +412,6 @@ sub activate_kms {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 get_kms_client_product_key
-
- Parameters  : $product_name (optional
- Returns     : If successful: string
-               If failed: false
- Description : Returns a KMS client product key based on the version of Windows
-               either specified as an argument or installed on the computer. A
-               KMS client product key is a publically shared product key which
-               must be installed before activating using a KMS server.
-
-=cut
-
-sub get_kms_client_product_key {
-	my $self = shift;
-	if (ref($self) !~ /windows/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return;
-	}
-	
-	# Get the product name
-	my $product_name = shift || $self->get_product_name();
-	if (!$product_name) {
-		notify($ERRORS{'WARNING'}, 0, "product name was not passed as an argument and could not be retrieved from computer");
-		return;
-	}
-	
-	# Remove (TM) or (R) from the product name
-	$product_name =~ s/ \([tmr]*\)//ig;
-	
-	# Get the matching product key from the hash for the product name
-	my $product_key = $KMS_CLIENT_PRODUCT_KEYS->{$product_name};
-	if (!$product_key) {
-		notify($ERRORS{'WARNING'}, 0, "unsupported product name: $product_name, KMS client product key is not known");
-		return;
-	}
-	notify($ERRORS{'DEBUG'}, 0, "returning KMS client setup key for $product_name: $product_key");
-	return $product_key;
-}
-
-#/////////////////////////////////////////////////////////////////////////////
-
 =head2 run_slmgr_ipk
 
  Parameters  : None

@@ -51,12 +51,15 @@ use 5.008000;
 use strict;
 use warnings;
 use diagnostics;
+
+use Encode;
 use English '-no_match_vars';
-use VCL::utils;
 use File::Basename;
+use MIME::Base64;
 use Net::Netmask;
 use Text::CSV_XS;
-use IO::String;
+
+use VCL::utils;
 
 ##############################################################################
 
@@ -415,6 +418,19 @@ sub pre_capture {
 
 =item *
 
+ If computer is part of Active Directory Domain, unjoin it
+
+=cut
+
+	if ($self->ad_get_current_domain()) {
+		if (!$self->ad_unjoin()) {
+			notify($ERRORS{'WARNING'}, 0, "failed to remove computer from Active Directory domain");
+			return 0;
+		}
+	}
+
+=item *
+
  Set root as the owner of /home/root
 
 =cut
@@ -455,27 +471,6 @@ sub pre_capture {
 	if (!$self->disable_autoadminlogon()) {
 		notify($ERRORS{'WARNING'}, 0, "unable to disable autoadminlogon");
 		return 0;
-	}
-
-=item *
-
- Disable ntsyslog service if it exists on the computer - it can prevent Cygwin sshd from working
-
-=cut
-
-	if ($self->service_exists('ntsyslog') && !$self->set_service_startup_mode('ntsyslog', 'disabled')) {
-		notify($ERRORS{'WARNING'}, 0, "unable to set ntsyslog service startup mode to disabled");
-		return 0;
-	}
-
-=item *
-
- Disable dynamic DNS
-
-=cut
-
-	if (!$self->disable_dynamic_dns()) {
-		notify($ERRORS{'WARNING'}, 0, "unable to disable dynamic dns");
 	}
 
 =item *
@@ -724,6 +719,8 @@ sub post_load {
 	}
 	
 	my $computer_node_name = $self->data->get_computer_node_name();
+	my $imagedomain_domaindnsname = $self->data->get_image_domain_dns_name(0);
+	
 	my $node_configuration_directory = $self->get_node_configuration_directory();
 	
 	notify($ERRORS{'OK'}, 0, "beginning Windows post-load tasks on $computer_node_name");
@@ -897,26 +894,6 @@ sub post_load {
 		return 0;
 	}
 
-#=item *
-#
-#Disable NetBIOS
-#
-#=cut
-#
-#	if (!$self->disable_netbios()) {
-#		notify($ERRORS{'WARNING'}, 0, "failed to disable NetBIOS");
-#	}
-
-#=item *
-#
-#Disable dynamic DNS
-#
-#=cut
-#
-#	if (!$self->disable_dynamic_dns()) {
-#		notify($ERRORS{'WARNING'}, 0, "failed to disable dynamic DNS");
-#	}
-
 =item *
 
  Remove the Windows root password and other private information from the VCL configuration files
@@ -972,40 +949,42 @@ sub post_load {
 	if (!$self->install_updates()) {
 		notify($ERRORS{'WARNING'}, 0, "failed to run custom post_load scripts");
 	}
-
+	
 =item *
 
- Set the computer name if the imagemeta.sethostname flag is true
+ Join Active Directory domain if configured for image
 
 =cut
 
-	if ($self->data->get_imagemeta_sethostname(0)) {
-		$self->set_computer_hostname();
+	if ($imagedomain_domaindnsname) {
+		if (!$self->ad_join()) {
+			notify($ERRORS{'WARNING'}, 0, "failed to join Active Directory domain");
+			return 0;
+		}
+	}
+	elsif ($self->data->get_imagemeta_sethostname(0)) {
+		# Image configured to set hostname
+		if (!$self->set_computer_hostname()) {
+			notify($ERRORS{'WARNING'}, 0, "failed to rename computer");
+			return 0;
+		}
+		push @{$self->{reboot_required}}, 'computer was renamed';
 	}
 
 =item *
 
- Check if the imagemeta postoption is set to reboot, reboot if necessary
+ Reboot the computer if necessary
 
 =cut
-
-	if ($self->data->get_imagemeta_postoption() =~ /reboot/i) {
-		notify($ERRORS{'OK'}, 0, "imagemeta postoption reboot is set for image, rebooting computer");
-		
-		# Create a scheduled task to run post_load.cmd when the image boots
-		my $task_command = "$node_configuration_directory/Scripts/update_cygwin.cmd >> $node_configuration_directory/Logs/update_cygwin.log";
-		if ($self->create_startup_scheduled_task('VCL Update Cygwin', $task_command, 'root', $root_random_password)) {
-			if (!$self->reboot('', '', '', 0)) {
-				notify($ERRORS{'WARNING'}, 0, "failed to reboot the computer");
-				return 0;
-			}
+	
+	if ($self->{reboot_required}) {
+		notify($ERRORS{'DEBUG'}, 0, "attempting to reboot computer, reasons why necessary:\n" . join("\n", @{$self->{reboot_required}}));
+		if (!$self->reboot()) {
+			notify($ERRORS{'WARNING'}, 0, "failed to reboot after renaming computer");
 		}
-		else {
-			notify($ERRORS{'WARNING'}, 0, "computer not rebooted, failed to create startup scheduled task to executed update_cygwin.cmd, computer might not have responded after reboot");
-			$self->data->set_imagemeta_sethostname(0);
-			$self->data->set_imagemeta_postoption('');
-		}
+		delete $self->{reboot_required};
 	}
+	
 
 =back
 
@@ -1159,7 +1138,7 @@ sub sanitize {
 		notify($ERRORS{'WARNING'}, 0, "failed to delete users from $computer_node_name");
 		return 0;
 	}
-
+	
 	notify($ERRORS{'OK'}, 0, "$computer_node_name has been sanitized");
 	return 1;
 } ## end sub sanitize
@@ -1852,6 +1831,7 @@ sub create_user {
 	
 	my $computer_node_name = $self->data->get_computer_node_name();
 	my $system32_path = $self->get_system32_path() || return;
+	my $domain_dns_name = $self->data->get_image_domain_dns_name();
 	
 	my $user_parameters = shift;
 	if (!$user_parameters) {
@@ -1869,40 +1849,50 @@ sub create_user {
 		return;
 	}
 	
-	my $password = $user_parameters->{password};
-	if (!defined($password)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to create user on $computer_node_name, argument hash does not contain a 'password' key:\n" . format_data($user_parameters));
-		return;
-	}
-	
 	my $root_access = $user_parameters->{root_access};
 	if (!defined($root_access)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to create user on $computer_node_name, argument hash does not contain a 'root_access' key:\n" . format_data($user_parameters));
 		return;
 	}
 	
-	# Check if user already exists
-	if (!$self->user_exists($username)) {
-		# Attempt to create the user account
-		my $add_user_command = "$system32_path/net.exe user \"$username\" \"$password\" /ADD /EXPIRES:NEVER /COMMENT:\"Account created by VCL\"";
-		my ($add_user_exit_status, $add_user_output) = $self->execute($add_user_command, 0);
-		if (!defined($add_user_output)) {
-			notify($ERRORS{'WARNING'}, 0, "failed to execute command create user on $computer_node_name: $username");
-			return;
-		}
-		elsif ($add_user_exit_status == 0) {
-			notify($ERRORS{'OK'}, 0, "created user on $computer_node_name: $username, password: $password");
-		}
-		else {
-			notify($ERRORS{'WARNING'}, 0, "failed to create user on $computer_node_name: $username, exit status: $add_user_exit_status, output:\n" . join("\n", @$add_user_output));
-			return 0;
-		}
+	my $password = $user_parameters->{password};
+	
+	# Check if image is configured for Active Directory and a password should NOT be set
+	# OS.pm::add_user_accounts should have already called should_set_user_password which checks if AD is configured and if user exists in AD
+	# If user exists in AD, password argument should not be set
+	# If for some reason it is set, add local user account
+	if ($domain_dns_name && !$password) {
+		$username .= "@" . $domain_dns_name;
 	}
 	else {
-		# Account already exists on machine, set password
-		if (!$self->set_password($username, $password)) {
-			notify($ERRORS{'WARNING'}, 0, "failed to set password of existing user on $computer_node_name: $username");
+		if (!defined($password) && !$domain_dns_name) {
+			notify($ERRORS{'WARNING'}, 0, "failed to create user on $computer_node_name, argument hash does not contain a 'password' key:\n" . format_data($user_parameters));
 			return;
+		}
+		
+		# Not an AD image, check if user already exists
+		if (!$self->user_exists($username)) {
+			# Attempt to create the user account
+			my $add_user_command = "$system32_path/net.exe user \"$username\" \"$password\" /ADD /EXPIRES:NEVER /COMMENT:\"Account created by VCL\"";
+			my ($add_user_exit_status, $add_user_output) = $self->execute($add_user_command, 0);
+			if (!defined($add_user_output)) {
+				notify($ERRORS{'WARNING'}, 0, "failed to execute command create user on $computer_node_name: $username");
+				return;
+			}
+			elsif ($add_user_exit_status == 0) {
+				notify($ERRORS{'OK'}, 0, "created user on $computer_node_name: $username, password: $password");
+			}
+			else {
+				notify($ERRORS{'WARNING'}, 0, "failed to create user on $computer_node_name: $username, exit status: $add_user_exit_status, output:\n" . join("\n", @$add_user_output));
+				return 0;
+			}
+		}
+		else {
+			# Account already exists on machine, set password
+			if (!$self->set_password($username, $password)) {
+				notify($ERRORS{'WARNING'}, 0, "failed to set password of existing user on $computer_node_name: $username");
+				return;
+			}
 		}
 	}
 	
@@ -1986,6 +1976,146 @@ sub add_user_to_group {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 remove_user_from_group
+
+ Parameters  : $username, $group
+ Returns     : boolean
+ Description : Removes a user from a local group on the computer. If an AD user
+               account and local account exist with the same name, both will be
+               removed.
+
+=cut
+
+sub remove_user_from_group {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $computer_name = $self->data->get_computer_node_name();
+	my $system32_path = $self->get_system32_path() || return;
+
+	my $username = shift;
+	if (!defined($username)) {
+		notify($ERRORS{'WARNING'}, 0, "username argument was not supplied");
+		return;
+	}
+	
+	my $group = shift;
+	if (!defined($group)) {
+		notify($ERRORS{'WARNING'}, 0, "local group name argument was not supplied");
+		return;
+	}
+	
+	my @group_members = $self->get_group_members($group);
+	if (!@group_members) {
+		notify($ERRORS{'DEBUG'}, 0, "$username not removed from $group local group on $computer_name, group is either empty or membership could not be retrieved");
+		return 1;
+	}
+	
+	my @matching_members = grep(/(^|\\)$username$/i, @group_members);
+	if (!@matching_members) {
+		notify($ERRORS{'OK'}, 0, "$username is not a member of $group local group on $computer_name");
+		return 1;
+	}
+	for my $matching_member (@matching_members) {
+		# Escape backslashes in domain usernames
+		$matching_member =~ s/\\/\\\\/;
+		my $command = "$system32_path/net.exe localgroup \"$group\" \"$matching_member\" /DELETE";
+		my ($exit_status, $output) = $self->execute($command);
+		if (!defined($output)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to execute command to remove $matching_member from $group local group on $computer_name: $command");
+			return;
+		}
+		elsif (grep(/no such/, @$output)) {
+			# There is no such global user or group: admin.
+			notify($ERRORS{'OK'}, 0, "$matching_member is not a member of $group local group on $computer_name");
+			return 1;
+		}
+		elsif ($exit_status ne '0') {
+			notify($ERRORS{'WARNING'}, 0, "failed to remove $matching_member from $group local group on $computer_name, exit status: $exit_status, command:\n$command\noutput:\n" . join("\n", @$output));
+			return 0;
+		}
+		else {
+			notify($ERRORS{'OK'}, 0, "removed $matching_member from $group local group on $computer_name");		
+		}
+	}
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_group_members
+
+ Parameters  : $group_name
+ Returns     : array
+ Description : Retrieves the names of users who are members of a local Windows
+               group.
+
+=cut
+
+sub get_group_members {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $computer_name = $self->data->get_computer_node_name();
+	my $system32_path = $self->get_system32_path() || return;
+	
+	my $group = shift;
+	if (!defined($group)) {
+		notify($ERRORS{'WARNING'}, 0, "local group name argument was not supplied");
+		return;
+	}
+	
+	my $command = "$system32_path/net.exe localgroup \"$group\"";
+	my ($exit_status, $output) = $self->execute($command);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to retrieve members of $group local group on $computer_name: $command");
+		return;
+	}
+	elsif ($exit_status ne '0') {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve members of $group local group on $computer_name, exit status: $exit_status, command: '$command', output:\n" . join("\n", @$output));
+		return 0;
+	}
+	
+	# Alias name     Remote Desktop Users
+	# Comment        Members in this group are granted the right to logon remotely
+	#
+	# Members
+	#
+	# -------------------------------------------------------------------------------
+	# AD\admin
+	# admin
+	# AD\domainuser
+	# admin
+	# tester1
+	# ...
+	# test100
+	# The command completed successfully.
+	my @group_members;
+	my $separator_line_found = 0;
+	for my $line (@$output) {
+		if (!$separator_line_found) {
+			if ($line =~ /---/) {
+				$separator_line_found = 1;
+			}
+			next;
+		}
+		elsif ($line =~ /The command/) {
+			last;
+		}
+		push @group_members, $line;
+	}
+	notify($ERRORS{'OK'}, 0, "retrieve members of $group local group on $computer_name: " . join(", ", @group_members));
+	return @group_members;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 =head2 delete_user
 
  Parameters  : $node, $user, $type, $osname
@@ -2021,6 +2151,10 @@ sub delete_user {
 	}
 	elsif (defined($delete_user_exit_status) && $delete_user_exit_status == 2) {
 		notify($ERRORS{'OK'}, 0, "user $username was not deleted because user does not exist");
+		
+		# Could be an AD domain user, make sure user is removed from groups
+		$self->remove_user_from_group($username, 'Administrators');
+		$self->remove_user_from_group($username, 'Remote Desktop Users');
 	}
 	elsif (defined($delete_user_exit_status)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to delete user $username from $computer_node_name, exit status: $delete_user_exit_status, output:\n@{$delete_user_output}");
@@ -2130,6 +2264,63 @@ sub set_password {
 	notify($ERRORS{'OK'}, 0, "changed password for user: $username");
 	return 1;
 } ## end sub set_password
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 should_set_user_password
+
+ Parameters  : $user_id
+ Returns     : boolean
+ Description : Determines if a random password should be set for a user. This is
+               the default behavior. A random password will not be set if:
+					* The image is configured for Active Directory
+					* The user exists in the domain
+
+=cut
+
+sub should_set_user_password {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my ($user_id) = shift;
+	if (!$user_id) {
+		notify($ERRORS{'WARNING'}, 0, "user ID argument was not supplied");
+		return;
+	}
+	
+	if (defined($self->{should_set_user_password}{$user_id})) {
+		return $self->{should_set_user_password}{$user_id};
+	}
+	
+	# Check if image is configured for Active Directory
+	my $domain_dns_name = $self->data->get_image_domain_dns_name();
+	if ($domain_dns_name) {
+		my $user_info = get_user_info($user_id);
+		if (!$user_info) {
+			notify($ERRORS{'WARNING'}, 0, "unable to determine if user password should be set, user info could not be retrieved for user ID $user_id");
+			return;
+		}
+		
+		my $username = $user_info->{unityid};
+		if ($self->ad_user_exists($username)) {
+			$self->{should_set_user_password}{$user_id} = 0;
+			notify($ERRORS{'DEBUG'}, 0, "verified user exists in $domain_dns_name Active Directory domain: $username (ID: $user_id), random password will NOT be set for user");
+		}
+		else {
+			$self->{should_set_user_password}{$user_id} = 1;
+			notify($ERRORS{'WARNING'}, 0, "could not verify user exists in $domain_dns_name Active Directory domain: $username (ID: $user_id), random password will be set");
+		}
+	}
+	else {
+		# Not configured for Active Directory, random password should be set
+		$self->{should_set_user_password}{$user_id} = 1;
+	}
+	
+	return $self->{should_set_user_password}{$user_id};
+}
 
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -3377,6 +3568,51 @@ sub create_startup_scheduled_task {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 create_update_cygwin_startup_scheduled_task
+
+ Parameters  : none
+ Returns     : boolean
+ Description : Creates a scheduled task that runs on startup named 'VCL Update
+               Cygwin' which runs update_cygwin.cmd as root.
+
+=cut
+
+sub create_update_cygwin_startup_scheduled_task {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Avoid doing this more than once
+	if ($self->{created_update_cygwin_startup_scheduled_task}) {
+		return 1;
+	}
+	
+	my $root_password = $self->{root_password};
+	if (!$root_password) {
+		$root_password = getpw();
+		$self->{root_password} = $root_password;
+		if (!$self->set_password('root', $root_password)) {
+			notify($ERRORS{'WARNING'}, 0, "unable to create startup scheduled task to update Cygwin, failed to set root password");
+			return;
+		}
+	}
+	
+	# Create a scheduled task to run post_load.cmd when the image boots
+	my $node_configuration_directory = $self->get_node_configuration_directory();
+	my $task_command = "$node_configuration_directory/Scripts/update_cygwin.cmd >> $node_configuration_directory/Logs/update_cygwin.log";
+	if ($self->create_startup_scheduled_task('VCL Update Cygwin', $task_command, 'root', $root_password)) {
+		$self->{created_update_cygwin_startup_scheduled_task} = 1;
+		return 1;
+	}
+	else {
+		return 0;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 =head2 enable_autoadminlogon
 
  Parameters  :
@@ -3555,13 +3791,13 @@ sub reboot {
 				notify($ERRORS{'WARNING'}, 0, "reboot not attempted, failed to enable ssh from private IP addresses");
 				return 0;
 			}
-	
+			
 			# Set sshd service startup mode to auto
 			if (!$self->set_service_startup_mode('sshd', 'auto')) {
 				notify($ERRORS{'WARNING'}, 0, "reboot not attempted, unable to set sshd service startup mode to auto");
 				return 0;
 			}
-	
+			
 			# Make sure ping access is enabled from private IP addresses
 			if (!$self->firewall_enable_ping_private()) {
 				notify($ERRORS{'WARNING'}, 0, "reboot not attempted, failed to enable ping from private IP addresses");
@@ -3570,6 +3806,9 @@ sub reboot {
 			
 			# Kill the screen saver process, it occasionally prevents reboots and shutdowns from working
 			$self->kill_process('logon.scr');
+			
+			# Make sure update_cygwin.cmd runs after the computer is rebooted with the new hostname
+			$self->create_update_cygwin_startup_scheduled_task();
 		}
 		
 		# Delete cached network configuration information so it is retrieved next time it is needed
@@ -3629,6 +3868,13 @@ sub reboot {
 	if ($result) {
 		# Reboot was successful, calculate how long reboot took
 		notify($ERRORS{'OK'}, 0, "reboot complete on $computer_node_name, took $reboot_duration seconds");
+		
+		# Clear any previous reboot_required reasons to prevent unnecessary reboots
+		delete $self->{reboot_required};
+		
+		# Clear any imagemeta postoption reboot flag
+		$self->data->set_imagemeta_postoption('');
+		
 		return 1;
 	}
 	else {
@@ -4244,6 +4490,114 @@ sub get_scheduled_task_info {
 	notify($ERRORS{'DEBUG'}, 0, "found " . scalar(keys %$scheduled_task_info) . " scheduled tasks");
 	return $scheduled_task_info;
 }
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 enable_dynamic_dns
+
+ Parameters  : $interface (private or public or both)
+ Returns     :
+ Description :
+
+=cut
+
+sub enable_dynamic_dns {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $interface = shift;
+	
+	if (!defined($interface)) {
+		notify($ERRORS{'OK'}, 0, "interface not specified for function enable_dynamic_dns defaulting to public interface");
+		$interface = 'public'
+	}
+	
+	my $management_node_keys = $self->data->get_management_node_keys();
+	my $computer_node_name   = $self->data->get_computer_node_name();
+	my $system32_path        = $self->get_system32_path() || return;
+	
+	my $registry_string .= <<"EOF";
+Windows Registry Editor Version 5.00
+
+; This file enables dynamic DNS updates
+
+[HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters]
+"DisableDynamicUpdate"=dword:00000000
+
+[HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters]
+"DisableReverseAddressRegistrations"=dword:00000000
+EOF
+
+	# Import the string into the registry
+	if ($self->import_registry_string($registry_string)) {
+		notify($ERRORS{'OK'}, 0, "enabled dynamic dns");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to enable dynamic dns");
+		return;
+	}
+
+	# Get the network configuration
+	my $network_configuration = $self->get_network_configuration();
+	if (!$network_configuration) {
+		notify($ERRORS{'WARNING'}, 0, "unable to retrieve network configuration");
+		return;
+	}
+	
+	# Get the public and private interface names
+	my $public_interface_name = $self->get_public_interface_name();
+	my $private_interface_name = $self->get_private_interface_name();
+	
+	# Assemble netsh.exe commands to disable DNS registration
+	my $netsh_command;
+	
+	if ($interface eq 'public') {
+		$netsh_command .= "$system32_path/netsh.exe interface ip set dns";
+		$netsh_command .= " name = \"$public_interface_name\"";
+		$netsh_command .= " source = dhcp";
+		$netsh_command .= " register = both";
+		$netsh_command .= " ;";
+	}
+	elsif ($interface eq 'private') {
+		$netsh_command .= "$system32_path/netsh.exe interface ip set dns";
+		$netsh_command .= " name = \"$private_interface_name\"";
+		$netsh_command .= " source = dhcp";
+		$netsh_command .= " register = both";
+		$netsh_command .= " ;";
+	}
+	else {
+		$netsh_command .= "$system32_path/netsh.exe interface ip set dns";
+		$netsh_command .= " name = \"$public_interface_name\"";
+		$netsh_command .= " source = dhcp";
+		$netsh_command .= " register = both";
+		$netsh_command .= " ;";
+		
+		$netsh_command .= "$system32_path/netsh.exe interface ip set dns";
+		$netsh_command .= " name = \"$private_interface_name\"";
+		$netsh_command .= " source = dhcp";
+		$netsh_command .= " register = both";
+		$netsh_command .= " ;";
+	}
+	
+	# Execute the netsh.exe command
+	my ($netsh_exit_status, $netsh_output) = run_ssh_command($computer_node_name, $management_node_keys, $netsh_command);
+	if (defined($netsh_exit_status)  && $netsh_exit_status == 0) {
+		notify($ERRORS{'OK'}, 0, "enabled dynamic DNS registration on $interface adapters");
+	}
+	elsif (defined($netsh_exit_status)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to enable dynamic DNS registration on $interface adapters, exit status: $netsh_exit_status, output:\n@{$netsh_output}");
+		return;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to enable dynamic DNS registration on $interface adapters");
+		return;
+	}
+
+	return 1;
+} ## end sub enable_dynamic_dns
 
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -5734,13 +6088,10 @@ sub get_network_configuration {
 		# Autoconfiguration ip address will be displayed as "Autoconfiguration IP Address. . . : 169.x.x.x"
 		$setting =~ s/autoconfiguration_ip/ip/;
 		
-		# Remove the trailing s from dns_servers
-		$setting =~ s/dns_servers/dns_server/;
-		
 		# Check which setting was found and add to hash
 		if ($setting =~ /dns_servers/) {
 			push(@{$network_configuration->{$interface_name}{$setting}}, $value);
-			#notify($ERRORS{'OK'}, 0, "$interface_name:$setting = @{$network_configuration->{$interface_name}{$setting}}");
+			notify($ERRORS{'OK'}, 0, "$interface_name:$setting\n" . format_data($network_configuration->{$interface_name}{$setting}));
 		}
 		elsif ($setting =~ /ip_address/) {
 			$value =~ s/[^\.\d]//g;
@@ -6935,22 +7286,23 @@ sub start_service {
 		notify($ERRORS{'WARNING'}, 0, "failed to execute command to to start service: $service_name");
 		return;
 	}
-	elsif (grep(/is not started/i, @{$output})) {
-		notify($ERRORS{'OK'}, 0, "service is not started: $service_name");
+	elsif (grep(/already been started/i, @{$output})) {
+		notify($ERRORS{'OK'}, 0, "service is already started: $service_name");
 		return 1;
 	}
 	elsif (grep(/(does not exist|service name is invalid)/i, @$output)) {
 		notify($ERRORS{'WARNING'}, 0, "service could not be started because it does not exist: $service_name, output:\n" . join("\n", @$output));
 		return 0;
 	}
-	elsif ($exit_status || grep(/could not be started/i, @$output)) {
+	elsif ($exit_status) {
 		notify($ERRORS{'WARNING'}, 0, "failed to start service: $service_name, exit status: $exit_status, command:\n$command\noutput:\n" . join("\n", @$output));
 		return 0;
 	}
 	else {
 		notify($ERRORS{'OK'}, 0, "started service: $service_name" . join("\n", @$output));
+		return 1;
 	}
-	return 1;
+	
 } ## end sub start_service
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -7826,63 +8178,57 @@ sub get_node_configuration_directory {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 set_computer_name
+=head2 get_kms_client_product_keys
 
- Parameters  : $computer_name (optional)
- Returns     : If successful: true
-               If failed: false
- Description : Sets the registry keys to set the computer name. This subroutine
-               does not attempt to reboot the computer.
-               The computer name argument is optional. If not supplied, the
-               computer's short name stored in the database will be used,
-               followed by a hyphen and the image ID that is loaded.
+ Parameters  : none
+ Returns     : hash reference
+ Description : Retrieves the $KMS_CLIENT_PRODUCT_KEYS variable.
 
 =cut
 
-sub set_computer_name {
+sub get_kms_client_product_keys {
+	return $KMS_CLIENT_PRODUCT_KEYS;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_kms_client_product_key
+
+ Parameters  : $product_name (optional)
+ Returns     : If successful: string
+               If failed: false
+ Description : Returns a KMS client product key based on the version of Windows
+               either specified as an argument or installed on the computer. A
+               KMS client product key is a publically shared product key which
+               must be installed before activating using a KMS server.
+
+=cut
+
+sub get_kms_client_product_key {
 	my $self = shift;
 	if (ref($self) !~ /windows/i) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return;
 	}
 	
-	# Get the computer name
-	my $new_computer_name = shift;
-	if (!$new_computer_name) {
-		$new_computer_name = $self->data->get_computer_short_name();
-		if (!$new_computer_name) {
-			notify($ERRORS{'WARNING'}, 0, "computer name argument was not supplied and could not be retrieved from the reservation data");
-			return;
-		}
-		
-		# Append the image ID to the computer name
-		my $image_id = $self->data->get_image_id();
-		$new_computer_name .= "-$image_id" if $image_id;
-	}
-	
-	my $computer_node_name   = $self->data->get_computer_node_name();
-	
-	my $registry_string .= <<"EOF";
-Windows Registry Editor Version 5.00
-
-[HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Control\\ComputerName\\ComputerName]
-"ComputerName"="$new_computer_name"
-
-[HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters]
-"Hostname"="$new_computer_name"
-"NV Hostname"="$new_computer_name"
-EOF
-	
-	# Import the string into the registry
-	if ($self->import_registry_string($registry_string)) {
-		notify($ERRORS{'DEBUG'}, 0, "set registry keys to change the computer name of $computer_node_name to $new_computer_name");
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to set registry keys to change the computer name of $computer_node_name to $new_computer_name");
+	# Get the product name
+	my $product_name = shift || $self->get_product_name();
+	if (!$product_name) {
+		notify($ERRORS{'WARNING'}, 0, "product name was not passed as an argument and could not be retrieved from computer");
 		return;
 	}
 	
-	return 1;
+	# Remove (TM) or (R) from the product name
+	$product_name =~ s/ \([tmr]*\)//ig;
+	
+	# Get the matching product key from the hash for the product name
+	my $product_key = $KMS_CLIENT_PRODUCT_KEYS->{$product_name};
+	if (!$product_key) {
+		notify($ERRORS{'WARNING'}, 0, "unsupported product name: $product_name, KMS client product key is not known");
+		return;
+	}
+	notify($ERRORS{'DEBUG'}, 0, "returning KMS client setup key for $product_name: $product_key");
+	return $product_key;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -8187,13 +8533,11 @@ sub set_static_public_address {
 	my $computer_public_ip_address = $self->data->get_computer_public_ip_address() || '<undefined>';
 	my $subnet_mask = $self->data->get_management_node_public_subnet_mask() || '<undefined>';
 	my $default_gateway = $self->data->get_management_node_public_default_gateway() || '<undefined>';
-	my @dns_servers = $self->data->get_management_node_public_dns_servers();
 
    if ($server_request_fixed_ip) {
       $computer_public_ip_address = $server_request_fixed_ip;
       $subnet_mask = $self->data->get_server_request_netmask();
       $default_gateway = $self->data->get_server_request_router();
-      @dns_servers = $self->data->get_server_request_dns_servers();
    }
 	
 	# Assemble a string containing the static IP configuration
@@ -8202,7 +8546,6 @@ public interface name: $interface_name
 public IP address: $computer_public_ip_address
 public subnet mask: $subnet_mask
 public default gateway: $default_gateway
-public DNS server(s): @dns_servers
 EOF
 	
 	# Make sure required info was retrieved
@@ -8212,6 +8555,8 @@ EOF
 	}
 	
 	my $current_public_ip_address = $self->get_public_ip_address();
+	my $current_public_subnet_mask = $self->get_public_subnet_mask();
+	
 	if ($current_public_ip_address eq $computer_public_ip_address) {
 		notify($ERRORS{'DEBUG'}, 0, "public IP address of $computer_name is already set to $current_public_ip_address, attempting to set it again in case any parameters changed");
 	}
@@ -8225,9 +8570,6 @@ EOF
 	
 	notify($ERRORS{'OK'}, 0, "attempting to set static public IP address on $computer_name:\n$configuration_info_string");
 	
-	my $primary_dns_server_address = shift @dns_servers;
-	notify($ERRORS{'DEBUG'}, 0, "primary DNS server address: $primary_dns_server_address\nalternate DNS server address(s):\n" . (join("\n", @dns_servers) || '<none>'));
-	
 	# Delete any default routes
 	$self->delete_default_routes();
 	
@@ -8236,15 +8578,6 @@ EOF
 	
 	# Set the static public IP address
 	my $command = "$system32_path/netsh.exe interface ip set address name=\"$interface_name\" source=static addr=$computer_public_ip_address mask=$subnet_mask gateway=$default_gateway gwmetric=0";
-	
-	# Set the static DNS server address
-	$command .= " && $system32_path/netsh.exe interface ip set dns name=\"$interface_name\" source=static addr=$primary_dns_server_address register=none";
-	
-	# Add commands to set the alternate DNS server addresses
-	for my $alternate_dns_server_address (@dns_servers) {
-		$command .= " && $system32_path/netsh.exe interface ip add dns name=\"$interface_name\" addr=$alternate_dns_server_address";
-	}
-	
 	my ($exit_status, $output) = $self->execute($command, 1, 60, 3);
 	if (!defined($output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to execute command to set static public IP address");
@@ -8255,16 +8588,147 @@ EOF
 		return;
 	}
 	else {
-		notify($ERRORS{'OK'}, 0, "set static public IP address");
+		notify($ERRORS{'OK'}, 0, "set static public IP address: $computer_public_ip_address/$subnet_mask, default gateway: $default_gateway");
 	}
+
+	$self->set_public_default_route() || return;
 	
-	# Add persistent static public default route
-	if (!$self->set_public_default_route()) {
-		notify($ERRORS{'WARNING'}, 0, "failed to add persistent static public default route");
+	$self->set_static_dns_servers() || return;
+	
+	return 1;
+}
+
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 set_static_dns_servers
+
+ Parameters  : none
+ Returns     : boolean
+ Description : Configures the computer to use static DNS server addresses rather
+               than addresses obtained from DHCP. Static addresses will only be
+               used if either of the following conditions is true:
+               1. Server request is configured with specific DNS servers
+               2. The management node is configured to assign static public IP
+                  addresses and the public DNS server list is not empty
+               3. The image is configured to use Active Directory authentication
+                  and the configured domain's DNS server list is not empty
+               
+               If multiple conditions are true, only the DNS servers configured
+               for the first condition met are used.
+
+=cut
+
+sub set_static_dns_servers {
+	my $self = shift;	
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return;
 	}
 	
-	notify($ERRORS{'OK'}, 0, "configured static address for public interface '$interface_name'");
+	my $computer_name	= $self->data->get_computer_short_name();
+	my $image_name	= $self->data->get_image_name();
+	my $system32_path = $self->get_system32_path() || return;
+	
+	my $mn_public_ip_configuration = $self->data->get_management_node_public_ip_configuration();
+	my @mn_dns_servers = $self->data->get_management_node_public_dns_servers();
+	
+	my $domain_dns_name = $self->data->get_image_domain_dns_name();
+	my @domain_dns_servers = $self->data->get_image_domain_dns_servers();
+	
+	my @server_request_dns_servers = $self->data->get_server_request_dns_servers();
+	
+	my @dns_servers;
+	if (@server_request_dns_servers) {
+		@dns_servers = @server_request_dns_servers;
+		notify($ERRORS{'DEBUG'}, 0, "server request specific DNS servers will be statically set on $computer_name: " . join(", ", @dns_servers));
+	}
+	elsif ($domain_dns_name && @domain_dns_servers) {
+		@dns_servers = @domain_dns_servers;
+		notify($ERRORS{'DEBUG'}, 0, "$image_name image is configured for Active Directory, domain DNS servers will be statically set on $computer_name: " . join(", ", @dns_servers));
+	}
+	elsif ($mn_public_ip_configuration =~ /static/i && @mn_dns_servers) {
+		@dns_servers = @mn_dns_servers;
+		notify($ERRORS{'DEBUG'}, 0, "management node IP configuration set to $mn_public_ip_configuration, management node DNS servers will be statically set on $computer_name: " . join(", ", @dns_servers));
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "$computer_name not configured to use static DNS servers:\n" .
+			"management node IP configuration               : $mn_public_ip_configuration\n" .
+			"management node DNS servers configured         : " . (@mn_dns_servers ? 'yes' : 'no') . "\n" .
+			"image configured for Active Directory          : " . ($domain_dns_name ? 'yes' : 'no') . "\n" .
+			"Active Directory domain DNS servers configured : " . (@domain_dns_servers ? 'yes' : 'no')
+		);
+		return;
+	}
+	
+	my $private_interface_name = $self->get_private_interface_name();
+	if (!$private_interface_name) {
+		notify($ERRORS{'WARNING'}, 0, "unable to set static DNS servers on $computer_name, private interface name could not be retrieved");
+		return;
+	}
+	
+	my $public_interface_name = $self->get_public_interface_name();
+	if (!$public_interface_name) {
+		notify($ERRORS{'WARNING'}, 0, "unable to set static DNS servers on $computer_name, public interface name could not be retrieved");
+		return;
+	}
+	
+	for my $interface_name ($private_interface_name, $public_interface_name) {
+		# Get the first address from the array - the netsh.exe syntax is different for the first/primary DNS server and others
+	
+		# netsh interface ipv4 set dnsservers [name=]<string> [source=]dhcp|static [[address=]<IP address>|none] [[register=]none|primary|both] [[validate=]yes|no]
+		# name - The name or index of the interface.
+		# source - One of the following values:
+		#    dhcp: Sets DHCP as the source for configuring DNS servers for the specific interface.
+		#    static: Sets the source for configuring DNS servers to local static configuration.
+		# address - One of the following values:
+		#    <IP address>: An IP address for a DNS server.
+		#    none: Clears the list of DNS servers.
+		# register - One of the following values:
+		#    none: Disables Dynamic DNS registration.
+		#    primary: Register under the primary DNS suffix only.
+		#    both: Register under both the primary DNS suffix, as well as under the connection-specific suffix.
+		# validate - Specifies whether validation of the DNS server setting will be performed. The value is yes by default.
+		my $primary_dns_server = $dns_servers[0];
+		my $command = "$system32_path/netsh.exe interface ipv4 set dnsservers name=\"$interface_name\" source=static address=$primary_dns_server validate=no";
+		
+		# netsh interface ipv4 add dnsservers [name=]<string> [address=]<IPv4 address> [[index=]<integer>] [[validate=]yes|no]
+		# name         - The name or index of the interface where DNS servers are added.
+		# address      - The IP address for the DNS server you are adding.
+		# index        - Specifies the index (preference) for the specified DNS server address.
+		# validate     - Specifies whether validation of the DNS server setting will be performed. The value is yes by default.
+		for (my $i=1; $i<scalar(@dns_servers); $i++) {
+			my $secondary_dns_server = $dns_servers[$i];
+			$command .= " ; $system32_path/netsh.exe interface ipv4 add dnsservers name=\"$interface_name\" address=$secondary_dns_server validate=no";
+		}
+		
+		my ($exit_status, $output) = $self->execute($command);
+		if (!defined($output)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to execute command to configure static DNS servers for $interface_name interface on $computer_name: $command");
+			return;
+		}
+		elsif ($exit_status ne '0') {
+			notify($ERRORS{'WARNING'}, 0, "failed to configure static DNS servers for $interface_name interface on $computer_name, exit status: $exit_status, command:\n$command\noutput:\n" . join("\n", @$output));
+			return 0;
+		}
+		else {
+			notify($ERRORS{'OK'}, 0, "configured static DNS servers for $interface_name interface on $computer_name: " . join(", ", @dns_servers));
+		}
+	}
+	
+	# Flush the DNS cache - not sure if this is necessary but AD computers sometimes have trouble finding things for some reason
+	my $command = "$system32_path/ipconfig.exe /flushdns";
+	my ($exit_status, $output) = $self->execute($command);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to flush DNS resolver cache on $computer_name: $command");
+	}
+	elsif ($exit_status ne '0') {
+		notify($ERRORS{'WARNING'}, 0, "failed to flush DNS resolver cache on $computer_name, exit status: $exit_status, command:\n$command\noutput:\n" . join("\n", @$output));
+	}
+	else {
+		notify($ERRORS{'OK'}, 0, "flushed DNS resolver cache on $computer_name");
+	}
+	
 	return 1;
 }
 
@@ -8526,11 +8990,11 @@ sub is_64_bit {
 	
 	# Check if architecture has previously been determined
 	if (defined($self->{OS_ARCHITECTURE}) && $self->{OS_ARCHITECTURE} eq '64') {
-		notify($ERRORS{'DEBUG'}, 0, '64-bit Windows OS previously detected');
+		#notify($ERRORS{'DEBUG'}, 0, '64-bit Windows OS previously detected');
 		return 1;
 	}
 	elsif (defined($self->{OS_ARCHITECTURE}) && $self->{OS_ARCHITECTURE} eq '32') {
-		notify($ERRORS{'DEBUG'}, 0, '32-bit Windows OS previously detected');
+		#notify($ERRORS{'DEBUG'}, 0, '32-bit Windows OS previously detected');
 		return 0;
 	}
 	
@@ -10984,6 +11448,7 @@ sub run_script {
 	my $timeout_seconds = shift || 300;
 	
 	my $computer_node_name = $self->data->get_computer_node_name();
+	my $system32_path = $self->get_system32_path() || return;
 	
 	# Check if script exists
 	if (!$self->file_exists($script_path)) {
@@ -11013,7 +11478,13 @@ sub run_script {
 	my $timestamp = makedatestring();
 	
 	# Assemble the command
-	my $command = "cmd.exe /c \"$script_path_escaped & exit %ERRORLEVEL%\"";
+	my $command;
+	if ($script_extension =~ /vbs/i) {
+		$command = "cmd.exe /c \"$system32_path/cscript.exe $script_path_escaped & exit %ERRORLEVEL%\"";
+	}
+	else {
+		$command = "cmd.exe /c \"$script_path_escaped & exit %ERRORLEVEL%\"";
+	}
 	
 	# Execute the command
 	notify($ERRORS{'DEBUG'}, 0, "executing script on $computer_node_name:\nscript path: $script_path\nlog file path: $log_file_path\nscript timeout: $timeout_seconds seconds");
@@ -11029,13 +11500,13 @@ sub run_script {
 	$logfile_contents = '=' x $header_line_length . "\r\n$logfile_contents\r\n" . '=' x $header_line_length . "\r\n";
 	$logfile_contents .= join("\r\n", @$output) . "\r\n";
 	$self->create_text_file($log_file_path, $logfile_contents, 1);
-	
+
 	if ($exit_status == 0) {
-		notify($ERRORS{'OK'}, 0, "successfully executed script on $computer_node_name: '$script_path', output saved to '$log_file_path', command:\n$command, output:\n" . join("\n". @$output));
+		notify($ERRORS{'OK'}, 0, "successfully executed script on $computer_node_name: '$script_path'\nlog file: log_file_path\ncommand: $command, output:\n" . join("\n", @$output));
 		return 1;
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "script '$script_path' returned a non-zero exit status: $exit_status\nlogfile path: '$log_file_path'\ncommand: '$command'\noutput:\n" . join("\n", @$output));
+		notify($ERRORS{'WARNING'}, 0, "script '$script_path' returned a non-zero exit status: $exit_status\nlog file: $log_file_path\ncommand: '$command'\noutput:\n" . join("\n", @$output));
 		return 0;
 	}
 }
@@ -11184,7 +11655,7 @@ sub install_exe_update {
 	elsif ($exit_status eq '194') {
 		# Exit status 194 - installed but reboot required
 		notify($ERRORS{'DEBUG'}, 0, "installed update on $computer_node_name, exit status $exit_status indicates a reboot is required");
-		$self->data->set_imagemeta_postoption('reboot');
+		push @{$self->{reboot_required}}, "installed update: $file_path, exit status indicates a reboot is required";
 		return 1;
 	}
 	elsif ($exit_status eq '0') {
@@ -11198,7 +11669,7 @@ sub install_exe_update {
 	my @log_file_lines = $self->get_file_contents($log_file_path);
 	for my $line (@log_file_lines) {
 		if ($line =~ /RebootNecessary = 1|reboot is required/i) {
-			$self->data->set_imagemeta_postoption('reboot');
+			push @{$self->{reboot_required}}, "installed update: $file_path, log file indicates a reboot is required: $line";
 		}
 	}
 	
@@ -11292,7 +11763,7 @@ sub install_msu_update {
 			if ($error_code eq '2359302') {
 				# Already installed but reboot is required
 				notify($ERRORS{'DEBUG'}, 0, "update $update_id is already installed but a reboot is required:\n" . format_data(\%event_data));
-				$self->data->set_imagemeta_postoption('reboot');
+				push @{$self->{reboot_required}}, "installed update: $file_path, event log indicates a reboot is required";
 			}
 			else {
 				notify($ERRORS{'WARNING'}, 0, "error occurred installing update $update_id:\n" . format_data(\%event_data));
@@ -11302,7 +11773,7 @@ sub install_msu_update {
 			if ($debug_message =~ /IsRebootRequired: 1/i) {
 				# RebootIfRequested.01446: Reboot is not scheduled. IsRunWizardStarted: 0, IsRebootRequired: 0, RestartMode: 1
 				notify($ERRORS{'DEBUG'}, 0, "installed update $update_id, reboot is required:\n$debug_message");
-				$self->data->set_imagemeta_postoption('reboot');
+				push @{$self->{reboot_required}}, "installed update: $file_path, event message indicates a reboot is required: $debug_message";
 			}
 			elsif ($debug_message =~ /Update is already installed/i) {
 				# InstallWorker.01051: Update is already installed
@@ -12118,6 +12589,56 @@ sub disable_set_network_location_prompt {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 get_current_computer_hostname
+
+ Parameters  : none
+ Returns     : string
+ Description : Retrieves the current hostname the computer is using. If a
+               computer was renamed but not rebooted, this will return the
+               previous name.
+
+=cut
+
+sub get_current_computer_hostname {
+	my $self = shift;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $computer_name = $self->data->get_computer_node_name();
+	
+	my $command = 'cmd.exe /c "C:/Windows/Sysnative/Wbem/wmic.exe COMPUTERSYSTEM GET Name /Value"';
+	my ($exit_status, $output) = $self->execute($command);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command on $computer_name: $command");
+		return;
+	}
+	elsif ($exit_status ne '0') {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve current computer hostname from $computer_name, exit status: $exit_status, command:\n$command\noutput:\n" . join("\n", @$output));
+		return 0;
+	}
+	
+	# Output should be:
+	# Name=vm-100
+	my ($line) = grep(/Name=(.+)/i, @$output);
+	if (!$line) {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve current computer name from $computer_name, output does not contain a 'Name=' line:\n" . join("\n", @$output));
+		return;
+	}
+	
+	my ($current_computer_name) = $line =~ /Name=(.+)$/ig;
+	if (!$current_computer_name) {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve current computer name from $computer_name, failed to parse line: '$line'");
+		return;
+	}
+
+	notify($ERRORS{'OK'}, 0, "retrieved current computer hostname from $computer_name: '$current_computer_name'");
+	return $current_computer_name;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 =head2 set_computer_hostname
 
  Parameters  : $new_computer_name (optional)
@@ -12178,9 +12699,9 @@ sub set_computer_hostname {
 		notify($ERRORS{'DEBUG'}, 0, "failed to execute command to set computer name of $database_computer_hostname to $new_computer_name");
 		return;
 	}
-	elsif (grep(/ReturnValue = 0;/i, @$output)) {
+	elsif (grep(/(ReturnValue = 0|Method execution successful)/i, @$output)) {
 		notify($ERRORS{'OK'}, 0, "set computer name of $database_computer_hostname to $new_computer_name, exit status: $exit_status, command:\n$command\noutput:\n" . join("\n", @$output));
-		$self->data->set_imagemeta_postoption('reboot');
+		push @{$self->{reboot_required}}, "computer hostname was changed";
 	}
 	else {
 		notify($ERRORS{'WARNING'}, 0, "failed to set computer name of $database_computer_hostname to $new_computer_name, exit status: $exit_status, command:\n$command\noutput:\n" . join("\n", @$output));
@@ -12189,11 +12710,10 @@ sub set_computer_hostname {
 	
 	# Set the DNS suffix registry key
 	if ($dns_suffix) {
-		return $self->reg_add('HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\services\Tcpip\Parameters', 'NV Domain', 'REG_SZ', $dns_suffix);
+		$self->reg_add('HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\services\Tcpip\Parameters', 'NV Domain', 'REG_SZ', $dns_suffix);
 	}
-	else {
-		return 1;
-	}
+	
+	return 1;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -12406,6 +12926,1388 @@ sub get_nfs_mounts_windows {
 		notify($ERRORS{'OK'}, 0, "retrieved mounted Windows client NFS shares on $computer_name, command: '$command', output:\n" . join("\n", @$output));
 		return 1;
 	}
+}
+
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_windows_features
+
+ Parameters  : none
+ Returns     : hash reference
+ Description : Retrieves a list of all features available on the Windows OS. If
+               called in scalar context, a hash reference is returned:
+               {
+                 "Chess" => {
+                   "State" => "Disabled"
+                 },
+                 "ClientForNFS-Infrastructure" => {
+                   "State" => "Enabled"
+                 },
+                 ...
+               }
+               
+               If called in array context, an array of feature names is
+               returned:
+               (
+                  Chess,
+                  ClientForNFS-Infrastructure,
+                  ...
+               )
+
+=cut
+
+sub get_windows_features {
+	my $self = shift;
+	if (ref($self) !~ /Windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $computer_name = $self->data->get_computer_node_name();
+	my $system32_path = $self->get_system32_path() || return;
+	
+	notify($ERRORS{'DEBUG'}, 0, "retrieving Windows features on $computer_name");
+	my $command = "$system32_path/cmd.exe /c \"dism /online /get-features /format:table\"";
+	my ($exit_status, $output) = $self->execute($command);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command on $computer_name: $command");
+		return;
+	}
+	elsif ($exit_status ne '0') {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve feature info from $computer_name, exit status: $exit_status, command:\n$command\noutput:\n" . join("\n", @$output));
+		return;
+	}
+	
+	my $feature_info = {};
+	for my $line (@$output) {
+		# Line format:
+		# FreeCell                                    | Disabled
+		my ($feature_name, $state) = $line =~ /^(\S+)\s+.*(Enabled|Disabled)\s*$/i;
+		if (defined($feature_name) && defined($state)) {
+			$feature_info->{$feature_name}{State} = $state;
+		}
+	}
+	
+	if (!keys(%$feature_info)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve feature info from $computer_name, failed to parse any feature names and states from output:\n" . join("\n", @$output));
+		return;
+	}
+	
+	if (wantarray) {
+		my @feature_names = sort { lc($a) cmp lc($b) } keys %$feature_info;
+		notify($ERRORS{'DEBUG'}, 0, "retrieved feature info from $computer_name, returning array:\n" . join("\n", @feature_names));
+		return $feature_info;
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "retrieved feature info from $computer_name, returning hash reference:\n" . format_data($feature_info));
+		return $feature_info;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_windows_feature_info
+
+ Parameters  : $feature_name
+ Returns     : hash reference
+ Description : Retrieves info for a single Windows feature and constructs a
+               hash:
+               {
+                  "Description" => "Install the .NET Environment for supporting managed code activation",
+                  "Display Name" => ".NET Environment",
+                  "Feature Name" => "WAS-NetFxEnvironment",
+                  "Restart Required" => "Possible",
+                  "State" => "Enabled"
+               }
+
+=cut
+
+sub get_windows_feature_info {
+	my $self = shift;
+	if (ref($self) !~ /Windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $feature_name = shift;
+	if (!$feature_name) {
+		notify($ERRORS{'WARNING'}, 0, "feature name argument was not specified");
+		return;
+	}
+	
+	my $computer_name = $self->data->get_computer_node_name();
+	my $system32_path = $self->get_system32_path() || return;
+	
+	notify($ERRORS{'DEBUG'}, 0, "retrieving info for Windows feature on $computer_name: $feature_name");
+	my $command = "$system32_path/cmd.exe /c \"DISM.exe /Online /Get-FeatureInfo /FeatureName=$feature_name\"";
+	my ($exit_status, $output) = $self->execute($command);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command on $computer_name: $command");
+		return;
+	}
+	elsif (grep(/Feature name.*is unknown/, @$output)) {
+		# Feature name foo is unknown
+		notify($ERRORS{'OK'}, 0, "Windows feature is unknown on $computer_name: $feature_name, returning empty hash reference");
+		return {};
+	}
+	elsif ($exit_status ne '0') {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve feature info from $computer_name, exit status: $exit_status, command:\n$command\noutput:\n" . join("\n", @$output));
+		return;
+	}
+
+	my $feature_information_line_found = 0;
+	my $feature_info = {};
+	for my $line (@$output) {
+		if ($line !~ /\w/) {
+			next;
+		}
+		elsif (!$feature_information_line_found) {
+			# Ignore all lines until a 'Feature Information:' line is found
+			if ($line =~ /Feature Information:/) {
+				$feature_information_line_found = 1;
+			}
+			next;
+		}
+		
+		# Line format:
+		# Display Name : Windows Media Player
+		my ($property, $value) = $line =~ /^(\w.*\S)\s+:\s+(\S.*)$/i;
+		if (defined($property) && defined($value)) {
+			$feature_info->{$property} = $value;
+		}
+		else {
+			notify($ERRORS{'DEBUG'}, 0, "line does not contain property:value: '$line'");
+		}
+	}
+	
+	if (keys(%$feature_info)) {
+		notify($ERRORS{'DEBUG'}, 0, "retrieved Windows feature info from $computer_name: $feature_name\n" . format_data($feature_info));
+		return $feature_info;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve Windows feature info from $computer_name: $feature_name, failed to parse any properties from output:\n" . join("\n", @$output));
+		return;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 is_windows_feature_enabled
+
+ Parameters  : $feature_name
+ Returns     : boolean
+ Description : Determines whether or not a Windows feature such as the NFS
+               client is enabled.
+
+=cut
+
+sub is_windows_feature_enabled {
+	my $self = shift;
+	if (ref($self) !~ /Windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $feature_name = shift;
+	if (!$feature_name) {
+		notify($ERRORS{'WARNING'}, 0, "feature name argument was not specified");
+		return;
+	}
+	
+	my $computer_name = $self->data->get_computer_node_name();
+	
+	my $feature_info = $self->get_windows_feature_info($feature_name) || return;
+	if (!keys(%$feature_info)) {
+		notify($ERRORS{'DEBUG'}, 0, "Windows feature is NOT enabled on $computer_name because the feature is unknown: $feature_name");
+		return 0;
+	}
+	elsif (!defined($feature_info->{State})) {
+		notify($ERRORS{'WARNING'}, 0, "failed to determine if Windows feature is enabled on $computer_name: $feature_name, feature info does not contain a 'State' key:\n" . format_data($feature_info));
+		return;
+	}
+	
+	my $state = $feature_info->{State};
+	if ($state =~ /Enabled/i) {
+		notify($ERRORS{'DEBUG'}, 0, "Windows feature is enabled on $computer_name: $feature_name");
+		return 1;
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "Windows feature is NOT enabled on $computer_name: $feature_name");
+		return 0;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 enable_windows_feature
+
+ Parameters  : $feature_name
+ Returns     : boolean
+ Description : Enables a Windows feature. This will also recursively enable any
+               parent features which must be enabled before the feature
+               specified by the argument can be enabled.
+
+=cut
+
+sub enable_windows_feature {
+	my $self = shift;
+	if (ref($self) !~ /Windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my ($feature_name, $no_recurse) = @_;
+	if (!$feature_name) {
+		notify($ERRORS{'WARNING'}, 0, "feature name argument was not specified");
+		return;
+	}
+	
+	my $computer_name = $self->data->get_computer_node_name();
+	my $system32_path = $self->get_system32_path() || return;
+	
+	my $log_path = "C:/Windows/Logs/DISM/$feature_name.log";
+
+	my $command = "$system32_path/cmd.exe /c \"DISM.exe /Online /Enable-Feature /FeatureName:$feature_name /NoRestart /LogPath=$log_path\"";
+	notify($ERRORS{'DEBUG'}, 0, "enabling Windows feature on $computer_name: $feature_name, command:\n$command");
+	my ($exit_status, $output) = $self->execute({
+		command => $command,
+		timeout_seconds => 120,
+		display_output => 0,
+	});
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command on $computer_name: $command");
+		return;
+	}
+	elsif (grep(/completed successfully/, @$output)) {
+		notify($ERRORS{'OK'}, 0, "enabled Windows feature on $computer_name: $feature_name");
+		return 1;
+	}
+	
+	my $parent_feature_found = 0;
+	if (!$no_recurse) {
+		# Check if parent features need to be enabled first, line like this will exist:
+		#    Ensure that the following parent feature(s) are enabled first
+		#    IIS-Security, IIS-WebServer, IIS-WebServerRole
+		my $parent_feature_line_found = 0;
+		LINE: for my $line (@$output) {
+			if ($line !~ /\w/) {
+				next LINE;
+			}
+			elsif (!$parent_feature_line_found) {
+				if ($line =~ /Ensure that the following parent feature.*enabled first/) {
+					$parent_feature_line_found = 1;
+				}
+				next LINE;
+			}
+			
+			# Stop checking if this line is found:
+			#    The DISM log file can be found at C:\Windows\Logs\DISM\dism.log
+			if ($line =~ /DISM log file/) {
+				last LINE;
+			}
+			
+			my @parent_feature_names = split(/,\s+/, $line);
+			if (@parent_feature_names) {
+				$parent_feature_found = 1;
+				notify($ERRORS{'DEBUG'}, 0, "parent Windows feature(s) need to be enabled before $feature_name can be enabled: " . join("\n", @parent_feature_names));
+				for my $parent_feature_name (@parent_feature_names) {
+					if (!$self->enable_windows_feature($parent_feature_name)) {
+						notify($ERRORS{'WARNING'}, 0, "failed to enable Windows feature on $computer_name: $feature_name, failed to enable parent feature: $parent_feature_name");
+						return;
+					}
+				}
+			}
+			else {
+				notify($ERRORS{'DEBUG'}, 0, "line does not appear to contain the name of a parent feature: '$line'");
+				next LINE;
+			}
+		}
+	}
+	
+	# Check if any parent features were found which need to be enabled first
+	# If not, failed to enable feature for some other reason
+	if ($parent_feature_found) {
+		# Make one more attempt to enable the feature, do not attempt to install parent features again ($no_recurse = 1)
+		return $self->enable_windows_feature($feature_name, 1);
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to enable Windows feature on $computer_name: $feature_name, exit status: $exit_status, command: '$command', output:\n" . join("\n", @$output));
+		return;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 run_powershell_command
+
+ Parameters  : $powershell_script_contents, $display_output (optional), $encode_command (optional)
+ Returns     : array ($exit_status, $output)
+ Description : Runs Powershell code as a command.
+
+=cut
+
+sub run_powershell_command {
+	my $self = shift;	
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my ($powershell_command_argument, $display_output, $encode_command) = @_;
+	if (!$powershell_command_argument) {
+		notify($ERRORS{'WARNING'}, 0, "powershell script contents argument was not supplied");
+		return;
+	}
+	
+	my $system32_path = $self->get_system32_path() || return;
+	my $computer_name	= $self->data->get_computer_short_name();
+	
+	# -Version Starts the specified version of Windows PowerShell 
+	# -NoLogo Hides the copyright banner at startup
+	# -NoExit Does not exit after running startup commands 
+	# -Sta Start the shell using a single-threaded apartment 
+	# -NoProfile Does not use the user profile
+	# -NonInteractive Does not present an interactive prompt to the user.
+	# -InputFormat Valid values are "Text" (text strings) or "XML"
+	# -OutputFormat Valid values are "Text" (text strings) or "XML"
+	# -EncodedCommand Accepts a base-64-encoded string version of a command
+	# -File Execute a script file.
+	# -ExecutionPolicy Sets the default execution policy for the session
+	# -Command 	Executes the specified commands
+	
+	#my $command = "$system32_path/WindowsPowerShell/v1.0/powershell.exe -NoLogo -NoProfile -NonInteractive";
+	
+	my $command;
+	$command .= 'cmd.exe /c "';
+	$command .= "$system32_path/WindowsPowerShell/v1.0/powershell.exe -NoLogo -NoProfile -NonInteractive";
+	
+	
+	if ($encode_command) {
+		# Use the -EncodedCommand argument to avoid the need to escape various special characters
+		# The 2nd argument to encode_base64 needs to be an empty string or else it will break the encoded string up into 76 character lines
+		my $powershell_command_encoded = encode_base64(encode("UTF-16LE", $powershell_command_argument), "");
+		
+		#$command .= " -InputFormat Text";
+		$command .= " -OutputFormat Text";
+		$command .= " -EncodedCommand $powershell_command_encoded";
+	}
+	else {
+		# Replace newlines with semicolon
+		$powershell_command_argument =~ s/[\n\r]+/ ; /g;
+		
+		# Clean up semicolons
+		$powershell_command_argument =~ s/\s+;[\s;]*/ ; /g;
+		
+		# Remove semicolons from before and after curly brackets
+		$powershell_command_argument =~ s/[\s;]*([{}])[\s;]*/ $1 /g;
+		
+		#$powershell_command_argument .= ' ; [Environment]::Exit(!\$?)';
+		$command .= " -Command \\\"$powershell_command_argument\\\"";
+	}
+	$command .= ' < NUL"';
+	
+	notify($ERRORS{'DEBUG'}, 0, "attempting to run PowerShell command on $computer_name:\n$command") if $display_output;
+	my ($exit_status, $output) = $self->execute({
+		command => $command,
+		display_output => 0,
+		timeout_seconds => 30,
+		#no_persistent_connection => 1,
+		max_attempts => 1,
+	});
+	
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to run PowerShell command on $computer_name");
+		return;
+	}
+	else {
+		notify($ERRORS{'OK'}, 0, "ran PowerShell command on $computer_name, exit status: $exit_status, command: '$command', output:\n" . join("\n", @$output)) if $display_output;
+		return ($exit_status, $output);
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 run_powershell_as_script
+
+ Parameters  : $powershell_script_contents, $display_output (optional), $retain_script_file (optional)
+ Returns     : array ($exit_status, $output)
+ Description : Accepts a string containing the contents of a Powershell script,
+               creates the script on the computer under C:\cygwin\VCL\Scripts,
+               and executes the script. The script is named after the calling
+               subroutine, so ad_join.ps1 would be generated when invoked from
+               ad_join().
+               
+               By default, the script file is deleted after it is executed for
+               safety. This can be overridden if the $retain_script_file
+               argument is true.
+=cut
+
+sub run_powershell_as_script {
+	my $self = shift;	
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my ($script_contents_argument, $display_output, $retain_script_file) = @_;
+	if (!$script_contents_argument) {
+		notify($ERRORS{'WARNING'}, 0, "powershell script contents argument was not supplied");
+		return;
+	}
+	
+	my $system32_path = $self->get_system32_path() || return;
+	my $computer_name	= $self->data->get_computer_short_name();
+	
+	# Figure out the script location
+	my $node_configuration_directory = $self->get_node_configuration_directory();
+	my $calling_subroutine = get_calling_subroutine();
+	$calling_subroutine =~ s/.*:://g;
+	my $powershell_script_path = "$node_configuration_directory/Scripts/$calling_subroutine.ps1";
+	
+	# Remove trailing newlines and blank lines
+	$script_contents_argument =~ s/[\r\n]+$//g;
+	
+	# Create copy of script contents, use this for execution, copied in case transformations need to be made in the future
+	my $script_contents = $script_contents_argument;
+	
+	$self->create_text_file($powershell_script_path, $script_contents);
+	
+	# Running Powershell scripts/commands via Cygwin has issues because Powershell.exe does screwy things with the terminal
+	# If OS.pm::execute_new is used (persistent SSH connection), script hangs if
+	# run normally and does not exit with [Environment]::Exit(x)
+	# Using run_ssh_command fails to determine the correct exit status but does not hang regardless of how script exits.
+	# Wrapping the script in cmd.exe /c "... < NUL" seems to prevent execute_new from hanging and the exit status is correct
+	
+	my $command;
+	$command .= 'cmd.exe /c "';
+	$command .= "$system32_path/WindowsPowerShell/v1.0/powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $powershell_script_path";
+	$command .= ' < NUL"';
+	
+	notify($ERRORS{'DEBUG'}, 0, "attempting to execute PowerShell script: $powershell_script_path, contents:\n$script_contents") if $display_output;
+	my ($exit_status, $output) = $self->execute({
+		command => $command,
+		display_output => 1,
+		timeout_seconds => 60,
+		#no_persistent_connection => 1,
+		max_attempts => 1,
+	});
+	
+	# Delete the script file unless retain flag was specified
+	if ($retain_script_file) {
+		notify($ERRORS{'DEBUG'}, 0, "script NOT deleted because \$retain_script_file argument was specified");
+		
+		# TODO: add subs to correctly set Windows file permissions
+		# Open up permissions so Powershell file can easily be debugged on the Windows computer by users other than root
+		$self->execute("chmod -v 777 `cygpath \"$powershell_script_path\"`", 1);
+	}
+	else {
+		$self->delete_file($powershell_script_path);
+	}
+	
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to run PowerShell commands as script on $computer_name");
+		return;
+	}
+	else {
+		notify($ERRORS{'OK'}, 0, "ran PowerShell commands as script on $computer_name, exit status: $exit_status, command: '$command', script contents:\n$script_contents_argument\noutput:\n" . join("\n", @$output)) if $display_output;
+		return ($exit_status, $output);
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 powershell_command_exists
+
+ Parameters  : $powershell_command
+ Returns     : boolean
+ Description : Checks if a PowerShell command or cmdlets exists on the computer.
+
+=cut
+
+sub powershell_command_exists {
+	my $self = shift;	
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $powershell_command_argument = shift;
+	if (!$powershell_command_argument) {
+		notify($ERRORS{'WARNING'}, 0, "powershell command argument was not supplied");
+		return;
+	}
+	
+	my $computer_name	= $self->data->get_computer_short_name();
+	
+	my $powershell_command = "Get-Command $powershell_command_argument | Format-List Name";
+	my ($exit_status, $output) = $self->run_powershell_command($powershell_command);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to determine if '$powershell_command' PowerShell command exists on $computer_name");
+		return;
+	}
+	elsif (grep(/(NotFound)/, @$output)) {
+		notify($ERRORS{'DEBUG'}, 0, "PowerShell command does NOT exist on $computer_name: $powershell_command_argument, output:\n" . join("\n", @$output));
+		return 0;
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "PowerShell command exists on $computer_name: $powershell_command_argument, output:\n" . join("\n", @$output));
+		return 1;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_ad_computer_ou_dn
+
+ Parameters  : none
+ Returns     : boolean
+ Description : Converts an OU path as displayed on the Object tab when viewing
+               an OU's properties in the Active Directory Users and Computers
+               tool from:
+               my.ad.domain/Org/Unit/ComputerOU
+               To:
+               OU=ComputerOU,OU=Unit,OU=Org,DC=domain,DC=ad,DC=my
+
+=cut
+
+sub get_ad_computer_ou_dn {
+	my $self = shift;	
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $domain_dns_name = $self->data->get_image_domain_dns_name();
+	
+	# Accepts a $computer_ou argument but should only be used for testing
+	my $computer_ou = shift || $self->data->get_image_domain_base_ou();
+	my $computer_ou_original = $computer_ou;
+	
+	if (!defined($domain_dns_name)) {
+		notify($ERRORS{'WARNING'}, 0, "AD domain DNS name is not configured");
+		return;
+	}
+	elsif (!defined($computer_ou)) {
+		notify($ERRORS{'DEBUG'}, 0, "AD domain computer OU is not configured");
+		return;
+	}
+	
+	# Possible cases:
+	#    OU=ComputerOU,OU=VCL,DC=my,DC=ad,DC=domain
+	#    OU=ComputerOU,OU=VCL
+	#    ComputerOU,VCL
+	#    ComputerOU
+	#    my.ad.domain/VCL/ComputerOU
+	#    VCL/ComputerOU
+	
+	# OU can either contain commas or slashes but not both - determines which order to put OU parts back together in
+	if ($computer_ou =~ /,/ && $computer_ou =~ /\//) {
+		notify($ERRORS{'WARNING'}, 0, "invalid AD OU, it can't contain both a comma and slash: $computer_ou");
+		return;
+	}
+	
+	# Remove domain DN section if it was specified for the image
+	$computer_ou =~ s/,DC=.*//g;
+	
+	# Strip out OU= parts, will be added later
+	$computer_ou =~ s/\s*OU=//g;
+	
+	# Assemble the domain part of the DN based on the domain DNS name
+	my @domain_parts = split(/\./, $domain_dns_name);
+	my $domain_section = "DC=" . join(",DC=", @domain_parts);
+	
+	# Check which order the OU parts should be reassembled in
+	my @ou_parts;
+	if ($computer_ou =~ /\//) {
+		# my.ad.domain/VCL/ComputerOU
+		# VCL/ComputerOU
+		@ou_parts = reverse split(/\/+/, $computer_ou);
+		
+		# Check if last part contains a period, if so, strip it
+		if ($ou_parts[-1] =~ /\./) {
+			pop @ou_parts;
+		}
+	}
+	else {
+		@ou_parts = split(/,+/, $computer_ou);
+	}
+	my $ou_section = "OU=" . join(",OU=", @ou_parts);
+	
+	my $dn = "$ou_section,$domain_section";
+	
+	notify($ERRORS{'DEBUG'}, 0, "converted computer OU to DN: $computer_ou_original --> $dn");
+	return $dn;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 ad_join_prepare
+
+ Parameters  : none
+ Returns     : boolean
+ Description : Performs tasks necessary prior to joining a computer to an Active
+               Directory domain:
+               * Ensures the 'TCP NetBIOS helper' service is started
+               * Sets static DNS servers if configured for the domain
+               * Deletes existing matching computer objects
+
+=cut
+
+sub ad_join_prepare {
+	my $self = shift;	
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Enable and start the TCP NetBIOS helper service
+	$self->set_service_startup_mode('lmhosts', 'auto');
+	$self->start_service('lmhosts');
+	
+	# Set specific DNS servers for private and public interfaces if DNS servers are configured
+	$self->set_static_dns_servers();
+	
+	# Delete existing computer with same computer name
+	# Computer may have been joined to a different OU
+	# Don't bother moving existing objects
+	$self->ad_delete_computer();
+	
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 ad_join
+
+ Parameters  : none
+ Returns     : boolean
+ Description : Joins the computer to the Active Directory domain configured for
+               the image.
+
+=cut
+
+sub ad_join {
+	my $self = shift;	
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Calculate how long the tasks take
+	my $start_time = time;
+	my $rename_computer_reboot_duration = 0;
+	my $ad_join_reboot_duration = 0;
+	
+	my $computer_name	= $self->data->get_computer_short_name();
+	my $image_name	= $self->data->get_image_name();
+	
+	my $domain_dns_name = $self->data->get_image_domain_dns_name();
+	my $domain_username = $self->data->get_image_domain_username();
+	my $domain_password = $self->data->get_image_domain_password();
+	
+	my $computer_ou_dn = $self->get_ad_computer_ou_dn();
+	
+	if (!defined($domain_dns_name)) {
+		notify($ERRORS{'WARNING'}, 0, "unable to add $computer_name to AD, image $image_name is not assigned to a domain");
+		return;
+	}
+	elsif (!defined($domain_username)) {
+		notify($ERRORS{'WARNING'}, 0, "unable to add $computer_name to AD, user name is not configured for $domain_dns_name domain");
+		return;
+	}
+	elsif (!defined($domain_password)) {
+		notify($ERRORS{'WARNING'}, 0, "unable to add $computer_name to AD, password is not configured for $domain_dns_name domain");
+		return;
+	}
+	
+	# Make sure the computer is not already a member of a domain
+	# TODO: add logic to check if computer belongs to the correct domain in the correct OU
+	# If not, remove and rejoin
+	my $current_domain_name = $self->ad_get_current_domain();
+	if ($current_domain_name) {
+		if ($current_domain_name ne $domain_dns_name) {
+			notify($ERRORS{'WARNING'}, 0, "unable to add $computer_name to $domain_dns_name domain, it is already a member of a different domain: $current_domain_name");
+			return;
+		}
+		
+		# Search for the computer object in the domain
+		my $current_computer_dn = $self->ad_search_computer();
+		if (!$current_computer_dn) {
+			notify($ERRORS{'WARNING'}, 0, "unable to add $computer_name to $domain_dns_name domain, it appears to already a member of the domain but the current DN could not be determined");
+			return;
+		}
+		
+		# Extract the OU DN from the computer DN
+		my ($current_computer_ou_dn) = $current_computer_dn =~ /^[^,]+,(OU=.+)$/;
+		if (!$current_computer_ou_dn) {
+			notify($ERRORS{'WARNING'}, 0, "unable to add $computer_name to $domain_dns_name domain, failed to parse OU DN from current computer DN: $current_computer_dn");
+			return;
+		}
+		
+		if ($current_computer_ou_dn =~ /^$computer_ou_dn$/i) {
+			notify($ERRORS{'OK'}, 0, "$computer_name is already joined to $domain_dns_name domain and in the correct OU: $current_computer_ou_dn");
+			return 1;
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "$computer_name is already joined to $domain_dns_name domain but in the a different OU:\n" .
+				"correct OU: $computer_ou_dn\n" .
+				"current OU: $current_computer_ou_dn"
+			);
+			$self->ad_unjoin() || return;
+		}
+	}
+	
+	# Figure out/fix the computer OU and assemble optional section to add to PowerShell command
+	my $domain_computer_command_section = '';
+	if ($computer_ou_dn) {
+		$domain_computer_command_section = "-OUPath \"$computer_ou_dn\"";
+	}
+	
+	notify($ERRORS{'DEBUG'}, 0, "attempting to join $computer_name to AD\n" .
+		"domain DNS name: $domain_dns_name\n" .
+		"domain user: $domain_username\n" .
+		"domain password: $domain_password\n" .
+		"domain computer OU DN: " . ($computer_ou_dn ? $computer_ou_dn : '<not configured>')
+	);
+
+	# Perform preparation tasks
+	$self->ad_join_prepare() || return;
+	
+	# Assemble the PowerShell script
+	my $ad_powershell_script = <<EOF;
+\$ps_credential = New-Object System.Management.Automation.PsCredential("$domain_dns_name\\$domain_username", (ConvertTo-SecureString "$domain_password" -AsPlainText -Force))
+Add-Computer -DomainName "$domain_dns_name" -Credential \$ps_credential $domain_computer_command_section -Verbose -ErrorAction Stop
+EOF
+
+	# Check if the computer needs to be renamed
+	my $current_computer_hostname = $self->get_current_computer_hostname() || '<unknown>';
+	if (lc($current_computer_hostname) ne lc($computer_name)) {
+		notify($ERRORS{'DEBUG'}, 0, "$computer_name needs to be renamed, current hostname: '$current_computer_hostname'");
+		
+		# Check if computer supports PowerShell Rename-Computer cmdlet
+		# If it does, computer can be renamed and joined to AD in 1 step with 1 reboot
+		# Otherwise, computer name needs to be changed, rebooted, then added to AD
+		my $powershell_supports_rename = $self->powershell_command_exists('Rename-Computer');
+		if ($powershell_supports_rename) {
+			$ad_powershell_script .= "Rename-Computer -NewName $computer_name -DomainCredential \$ps_credential -Force -Verbose";
+		}
+		else {
+			notify($ERRORS{'DEBUG'}, 0, "PowerShell version on $computer_name does NOT support Rename-Computer, renaming computer");
+			if (!$self->set_computer_hostname()) {
+				notify($ERRORS{'WARNING'}, 0, "failed to join $computer_name to Active Directory domain, PowerShell version does NOT support Rename-Computer, failed to rename using traditional method");
+				return;
+			}
+			
+			my $rename_computer_reboot_start = time;
+			if (!$self->reboot(300, 3, 1)) {
+				notify($ERRORS{'WARNING'}, 0, "failed to join $computer_name to Active Directory domain, failed to reboot computer after it was renamed");
+				return;
+			}
+			$rename_computer_reboot_duration = (time - $rename_computer_reboot_start);
+		}
+	}
+
+	# Success:
+	# WARNING: The changes will take effect after you restart the computer
+	# VCLV98-248.
+	
+	# Possible errors:
+	
+	# File C:\Users\Administrator\Desktop\ad_join.ps1 cannot be loaded because
+	# the execution of scripts is disabled on this system. Please see "get-help
+	# about_signing" for more details.
+	
+	# OU doesn't exist:
+	# Add-Computer : This command cannot be executed on target
+	# computer('VCLV98-248') due to following error: The system cannot find the
+	# file specified.
+	
+	# Could happen if DNS isn't properly configured:
+	# This command cannot be executed on target computer('WIN7') due to following
+	# error: The specified domain either does not exist or could not be
+	# contacted.
+	
+	# Computer already added to AD in another OU:
+	# Add-Computer : This command cannot be executed on target
+	# computer('VCLV98-247') due to following error: The account already exists.
+	
+	my ($exit_status, $output) = $self->run_powershell_as_script($ad_powershell_script, 0, 1);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute PowerShell script to join $computer_name to Active Directory domain");
+		return;
+	}
+	
+	# Combine the output lines into a single string or else unpredictable text wrapping may occur
+	my $output_string = join(' ', @$output);
+	$output_string =~ s/\s+/ /g;
+	
+	if ($output_string =~ /(error:|does not exist|cannot be loaded)/i) {
+		notify($ERRORS{'WARNING'}, 0, "failed to join $computer_name to Active Directory domain, output:\n$output_string");
+		return 0;
+	}
+	else {
+		notify($ERRORS{'OK'}, 0, "executed PowerShell script to join $computer_name to Active Directory domain, output:\n" . join("\n", @$output));
+	}
+
+	# Reboot, computer should be joined to AD with the correct hostname
+	# If computer had to be rebooted to be renamed, certain tasks in reboot() don't need to be performed again
+	# Set reboot()'s last $pre_configure flag accordingly
+	my $ad_join_reboot_pre_configure = ($rename_computer_reboot_duration ? 0 : 1);
+	
+	my $ad_join_reboot_start = time;
+	if (!$self->reboot(300, 3, 1, $ad_join_reboot_pre_configure)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to join $computer_name to Active Directory domain, failed to reboot computer after it joined the domain");
+		return;
+	}
+	$ad_join_reboot_duration = (time - $ad_join_reboot_start);
+	
+	my $total_duration = (time - $start_time);
+	my $other_tasks_duration = ($total_duration - $rename_computer_reboot_duration - $ad_join_reboot_duration);
+	
+	notify($ERRORS{'DEBUG'}, 0, "successfully joined $computer_name to Active Directory domain: $domain_dns_name, time statistics:\n" .
+		"computer rename reboot : $rename_computer_reboot_duration seconds\n" .
+		"AD join reboot         : $ad_join_reboot_duration seconds\n" .
+		"other tasks            : $other_tasks_duration seconds\n" .
+		"total                  : $total_duration seconds"
+	);
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 ad_unjoin
+
+ Parameters  : none
+ Returns     : boolean
+ Description : Unjoins the computer from the Active Directory domain by
+               attempting to add the computer to a workgroup named 'VCL'. If
+               successful, the computer object is deleted from the domain.
+
+=cut
+
+sub ad_unjoin {
+	my $self = shift;	
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $computer_name	= $self->data->get_computer_short_name();
+	my $image_name	= $self->data->get_image_name();
+	
+	my $domain_dns_name = $self->data->get_image_domain_dns_name();
+	my $domain_username = $self->data->get_image_domain_username();
+	my $domain_password = $self->data->get_image_domain_password();
+	
+	if (!defined($domain_dns_name)) {
+		notify($ERRORS{'WARNING'}, 0, "unable to remove $computer_name from AD, image $image_name is not assigned to a domain");
+		return;
+	}
+	elsif (!defined($domain_username)) {
+		notify($ERRORS{'WARNING'}, 0, "unable to remove $computer_name from AD, user name is not configured for $domain_dns_name domain");
+		return;
+	}
+	elsif (!defined($domain_password)) {
+		notify($ERRORS{'WARNING'}, 0, "unable to remove $computer_name from AD, password is not configured for $domain_dns_name domain");
+		return;
+	}
+	
+	if (!$self->ad_get_current_domain()) {
+		notify($ERRORS{'DEBUG'}, 0, "$computer_name does not need to be removed from AD because it is not currently joined to a domain");
+		return 1;
+	}
+	
+	notify($ERRORS{'DEBUG'}, 0, "attempting to unjoin $computer_name from AD");
+	
+	# Assemble the PowerShell script
+	my $ad_powershell_script = <<EOF;
+\$Host.UI.RawUI.BufferSize = New-Object Management.Automation.Host.Size(5000, 500)
+\$ps_credential = New-Object System.Management.Automation.PsCredential("$domain_dns_name\\$domain_username", (ConvertTo-SecureString "$domain_password" -AsPlainText -Force))
+try {
+   Add-Computer -WorkgroupName VCL -Credential \$ps_credential -ErrorAction Stop
+}
+catch {
+   Write-Host "ERROR: failed to add computer to workgroup, error: \$(\$_.Exception.Message)"
+   exit 1
+}
+EOF
+
+	my ($exit_status, $output) = $self->run_powershell_as_script($ad_powershell_script, 1, 1);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute PowerShell script to remove $computer_name from Active Directory domain");
+		return;
+	}
+	elsif (grep(/ERROR/, @$output)) {
+		# Computer object was already or deleted or can't be found for some reason:
+		#   This command cannot be executed on target computer('') due to following error: No mapping between account names and security IDs was done.
+		if (grep(/No mapping between account names/, @$output)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to remove $computer_name from Active Directory domain, the computer object may have been deleted from the domain, output:\n" . join("\n", @$output));
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "failed to remove $computer_name from Active Directory domain, output:\n" . join("\n", @$output));
+		}
+		return 0;
+	}
+	
+	notify($ERRORS{'OK'}, 0, "removed $computer_name from Active Directory domain, output:\n" . join("\n", @$output));
+	
+	if (!$self->reboot(300, 3, 1)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to remove $computer_name from Active Directory domain, failed to reboot computer after unjoining domain");
+		return;
+	}
+	
+	$self->ad_delete_computer($computer_name);
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 ad_get_current_domain
+
+ Parameters  : none
+ Returns     : boolean
+ Description : Checks if the computer is joined to any Active Directory domain.
+
+=cut
+
+sub ad_get_current_domain {
+	my $self = shift;	
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $computer_name	= $self->data->get_computer_short_name();
+	my $system32_path = $self->get_system32_path() || return;
+	
+	my $command = "echo | $system32_path/Wbem/wmic.exe COMPUTERSYSTEM GET PartOfDomain,Domain /FORMAT:LIST";
+	my ($exit_status, $output) = $self->execute($command);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to determine if $computer_name is joined to a domain: $command");
+		return;
+	}
+	
+	my ($part_of_domain_line) = grep(/^PartOfDomain/i, @$output);
+	if (!$part_of_domain_line) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine if $computer_name is joined to a domain, output does not contain a 'PartOfDomain' line:\n" . join("\n", @$output));
+		return;
+	}
+	elsif ($part_of_domain_line =~ /FALSE/i) {
+		notify($ERRORS{'DEBUG'}, 0, "$computer_name is NOT joined to a domain, output:\n" . join("\n", @$output));
+		return 0;
+	}
+	
+	my ($domain_line) = grep(/^Domain/i, @$output);
+	my ($domain_name) = $domain_line =~ /Domain=(.+)/;
+	if ($domain_name) {
+		notify($ERRORS{'DEBUG'}, 0, "$computer_name is joined to a domain, returning '$domain_name'\n" . join("\n", @$output));
+		return $domain_name;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "$computer_name is joined to a domain but 'Domain=' line could not be parsed from the output, returning 1:\n" . join("\n", @$output));
+		return 1;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 ad_search
+
+ Parameters  : $ldap_filter_argument, $attempt_limit (optional)
+ Returns     : array
+ Description : Searches for a contain or object in Active Directory based on the
+               argument hash reference. The keys of the argument represent LDAP
+               attributes.
+					
+					By default, up to 3 attempts will be made if the search fails.
+					This is mainly done to overcome an issue during the reserve()
+					sequence if static IP addresses are used. After the static IP is
+					set on the AD-joined computer, there is a brief delay before DNS
+					resolution works properly. As a result, the first AD search often
+					fails.
+
+=cut
+
+sub ad_search {
+	my $self = shift;	
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my ($ldap_filter_argument, $attempt_limit) = @_;
+	if (!defined($ldap_filter_argument)) {
+		notify($ERRORS{'WARNING'}, 0, "LDAP filter hash reference argument was not supplied");
+		return;
+	}
+	elsif (!ref($ldap_filter_argument) || ref($ldap_filter_argument) ne 'HASH') {
+		notify($ERRORS{'WARNING'}, 0, "LDAP filter argument is not a hash reference:\n" . format_data($ldap_filter_argument));
+		return;
+	}
+	elsif (!scalar(keys %$ldap_filter_argument)) {
+		notify($ERRORS{'WARNING'}, 0, "empty LDAP FILTER hash reference argument was supplied");
+		return;
+	}
+	
+	$attempt_limit = 3 unless $attempt_limit;
+	
+	# Make sure objectClass was specified
+	if (!defined($ldap_filter_argument->{objectClass})) {
+		notify($ERRORS{'WARNING'}, 0, "LDAP FILTER hash reference argument does not contain an objectClass value:\n" . format_data($ldap_filter_argument));
+		return;
+	}
+	elsif ($ldap_filter_argument->{objectClass} !~ /^(computer|organizationalUnit|user)$/) {
+		notify($ERRORS{'WARNING'}, 0, "LDAP FILTER objectClass value not allowed: " . $ldap_filter_argument->{objectClass});
+		return;
+	}
+	
+	# This sub handles both search and delete under very strict conditions
+	# This is somewhat ugly but was done to reduce code duplication - especially with the Powershell below
+	my $operation;
+	my $calling_subroutine = get_calling_subroutine();
+	if ($calling_subroutine =~ /^(ad_delete_computer)$/) {
+		$operation = 'delete';
+	}
+	else {
+		$operation = 'search for';
+	}
+	
+	my $computer_name	= $self->data->get_computer_short_name();
+	
+	my $domain_dns_name = $self->data->get_image_domain_dns_name();
+	my $domain_username = $self->data->get_image_domain_username();
+	my $domain_password = $self->data->get_image_domain_password();
+	if (!defined($domain_dns_name)) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine if AD object exists on $computer_name, domain DNS name is not configured");
+		return;
+	}
+	elsif (!defined($domain_username)) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine if AD object exists on $computer_name, user name is not configured for $domain_dns_name domain");
+		return;
+	}
+	elsif (!defined($domain_password)) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine if AD object exists on $computer_name, password is not configured for $domain_dns_name domain");
+		return;
+	}
+	
+	my $search_attribute_count = scalar(keys %$ldap_filter_argument);
+	
+	my $ldap_filter;
+	$ldap_filter .= '(&' if ($search_attribute_count > 1);
+	for my $attribute (keys %$ldap_filter_argument) {
+		my $value = $ldap_filter_argument->{$attribute};
+		$ldap_filter .= "($attribute=$value)";
+	}
+	$ldap_filter .= ')' if ($search_attribute_count > 1);
+	notify($ERRORS{'DEBUG'}, 0, "assembled LDAP filter: '$ldap_filter'");
+	
+	
+	# Assemble the PowerShell script
+	my $powershell_script_contents = <<'EOF';
+$Host.UI.RawUI.BufferSize = New-Object Management.Automation.Host.Size(5000, 500)
+
+$domain_dns_name = '[domain_dns_name]'
+$domain_username = '[domain_username]'
+$domain_password = '[domain_password]'
+$ldap_filter = '[ldap_filter]'
+$delete = '[delete]'
+
+$type = [System.DirectoryServices.ActiveDirectory.DirectoryContextType]"Domain"
+$directory_context = New-Object System.DirectoryServices.ActiveDirectory.DirectoryContext($type, $domain_dns_name, $domain_username, $domain_password)
+try {
+   $domain = [System.DirectoryServices.ActiveDirectory.Domain]::GetDomain($directory_context)
+}
+catch {
+   if ($_.Exception.InnerException) {
+      $exception_message = $_.Exception.InnerException.Message
+   }
+   else {
+      $exception_message = $_.Exception.Message
+   }
+   Write-Host "ERROR: failed to connect to $domain_dns_name domain, error: $exception_message"
+   exit
+}
+
+
+$searcher = New-Object System.DirectoryServices.DirectorySearcher($domain.GetDirectoryEntry())
+$searcher.filter = "$ldap_filter"
+
+try {
+   $results = $searcher.FindAll()
+   # Try to output the results to catch this exception:
+   # An error occurred while enumerating through a collection: The <...> search filter is invalid.
+   $results | Out-Null
+}
+catch {
+   Write-Host "ERROR: failed to search for entries matching LDAP filter: --> '$ldap_filter', error: $($_.Exception.Message)"
+   exit 1
+}
+
+
+if ($delete -eq 1) {
+Write-Host "delete true : $delete"
+   if ($results.Count -eq 0) {
+      Write-Host "no entries found to delete matching LDAP filter: '$ldap_filter'"
+      exit 0
+   }
+   elseif ($results.Count -gt 1) {
+      Write-Host "ERROR: delete not performed for safety, multiple entries found to delete matching LDAP filter: '$ldap_filter'`n$($results | Select -ExpandProperty Path | Out-String)"
+      exit 1
+   }
+}
+
+
+ForEach($result in $results) {
+   $entry = $result.GetDirectoryEntry();
+   $dn = $entry.distinguishedName
+   if ($delete -eq 1) {
+      Write-Host "attempting to delete entry: $dn"
+      try {
+         $entry.DeleteTree();
+         Write-Host "deleted entry: $dn"
+      }
+      catch {
+         Write-Host "ERROR: failed to delete entry: $dn, error: $($_.Exception.Message)"
+         exit 1
+      }
+   }
+   else {
+      Write-Host $dn
+   }
+}
+EOF
+	
+	$powershell_script_contents =~ s/\[domain_dns_name\]/$domain_dns_name/;
+	$powershell_script_contents =~ s/\[domain_username\]/$domain_username/;
+	$powershell_script_contents =~ s/\[domain_password\]/$domain_password/;
+	$powershell_script_contents =~ s/\[ldap_filter\]/$ldap_filter/;
+	
+	if ($operation eq 'delete') {
+		$powershell_script_contents =~ s/\[delete\]/1/;
+	}
+	else {
+		$powershell_script_contents =~ s/\[delete\]/0/;
+	}
+	
+	my ($exit_status, $output);
+	for (my $attempt=1; $attempt<=$attempt_limit; $attempt++) {
+		($exit_status, $output) = $self->run_powershell_as_script($powershell_script_contents);
+		if (!defined($output)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to execute PowerShell script on $computer_name to $operation objects in $domain_dns_name AD domain matching LDAP filter: '$ldap_filter'");
+			return;
+		}
+		elsif (grep(/(WARNING:|ERROR:|exception)/i, @$output)) {
+			# Only display a warning on the last attempt
+			# Known issue, see comment in sub header
+			my $notify_type = ($attempt < $attempt_limit ? $ERRORS{'DEBUG'} : $ERRORS{'WARNING'});
+			notify($notify_type, 0, "attempt $attempt/$attempt_limit: failed to $operation objects on $computer_name in $domain_dns_name AD domain matching LDAP filter: '$ldap_filter', error occurred:\n" . join("\n", @$output));
+		}
+		else {
+			last;
+		}
+		return if $attempt == $attempt_limit;
+	}
+	
+	if ($operation eq 'delete') {
+		notify($ERRORS{'OK'}, 0, "deleted objects on $computer_name in $domain_dns_name AD domain matching LDAP filter: '$ldap_filter', output:\n" . join("\n", @$output));
+		return 1;
+	}
+	
+	my @matching_dns;
+	for my $line (@$output) {
+		# Remove leading and trailing spaces
+		$line =~ s/(^\s+|\s+$)//g;
+		if ($line =~ /^[A-Z]{2}=.+/i) {
+			push @matching_dns, $line;
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "unexpected output found $operation objects on $computer_name in $domain_dns_name AD domain matching LDAP filter: '$ldap_filter': '$line'");
+		}
+	}
+	
+	my $matching_count = scalar(@matching_dns);
+	if ($matching_count) {
+		notify($ERRORS{'OK'}, 0, "found $matching_count object" . ($matching_count > 1 ? 's' : '') . " matching LDAP filter in $domain_dns_name AD domain on $computer_name: '$ldap_filter'\n" . join("\n", sort @matching_dns));
+	}
+	else {
+		notify($ERRORS{'OK'}, 0, "object NOT found matching LDAP filter in $domain_dns_name AD domain on $computer_name: '$ldap_filter'");
+	}
+	return @matching_dns;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 ad_delete_computer
+
+ Parameters  : $computer_samaccountname (optional)
+ Returns     : boolean
+ Description : Deletes a computer object from the active directory domain with a
+               sAMAccountName attribute matching the argument. If no argument is
+               provided, the short name of the reservation computer is used.
+               
+               The sAMAccountName attribute for computers in Active Directory
+               always end with a dollar sign. The trailing dollar sign does not
+               need to be included in the argumenat. One will be added to the
+               LDAP filter used to search for the object to delete.
+
+=cut
+
+sub ad_delete_computer {
+	my $self = shift;	
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $computer_samaccountname = shift || $self->data->get_computer_short_name();
+	
+	$computer_samaccountname =~ s/\$*$/\$/g;
+	
+	return $self->ad_search(
+		{
+			'objectClass' => 'computer',
+			'sAMAccountName' => $computer_samaccountname,
+		},
+		'delete'
+	);
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 ad_search_computer
+
+ Parameters  : $ou_identifier
+ Returns     : string
+ Description : Checks if a computer exists in the Active Directory domain with a
+               sAMAccountName attribute matching the argument. If found, a
+               string containing the computer DN is returned.
+
+=cut
+
+sub ad_search_computer {
+	my $self = shift;	
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $computer_samaccountname = shift || $self->data->get_computer_short_name();
+	
+	$computer_samaccountname =~ s/\$*$/\$/g;
+	
+	my @computer_dns = $self->ad_search(
+		{
+			'objectClass' => 'computer',
+			'sAMAccountName' => $computer_samaccountname,
+		}
+	);
+	if (@computer_dns) {
+		return $computer_dns[0];
+	}
+	else {
+		return 0;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 ad_search_ou
+
+ Parameters  : $ou_identifier
+ Returns     : array
+ Description : Checks if an OU exists in the Active Directory domain with a
+               matching the identifier argument. The identifier may either be
+               the short name of an OU:
+               'Test VMs'
+               Or the full distinguished name:
+               OU=Test VMs,OU=VCL,DC=ad,DC=example,DC=edu'
+               
+               An array of matching DNs is returned.
+
+=cut
+
+sub ad_search_ou {
+	my $self = shift;	
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $ou_identifier = shift;
+	if (!defined($ou_identifier)) {
+		notify($ERRORS{'WARNING'}, 0, "OU identifier argument was not supplied");
+		return;
+	}
+	
+	# Check if a DN or single name was provided
+	my $attribute_name;
+	if ($ou_identifier =~ /^OU=/i) {
+		$attribute_name = 'distinguishedName';
+	}
+	else {
+		$attribute_name = 'ou';
+	}
+	
+	return $self->ad_search(
+		{
+			'objectClass' => 'organizationalUnit',
+			$attribute_name => $ou_identifier,
+		}
+	);
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 ad_user_exists
+
+ Parameters  : $user_samaccountname
+ Returns     : boolean
+ Description : Checks if a user exists in the Active Directory domain with a
+               matching sAMAccountName.
+
+=cut
+
+sub ad_user_exists {
+	my $self = shift;	
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my ($user_samaccountname, $no_cache) = @_;
+	if (!defined($user_samaccountname)) {
+		notify($ERRORS{'WARNING'}, 0, "user sAMAccountName argument was not supplied");
+		return;
+	}
+	
+	my $domain_dns_name = $self->data->get_image_domain_dns_name();
+	if (!defined($domain_dns_name)) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine if user exists in Active Directory, domain DNS name is not configured");
+		return;
+	}
+	
+	if (!$no_cache && defined($self->{ad_user_exists}{$user_samaccountname})) {
+		return $self->{ad_user_exists}{$user_samaccountname};
+	}
+	
+	my @user_dns = $self->ad_search(
+		{
+			'objectClass' => 'user',
+			'sAMAccountName' => $user_samaccountname,
+		}
+	);
+	
+	if (@user_dns) {
+		$self->{ad_user_exists}{$user_samaccountname} = 1;
+		notify($ERRORS{'DEBUG'}, 0, "user exists in Active Directory domain: $user_samaccountname");
+		
+	}
+	else {
+		$self->{ad_user_exists}{$user_samaccountname} = 0;
+		notify($ERRORS{'DEBUG'}, 0, "user does NOT exist in Active Directory domain: $user_samaccountname");
+	}
+	return $self->{ad_user_exists}{$user_samaccountname};
 }
 
 #/////////////////////////////////////////////////////////////////////////////

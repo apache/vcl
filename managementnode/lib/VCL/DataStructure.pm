@@ -393,6 +393,15 @@ $SUBROUTINE_MAPPINGS{imagemeta_sysprep} = '$self->request_data->{reservation}{RE
 $SUBROUTINE_MAPPINGS{imagemeta_rootaccess} = '$self->request_data->{reservation}{RESERVATION_ID}{image}{imagemeta}{rootaccess}';
 $SUBROUTINE_MAPPINGS{imagemeta_sethostname} = '$self->request_data->{reservation}{RESERVATION_ID}{image}{imagemeta}{sethostname}';
 
+$SUBROUTINE_MAPPINGS{image_domain_dns_servers} = '$self->request_data->{reservation}{RESERVATION_ID}{image}{imagedomain}{dnsServers}';
+$SUBROUTINE_MAPPINGS{image_domain_dns_name} = '$self->request_data->{reservation}{RESERVATION_ID}{image}{imagedomain}{domainDNSName}';
+$SUBROUTINE_MAPPINGS{image_domain_id} = '$self->request_data->{reservation}{RESERVATION_ID}{image}{imagedomain}{id}';
+$SUBROUTINE_MAPPINGS{image_domain_login_description} = '$self->request_data->{reservation}{RESERVATION_ID}{image}{imagedomain}{logindescription}';
+$SUBROUTINE_MAPPINGS{image_domain_password} = '$self->request_data->{reservation}{RESERVATION_ID}{image}{imagedomain}{password}';
+$SUBROUTINE_MAPPINGS{image_domain_prettyname} = '$self->request_data->{reservation}{RESERVATION_ID}{image}{imagedomain}{prettyname}';
+$SUBROUTINE_MAPPINGS{image_domain_username} = '$self->request_data->{reservation}{RESERVATION_ID}{image}{imagedomain}{username}';
+$SUBROUTINE_MAPPINGS{image_domain_base_ou} = '$self->request_data->{reservation}{RESERVATION_ID}{image}{imagedomain}{imageaddomain}{baseOU}';
+
 $SUBROUTINE_MAPPINGS{image_os_name} = '$self->request_data->{reservation}{RESERVATION_ID}{image}{OS}{name}';
 $SUBROUTINE_MAPPINGS{image_os_prettyname} = '$self->request_data->{reservation}{RESERVATION_ID}{image}{OS}{prettyname}';
 $SUBROUTINE_MAPPINGS{image_os_type} = '$self->request_data->{reservation}{RESERVATION_ID}{image}{OS}{type}';
@@ -891,7 +900,9 @@ sub _automethod : Automethod {
 			$return_value = eval $hash_path;
 		}
 		elsif (!$key_defined) {
-			notify($ERRORS{'WARNING'}, 0, "corresponding data has not been initialized for $method_name: $hash_path", $self->request_data) if $show_warnings;
+			if ($show_warnings && $hash_path !~ /(serverrequest)/) {
+				notify($ERRORS{'WARNING'}, 0, "corresponding data has not been initialized for $method_name: $hash_path", $self->request_data);
+			}
 			return sub { };
 		}
 		else {
@@ -1914,6 +1925,34 @@ sub get_management_node_public_default_gateway {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 get_image_domain_dns_servers
+
+ Parameters  : none
+ Returns     : array
+ Description : Returns an array containing the addresses of the Active Directory
+               domain DNS servers configured for the image.
+
+=cut
+
+sub get_image_domain_dns_servers {
+	my $self = shift;
+	unless (ref($self) && $self->isa('VCL::DataStructure')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine can only be called as a VCL::DataStructure module object method");
+		return;
+	}
+	
+	my $reservation_id = $self->reservation_id;
+	my $dns_servers_array_ref = $self->request_data->{reservation}{$reservation_id}{image}{imagedomain}{dnsServers};
+	if (!$dns_servers_array_ref) {
+		notify($ERRORS{'DEBUG'}, 0, "no Active Directory domain DNS server addresses are configured for the image");
+		return ();
+	}
+	return @$dns_servers_array_ref
+}
+
+
+#/////////////////////////////////////////////////////////////////////////////
+
 =head2 get_management_node_public_dns_servers
 
  Parameters  : None
@@ -2289,7 +2328,7 @@ sub get_reservation_info_json_string {
 		return;
 	}
 	
-	notify($ERRORS{'DEBUG'}, 0, "constructed JSON string based on reservation infor:\n$json");
+	notify($ERRORS{'DEBUG'}, 0, "constructed JSON string based on reservation information:\n$json");
 	return $json;
 }
 
