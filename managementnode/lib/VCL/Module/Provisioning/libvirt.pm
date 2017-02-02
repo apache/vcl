@@ -494,8 +494,7 @@ EOF
 		return;
 	}
 	elsif (scalar @disk_file_paths > 1) {
-		notify($ERRORS{'WARNING'}, 0, "found multiple disks defined in the XML definition for $domain_name, only domains with a single disk may be captured:\n" . format_data(\@disk_file_paths));
-		return;
+		notify($ERRORS{'WARNING'}, 0, "found multiple disks defined in the XML definition for $domain_name, only the first disk will be captured:\n" . format_data(\@disk_file_paths));
 	}
 
 	# Copy the linked clone to create a new master image file
