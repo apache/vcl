@@ -597,16 +597,6 @@ sub pre_capture {
 
 =item *
 
- Defragment hard drive
-
-=cut
-
-	if (!$self->defragment_hard_drive()) {
-		notify($ERRORS{'WARNING'}, 0, "unable to defragment the hard drive");
-	}
-
-=item *
-
  Disable the pagefile, reboot, and delete pagefile.sys
  
  ********* node reboots *********
@@ -1182,11 +1172,6 @@ sub grant_access {
 			notify($ERRORS{'WARNING'}, 0, "failed to enable Administrator account for imaging request");
 			return 0;
 		}
-	} ## end if ($request_forimaging)
-	
-	# Delete legacy VCL logon/logoff scripts
-	if (!$self->delete_files_by_pattern("$system32_path/GroupPolicy/User/Scripts", ".*VCL.*cmd", 2)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to delete legacy VCL logon and logoff scripts");
 	}
 
 	notify($ERRORS{'OK'}, 0, "access has been granted for reservation on $computer_node_name");
@@ -1453,9 +1438,9 @@ sub move_file {
 
 =head2 delete_files_by_pattern
 
- Parameters  :
- Returns     :
- Description :
+ Parameters  : $base_directory, $regex_pattern, $max_depth (optional)
+ Returns     : boolean
+ Description : Deletes all files found under the base directory
 
 =cut
 
@@ -1466,40 +1451,62 @@ sub delete_files_by_pattern {
 		return;
 	}
 
-	my $base_directory = shift;
-	my $pattern        = shift;
-	my $max_depth      = shift || '5';
+	my ($base_directory, $regex_pattern, $max_depth, $show_deleted) = @_;
 
 	# Make sure base directory and pattern were specified
-	if (!($base_directory && $pattern)) {
+	if (!($base_directory && $regex_pattern)) {
 		notify($ERRORS{'WARNING'}, 0, "base directory and pattern must be specified as arguments");
 		return;
 	}
 	
-	# Check if the path begins with an environment variable and extract it
-	my ($base_directory_variable) = $base_directory =~ /(\$[^\/\\]*)/g;
+	my $computer_name = $self->data->get_computer_short_name();
+	
+	notify($ERRORS{'DEBUG'}, 0, "attempting to delete files on $computer_name, base directory: '$base_directory', pattern: '$regex_pattern', max depth: " . ($max_depth ? $max_depth : 'unlimited'));
+	
+	# Check if the path begins with an environment variable
+	my ($base_directory_variable, $remainder) = $base_directory =~ /(\$[^\/\\]*)(.*)/g;
+	if ($base_directory_variable) {
+		my $cygpath_command = "/bin/cygpath.exe \"$base_directory_variable\"";
+		my ($cygpath_exit_status, $cygpath_output) = $self->execute($cygpath_command, 0);
+		if (!defined($cygpath_output)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to execute command to determine if $base_directory_variable environment variable is set on $computer_name: $cygpath_command");
+			return;
+		}
+		elsif (grep(/cygpath:/, @$cygpath_output)) {
+			notify($ERRORS{'DEBUG'}, 0, "files not deleted because $base_directory_variable environment variable is not set on $computer_name");
+			return;
+		}
+		elsif (!grep(/\w/, @$cygpath_output)) {
+			notify($ERRORS{'DEBUG'}, 0, "files not deleted because $base_directory_variable environment variable is empty on $computer_name");
+			return;
+		}
+		
+		my ($base_directory_variable_value) = grep(/\w/, @$cygpath_output);
+		$remainder = '' unless defined($remainder);
+		
+		my $base_directory_new = "$base_directory_variable_value/$remainder";
+		$base_directory_new =~ s/[\\\/]+/\//g;
+		
+		notify($ERRORS{'DEBUG'}, 0, "$base_directory_variable environment variable is set on $computer_name: '$base_directory' --> '$base_directory_new'");
+		$base_directory = $base_directory_new;
+	}
 	
 	# Remove trailing slashes from base directory
 	$base_directory =~ s/[\/\\]*$/\//;
-
-	#notify($ERRORS{'DEBUG'}, 0, "attempting to delete files under $base_directory matching pattern $pattern, max depth: $max_depth");
 	
 	# Assemble command
 	# Use find to locate all the files under the base directory matching the pattern specified
-	my $command = "/bin/find.exe \"$base_directory\" -mindepth 1 -maxdepth $max_depth -iregex \"$pattern\"";
+	my $command = "/bin/find.exe \"$base_directory\"";
+	$command .= " -mindepth 1";
+	$command .= " -maxdepth $max_depth" if $max_depth;
+	$command .= " -iregex \"$regex_pattern\"";
 	$command .= " -exec chown -R root {} \\;";
 	$command .= " -exec chmod -R 777 {} \\;";
 	$command .= " -exec rm -rvf {} \\;";
-	
-	# If the path begins with an environment variable, check if the variable is defined by passing it to cygpath.exe
-	# Unintended files will be deleted if the environment variable is not defined because the base directory would change from "$TEMP/" to "/"
-	if ($base_directory_variable) {
-		$command = "/bin/cygpath.exe \"$base_directory_variable\" 2>&1 && $command";
-	}
 
 	my ($exit_status, $output) = $self->execute($command, 0);
 	if (!defined($output)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to run SSH command to delete files under $base_directory matching pattern $pattern, command: $command");
+		notify($ERRORS{'WARNING'}, 0, "failed to run SSH command to delete files under $base_directory matching pattern $regex_pattern, command: $command");
 		return;
 	}
 	elsif ($base_directory_variable && grep(/cygpath:/i, @$output)) {
@@ -1507,19 +1514,26 @@ sub delete_files_by_pattern {
 		return;
 	}
 	elsif (grep(/find:.*no such file/i, @$output)) {
-		notify($ERRORS{'OK'}, 0, "files not deleted because base directory does not exist: $base_directory");
+		notify($ERRORS{'OK'}, 0, "files not deleted because base directory does not exist: $base_directory, command: '$command'");
 		return 1;
 	}
 	elsif (grep(/(^Usage:)/i, @$output)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to delete files under $base_directory matching pattern $pattern\ncommand: $command\noutput:\n" . join("\n", @$output));
+		notify($ERRORS{'WARNING'}, 0, "failed to delete files under $base_directory matching pattern $regex_pattern\ncommand: $command\noutput:\n" . join("\n", @$output));
 		return;
 	}
 	else {
 		my @deleted = grep(/removed /, @$output);
 		my @not_deleted = grep(/cannot remove/, @$output);
-		notify($ERRORS{'OK'}, 0, scalar @deleted . "/" . scalar @not_deleted . " files deleted deleted under '$base_directory' matching '$pattern'") if @deleted;
-		#notify($ERRORS{'DEBUG'}, 0, "files/directories which were deleted:\n" . join("\n", @deleted)) if @deleted;
-		notify($ERRORS{'DEBUG'}, 0, "files/directories which were NOT deleted:\n" . join("\n", @not_deleted)) if @not_deleted;
+		
+		my $message;
+		$message .= "attempted to delete files:\n";
+		$message .= "base directory: $base_directory\n";
+		$message .= "regular expression pattern: $regex_pattern\n";
+		$message .= "files and directories deleted: " . scalar(@deleted) . "\n";
+		$message .= "files and directories NOT deleted: " . scalar(@not_deleted) . "\n";
+		$message .= "deleted:\n" . join("\n", @deleted) . "\n" if ($show_deleted && @deleted);
+		$message .= "NOT deleted:\n" . join("\n", @not_deleted) if (@not_deleted);
+		notify($ERRORS{'OK'}, 0, $message) if (@deleted || @not_deleted);
 	}
 	
 	return 1;
@@ -6311,28 +6325,10 @@ sub delete_capture_configuration_files {
 	}
 
 	my $system32_path = $self->get_system32_path() || return;
-	
-	# Remove old logon and logoff scripts
-	if ($self->file_exists($system32_path . '/GroupPolicy/User/Scripts/*VCL*')) {
-		$self->delete_files_by_pattern($system32_path . '/GroupPolicy/User/Scripts', '.*\(Prepare\|prepare\|Cleanup\|cleanup\|post_load\).*');
-		
-		# Remove VCLprepare.cmd and VCLcleanup.cmd lines from scripts.ini file
-		$self->remove_user_group_policy_script('logon', 'VCLprepare.cmd');
-		$self->remove_user_group_policy_script('logoff', 'VCLcleanup.cmd');
-	}
-	
-	# Remove old scripts and utilities
-	$self->delete_files_by_pattern('C:/Cygwin/home/root', '.*\(vbs\|exe\|cmd\|bat\|log\)');
-
-	# Remove old C:\VCL directory if it exists
-	$self->delete_file('C:/VCL');
 
 	# Delete VCL scheduled task if it exists
 	$self->delete_scheduled_task('VCL Startup Configuration');
-
-	# Remove old root Application Data/VCL directory
-	$self->delete_file('$SYSTEMDRIVE/Documents and Settings/root/Application Data/VCL');
-
+	
 	# Remove existing configuration files if they exist
 	notify($ERRORS{'OK'}, 0, "attempting to remove old configuration directory if it exists: $NODE_CONFIGURATION_DIRECTORY");
 	if (!$self->delete_file($NODE_CONFIGURATION_DIRECTORY)) {
@@ -6985,13 +6981,10 @@ sub copy_capture_configuration_files {
 
 =head2 clean_hard_drive
 
- Parameters  : 
- Returns     :
- Description : Removed unnecessary files from the hard drive. This is done
-               before capturing an image. Examples of unnecessary files:
-					-temp files and temp directories
-					-cache files
-					-downloaded patch files
+ Parameters  : none
+ Returns     : boolean
+ Description : Runs dism.exe and cleanmgr.exe to attempt to clean unnecessary
+               files from the hard drive.
 
 =cut
 
@@ -7001,205 +6994,135 @@ sub clean_hard_drive {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return;
 	}
+	
+	$self->run_dism_cleanup();
+	$self->run_cleanmgr();
+	return 1;
+}
 
-	my $computer_node_name   = $self->data->get_computer_node_name();
-	my $system32_path        = $self->get_system32_path() || return;
-	my $cygwin_path          = $self->get_cygwin_installation_directory_path();
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 run_dism_cleanup
+
+ Parameters  : none
+ Returns     : boolean
+ Description : Runs 'dism.exe /online /cleanup-image /spsuperseded' to clean up
+               service pack and update files from the computer's hard drive.
+
+=cut
+
+sub run_dism_cleanup {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+
+	my $computer_name = $self->data->get_computer_short_name();
+	my $system32_path = $self->get_system32_path() || return;
 	
 	# Run dism.exe
-	# The dism.exe file may not be present
 	my $dism_command = "$system32_path/dism.exe /online /cleanup-image /spsuperseded";
 	my ($dism_exit_status, $dism_output) = $self->execute($dism_command, 1);
 	if (!defined($dism_output)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to run dism.exe");
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to run dism.exe on $computer_name");
 		return;
 	}
 	elsif (grep(/not found|no such file/i, @$dism_output)) {
-		notify($ERRORS{'OK'}, 0, "dism.exe is not present on $computer_node_name");
+		# The dism.exe file may not be present
+		notify($ERRORS{'OK'}, 0, "dism.exe is not present on $computer_name");
 	}
 	elsif (grep(/No service pack backup files/i, @$dism_output)) {
-		notify($ERRORS{'DEBUG'}, 0, "dism.exe did not find any service pack files to remove");
+		notify($ERRORS{'DEBUG'}, 0, "dism.exe did not find any service pack files to remove on $computer_name");
 	}
 	elsif (grep(/spsuperseded option is not recognized/i, @$dism_output)) {
-		notify($ERRORS{'DEBUG'}, 0, "dism.exe is not able to remove service pack files for the OS version");
+		notify($ERRORS{'DEBUG'}, 0, "dism.exe is not able to remove service pack files for the OS version on $computer_name");
 	}
 	elsif (grep(/operation completed successfully/i, @$dism_output)) {
-		notify($ERRORS{'OK'}, 0, "ran dism.exe, output:\n" . join("\n", @$dism_output));
+		notify($ERRORS{'OK'}, 0, "ran dism.exe to clean image on $computer_name, output:\n" . join("\n", @$dism_output));
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "unexpected output returned from dism.exe:\n" . join("\n", @$dism_output));
+		notify($ERRORS{'WARNING'}, 0, "unexpected output returned from dism.exe on $computer_name:\n" . join("\n", @$dism_output));
 	}
-	
-	# Note: attempt to delete everything under C:\RECYCLER before running cleanmgr.exe
-	# The Recycle Bin occasionally becomes corrupted
-	# cleanmgr.exe will hang with an "OK/Cancel" box on the screen if this happens
-	my @patterns_to_delete = (
-		'$SYSTEMDRIVE/RECYCLER,.*',
-		'$TEMP,.*',
-		'$TMP,.*',
-		"$cygwin_path/tmp,.*",
-		'$SYSTEMDRIVE/Temp,.*',
-		'$SYSTEMROOT/Temp,.*',
-		'$SYSTEMROOT/ie7updates,.*',
-		'$SYSTEMROOT/ServicePackFiles,.*',
-		'$SYSTEMROOT/SoftwareDistribution/Download,.*',
-		'$SYSTEMROOT/Minidump,.*',
-		'$ALLUSERSPROFILE/Application Data/Microsoft/Dr Watson,.*',
-		'$SYSTEMROOT,.*\\.tmp,1',
-		'$SYSTEMROOT,.*\\$hf_mig\\$.*,1',
-		'$SYSTEMROOT,.*\\$NtUninstall.*,1',
-		'$SYSTEMROOT,.*\\$NtServicePackUninstall.*,1',
-		'$SYSTEMROOT,.*\\$MSI.*Uninstall.*,1',
-		'$SYSTEMROOT,.*AFSCache,1',
-		'$SYSTEMROOT,.*afsd_init\\.log,1',
-		'$SYSTEMDRIVE/Documents and Settings,.*Recent\\/.*,10',
-		'$SYSTEMDRIVE/Documents and Settings,.*Cookies\\/.*,10',
-		'$SYSTEMDRIVE/Documents and Settings,.*Temp\\/.*,10',
-		'$SYSTEMDRIVE/Documents and Settings,.*Temporary Internet Files\\/Content.*\\/.*,10',
-		'$SYSTEMDRIVE,.*pagefile\\.sys,1',
-		$cygwin_path . '/home/root,.*%USERPROFILE%,1',
-		"$system32_path/GroupPolicy/User/Scripts,.*VCL.*cmd"
-	);
-	
-	# Attempt to stop the AFS service, needed to delete AFS files
-	if ($self->service_exists('TransarcAFSDaemon')) {
-		$self->stop_service('TransarcAFSDaemon');
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 run_cleanmgr
+
+ Parameters  : none
+ Returns     : boolean
+ Description : Runs the cleanmgr.exe utility. This is the utility run by
+               selecting the "Disk Cleanup" option when viewing a hard drive's
+               properties.
+
+=cut
+
+sub run_cleanmgr {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
 	}
 
-	# Loop through the directories to empty
-	# Don't care if they aren't emptied
-	for my $base_pattern (@patterns_to_delete) {
-		my ($base_directory, $pattern, $max_depth) = split(',', $base_pattern);
-		notify($ERRORS{'DEBUG'}, 0, "attempting to delete files under $base_directory matching pattern $pattern");
-		$self->delete_files_by_pattern($base_directory, $pattern, $max_depth);
-	}
+	my $computer_node_name = $self->data->get_computer_node_name();
+	my $system32_path = $self->get_system32_path() || return;
+	
+	my $volume_caches_key = 'HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches';
 	
 	# Add the cleanmgr.exe settings to the registry
-	my $registry_string .= <<"EOF";
+	my $registry_string .= <<EOF;
 Windows Registry Editor Version 5.00
 
-; This registry file contains the entries to turn on all cleanmgr options 
-; The state flags below are set to 1, so use the command: 'CLEANMGR /sagerun:1'
+[$volume_caches_key]
 
-[HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\explorer\\VolumeCaches]
-
-[HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\explorer\\VolumeCaches\\Active Setup Temp Folders]
-"StateFlags0001"=dword:00000002
-
-[HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\explorer\\VolumeCaches\\Content Indexer Cleaner]
-"StateFlags0001"=dword:00000002
-
-[HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\VolumeCaches\\Device Driver Packages]
-"StateFlags0001"=dword:00000002
-
-[HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\explorer\\VolumeCaches\\Downloaded Program Files]
-"StateFlags0001"=dword:00000002
-
-[HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\explorer\\VolumeCaches\\Hibernation File]
-"StateFlags0001"=dword:00000002
-
-[HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\explorer\\VolumeCaches\\Internet Cache Files]
-"StateFlags0001"=dword:00000002
-
-[HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\explorer\\VolumeCaches\\Memory Dump Files]
-"StateFlags0001"=dword:00000002
-
-[HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\explorer\\VolumeCaches\\Offline Pages Files]
-"StateFlags0001"=dword:00000002
-
-[HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\explorer\\VolumeCaches\\Old ChkDsk Files]
-"StateFlags0001"=dword:00000002
-
-[HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\explorer\\VolumeCaches\\Previous Installations]
-"StateFlags0001"=dword:00000002
-
-[HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\explorer\\VolumeCaches\\Recycle Bin]
-"StateFlags0001"=dword:00000002
-
-[HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\VolumeCaches\\Service Pack Cleanup]
-"StateFlags0001"=dword:00000000
-
-[HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\explorer\\VolumeCaches\\Setup Log Files]
-"StateFlags0001"=dword:00000000
-
-[HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\explorer\\VolumeCaches\\System error memory dump files]
-"StateFlags0001"=dword:00000002
-
-[HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\explorer\\VolumeCaches\\System error minidump files]
-"StateFlags0001"=dword:00000002
-
-[HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\explorer\\VolumeCaches\\Temporary Files]
-"StateFlags0001"=dword:00000002
-
-[HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\explorer\\VolumeCaches\\Temporary Setup Files]
-"StateFlags0001"=dword:00000002
-
-[HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\explorer\\VolumeCaches\\Temporary Sync Files]
-"StateFlags0001"=dword:00000002
-
-[HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\explorer\\VolumeCaches\\Thumbnail Cache]
-"StateFlags0001"=dword:00000002
-
-[HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\VolumeCaches\\Update Cleanup]
-"StateFlags0001"=dword:00000002
-
-[HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\explorer\\VolumeCaches\\Upgrade Discarded Files]
-"StateFlags0001"=dword:00000002
-
-[HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\explorer\\VolumeCaches\\Windows Error Reporting Archive Files]
-"StateFlags0001"=dword:00000002
-
-[HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\explorer\\VolumeCaches\\Windows Error Reporting Queue Files]
-"StateFlags0001"=dword:00000002
-
-[HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\explorer\\VolumeCaches\\Windows Error Reporting System Archive Files]
-"StateFlags0001"=dword:00000002
-
-[HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\explorer\\VolumeCaches\\Windows Error Reporting System Queue Files]
-"StateFlags0001"=dword:00000002
-
-[HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\VolumeCaches\\Windows ESD installation files]
-"StateFlags0001"=dword:00000002
-
-[HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\VolumeCaches\\Windows Upgrade Log Files]
-"StateFlags0001"=dword:00000002
 EOF
 
-	# Import the string into the registry
-	if ($self->import_registry_string($registry_string)) {
-		notify($ERRORS{'DEBUG'}, 0, "set registry settings to configure the disk cleanup utility");
+	# Retrieve the existing VolumeCaches registry settings
+	# The cleanmgr.exe options may vary depending on version and which Windows features are installed
+	# Dynamically determine all of the options available on the computer
+	my $volume_caches_info = $self->reg_query($volume_caches_key);
+	for my $key_path (keys %$volume_caches_info) {
+		# Get the key name:
+		# HKEY_LOCAL_MACHINE\SOFTWARE\...\VolumeCaches\Temporary Setup Files --> 'Temporary Setup Files'
+		my ($key) = $key_path =~ /([^\\]+)$/;
+		$registry_string .= "[$volume_caches_key\\$key]\n";
+		$registry_string .= "\"StateFlags9999\"=dword:00000002\n\n";
 	}
-	else {
+	
+	# Import the string into the registry
+	if (!$self->import_registry_string($registry_string)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to set registry settings to configure the disk cleanup utility");
+		return;
 	}
 	
 	# Run cleanmgr.exe
-	# The cleanmgr.exe file may not be present - it is not installed by default on Windows Server 2008 and possibly others
-	my $cleanmgr_command = "/bin/cygstart.exe $system32_path/cleanmgr.exe /SAGERUN:01";
+	my $cleanmgr_command = "/bin/cygstart.exe $system32_path/cleanmgr.exe /SAGERUN:9999";
 	my ($cleanmgr_exit_status, $cleanmgr_output) = $self->execute($cleanmgr_command);
 	if (!defined($cleanmgr_output)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to run cleanmgr.exe");
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to run cleanmgr.exe");
 		return;
 	}
 	elsif (grep(/not found/i, @$cleanmgr_output)) {
+		# The cleanmgr.exe file may not be present - it is not installed by default on Windows Server 2008 and possibly others
 		notify($ERRORS{'OK'}, 0, "cleanmgr.exe is not present on $computer_node_name, this is usually because the Desktop Experience feature is not installed");
-	}
-	else {
-		# Wait for cleanmgr.exe to finish - may take a long time
-		my $message = 'waiting for cleanmgr.exe to finish';
-		my $total_wait_seconds = 900;
-		notify($ERRORS{'OK'}, 0, "started cleanmgr.exe, waiting up to $total_wait_seconds seconds for it to finish");
-		
-		if ($self->code_loop_timeout(sub{!$self->is_process_running(@_)}, ['cleanmgr.exe'], $message, $total_wait_seconds, 15)) {
-			notify($ERRORS{'DEBUG'}, 0, "cleanmgr.exe has finished");
-		}
-		else {
-			notify($ERRORS{'WARNING'}, 0, "cleanmgr.exe has not finished after waiting $total_wait_seconds seconds, the Recycle Bin may be corrupt");
-		}
+		return 1;
 	}
 	
-	return 1;
-} ## end sub clean_hard_drive
+	# Wait for cleanmgr.exe to finish - may take a long time
+	my $message = 'waiting for cleanmgr.exe to finish';
+	my $total_wait_seconds = 600;
+	notify($ERRORS{'OK'}, 0, "started cleanmgr.exe, waiting up to $total_wait_seconds seconds for it to finish");
+	if ($self->code_loop_timeout(sub{!$self->is_process_running(@_)}, ['cleanmgr.exe'], $message, $total_wait_seconds, 15)) {
+		notify($ERRORS{'DEBUG'}, 0, "cleanmgr.exe has finished");
+		return 1;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "cleanmgr.exe has not finished after waiting $total_wait_seconds seconds, the Recycle Bin may be corrupt");
+		return 0;
+	}
+}
 
 #/////////////////////////////////////////////////////////////////////////////
 
