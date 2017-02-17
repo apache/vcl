@@ -13491,8 +13491,9 @@ sub ad_join_prepare {
 	# Set specific DNS servers for private and public interfaces if DNS servers are configured
 	$self->set_static_dns_servers();
 	
-	# Delete existing computer with same computer name
-	# Computer may have been joined to a different OU
+	# Need to make sure computer object with same name doesn't already exist
+	# If object exists in different OU, the following error will occur when attempting to join the domain:
+	#    This command cannot be executed on target computer('<name>') due to following error: The account already exists.
 	# Don't bother moving existing objects
 	$self->ad_delete_computer();
 	
@@ -13889,7 +13890,7 @@ sub ad_search {
 	# This is somewhat ugly but was done to reduce code duplication - especially with the Powershell below
 	my $operation;
 	my $calling_subroutine = get_calling_subroutine();
-	if ($calling_subroutine =~ /^(ad_delete_computer)$/) {
+	if ($calling_subroutine =~ /(ad_delete_computer)/) {
 		$operation = 'delete';
 	}
 	else {
@@ -14099,7 +14100,7 @@ sub ad_delete_computer {
 
 =head2 ad_search_computer
 
- Parameters  : $ou_identifier
+ Parameters  : $computer_samaccountname (optional)
  Returns     : string
  Description : Checks if a computer exists in the Active Directory domain with a
                sAMAccountName attribute matching the argument. If found, a
