@@ -14092,7 +14092,6 @@ sub ad_delete_computer {
 			'objectClass' => 'computer',
 			'sAMAccountName' => $computer_samaccountname,
 		},
-		'delete'
 	);
 }
 
