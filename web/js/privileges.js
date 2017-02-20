@@ -231,7 +231,7 @@ function setSelectedPrivNode(nodeid) {
 	RPCwrapper(data, generalPrivCB, 0);
 }
 
-function removeNodesFromTree(idlist) {
+function removeNodesFromTree(idlist, deleteid) {
 	var tree = dijit.byId('privtree');
 	var ids = idlist.split(',');
 	for(var i in ids) {
@@ -240,11 +240,11 @@ function removeNodesFromTree(idlist) {
 			moveitem = undefined;
 			dijit.byId('revertMoveNodeBtn').set('disabled', true);
 		}
-		tree.model.store.fetchItemByIdentity({
-			identity: ids[i],
-			onItem: removeNodesFromTreeCB
-		});
 	}
+	tree.model.store.fetchItemByIdentity({
+		identity: deleteid,
+		onItem: removeNodesFromTreeCB
+	});
 }
 
 function removeNodesFromTreeCB(item, request) {
