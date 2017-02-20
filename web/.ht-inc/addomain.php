@@ -84,19 +84,10 @@ class ADdomain extends Resource {
 			case 'domaindnsname':
 				$w = 12;
 				break;
-			case 'domainnetbiosname':
-				$w = 12;
-				break;
 			case 'username':
 				$w = 9;
 				break;
 			case 'dnsservers':
-				$w = 12;
-				break;
-			case 'domaincontrollers':
-				$w = 17;
-				break;
-			case 'logindescription':
 				$w = 12;
 				break;
 			default:
@@ -126,14 +117,8 @@ class ADdomain extends Resource {
 		switch($field) {
 			case 'domaindnsname':
 				return 'Domain DNS Name';
-			case 'domainnetbiosname':
-				return 'Domain NetBIOS Name';
 			case 'dnsservers':
 				return 'DNS Server(s)';
-			case 'domaincontrollers':
-				return 'Domain Controller(s)';
-			case 'logindescription':
-				return 'Login Description';
 		}
 		return ucfirst($field);
 	}
@@ -157,14 +142,6 @@ class ADdomain extends Resource {
 		}
 
 		if($add) {
-			$esc_name = mysql_real_escape_string($data['name']);
-			$query = "SELECT id FROM addomain WHERE name = '$esc_name'";
-			$qh = doQuery($query);
-			if($row = mysql_fetch_assoc($qh)) {
-				sendJSON(array('status' => 'adderror',
-				               'errormsg' => wordwrap(i('An AD Domain with this name already exists.'), 75, '<br>')));
-				return;
-			}
 			if(! $data['rscid'] = $this->addResource($data)) {
 				sendJSON(array('status' => 'adderror',
 				               'errormsg' => wordwrap(i('Error encountered while trying to create new AD domain. Please contact an admin for assistance.'), 75, '<br>')));
@@ -184,9 +161,6 @@ class ADdomain extends Resource {
 			# domaindnsname
 			if($data['domaindnsname'] != $olddata['domaindnsname'])
 				$updates[] = "domainDNSName = '{$data['domaindnsname']}'";
-			# domainnetbiosname
-			if($data['domainnetbiosname'] != $olddata['domainnetbiosname'])
-				$updates[] = "domainNetBIOSName = '{$data['domainnetbiosname']}'";
 			# username
 			if($data['username'] != $olddata['username'])
 				$updates[] = "username = '{$data['username']}'";
@@ -198,14 +172,6 @@ class ADdomain extends Resource {
 			# dnsservers
 			if($data['dnsservers'] != $olddata['dnsservers'])
 				$updates[] = "dnsServers = '{$data['dnsservers']}'";
-			# domaincontrollers
-			if($data['domaincontrollers'] != $olddata['domaincontrollers'])
-				$updates[] = "domainControllers = '{$data['domaincontrollers']}'";
-			# logindescription
-			/*if($data['logindescription'] != $olddata['logindescription']) {
-				$esc_desc = mysql_real_escape_string($data['logindescription']);
-				$updates[] = "logindescription = '$esc_desc'";
-			}*/
 			if(count($updates)) {
 				$query = "UPDATE addomain SET "
 				       . implode(', ', $updates)
@@ -304,21 +270,15 @@ class ADdomain extends Resource {
 				.	"(name, "
 				.	"ownerid, "
 				.	"domainDNSName, "
-				.	"domainNetBIOSName, "
 				.	"username, "
 				.	"password, "
-				.	"dnsServers, "
-				#.	"logindescription, "
-				.	"domainControllers) "
+				.	"dnsServers) "
 				.	"VALUES ('{$data['name']}', "
 				.	"$ownerid, "
 				.	"'{$data['domaindnsname']}', "
-				.	"'{$data['domainnetbiosname']}', "
 				.	"'{$data['username']}', "
 				.	"'$esc_pass', "
-				.	"'{$data['dnsservers']}', "
-				#.	"'$esc_desc', "
-				.	"'{$data['domaincontrollers']}')";
+				.	"'{$data['dnsservers']}')";
 		doQuery($query);
 
 		$rscid = dbLastInsertID();
@@ -372,15 +332,10 @@ class ADdomain extends Resource {
 		$cont = addContinuationsEntry('AJvalidateUserid');
 		$h .= "<input type=\"hidden\" id=\"valuseridcont\" value=\"$cont\">\n";
 		# domain dns name
-		$hostbase = '([A-Za-z0-9]{1,63})(\.[A-Za-z0-9-_]+)*(\.?[A-Za-z0-9])';
+		$hostbase = '([-A-Za-z0-9]{1,63})(\.[A-Za-z0-9-_]+)*(\.?[A-Za-z0-9])';
 		$errmsg = i("Domain DNS Name should be in the format domain.tld and can only contain letters, numbers, dashes(-), periods(.), and underscores(_) (e.g. myuniversity.edu)");
 		$h .= labeledFormItem('domaindnsname', i('Domain DNS Name'), 'text', "^$hostbase$",
 		                      1, '', $errmsg, '', '', '200px', helpIcon('domaindnsnamehelp')); 
-		# domain netbios name
-		$errmsg = i("Domain NetBIOS Name can only contain letters, numbers, dashes(-), periods(.), and underscores(_) and can be up to 15 characters long");
-		$h .= labeledFormItem('domainnetbiosname', i('Domain NetBIOS Name'), 'text', '^[a-zA-Z0-9_][-a-zA-Z0-9_\.]{0,14}$',
-		                      1, '', $errmsg, '', '', '200px', helpIcon('domainnetbiosnamehelp')); 
-		$h .= "<br>\n";
 		# username
 		$errmsg = i("Username cannot contain single (') or double (&quot;) quotes, less than (&lt;), or greater than (&gt;) and can be from 2 to 64 characters long");
 		$h .= labeledFormItem('username', i('Username'), 'text', '^([A-Za-z0-9-!@#$%^&\*\(\)_=\+\[\]{}\\\|:;,\./\?~` ]){2,64}$',
@@ -397,14 +352,6 @@ class ADdomain extends Resource {
 		$errmsg = i("Invalid IP address specified - must be a valid IPV4 address");
 		$h .= labeledFormItem('dnsservers', i('DNS Server(s)'), 'text', $reg, 0, '', $errmsg,
 		                      '', '', '300px', helpIcon('dnsservershelp')); 
-		# domain controllers list
-		$reg = "$hostbase(,$hostbase){0,4}";
-		$errmsg = i("Invalid Domain Controller specified. Must be comma delimited list of hostnames or IP addresses, with up to 5 allowed");
-		$h .= labeledFormItem('domaincontrollers', i('Domain Controller(s)'), 'text', $reg, 0, '', $errmsg,
-		                      '', '', '300px', helpIcon('domaincontrollershelp')); 
-		# login description
-		/*$h .= labeledFormItem('logindescription', i('Login Description'), 'textarea', '',
-		                      1, '', '', '', '', '300px', helpIcon('logindescriptionhelp'));*/
 
 		$h .= "</div>\n"; # center
 		$h .= "</div>\n"; # addomaindlgcontent
@@ -446,11 +393,8 @@ class ADdomain extends Resource {
 		$h .= "<div id=\"tooltips\">\n";
 		# todo fill in all help contents
 		$h .= helpTooltip('domaindnsnamehelp', i(""));
-		$h .= helpTooltip('domainnetbiosnamehelp', i(""));
 		$h .= helpTooltip('usernamehelp', i("These credentials will be used to register reserved computers with AD."));
 		$h .= helpTooltip('dnsservershelp', i(""));
-		$h .= helpTooltip('domaincontrollershelp', i(""));
-		#$h .= helpTooltip('logindescriptionhelp', i(""));
 		$h .= "</div>\n"; # tooltips
 
 		return $h;
@@ -483,18 +427,10 @@ class ADdomain extends Resource {
 		$return["name"] = processInputVar("name", ARG_STRING);
 		$return["owner"] = processInputVar("owner", ARG_STRING, "{$user["unityid"]}@{$user['affiliation']}");
 		$return["domaindnsname"] = processInputVar("domaindnsname", ARG_STRING);
-		$return["domainnetbiosname"] = processInputVar("domainnetbiosname", ARG_STRING);
 		$return["username"] = processInputVar("username", ARG_STRING);
 		$return["password"] = processInputVar("password", ARG_STRING);
 		$return["password2"] = processInputVar("password2", ARG_STRING);
 		$return["dnsservers"] = processInputVar("dnsservers", ARG_STRING);
-		$return["domaincontrollers"] = processInputVar("domaincontrollers", ARG_STRING);
-		/*$return["logindescription"] = processInputVar("logindescription", ARG_STRING);
-
-		$return['logindescription'] = preg_replace("/[\n\s]*$/", '', $return['logindescription']);
-		$return['logindescription'] = preg_replace("/\r/", '', $return['logindescription']);
-		$return['logindescription'] = htmlspecialchars($return['logindescription']);
-		$return['logindescription'] = preg_replace("/\n/", '<br>', $return['logindescription']);*/
 
 		if(! preg_match("/^([A-Za-z0-9-!@#$%^&\*\(\)_=\+\[\]{}\\\|:;,\.\/\?~` ]){2,30}$/", $return['name'])) {
 			$return['error'] = 1;
@@ -504,6 +440,10 @@ class ADdomain extends Resource {
 			$return['error'] = 1;
 			$errormsg[] = i("An AD domain already exists with this name.");
 		}
+		elseif($this->checkExistingField('domainDNSName', $return['domaindnsname'], $return['rscid'])) {
+			$return['error'] = 1;
+			$errormsg[] = i("An AD domain already exists with this Domain DNS Name.");
+		}
 		if(! validateUserid($return['owner'])) {
 			$return['error'] = 1;
 			$errormsg[] = i("Submitted owner is not valid");
@@ -512,10 +452,6 @@ class ADdomain extends Resource {
 		if(! preg_match('/^([A-Za-z0-9]{1,63})(\.[A-Za-z0-9-_]+)*(\.?[A-Za-z0-9])$/', $return['domaindnsname'])) {
 			$return['error'] = 1;
 			$errormsg[] = i("Domain DNS Name should be in the format domain.tld and can only contain letters, numbers, dashes(-), periods(.), and underscores(_) (e.g. myuniversity.edu)");
-		}
-		if(! preg_match('/^[a-zA-Z0-9_][-a-zA-Z0-9_\.]{0,14}$/', $return['domainnetbiosname'])) {
-			$return['error'] = 1;
-			$errormsg[] = i("Domain NetBIOS Name can only contain letters, numbers, dashes(-), periods(.), and underscores(_) and can be up to 15 characters long");
 		}
 
 		if(! preg_match('/^([A-Za-z0-9-!@#$%^&\*\(\)_=\+\[\]{}\\\|:;,\.\/\?~` ]){2,64}$/', $return['username'])) {
@@ -542,25 +478,6 @@ class ADdomain extends Resource {
 				break;
 			}
 		}
-
-		$dcs = explode(',', $return['domaincontrollers']);
-		if(count($dcs) > 5) {
-			$return['error'] = 1;
-			$errormsg[] = i("Too many Domain Controllers specified, up to 5 are allowed");
-		}
-		else {
-			foreach($dcs as $dc) {
-				if(! validateHostname($dc) && ! validateIPv4addr($dc)) {
-					$return['error'] = 1;
-					$errormsg[] = i("Invalid Domain Controller specified. Must be comman delimited list of hostnames or IP addresses, with up to 5 allowed");
-				}
-			}
-		}
-
-		/*if(! preg_match('/^$/', $return['logindescription'])) {
-			$return['error'] = 1;
-			$errormsg[] = i("");
-		}*/
 
 		if($return['error'])
 			$return['errormsg'] = implode('<br>', $errormsg);

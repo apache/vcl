@@ -8858,11 +8858,8 @@ function getNATports($resid) {
 /// \b ownerid\n
 /// \b owner\n
 /// \b domaindnsname\n
-/// \b domainnetbiosname\n
 /// \b username\n
-/// \b dnsservers\n
-/// \b domaincontrollers\n
-/// \b logindescription
+/// \b dnsservers
 ///
 /// \brief builds an array of AD domains
 ///
@@ -8874,11 +8871,8 @@ function getADdomains($addomainid=0) {
 	       .        "ad.ownerid, "
 	       .        "CONCAT(u.unityid, '@', a.name) AS owner, "
 	       .        "ad.domainDNSName AS domaindnsname, "
-	       .        "ad.domainNetBIOSName AS domainnetbiosname, "
 	       .        "ad.username, "
-	       .        "ad.dnsServers AS dnsservers, "
-	       #.        "ad.logindescription, "
-	       .        "ad.domainControllers AS domaincontrollers "
+	       .        "ad.dnsServers AS dnsservers "
 	       . "FROM addomain ad, "
 	       .      "affiliation a, "
 	       .      "user u, "

@@ -52,11 +52,8 @@ function inlineEditResourceCB(data, ioArgs) {
 		dijit.byId('owner').set('value', data.items.data.owner);
 
 		dijit.byId('domaindnsname').set('value', data.items.data.domaindnsname);
-		dijit.byId('domainnetbiosname').set('value', data.items.data.domainnetbiosname);
 		dijit.byId('username').set('value', data.items.data.username);
 		dijit.byId('dnsservers').set('value', data.items.data.dnsservers);
-		dijit.byId('domaincontrollers').set('value', data.items.data.domaincontrollers);
-		//dijit.byId('logindescription').set('value', data.items.data.logindescription);
 
 		dijit.byId('password').set('required', false);
 		dijit.byId('password2').set('required', false);
@@ -70,7 +67,7 @@ function inlineEditResourceCB(data, ioArgs) {
 }
 
 function resetEditResource() {
-	var fields = ['name', 'owner', 'domaindnsname', 'domainnetbiosname', 'username', 'password', 'password2', 'dnsservers', 'domaincontrollers'/*, 'logindescription'*/];
+	var fields = ['name', 'owner', 'domaindnsname', 'username', 'password', 'password2', 'dnsservers'];
 	for(var i = 0; i < fields.length; i++) {
 		dijit.byId(fields[i]).reset();
 	}
@@ -79,7 +76,7 @@ function resetEditResource() {
 
 function saveResource() {
 	var errobj = dojo.byId('addeditdlgerrmsg');
-	var fields = ['name', 'owner', 'domaindnsname', 'domainnetbiosname', 'username', 'password', 'password2', 'dnsservers', 'domaincontrollers'/*, 'logindescription'*/];
+	var fields = ['name', 'owner', 'domaindnsname', 'username', 'password', 'password2', 'dnsservers'];
 
 	if(dojo.byId('editresid').value == 0)
 		var data = {continuation: dojo.byId('addresourcecont').value};
@@ -131,7 +128,7 @@ function saveResourceCB(data, ioArgs) {
 			resourcegrid.store.fetch({
 				query: {id: data.items.data.id},
 				onItem: function(item) {
-					var fields = ['name', 'owner', 'domaindnsname', 'domainnetbiosname', 'username','dnsservers', 'domaincontrollers'/*, 'logindescription'*/];
+					var fields = ['name', 'owner', 'domaindnsname', 'username','dnsservers'];
 					for(var i = 0; i < fields.length; i++) {
 						dijit.byId(fields[i]).reset();
 						resourcegrid.store.setValue(item, fields[i], data.items.data[fields[i]]);
