@@ -1186,7 +1186,7 @@ class Resource {
 		$h .= "</td>\n";
 		# transfer buttons
 		$h .= "<td style=\"vertical-align: middle;\">\n";
-		$h .= dijitButton('', "<div style=\"width: 50px;\">&lt;-" . i("Add") . "</div>",
+		$h .= dijitButton('', "<div style=\"width: 60px;\">&lt;-" . i("Add") . "</div>",
 		                  "resource.addRemItem('addmapgrpcont', 'groups', 'outmapgroups');");
 		$cdata = $this->basecdata;
 		$cdata['mode'] = 'add';
@@ -1195,7 +1195,7 @@ class Resource {
 		$h .= "<br>\n";
 		$h .= "<br>\n";
 		$h .= "<br>\n";
-		$h .= dijitButton('', "<div style=\"width: 50px;\">" . i("Remove") . "-&gt;</div>",
+		$h .= dijitButton('', "<div style=\"width: 60px;\">" . i("Remove") . "-&gt;</div>",
 		                  "resource.addRemItem('remmapgrpcont', 'groups', 'inmapgroups');");
 		$cdata['mode'] = 'remove';
 		$cont = addContinuationsEntry('AJaddRemMapToGroup', $cdata);
@@ -1380,14 +1380,14 @@ class Resource {
 		$h .= "</td>\n";
 		# transfer buttons
 		$h .= "<td style=\"vertical-align: middle;\">\n";
-		$h .= dijitButton('', "<div style=\"width: 50px;\">&lt;-" . i("Add") . "</div>",
+		$h .= dijitButton('', "<div style=\"width: 60px;\">&lt;-" . i("Add") . "</div>",
 		                  "resource.addRemItem('addmaptogrpcont', 'maptogroups', 'outmaptogroups');");
 		$cdata = $this->basecdata;
 		$cdata['mode'] = 'add';
 		$cont = addContinuationsEntry('AJaddRemGroupMapTo', $cdata);
 		$h .= "<input type=\"hidden\" id=\"addmaptogrpcont\" value=\"$cont\">\n";
 		$h .= "<br><br><br>\n";
-		$h .= dijitButton('', "<div style=\"width: 50px;\">" . i("Remove") . "-&gt;</div>",
+		$h .= dijitButton('', "<div style=\"width: 60px;\">" . i("Remove") . "-&gt;</div>",
 		                  "resource.addRemItem('remmaptogrpcont', 'maptogroups', 'inmaptogroups');");
 		$cdata['mode'] = 'remove';
 		$cont = addContinuationsEntry('AJaddRemGroupMapTo', $cdata);
