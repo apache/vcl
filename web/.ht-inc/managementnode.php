@@ -478,7 +478,7 @@ class ManagementNode extends Resource {
 		$h .= helpTooltip('imagelibgrouphelp', i("This management node will try to get image files from other nodes in the selected group."));
 		$h .= helpTooltip('imagelibuserhelp', i("userid to use for scp when copying image files from another management node"));
 		$h .= helpTooltip('imagelibkeyhelp', i("path to ssh identity key file to use for scp when copying image files from another management node"));
-		$h .= helpTooltip('ipconfighelp', i("Method by which public NIC on nodes controlled by this management node recive their network configuration <ul><li>Dynamic DHCP - nodes receive an address via DHCP from a pool of addresses</li><li>Manual DHCP - nodes always receive the same address via DHCP</li><li>Static - VCL will configure the public address of the node</li></ul>"));
+		$h .= helpTooltip('ipconfighelp', i("Method by which public NIC on nodes controlled by this management node receive their network configuration <ul><li>Dynamic DHCP - nodes receive an address via DHCP from a pool of addresses</li><li>Manual DHCP - nodes always receive the same address via DHCP</li><li>Static - VCL will configure the public address of the node</li></ul>"));
 		$h .= helpTooltip('netmaskhelp', i("Netmask for public NIC"));
 		$h .= helpTooltip('gatewayhelp', i("IP address of gateway for public NIC"));
 		$h .= helpTooltip('dnsserverhelp', i("comma delimited list of IP addresses of DNS servers for public network"));
