@@ -1988,7 +1988,7 @@ msgstr ""
 #: managementnode.php:480
 msgid ""
 "Method by which public NIC on nodes controlled by this management node "
-"recive their network configuration <ul><li>Dynamic DHCP - nodes receive an "
+"receive their network configuration <ul><li>Dynamic DHCP - nodes receive an "
 "address via DHCP from a pool of addresses</li><li>Manual DHCP - nodes always "
 "receive the same address via DHCP</li><li>Static - VCL will configure the "
 "public address of the node</li></ul>"
