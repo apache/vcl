@@ -3587,7 +3587,7 @@ EOF
 	
 	# Retrieve AD info if configured for the image
 	my $image_id = $image_info->{id};
-	my $domain_info = get_image_active_directory_domain_info($image_id);
+	my $domain_info = get_image_active_directory_domain_info($image_id, $no_cache);
 	$image_info->{imagedomain} = $domain_info;
 	
 	#notify($ERRORS{'DEBUG'}, 0, "retrieved info for image '$image_identifier':\n" . format_data($image_info));
@@ -14604,20 +14604,23 @@ EOF
 
 =head2 get_image_active_directory_domain_info
 
- Parameters  : $image_id
+ Parameters  : $image_id, $no_cache (optional)
  Returns     : Hash containing image domain columns
  Description : Gets the imagedomain information from the database
 
 =cut
 
 sub get_image_active_directory_domain_info {
-	my ($image_id) = @_;
+	my ($image_id, $no_cache) = @_;
 	if (!$image_id) {
 		notify($ERRORS{'WARNING'}, 0, "image ID argument was not specified");
 		return;
 	}
 	
-	return $ENV{image_active_directory_domain_info} if defined($ENV{image_active_directory_domain_info});
+	if (!$no_cache && defined($ENV{image_active_directory_domain_info})) {
+		notify($ERRORS{'DEBUG'}, 0, "returning cached Active Directory info for image $image_id");
+		return $ENV{image_active_directory_domain_info};
+	}
 	
 	# Get a hash ref containing the database column names
 	my $database_table_columns = get_database_table_columns();
@@ -14656,8 +14659,9 @@ EOF
 
 	# Check to make sure 1 row was returned
 	if (scalar @selected_rows == 0) {
+		$ENV{image_active_directory_domain_info} = {};
 		notify($ERRORS{'DEBUG'}, 0, "image $image_id is not configured for Active Directory");
-		return;
+		return $ENV{image_active_directory_domain_info};
 	}
 
 	# Get the single row returned from the select statement
