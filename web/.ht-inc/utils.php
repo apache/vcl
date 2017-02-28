@@ -5489,7 +5489,9 @@ function findManagementNode($compid, $start, $nowfuture) {
 /// \b forcheckout - whether or not the image is intended for checkout\n
 /// \b password - password for this computer\n
 /// \b connectIP - IP to which user will connect\n
-/// \b remoteIP - IP of remote user\n\n
+/// \b remoteIP - IP of remote user\n
+/// \b domainDNSName - AD domain DNS name associated with image if image is
+/// using AD integration; empty string if AD integration not being used\n\n
 /// an array of arrays of passwords whose key is 'passwds', with the next key
 /// being the reservationid and the elements being the userid as a key and that
 /// user's password as the value
@@ -5544,9 +5546,12 @@ function getRequestInfo($id, $returnNULL=0) {
 	       .        "i.forcheckout, "
 	       .        "rs.pw AS password, "
 	       .        "COALESCE(nh.publicIPaddress, c.IPaddress) AS connectIP, "
-	       .        "rs.remoteIP "
+	       .        "rs.remoteIP, "
+	       .        "ad.domainDNSName "
 	       . "FROM reservation rs, "
-	       .      "image i, "
+	       .      "image i "
+	       . "LEFT JOIN imageaddomain iadd ON (i.id = iadd.imageid) "
+	       . "LEFT JOIN addomain ad ON (iadd.addomainid = ad.id), "
 	       .      "imagerevision ir, "
 	       .      "OS o, "
 	       .      "computer c "
@@ -9944,9 +9949,12 @@ function sendRDPfile() {
 		print "username:s:Administrator\r\n";
 	else {
 		if(preg_match('/(.*)@(.*)/', $user['unityid'], $matches))
-			print "username:s:" . $matches[1] . "\r\n";
+			$userid =  $matches[1];
 		else
-			print "username:s:" . $user["unityid"] . "\r\n";
+			$userid = $user["unityid"];
+		if($request['reservations'][0]['domainDNSName'] != '' && ! strlen($passwd))
+			$userid .= "@" . $request['reservations'][0]['domainDNSName'];
+		print "username:s:$userid\r\n";
 	}
 	print "clear password:s:$passwd\r\n";
 	print "domain:s:\r\n";
