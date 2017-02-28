@@ -160,6 +160,7 @@ function selectAuth() {
 	print i("Please select an authentication method to use:") . "<br><br>\n";
 	if(strlen($authtype))
 		print "<font color=red>" . i("Selected method failed, please try again") . "</font><br>\n";
+	$methods = array();
 	foreach(array_keys($authMechs) as $mech)
 		$methods["$mech"] = $mech;
 	print "<FORM action=\"" . BASEURL . SCRIPT . "\" method=post name=loginform>\n";
