@@ -664,8 +664,11 @@ function editOrAddGroup($state) {
 				print "Type: Federated<br><br>\n";
 			$editusergroup = 1;
 		}
-		else
+		else {
 			print "<H2>Edit Resource Group</H2>\n";
+			list($junk, $name) = explode('/', $resourcegroups[$data['groupid']]["name"]);
+			print "$name<br><br>\n";
+		}
 	}
 	if(($state && $data["type"] == "user") || $data["isowner"] ||
 		$data["type"] == "resource") {
@@ -692,11 +695,20 @@ function editOrAddGroup($state) {
 			$tmp = explode('@', $usergroups[$groupid]['name']);
 			if($tmp[0] == 'Specify End Time' ||
 				$tmp[0] == 'Allow No User Check' ||
-				$tmp[0] == 'Default for Editable by')
+				$tmp[0] == 'Default for Editable by' ||
+				$tmp[0] == 'manageNewImages')
 				$editname = 0;
 		}
-		if($data['type'] == 'resource' ||
-		   ($editname && $data['courseroll'] == 0 && $data['custom'] == 1)) {
+		if($data['type'] == 'user' && $state == 0 &&
+		   ($data['courseroll'] == 1 || $data['custom'] == 0)) {
+			$editname = 0;
+		}
+		if($data['type'] == 'resource' && $state == 0 &&
+		   ($resourcegroups[$groupid]['name'] == 'computer/newimages' ||
+			$resourcegroups[$groupid]['name'] == 'computer/newvmimages')) {
+			$editname = 0;
+		}
+		if($editname) {
 			print "  <TR>\n";
 			print "    <TH align=right>Name:</TH>\n";
 			print "    <TD><INPUT type=text name=name value=\"{$data['name']}\" ";
@@ -865,6 +877,8 @@ function editOrAddGroup($state) {
 			               'groupid' => $data['groupid'],
 			               'isowner' => $data['isowner'],
 			               'editname' => $editname);
+			if($editname == 0)
+				$cdata['name'] = $data['name'];
 			if($data['type'] == 'resource') {
 				$cdata['resourcetypeid'] = $resourcetypeid;
 				if(! empty($dispUserGrpIDs))
@@ -873,10 +887,8 @@ function editOrAddGroup($state) {
 					$cdata['ownergroupids'] = implode(',', array_keys($dispUserGrpIDsAllAffils));
 			}
 			else {
-				if($data['courseroll'] == 1 || $data['custom'] == 0 || $editname == 0) {
-					$cdata['name'] = $data['name'];
+				if($editname == 0)
 					$cdata['affiliationid'] = $data['affiliationid'];
-				}
 				$cdata['selectAffil'] = $selectAffil;
 				$cdata['groupwasnone'] = $groupwasnone;
 				$cdata['custom'] = $data['custom'];
@@ -1434,8 +1446,8 @@ function confirmEditOrAddGroup($state) {
 	print "<DIV align=center>\n";
 	print "<H2>$title</H2>\n";
 	print "$question<br><br>\n";
-	if($data['courseroll'] == 1 || $data['custom'] == 0 || $editname == 0) {
-		if($user['showallgroups'])
+	if($editname == 0) {
+		if($data['type'] == 'user' && $user['showallgroups'])
 			print "{$data['name']}@{$affils[$data['affiliationid']]}<br><br>\n";
 		else
 			print "{$data['name']}<br><br>\n";
@@ -1614,7 +1626,8 @@ function AJconfirmDeleteGroup() {
 		if($usergroups[$groupid]['groupaffiliationid'] == 1 &&
 		   ($checkname == 'Specify End Time' ||
 		   $checkname == 'Allow No User Check' ||
-		   $checkname == 'Default for Editable by')) {
+		   $checkname == 'Default for Editable by' ||
+		   $checkname == 'manageNewImages')) {
 			$rt = array('status' => 'noaccess',
 			            'title' => _('Delete User Group Error'),
 			            'msg' => sprintf(_('%s is a system group that cannot be deleted'), "<strong>{$usergroups[$groupid]['name']}</strong>"));
@@ -1651,6 +1664,15 @@ function AJconfirmDeleteGroup() {
 		$target = "";
 	}
 	else {
+		if($resourcegroups[$groupid]['name'] == 'computer/newimages' ||
+			$resourcegroups[$groupid]['name'] == 'computer/newvmimages') {
+			$rt = array('status' => 'noaccess',
+			            'title' => _('Delete Resource Group Error'),
+			            'msg' => _('The submitted resource group is a system group that cannot be deleted.'));
+			sendJSON($rt);
+			return;
+		}
+
 		$title = _("Delete Resource Group");
 		$usemsg = wordwrap(_("This group is currently assigned to at least one node in the privilege tree. You cannot delete it until it is no longer in use."), 75, "<br>");
 		$question = _("Delete the following resource group?");
