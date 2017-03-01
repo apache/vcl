@@ -1712,7 +1712,7 @@ function userLookup() {
 		# image access
 		print "<table>\n";
 		print "  <tr>\n";
-		print "    <th>Images User Has Access To:<th>\n";
+		print "    <th style=\"vertical-align: top;\">Images User Has Access To:<th>\n";
 		print "    <td>\n";
 		foreach($userResources['image'] as $img)
 			print "      $img<br>\n";
