@@ -130,6 +130,8 @@ function getHeader($refresh) {
 		$rt .= "                <ul class=\"dropdown-menu\">\n";
 		$items = array('dashboard', 'statistics', 'userLookup');
 		foreach($items as $item) {
+			if(! isset($menu[$item]))
+				continue;
 			$selected = '';
 			if($menu[$item]['selected'])
 				$selected = ' class="active"';
