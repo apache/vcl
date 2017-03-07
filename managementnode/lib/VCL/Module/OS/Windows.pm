@@ -947,7 +947,7 @@ sub post_load {
 =cut
 
 	if ($imagedomain_domaindnsname) {
-		if (!$self->ad_join()) {
+		if (!$self->ad_check()) {
 			notify($ERRORS{'WARNING'}, 0, "failed to join Active Directory domain");
 			return 0;
 		}
@@ -13502,6 +13502,149 @@ sub ad_join_prepare {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 node_status_os_check
+
+ Parameters  : none
+ Returns     : boolean
+ Description : Called from provisioning module's node_status subroutine. This
+               checks if the loaded computer's Active Directory configuration is
+               correct if image is configured to join an AD domain.
+
+=cut
+
+sub node_status_os_check {
+	my $self = shift;	
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Check if computer AD configuration is correct if image is configured for AD
+	# Returning false indicates AD configuration could not be corrected and calling subroutine should reload the computer
+	return $self->ad_check();
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 ad_check
+
+ Parameters  : none
+ Returns     : boolean
+ Description : Checks if the computer is joined to an Active Directory domain
+               and located in the correct OU.
+
+=cut
+
+sub ad_check {
+	my $self = shift;	
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $computer_name	= $self->data->get_computer_short_name();
+	my $image_domain_dns_name = $self->data->get_image_domain_dns_name();
+	
+	# Check if the computer is joined to any AD domain
+	my $computer_current_domain_name = $self->ad_get_current_domain();
+	
+	if (!$image_domain_dns_name) {
+		# Computer should NOT be joined to an AD domain
+		if (!$computer_current_domain_name) {
+			notify($ERRORS{'OK'}, 0, "image is not configured for Active Directory and $computer_name is not joined to a domain, returning 1");
+			return 1;
+		}
+		
+		# Computer incorrectly joined to an AD domain, attempt to unjoin the domain
+		notify($ERRORS{'OK'}, 0, "$computer_name is joined to the $computer_current_domain_name domain but the image is not configured for Active Directory, attempting to unjoin the domain");
+		if ($self->ad_unjoin()) {
+			notify($ERRORS{'OK'}, 0, "image is not configured for Active Directory, unjoined $computer_name from $computer_current_domain_name domain, returning 1");
+			return 1;
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "image is not configured for Active Directory, failed to unjoin $computer_name from $computer_current_domain_name domain, returning undefined");
+			return;
+		}
+	}
+	
+	# Computer should be joined to AD domain
+	if (!$computer_current_domain_name) {
+		# Computer is not joined to an AD domain, return the result of attempting to join
+		notify($ERRORS{'OK'}, 0, "image is configured to join the $image_domain_dns_name domain, $computer_name is not joined to a domain, attempting to join the domain");
+		return $self->ad_join();
+	}
+	
+	
+	# Computer is joined to an AD domain, check if it's in the correct domain
+	if ($computer_current_domain_name ne $image_domain_dns_name) {
+		# Computer is not joined to the correct domain, attempt to unjoin and then rejoin
+		notify($ERRORS{'DEBUG'}, 0, "$computer_name is joined to the $computer_current_domain_name domain, image is configured to join the $image_domain_dns_name, attempting to unjoin then join the correct domain");
+		if (!$self->ad_unjoin()) {
+			notify($ERRORS{'WARNING'}, 0, "image is configured to join the $image_domain_dns_name, failed to unjoin $computer_name from the $computer_current_domain_name domain, returning undefined");
+			return;
+		}
+		elsif (!$self->ad_join()) {
+			notify($ERRORS{'WARNING'}, 0, "image is configured to join the $image_domain_dns_name, unjoined $computer_name from the incorrect $computer_current_domain_name domain but failed to rejoin the correct $image_domain_dns_name domain, returning undefined");
+			return;
+		}
+		else {
+			notify($ERRORS{'OK'}, 0, "unjoined $computer_name from the incorrect $computer_current_domain_name and rejoined to the correct domain: $image_domain_dns_name, returning 1");
+			return 1;
+		}
+	}
+	
+	# Computer is joined to the correct AD domain, make sure computer object is in the correct OU
+	
+	# Determine the OU configured for the image
+	my $image_ou_dn = $self->get_ad_computer_ou_dn();
+	if (!$image_ou_dn) {
+		notify($ERRORS{'WARNING'}, 0, "image is configured to join the $image_domain_dns_name domain but proper computer OU DN could not be determined, returning undefined");
+		return;
+	}
+	
+	# Get the computer's current OU
+	my $computer_current_dn = $self->ad_search_computer();
+	if (!$computer_current_dn) {
+		notify($ERRORS{'WARNING'}, 0, "$computer_name is joined to the correct $computer_current_domain_name domain but current OU could not be determined, assuming computer object is in the correct OU, returning 1");
+		return 1;
+	}
+	
+	# Extract the OU DN from the DN of the computer object
+	my ($computer_current_ou_dn) = $computer_current_dn =~ /^[^,]+,(OU=.+)$/;
+	if (!$computer_current_ou_dn) {
+		notify($ERRORS{'WARNING'}, 0, "$computer_name is joined to the correct $computer_current_domain_name domain but current OU DN could not be parsed from current computer object DN: '$computer_current_dn', assuming computer object is in the correct OU, returning 1");
+		return 1;
+	}
+	
+	if ($computer_current_ou_dn =~ /^$image_ou_dn$/i) {
+		notify($ERRORS{'OK'}, 0, "$computer_name is joined to the correct domain and in the correct OU, returning 1:\n" .
+			"current domain: $computer_current_domain_name\n" .
+			"computer object OU: $computer_current_ou_dn"
+		);
+		return 1;
+	}
+	
+	# Computer is in the wrong OU
+	notify($ERRORS{'OK'}, 0, "$computer_name is joined to the correct $computer_current_domain_name domain but located in the wrong OU, attempting to unjoin then rejoin the domain in the correct OU:\n" .
+		"OU configured for image    : $image_ou_dn\n" .
+		"current computer object OU : $computer_current_ou_dn"
+	);
+	if (!$self->ad_unjoin()) {
+		notify($ERRORS{'WARNING'}, 0, "failed to unjoin $computer_name from the $computer_current_domain_name domain in order to rejoin in the correct OU, returning undefined");
+		return;
+	}
+	elsif (!$self->ad_join()) {
+		notify($ERRORS{'WARNING'}, 0, "failed to rejoin $computer_name to the correct OU in the $image_domain_dns_name domain: '$image_ou_dn', returning undefined");
+		return;
+	}
+	else {
+		notify($ERRORS{'OK'}, 0, "rejoined $computer_name to the correct OU in the $image_domain_dns_name domain: '$image_ou_dn', returning 1");
+		return 1;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 =head2 ad_join
 
  Parameters  : none
@@ -13545,43 +13688,6 @@ sub ad_join {
 		return;
 	}
 	
-	# Make sure the computer is not already a member of a domain
-	# TODO: add logic to check if computer belongs to the correct domain in the correct OU
-	# If not, remove and rejoin
-	my $current_domain_name = $self->ad_get_current_domain();
-	if ($current_domain_name) {
-		if ($current_domain_name ne $domain_dns_name) {
-			notify($ERRORS{'WARNING'}, 0, "unable to add $computer_name to $domain_dns_name domain, it is already a member of a different domain: $current_domain_name");
-			return;
-		}
-		
-		# Search for the computer object in the domain
-		my $current_computer_dn = $self->ad_search_computer();
-		if (!$current_computer_dn) {
-			notify($ERRORS{'WARNING'}, 0, "unable to add $computer_name to $domain_dns_name domain, it appears to already a member of the domain but the current DN could not be determined");
-			return;
-		}
-		
-		# Extract the OU DN from the computer DN
-		my ($current_computer_ou_dn) = $current_computer_dn =~ /^[^,]+,(OU=.+)$/;
-		if (!$current_computer_ou_dn) {
-			notify($ERRORS{'WARNING'}, 0, "unable to add $computer_name to $domain_dns_name domain, failed to parse OU DN from current computer DN: $current_computer_dn");
-			return;
-		}
-		
-		if ($current_computer_ou_dn =~ /^$computer_ou_dn$/i) {
-			notify($ERRORS{'OK'}, 0, "$computer_name is already joined to $domain_dns_name domain and in the correct OU: $current_computer_ou_dn");
-			return 1;
-		}
-		else {
-			notify($ERRORS{'WARNING'}, 0, "$computer_name is already joined to $domain_dns_name domain but in the a different OU:\n" .
-				"correct OU: $computer_ou_dn\n" .
-				"current OU: $current_computer_ou_dn"
-			);
-			$self->ad_unjoin() || return;
-		}
-	}
-	
 	# Figure out/fix the computer OU and assemble optional section to add to PowerShell command
 	my $domain_computer_command_section = '';
 	if ($computer_ou_dn) {
@@ -13594,7 +13700,7 @@ sub ad_join {
 		"domain password: $domain_password\n" .
 		"domain computer OU DN: " . ($computer_ou_dn ? $computer_ou_dn : '<not configured>')
 	);
-
+	
 	# Perform preparation tasks
 	$self->ad_join_prepare() || return;
 	
@@ -13719,69 +13825,124 @@ sub ad_unjoin {
 	
 	my $computer_name	= $self->data->get_computer_short_name();
 	my $image_name	= $self->data->get_image_name();
+	my $system32_path = $self->get_system32_path() || return;
 	
-	my $domain_dns_name = $self->data->get_image_domain_dns_name();
-	my $domain_username = $self->data->get_image_domain_username();
-	my $domain_password = $self->data->get_image_domain_password();
-	
-	if (!defined($domain_dns_name)) {
-		notify($ERRORS{'WARNING'}, 0, "unable to remove $computer_name from AD, image $image_name is not assigned to a domain");
-		return;
-	}
-	elsif (!defined($domain_username)) {
-		notify($ERRORS{'WARNING'}, 0, "unable to remove $computer_name from AD, user name is not configured for $domain_dns_name domain");
-		return;
-	}
-	elsif (!defined($domain_password)) {
-		notify($ERRORS{'WARNING'}, 0, "unable to remove $computer_name from AD, password is not configured for $domain_dns_name domain");
-		return;
-	}
-	
-	if (!$self->ad_get_current_domain()) {
+	my $computer_current_domain = $self->ad_get_current_domain();
+	if (!$computer_current_domain) {
 		notify($ERRORS{'DEBUG'}, 0, "$computer_name does not need to be removed from AD because it is not currently joined to a domain");
 		return 1;
 	}
 	
-	notify($ERRORS{'DEBUG'}, 0, "attempting to unjoin $computer_name from AD");
+	# Expected output:
+	# Executing (\\<COMPUTERNAME>\ROOT\CIMV2:Win32_ComputerSystem.Name="<COMPUTERNAME>")->UnJoinDomainOrWorkgroup()
+	# Method execution successful.s
+	# Out Parameters:
+	# instance of __PARAMETERS
+	# {
+	#       ReturnValue = 0;
+	# };
 	
-	# Assemble the PowerShell script
-	my $ad_powershell_script = <<EOF;
-\$Host.UI.RawUI.BufferSize = New-Object Management.Automation.Host.Size(5000, 500)
-\$ps_credential = New-Object System.Management.Automation.PsCredential("$domain_dns_name\\$domain_username", (ConvertTo-SecureString "$domain_password" -AsPlainText -Force))
-try {
-   Add-Computer -WorkgroupName VCL -Credential \$ps_credential -ErrorAction Stop
-}
-catch {
-   Write-Host "ERROR: failed to add computer to workgroup, error: \$(\$_.Exception.Message)"
-   exit 1
-}
-EOF
+	# Assemble the unjoin command
+	my $unjoin_command = "echo | cmd.exe /c \"$system32_path/Wbem/wmic.exe /INTERACTIVE:OFF COMPUTERSYSTEM WHERE Name=\\\"%COMPUTERNAME%\\\" Call UnJoinDomainOrWorkgroup FUnjoinOptions=0\"";
+	notify($ERRORS{'DEBUG'}, 0, "attempting to unjoin $computer_name from $computer_current_domain Active Directory domain");
+	my ($unjoin_exit_status, $unjoin_output) = $self->execute($unjoin_command);
+	if (!defined($unjoin_output)) {
+		notify($ERRORS{'DEBUG'}, 0, "failed to execute command to unjoin the $computer_current_domain Active Directory domain");
+		return;
+	}
+	elsif (grep(/ERROR/i, @$unjoin_output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to unjoin $computer_current_domain Active Directory domain, output:\n" . join("\n", @$unjoin_output));
+		return;
+	}
+	elsif (grep(/ReturnValue\s+=\s+[1-9]/i, @$unjoin_output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to unjoin $computer_current_domain Active Directory domain, return value is not 0, output:\n" . join("\n", @$unjoin_output));
+		return;
+	}
+	elsif (grep(/Method execution successful/i, @$unjoin_output)) {
+		notify($ERRORS{'OK'}, 0, "unjoined $computer_current_domain Active Directory domain, output:\n" . join("\n", @$unjoin_output));
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "unexpected output unjoining $computer_current_domain Active Directory domain, output:\n" . join("\n", @$unjoin_output));
+	}
+	
+	
+	# Assemble the join workgroup command
+	my $join_workgroup_command = "echo | cmd.exe /c \"$system32_path/Wbem/wmic.exe /INTERACTIVE:OFF COMPUTERSYSTEM WHERE Name=\\\"%COMPUTERNAME%\\\" Call JoinDomainOrWorkgroup name=VCL\"";
+	my ($join_workgroup_exit_status, $join_workgroup_output) = $self->execute($join_workgroup_command);
+	if (!defined($join_workgroup_output)) {
+		notify($ERRORS{'DEBUG'}, 0, "failed to execute command to join workgroup");
+		return;
+	}
+	elsif (grep(/ERROR/i, @$join_workgroup_output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to join workgroup, output:\n" . join("\n", @$join_workgroup_output));
+	}
+	elsif (grep(/ReturnValue\s+=\s+[1-9]/i, @$join_workgroup_output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to join workgroup, return value is not 0, output:\n" . join("\n", @$join_workgroup_output));
+	}
+	elsif (grep(/Method execution successful/i, @$join_workgroup_output)) {
+		notify($ERRORS{'OK'}, 0, "joined workgroup, output:\n" . join("\n", @$join_workgroup_output));
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "unexpected output joining workgroup, output:\n" . join("\n", @$join_workgroup_output));
+	}
 
-	my ($exit_status, $output) = $self->run_powershell_as_script($ad_powershell_script, 1, 1);
-	if (!defined($output)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to execute PowerShell script to remove $computer_name from Active Directory domain");
-		return;
-	}
-	elsif (grep(/ERROR/, @$output)) {
-		# Computer object was already or deleted or can't be found for some reason:
-		#   This command cannot be executed on target computer('') due to following error: No mapping between account names and security IDs was done.
-		if (grep(/No mapping between account names/, @$output)) {
-			notify($ERRORS{'WARNING'}, 0, "failed to remove $computer_name from Active Directory domain, the computer object may have been deleted from the domain, output:\n" . join("\n", @$output));
-		}
-		else {
-			notify($ERRORS{'WARNING'}, 0, "failed to remove $computer_name from Active Directory domain, output:\n" . join("\n", @$output));
-		}
-		return 0;
-	}
-	
-	notify($ERRORS{'OK'}, 0, "removed $computer_name from Active Directory domain, output:\n" . join("\n", @$output));
-	
 	if (!$self->reboot(300, 3, 1)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to remove $computer_name from Active Directory domain, failed to reboot computer after unjoining domain");
+		notify($ERRORS{'WARNING'}, 0, "failed to unjoin $computer_name from Active Directory domain, failed to reboot computer after unjoining domain");
 		return;
 	}
 	
-	$self->ad_delete_computer($computer_name);
+	# Verify the computer no longer is joined to a domain
+	my $new_computer_current_domain = $self->ad_get_current_domain();
+	if ($new_computer_current_domain) {
+		notify($ERRORS{'WARNING'}, 0, "failed to unjoin $computer_name from Active Directory domain, it appears to still be a member of the $new_computer_current_domain domain");
+		return;
+	}
+	
+	#if (!defined($domain_dns_name)) {
+	#	notify($ERRORS{'WARNING'}, 0, "unable to remove $computer_name from AD, image $image_name is not assigned to a domain");
+	#	return;
+	#}
+	#elsif (!defined($domain_username)) {
+	#	notify($ERRORS{'WARNING'}, 0, "unable to remove $computer_name from AD, user name is not configured for $domain_dns_name domain");
+	#	return;
+	#}
+	#elsif (!defined($domain_password)) {
+	#	notify($ERRORS{'WARNING'}, 0, "unable to remove $computer_name from AD, password is not configured for $domain_dns_name domain");
+	#	return;
+	#}
+	#	# Assemble the PowerShell script
+	#	my $ad_powershell_script = <<EOF;
+	#\$Host.UI.RawUI.BufferSize = New-Object Management.Automation.Host.Size(5000, 500)
+	#\$ps_credential = New-Object System.Management.Automation.PsCredential("$domain_dns_name\\$domain_username", (ConvertTo-SecureString "$domain_password" -AsPlainText -Force))
+	#try {
+	#   Add-Computer -WorkgroupName VCL -Credential \$ps_credential -ErrorAction Stop
+	#}
+	#catch {
+	#   Write-Host "ERROR: failed to add computer to workgroup, error: \$(\$_.Exception.Message)"
+	#   exit 1
+	#}
+	#EOF
+	#
+	#	my ($exit_status, $output) = $self->run_powershell_as_script($ad_powershell_script, 1, 1);
+	#	if (!defined($output)) {
+	#		notify($ERRORS{'WARNING'}, 0, "failed to execute PowerShell script to remove $computer_name from Active Directory domain");
+	#		return;
+	#	}
+	#	elsif (grep(/ERROR/, @$output)) {
+	#		# Computer object was already or deleted or can't be found for some reason:
+	#		#   This command cannot be executed on target computer('') due to following error: No mapping between account names and security IDs was done.
+	#		if (grep(/No mapping between account names/, @$output)) {
+	#			notify($ERRORS{'WARNING'}, 0, "failed to remove $computer_name from Active Directory domain, the computer object may have been deleted from the domain, output:\n" . join("\n", @$output));
+	#		}
+	#		else {
+	#			notify($ERRORS{'WARNING'}, 0, "failed to remove $computer_name from Active Directory domain, output:\n" . join("\n", @$output));
+	#		}
+	#		return 0;
+	#	}
+	#	
+	#	notify($ERRORS{'OK'}, 0, "removed $computer_name from Active Directory domain, output:\n" . join("\n", @$output));
+	
+	$self->ad_delete_computer($computer_name, $computer_current_domain);
 	return 1;
 }
 
@@ -13792,6 +13953,14 @@ EOF
  Parameters  : none
  Returns     : boolean
  Description : Checks if the computer is joined to any Active Directory domain.
+               Returns the following:
+               * undefined - Error occurred, unable to determine if computer is
+                 joined to a domain.
+               * 0 - Computer is not joined to a domain.
+               * string - Computer is joined to a domain. The domain name is
+                 returned.
+               * 1 - Computer is joined to a domain but the domain name could
+                 not be determined.
 
 =cut
 
@@ -13860,7 +14029,11 @@ sub ad_search {
 		return;
 	}
 	
-	my ($ldap_filter_argument, $attempt_limit) = @_;
+	my $arguments = shift;
+	
+	my $computer_name	= $self->data->get_computer_short_name();
+	
+	my $ldap_filter_argument = $arguments->{ldap_filter};
 	if (!defined($ldap_filter_argument)) {
 		notify($ERRORS{'WARNING'}, 0, "LDAP filter hash reference argument was not supplied");
 		return;
@@ -13873,11 +14046,8 @@ sub ad_search {
 		notify($ERRORS{'WARNING'}, 0, "empty LDAP FILTER hash reference argument was supplied");
 		return;
 	}
-	
-	$attempt_limit = 3 unless $attempt_limit;
-	
-	# Make sure objectClass was specified
-	if (!defined($ldap_filter_argument->{objectClass})) {
+	elsif (!defined($ldap_filter_argument->{objectClass})) {
+		# Make sure objectClass was specified
 		notify($ERRORS{'WARNING'}, 0, "LDAP FILTER hash reference argument does not contain an objectClass value:\n" . format_data($ldap_filter_argument));
 		return;
 	}
@@ -13885,6 +14055,37 @@ sub ad_search {
 		notify($ERRORS{'WARNING'}, 0, "LDAP FILTER objectClass value not allowed: " . $ldap_filter_argument->{objectClass});
 		return;
 	}
+	
+	my $domain_dns_name;
+	my $domain_username;
+	my $domain_password;
+	if (defined($arguments->{domain_dns_name})) {
+		$domain_dns_name = $arguments->{domain_dns_name};
+		($domain_username, $domain_password) = get_active_directory_domain_credentials($domain_dns_name);
+		if (!defined($domain_username) || !defined($domain_password)) {
+			notify($ERRORS{'WARNING'}, 0, "unable to search domain: $domain_dns_name, domain DNS name argument was specified but credentials could not be determined from existing 'addomain' table entries");
+			return;
+		}
+	}
+	else {
+		$domain_dns_name = $self->data->get_image_domain_dns_name();
+		$domain_username = $self->data->get_image_domain_username();
+		$domain_password = $self->data->get_image_domain_password();
+	}
+	if (!defined($domain_dns_name)) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine if AD object exists on $computer_name, domain DNS name is not configured for the image and was not passed as an argument");
+		return;
+	}
+	elsif (!defined($domain_username)) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine if AD object exists on $computer_name, user name is not configured for $domain_dns_name domain");
+		return;
+	}
+	elsif (!defined($domain_password)) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine if AD object exists on $computer_name, password is not configured for $domain_dns_name domain");
+		return;
+	}
+	
+	my $attempt_limit = $arguments->{attempt_limit} || 3;
 	
 	# This sub handles both search and delete under very strict conditions
 	# This is somewhat ugly but was done to reduce code duplication - especially with the Powershell below
@@ -13895,24 +14096,6 @@ sub ad_search {
 	}
 	else {
 		$operation = 'search for';
-	}
-	
-	my $computer_name	= $self->data->get_computer_short_name();
-	
-	my $domain_dns_name = $self->data->get_image_domain_dns_name();
-	my $domain_username = $self->data->get_image_domain_username();
-	my $domain_password = $self->data->get_image_domain_password();
-	if (!defined($domain_dns_name)) {
-		notify($ERRORS{'WARNING'}, 0, "unable to determine if AD object exists on $computer_name, domain DNS name is not configured");
-		return;
-	}
-	elsif (!defined($domain_username)) {
-		notify($ERRORS{'WARNING'}, 0, "unable to determine if AD object exists on $computer_name, user name is not configured for $domain_dns_name domain");
-		return;
-	}
-	elsif (!defined($domain_password)) {
-		notify($ERRORS{'WARNING'}, 0, "unable to determine if AD object exists on $computer_name, password is not configured for $domain_dns_name domain");
-		return;
 	}
 	
 	my $search_attribute_count = scalar(keys %$ldap_filter_argument);
@@ -14064,7 +14247,7 @@ EOF
 
 =head2 ad_delete_computer
 
- Parameters  : $computer_samaccountname (optional)
+ Parameters  : $computer_samaccountname (optional), $domain_dns_name (optional)
  Returns     : boolean
  Description : Deletes a computer object from the active directory domain with a
                sAMAccountName attribute matching the argument. If no argument is
@@ -14084,23 +14267,34 @@ sub ad_delete_computer {
 		return;
 	}
 	
-	my $computer_samaccountname = shift || $self->data->get_computer_short_name();
+	my ($computer_samaccountname, $domain_dns_name) = @_;
 	
+	$computer_samaccountname = $self->data->get_computer_short_name() unless $computer_samaccountname;
+	
+	# Make sure computer samAccountName does not contain a trailing dollar sign
+	# A dollar sign will be present if retrieved directly from AD
 	$computer_samaccountname =~ s/\$*$/\$/g;
 	
-	return $self->ad_search(
-		{
+	my $ad_search_arguments = {
+		'ldap_filter' => {
 			'objectClass' => 'computer',
 			'sAMAccountName' => $computer_samaccountname,
-		},
-	);
+		}
+	};
+	
+	# If a specific domain was specified, retrieve the username and password for that domain
+	if ($domain_dns_name) {
+		$ad_search_arguments->{domain_dns_name} = $domain_dns_name;
+	}
+	
+	return $self->ad_search($ad_search_arguments);
 }
 
 #/////////////////////////////////////////////////////////////////////////////
 
 =head2 ad_search_computer
 
- Parameters  : $computer_samaccountname (optional)
+ Parameters  : $computer_samaccountname (optional), $domain_dns_name (optional)
  Returns     : string
  Description : Checks if a computer exists in the Active Directory domain with a
                sAMAccountName attribute matching the argument. If found, a
@@ -14115,16 +14309,27 @@ sub ad_search_computer {
 		return;
 	}
 	
-	my $computer_samaccountname = shift || $self->data->get_computer_short_name();
+	my ($computer_samaccountname, $domain_dns_name) = @_;
 	
+	$computer_samaccountname = $self->data->get_computer_short_name() unless $computer_samaccountname;
+	
+	# Make sure computer samAccountName does not contain a trailing dollar sign
+	# A dollar sign will be present if retrieved directly from AD
 	$computer_samaccountname =~ s/\$*$/\$/g;
 	
-	my @computer_dns = $self->ad_search(
-		{
+	my $ad_search_arguments = {
+		'ldap_filter' => {
 			'objectClass' => 'computer',
 			'sAMAccountName' => $computer_samaccountname,
 		}
-	);
+	};
+	
+	# If a specific domain was specified, retrieve the username and password for that domain
+	if ($domain_dns_name) {
+		$ad_search_arguments->{domain_dns_name} = $domain_dns_name;
+	}
+	
+	my @computer_dns = $self->ad_search($ad_search_arguments);
 	if (@computer_dns) {
 		return $computer_dns[0];
 	}
@@ -14174,8 +14379,10 @@ sub ad_search_ou {
 	
 	return $self->ad_search(
 		{
-			'objectClass' => 'organizationalUnit',
-			$attribute_name => $ou_identifier,
+			'ldap_filter' => {
+				'objectClass' => 'organizationalUnit',
+				$attribute_name => $ou_identifier,
+			}
 		}
 	);
 }
@@ -14216,8 +14423,10 @@ sub ad_user_exists {
 	
 	my @user_dns = $self->ad_search(
 		{
-			'objectClass' => 'user',
-			'sAMAccountName' => $user_samaccountname,
+			'ldap_filter' => {
+				'objectClass' => 'user',
+				'sAMAccountName' => $user_samaccountname,
+			}
 		}
 	);
 	

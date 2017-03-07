@@ -128,14 +128,22 @@ sub node_status {
 	
 	# Check if the post-load tasks have been completed
 	my $post_load_status = $self->os->get_post_load_status();
-	if ($post_load_status) {
-		notify($ERRORS{'OK'}, 0, "OS module post_load tasks have been completed on $computer_name, returning 'READY'");
-		return 'READY';
-	}
-	else {
+	if (!$post_load_status) {
 		notify($ERRORS{'DEBUG'}, 0, "OS module post_load tasks have NOT been completed on $computer_name, returning 'POST_LOAD'");
 		return 'POST_LOAD';
 	}
+	
+	# Check if OS module implements a node_status_os_check subroutine
+	# Currently, this is only used by the Windows module to ensure the AD configuration is correct if an image's AD configuration is changed after a computer is loaded
+	if ($self->os->can('node_status_os_check')) {
+		if (!$self->os->node_status_os_check()) {
+			notify($ERRORS{'DEBUG'}, 0, "OS module's node_status_os_check returned false, returning 'RELOAD'");
+			return 'RELOAD';
+		}
+	}
+	
+	notify($ERRORS{'DEBUG'}, 0, "general node status checks all succeeded, returning 'READY'");
+	return 'READY';
 }
 
 #/////////////////////////////////////////////////////////////////////////////

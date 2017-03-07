@@ -115,6 +115,7 @@ our @EXPORT = qw(
 	format_data
 	format_hash_keys
 	format_number
+	get_active_directory_domain_credentials
 	get_affiliation_info
 	get_array_intersection
 	get_block_request_image_info
@@ -14694,6 +14695,61 @@ EOF
 	notify($ERRORS{'DEBUG'}, 0, "retrieved Active Directory info for image $image_id:\n" . format_data($info));
 	return $info;
 } ## end sub get_image_active_directory_domain_info
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_active_directory_domain_credentials
+
+ Parameters  : $domain_dns_name, $no_cache (optional)
+ Returns     : ($username, $password)
+ Description : Attempts to retrieve the username and password for the domain
+               from the addomain table. This is used if a computer needs to be
+               removed from a domain but the reservation image is not configured
+               for Active Directory. When this occurs, the credentials are not
+               available from $self->data.
+
+=cut
+
+sub get_active_directory_domain_credentials {
+	my ($domain_dns_name, $no_cache) = @_;
+	if (!$domain_dns_name) {
+		notify($ERRORS{'WARNING'}, 0, "domain DNS name argument was not specified");
+		return;
+	}
+	
+	if (!$no_cache && defined($ENV{active_directory_domain_credentials}{$domain_dns_name})) {
+		notify($ERRORS{'DEBUG'}, 0, "returning cached Active Directory credentials for $domain_dns_name domain");
+		return @{$ENV{active_directory_domain_credentials}{$domain_dns_name}};
+	}
+	
+	# Construct the select statement
+	my $select_statement = <<EOF;
+SELECT DISTINCT
+username,
+password
+FROM
+addomain
+WHERE
+addomain.domainDNSName = '$domain_dns_name'
+EOF
+	
+	# Call the database select subroutine
+	my @selected_rows = database_select($select_statement);
+
+	# Check to make sure 1 row was returned
+	if (scalar @selected_rows == 0) {
+		notify($ERRORS{'DEBUG'}, 0, "Active Directory domain does not exist in the database: $domain_dns_name");
+		return ();
+	}
+
+	# Get the single row returned from the select statement
+	my $row = $selected_rows[0];
+	my $username = $row->{username};
+	my $password = $row->{password};
+	notify($ERRORS{'DEBUG'}, 0, "retrieved credentials for $domain_dns_name domain from database, username: '$username', password: '$password'");
+	$ENV{active_directory_domain_credentials}{$domain_dns_name} = [$username, $password];
+	return @{$ENV{active_directory_domain_credentials}{$domain_dns_name}};
+}
 
 #/////////////////////////////////////////////////////////////////////////////
 

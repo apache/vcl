@@ -900,7 +900,7 @@ sub _automethod : Automethod {
 			$return_value = eval $hash_path;
 		}
 		elsif (!$key_defined) {
-			if ($show_warnings && $hash_path !~ /(serverrequest|image_domain)/) {
+			if ($show_warnings && $hash_path !~ /(serverrequest|domain)/) {
 				notify($ERRORS{'WARNING'}, 0, "corresponding data has not been initialized for $method_name: $hash_path", $self->request_data);
 			}
 			return sub { };
