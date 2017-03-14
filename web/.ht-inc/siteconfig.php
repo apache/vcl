@@ -1983,6 +1983,8 @@ class GlobalMultiVariable {
 	function existingValuesHTML() {
 		$h = "<span id=\"{$this->domidbase}multivalspan\">\n";
 		foreach($this->values as $key => $val) {
+			if(! isset($this->units[$key]))
+				continue;
 			$this->savekeys[] = "{$this->domidbase}|$key";
 			$this->setkeys[] = $key;
 			$h .= "<span id=\"{$this->domidbase}|{$key}wrapspan\">\n";
