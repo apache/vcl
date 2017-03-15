@@ -833,7 +833,7 @@ function XMLRPCgetRequestConnectData($requestid, $remoteIP) {
 		$connectMethods = getImageConnectMethodTexts(
 		                     $requestData["reservations"][0]["imageid"],
 		                     $requestData["reservations"][0]["imagerevisionid"]);
-		if($requestData["forimaging"])
+		if($requestData["forimaging"] && $requestData['reservations'][0]['OStype'] == 'windows')
 			$thisuser = 'Administrator';
 		else
 			if(preg_match('/(.*)@(.*)/', $user['unityid'], $matches))
