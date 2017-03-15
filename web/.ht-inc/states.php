@@ -30,7 +30,7 @@ $actions["entry"] = array('main',
                           'blockAllocations',
                           'userpreferences',
                           'viewGroups',
-                          'serverProfiles',
+                          #'serverProfiles',
                           'pickTimeTable',
                           'viewNodes',
                           'userLookup',
@@ -140,7 +140,7 @@ $noHTMLwrappers = array('sendRDPfile',
                         'AJpermSelectUserGroup',
                         'AJcopyUserGroupPrivs',
                         'AJsaveUserGroupPrivs',
-                        'AJsaveServerProfile',
+                        /*'AJsaveServerProfile',
                         'AJserverProfileData',
                         'AJdelServerProfile',
                         'jsonProfileGroupingGroups',
@@ -150,7 +150,7 @@ $noHTMLwrappers = array('sendRDPfile',
                         'AJaddProfileToGroup',
                         'AJremProfileFromGroup',
                         'AJserverProfileStoreData',
-                        'AJfetchRouterDNS',
+                        'AJfetchRouterDNS',*/
                         'AJconfirmDeleteRequest',
                         'AJsubmitDeleteRequest',
                         'AJconfirmRemoveRequest',
@@ -374,7 +374,7 @@ $actions['pages']['jsonUserGroupStore'] = "manageGroups";
 $actions['pages']['jsonResourceGroupStore'] = "manageGroups";
 
 # server profiles
-$actions['mode']['serverProfiles'] = "serverProfiles"; # entry
+/*$actions['mode']['serverProfiles'] = "serverProfiles"; # entry
 $actions['mode']['AJsaveServerProfile'] = "AJsaveServerProfile";
 $actions['mode']['AJserverProfileData'] = "AJserverProfileData";
 $actions['mode']['AJdelServerProfile'] = "AJdelServerProfile";
@@ -397,7 +397,7 @@ $actions['pages']['AJremGroupFromProfile'] = "serverProfiles";
 $actions['pages']['AJaddProfileToGroup'] = "serverProfiles";
 $actions['pages']['AJremProfileFromGroup'] = "serverProfiles";
 $actions['pages']['AJserverProfileStoreData'] = "serverProfiles";
-$actions['pages']['AJfetchRouterDNS'] = "serverProfiles";
+$actions['pages']['AJfetchRouterDNS'] = "serverProfiles";*/
 
 # time table
 # TODO a few of these belong to new reservation
