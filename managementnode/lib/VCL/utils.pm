@@ -110,6 +110,7 @@ our @EXPORT = qw(
 	delete_request
 	delete_reservation_account
 	delete_variable
+	delete_vcld_semaphore
 	determine_remote_connection_target
 	escape_file_path
 	format_data
@@ -189,6 +190,7 @@ our @EXPORT = qw(
 	get_user_group_member_info
 	get_user_info
 	get_variable
+	get_vcld_semaphore_info
 	get_vmhost_assigned_vm_info
 	get_vmhost_assigned_vm_provisioning_info
 	get_vmhost_info
@@ -203,6 +205,7 @@ our @EXPORT = qw(
 	insert_reload_request
 	insert_request
 	insert_reservation
+	insert_vcld_semaphore
 	insertloadlog
 	ip_address_to_hostname
 	ip_address_to_network_address
@@ -2875,7 +2878,8 @@ sub database_execute {
 	
 	# Check the statement handle
 	if (!$statement_handle) {
-		notify($ERRORS{'WARNING'}, 0, "could not prepare SQL statement, $sql_statement, " . $dbh->errstr());
+		my $error_string = $dbh->errstr() || '<unknown error>';
+		notify($ERRORS{'WARNING'}, 0, "could not prepare SQL statement, $sql_statement, $error_string");
 		$dbh->disconnect if !defined $ENV{dbh};
 		return;
 	}
@@ -2883,10 +2887,17 @@ sub database_execute {
 	# Execute the statement handle
 	my $result = $statement_handle->execute();
 	if (!defined($result)) {
-		notify($ERRORS{'WARNING'}, 0, "could not execute SQL statement: $sql_statement\n" . $dbh->errstr());
+		my $error_string = $dbh->errstr() || '<unknown error>';
 		$statement_handle->finish;
 		$dbh->disconnect if !defined $ENV{dbh};
-		return;
+		
+		if (wantarray) {
+			return (0, $error_string);
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "could not execute SQL statement: $sql_statement\n$error_string");
+			return;
+		}
 	}
 	
 	# Get the id of the last inserted record if this is an INSERT statement
@@ -7929,6 +7940,187 @@ EOF
 	else {
 		notify($ERRORS{'WARNING'}, 0, "failed to update natlog table for reservation $reservation_id");
 		return 0;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_vcld_semaphore_info
+
+ Parameters  : $semaphore_identifier
+ Returns     : hash reference
+ Description : Retrieves information for all rows in the vcldsemaphore table. A
+               hash is constructed. The keys are the vcldsemaphore.identifier
+               values:
+                  {
+                    "sem_3115" => {
+                      "expires" => "2017-03-15 11:54:36",
+                      "pid" => 13775,
+                      "reservationid" => 3115
+                    },
+                    "sem_3116" => {
+                      "expires" => "2017-03-15 11:54:35",
+                      "pid" => 13769,
+                      "reservationid" => 3116
+                    }
+                  }
+
+=cut
+
+sub get_vcld_semaphore_info {
+	my @rows = database_select('SELECT * FROM vcldsemaphore');
+	
+	my $vcld_semaphore_info = {};
+	for my $row (@rows) {
+		my $semaphore_identifier = $row->{'identifier'};
+		for my $column (keys %$row) {
+			next if $column eq 'identifier';
+			$vcld_semaphore_info->{$semaphore_identifier}{$column} = $row->{$column};
+		}
+	}
+	
+	notify($ERRORS{'DEBUG'}, 0, "retrieved vcld semaphore info:\n" . format_data($vcld_semaphore_info));
+	return $vcld_semaphore_info;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 insert_vcld_semaphore
+
+ Parameters  : $semaphore_identifier, $reservation_id, $semaphore_expire_seconds, $force (optional)
+ Returns     : boolean
+ Description : Attempts to insert a row into the vcldsemaphore table. The
+					$semaphore_expire_seconds argument should contain an integer
+					representing the number of seconds in the future when the
+					semaphore can be deemed orphaned. The Semaphore.pm module should
+					always clean up all rows added to the vcldsemaphore table when
+					the semaphore object is destroyed. This is not guaranteed if a
+					process dies abruptly with a KILL signal. If $expire_seconds is
+					not provided, a default value of 600 seconds (10 minutes) will be
+					used.
+
+=cut
+
+sub insert_vcld_semaphore {
+	my ($semaphore_identifier, $reservation_id, $semaphore_expire_seconds, $force) = @_;
+	if (!defined($semaphore_identifier)) {
+		notify($ERRORS{'WARNING'}, 0, "semaphore identifier argument was not supplied");
+		return;
+	}
+	elsif (!defined($reservation_id)) {
+		notify($ERRORS{'WARNING'}, 0, "reservation ID argument was not supplied");
+		return;
+	}
+	elsif (!defined($semaphore_expire_seconds)) {
+		notify($ERRORS{'WARNING'}, 0, "semaphore expire seconds argument was not supplied");
+		return;
+	}
+	elsif ($semaphore_expire_seconds !~ /^\d+$/) {
+		notify($ERRORS{'WARNING'}, 0, "semaphore expire seconds argument is invalid: $semaphore_expire_seconds");
+		return;
+	}
+	
+	my $insert_statement = <<EOF;
+INSERT INTO
+vcldsemaphore
+(
+   identifier,
+	reservationid,
+	pid,
+	expires
+	
+)
+VALUES
+(
+   '$semaphore_identifier',
+	$reservation_id,
+	$PID,
+   TIMESTAMPADD(SECOND, $semaphore_expire_seconds, NOW())
+)
+EOF
+
+	if ($force) {
+		$insert_statement .= <<"EOF";
+ON DUPLICATE KEY UPDATE
+identifier = VALUES(identifier),
+reservationid = VALUES(reservationid),
+pid = $PID,
+expires = TIMESTAMPADD(SECOND, $semaphore_expire_seconds, NOW())
+EOF
+	}
+
+	# Execute the insert statement, the return value should be the id of the row
+	my ($result, $insert_error) = database_execute($insert_statement);
+	if ($result) {
+		notify($ERRORS{'DEBUG'}, 0, "inserted row into vcldsemaphore table, identifier: $semaphore_identifier, semaphore expire seconds: $semaphore_expire_seconds");
+		return 1;
+	}
+	elsif ($insert_error =~ /Duplicate/i) {
+		notify($ERRORS{'OK'}, 0, "vcldsemaphore table already contains a row with procid = '$semaphore_identifier': $insert_error");
+		return 0;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to insert row into vcldsemaphore table, identifier: $semaphore_identifier, error: $insert_error\nSQL statement:\n$insert_statement");
+		return;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 delete_vcld_semaphore
+
+ Parameters  : $semaphore_identifier, $expires_datetime (optional)
+ Returns     : boolean
+ Description : Deletes an entry from the vcldsemaphore table with the
+               semaphore.identifier value specified by the argument.
+               
+               If the $expires_datetime argument is NOT supplied, only entries
+               with a vcldsemaphore.pid value matching the current process's PID
+               will be deleted for safety.
+               
+               In order to delete or clean up entries created by other
+               processes, the $expires_datetime argument is required. This
+               argument must be specified when deleting entries made by other
+               processes to prevent accidental deletion of entries with the same
+               identifier created between the time the current process retrieves
+               the info and calls this subroutine. When $expires_datetime is
+               specified, entries with any vcldsemaphore.pid value will be
+               deleted but the semaphore.expires value must match the argument. 
+
+=cut
+
+sub delete_vcld_semaphore {
+	my ($semaphore_identifier, $expires_datetime) = @_;
+	if (!defined($semaphore_identifier)) {
+		notify($ERRORS{'WARNING'}, 0, "semaphore identifier argument was not supplied");
+		return;
+	}
+	
+	my $delete_statement .= <<"EOF";
+DELETE 
+FROM 
+vcldsemaphore
+WHERE
+identifier = '$semaphore_identifier'
+EOF
+	
+	my $where_string;
+	if ($expires_datetime) {
+		$delete_statement .= "AND expires = '$expires_datetime'";
+		$where_string = ", expires: $expires_datetime";
+	}
+	else {
+		$delete_statement .= "AND pid = $PID";
+		$where_string = ", pid: $PID";
+	}
+	
+	if (database_execute($delete_statement)) {
+		notify($ERRORS{'OK'}, 0, "deleted vcldsemaphore with identifier: '$semaphore_identifier'$where_string");
+		return 1;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to delete vcldsemaphore with identifier: '$semaphore_identifier'$where_string");
+		return;
 	}
 }
 
@@ -14618,11 +14810,6 @@ sub get_image_active_directory_domain_info {
 		return;
 	}
 	
-	if (!$no_cache && defined($ENV{image_active_directory_domain_info})) {
-		notify($ERRORS{'DEBUG'}, 0, "returning cached Active Directory info for image $image_id");
-		return $ENV{image_active_directory_domain_info};
-	}
-	
 	# Get a hash ref containing the database column names
 	my $database_table_columns = get_database_table_columns();
 	
@@ -14660,9 +14847,8 @@ EOF
 
 	# Check to make sure 1 row was returned
 	if (scalar @selected_rows == 0) {
-		$ENV{image_active_directory_domain_info} = {};
 		notify($ERRORS{'DEBUG'}, 0, "image $image_id is not configured for Active Directory");
-		return $ENV{image_active_directory_domain_info};
+		return {};
 	}
 
 	# Get the single row returned from the select statement
@@ -14676,7 +14862,7 @@ EOF
 		# Split the table-column names
 		my ($table, $column) = $key =~ /^([^-]+)-(.+)/;
 		
-		if ($value && $column =~ /(dnsServers|domainControllers)/) {
+		if ($value && $column =~ /(dnsServers)/) {
 			my @value_array = split(/[,;]+/, $value);
 			$value = \@value_array;
 		}
@@ -14691,7 +14877,6 @@ EOF
 		}
 	}
 	
-	$ENV{image_active_directory_domain_info} = $info;
 	notify($ERRORS{'DEBUG'}, 0, "retrieved Active Directory info for image $image_id:\n" . format_data($info));
 	return $info;
 } ## end sub get_image_active_directory_domain_info
