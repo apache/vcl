@@ -870,15 +870,12 @@ ALTER TABLE `computerloadlog` CHANGE `loadstateid` `loadstateid` SMALLINT( 8 ) U
 
 CREATE TABLE IF NOT EXISTS `addomain` (
   `id` tinyint(3) unsigned NOT NULL auto_increment,
-  `name` varchar(30) NOT NULL default '',
   `ownerid` mediumint(8) unsigned NOT NULL,
+  `name` varchar(30) NOT NULL default '',
   `domainDNSName` varchar(70) NOT NULL default '',
-  `domainNetBIOSName` varchar(15) default NULL,
+  `dnsServers` varchar(512) default NULL,
   `username` varchar(64) default NULL,
   `password` varchar(256) default NULL,
-  `dnsServers` varchar(512) default NULL,
-  `domainControllers` varchar(512) NOT NULL,
-  `logindescription` text,
   PRIMARY KEY (`id`),
   UNIQUE KEY `domainDNSName` (`domainDNSName`)
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1;
