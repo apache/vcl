@@ -1641,6 +1641,7 @@ function userLookup() {
 		       .      "userprivtype upt "
 		       . "WHERE up.privnodeid = p.id AND "
 		       .       "up.userprivtypeid = upt.id AND "
+		       .       "upt.name NOT IN ('configAdmin', 'serverProfileAdmin') AND "
 		       .       "up.userid = {$userdata['id']} "
 		       . "ORDER BY p.name, "
 		       .          "upt.name";
@@ -1680,6 +1681,7 @@ function userLookup() {
 			       .       "up.userprivtypeid = upt.id AND "
 			       .       "upt.name != 'cascade' AND "
 			       .       "upt.name != 'block' AND "
+			       .       "upt.name NOT IN ('configAdmin', 'serverProfileAdmin') AND "
 			       .       "up.usergroupid IN (" . implode(',', array_keys($userdata['groups'])) . ") "
 			       . "ORDER BY p.name, "
 			       .          "upt.name";
@@ -2725,6 +2727,7 @@ function getNodePrivileges($node, $type="all", $privs=0) {
 		       .      "affiliation a "
 		       . "WHERE up.privnodeid = $node AND "
 		       .       "up.userprivtypeid = t.id AND "
+		       .       "t.name NOT IN ('configAdmin', 'serverProfileAdmin') AND "
 		       .       "up.userid = u.id AND "
 		       .       "up.userid IS NOT NULL AND "
 		       .       "u.affiliationid = a.id "
@@ -2745,6 +2748,7 @@ function getNodePrivileges($node, $type="all", $privs=0) {
 		       . "LEFT JOIN affiliation a ON (g.affiliationid = a.id) "
 		       . "WHERE up.privnodeid = $node AND "
 		       .       "up.userprivtypeid = t.id AND "
+		       .       "t.name NOT IN ('configAdmin', 'serverProfileAdmin') AND "
 		       .       "up.usergroupid = g.id AND "
 		       .       "up.usergroupid IS NOT NULL "
 		       . "ORDER BY g.name";
@@ -2916,6 +2920,7 @@ function getNodeCascadePrivileges($node, $type="all", $privs=0) {
 			       .      "userprivtype t, "
 			       .      "affiliation a "
 			       . "WHERE up.userprivtypeid = t.id AND "
+			       .       "t.name NOT IN ('configAdmin', 'serverProfileAdmin') AND "
 			       .       "up.userid = u.id AND "
 			       .       "up.userid IS NOT NULL AND "
 			       .       "t.name = 'block' AND "
@@ -2942,6 +2947,7 @@ function getNodeCascadePrivileges($node, $type="all", $privs=0) {
 			       .       "up.userid IS NOT NULL AND "
 			       .       "t.name != 'cascade' AND "
 			       .       "t.name != 'block' AND "
+			       .       "t.name NOT IN ('configAdmin', 'serverProfileAdmin') AND "
 			       . 		"Cup.userprivtypeid = Ct.id AND "
 			       . 		"Ct.name = 'cascade' AND "
 			       . 		"Cup.privnodeid = up.privnodeid AND "
@@ -2981,6 +2987,7 @@ function getNodeCascadePrivileges($node, $type="all", $privs=0) {
 			       .      "userpriv up, "
 			       .      "userprivtype t "
 			       . "WHERE up.userprivtypeid = t.id AND "
+			       .       "t.name NOT IN ('configAdmin', 'serverProfileAdmin') AND "
 			       .       "up.usergroupid = g.id AND "
 			       .       "up.usergroupid IS NOT NULL AND "
 			       .       "t.name = 'block'";
@@ -3008,6 +3015,7 @@ function getNodeCascadePrivileges($node, $type="all", $privs=0) {
 			       .       "up.usergroupid IS NOT NULL AND "
 			       .       "t.name != 'cascade' AND "
 			       .       "t.name != 'block' AND "
+			       .       "t.name NOT IN ('configAdmin', 'serverProfileAdmin') AND "
 			       . 		"Cup.userprivtypeid = Ct.id AND "
 			       . 		"Ct.name = 'cascade' AND "
 			       . 		"Cup.privnodeid = up.privnodeid AND "

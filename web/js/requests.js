@@ -28,11 +28,11 @@ var revisiongrids;
 var waittimeobj;
 var waittimeh;
 
-var profilesstoredata = {
+/*var profilesstoredata = {
 	identifier: 'id',
 	label: 'name',
 	items: []
-}
+}*/
 
 function generalReqCB(data, ioArgs) {
 	eval(data);
@@ -92,7 +92,7 @@ function resetNewResDlg() {
 	setLastImage();
 	dojo.byId('basicrdo').checked = true;
 	selectResType();
-	dijit.byId('deployprofileid').reset();
+	//dijit.byId('deployprofileid').reset();
 	if(dijit.byId('nousercheck'))
 		dijit.byId('nousercheck').reset();
 	dijit.byId('deployname').reset();
@@ -147,7 +147,7 @@ function selectResType() {
 		dojo.removeClass('limitstart', 'hidden');
 		dojo.removeClass('durationend', 'hidden');
 		dojo.addClass('whentitleserver', 'hidden');
-		dojo.addClass('deployprofileslist', 'hidden');
+		//dojo.addClass('deployprofileslist', 'hidden');
 		dojo.addClass('nrnamespan', 'hidden');
 		dojo.addClass('nrservergroupspan', 'hidden');
 		//dojo.addClass('nrmacaddrspan', 'hidden');
@@ -217,10 +217,10 @@ function selectResType() {
 		dojo.addClass('limitstart', 'hidden');
 		dojo.addClass('durationend', 'hidden');
 		dojo.removeClass('whentitleserver', 'hidden');
-		if(profilesstore._arrayOfAllItems.length != 0 &&
+		/*if(profilesstore._arrayOfAllItems.length != 0 &&
 		   (profilesstore._arrayOfAllItems.length != 1 ||
 		   profilesstore._arrayOfAllItems[0].name != _('(New Profile)')))
-			dojo.removeClass('deployprofileslist', 'hidden');
+			dojo.removeClass('deployprofileslist', 'hidden');*/
 		dojo.removeClass('nrnamespan', 'hidden');
 		dojo.removeClass('nrservergroupspan', 'hidden');
 		//dojo.removeClass('nrmacaddrspan', 'hidden');
@@ -487,7 +487,7 @@ function getDeployData(waitonly) {
 		data.nousercheck = 1;
 	else
 		data.nousercheck = 0;
-	data.profileid = dojo.byId('appliedprofileid').value;
+	//data.profileid = dojo.byId('appliedprofileid').value;
 	data.name = dijit.byId('deployname').get('value');
 	data.admingroupid = getSelectValue('deployadmingroup');
 	data.logingroupid = getSelectValue('deploylogingroup');

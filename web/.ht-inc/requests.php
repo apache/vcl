@@ -1310,7 +1310,7 @@ function newReservationHTML() {
 	if(in_array('serverCheckOut', $user['privileges']) && 
 	   count($checkout['image'])) {
 		$serveraccess = 1;
-		$extraimages = getServerProfileImages($user['id']);
+		/*$extraimages = getServerProfileImages($user['id']);
 		foreach($extraimages as $id => $name) {
 			if(! array_key_exists($id, $images)) {
 				$images[$id] = array('name' => $name,
@@ -1346,7 +1346,7 @@ function newReservationHTML() {
 					$dorevisionscont = 1;
 				}
 			}
-		}
+		}*/
 	}
 
 	$imageid = getUsersLastImage($user['id']);
@@ -1469,7 +1469,7 @@ function newReservationHTML() {
 	if($showradios)
 		$h .= "<br><br>\n";
 
-	$h .= "<span id=\"deployprofileslist\" class=\"hidden\">\n";
+	/*$h .= "<span id=\"deployprofileslist\" class=\"hidden\">\n";
 	$h .= "<div dojoType=\"dojo.data.ItemFileWriteStore\" jsId=\"profilesstore\" ";
 	$h .= "data=\"profilesstoredata\"></div>\n";
 	$h .= i("Profile:") . " ";
@@ -1488,9 +1488,9 @@ function newReservationHTML() {
 	$h .= "</button>";
 	$h .= "<br><br>\n";
 	$h .= "<input type=\"hidden\" id=\"appliedprofileid\" value=\"0\">\n";
-	$h .= "</span>\n"; # deployprofileslist
+	$h .= "</span>\n"; # deployprofileslist*/
 
-	$h .= "<div id=\"deployprofilediv\">\n";
+	$h .= "<div id=\"deployserverdiv\">\n";
 	# directions
 	$h .= "<span id=\"nrdirections\">";
 	$h .= i("Please select the environment you want to use from the list:");
@@ -1769,7 +1769,7 @@ function newReservationHTML() {
 
 	$h .= "<div id=\"deployerr\" class=\"rederrormsg\"></div>\n";
 	$h .= "<div id=\"waittime\"></div><br>\n";
-	$h .= "</div>\n"; # deployprofilediv
+	$h .= "</div>\n"; # deployserverdiv
 
 	$h .= "   </div>\n";
 	$h .= "   <input type=\"hidden\" id=\"newrescont\">\n";
@@ -1819,10 +1819,10 @@ function AJupdateWaitTime() {
 	# process imageid
 	$resources = getUserResources(array("imageAdmin", "imageCheckOut"));
 	$validImageids = array_keys($resources['image']);
-	if($type == 'server') {
+	/*if($type == 'server') {
 		$extraimages = getServerProfileImages($user['id']);
 		$validImageids = array_merge($validImageids, array_keys($extraimages));
-	}
+	}*/
 	if(! in_array($imageid, $validImageids))
 		return;
 
@@ -2369,8 +2369,8 @@ function AJnewRequest() {
 		       . "WHERE requestid = $requestid";
 		doQuery($query);
 
-		$fields = array('requestid', 'serverprofileid');
-		$values = array($requestid, $data['profileid']);
+		$fields = array('requestid'/*, 'serverprofileid'*/);
+		$values = array($requestid/*, $data['profileid']*/);
 		if($data['name'] == '') {
 			$fields[] = 'name';
 			$name = $images[$data['imageid']]['prettyname'];
@@ -4579,10 +4579,10 @@ function processRequestInput() {
 	$resources = getUserResources(array("imageAdmin", "imageCheckOut"));
 	$withnocheckout = $resources['image'];
 	$images = removeNoCheckout($resources["image"]);
-	$extraimages = getServerProfileImages($user['id']);
+	#$extraimages = getServerProfileImages($user['id']);
 	if((! array_key_exists($return['imageid'], $images) &&
-	   ($return['type'] != 'server' || 
-	   ! array_key_exists($return['imageid'], $extraimages)) &&
+	   /*($return['type'] != 'server' || 
+		! array_key_exists($return['imageid'], $extraimages)) &&*/
 	   ($return['type'] != 'imaging' ||
 	   ! array_key_exists($return['imageid'], $withnocheckout))) ||
 	   ($return['type'] == 'imaging' &&
@@ -4740,7 +4740,7 @@ function processRequestInput() {
 		}
 
 		# profileid
-		$return['profileid'] = processInputVar('profileid', ARG_NUMERIC, 0);
+		/*$return['profileid'] = processInputVar('profileid', ARG_NUMERIC, 0);
 		$resources = getUserResources(array("serverCheckOut", "serverProfileAdmin"),
 		                              array("available","administer"));
 		if(! array_key_exists($return['profileid'], $resources['serverprofile']))
@@ -4753,7 +4753,7 @@ function processRequestInput() {
 			   ($tmp['fixedIP'] == $return['ipaddr'] && $return['ipaddr'] == '' &&
 			   $tmp['fixedMAC'] == $return['macaddr'] && $return['macaddr'] == '')))
 				$return['profileid'] = 0;
-		}
+		}*/
 
 		# admingroupid
 		$usergroups = getUserGroups();

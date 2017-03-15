@@ -197,7 +197,7 @@ function initGlobals() {
 		if($mode == 'xmlrpccall' || $mode == 'xmlrpcaffiliations') {
 			require_once(".ht-inc/xmlrpcWrappers.php");
 			require_once(".ht-inc/requests.php");
-			require_once(".ht-inc/serverprofiles.php");
+			#require_once(".ht-inc/serverprofiles.php");
 			require_once(".ht-inc/groups.php");
 			setupSession();
 		}
@@ -308,10 +308,10 @@ function initGlobals() {
 		case 'storebackend':
 			require_once(".ht-inc/storebackend.php");
 			break;
-		case 'serverProfiles':
+		/*case 'serverProfiles':
 			require_once(".ht-inc/serverprofiles.php");
 			require_once(".ht-inc/requests.php");
-			break;
+			break;*/
 		case 'oneClicks':
 			require_once(".ht-inc/oneclick.php");
 			break;
@@ -521,7 +521,7 @@ function checkAccess() {
 			$mode = "main";
 			$actionFunction = "main";
 			return;
-	   }
+		}
 		else {
 			if(! $inContinuation) {
 				# check that user has access to this area
@@ -533,14 +533,14 @@ function checkAccess() {
 							return;
 						}
 						break;
-					case 'serverProfiles':
+					/*case 'serverProfiles':
 						if(! in_array("serverProfileAdmin", $user["privileges"]) &&
 						   ! in_array("serverCheckOut", $user["privileges"])) {
 							$mode = "";
 							$actionFunction = "main";
 							return;
 						}
-						break;
+						break;*/
 					case 'pickTimeTable':
 						$computermetadata = getUserComputerMetaData();
 						if(! count($computermetadata["platforms"]) ||
@@ -1427,7 +1427,7 @@ function getImages($includedeleted=0, $imageid=0) {
 /// \brief gets information about server profiles
 ///
 ////////////////////////////////////////////////////////////////////////////////
-function getServerProfiles($id=0) {
+/*function getServerProfiles($id=0) {
 	$key = getKey(array('getServerProfiles', $id));
 	if(isset($_SESSION['usersessiondata'][$key]))
 		return $_SESSION['usersessiondata'][$key];
@@ -1486,7 +1486,7 @@ function getServerProfiles($id=0) {
 	}
 	$_SESSION['usersessiondata'][$key] = $profiles;
 	return $profiles;
-}
+}*/
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
@@ -1500,7 +1500,7 @@ function getServerProfiles($id=0) {
 /// \brief builds an array of images that user has access to via server profiles
 ///
 ////////////////////////////////////////////////////////////////////////////////
-function getServerProfileImages($userid) {
+/*function getServerProfileImages($userid) {
 	$key = getKey(array('getServerProfileImages', $userid));
 	if(isset($_SESSION['usersessiondata'][$key]))
 		return $_SESSION['usersessiondata'][$key];
@@ -1524,7 +1524,7 @@ function getServerProfileImages($userid) {
 		$profiles[$row['id']] = $row['image'];
 	$_SESSION['usersessiondata'][$key] = $profiles;
 	return $profiles;
-}
+}*/
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
@@ -3981,6 +3981,7 @@ function getOverallUserPrivs($userid) {
 	       . "FROM userprivtype t, "
 	       .      "userpriv u "
 	       . "WHERE u.userprivtypeid = t.id AND "
+	       .       "t.name NOT IN ('configAdmin', 'serverProfileAdmin') AND "
 	       .       "(u.userid = $userid OR "
 	       .       "u.usergroupid IN (SELECT usergroupid "
 	       .                         "FROM usergroupmembers "
@@ -10246,7 +10247,7 @@ function getTypes($subtype="both") {
 	$types = array("users" => array(),
 	               "resources" => array());
 	if($subtype == "users" || $subtype == "both") {
-		$query = "SELECT id, name FROM userprivtype";
+		$query = "SELECT id, name FROM userprivtype WHERE name NOT IN ('configAdmin', 'serverProfileAdmin')";
 		$qh = doQuery($query, 365);
 		while($row = mysql_fetch_assoc($qh)) {
 			if($row["name"] == "block" || $row["name"] == "cascade")
@@ -12780,12 +12781,12 @@ function getNavMenuData($homeurl=HOMEURL) {
 		$menudata['managementnode']['selected'] = checkMenuItemSelected('managementnode');
 	}
 
-	if(in_array("serverProfileAdmin", $user["privileges"]) ||
+	/*if(in_array("serverProfileAdmin", $user["privileges"]) ||
 	   in_array("serverCheckOut", $user["privileges"])) {
 		$menudata['serverProfiles']['url'] = BASEURL . SCRIPT . "?mode=serverProfiles";
 		$menudata['serverProfiles']['title'] = i('Server Profiles');
 		$menudata['serverProfiles']['selected'] = checkMenuItemSelected('serverProfiles');
-	}
+	}*/
 
 	if(count($computermetadata["platforms"]) &&
 		count($computermetadata["schedules"])) {
@@ -13113,7 +13114,7 @@ function getDojoHTML($refresh) {
 			                      'dojox.grid.DataGrid',
 			                      'dijit.form.Button');
 			break;
-		case 'serverProfiles':
+		/*case 'serverProfiles':
 			$filename = 'vclServerProfiles.js';
 			$dojoRequires = array('dojo.parser',
 			                      'dijit.Dialog',
@@ -13128,7 +13129,7 @@ function getDojoHTML($refresh) {
 			                      'dijit.layout.TabContainer',
 			                      'dojox.string.sprintf',
 			                      'dojo.data.ItemFileWriteStore');
-			break;
+			break;*/
 		case 'editVMInfo':
 			$filename = 'vclVirtualHosts.js';
 			$dojoRequires = array('dojo.parser',
@@ -13263,8 +13264,8 @@ function getDojoHTML($refresh) {
 			$rt .= "      testJS();\n";
 			$rt .= "      document.onmousemove = updateMouseXY;\n";
 			$rt .= "      showScriptOnly();\n";
-			$cont = addContinuationsEntry('AJserverProfileStoreData', array(), 120, 1, 0);
-			$rt .= "   populateProfileStore('$cont');\n";
+			/*$cont = addContinuationsEntry('AJserverProfileStoreData', array(), 120, 1, 0);
+			$rt .= "   populateProfileStore('$cont');\n";*/
 			$rt .= "   });\n";
 			if($refresh)
 				$rt .= "   refresh_timer = setTimeout(resRefresh, 12000);\n";
@@ -13487,7 +13488,7 @@ function getDojoHTML($refresh) {
 				$rt .= "<script type=\"text/javascript\" src=\"js/$jsfile?v=$v\"></script>\n";
 			return $rt;
 
-		case "serverProfiles":
+		/*case "serverProfiles":
 			$rt .= "<style type=\"text/css\">\n";
 			$rt .= "   @import \"themes/$skin/css/dojo/$skin.css\";\n";
 			$rt .= "</style>\n";
@@ -13506,7 +13507,7 @@ function getDojoHTML($refresh) {
 			$rt .= "   });\n";
 			$rt .= "   dojo.addOnLoad(getProfiles);\n";
 			$rt .= "</script>\n";
-			return $rt;
+			return $rt;*/
 
 		case 'selectauth':
 			$rt .= "<script type=\"text/javascript\" src=\"dojo/dojo/dojo.js\"></script>\n";

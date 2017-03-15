@@ -417,9 +417,9 @@ function XMLRPCdeployServer($imageid, $start, $end, $admingroup='',
 	$imageid = processInputData($imageid, ARG_NUMERIC);
 	$resources = getUserResources(array("imageAdmin", "imageCheckOut"));
 	$images = removeNoCheckout($resources["image"]);
-	$extraimages = getServerProfileImages($user['id']);
-	if(! array_key_exists($imageid, $images) &&
-	   ! array_key_exists($imageid, $extraimages)) {
+	#$extraimages = getServerProfileImages($user['id']);
+	if(! array_key_exists($imageid, $images) /*&&
+		! array_key_exists($imageid, $extraimages)*/) {
 		return array('status' => 'error',
 		             'errorcode' => 3,
 		             'errormsg' => "access denied to $imageid");

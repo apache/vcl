@@ -85,7 +85,7 @@ function int2bstr(a) {
 	return b;
 }
 
-function populateProfileStore(cont) {
+/*function populateProfileStore(cont) {
 	if(typeof(offsetreloading) != 'undefined' && offsetreloading == 1)
 		return;
 	RPCwrapper({continuation: cont}, populateProfileStoreCB, 1);
@@ -171,4 +171,4 @@ function getServerProfileDataDeployCB(data, ioArgs) {
 		dijit.byId('deployrouter').set('disabled', true);
 		dijit.byId('deploydns').set('disabled', true);
 	}
-}
+}*/
