@@ -1436,6 +1436,21 @@ CREATE TABLE IF NOT EXISTS `variable` (
 
 -- --------------------------------------------------------
 
+--
+-- Table structure for table `vcldsemaphore`
+--
+
+CREATE TABLE IF NOT EXISTS `vcldsemaphore` (
+  `identifier` varchar(256) NOT NULL,
+  `reservationid` mediumint(9) unsigned NOT NULL,
+  `pid` smallint(5) unsigned NOT NULL,
+  `expires` datetime NOT NULL,
+  PRIMARY KEY (`identifier`),
+  KEY `reservationid` (`reservationid`)
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+
+-- --------------------------------------------------------
+
 -- 
 -- Table structure for table `vmhost`
 -- 
@@ -2615,6 +2630,11 @@ ALTER TABLE `userpriv` ADD CONSTRAINT FOREIGN KEY (`userid`) REFERENCES `user` (
 ALTER TABLE `userpriv` ADD CONSTRAINT FOREIGN KEY (`usergroupid`) REFERENCES `usergroup` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 ALTER TABLE `userpriv` ADD CONSTRAINT FOREIGN KEY (`privnodeid`) REFERENCES `privnode` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 ALTER TABLE `userpriv` ADD CONSTRAINT FOREIGN KEY (`userprivtypeid`) REFERENCES `userprivtype` (`id`) ON UPDATE CASCADE;
+
+--
+-- Constraints for table `vcldsemaphore`
+--
+ALTER TABLE `vcldsemaphore` ADD CONSTRAINT FOREIGN KEY (`reservationid`) REFERENCES `reservation` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 --
 -- Constraints for table `vmhost`

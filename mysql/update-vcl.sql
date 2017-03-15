@@ -1497,6 +1497,21 @@ CREATE TABLE IF NOT EXISTS `variable` (
 
 -- --------------------------------------------------------
 
+--
+-- Table structure for table `vcldsemaphore`
+--
+
+CREATE TABLE IF NOT EXISTS `vcldsemaphore` (
+  `identifier` varchar(256) NOT NULL,
+  `reservationid` mediumint(9) unsigned NOT NULL,
+  `pid` smallint(5) unsigned NOT NULL,
+  `expires` datetime NOT NULL,
+  PRIMARY KEY (`identifier`),
+  KEY `reservationid` (`reservationid`)
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+
+-- --------------------------------------------------------
+
 -- 
 -- Table structure change for table `vmhost`
 -- 
@@ -2595,6 +2610,14 @@ CALL DropExistingConstraints('userpriv', 'userprivtypeid');
 CALL AddConstraintIfNotExists('userpriv', 'userid', 'user', 'id', 'update', 'CASCADE');
 CALL AddConstraintIfNotExists('userpriv', 'userprivtypeid', 'userprivtype', 'id', 'update', 'CASCADE');
 CALL AddConstraintIfNotExists('userpriv', 'usergroupid', 'usergroup', 'id', 'both', 'CASCADE');
+
+-- --------------------------------------------------------
+
+--
+-- Constraints for table `vcldsemaphore`
+--
+
+CALL AddConstraintIfNotExists('vcldsemaphore', 'reservationid', 'reservation', 'id', 'both', 'CASCADE');
 
 -- --------------------------------------------------------
 
