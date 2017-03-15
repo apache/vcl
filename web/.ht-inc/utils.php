@@ -2036,10 +2036,7 @@ function getUserResources($userprivs, $resourceprivs=array("available"),
 			foreach($resourceprivs as $priv) {
 				if(isset($nodeprivs[$nodeid]["resources"][$resourceid][$priv])) {
 					list($type, $name, $id) = explode('/', $resourceid);
-					if(! isset($resourcegroups[$type]))
-						$resourcegroups[$type] = array();
-					if(! isset($resourcegroups[$type][$name]))
-						$resourcegroups[$type][$id] = $name;
+					$resourcegroups[$type][$id] = $name;
 				}
 			}
 		}
@@ -2049,10 +2046,7 @@ function getUserResources($userprivs, $resourceprivs=array("available"),
 				if(isset($nodeprivs[$nodeid]["cascaderesources"][$resourceid][$priv]) &&
 					! (isset($nodeprivs[$nodeid]["resources"][$resourceid]["block"]))) {
 					list($type, $name, $id) = explode('/', $resourceid);
-					if(! isset($resourcegroups[$type]))
-						$resourcegroups[$type] = array();
-					if(! isset($resourcegroups[$type][$name]))
-						$resourcegroups[$type][$id] = $name;
+					$resourcegroups[$type][$id] = $name;
 				}
 			}
 		}
@@ -2084,13 +2078,15 @@ function getUserResources($userprivs, $resourceprivs=array("available"),
 ////////////////////////////////////////////////////////////////////////////////
 ///
 /// \fn getUserResourcesUp(&$nodeprivs, $nodeid, $userid,
-///                                 $resourceprivs)
+///                        $resourceprivs, $privdataset)
 ///
 /// \param $nodeprivs - node privilege array used in getUserResources
 /// \param $nodeid - an id from the nodepriv table
 /// \param $userid - an id from the user table
 /// \param $resourceprivs - array of privileges to look for (such as
 /// imageAdmin, imageCheckOut, etc); don't include 'block' or 'cascade'
+/// \param $privdataset - array of data from userpriv table built in
+/// getUserResources function
 ///
 /// \return modifies $nodeprivs, but doesn't return anything
 ///
@@ -2118,13 +2114,15 @@ function getUserResourcesUp(&$nodeprivs, $nodeid, $userid,
 ////////////////////////////////////////////////////////////////////////////////
 ///
 /// \fn getUserResourcesDown(&$nodeprivs, $nodeid, $userid,
-///                                   $resourceprivs)
+///                          $resourceprivs, $privdataset)
 ///
 /// \param $nodeprivs - node privilege array used in getUserResources
 /// \param $nodeid - an id from the nodepriv table
 /// \param $userid - an id from the user table
 /// \param $resourceprivs - array of privileges to look for (such as
 /// imageAdmin, imageCheckOut, etc); don't include 'block' or 'cascade'
+/// \param $privdataset - array of data from userpriv table built in
+/// getUserResources function
 ///
 /// \return modifies $nodeprivs, but doesn't return anything
 ///
@@ -2145,7 +2143,7 @@ function getUserResourcesDown(&$nodeprivs, $nodeid, $userid,
 ////////////////////////////////////////////////////////////////////////////////
 ///
 /// \fn addNodeUserResourcePrivs(&$nodeprivs, $id, $lastid, $userid,
-///                                       $resourceprivs)
+///                              $resourceprivs, $privdataset)
 ///
 /// \param $nodeprivs - node privilege array used in getUserResources
 /// \param $id - an id from the nodepriv table
@@ -2153,6 +2151,8 @@ function getUserResourcesDown(&$nodeprivs, $nodeid, $userid,
 /// \param $userid - an id from the user table
 /// \param $resourceprivs - array of privileges to look for (such as
 /// imageAdmin, imageCheckOut, etc); don't include 'block' or 'cascade'
+/// \param $privdataset - array of data from userpriv table built in
+/// getUserResources function
 ///
 /// \return modifies $nodeprivs, but doesn't return anything
 ///
@@ -2338,6 +2338,8 @@ function addOwnedResources(&$resources, $includedeleted, $userid) {
 		if(! $includedeleted &&
 		   ($type == "image" || $type == "computer" || $type == 'config'))
 			$query .= " AND deleted = 0";
+		if(! $includedeleted && $type == 'managementnode')
+			$query .= " AND stateid != (SELECT id FROM state WHERE name = 'deleted') ";
 		$qh = doQuery($query, 101);
 		while($row = mysql_fetch_assoc($qh)) {
 			if(! isset($resources[$type][$row["id"]]))
@@ -2423,11 +2425,13 @@ function getResourcesFromGroups($groups, $type, $includedeleted) {
 	       .       "m.resourcegroupid = g.id AND "
 	       .       "g.name IN ($inlist) AND "
 	       .       "g.resourcetypeid = rt.id AND "
-	       .       "rt.name = '$type'";
+	       .       "rt.name = '$type' ";
 	if(! $includedeleted &&
 	   ($type == "image" || $type == "computer" || $type == 'config')) {
 		$query .= "AND deleted = 0 ";
 	}
+	if(! $includedeleted && $type == 'managementnode')
+		$query .= "AND t.stateid != (SELECT id FROM state WHERE name = 'deleted') ";
 	/*if($type == "image")
 		$query .= "AND test = 0 ";*/
 	$query .= "ORDER BY t.$field";
@@ -5489,9 +5493,7 @@ function findManagementNode($compid, $start, $nowfuture) {
 /// \b forcheckout - whether or not the image is intended for checkout\n
 /// \b password - password for this computer\n
 /// \b connectIP - IP to which user will connect\n
-/// \b remoteIP - IP of remote user\n
-/// \b domainDNSName - AD domain DNS name associated with image if image is
-/// using AD integration; empty string if AD integration not being used\n\n
+/// \b remoteIP - IP of remote user\n\n
 /// an array of arrays of passwords whose key is 'passwds', with the next key
 /// being the reservationid and the elements being the userid as a key and that
 /// user's password as the value
@@ -8386,7 +8388,7 @@ function getComputers($sort=0, $includedeleted=0, $compid="") {
 ////////////////////////////////////////////////////////////////////////////////
 function getUserComputerMetaData() {
 	$key = getKey(array('getUserComputerMetaData'));
-	if(array_key_exists($key, $_SESSION['usersessiondata']))
+	if(isset($_SESSION['usersessiondata'][$key]))
 		return $_SESSION['usersessiondata'][$key];
 	$computers = getComputers();
 	$resources = getUserResources(array("computerAdmin"), 
@@ -9126,12 +9128,14 @@ function selectInputHTML($name, $dataArr, $domid="", $extra="", $selectedid=-1,
 		   $h .= "        <option value=\"$id\" selected=\"selected\">";
 		else
 		   $h .= "        <option value=\"$id\">";
-		if(isset($dataArr[$id]['prettyname']))
-			$h .= $dataArr[$id]["prettyname"] . "</option>\n";
-		elseif(isset($dataArr[$id]['name']))
-			$h .= $dataArr[$id]["name"] . "</option>\n";
-		elseif(isset($dataArr[$id]['hostname']))
-			$h .= $dataArr[$id]["hostname"] . "</option>\n";
+		if(is_array($dataArr[$id])) {
+			if(array_key_exists('prettyname', $dataArr[$id]))
+				$h .= $dataArr[$id]['prettyname'] . "</option>\n";
+			elseif(array_key_exists('name', $dataArr[$id]))
+				$h .= $dataArr[$id]['name'] . "</option>\n";
+			elseif(array_key_exists('hostname', $dataArr[$id]))
+				$h .= $dataArr[$id]['hostname'] . "</option>\n";
+		}
 		else
 			$h .= $dataArr[$id] . "</option>\n";
 	}
@@ -9771,7 +9775,7 @@ function checkUpdateServerRequestGroups($groupid) {
 ////////////////////////////////////////////////////////////////////////////////
 function getMaintItems($id=0) {
 	$key = getKey(array('getMaintItems', $id));
-	if(isset($_SESSION) && array_key_exists($key, $_SESSION['usersessiondata']))
+	if(isset($_SESSION['usersessiondata'][$key]))
 		return $_SESSION['usersessiondata'][$key];
 	$query = "SELECT m.id, "
 	       .        "m.start, "
@@ -11100,7 +11104,7 @@ function getNodePath($nodeid) {
 ////////////////////////////////////////////////////////////////////////////////
 function sortKeepIndex($a, $b) {
 	if(is_array($a)) {
-		if(isset($a["prettyname"])) {
+		if(array_key_exists("prettyname", $a)) {
 			if(preg_match('/[0-9]-[0-9]/', $a['prettyname']) ||
 			   preg_match('/\.edu$|\.com$|\.net$|\.org$/', $a['prettyname']) ||
 			   preg_match('/[0-9]-[0-9]/', $b['prettyname']) ||
@@ -11108,7 +11112,7 @@ function sortKeepIndex($a, $b) {
 				return compareDashedNumbers($a["prettyname"], $b["prettyname"]);
 			return strcasecmp($a["prettyname"], $b["prettyname"]);
 		}
-		elseif(isset($a["name"])) {
+		elseif(array_key_exists("name", $a)) {
 			if(preg_match('/[0-9]-[0-9]/', $a['name']) ||
 			   preg_match('/\.edu$|\.com$|\.net$|\.org$/', $a['name']) ||
 			   preg_match('/[0-9]-[0-9]/', $b['name']) ||
@@ -11261,7 +11265,7 @@ function getResourceMapping($resourcetype1, $resourcetype2,
 ////////////////////////////////////////////////////////////////////////////////
 function getConnectMethods($imageid) {
 	$key = getKey(array('getConnectMethods', $imageid));
-	if(array_key_exists($key, $_SESSION['usersessiondata']))
+	if(isset($_SESSION['usersessiondata'][$key]))
 		return $_SESSION['usersessiondata'][$key];
 	$query = "SELECT DISTINCT c.id, "
 	       .        "c.description, "
@@ -11983,7 +11987,7 @@ function validateHostname($name) {
 	// return 0 if dotted numbers only
 	if(preg_match('/^[0-9]+(\.[0-9]+){3}$/', $name))
 		return 0;
-	return preg_match('/^([A-Za-z0-9]{1,63})(\.[A-Za-z0-9-_]+)*(\.?[A-Za-z0-9])$/', $name);
+	return preg_match('/^([-A-Za-z0-9]{1,63})(\.[A-Za-z0-9-_]+)*(\.?[A-Za-z0-9])$/', $name);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -13841,7 +13845,7 @@ function getSelectLanguagePulldown() {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function getFSlocales() {
-	if(isset($_SESSION) && array_key_exists('locales', $_SESSION))
+	if(isset($_SESSION['locales']))
 		return $_SESSION['locales'];
 	$tmp = explode('/', $_SERVER['SCRIPT_FILENAME']);
 	array_pop($tmp);
