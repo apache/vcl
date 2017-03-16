@@ -227,8 +227,6 @@ class ADdomain extends Resource {
 		$args['rscid'] = $rscid;
 		$tmp = $this->getData($args);
 		$data = $tmp[$rscid];
-		/*$login = preg_replace("/<br>/", "\n", $data['logindescription']);
-		$data['logindescription'] = htmlspecialchars_decode($login);*/
 		$cdata = $this->basecdata;
 		$cdata['rscid'] = $rscid;
 		$cdata['olddata'] = $data;
@@ -264,7 +262,6 @@ class ADdomain extends Resource {
 
 		$ownerid = getUserlistID($data['owner']);
 		$esc_pass = mysql_real_escape_string($data['password']);
-		#$esc_desc = mysql_real_escape_string($data['logindescription']);
 	
 		$query = "INSERT INTO addomain"
 				.	"(name, "

@@ -21,15 +21,6 @@ function ADdomain() {
 }
 ADdomain.prototype = new Resource();
 
-ADdomain.prototype.colformatter = function(value, rowIndex, obj) {
-	if(obj.field == 'logindescription') {
-		var str = value.replace(/&lt;br>/g, '<br>'); 
-		str = str.replace(/&amp;/g, '&'); 
-		return str;
-	}
-	return value;
-}
-
 var resource = new ADdomain();
 
 function addNewResource(title) {
