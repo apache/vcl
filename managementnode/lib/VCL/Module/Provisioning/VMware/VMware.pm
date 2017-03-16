@@ -594,7 +594,7 @@ sub load {
 	my $computer_name = $self->data->get_computer_short_name() || return;
 	my $image_name = $self->data->get_image_name() || return;
 	my $vmhost_name = $self->data->get_vmhost_short_name() || return;
-
+	
 	
 	insertloadlog($reservation_id, $computer_id, "startload", "$computer_name $image_name");
 	
@@ -1995,6 +1995,7 @@ sub prepare_vmdk {
 	my $host_vmdk_file_path_shared = $self->get_vmdk_file_path_shared() || return;
 	my $host_vmdk_directory_path_shared = $self->get_vmdk_directory_path_shared() || return;
 	
+	my $request_state_name = $self->data->get_request_state_name(0) || 'unknown';
 	my $image_name = $self->data->get_image_name() || return;
 	my $vm_computer_name = $self->data->get_computer_short_name() || return;
 	my $vmhost_name = $self->data->get_vmhost_short_name() || return;
@@ -2004,31 +2005,28 @@ sub prepare_vmdk {
 	# Semaphores are created when exclusive access to a file/directory is needed to avoid conflicts
 	# A semaphore ID is a string identifying a semaphore object when created
 	# Only 1 process at a time may create a semaphore with a given ID - other processes must wait if they attempt to do so
-	# If the VM profile disk type is NOT network, include the VM host name in the semaphore ID
-	# This means exclusive access to a directory is only restricted to the same VM host
-	# If the disk type is network, multiple VM hosts may use the same directory so access should be restricted across hosts
-	my $vmdk_semaphore_id;
-	my $shared_vmdk_semaphore_id;
-	my $vmprofile_disk_type = $self->data->get_vmhost_profile_vmdisk();
-	if ($vmprofile_disk_type =~ /network/i) {
-		$vmdk_semaphore_id = $host_vmdk_directory_path;
-		$shared_vmdk_semaphore_id = $host_vmdk_directory_path_shared;
-	}
-	else {
-		$vmdk_semaphore_id = "$vmhost_name-$host_vmdk_directory_path";
-		$shared_vmdk_semaphore_id = "$vmhost_name-$host_vmdk_directory_path_shared";
-	}
 	
 	# Establish a semaphore for the shared vmdk directory before checking if it exists
 	# This causes this process to wait if another process is copying to the shared directory
 	# Wait a long time to create the semaphore in case another process is copying a large vmdk to the directory
-	my $vmdk_semaphore = $self->get_semaphore($shared_vmdk_semaphore_id, (60 * 20), 5) || return;
-	my $shared_vmdk_exists = $self->vmhost_os->file_exists($host_vmdk_file_path_shared);
 	
-	# Return 1 if the VM is not dedicated and the shared vmdk already exists on the host
-	if ($shared_vmdk_exists && !$is_vm_dedicated) {
-		notify($ERRORS{'DEBUG'}, 0, "VM is not dedicated and shared vmdk file already exists on VM host $vmhost_name: $host_vmdk_file_path");
-		return 1;
+	my $shared_vmdk_semaphore = $self->get_datastore_directory_semaphore($host_vmdk_directory_path_shared, (60 * 30)) || return;
+	
+	my $dedicated_vmdk_semaphore;
+	if ($host_vmdk_directory_path_shared ne $host_vmdk_directory_path) {
+		$dedicated_vmdk_semaphore = $self->get_datastore_directory_semaphore($host_vmdk_directory_path, (60 * 30)) || return;
+	}
+	
+	# Return  if the VM is not dedicated and the shared vmdk already exists on the host
+	my $shared_vmdk_exists = $self->vmhost_os->file_exists($host_vmdk_file_path_shared);
+	if ($shared_vmdk_exists) {
+		# Release the shared vmdk semaphore - image should be completely copied to correct location
+		undef $shared_vmdk_semaphore;
+		
+		if (!$is_vm_dedicated) {
+			notify($ERRORS{'DEBUG'}, 0, "VM is not dedicated and shared vmdk file already exists on VM host $vmhost_name: $host_vmdk_file_path");
+			return 1;
+		}
 	}
 	
 	# VM is either:
@@ -2037,32 +2035,27 @@ sub prepare_vmdk {
 	#        -vmdk directory should be created and vmdk files copied to it
 	#    -shared and the directory doesn't exist
 	#        -shared vmdk directory should be retrieved from the image repository
-	# Update the semaphore for exclusive access to the vmdk directory if this is not the same directory as the shared directory
-	# The original semaphore is automatically released when the variable is reassigned
-	if ($vmdk_semaphore_id ne $shared_vmdk_semaphore_id) {
-		$vmdk_semaphore = $self->get_semaphore($vmdk_semaphore_id, (60 * 1)) || return;
-	}
+	
 	
 	# If the VM is dedicated, check if the dedicated vmdk already exists on the host, delete it if necessary
-	if ($is_vm_dedicated && $self->vmhost_os->file_exists($host_vmdk_directory_path)) {
-		my $request_state_name = $self->data->get_request_state_name(0);
-		if ($request_state_name && $request_state_name =~ /(new|reload)/) {
-			notify($ERRORS{'WARNING'}, 0, "VM is dedicated and vmdk directory already exists on VM host $vmhost_name: $host_vmdk_directory_path, existing directory will be deleted");
-			if (!$self->vmhost_os->delete_file($host_vmdk_directory_path)) {
-				notify($ERRORS{'WARNING'}, 0, "failed to delete existing dedicated vmdk directory on VM host $vmhost_name: $host_vmdk_directory_path");
-				return;
+	if ($is_vm_dedicated) {
+		if ($self->vmhost_os->file_exists($host_vmdk_directory_path)) {
+			if ($request_state_name =~ /(new|reload)/) {
+				notify($ERRORS{'WARNING'}, 0, "VM is dedicated and vmdk directory already exists on VM host $vmhost_name: $host_vmdk_directory_path, existing directory will be deleted");
+				if (!$self->vmhost_os->delete_file($host_vmdk_directory_path)) {
+					notify($ERRORS{'WARNING'}, 0, "failed to delete existing dedicated vmdk directory on VM host $vmhost_name: $host_vmdk_directory_path");
+					return;
+				}
+			}
+			else {
+				# Don't delete the directory, it may be in use by a VM
+				# Attempting to delete it will likely delete some files but not all, leaving a mess to reconstruct
+				notify($ERRORS{'OK'}, 0, "VM is dedicated and vmdk directory already exists on VM host $vmhost_name: $host_vmdk_directory_path, request state is not new or reload, directory will not be deleted, returning true");
+				return 1;
 			}
 		}
-		else {
-			# Don't delete the directory, it may be in use by a VM
-			# Attempting to delete it will likely delete some files but not all, leaving a mess to reconstruct
-			notify($ERRORS{'OK'}, 0, "VM is dedicated and vmdk directory already exists on VM host $vmhost_name: $host_vmdk_directory_path, request state is not new or reload, directory will not be deleted, returning true");
-			return 1;
-		}
-	}
-	
-	# Check if the VM is dedicated, if so, attempt to copy files from the shared vmdk directory if it exists
-	if ($is_vm_dedicated) {
+		
+		# Attempt to copy files from the shared vmdk directory if it exists
 		if ($shared_vmdk_exists) {
 			notify($ERRORS{'DEBUG'}, 0, "VM is dedicated and shared vmdk exists on the VM host $vmhost_name, attempting to make a copy");
 			if ($self->copy_vmdk($host_vmdk_file_path_shared, $host_vmdk_file_path)) {
@@ -4922,7 +4915,7 @@ sub get_vm_os_configuration {
 	my $image_os_name = $self->data->get_image_os_name() || return;
 	my $image_os_type = $self->data->get_image_os_type();
 	my $image_architecture = $self->data->get_image_architecture() || return;
-	
+
 	# Figure out the key name in the %VM_OS_CONFIGURATION hash for the guest OS
 	for my $vm_os_configuration_key (keys(%VM_OS_CONFIGURATION)) {
 		my ($os_product_name, $os_architecture) = $vm_os_configuration_key =~ /(.+)-(.+)/;
@@ -5457,7 +5450,7 @@ sub get_vmx_info {
 			next;
 		}
 		elsif ($vmdk_file_path !~ /\.vmdk$/i) {
-			notify($ERRORS{'DEBUG'}, 0, "ignoring $storage_identifier, filename property does not end with .vmdk: $vmdk_file_path");
+			notify($ERRORS{'DEBUG'}, 0, "ignoring $storage_identifier, filename property does not end with .vmdk: $vmdk_file_path\n" . format_data($vmx_info{vmdk}{$storage_identifier}));
 			delete $vmx_info{vmdk}{$storage_identifier};
 			next;
 		}
@@ -9992,6 +9985,72 @@ sub migrate_revert_source {
 	else {
 		notify($ERRORS{'OK'}, 0, "reverted VM $vm_computer_name on source VM host $source_vmhost_computer_name");
 		return 1;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_datastore_directory_semaphore
+
+ Parameters  : $path, $total_wait_seconds (optional)
+ Returns     : VCL::Module::Semaphore object, false, or undefined
+ Description : Obtains a semaphore for exclusive access to the directory on the
+               datastore.
+
+=cut
+
+sub get_datastore_directory_semaphore {
+	my $self = shift;
+	if (ref($self) !~ /vmware/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my ($datastore_directory_path, $total_wait_seconds) = @_;
+	if (!defined($datastore_directory_path)) {
+		notify($ERRORS{'WARNING'}, 0, "datastore directory path argument was not supplied");
+		return;
+	}
+	
+	$total_wait_seconds = 300 unless $total_wait_seconds;
+	
+	notify($ERRORS{'DEBUG'}, 0, "attempting to obtain semaphore for datastore directory: $datastore_directory_path");
+	
+	my $datastore_url = $self->_get_datastore_url($datastore_directory_path);
+	if (!$datastore_url) {
+		notify($ERRORS{'WARNING'}, 0, "failed to obtain semaphore, datastore URL could not be determined for path: $datastore_directory_path");
+		return;
+	}
+	notify($ERRORS{'DEBUG'}, 0, "determined datastore URL: $datastore_url");
+	
+	my $directory_name;
+	if ($datastore_directory_path =~ /\.[^\/]+$/) {
+		# Argument appears to be a file path, use the parent directory name
+		$directory_name = $self->_get_parent_directory_name($datastore_directory_path);
+		if (!$directory_name) {
+			notify($ERRORS{'WARNING'}, 0, "failed to obtain semaphore, argument appears to be a file path: $datastore_directory_path, parent directory name could not be determined");
+			return;
+		}
+		notify($ERRORS{'DEBUG'}, 0, "argument appears to be a file path: $datastore_directory_path, using parent directory name for semaphore ID: $directory_name");
+	}
+	else {
+		$directory_name = $self->_get_file_base_name($datastore_directory_path);
+		if (!$directory_name) {
+			notify($ERRORS{'WARNING'}, 0, "failed to obtain semaphore, argument appears to be a directory path: $datastore_directory_path, base name could not be determined");
+			return;
+		}
+		notify($ERRORS{'DEBUG'}, 0, "argument appears to be a directory path: $datastore_directory_path, using directory name for semaphore ID: $directory_name");
+	}
+	
+	my $semaphore_identifier = $datastore_url . '/' . $directory_name;
+	my $semaphore = $self->get_semaphore($semaphore_identifier, $total_wait_seconds);
+	if ($semaphore) {
+		notify($ERRORS{'DEBUG'}, 0, "obtained semaphore with identifier '$semaphore_identifier', returning semaphore object");
+		return $semaphore;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to obtain semaphore with identifier '$semaphore_identifier', returning 0");
+		return 0;
 	}
 }
 

@@ -788,14 +788,16 @@ sub computer_not_being_used {
 				if (my @competing_reservation_pids = reservation_being_processed($competing_reservation_id)) {
 					notify($ERRORS{'OK'}, 0, "reservation $competing_reservation_id is currently being processed by PID(s): " . join(', ', @competing_reservation_pids) . ", making sure the process doesn't have any Semaphore objects open before attempting to kill it");
 					
-					# Create a Semaphore object and check if the competing process owns any of its own Semaphore objects
+					# Check if the competing process owns any semaphores
 					# This would indicate it's doing something such as retrieving an image
 					# Don't kill it or a partial image may be copied
-					my $semaphore = VCL::Module::Semaphore->new();
-					for my $competing_reservation_pid (@competing_reservation_pids) {
-						if ($semaphore->get_process_semaphore_ids($competing_reservation_pid)) {
-							notify($ERRORS{'CRITICAL'}, 0, "computer $computer_short_name is NOT available, reservation $competing_reservation_id is still being processed and owns a Semaphore object, not killing the competing process, it may be transferring an image:\n$competing_request_info_string");
-							return;
+					my $semaphore_info = get_vcld_semaphore_info();
+					for my $semaphore_identifier (keys %$semaphore_info) {
+						for my $competing_reservation_pid (@competing_reservation_pids) {
+							if ($semaphore_info->{$semaphore_identifier}{reservationid} == $competing_reservation_id && $semaphore_info->{$semaphore_identifier}{pid} == $competing_reservation_pid) {
+								notify($ERRORS{'CRITICAL'}, 0, "computer $computer_short_name is NOT available, reservation $competing_reservation_id is still being processed and owns a semaphore with identifier '$semaphore_identifier', not killing the competing process, it may be transferring an image:\n$competing_request_info_string, semaphore info:\n" . format_data($semaphore_info->{$semaphore_identifier}));
+								return;
+							}
 						}
 					}
 					

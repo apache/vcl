@@ -90,7 +90,6 @@ use Digest::SHA1 qw(sha1_hex);
 
 use VCL::utils;
 use VCL::DataStructure;
-use VCL::Module::Semaphore;
 
 ##############################################################################
 
@@ -1533,7 +1532,7 @@ sub code_loop_timeout {
 
 =head2 get_semaphore
 
- Parameters  : $semaphore_id, $total_wait_seconds (optional), $attempt_delay_seconds (optional)
+ Parameters  : $semaphore_identifier, $semaphore_expire_seconds (optional), $attempt_delay_seconds (optional)
  Returns     : VCL::Module::Semaphore object
  Description : This subroutine is used to ensure that only 1 process performs a
                particular task at a time. An example would be the retrieval of
@@ -1544,32 +1543,24 @@ sub code_loop_timeout {
                others will wait until the semaphore is released by the
                retrieving process.
                
-               Attempts to open and obtain an exclusive lock on the file
-               specified by the file path argument. If unable to obtain an
-               exclusive lock, it will wait up to the value specified by the
-               total wait seconds argument (default: 30 seconds). The number of
-               seconds to wait in between retries can be specified (default: 15
-               seconds).
-               
-               A semaphore object is returned. The exclusive lock will be
-               retained as long as the semaphore object remains defined. Once
-               undefined, the exclusive lock is released and the file is
-               deleted.
+               A semaphore object is returned. The semaphore will be retained as
+               long as the semaphore object remains defined. Once undefined, the
+               semaphore is released.
                
                Examples:
                
                Semaphore is released when it is undefined:
                my $semaphore = $self->get_semaphore('test');
-               ... <exclusive lock is in place>
+               ... <semaphore in place>
                undef $semaphore;
-               ... <exclusive lock released>
+               ... <semaphore released>
                
                Semaphore is released when it goes out of scope:
                if (blah) {
                   my $semaphore = $self->get_semaphore('test');
-                  ... <exclusive lock is in place>
+                  ... <semaphore in place>
                }
-               ... <exclusive lock released>
+               ... <semaphore released>
 
 =cut
 
@@ -1581,64 +1572,35 @@ sub get_semaphore {
 	}
 	
 	# Get the file path argument
-	my ($semaphore_id, $total_wait_seconds, $attempt_delay_seconds) = @_;
-	if (!$semaphore_id) {
-		notify($ERRORS{'WARNING'}, 0, "semaphore ID argument was not supplied");
+	my ($semaphore_identifier, $semaphore_expire_seconds, $attempt_delay_seconds) = @_;
+	if (!$semaphore_identifier) {
+		notify($ERRORS{'WARNING'}, 0, "semaphore identifier argument was not supplied");
 		return;
 	}
 	
 	# Attempt to create a new semaphore object
+	# Load Semaphore.pm here instead of calling use
+	# This prevents "Subroutine ... redefined" warnings
+	eval {
+		require "VCL/Module/Semaphore.pm";
+		import VCL::Module::Semaphore;
+	};
 	my $semaphore = VCL::Module::Semaphore->new({'data_structure' => $self->data, mn_os => $self->mn_os});
 	if (!$semaphore) {
 		notify($ERRORS{'WARNING'}, 0, "failed to create semaphore object");
 		return;
 	}
 	
-	# Attempt to open and exclusively lock the file
-	if ($semaphore->get_lockfile($semaphore_id, $total_wait_seconds, $attempt_delay_seconds)) {
-		# Return the semaphore object
-		my $address = sprintf('%x', $semaphore);
-		notify($ERRORS{'DEBUG'}, 0, "created '$semaphore_id' Semaphore object, memory address: $address");
+	my $semaphore_object_address = sprintf('%x', $semaphore);
+	
+	if ($semaphore->obtain($semaphore_identifier, $semaphore_expire_seconds, $attempt_delay_seconds)) {
+		notify($ERRORS{'DEBUG'}, 0, "obtained semaphore with identifier: '$semaphore_identifier', memory address: $semaphore_object_address");
 		return $semaphore;
 	}
 	else {
-		notify($ERRORS{'DEBUG'}, 0, "failed to create '$semaphore_id' Semaphore object");
+		notify($ERRORS{'DEBUG'}, 0, "failed to obtain semaphore with identifier: '$semaphore_identifier'");
 		return;
 	}
-}
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 does_semaphore_exist
-
- Parameters  : $semaphore_id
- Returns     : boolean
- Description : Determines if an open Semaphore exists on this management node
-               matching the $semaphore_id.
-
-=cut
-
-sub does_semaphore_exist {
-	my $self = shift;
-	unless (ref($self) && $self->isa('VCL::Module')) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return;
-	}
-	
-	my ($semaphore_id) = @_;
-	if (!$semaphore_id) {
-		notify($ERRORS{'WARNING'}, 0, "semaphore ID argument was not supplied");
-		return;
-	}
-	
-	# Attempt to create a new semaphore object
-	my $semaphore = VCL::Module::Semaphore->new({'data_structure' => $self->data, mn_os => $self->mn_os});
-	if (!$semaphore) {
-		notify($ERRORS{'WARNING'}, 0, "failed to create semaphore object");
-		return;
-	}
-	
-	return $semaphore->semaphore_exists($semaphore_id);
 }
 
 #/////////////////////////////////////////////////////////////////////////////

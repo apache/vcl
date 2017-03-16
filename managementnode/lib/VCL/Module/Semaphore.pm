@@ -25,7 +25,7 @@ VCL::Module::Semaphore - VCL module to control semaphores
 =head1 SYNOPSIS
 
  my $semaphore = VCL::Module::Semaphore->new({data_structure => $self->data});
- $semaphore->get_lockfile($semaphore_id, $total_wait_seconds, $attempt_delay_seconds);
+ $semaphore->obtain('something-unique', 240, $3);
 
 =head1 DESCRIPTION
 
@@ -67,478 +67,123 @@ use VCL::utils;
 
 ##############################################################################
 
-=head1 CLASS VARIABLES
-
-=cut
-
-=head2 $LOCKFILE_DIRECTORY_PATH
-
- Data type   : String
- Description : Location on the management node of the lockfiles are stored.
-
-=cut
-
-our $LOCKFILE_DIRECTORY_PATH = "/tmp";
-
-=head2 $LOCKFILE_EXTENSION
-
- Data type   : String
- Description : File extension to be used for lockfiles.
-
-=cut
-
-our $LOCKFILE_EXTENSION = "semaphore";
-
-##############################################################################
-
 =head1 OBJECT METHODS
 
 =cut
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 get_lockfile
+=head2 obtain
 
- Parameters  : $semaphore_id, $total_wait_seconds (optional), $attempt_delay_seconds (optional)
- Returns     : filehandle
- Description : Attempts to open and obtain an exclusive lock on the file
-               specified by the file path argument. If unable to obtain an
-               exclusive lock, it will wait up to the value specified by the
-               total wait seconds argument (default: 30 seconds). The number of
-               seconds to wait in between retries can be specified (default: 15
-               seconds).
+ Parameters  : $semaphore_identifier, $semaphore_expire_seconds (optional), $attempt_delay_seconds (optional)
+ Returns     : string
+ Description : Obtains a semaphore by inserting a row into the vcldsemaphore
+               database table.
+					
+					The $semaphore_expire_seconds is used to both determine when the
+					semaphore should be considered orphaned and to determine how long
+					the current process attempts to obtain a semaphore if blocked by
+					another process.
 
 =cut
 
-sub get_lockfile {
+sub obtain {
 	my $self = shift;
 	unless (ref($self) && $self->isa('VCL::Module')) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return;
 	}
 	
-	# Get the semaphore ID argument
-	my ($semaphore_id, $total_wait_seconds, $attempt_delay_seconds) = @_;
-	if (!$semaphore_id) {
-		notify($ERRORS{'WARNING'}, 0, "semaphore ID argument was not supplied");
+	my ($semaphore_identifier, $semaphore_expire_seconds, $attempt_delay_seconds) = @_;
+	if (!$semaphore_identifier) {
+		notify($ERRORS{'WARNING'}, 0, "semaphore identifier argument was not supplied");
+		return;
+	}
+	elsif (defined($semaphore_expire_seconds) && $semaphore_expire_seconds !~ /^\d+$/) {
+		notify($ERRORS{'WARNING'}, 0, "semaphore expire seconds argument is not a valid integer: $semaphore_expire_seconds");
 		return;
 	}
 	
-	$semaphore_id =~ s/\W+/-/g;
-	$semaphore_id =~ s/(^-|-$)//g;
-	
-	my $file_path = "$LOCKFILE_DIRECTORY_PATH/$semaphore_id.$LOCKFILE_EXTENSION";
-	
-	# Set the wait defaults if not supplied as arguments
-	$total_wait_seconds = 30 if !defined($total_wait_seconds);
+	$semaphore_expire_seconds = 300 unless defined($semaphore_expire_seconds);
 	$attempt_delay_seconds = 5 if !$attempt_delay_seconds;
 	
-	# Attempt to lock the file
-	my $wait_message = "attempting to open lockfile";
-	if ($self->code_loop_timeout(\&open_lockfile, [$self, $file_path], $wait_message, $total_wait_seconds, $attempt_delay_seconds)) {
-		return $file_path;
+	# Attempt to set the variable
+	my $wait_message = "attempting to add a row to the vcldsemaphore table with identifier: '$semaphore_identifier'";
+	if ($self->code_loop_timeout(\&_obtain, [$self, $semaphore_identifier, $semaphore_expire_seconds], $wait_message, $semaphore_expire_seconds, $attempt_delay_seconds)) {
+		notify($ERRORS{'OK'}, 0, "*** created semaphore by adding a row to the vcldsemaphore table with identifier: '$semaphore_identifier' ***");
+		$self->{vcldsemaphore_table_identifiers}{$semaphore_identifier} = 1;
+		return 1;
 	}
 	else {
-		notify($ERRORS{'DEBUG'}, 0, "failed to open lockfile: $file_path");
+		notify($ERRORS{'WARNING'}, 0, "failed to obtain semaphore by adding a row to the vcldsemaphore table after attempting for $semaphore_expire_seconds seconds: '$semaphore_identifier'");
 		return;
 	}
 }
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 open_lockfile
+=head2 _obtain
 
- Parameters  : $file_path
- Returns     : If successful: IO::File file handle object
-               If failed: false
- Description : Opens and obtains an exclusive lock on the file specified by the
-               argument.
-
-=cut
-
-sub open_lockfile {
-	my $self = shift;
-	unless (ref($self) && $self->isa('VCL::Module')) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return;
-	}
-	
-	# Get the file path argument
-	my ($file_path) = @_;
-	if (!$file_path) {
-		notify($ERRORS{'WARNING'}, 0, "file path argument was not supplied");
-		return;
-	}
-	
-	# Attempt to open and lock the file
-	if (my $file_handle = new IO::File($file_path, O_WRONLY|O_CREAT)) {
-		if (flock($file_handle, LOCK_EX | LOCK_NB)) {
-			notify($ERRORS{'DEBUG'}, 0, "opened and obtained an exclusive lock on file: $file_path");
-			
-			# Truncate and print the process information to the file
-			$file_handle->truncate(0);
-			print $file_handle "$$ $0\n";
-			$file_handle->setpos($file_handle->getpos());
-			
-			notify($ERRORS{'DEBUG'}, 0, "wrote to file: $file_path, contents:\n '$$ $0'");
-			
-			$self->{file_handles}{$file_path} = $file_handle;
-			return $file_handle;
-		}
-		else {
-			notify($ERRORS{'DEBUG'}, 0, "unable to obtain exclusive lock on file: $file_path");
-			$file_handle->close;
-		}
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to open file: $file_path, error:\n$!");
-		return;
-	}
-	
-	# Don't use get_lockfile_owning_pid or anything that uses lsof on the management node
-	# Not safe - seems to send ALRM some time after command seems to have run
-	## Determine which process is locking the file
-	#my @locking_pids = $self->get_lockfile_owning_pid($file_path);
-	#if (@locking_pids) {
-	#	if (grep { $_ eq $PID } @locking_pids) {
-	#		# The current process already has an exclusive lock on the file
-	#		# This could happen if open_lockfile is called more than once for the same file in the same scope
-	#		notify($ERRORS{'WARNING'}, 0, "file is already locked by this process: @locking_pids");
-	#		return;
-	#	}
-	#	else {
-	#		# Attempt to retrieve the names of the locking process(es)
-	#		my ($ps_exit_status, $ps_output) = run_command("ps -o pid=,cmd= @locking_pids", 1);
-	#		if (defined($ps_output) && !grep(/(ps:)/, @$ps_output)) {
-	#			notify($ERRORS{'DEBUG'}, 0, "file is locked by another process: @locking_pids\n" . join("\n", @$ps_output));
-	#		}
-	#		else {
-	#			notify($ERRORS{'DEBUG'}, 0, "file is locked by another process: @locking_pids");
-	#		}
-	#		return;
-	#	}
-	#}
-	#else {
-	#	notify($ERRORS{'DEBUG'}, 0, "unable to determine PIDs of processes which prevented an exclusive lock to be obtained on $file_path, lock may have been released before lsof command was executed");
-	#}
-	
-	return;
-}
-
-#/////////////////////////////////////////////////////////////////////////////
-#
-#=head2 get_lockfile_owning_pid
-#
-# Parameters  : $file_path
-# Returns     : integer
-# Description : Runs lsof to determine if a process has an exclusive lock on the
-#               lockfile.
-#
-#=cut
-#
-#sub get_lockfile_owning_pid {
-#	my $self = shift;
-#	unless (ref($self) && $self->isa('VCL::Module')) {
-#		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-#		return;
-#	}
-#	
-#	# Get the file path argument
-#	my ($file_path) = @_;
-#	if (!$file_path) {
-#		notify($ERRORS{'WARNING'}, 0, "file path argument was not supplied");
-#		return;
-#	}
-#	
-#	# Run lsof to determine which process is locking the file
-#	#my ($exit_status, $output) = $self->mn_os->execute("/usr/sbin/lsof -S 2 -O -Fp $file_path", 1, 10);
-#	my ($exit_status, $output) = $self->mn_os->execute("/usr/sbin/lsof -Fp $file_path", 0, 10);
-#	if (!defined($output)) {
-#		notify($ERRORS{'WARNING'}, 0, "failed to run lsof command to determine which process is locking the file: $file_path");
-#		return;
-#	}
-#	elsif (grep(/no such file/i, @$output)) {
-#		notify($ERRORS{'WARNING'}, 0, "lsof command reports that the file does not exist: $file_path");
-#		return;
-#	}
-#	
-#	# Parse the lsof output to determine the PID
-#	my @locking_pids = map { /^p(\d+)/ } @$output;
-#	my $locking_pid_count = scalar(@locking_pids);
-#	if (@locking_pids) {
-#		notify($ERRORS{'DEBUG'}, 0, "$file_path is locked by process" . ($locking_pid_count == 1 ? '' : 'es') . ": @locking_pids");
-#		return @locking_pids;
-#	}
-#	elsif (grep(/\w/, @$output)) {
-#		notify($ERRORS{'WARNING'}, 0, "failed to determine owning PID of lockfile: $file_path, unable to determine PIDs from lsof output\n:" . join("\n", @$output));
-#		return;
-#	}
-#	else {
-#		notify($ERRORS{'DEBUG'}, 0, "file is not locked: $file_path");
-#		return ();
-#	}
-#}
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 release_lockfile
-
- Parameters  : $file_path
+ Parameters  : $semaphore_identifier, $semaphore_expire_seconds
  Returns     : boolean
- Description : Releases the exclusive lock and closes the lockfile handle
-               specified by the argument.
+ Description : Helper function for Semaphore.pm::obtain. Attempts to call
+               insert_vcld_semaphore. If this fails, it retrieves existing
+               vcldsemaphore table entries and deletes expired rows.
 
 =cut
 
-sub release_lockfile {
+sub _obtain {
 	my $self = shift;
 	unless (ref($self) && $self->isa('VCL::Module')) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return;
 	}
 	
-	# Get the file path argument
-	my $file_path = shift;
-	if (!$file_path) {
-		notify($ERRORS{'WARNING'}, 0, "file path argument was not supplied");
-		return;
+	my ($semaphore_identifier, $semaphore_expire_seconds) = @_;
+	
+	my $reservation_id = $self->data->get_reservation_id();
+	
+	if (insert_vcld_semaphore($semaphore_identifier, $reservation_id, $semaphore_expire_seconds)) {
+		return 1;
 	}
 	
-	my $file_handle = $self->{file_handles}{$file_path};
-	if (!$file_handle) {
-		notify($ERRORS{'WARNING'}, 0, "file handle is not saved in this object for file path: $file_path");
-		return;
-	}
+	my $current_datetime = makedatestring();
+	my $current_epoch = convert_to_epoch_seconds($current_datetime);
 	
-	# Make sure the file handle is opened
-	my $fileno = $file_handle->fileno;
-	if (!$fileno) {
-		notify($ERRORS{'WARNING'}, 0, "file is not opened: $file_path");
-	}
-	
-	if (!flock($file_handle, LOCK_UN)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to unlock file: $file_path, reason: $!");
-	}
-	
-	# Close the file
-	if (!close($file_handle)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to close file: $file_path, reason: $!");
-	}
-	
-	# Delete the file
-	if (unlink($file_path)) {
-		notify($ERRORS{'DEBUG'}, 0, "deleted file: $file_path");
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to delete file: $file_path, reason: $!");
-	}
-	
-	delete $self->{file_handles}{$file_path};
-	return 1;
-}
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 get_lockfile_paths
-
- Parameters  : none
- Returns     : array
- Description : Returns the paths to all lockfiles.
-
-=cut
-
-sub get_lockfile_paths {
-	my $self = shift;
-	unless (ref($self) && $self->isa('VCL::Module')) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return;
-	}
-	
-	my @lockfile_paths = $self->mn_os->find_files($LOCKFILE_DIRECTORY_PATH, "*.$LOCKFILE_EXTENSION");
-	
-	my $lockfile_path_count = scalar(@lockfile_paths);
-	notify($ERRORS{'DEBUG'}, 0, "retreived $lockfile_path_count lockfile path" . ($lockfile_path_count == 1 ? '' : 's') . ":\n" . join("\n", @lockfile_paths));
-	return @lockfile_paths;
-}
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 semaphore_exists
-
- Parameters  : $semaphore_id
- Returns     : boolean
- Description : Determines if an open Semaphore exists on this management node
-               matching the $semaphore_id.
-
-=cut
-
-sub semaphore_exists {
-	my $self = shift;
-	unless (ref($self) && $self->isa('VCL::Module')) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return;
-	}
-	
-	my ($semaphore_id) = @_;
-	if (!$semaphore_id) {
-		notify($ERRORS{'WARNING'}, 0, "semaphore ID argument was not supplied");
-		return;
-	}
-	
-	my @lockfile_paths = $self->get_lockfile_paths();
-	if (!@lockfile_paths) {
-		notify($ERRORS{'DEBUG'}, 0, "did not find any lockfiles on this management node");
-		return ();
-	}
-	
-	for my $lockfile_path (@lockfile_paths) {
-		my ($lockfile_semaphore_id) = $lockfile_path =~ /([^\/]+)\.$LOCKFILE_EXTENSION/;
-		if ($lockfile_semaphore_id ne $semaphore_id) {
+	my $semaphore_info = get_vcld_semaphore_info();
+	for my $existing_semaphore_identifier (keys %$semaphore_info) {
+		# Ignore if identifier is different
+		if ($existing_semaphore_identifier ne $semaphore_identifier) {
 			next;
 		}
 		
-		# Check if the lockfile is actually locked by another process
-		# It may have been released or deleted
-		my @lockfile_owning_pids = $self->get_lockfile_owning_pid($lockfile_path);
-		if (@lockfile_owning_pids) {
-			notify($ERRORS{'DEBUG'}, 0, "'$semaphore_id' semaphore exists, lockfile path: $lockfile_path, owning PID: @lockfile_owning_pids");
-			return 1;
+		my $existing_reservation_id = $semaphore_info->{$existing_semaphore_identifier}{reservationid};
+		my $existing_expires_datetime = $semaphore_info->{$existing_semaphore_identifier}{expires};
+		my $existing_expires_epoch = convert_to_epoch_seconds($existing_expires_datetime);
+		
+		# Make sure existing semaphore wasn't created for this reservation - this should never happen
+		if ($existing_reservation_id eq $reservation_id) {
+			notify($ERRORS{'WARNING'}, 0, "semaphore with same identifier already exists for this reservation: $existing_semaphore_identifier, attempting to forcefully update existing vclsemaphore entry:\n" . format_data($semaphore_info->{$existing_semaphore_identifier}));
+			if (insert_vcld_semaphore($semaphore_identifier, $reservation_id, $semaphore_expire_seconds, 1)) {
+				return 1;
+			}
+		}
+		
+		if ($existing_expires_epoch < $current_epoch) {
+			notify($ERRORS{'WARNING'}, 0, "attempting to delete expired vcldsemaphore table entry:\n" .
+				"current time: $current_datetime ($current_epoch)\n" .
+				"expire time: $existing_expires_datetime ($existing_expires_epoch)"
+			);
+			delete_vcld_semaphore($existing_semaphore_identifier, $existing_expires_datetime);
 		}
 		else {
-			notify($ERRORS{'DEBUG'}, 0, "ignoring lockfile not locked by another process: $lockfile_path");
-			next;
+			notify($ERRORS{'DEBUG'}, 0, "existing vcldsemaphore table entry has NOT expired:\n" .
+				"current time: $current_datetime ($current_epoch)\n" .
+				"expire time: $existing_expires_datetime ($existing_expires_epoch)"
+			);
 		}
 	}
-	
-	notify($ERRORS{'DEBUG'}, 0, "'$semaphore_id' semaphore does not exist");
 	return 0;
-}
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 get_reservation_semaphore_ids
-
- Parameters  : $reservation_id
- Returns     : array
- Description : Returns the Semaphore IDs opened by the reservation specified by
-               the argument. An empty list is returned if no Semaphores are
-               open.
-
-=cut
-
-sub get_reservation_semaphore_ids {
-	my $self = shift;
-	unless (ref($self) && $self->isa('VCL::Module')) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return;
-	}
-	
-	my $reservation_id = shift || $self->data->get_reservation_id();
-	if (!$reservation_id) {
-		notify($ERRORS{'WARNING'}, 0, "reservation ID argument was not supplied");
-		return;
-	}
-	
-	my @lockfile_paths = $self->get_lockfile_paths();
-	if (!@lockfile_paths) {
-		notify($ERRORS{'DEBUG'}, 0, "did not find any lockfiles on this management node");
-		return ();
-	}
-	
-	my @reservation_semaphore_ids;
-	for my $lockfile_path (@lockfile_paths) {
-		my ($semaphore_id) = $lockfile_path =~ /([^\/]+)\.$LOCKFILE_EXTENSION/;
-		
-		my @lockfile_contents = $self->mn_os->get_file_contents($lockfile_path);
-		if (!@lockfile_contents) {
-			notify($ERRORS{'WARNING'}, 0, "failed to retrieve contents of lockfile: $lockfile_path");
-			next;
-		}
-		
-		my $lockfile_line = $lockfile_contents[0];
-		
-		# Line should contain a string similar to this:
-		# 31862 vclark 2376:3116 tomaintenance vclv1-42>vclh3-12.hpc.ncsu.edu vmwarewinxp-base234-v14 admin
-		my ($lockfile_reservation_id) = $lockfile_line =~ / \d+:(\d+) /;
-		
-		if (!defined($lockfile_reservation_id)) {
-			notify($ERRORS{'WARNING'}, 0, "failed to determine reservation ID from 1st line in $lockfile_path: '$lockfile_line'");
-			next;
-		}
-		
-		if ($lockfile_reservation_id == $reservation_id) {
-			notify($ERRORS{'DEBUG'}, 0, "semaphore '$semaphore_id' belongs to reservation $reservation_id");
-			push @reservation_semaphore_ids, $semaphore_id;
-		}
-		else {
-			notify($ERRORS{'DEBUG'}, 0, "semaphore '$semaphore_id' does NOT belong to reservation $reservation_id");
-		}
-	}
-	return @reservation_semaphore_ids;
-}
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 get_process_semaphore_ids
-
- Parameters  : $pid
- Returns     : array
- Description : Returns the Semaphore IDs opened by the process PID specified by
-               the argument. An empty list is returned if no Semaphores are
-               open.
-
-=cut
-
-sub get_process_semaphore_ids {
-	my $self = shift;
-	unless (ref($self) && $self->isa('VCL::Module')) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return;
-	}
-	
-	my $pid = shift;
-	if (!$pid) {
-		notify($ERRORS{'WARNING'}, 0, "process PID argument was not supplied");
-		return;
-	}
-	
-	my @lockfile_paths = $self->get_lockfile_paths();
-	if (!@lockfile_paths) {
-		notify($ERRORS{'DEBUG'}, 0, "did not find any lockfiles on this management node");
-		return ();
-	}
-	
-	my @process_semaphore_ids;
-	
-	for my $lockfile_path (@lockfile_paths) {
-		my ($semaphore_id) = $lockfile_path =~ /([^\/]+)\.$LOCKFILE_EXTENSION/;
-		
-		my @lockfile_contents = $self->mn_os->get_file_contents($lockfile_path);
-		if (!@lockfile_contents) {
-			notify($ERRORS{'WARNING'}, 0, "failed to retrieve contents of lockfile: $lockfile_path");
-			next;
-		}
-		
-		my $lockfile_line = $lockfile_contents[0];
-		
-		# Line should contain a string similar to this:
-		# 31862 vclark 2376:3116 tomaintenance vclv1-42>vclh3-12.hpc.ncsu.edu vmwarewinxp-base234-v14 admin
-		my ($lockfile_pid) = $lockfile_line =~ /^(\d+) /;
-		
-		if (!defined($lockfile_pid)) {
-			notify($ERRORS{'WARNING'}, 0, "failed to determine PID from 1st line in $lockfile_path: '$lockfile_line'");
-			next;
-		}
-		
-		if ($lockfile_pid == $pid) {
-			notify($ERRORS{'DEBUG'}, 0, "semaphore '$semaphore_id' belongs to process $pid");
-			push @process_semaphore_ids, $semaphore_id;
-		}
-		else {
-			notify($ERRORS{'DEBUG'}, 0, "semaphore '$semaphore_id' does NOT belong to process $pid");
-		}
-	}
-	return @process_semaphore_ids;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -547,8 +192,8 @@ sub get_process_semaphore_ids {
 
  Parameters  : none
  Returns     : nothing
- Description : Destroys the semaphore object. The files opened and exclusively
-               locked by the semaphore object are closed and deleted.
+ Description : Destroys the semaphore object. Database vcldsemaphore table
+               entries created for this object are deleted.
 
 =cut
 
@@ -556,8 +201,8 @@ sub DESTROY {
 	my $self = shift;
 	my $address = sprintf('%x', $self);
 	
-	for my $file_path (keys %{$self->{file_handles}}) {
-		$self->release_lockfile($file_path);
+	for my $semaphore_identifier (keys %{$self->{vcldsemaphore_table_identifiers}}) {
+		delete_vcld_semaphore($semaphore_identifier);
 	}
 	
 	# Check for an overridden destructor

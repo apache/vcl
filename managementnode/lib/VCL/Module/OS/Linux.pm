@@ -3519,7 +3519,7 @@ sub get_network_bridge_info {
 		$self->{network_bridge_info} = {};
 		return $self->{network_bridge_info};
 	}
-	elsif ($exit_status ne '0') {
+	elsif ($exit_status > 0) {
 		notify($ERRORS{'WARNING'}, 0, "failed to retrieve network bridge configuration from $computer_name, exit status: $exit_status, command:\n$command\noutput:\n" . join("\n", @$output));
 		return;
 	}

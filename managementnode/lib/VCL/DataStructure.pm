@@ -2332,6 +2332,60 @@ sub get_reservation_info_json_string {
 	return $json;
 }
 
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_connect_method_info_matching_name
+
+ Parameters  : $regex_pattern
+ Returns     : hash reference
+ Description : Checks the name of all connect methods mapped to the current
+               reservation's image revision. Returns info for all connect
+               methods with a connectmethod.name value matching the pattern
+               argument. This is useful for finding a particular connect method.
+               
+               For example:
+               $self->data->get_connect_method_info_matching_name('vmware');
+               
+               A hash reference is returned. The only hash element would be
+               information about a "VMwareVNC" connect method.
+
+=cut
+
+sub get_connect_method_info_matching_name {
+	my $self = shift;
+	if (ref($self) !~ /VCL::/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $regex_pattern = shift;
+	if (!defined($regex_pattern)) {
+		notify($ERRORS{'WARNING'}, 0, "connect method name regex pattern argument was not supplied");
+		return;
+	}
+	
+	my $matching_connect_method_info = {};
+	
+	my $connect_method_info = $self->get_connect_methods();
+	for my $connect_method_id (sort {$a <=> $b} keys %$connect_method_info) {
+		my $connect_method = $connect_method_info->{$connect_method_id};
+		my $connect_method_name = $connect_method->{name};
+		if ($connect_method_name =~ /$regex_pattern/i) {
+			$matching_connect_method_info->{$connect_method_id} = $connect_method;
+		}
+	}
+	
+	my $matching_count = scalar(keys %$matching_connect_method_info);
+	if (!$matching_count) {
+		notify($ERRORS{'DEBUG'}, 0, "no connect methods with name matching pattern '$regex_pattern' are mapped to image revision assigned to reservation");
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "found $matching_count connect method(s) with name matching pattern '$regex_pattern' mapped to image revision assigned to reservation:\n" . format_data($matching_connect_method_info));
+	}
+	return $matching_connect_method_info;
+}
+
 #/////////////////////////////////////////////////////////////////////////////
 
 1;

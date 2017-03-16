@@ -383,14 +383,13 @@ sub delete_management_node_reservation_info_json_file {
                configure something such as a storage unit or firewall device
                specifically for each reservation.
                
-               The stage argument may be any of the
-               following:
-               -pre_capture
-               -post_capture
-               -post_load
-               -post_reserve
-               -post_initial_connection
-               -post_reservation
+               The stage argument may be any of the following:
+               * pre_capture
+               * post_capture
+               * post_load
+               * post_reserve
+               * post_initial_connection
+               * post_reservation
                
                The scripts are stored on the management node under:
                /usr/local/vcl/tools/mn_stage_scripts
