@@ -6144,7 +6144,9 @@ sub copy_vmdk {
 	}
 	
 	# Calculate how long it took to copy
-	my $duration_seconds = ($end_time - $start_time);
+	# It's possible the copy took less than 1 second (experienced this with VAAI-enabled datastore)
+	# If 0 seconds, set it to 1 second to avoid divide by 0 errors later on
+	my $duration_seconds = ($end_time - $start_time) || 1;
 	my $minutes = ($duration_seconds / 60);
 	$minutes =~ s/\..*//g;
 	my $seconds = ($duration_seconds - ($minutes * 60));
