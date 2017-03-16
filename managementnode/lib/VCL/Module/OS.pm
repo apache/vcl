@@ -3239,7 +3239,7 @@ sub execute_new {
 					next ATTEMPT;
 				}
 				
-				sleep_uninterrupted(1);
+				#sleep_uninterrupted(1);
 				
 				#$ssh->exec("stty -echo");
 				#$ssh->exec("stty raw -echo");
@@ -4304,41 +4304,41 @@ sub get_timings {
  Returns     : boolean
  Description : Runs scripts on the computer intended for the state specified by
                the argument. The stage argument may be any of the following:
-               -pre_capture
-               -post_load
-               -post_reserve
-               -post_initial_connection
-               -post_reservation
+               * pre_capture
+               * post_load
+               * post_reserve
+               * post_initial_connection
+               * post_reservation
                
                Scripts are stored in various directories under tools matching
                the OS of the image being loaded. For example, scripts residing
                in any of the following directories would be executed if the
                stage argument is 'post_load' and the OS of the image being
                loaded is Windows XP 32-bit:
-               -tools/Windows/Scripts/post_load
-               -tools/Windows/Scripts/post_load/x86
-               -tools/Windows_Version_5/Scripts/post_load
-               -tools/Windows_Version_5/Scripts/post_load/x86
-               -tools/Windows_XP/Scripts/post_load
-               -tools/Windows_XP/Scripts/post_load/x86
+               * tools/Windows/Scripts/post_load
+               * tools/Windows/Scripts/post_load/x86
+               * tools/Windows_Version_5/Scripts/post_load
+               * tools/Windows_Version_5/Scripts/post_load/x86
+               * tools/Windows_XP/Scripts/post_load
+               * tools/Windows_XP/Scripts/post_load/x86
                
                The order the scripts are executed is determined by the script
                file names. The directory where the script resides has no affect
                on the order. Script files can be named beginning with a number.
                The scripts sorted numerically and processed from the lowest
                number to the highest:
-               -1.cmd
-               -50.cmd
-               -100.cmd
+               * 1.cmd
+               * 50.cmd
+               * 100.cmd
                
                Scripts which do not begin with a number are sorted
                alphabetically and processed after any scripts which begin with a
                number:
-               -1.cmd
-               -50.cmd
-               -100.cmd
-               -Blah.cmd
-               -foo.cmd
+               * 1.cmd
+               * 50.cmd
+               * 100.cmd
+               * Blah.cmd
+               * foo.cmd
 
 =cut
 
