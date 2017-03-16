@@ -611,10 +611,10 @@ sub add_ext_sshd_service {
 	# ExecStart=/usr/sbin/sshd -D $SSHD_OPTS
 	$ext_sshd_service_file_contents =~ s/^\s*(ExecStart=.+\S)\s+\$\S*OPT\S*(.*)$/$1$2/gm;
 	
-	# Remove explicit -f arguments
+	# Remove explicit -f arguments from ExecStart line
 	$ext_sshd_service_file_contents =~ s/^\s*(ExecStart=.+\S)\s+-f\s+\S+(.*)$/$1$2/gm;
 	
-	# Add -f argument
+	# Add -f argument to ExecStart line
 	$ext_sshd_service_file_contents =~ s|^\s*(ExecStart=.+\S)\s*$|$1 -f /etc/ssh/external_sshd_config|gm;
 	
 	# Set EnvironmentFile to /dev/null, service won't start if the file doesn't exist
@@ -625,6 +625,17 @@ sub add_ext_sshd_service {
 	# Otherwise, this may occur when attempting to enable the service if the service is named the same as the alias:
 	# Failed to execute operation: Too many levels of symbolic links
 	$ext_sshd_service_file_contents =~ s/^\s*Alias=.*//gm;
+	
+	# Add explicit lines, remove first to avoid duplicates:
+	$ext_sshd_service_file_contents =~ s/^\s*(Restart|RestartSec|StartLimitInterval)=.*\n?//gm;
+	
+	# Attempt to restart if the service dies
+	$ext_sshd_service_file_contents =~ s/(\[Service\])/$1\nRestart=on-failure/gm;
+	$ext_sshd_service_file_contents =~ s/(\[Service\])/$1\nRestartSec=3s/gm;
+	
+	# (VCL-1027) Add StartLimitInterval=0 under [Service] to prevent:
+	#    Job for ext_sshd.service failed because start of the service was attempted too often
+	$ext_sshd_service_file_contents =~ s/(\[Service\])/$1\nStartLimitInterval=0/gm;
 	
 	notify($ERRORS{'DEBUG'}, 0, "$ext_sshd_service_file_path:\n$ext_sshd_service_file_contents");
 	
