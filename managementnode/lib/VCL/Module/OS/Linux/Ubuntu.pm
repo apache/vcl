@@ -1213,7 +1213,55 @@ sub fix_debconf_db {
 			return;
 		}
 	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_product_name
+
+ Parameters  : none
+ Returns     : string
+ Description : Retrieves the name of the Ubuntu distribution from
+               'lsb_release --description'.
+
+=cut
+
+sub get_product_name {
+	my $self = shift;
+	if (ref($self) !~ /linux/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
 	
+	return $self->{product_name} if defined($self->{product_name});
+	
+	my $computer_name = $self->data->get_computer_short_name();
+	
+	my $command = 'lsb_release --description';
+	my ($exit_status, $output) = $self->execute($command);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to determine Ubuntu distribution name installed on $computer_name: $command");
+		return;
+	}
+	elsif ($exit_status ne '0') {
+		notify($ERRORS{'WARNING'}, 0, "failed to determine Ubuntu distribution name installed on $computer_name, exit status: $exit_status, command:\n$command\noutput:\n" . join("\n", @$output));
+		return 0;
+	}
+	
+	# Line should be in the form:
+	# Description:    Ubuntu 14.04.2 LTS
+	my ($product_name_line) = grep(/(Description|Ubuntu)/i, @$output);
+	if (!$product_name_line) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine Ubuntu distribution name installed on $computer_name, output does not contain a line with 'Description' or 'Ubuntu':\n" . join("\n", @$output));
+		return;
+	}
+	
+	# Remove Description: from line
+	$product_name_line =~ s/.*Description:\s*//g;
+	
+	$self->{product_name} = $product_name_line;
+	notify($ERRORS{'OK'}, 0, "determined Ubuntu distribution name installed on $computer_name: '$self->{product_name}'");
+	return $self->{product_name};
 }
 
 #/////////////////////////////////////////////////////////////////////////////
