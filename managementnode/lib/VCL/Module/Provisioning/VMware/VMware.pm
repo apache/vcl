@@ -1708,13 +1708,7 @@ sub prepare_vmx {
 	
 	# Set the disk parameters based on whether or not the VM has a dedicated virtual disk
 	# Also set the display name to indicate if the VM has a shared or dedicated virtual disk
-	my $display_name = "$computer_name:$image_name";
-	if ($is_vm_dedicated) {
-		$display_name .= " (dedicated)";
-	}
-	else {
-		$display_name .= " (shared)";
-	}
+	my $display_name = "$computer_name\_$image_name";
 	
 	my $vm_disk_mode = 'persistent';
 	my $vm_disk_write_through = "TRUE";
