@@ -152,7 +152,19 @@ our %VM_OS_CONFIGURATION = (
 		"ethernet-virtualDev" => "e1000",
 		"scsi-virtualDev" => "lsiLogic",
 		"cpu_socket_limit" => 2,
+	},
+	"win10-x86" => {
+		"guestOS" => "windows9",
+		"ethernet-virtualDev" => "e1000e",
+		"scsi-virtualDev" => "lsisas1068",
+		"cpu_socket_limit" => 2,
 	}, 
+	"win10-x86_64" => {
+		"guestOS" => "windows9-64",
+		"ethernet-virtualDev" => "e1000",
+		"scsi-virtualDev" => "lsisas1068",
+		"cpu_socket_limit" => 2,
+	},
 	"win2003-x86" => {
 		"guestOS" => "winNetEnterprise",
 		"ethernet-virtualDev" => "vlance",
@@ -183,25 +195,33 @@ our %VM_OS_CONFIGURATION = (
 		"scsi-virtualDev" => "lsisas1068",
 		"cpu_socket_limit" => 64,
 	},
+	"win2016-x86_64" => {
+		"guestOS" => "windows9srv-64",
+		"ethernet-virtualDev" => "e1000e",
+		"scsi-virtualDev" => "lsisas1068",
+		"cpu_socket_limit" => 64,
+	},
+	
 	# Default Windows configuration if Windows version isn't found above:
 	"windows-x86" => {
-		"guestOS" => "winXPPro",
-		"ethernet-virtualDev" => "vlance",
-		"scsi-virtualDev" => "busLogic",
+		"guestOS" => "windows7",
+		"ethernet-virtualDev" => "e1000",
+		"scsi-virtualDev" => "lsisas1068",
 	},
 	"windows-x86_64" => {
-		"guestOS" => "winXPPro-64",
+		"guestOS" => "windows7-64",
+		"ethernet-virtualDev" => "e1000",
+		"scsi-virtualDev" => "lsisas1068",
+	},
+	
+	# Default configuration if OS is not Windows or Linux:
+	"default-x86" => {
+		"guestOS" => "otherlinux",
 		"ethernet-virtualDev" => "e1000",
 		"scsi-virtualDev" => "lsiLogic",
 	},
-	# Default configuration if OS is not Windows or Linux:
-	"default-x86" => {
-		"guestOS" => "other",
-		"ethernet-virtualDev" => "vlance",
-		"scsi-virtualDev" => "busLogic",
-	},
 	"default-x86_64" => {
-		"guestOS" => "other-64",
+		"guestOS" => "otherlinux-64",
 		"ethernet-virtualDev" => "e1000",
 		"scsi-virtualDev" => "lsiLogic",
 	},
@@ -501,8 +521,65 @@ sub node_status {
 		notify($ERRORS{'DEBUG'}, 0, "request state is '$request_state_name', returning result from normal node_status checks: '$result'");
 		return $result;
 	}
+	
+	my $vmx_file_path = $self->get_vmx_file_path();
+	if (!$vmx_file_path) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine vmx file path, returning 'RELOAD'");
+		return 'RELOAD';
+	}
+	
+	#>>>>>>>>>>
+	# Experimental - Support for VMware ESXi's built in VNC server functionality
+	#my $reservation_id = $self->data->get_reservation_id();
+	#my $nathost_id = $self->data->get_nathost_id(0);
+	#if ($nathost_id) {
+	#	my $connect_method_info = get_reservation_connect_method_info($reservation_id);
+	#	
+	#	my $vnc_connect_method_port_id;
+	#	
+	#	for my $connect_method_id (keys %$connect_method_info) {
+	#		my $connect_method_name = $connect_method_info->{$connect_method_id}{name};
+	#		if ($connect_method_name =~ /(VMWare|ESX)/i && $connect_method_name =~ /VNC/i) {
+	#			my @vnc_connect_method_port_ids = keys(%{$connect_method_info->{$connect_method_id}{connectmethodport}});
+	#			$vnc_connect_method_port_id = $vnc_connect_method_port_ids[0];
+	#			last;
+	#		}
+	#	}
+	#	
+	#	if ($vnc_connect_method_port_id) {
+	#		my $vmx_info = $self->get_vmx_info($vmx_file_path);
+	#		if (!$vmx_info) {
+	#			notify($ERRORS{'WARNING'}, 0, "unable to retrieve vmx file info, returning 'RELOAD'");
+	#			return 'RELOAD';
+	#		}
+	#		
+	#		my $vnc_password = $vmx_info->{'remotedisplay.vnc.password'};
+	#		if (!defined($vnc_password)) {
+	#			notify($ERRORS{'WARNING'}, 0, "VMware VNC connect method enabled, vmx file does NOT contain VNC password, returning 'RELOAD'");
+	#			return 'RELOAD';
+	#		}
+	#		
+	#		my $vnc_port = $vmx_info->{'remotedisplay.vnc.port'};
+	#		if (!defined($vnc_port)) {
+	#			notify($ERRORS{'WARNING'}, 0, "VMware VNC connect method enabled, vmx file does NOT contain VNC port, returning 'RELOAD'");
+	#			return 'RELOAD';
+	#		}
+	#		
+	#		if (!$self->data->set_reservation_password($vnc_password) || !update_reservation_password($reservation_id, $vnc_password)) {
+	#			notify($ERRORS{'WARNING'}, 0, "VMware VNC connect method enabled, failed to override reservation password, returning 'RELOAD'");
+	#			return 'RELOAD';
+	#		}
+	#		
+	#		if (!insert_natport($reservation_id, $nathost_id, $vnc_connect_method_port_id, $vnc_port)) {
+	#			notify($ERRORS{'WARNING'}, 0, "VMware VNC connect method enabled, failed to override NAT port, returning 'RELOAD'");
+	#			return 'RELOAD';
+	#		}
+	#	}
+	#}
+	#<<<<<<<<<<
+
 	# If this is not a server request, no additional checks are necessary
-	elsif (!$is_server_request) {
+	if (!$is_server_request) {
 		notify($ERRORS{'DEBUG'}, 0, "this is not a server request, returning result from normal node_status checks: '$result'");
 		return $result;
 	}
@@ -516,11 +593,7 @@ sub node_status {
 		return 'RELOAD';
 	}
 	
-	my $vmx_file_path = $self->get_vmx_file_path();
-	if (!$vmx_file_path) {
-		notify($ERRORS{'WARNING'}, 0, "unable to determine vmx file path, returning 'RELOAD'");
-		return 'RELOAD';
-	}
+	
 	
 	my @vm_virtual_disk_file_paths = $self->api->get_vm_virtual_disk_file_paths($vmx_file_path);
 	if (!@vm_virtual_disk_file_paths) {
@@ -840,6 +913,11 @@ sub capture {
 	# Set the imagemeta Sysprep value to 0 to prevent Sysprep from being used
 	$self->data->set_imagemeta_sysprep(0);
 	
+	# Attempt to get the name of the OS running on the VM and tag the .vmx file with it
+	# The name will be saved in the reference .vmx file and can be used to select the most appropriate guest OS when loading future VMs
+	my $os_product_name = $self->os->get_product_name() if $self->os->can("get_product_name");
+	my $os_is_64_bit = $self->os->is_64_bit() if $self->os->can("is_64_bit");
+	
 	# Call the OS module's pre_capture() subroutine if implemented
 	if ($self->os->can("pre_capture") && !$self->os->pre_capture({end_state => 'off'})) {
 		notify($ERRORS{'WARNING'}, 0, "failed to complete OS module's pre_capture tasks");
@@ -860,6 +938,11 @@ sub capture {
 			return;
 		}
 	}
+	
+	# Tag the .vmx with the OS product name and architecture
+	$self->vmhost_os->append_text_file($vmx_file_path_original, "#os_product_name = \"$os_product_name\"") if (defined($os_product_name));
+	$self->vmhost_os->append_text_file($vmx_file_path_original, "#os_64_bit = \"$os_is_64_bit\"") if (defined($os_is_64_bit));
+	
 	
 	if ($vmprofile_vmdisk =~ /(local|dedicated)/ && $repository_mounted_on_vmhost) {
 		# See https://issues.apache.org/jira/browse/VCL-633
@@ -1700,20 +1783,24 @@ sub prepare_vmx {
 		"workingDir" => "$vmx_directory_path",
 	);
 	
-	#my $reservation_password     = $self->data->get_reservation_password();
-	#if (defined($reservation_password)) {
-	#	my $vnc_port = ($computer_id + 10000);
-	#	notify($ERRORS{'DEBUG'}, 0, "vnc access will be enabled, port: $vnc_port, password: $reservation_password");
-	#	
-	#	%vmx_parameters = (%vmx_parameters, (
-	#		"RemoteDisplay.vnc.enabled" => "TRUE",
-	#		"RemoteDisplay.vnc.password" => $reservation_password,
-	#		"RemoteDisplay.vnc.port" => $vnc_port,
-	#	));
+	#>>>>>>>>>>
+	## Experimental - Support for VMware ESXi's built in VNC server functionality
+	#my $reservation_id = $self->data->get_reservation_id();
+	#my $vnc_password = $self->data->get_reservation_password(0);
+	#if (!defined($vnc_password)) {
+	#	$vnc_password = getpw();
+	#	update_reservation_password($reservation_id, $vnc_password);
+	#	$self->data->set_reservation_password($vnc_password);
 	#}
-	#else {
-	#	notify($ERRORS{'DEBUG'}, 0, "vnc access will be not be enabled because the reservation password is not set");
-	#}
+	#
+	#my $vnc_port = ($computer_id + 10000);
+	#notify($ERRORS{'DEBUG'}, 0, "vnc access will be enabled, port: $vnc_port, password: $vnc_password");
+	#%vmx_parameters = (%vmx_parameters, (
+	#	"RemoteDisplay.vnc.enabled" => "TRUE",
+	#	"RemoteDisplay.vnc.password" => $vnc_password,
+	#	"RemoteDisplay.vnc.port" => $vnc_port,
+	#));
+	#<<<<<<<<<<
 	
 	# Add the disk adapter parameters to the hash
 	if ($vm_disk_adapter_type =~ /ide/i) {
@@ -4793,6 +4880,18 @@ sub get_vm_virtual_hardware_version {
 	
 	my $hardware_version;
 	
+	# Attempt to get the highest version supported by the VMware host
+	if ($self->api->can('get_highest_vm_hardware_version_key')) {
+		my $hardware_version_key = $self->api->get_highest_vm_hardware_version_key();
+		if ($hardware_version_key) {
+			($hardware_version) = $hardware_version_key =~ /-(\d+)$/g;
+			if ($hardware_version) {
+				notify($ERRORS{'DEBUG'}, 0, "retrieved highest VM hardware version supported on host: $hardware_version");
+				return $hardware_version;
+			}
+		}
+	}
+	
 	# Attempt to retrieve the type from the reference vmx file for the image
 	my $reference_vmx_file_info = $self->get_reference_vmx_info();
 	if ($reference_vmx_file_info) {
@@ -4977,8 +5076,111 @@ sub get_vm_guest_os {
 		return;
 	}
 	
-	my $vm_os_configuration = $self->get_vm_os_configuration() || return;
-	return $vm_os_configuration->{"guestOS"};
+	# Get the hard-coded default guest OS value
+	my $vm_os_configuration = $self->get_vm_os_configuration() || {};
+	my $default_guest_os = $vm_os_configuration->{'guestOS'} || 'other';
+	
+	my $guest_os_determination = 'default value for image OS';
+	
+	# Attempt to retrieve the guestOS from the reference vmx file for the image
+	my $reference_vmx_file_info = $self->get_reference_vmx_info();
+	if (!$reference_vmx_file_info) {
+		notify($ERRORS{'DEBUG'}, 0, "unable to dynamically determine VM guest OS value, reference .vmx file information could not be retrieved, returning $guest_os_determination: $default_guest_os");
+		return $default_guest_os;
+	}
+	my $refererence_guest_os = $reference_vmx_file_info->{guestos};
+	if ($refererence_guest_os) {
+		notify($ERRORS{'DEBUG'}, 0, "retrieved guestOS value from reference vmx file: $refererence_guest_os");
+		$default_guest_os = $refererence_guest_os;
+		$guest_os_determination = 'value from reference .vmx file';
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "unable to dynamically determine VM guest OS value, guestOS value could not be retrieved from reference .vmx file, returning $guest_os_determination: $default_guest_os");
+		return $default_guest_os;
+	}
+	
+	
+	# Get the supported guest OS names from the API object
+	my @supported_guest_os_ids;
+	if ($self->api->can('get_supported_guest_os_ids')) {
+		@supported_guest_os_ids = $self->api->get_supported_guest_os_ids();
+		if (!@supported_guest_os_ids) {
+			notify($ERRORS{'DEBUG'}, 0, "unable to dynamically determine VM guest OS value, failed to retrieve list of supported guest OS names from the API object, returning $guest_os_determination: $default_guest_os");
+			return $default_guest_os;
+		}
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "unable to dynamically determine VM guest OS value, API object does not implement a 'get_supported_guest_os_names' subroutine, returning $guest_os_determination: $default_guest_os");
+		return $default_guest_os;
+	}
+	
+	# Get the 'os_product_name' value from the reference .vmx file if it exists
+	# This gets added when a VM is loaded if it can be determined from the running OS
+	my $captured_os_product_name = $reference_vmx_file_info->{'os_product_name'};
+	if (!$captured_os_product_name) {
+		notify($ERRORS{'DEBUG'}, 0, "unable to dynamically determine VM guest OS value, reference .vmx file does not contain an 'os_product_name' key, returning $guest_os_determination: $default_guest_os");
+		return $default_guest_os;
+	}
+	
+	my $captured_os_64_bit = $reference_vmx_file_info->{'os_64_bit'} || 1;
+	my $guest_os_64_bit_section = ($captured_os_64_bit ? '-64' : '');
+	
+	# $captured_os_product_name should like like:
+	# CentOS release 6.5 (Final)									: centos-64
+	# Red Hat Enterprise Linux Server release 7.2 (Maipo)	: rhel7-64
+	# Ubuntu 16.04.1 LTS												: ubuntu-64
+	# Windows 7 Enterprise											: windows7-64
+	# Windows 8 Enterprise											: windows8-64
+	# Windows 10 Enterprise											: windows9-64
+	# Windows Server 2008 R2 Datacenter							: windows7srv-64
+	# Windows Server 2012 R2 Datacenter							: windows8srv-64
+	my $image_os_product_patterns = {
+		'^centos[^\d]*[4567]'			=> '"centos'		. $guest_os_64_bit_section . '"',
+		'^(?:red hat|rh)[^\d]*(\d+)'	=> '"rhel$1'		. $guest_os_64_bit_section . '"',
+		'^ubuntu'							=> '"ubuntu' 		. $guest_os_64_bit_section . '"',
+		'^windows[^\d]*(7|8)'			=> '"windows$1'	. $guest_os_64_bit_section . '"',
+		'^windows[^\d]*10'				=> '"windows9'		. $guest_os_64_bit_section . '"',
+		'^windows[^\d]*2008'				=> '"windows7srv'	. $guest_os_64_bit_section . '"',
+		'^windows[^\d]*2012'				=> '"windows8srv'	. $guest_os_64_bit_section . '"',
+		'^windows[^\d]*2016'				=> '"windows9srv'	. $guest_os_64_bit_section . '"',
+	};
+	
+	my $guest_os;
+	for my $image_os_product_pattern (keys %$image_os_product_patterns) {
+		my $guest_os_value = $image_os_product_patterns->{$image_os_product_pattern};
+		if ($captured_os_product_name =~ /$image_os_product_pattern/i) {
+			$guest_os = eval $guest_os_value;
+			
+			notify($ERRORS{'DEBUG'}, 0, "match:\n" .
+				"image OS product : $captured_os_product_name\n" .
+				"pattern          : $image_os_product_pattern\n" .
+				"guest OS value   : $guest_os_value\n" .
+				"guest OS         : $guest_os"
+			);
+			
+			last;
+		}
+		else {
+			notify($ERRORS{'DEBUG'}, 0, "no match:\n" .
+				"image OS product : $captured_os_product_name\n" .
+				"pattern          : $image_os_product_pattern\n" .
+				"guest OS value   : $guest_os_value"
+			);
+		}
+	}
+	
+	if (!defined($guest_os)) {
+		notify($ERRORS{'DEBUG'}, 0, "unable to dynamically determine VM guest OS value, did not find a pattern matching OS product name: $captured_os_product_name, returning $guest_os_determination: $default_guest_os");
+		return $default_guest_os;
+	}
+	elsif (!grep { $guest_os eq $_ } @supported_guest_os_ids) {
+		notify($ERRORS{'DEBUG'}, 0, "unable to dynamically determine VM guest OS value, '$guest_os' does not match any supported guest OS names, returning $guest_os_determination: $default_guest_os");
+		return $default_guest_os;
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "dynamically determined VM guest OS value: '$guest_os'");
+		return $guest_os;
+	}
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -5002,7 +5204,6 @@ sub get_vm_cpu_socket_limit {
 	my $vm_os_configuration = $self->get_vm_os_configuration() || return;
 	return $vm_os_configuration->{"cpu_socket_limit"};
 }
-
 
 #/////////////////////////////////////////////////////////////////////////////
 

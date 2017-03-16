@@ -205,16 +205,6 @@ sub _run_vim_cmd {
 			$semaphore = $self->get_semaphore($vmhost_computer_name, 120, 1) || next ATTEMPT;
 		}
 		
-		#	my $semaphore_id = "$vmhost_computer_name";
-		#	if ($self->does_semaphore_exist($semaphore_id)) {
-		#		
-		#		notify($ERRORS{'DEBUG'}, 0, "blocked by another process controlling $vmhost_computer_name, sleeping for 10 seconds");
-		#		sleep_uninterrupted(10);
-		#		my $wait_message = "blocked by another process controlling $vmhost_computer_name";
-		#		$self->code_loop_timeout(sub{!$self->does_semaphore_exist(@_)}, [$semaphore_id], $wait_message, 140, 5);
-		#	}
-		#}
-		
 		# The following error is somewhat common if several processes are adding/removing VMs at the same time:
 		# (vmodl.fault.ManagedObjectNotFound) {
 		#	 dynamicType = <unset>,
@@ -227,6 +217,14 @@ sub _run_vim_cmd {
 		# This will be used to improve performance by reducing the number of calls necessary
 		$self->{vim_cmd_calls}++;
 		#notify($ERRORS{'DEBUG'}, 0, "vim-cmd call count: $self->{vim_cmd_calls} ($vim_arguments)");
+		
+		#my $register_semaphore;
+		#if ($command =~ /(getallvms|register)/) {
+		#	$register_semaphore = $self->get_semaphore($vmhost_computer_name, 120, 1);
+		#	if (!$register_semaphore) {
+		#		next ATTEMPT;
+		#	}
+		#}
 		
 		my ($exit_status, $output) = $self->vmhost_os->execute({
 			'command' => $command,
@@ -2600,12 +2598,64 @@ sub get_config_option_descriptor_info {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 get_highest_vm_hardware_version_key
+
+ Parameters  : none
+ Returns     : string
+ Description : Each VMware VM has a hardware version. The versions supported on
+               the host depends on the version of VMware. This subroutine
+               returns the highest supported version and returns an integer. For
+               example vmx-11 is returned for ESXi 6.0.
+
+=cut
+
+sub get_highest_vm_hardware_version_key {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $vmhost_hostname = $self->data->get_vmhost_hostname();
+	
+	my $config_option_descriptor_info = $self->get_config_option_descriptor_info();
+	
+	my $highest_vm_hardware_version_number;
+	my $highest_vm_hardware_version_key;
+	for my $version_key (sort keys %$config_option_descriptor_info) {
+		my ($version_number) = $version_key =~ /-(\d+)$/g;
+		if (!$highest_vm_hardware_version_number || $highest_vm_hardware_version_number < $version_number) {
+			$highest_vm_hardware_version_number = $version_number;
+			$highest_vm_hardware_version_key = $version_key;
+		}
+	}
+	
+	notify($ERRORS{'DEBUG'}, 0, "determined highest VM hardware version supported on $vmhost_hostname: $highest_vm_hardware_version_key");
+	return $highest_vm_hardware_version_key;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 =head2 get_config_option_info
 
  Parameters  : $key
  Returns     : hash reference
  Description : Retrieves info about the VM configuration options available for a
-               particular hardware version key (ex: vmx-09).
+					particular hardware version key (ex: vmx-09). A hash reference is
+					returned with the following keys:
+                  {
+                     capabilities = {},
+                     datastore = {},
+                     defaultDevice = [],
+                     description = '',
+                     guestOSDefaultIndex = '',
+                     guestOSDescriptor = [],
+                     hardwareOptions = {},
+                     supportedMonitorType = [],
+                     supportedOvfEnvironmentTransport = '',
+                     supportedOvfInstallTransport = '',
+                     version = '',
+                  },
 
 =cut
 
@@ -2706,126 +2756,206 @@ sub get_config_option_guest_os_info {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 get_supported_guest_os_ids
+
+ Parameters  : $vm_hardware_version_key (optional)
+ Returns     : array
+ Description : Retrieves the names of the supported guestOS values for the VM
+               hardware version specified by the argument (example: vmx-11). If
+               no argument is supplied, the host's highest supported hardware
+               version is used.
+
+=cut
+
+sub get_supported_guest_os_ids {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $vmhost_hostname = $self->data->get_vmhost_hostname();
+	
+	my $vm_hardware_version_key = shift;
+	if (!defined($vm_hardware_version_key)) {
+		$vm_hardware_version_key = $self->get_highest_vm_hardware_version_key();
+		if (!defined($vm_hardware_version_key)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to determine supported guest OS names on $vmhost_hostname, VM hardware version key argument was not provided and highest supported VM hardware version could not be determiend");
+			return;
+		}
+	}
+	
+	my $config_option_info = $self->get_config_option_info($vm_hardware_version_key) || return;
+	
+	my $guest_os_descriptor_array_ref = $config_option_info->{guestOSDescriptor};
+	if (!defined($guest_os_descriptor_array_ref)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve config option guest OS info, config option info does not contain a 'guestOSDescriptor' key:\n" . format_hash_keys($config_option_info));
+		return;
+	}
+	
+	my $type = ref($guest_os_descriptor_array_ref);
+	if (!$type || $type ne 'ARRAY') {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve config option guest OS info for '$vm_hardware_version_key', guestOSDescriptor value is not an array reference:\n" . format_data($guest_os_descriptor_array_ref));
+		return;
+	}
+	
+	my @supported_guest_os_ids;
+	for my $guest_os_descriptor (@$guest_os_descriptor_array_ref) {
+		my $guest_os_id = $guest_os_descriptor->{id};
+		
+		# Every name includes "Guest" at the end but this is not in the valid guestOS values
+		$guest_os_id =~ s/Guest//;
+		
+		# Windows server OS's: windows7Server --> windows7srv
+		$guest_os_id =~ s/(windows.+)Server/$1srv/;
+		
+		# windows7_64 --> windows7-64
+		# windows8srv64 --> windows8srv-64
+		$guest_os_id =~ s/_?(64)/-$1/g;
+		
+		push @supported_guest_os_ids, $guest_os_id;
+	}
+	
+	notify($ERRORS{'DEBUG'}, 0, "retrieved supported guest OS names on $vmhost_hostname, VM hardware version: $vm_hardware_version_key: " . join(",", @supported_guest_os_ids));
+	return @supported_guest_os_ids;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 =head2 _print_compatible_guest_os_hardware_versions
 
  Parameters  : $print_code (optional)
  Returns     : true
  Description : Used for development/testing only. Prints list of possible
                guestOS values.
-               asianux3Guest                            vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
-               asianux3_64Guest                         vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
-               asianux4Guest                                   vmx-08 vmx-09 vmx-10 vmx-11
-               asianux4_64Guest                                vmx-08 vmx-09 vmx-10 vmx-11
-               asianux5_64Guest                                                     vmx-11
-               centos64Guest                            vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
-               centosGuest                              vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
-               coreos64Guest                                                        vmx-11
-               darwin10Guest                            vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
-               darwin10_64Guest                         vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
-               darwin11Guest                                   vmx-08 vmx-09 vmx-10 vmx-11
-               darwin11_64Guest                                vmx-08 vmx-09 vmx-10 vmx-11
-               darwin12_64Guest                                       vmx-09 vmx-10 vmx-11
-               darwin13_64Guest                                              vmx-10 vmx-11
-               darwin14_64Guest                                                     vmx-11
-               darwin64Guest                            vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
-               darwinGuest                              vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
-               debian4Guest                             vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
-               debian4_64Guest                          vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
-               debian5Guest                             vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
-               debian5_64Guest                          vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
-               debian6Guest                                    vmx-08 vmx-09 vmx-10 vmx-11
-               debian6_64Guest                                 vmx-08 vmx-09 vmx-10 vmx-11
-               debian7Guest                                                  vmx-10 vmx-11
-               debian7_64Guest                                               vmx-10 vmx-11
-               debian8Guest                                                         vmx-11
-               debian8_64Guest                                                      vmx-11
-               dosGuest                                 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
-               eComStation2Guest                               vmx-08 vmx-09 vmx-10 vmx-11
-               eComStationGuest                         vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
-               fedora64Guest                                                        vmx-11
-               fedoraGuest                                                          vmx-11
-               freebsd64Guest                           vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
-               freebsdGuest                             vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
-               netware5Guest              vmx-03 vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
-               netware6Guest              vmx-03 vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
-               oesGuest                          vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
-               openServer5Guest                         vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
-               openServer6Guest                                vmx-08 vmx-09 vmx-10 vmx-11
-               opensuse64Guest                                                      vmx-11
-               opensuseGuest                                                        vmx-11
-               oracleLinux64Guest                       vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
-               oracleLinuxGuest                         vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
-               os2Guest                                 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
-               other24xLinux64Guest                     vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
-               other24xLinuxGuest                       vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
-               other26xLinux64Guest                     vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
-               other26xLinuxGuest                       vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
-               other3xLinux64Guest                                           vmx-10 vmx-11
-               other3xLinuxGuest                                             vmx-10 vmx-11
-               otherGuest                 vmx-03 vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
-               otherGuest64                      vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
-               otherLinux64Guest                 vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
-               otherLinuxGuest            vmx-03 vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
-               rhel2Guest                        vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
-               rhel3Guest                        vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
-               rhel3_64Guest                     vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
-               rhel4Guest                        vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
-               rhel4_64Guest                     vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
-               rhel5Guest                        vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
-               rhel5_64Guest                     vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
-               rhel6Guest                               vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
-               rhel6_64Guest                            vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
-               rhel7Guest                                             vmx-09 vmx-10
-               rhel7_64Guest                                          vmx-09 vmx-10 vmx-11
-               sles10Guest                       vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
-               sles10_64Guest                    vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
-               sles11Guest                       vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
-               sles11_64Guest                    vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
-               sles12Guest                                            vmx-09 vmx-10
-               sles12_64Guest                                         vmx-09 vmx-10 vmx-11
-               sles64Guest                       vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
-               slesGuest                         vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
-               solaris10Guest                    vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
-               solaris10_64Guest                 vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
-               solaris11_64Guest                               vmx-08 vmx-09 vmx-10 vmx-11
-               solaris8Guest                            vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
-               solaris9Guest                            vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
-               ubuntu64Guest                     vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
-               ubuntuGuest                       vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
-               unixWare7Guest                           vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
-               vmkernel5Guest                                  vmx-08 vmx-09 vmx-10 vmx-11
-               vmkernel6Guest                                                       vmx-11
-               vmkernelGuest                            vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
-               win2000AdvServGuest        vmx-03 vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
-               win2000ProGuest                   vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
-               win2000ServGuest           vmx-03 vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
-               win31Guest                               vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
-               win95Guest                               vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
-               win98Guest                               vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
-               winLonghorn64Guest                vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
-               winLonghornGuest                  vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
-               winNTGuest                 vmx-03 vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
-               winNetBusinessGuest        vmx-03 vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
-               winNetDatacenter64Guest           vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
-               winNetDatacenterGuest      vmx-03 vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
-               winNetEnterprise64Guest           vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
-               winNetEnterpriseGuest      vmx-03 vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
-               winNetStandard64Guest             vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
-               winNetStandardGuest        vmx-03 vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
-               winNetWebGuest             vmx-03 vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
-               winVista64Guest                   vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
-               winVistaGuest                     vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
-               winXPPro64Guest                   vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
-               winXPProGuest              vmx-03 vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
-               windows7Guest                     vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
-               windows7Server64Guest             vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
-               windows7_64Guest                  vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11
-               windows8Guest                                   vmx-08 vmx-09 vmx-10 vmx-11
-               windows8Server64Guest                           vmx-08 vmx-09 vmx-10 vmx-11
-               windows8_64Guest                                vmx-08 vmx-09 vmx-10 vmx-11
-               windows9Guest                                                 vmx-10 vmx-11
-               windows9Server64Guest                                         vmx-10 vmx-11
-               windows9_64Guest                                              vmx-10 vmx-11
+					asianux3                                 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11 vmx-12 vmx-13
+					asianux3-64                              vmx-07 vmx-08 vmx-09 vmx-10 vmx-11 vmx-12 vmx-13
+					asianux4                                        vmx-08 vmx-09 vmx-10 vmx-11 vmx-12 vmx-13
+					asianux4-64                                     vmx-08 vmx-09 vmx-10 vmx-11 vmx-12 vmx-13
+					asianux7-64                                                                        vmx-13
+					centos                                   vmx-07 vmx-08 vmx-09 vmx-10 vmx-11 vmx-12 vmx-13
+					centos-64                                vmx-07 vmx-08 vmx-09 vmx-10 vmx-11 vmx-12 vmx-13
+					centos6                                                                            vmx-13
+					centos6-64                                                                         vmx-13
+					centos7-64                                                                         vmx-13
+					coreos-64                                                            vmx-11 vmx-12 vmx-13
+					darwin                                   vmx-07 vmx-08 vmx-09 vmx-10 vmx-11 vmx-12 vmx-13
+					darwin-64                                vmx-07 vmx-08 vmx-09 vmx-10 vmx-11 vmx-12 vmx-13
+					darwin10                                 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11 vmx-12 vmx-13
+					darwin10-64                              vmx-07 vmx-08 vmx-09 vmx-10 vmx-11 vmx-12 vmx-13
+					darwin11                                        vmx-08 vmx-09 vmx-10 vmx-11 vmx-12 vmx-13
+					darwin11-64                                     vmx-08 vmx-09 vmx-10 vmx-11 vmx-12 vmx-13
+					darwin12-64                                            vmx-09 vmx-10 vmx-11 vmx-12 vmx-13
+					darwin13-64                                                   vmx-10 vmx-11 vmx-12 vmx-13
+					darwin14-64                                                          vmx-11 vmx-12 vmx-13
+					darwin15-64                                                                 vmx-12 vmx-13
+					darwin16-64                                                                        vmx-13
+					debian10                                                                           vmx-13
+					debian10-64                                                                        vmx-13
+					debian4                                  vmx-07 vmx-08 vmx-09 vmx-10 vmx-11 vmx-12 vmx-13
+					debian4-64                               vmx-07 vmx-08 vmx-09 vmx-10 vmx-11 vmx-12 vmx-13
+					debian5                                  vmx-07 vmx-08 vmx-09 vmx-10 vmx-11 vmx-12 vmx-13
+					debian5-64                               vmx-07 vmx-08 vmx-09 vmx-10 vmx-11 vmx-12 vmx-13
+					debian6                                  vmx-07 vmx-08 vmx-09 vmx-10 vmx-11 vmx-12 vmx-13
+					debian6-64                               vmx-07 vmx-08 vmx-09 vmx-10 vmx-11 vmx-12 vmx-13
+					debian7                                                       vmx-10 vmx-11 vmx-12 vmx-13
+					debian7-64                                                    vmx-10 vmx-11 vmx-12 vmx-13
+					debian8                                                              vmx-11 vmx-12 vmx-13
+					debian8-64                                                           vmx-11 vmx-12 vmx-13
+					debian9                                                                            vmx-13
+					debian9-64                                                                         vmx-13
+					dos                                      vmx-07 vmx-08 vmx-09 vmx-10 vmx-11 vmx-12 vmx-13
+					eComStation                              vmx-07 vmx-08 vmx-09 vmx-10 vmx-11 vmx-12 vmx-13
+					eComStation2                                    vmx-08 vmx-09 vmx-10 vmx-11 vmx-12 vmx-13
+					fedora                                                               vmx-11 vmx-12 vmx-13
+					fedora-64                                                            vmx-11 vmx-12 vmx-13
+					freebsd                                  vmx-07 vmx-08 vmx-09 vmx-10 vmx-11 vmx-12 vmx-13
+					freebsd-64                               vmx-07 vmx-08 vmx-09 vmx-10 vmx-11 vmx-12 vmx-13
+					netware5                   vmx-03 vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11 vmx-12 vmx-13
+					netware6                   vmx-03 vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11 vmx-12 vmx-13
+					oes                               vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11 vmx-12 vmx-13
+					openServer5                              vmx-07 vmx-08 vmx-09 vmx-10 vmx-11 vmx-12 vmx-13
+					openServer6                                     vmx-08 vmx-09 vmx-10 vmx-11 vmx-12 vmx-13
+					opensuse                                                             vmx-11 vmx-12 vmx-13
+					opensuse-64                                                          vmx-11 vmx-12 vmx-13
+					oracleLinux                              vmx-07 vmx-08 vmx-09 vmx-10 vmx-11 vmx-12 vmx-13
+					oracleLinux-64                           vmx-07 vmx-08 vmx-09 vmx-10 vmx-11 vmx-12 vmx-13
+					oracleLinux6                                                                       vmx-13
+					oracleLinux6-64                                                                    vmx-13
+					oracleLinux7-64                                                                    vmx-13
+					os2                                      vmx-07 vmx-08 vmx-09 vmx-10 vmx-11 vmx-12 vmx-13
+					other                      vmx-03 vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11 vmx-12 vmx-13
+					other-64                          vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11 vmx-12 vmx-13
+					other24xLinux                            vmx-07 vmx-08 vmx-09 vmx-10 vmx-11 vmx-12 vmx-13
+					other24xLinux-64                         vmx-07 vmx-08 vmx-09 vmx-10 vmx-11 vmx-12 vmx-13
+					other26xLinux                            vmx-07 vmx-08 vmx-09 vmx-10 vmx-11 vmx-12 vmx-13
+					other26xLinux-64                         vmx-07 vmx-08 vmx-09 vmx-10 vmx-11 vmx-12 vmx-13
+					other3xLinux                                                  vmx-10 vmx-11 vmx-12 vmx-13
+					other3xLinux-64                                               vmx-10 vmx-11 vmx-12 vmx-13
+					otherLinux                 vmx-03 vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11 vmx-12 vmx-13
+					otherLinux-64                     vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11 vmx-12 vmx-13
+					rhel2                             vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11 vmx-12 vmx-13
+					rhel3                             vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11 vmx-12 vmx-13
+					rhel3-64                          vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11 vmx-12 vmx-13
+					rhel4                             vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11 vmx-12 vmx-13
+					rhel4-64                          vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11 vmx-12 vmx-13
+					rhel5                             vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11 vmx-12 vmx-13
+					rhel5-64                          vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11 vmx-12 vmx-13
+					rhel6                                    vmx-07 vmx-08 vmx-09 vmx-10 vmx-11 vmx-12 vmx-13
+					rhel6-64                                 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11 vmx-12 vmx-13
+					rhel7                                                  vmx-09 vmx-10
+					rhel7-64                                               vmx-09 vmx-10 vmx-11 vmx-12 vmx-13
+					sles                              vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11 vmx-12 vmx-13
+					sles-64                           vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11 vmx-12 vmx-13
+					sles10                            vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11 vmx-12 vmx-13
+					sles10-64                         vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11 vmx-12 vmx-13
+					sles11                            vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11 vmx-12 vmx-13
+					sles11-64                         vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11 vmx-12 vmx-13
+					sles12                                                 vmx-09 vmx-10
+					sles12-64                                              vmx-09 vmx-10 vmx-11 vmx-12 vmx-13
+					solaris10                         vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11 vmx-12 vmx-13
+					solaris10-64                      vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11 vmx-12 vmx-13
+					solaris11-64                                    vmx-08 vmx-09 vmx-10 vmx-11 vmx-12 vmx-13
+					solaris8                                 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11 vmx-12 vmx-13
+					solaris9                                 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11 vmx-12 vmx-13
+					ubuntu                            vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11 vmx-12 vmx-13
+					ubuntu-64                         vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11 vmx-12 vmx-13
+					unixWare7                                vmx-07 vmx-08 vmx-09 vmx-10 vmx-11 vmx-12 vmx-13
+					vmkernel                                 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11 vmx-12 vmx-13
+					vmkernel5                                       vmx-08 vmx-09 vmx-10 vmx-11 vmx-12 vmx-13
+					vmkernel6                                                            vmx-11 vmx-12 vmx-13
+					vmkernel65                                                           vmx-11 vmx-12 vmx-13
+					vmwarePhoton-64                                                                    vmx-13
+					win2000AdvServ             vmx-03 vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11 vmx-12 vmx-13
+					win2000Pro                        vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11 vmx-12 vmx-13
+					win2000Serv                vmx-03 vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11 vmx-12 vmx-13
+					win31                                    vmx-07 vmx-08 vmx-09 vmx-10 vmx-11 vmx-12 vmx-13
+					win95                                    vmx-07 vmx-08 vmx-09 vmx-10 vmx-11 vmx-12 vmx-13
+					win98                                    vmx-07 vmx-08 vmx-09 vmx-10 vmx-11 vmx-12 vmx-13
+					windows7                          vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11 vmx-12 vmx-13
+					windows7-64                       vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11 vmx-12 vmx-13
+					windows7srv-64                    vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11 vmx-12 vmx-13
+					windows8                                        vmx-08 vmx-09 vmx-10 vmx-11 vmx-12 vmx-13
+					windows8-64                                     vmx-08 vmx-09 vmx-10 vmx-11 vmx-12 vmx-13
+					windows8srv-64                                  vmx-08 vmx-09 vmx-10 vmx-11 vmx-12 vmx-13
+					windows9                                                      vmx-10 vmx-11 vmx-12 vmx-13
+					windows9-64                                                   vmx-10 vmx-11 vmx-12 vmx-13
+					windows9srv-64                                                vmx-10 vmx-11 vmx-12 vmx-13
+					winLonghorn                       vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11 vmx-12 vmx-13
+					winLonghorn-64                    vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11 vmx-12 vmx-13
+					winNetBusiness             vmx-03 vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11 vmx-12 vmx-13
+					winNetDatacenter           vmx-03 vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11 vmx-12 vmx-13
+					winNetDatacenter-64               vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11 vmx-12 vmx-13
+					winNetEnterprise           vmx-03 vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11 vmx-12 vmx-13
+					winNetEnterprise-64               vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11 vmx-12 vmx-13
+					winNetStandard             vmx-03 vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11 vmx-12 vmx-13
+					winNetStandard-64                 vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11 vmx-12 vmx-13
+					winNetWeb                  vmx-03 vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11 vmx-12 vmx-13
+					winNT                      vmx-03 vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11 vmx-12 vmx-13
+					winVista                          vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11 vmx-12 vmx-13
+					winVista-64                       vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11 vmx-12 vmx-13
+					winXPPro                   vmx-03 vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11 vmx-12 vmx-13
+					winXPPro-64                       vmx-04 vmx-07 vmx-08 vmx-09 vmx-10 vmx-11 vmx-12 vmx-13
 
 =cut
 
@@ -2842,15 +2972,15 @@ sub _print_compatible_guest_os_hardware_versions {
 	my $config_option_descriptor_info = $self->get_config_option_descriptor_info();
 	
 	for my $version_key (sort keys %$config_option_descriptor_info) {
-		my $config_option_guest_os_info = $self->get_config_option_guest_os_info($version_key);
-		for my $guest_os (keys %$config_option_guest_os_info) {
-			$guest_os_info->{$guest_os}{$version_key} = 1;
+		my @guest_os_ids = $self->get_supported_guest_os_ids($version_key);
+		for my $guest_os_id (@guest_os_ids) {
+			$guest_os_info->{$guest_os_id}{$version_key} = 1;
 		}
 	}
 	
 	my $version_key_count = scalar(keys %$config_option_descriptor_info);
 	
-	for my $guest_os (sort keys %$guest_os_info) {
+	for my $guest_os (sort {lc($a) cmp lc($b)} keys %$guest_os_info) {
 		if ($print_code) {
 			print "'$guest_os' => { ";
 			for my $version_key (sort keys %{$guest_os_info->{$guest_os}}) {
