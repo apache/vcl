@@ -858,11 +858,11 @@ sub does_image_exist {
 	
 	# If the partner doesn't have the image, a "no such file" error should be displayed
 	my $image_files_exist;
-	if (defined(@$du_output) && grep(/no such file/i, @$du_output)) {
+	if (defined($du_output) && grep(/no such file/i, @$du_output)) {
 		notify($ERRORS{'OK'}, 0, "$image_name does NOT exist");
 		$image_files_exist = 0;
 	}
-	elsif (defined(@$du_output) && !grep(/\d+\s+total/i, @$du_output)) {
+	elsif (defined($du_output) && !grep(/\d+\s+total/i, @$du_output)) {
 		notify($ERRORS{'WARNING'}, 0, "du output does not contain a total line:\n" . join("\n", @$du_output));
 		return;
 	}
@@ -982,11 +982,11 @@ sub retrieve_image {
 		my ($du_exit_status, $du_output) = run_ssh_command($partner, $partner_image_lib_key, "du -c $image_repository_path_remote\/*$image_name* | grep total", $partner_image_lib_user, $partner_ssh_port, 1);
 		
 		# If the partner doesn't have the image, a "no such file" error should be displayed
-		if (defined(@$du_output) && grep(/no such file/i, @$du_output)) {
+		if (defined($du_output) && grep(/no such file/i, @$du_output)) {
 			notify($ERRORS{'OK'}, 0, "$image_name does NOT exist on $partner_hostname");
 			next;
 		}
-		elsif (defined(@$du_output) && !grep(/\d+\s+total/i, @$du_output)) {
+		elsif (defined($du_output) && !grep(/\d+\s+total/i, @$du_output)) {
 			notify($ERRORS{'WARNING'}, 0, "du output does not contain a total line:\n" . join("\n", @$du_output));
 			next;
 		}
