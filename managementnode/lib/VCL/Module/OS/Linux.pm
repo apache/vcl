@@ -104,9 +104,11 @@ our $CAPTURE_DELETE_FILE_PATHS = [
 	'/etc/sysconfig/iptables*old*',
 	'/etc/sysconfig/iptables_pre*',
 	'/etc/udev/rules.d/70-persistent-net.rules',
-	'/tmp/ifcfg-*',
+	'/tmp/*',
 	'/var/log/*.0',
+	'/var/log/*-20*',
 	'/var/log/*.gz',
+	'/var/log/*.old',
 ];
 
 =head2 $CAPTURE_CLEAR_FILE_PATHS
@@ -118,9 +120,11 @@ our $CAPTURE_DELETE_FILE_PATHS = [
 
 our $CAPTURE_CLEAR_FILE_PATHS = [
 	'/etc/hostname',
+	'/var/log/audit/audit.log',
 	'/var/log/auth.log*',
 	'/var/log/boot.log*',
 	'/var/log/lastlog',
+	'/var/log/maillog',
 	'/var/log/messages',
 	'/var/log/secure',
 	'/var/log/udev',
