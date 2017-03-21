@@ -3406,7 +3406,7 @@ sub get_os_type {
 
 =head2 get_os_perl_package
 
- Parameters  : $computer_name
+ Parameters  : $computer_identifier (optional), $suppress_warning (optional)
  Returns     : string
  Description : Attempts to determine the Perl package which should be used to
                control the computer.
@@ -3414,48 +3414,96 @@ sub get_os_type {
 =cut
 
 sub get_os_perl_package {
-	my $computer_identifier = shift;
-	if (ref($computer_identifier)) {
-		$computer_identifier = shift
+	my $argument = shift;
+	
+	my $self;
+	my $computer_identifier;
+	
+	my $argument_type = ref($argument);
+	if ($argument_type) {
+		if ($argument->isa('VCL::Module')) {
+			$self = $argument;
+			$computer_identifier = shift || $self->data->get_computer_id();
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "invalid first argument type: $argument_type, it must either be a reference to a VCL::Module object or a scalar representing the computer identifier");
+			return;
+		}
+	}
+	else {
+		$computer_identifier = $argument;
 	}
 	if (!$computer_identifier) {
 		notify($ERRORS{'WARNING'}, 0, "computer identifier argument not specified");
 		return;
 	}
 	
-	my $os = VCL::Module::create_object('VCL::Module::OS', { computer_identifier => $computer_identifier});
+	my $suppress_warning = shift;
+	
+	notify($ERRORS{'DEBUG'}, 0, "attempting to determine Perl package name to use for OS currently loaded on computer: $computer_identifier");
+	
+	my $os;
+	
+	# Try to avoid creating a separate OS object
+	# Check if called by $self-> and if $self's DataStructure matches computer identifier
+	if ($self && $self->isa('VCL::Module::OS') && $self->data()) {
+		my $self_computer_short_name = $self->data->get_computer_short_name();
+		if ($self->data->get_computer_id() eq $computer_identifier || $computer_identifier =~ /^$self_computer_short_name/) {
+			$os = $self;
+		}
+	}
 	if (!$os) {
-		notify($ERRORS{'WARNING'}, 0, "unable to determine perl package to use for OS installed on $computer_identifier, OS object could not be created");
-		return;
+		$os = VCL::Module::create_object('VCL::Module::OS::Windows', { computer_identifier => $computer_identifier});
+		if (!$os) {
+			notify($ERRORS{'WARNING'}, 0, "unable to determine perl package to use for OS installed on $computer_identifier, OS object could not be created");
+			return;
+		}
 	}
 	
-	
 	my $command = "uname -a";
-	my ($exit_status, $output) = $os->execute($command);
+	my ($exit_status, $output) = $os->execute({
+		command => $command,
+		max_attempts => 1,
+		display_output => 0,
+	});
 	if (!defined($output)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to execute command to determine OS installed on $computer_identifier");
+		if ($suppress_warning) {
+			notify($ERRORS{'DEBUG'}, 0, "unable to determine OS installed on computer $computer_identifier, computer may not be responding");
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "failed to execute command to determine OS installed on $computer_identifier");
+		}
 		return;
 	}
 	
 	my $os_perl_package;
 	if (grep(/Cygwin/i, @$output)) {
-		my $windows_os = VCL::Module::create_object('VCL::Module::OS::Windows', { computer_identifier => $computer_identifier});
-		if (!$windows_os) {
-			notify($ERRORS{'WARNING'}, 0, "unable to determine perl package to use for OS installed on $computer_identifier, Windows OS object could not be created");
-			return;
+		my $windows_os;
+		if ($os->isa('VCL::Module::OS::Windows')) {
+			$windows_os = $os;
 		}
-		return $windows_os->_get_os_perl_package($os);
+		else {
+			$windows_os = VCL::Module::create_object('VCL::Module::OS::Windows', { computer_identifier => $computer_identifier});
+			if (!$windows_os) {
+				notify($ERRORS{'WARNING'}, 0, "unable to determine perl package to use for OS installed on $computer_identifier, Windows OS object could not be created");
+				return;
+			}
+		}
+		$os_perl_package = $windows_os->_get_os_perl_package($os) || return;
 	}
 	elsif (grep(/Ubuntu/i, @$output)) {
-		return "VCL::Module::OS::Linux::Ubuntu"
+		$os_perl_package = "VCL::Module::OS::Linux::Ubuntu"
 	}
 	elsif (grep(/Linux/i, @$output)) {
-		return "VCL::Module::OS::Linux"
+		$os_perl_package = "VCL::Module::OS::Linux"
 	}
 	else {
 		notify($ERRORS{'WARNING'}, 0, "failed to determine OS installed on $computer_identifier, unsupported output returned from '$command':\n" . join("\n", @$output));
 		return;
 	}
+	
+	notify($ERRORS{'DEBUG'}, 0, "determined OS Perl package to use for OS installed on computer $computer_identifier: $os_perl_package");
+	return $os_perl_package;
 }
 
 #/////////////////////////////////////////////////////////////////////////////

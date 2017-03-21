@@ -1084,13 +1084,42 @@ sub post_reservation {
 	
 	# Check if custom post_reservation script exists in image
 	my $script_path = '$SYSTEMROOT/vcl_post_reservation.cmd';
-	if (!$self->file_exists($script_path)) {
+	if ($self->file_exists($script_path)) {
+		# Run the post_reservation script
+		$self->run_script($script_path);
+	}
+	else {
 		notify($ERRORS{'DEBUG'}, 0, "custom post_reservation script does NOT exist in image: $script_path");
-		return 1;
 	}
 	
-	# Run the post_reservation script
-	$self->run_script($script_path);
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 pre_reload
+
+ Parameters  : none
+ Returns     : true
+ Description : Unjoins the computer from an Active Directory domain if
+               previously joined. This helps avoid orphaned computer objects.
+
+=cut
+
+sub pre_reload {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return 0;
+	}
+	
+	my $computer_name = $self->data->get_computer_short_name();
+	
+	# Check if the computer is joined to any AD domain
+	my $computer_current_domain_name = $self->ad_get_current_domain();
+	if ($computer_current_domain_name) {
+		$self->ad_delete_computer($computer_name, $computer_current_domain_name);
+	}
 	
 	return 1;
 }

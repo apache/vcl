@@ -470,6 +470,34 @@ sub create_os_object {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 create_current_os_object
+
+ Parameters  : $computer_identifier (optional)
+ Returns     : string
+ Description : Attempts to determine the Perl package which should be used to
+               control the computer.
+
+=cut
+
+sub create_current_os_object {
+	my ($self, $computer_identifier, $suppress_warning) = @_;
+	
+	my $os_perl_package = VCL::Module::OS::get_os_perl_package(@_);
+	if (!$os_perl_package) {
+		notify($ERRORS{'WARNING'}, 0, "failed to create object for OS currently loaded on computer, correct Perl package path could not be determined") unless $suppress_warning;
+		return;
+	}
+	
+	if (ref($self) && ref($self) eq $os_perl_package) {
+		notify($ERRORS{'DEBUG'}, 0, "returning object used to call this subroutine becuase it is the correct module type: " . ref($self));
+		return $self;
+	}
+	
+	return $self->create_os_object($os_perl_package);
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 =head2 create_mn_os_object
 
  Parameters  : none

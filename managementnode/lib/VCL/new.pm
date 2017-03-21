@@ -565,6 +565,13 @@ sub reload_image {
 			notify($ERRORS{'OK'}, 0, "unable to check if image exists, does_image_exist() not implemented by " . ref($self->provisioner));
 		}
 		
+		# OS currently installed on computer may not be the same type as $self->os
+		# Attempt to create a new OS object representing OS currently installed and check if that object implements a 'pre_reload' subroutine
+		my $computer_current_os = $self->create_current_os_object($computer_id, 1);
+		if ($computer_current_os && $computer_current_os->can('pre_reload')) {
+			$computer_current_os->pre_reload();
+		}
+		
 		# Update the computer state to reloading
 		if (update_computer_state($computer_id, "reloading")) {
 			notify($ERRORS{'OK'}, 0, "computer $computer_short_name state set to reloading");
