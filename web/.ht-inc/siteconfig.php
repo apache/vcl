@@ -71,9 +71,10 @@ function generalOptions($globalopts) {
 	$h .= "<div id=\"siteconfiglayout\">\n";
 
 	# -------- left column ---------
-	# TODO control access to affiliations
-	$h .= "<div id=\"siteconfigleftcol\">\n";
-	$obj = new Affiliations();
+	if(! checkUserHasPerm('Site Configuration (global)')) {
+		$h .= "<div id=\"siteconfigleftcol\">\n";
+		$obj = new Affiliations();
+	}
 	$h .= $obj->getHTML($globalopts);
 	$obj = new connectedUserCheck();
 	$h .= $obj->getHTML($globalopts);
@@ -1914,6 +1915,7 @@ class GlobalMultiVariable {
 	var $addCBextra;
 	var $deleteCBextra;
 	var $saveCBextra;
+	var $allowduplicates;
 
 	/////////////////////////////////////////////////////////////////////////////
 	///
@@ -1929,6 +1931,17 @@ class GlobalMultiVariable {
 		$this->addCBextra = 'addNewMultiValCBextra';
 		$this->deleteCBextra = 'deleteMultiValCBextra';
 		$this->saveCBextra = 'saveCBextra';
+		$this->allowduplicates = 0;
+	}
+
+	/////////////////////////////////////////////////////////////////////////////
+	///
+	/// \fn setValues
+	///
+	/// \brief sets values in $this->values
+	///
+	/////////////////////////////////////////////////////////////////////////////
+	function setValues() {
 	}
 
 	////////////////////////////////////////////////////////////////////////////////
@@ -2068,7 +2081,12 @@ class GlobalMultiVariable {
 	///
 	////////////////////////////////////////////////////////////////////////////////
 	function AJaddConfigMultiVal() {
-		# TODO check access?
+		if(! checkUserHasPerm('Site Configuration (global)')) {
+			$arr = array('status' => 'noaccess',
+			             'msg' => _('You do not have access to modify the submitted settings.'));
+			sendJSON($arr);
+			return;
+		}
 		$newkey = processInputVar('multivalid', ARG_NUMERIC);
 		$newval = processInputVar('multival', ARG_STRING);
 		if(! array_key_exists($newkey, $this->units)) {
@@ -2090,6 +2108,10 @@ class GlobalMultiVariable {
 			return;
 		}
 		setVariable("{$this->domidbase}|$newkey", $newval, 'none');
+		$this->setValues();
+		$addcont = addContinuationsEntry('AJaddConfigMultiVal', $this->basecdata);
+		$delcont = addContinuationsEntry('AJdeleteMultiSetting', $this->basecdata);
+		$savecont = addContinuationsEntry('AJupdateAllSettings', $this->basecdata);
 		$arr = array('status' => 'success',
 		             'msgid' => "{$this->domidbase}msg",
 		             'addid' => "{$this->domidbase}|$newkey",
@@ -2097,6 +2119,9 @@ class GlobalMultiVariable {
 		             'addval' => $newval,
 		             'delkey' => $newkey,
 		             'extrafunc' => "{$this->jsname}.{$this->addCBextra}",
+		             'addcont' => $addcont,
+		             'delcont' => $delcont,
+		             'savecont' => $savecont,
 		             'msg' => $this->addmsg,
 		             'regexp' => $this->constraint,
 		             'invalidmsg' => str_replace('&amp;', '&', $this->invalidmsg));
@@ -2111,7 +2136,12 @@ class GlobalMultiVariable {
 	///
 	////////////////////////////////////////////////////////////////////////////////
 	function AJdeleteMultiSetting() {
-		# TODO check access?
+		if(! checkUserHasPerm('Site Configuration (global)')) {
+			$arr = array('status' => 'noaccess',
+			             'msg' => _('You do not have access to modify the submitted settings.'));
+			sendJSON($arr);
+			return;
+		}
 		$key = processInputVar('key', ARG_NUMERIC);
 		if(! array_key_exists($key, $this->values)) {
 			$arr = array('status' => 'failed',
@@ -2131,13 +2161,16 @@ class GlobalMultiVariable {
 			sendJSON($arr);
 			return;
 		}
+		$this->setValues();
+		$savecont = addContinuationsEntry('AJupdateAllSettings', $this->basecdata);
 		$arr = array('status' => 'success',
 		             'msgid' => "{$this->domidbase}msg",
 		             'delid' => "{$this->domidbase}|$key",
 		             'extrafunc' => "{$this->jsname}.{$this->deleteCBextra}",
 		             'addid' => "$key",
 		             'addname' => $this->units[$key]['name'],
-		             'msg' => $this->delmsg);
+		             'msg' => $this->delmsg,
+		             'savecont' => $savecont);
 		sendJSON($arr);
 	}
 
@@ -2210,14 +2243,16 @@ class GlobalMultiVariable {
 						sendJSON($arr);
 						return;
 					}
-					foreach($newvals as $testval) {
-						if($newval == $testval) {
-							$arr = array('status' => 'failed',
-							             'msgid' => "{$this->domidbase}msg",
-							             'btn' => "{$this->domidbase}btn",
-							             'errmsg' => _("Duplicate new values submitted"));
-							sendJSON($arr);
-							return;
+					if(! $this->allowduplicates) {
+						foreach($newvals as $testval) {
+							if($newval == $testval) {
+								$arr = array('status' => 'failed',
+								             'msgid' => "{$this->domidbase}msg",
+								             'btn' => "{$this->domidbase}btn",
+								             'errmsg' => _("Duplicate new values submitted"));
+								sendJSON($arr);
+								return;
+							}
 						}
 					}
 					if($newval != $origvals[$key])
@@ -2254,11 +2289,14 @@ class GlobalMultiVariable {
 		}
 		foreach($newvals as $key => $val)
 			$this->updateValue($key, $val);
+		$this->setValues();
+		$savecont = addContinuationsEntry('AJupdateAllSettings', $this->basecdata);
 		$arr = array('status' => 'success',
 		             'msgid' => "{$this->domidbase}msg",
 		             'btn' => "{$this->domidbase}btn",
 		             'msg' => $this->updatemsg,
-		             'extrafunc' => "{$this->jsname}.{$this->saveCBextra}");
+		             'extrafunc' => "{$this->jsname}.{$this->saveCBextra}",
+		             'savecont' => $savecont);
 		sendJSON($arr);
 	}
 
@@ -2335,6 +2373,24 @@ class NFSmounts extends GlobalMultiVariable {
 		$this->invalidmsg = _("Invalid value - must be in the form") . str_replace('&', '&amp;', $formbase);
 		$this->invalidvaluemsg = html_entity_decode($this->invalidmsg);
 		$this->width = '400px';
+		$this->allowduplicates = 1;
+	}
+
+	/////////////////////////////////////////////////////////////////////////////
+	///
+	/// \fn setValues
+	///
+	/// \brief sets values in $this->values
+	///
+	/////////////////////////////////////////////////////////////////////////////
+	function setValues() {
+		$vals = getVariablesRegex('^nfsmount\\\|[0-9]+$');
+		$this->values = array();
+		foreach($vals as $key => $val) {
+			$tmp = explode('|', $key);
+			$id = $tmp[1];
+			$this->values[$id] = $val;
+		}
 	}
 
 	////////////////////////////////////////////////////////////////////////////////
@@ -2420,6 +2476,23 @@ class Affiliations extends GlobalMultiVariable {
 		$this->saveCBextra = 'pagerefresh';
 	}
 
+	/////////////////////////////////////////////////////////////////////////////
+	///
+	/// \fn setValues
+	///
+	/// \brief sets values in $this->values
+	///
+	/////////////////////////////////////////////////////////////////////////////
+	function setValues() {
+		$affils = getAffiliations();
+		$this->values = array();
+		foreach($affils as $key => $val) {
+			if($val == 'Global')
+				continue;
+			$this->values[$key] = $val;
+		}
+	}
+
 	////////////////////////////////////////////////////////////////////////////////
 	///
 	/// \fn existingValuesHTML()
@@ -2499,6 +2572,12 @@ class Affiliations extends GlobalMultiVariable {
 	///
 	////////////////////////////////////////////////////////////////////////////////
 	function AJaddConfigMultiVal() {
+		if(! checkUserHasPerm('Site Configuration (global)')) {
+			$arr = array('status' => 'noaccess',
+			             'msg' => _('You do not have access to modify the submitted settings.'));
+			sendJSON($arr);
+			return;
+		}
 		$newval = processInputVar('multival', ARG_STRING);
 		if(! $this->validateValue($newval)) {
 			$arr = array('status' => 'failed',

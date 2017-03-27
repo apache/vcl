@@ -453,8 +453,14 @@ GlobalMultiVariable.prototype.addNewMultiValCBextra = function(data) {
 	dijit.byId(this.domidbase + 'newmultivalid').removeOption({value: data.items.delkey});
 	if(dijit.byId(this.domidbase + 'newmultivalid').options.length == 0)
 		dojo.addClass(this.domidbase + 'multivalnewspan', 'hidden');
+	dojo.byId(this.domidbase + 'addcont').value = data.items.addcont;
+	dojo.byId('delete' + this.domidbase + 'cont').value = data.items.delcont;
+	dojo.byId(this.domidbase + 'cont').value = data.items.savecont;
 	var keys = dojo.byId(this.domidbase + 'savekeys').value.split(',');
-	keys.push(data.items.addid);
+	if(keys[0] == '')
+		keys[0] = data.items.addid;
+	else
+		keys.push(data.items.addid);
 	dojo.byId(this.domidbase + 'savekeys').value = keys.join(',');
 	dijit.byId(this.domidbase + 'addbtn').set('disabled', false);
 }
@@ -476,8 +482,10 @@ GlobalMultiVariable.prototype.deleteMultiValCBextra = function(data) {
 	}
 	dojo.byId(this.domidbase + 'savekeys').value = newkeys.join(',');
 	dojo.removeClass(this.domidbase + 'multivalnewspan', 'hidden');
+	dojo.byId(this.domidbase + 'cont').value = data.items.savecont;
 }
 GlobalMultiVariable.prototype.saveCBextra = function(data) {
+	dojo.byId(this.domidbase + 'cont').value = data.items.savecont;
 }
 
 function nfsmount() {
