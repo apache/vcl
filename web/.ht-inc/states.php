@@ -592,6 +592,7 @@ $actions['classmapping']['userpasswordlength'] = 'siteconfig';
 $actions['classmapping']['userpasswordspecialchar'] = 'siteconfig';
 $actions['classmapping']['natportrange'] = 'siteconfig';
 $actions['classmapping']['nfsmounts'] = 'siteconfig';
+$actions['classmapping']['affiliations'] = 'siteconfig';
 $actions['classmapping']['messages'] = 'siteconfig';
 $actions['classmapping']['affilhelpaddress'] = 'siteconfig';
 $actions['classmapping']['affilkmsserver'] = 'siteconfig';

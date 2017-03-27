@@ -35,6 +35,13 @@ function generalSiteConfigCB(data, ioArgs) {
 		}
 		clearmsg(data.items.msgid, 20);
 	}
+	else if(data.items.status == 'noaction') {
+		dojo.removeClass(data.items.msgid, 'cfgerror');
+		dojo.removeClass(data.items.msgid, 'cfgsuccess');
+		dojo.byId(data.items.msgid).innerHTML = '';
+		if('btn' in data.items)
+			dijit.byId(data.items.btn).set('disabled', false);
+	}
 	else if(data.items.status == 'failed') {
 		dojo.removeClass(data.items.msgid, 'cfgsuccess');
 		dojo.addClass(data.items.msgid, 'cfgerror');
@@ -430,7 +437,7 @@ GlobalMultiVariable.prototype.addNewMultiValCBextra = function(data) {
 	}, document.createElement('div'));
 	span2.appendChild(text.domNode);
 	span.appendChild(span2);
-	var func = this.deleteMultiVal
+	var func = this.deleteMultiVal;
 	var domidbase = this.domidbase;
 	var btn = new dijit.form.Button({
 		id: data.items.addid + 'delbtn',
@@ -461,7 +468,6 @@ GlobalMultiVariable.prototype.deleteMultiValCBextra = function(data) {
 	dijit.byId(data.items.delid + 'delbtn').destroy();
 	dojo.destroy(data.items.delid + 'wrapspan');
 	dijit.byId(this.domidbase + 'newmultivalid').addOption({value: data.items.addid, label: data.items.addname});
-	//dojo.removeClass(this.domidbase + 'adddiv', 'hidden');
 	var keys = dojo.byId(this.domidbase + 'savekeys').value.split(',');
 	var newkeys = new Array();
 	for(var i = 0; i < keys.length; i++) {
@@ -469,8 +475,9 @@ GlobalMultiVariable.prototype.deleteMultiValCBextra = function(data) {
 			newkeys.push(keys[i]);
 	}
 	dojo.byId(this.domidbase + 'savekeys').value = newkeys.join(',');
-	//dojo.byId(this.domidbase + 'cont').value = data.items.savecont;
 	dojo.removeClass(this.domidbase + 'multivalnewspan', 'hidden');
+}
+GlobalMultiVariable.prototype.saveCBextra = function(data) {
 }
 
 function nfsmount() {
@@ -479,6 +486,53 @@ function nfsmount() {
 }
 nfsmount.prototype = new GlobalMultiVariable();
 var nfsmount = new nfsmount();
+
+function affiliation() {
+	GlobalMultiVariable.apply(this, Array.prototype.slice.call(arguments));
+	this.domidbase = 'affiliation';
+	this.addNewMultiVal = function() {
+		var data = {continuation: dojo.byId(this.domidbase + 'addcont').value,
+		            multival: dijit.byId(this.domidbase + 'newmultival').get('value')};
+		dijit.byId(this.domidbase + 'addbtn').set('disabled', true);
+		RPCwrapper(data, generalSiteConfigCB, 1);
+	}
+	this.deleteMultiVal = function(key, domidbase) {
+		var affil = dijit.byId(this.domidbase + '|' + key).get('_resetValue');
+		dojo.byId('delaffilkey').value = key;
+		this.showDelete(affil);
+	}
+	this.deleteMultiValSubmit = function() {
+		var data = {key: dojo.byId('delaffilkey').value,
+		            continuation: dojo.byId('delete' + this.domidbase + 'cont').value};
+		RPCwrapper(data, generalSiteConfigCB, 1);
+		setTimeout(this.hideDelete, 300);
+	}
+	this.pagerefresh = function(data) {
+		window.location.reload(false);
+	}
+	this.deleteMultiValCBextra = function(data) {
+		dijit.byId(data.items.delid).destroy();
+		dijit.byId(data.items.delid + 'delbtn').destroy();
+		dojo.destroy(data.items.delid + 'wrapspan');
+		window.location.reload(false);
+	}
+	this.showDelete = function(affil) {
+		dojo.byId('affilconfirmname').innerHTML = affil;
+		dojo.byId('siteconfigconfirmoverlay').style.display = 'block';
+		dojo.byId('affiliationconfirmbox').style.display = 'block';
+		var dialog = dojo.byId('affiliationconfirmbox');
+		var overlay = dojo.byId('siteconfigconfirmoverlay');
+		dialog.style.top = (overlay.offsetHeight/2) - (dialog.offsetHeight/2) + 'px';
+		dialog.style.left = (overlay.offsetWidth/2) - (dialog.offsetWidth/2) + 'px';
+	}
+	this.hideDelete = function() {
+		dojo.byId('siteconfigconfirmoverlay').style.display = 'none';
+		dojo.byId('affiliationconfirmbox').style.display = 'none';
+		dojo.byId('affilconfirmname').innerHTML = '';
+	}
+}
+affiliation.prototype = new GlobalMultiVariable();
+var affiliation = new affiliation();
 
 function messages() {
 	var items;

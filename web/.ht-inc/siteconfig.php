@@ -71,7 +71,10 @@ function generalOptions($globalopts) {
 	$h .= "<div id=\"siteconfiglayout\">\n";
 
 	# -------- left column ---------
+	# TODO control access to affiliations
 	$h .= "<div id=\"siteconfigleftcol\">\n";
+	$obj = new Affiliations();
+	$h .= $obj->getHTML($globalopts);
 	$obj = new connectedUserCheck();
 	$h .= $obj->getHTML($globalopts);
 	$obj = new acknowledge();
@@ -137,9 +140,9 @@ function timeSourceHTML($globalopts) {
 		return '';
 	$h  = "<div class=\"configwidget\">\n";
 	$h .= "<h3>" . i("Time Source") . "</h3>\n";
-	$h .= "<span class=\"siteconfigdesc\">\n";
+	$h .= "<div class=\"siteconfigdesc\">\n";
 	$h .= i("Set the default list of time servers to be used on installed nodes. These can be overridden for each management node under the settings for a given management node. Separate hostnames using a comma (,).") . "<br><br>\n";
-	$h .= "</span>\n";
+	$h .= "</div>\n";
 	$val = getVariable('timesource|global', '', 1);
 	$hostreg = '(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]*[a-zA-Z0-9])\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\-]*[A-Za-z0-9])';
 	$h .= labeledFormItem('timesource', i('Time Servers'), 'text', "^($hostreg){1}(,$hostreg)*$", '', $val['value']);
@@ -250,9 +253,9 @@ class TimeVariable {
 		$data = getVariablesRegex("^{$this->key}.*");
 		$h  = "<div class=\"configwidget\" style=\"width: 100%;\">\n";
 		$h .= "<h3>{$this->name}</h3>\n";
-		$h .= "<span class=\"siteconfigdesc\">\n";
+		$h .= "<div class=\"siteconfigdesc\">\n";
 		$h .= $this->desc;
-		$h .= "<br><br></span>\n";
+		$h .= "<br><br></div>\n";
 
 		$origvals = array();
 		$affils = getAffiliations();
@@ -927,9 +930,9 @@ class AffilTextVariable {
 		global $user;
 		$h  = "<div class=\"configwidget\" style=\"width: 100%;\">\n";
 		$h .= "<h3>{$this->name}</h3>\n";
-		$h .= "<span class=\"siteconfigdesc\">\n";
+		$h .= "<div class=\"siteconfigdesc\">\n";
 		$h .= $this->desc;
-		$h .= "<br><br></span>\n";
+		$h .= "<br><br></div>\n";
 
 		$affils = getAffiliations();
 		$saveids = array();
@@ -1662,9 +1665,9 @@ class GlobalSingleVariable {
 		$val = getVariable($this->key, $this->defaultval);
 		$h  = "<div class=\"configwidget\" style=\"width: 100%;\">\n";
 		$h .= "<h3>{$this->name}</h3>\n";
-		$h .= "<span class=\"siteconfigdesc\">\n";
+		$h .= "<div class=\"siteconfigdesc\">\n";
 		$h .= $this->desc;
-		$h .= "<br><br></span>\n";
+		$h .= "<br><br></div>\n";
 		switch($this->type) {
 			case 'numeric':
 				$extra = array('smallDelta' => 1, 'largeDelta' => 10);
@@ -1908,6 +1911,9 @@ class GlobalMultiVariable {
 	var $updatemsg;
 	var $type;
 	var $width;
+	var $addCBextra;
+	var $deleteCBextra;
+	var $saveCBextra;
 
 	/////////////////////////////////////////////////////////////////////////////
 	///
@@ -1919,7 +1925,10 @@ class GlobalMultiVariable {
 	function __construct() {
 		$this->basecdata = array('obj' => $this);
 		$this->updatemsg = _("Values updated");
-		$type = 'text';
+		$this->type = 'text';
+		$this->addCBextra = 'addNewMultiValCBextra';
+		$this->deleteCBextra = 'deleteMultiValCBextra';
+		$this->saveCBextra = 'saveCBextra';
 	}
 
 	////////////////////////////////////////////////////////////////////////////////
@@ -1935,9 +1944,10 @@ class GlobalMultiVariable {
 		global $user;
 		$h  = "<div class=\"configwidget\" style=\"width: 100%;\">\n";
 		$h .= "<h3>{$this->name}</h3>\n";
-		$h .= "<span class=\"siteconfigdesc\">\n";
+		$h .= "<div class=\"GMV{$this->domidbase}wrapper\">\n"; # wrapper
+		$h .= "<div class=\"siteconfigdesc\">\n";
 		$h .= $this->desc;
-		$h .= "<br><br></span>\n";
+		$h .= "<br><br></div>\n";
 		$this->savekeys = array();
 		$this->setkeys = array();
 
@@ -1967,6 +1977,7 @@ class GlobalMultiVariable {
 		$h .= "<input type=\"hidden\" id=\"{$this->domidbase}savekeys\" value=\"{$this->savekeys}\">\n";
 		$cont = addContinuationsEntry('AJdeleteMultiSetting', $cdata);
 		$h .= "<input type=\"hidden\" id=\"delete{$this->domidbase}cont\" value=\"$cont\">\n";
+		$h .= "</div>\n"; # wrapper
 		$h .= "</div>\n";
 		return $h;
 	}
@@ -2057,6 +2068,7 @@ class GlobalMultiVariable {
 	///
 	////////////////////////////////////////////////////////////////////////////////
 	function AJaddConfigMultiVal() {
+		# TODO check access?
 		$newkey = processInputVar('multivalid', ARG_NUMERIC);
 		$newval = processInputVar('multival', ARG_STRING);
 		if(! array_key_exists($newkey, $this->units)) {
@@ -2084,7 +2096,7 @@ class GlobalMultiVariable {
 		             'addname' => $this->units[$newkey]['name'],
 		             'addval' => $newval,
 		             'delkey' => $newkey,
-		             'extrafunc' => "{$this->jsname}.addNewMultiValCBextra",
+		             'extrafunc' => "{$this->jsname}.{$this->addCBextra}",
 		             'msg' => $this->addmsg,
 		             'regexp' => $this->constraint,
 		             'invalidmsg' => str_replace('&amp;', '&', $this->invalidmsg));
@@ -2095,10 +2107,11 @@ class GlobalMultiVariable {
 	///
 	/// \fn AJdeleteMultiSetting()
 	///
-	/// \brief deletes a multi value setting
+	/// \brief processes deletion of a multi value setting
 	///
 	////////////////////////////////////////////////////////////////////////////////
 	function AJdeleteMultiSetting() {
+		# TODO check access?
 		$key = processInputVar('key', ARG_NUMERIC);
 		if(! array_key_exists($key, $this->values)) {
 			$arr = array('status' => 'failed',
@@ -2108,11 +2121,20 @@ class GlobalMultiVariable {
 			sendJSON($arr);
 			return;
 		}
-		deleteVariable("{$this->domidbase}|$key");
+		if(! $this->deleteValue($key)) {
+			$arr = array('status' => 'failed',
+			             'msgid' => "{$this->domidbase}msg",
+			             'btn' => "{$this->domidbase}|{$key}delbtn",
+			             'errmsg' => _("Invalid item submitted for deletion"));
+			if(isset($this->invalidvaluemsg))
+				$arr['errmsg'] = $this->invalidvaluemsg;
+			sendJSON($arr);
+			return;
+		}
 		$arr = array('status' => 'success',
 		             'msgid' => "{$this->domidbase}msg",
 		             'delid' => "{$this->domidbase}|$key",
-		             'extrafunc' => "{$this->jsname}.deleteMultiValCBextra",
+		             'extrafunc' => "{$this->jsname}.{$this->deleteCBextra}",
 		             'addid' => "$key",
 		             'addname' => $this->units[$key]['name'],
 		             'msg' => $this->delmsg);
@@ -2121,9 +2143,25 @@ class GlobalMultiVariable {
 
 	////////////////////////////////////////////////////////////////////////////////
 	///
+	/// \fn deleteValue($key)
+	///
+	/// \param $key - key of value to delete from $this->values
+	///
+	/// \return 0 on fail, 1 on success
+	///
+	/// \brief deletes a multi value setting
+	///
+	////////////////////////////////////////////////////////////////////////////////
+	function deleteValue($key) {
+		deleteVariable("{$this->domidbase}|$key");
+		return 1;
+	}
+
+	////////////////////////////////////////////////////////////////////////////////
+	///
 	/// \fn AJupdateAllSettings()
 	///
-	/// \brief updates all values for implemented type of timevariable
+	/// \brief processes updating values for submitted variables
 	///
 	////////////////////////////////////////////////////////////////////////////////
 	function AJupdateAllSettings() {
@@ -2162,13 +2200,25 @@ class GlobalMultiVariable {
 				case 'text':
 				case 'textarea':
 					$newval = processInputVar("{$this->domidbase}|$key", ARG_STRING); 
-					if(! $this->validateValue($newval)) {
+					if(! $this->validateValue($newval, $key)) {
 						$arr = array('status' => 'failed',
 						             'msgid' => "{$this->domidbase}msg",
 						             'btn' => "{$this->domidbase}btn",
 						             'errmsg' => _("Invalid value submitted for ") . $this->units[$key]['name']);
+						if(isset($this->invalidvaluemsg))
+							$arr['errmsg'] = $this->invalidvaluemsg;
 						sendJSON($arr);
 						return;
+					}
+					foreach($newvals as $testval) {
+						if($newval == $testval) {
+							$arr = array('status' => 'failed',
+							             'msgid' => "{$this->domidbase}msg",
+							             'btn' => "{$this->domidbase}btn",
+							             'errmsg' => _("Duplicate new values submitted"));
+							sendJSON($arr);
+							return;
+						}
 					}
 					if($newval != $origvals[$key])
 						$newvals["{$this->jsname}|$key"] = $newval;
@@ -2195,24 +2245,50 @@ class GlobalMultiVariable {
 					return;
 			}
 		}
+		if(empty($newvals)) {
+			$arr = array('status' => 'noaction',
+			             'msgid' => "{$this->domidbase}msg",
+			             'btn' => "{$this->domidbase}btn");
+			sendJSON($arr);
+			return;
+		}
 		foreach($newvals as $key => $val)
-			setVariable($key, $val, 'none');
+			$this->updateValue($key, $val);
 		$arr = array('status' => 'success',
 		             'msgid' => "{$this->domidbase}msg",
 		             'btn' => "{$this->domidbase}btn",
-		             'msg' => $this->updatemsg);
+		             'msg' => $this->updatemsg,
+		             'extrafunc' => "{$this->jsname}.{$this->saveCBextra}");
 		sendJSON($arr);
 	}
 
 	////////////////////////////////////////////////////////////////////////////////
 	///
-	/// \fn validateValue($val)
+	/// \fn updateValue($key, $val)
 	///
-	/// \brief validates that a new value is okay; should be implemented in 
-	/// inheriting class
+	/// \param $key - key of value to update from $this->values
+	/// \param $val - new value for $key
+	///
+	/// \brief updates value for $key
 	///
 	////////////////////////////////////////////////////////////////////////////////
-	function validateValue($val) {
+	function updateValue($key, $val) {
+		setVariable($key, $val, 'none');
+	}
+
+	////////////////////////////////////////////////////////////////////////////////
+	///
+	/// \fn validateValue($val, $key)
+	///
+	/// \param $val - value to be validated
+	/// \param $key - (optional, default=NULL) corresponding key if existing value
+	///
+	/// \return 0 if invalid, 1 if valid
+	///
+	/// \brief validates that a new value is okay
+	///
+	////////////////////////////////////////////////////////////////////////////////
+	function validateValue($val, $key=NULL) {
 		return 1;
 	}
 }
@@ -2263,12 +2339,17 @@ class NFSmounts extends GlobalMultiVariable {
 
 	////////////////////////////////////////////////////////////////////////////////
 	///
-	/// \fn validateValue($val)
+	/// \fn validateValue($val, $key)
+	///
+	/// \param $val - value to be validated
+	/// \param $key - (unused)
+	///
+	/// \return 0 if invalid, 1 if valid
 	///
 	/// \brief validates that a new value is okay
 	///
 	////////////////////////////////////////////////////////////////////////////////
-	function validateValue($val) {
+	function validateValue($val, $key=NULL) {
 		$vals = explode(";", $val);
 		foreach($vals as $testval) {
 			$tmp = explode(':', $testval);
@@ -2288,6 +2369,258 @@ class NFSmounts extends GlobalMultiVariable {
 				return 0;
 			if(! preg_match(':^/[a-zA-Z0-9\.@#%\(\)-_=\+/]+:', $mntpath))
 				return 0;
+		}
+		return 1;
+	}
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \class Affiliations
+///
+/// \brief extends GlobalMultiVariable class to implement Affiliations
+///
+////////////////////////////////////////////////////////////////////////////////
+class Affiliations extends GlobalMultiVariable {
+	/////////////////////////////////////////////////////////////////////////////
+	///
+	/// \fn __construct()
+	///
+	/// \brief class construstor
+	///
+	/////////////////////////////////////////////////////////////////////////////
+	function __construct() {
+		parent::__construct();
+		$this->name = _('Affiliations');
+		$affils = getAffiliations();
+		$this->units = array();
+		$this->values = array();
+		foreach($affils as $key => $val) {
+			if($val == 'Global')
+				continue;
+			$this->units[$key]['name'] = $val;
+			$this->values[$key] = $val;
+		}
+		$formbase = ' be a max of 40 characters and contain A-Z a-z 0-9 - _';
+		$this->desc = _("Affiliation names can") . $formbase;
+		$this->domidbase = 'affiliation';
+		$this->basecdata['obj'] = $this;
+		$this->jsname = 'affiliation';
+		$this->defaultval = '';
+		$this->type = 'text';
+		$this->addmsg = i("Affiliation sucessfully added; reloading page");
+		$this->delmsg = i("Affiliation sucessfully deleted; reloading page");
+		$this->updatemsg = i("Values updated; reloading page");
+		$this->constraint = '[-A-Za-z0-9_]{1,40}';
+		$this->invalidmsg = i("Invalid value - must") . str_replace('&', '&amp;', $formbase);
+		$this->invalidvaluemsg = html_entity_decode($this->invalidmsg);
+		$this->width = '200px';
+		$this->addCBextra = 'pagerefresh';
+		$this->deleteCBextra = 'deleteMultiValCBextra';
+		$this->saveCBextra = 'pagerefresh';
+	}
+
+	////////////////////////////////////////////////////////////////////////////////
+	///
+	/// \fn existingValuesHTML()
+	///
+	/// \return string of HTML
+	///
+	/// \brief generates HTML for existing value forms
+	///
+	////////////////////////////////////////////////////////////////////////////////
+	function existingValuesHTML() {
+		$h = "<span id=\"{$this->domidbase}multivalspan\">\n";
+		foreach($this->values as $key => $val) {
+			if(! isset($this->units[$key]))
+				continue;
+			$this->savekeys[] = "{$this->domidbase}|$key";
+			$h .= "<span id=\"{$this->domidbase}|{$key}wrapspan\">\n";
+			$h .= "<input type=\"text\" ";
+			$h .=        "dojoType=\"dijit.form.ValidationTextBox\" ";
+			$h .=        "required=\"1\" ";
+			$h .=        "regExp=\"{$this->constraint}\" ";
+			$h .=        "invalidMessage=\"{$this->invalidmsg}\" ";
+			$h .=        "style=\"width: {$this->width}\"; ";
+			$h .=        "value=\"$val\" ";
+			$h .=        "id=\"{$this->domidbase}|$key\">\n";
+			$h .= dijitButton("{$this->domidbase}|{$key}delbtn", _('Delete'),
+			                  "{$this->jsname}.deleteMultiVal('$key', '{$this->domidbase}');");
+			$h .= "<br></span>\n";
+		}
+		$h .= "<div id=\"siteconfigconfirmoverlay\">\n";
+		$h .= "</div>\n"; # overlay
+
+		$h .= "<div id=\"affiliationconfirmbox\">\n";
+		$h .= "<div id=\"affilconfbox-table\">\n";
+		$h .= "<div id=\"affilconfbox-cell\">\n";
+		$h .= "Delete <span id=\"affilconfirmname\"></span>?<br><br>\n";
+		$h .= dijitButton('', 'Delete', 'affiliation.deleteMultiValSubmit();');
+		$h .= dijitButton('', 'Cancel', 'affiliation.hideDelete();');
+		$h .= "</div>\n"; # affilconfbox-cell
+		$h .= "</div>\n"; # affilconfbox-table
+		$h .= "</div>\n";
+		$h .= "<input type=\"hidden\" id=\"delaffilkey\">\n";
+
+		$h .= "</span>\n"; # multivalspan
+		return $h;
+	}
+
+	////////////////////////////////////////////////////////////////////////////////
+	///
+	/// \fn newValueHTML($remaining)
+	///
+	/// \param $remaining - array of remaining units for which values can be added
+	///
+	/// \return string of HTML
+	///
+	/// \brief generates HTML for new value form
+	///
+	////////////////////////////////////////////////////////////////////////////////
+	function newValueHTML($remaining) {
+		$h  = "<input type=\"text\" ";
+		$h .=        "dojoType=\"dijit.form.ValidationTextBox\" ";
+		$h .=        "required=\"1\" ";
+		$h .=        "regExp=\"{$this->constraint}\" ";
+		$h .=        "invalidMessage=\"{$this->invalidmsg}\" ";
+		$h .=        "style=\"width: {$this->width}\"; ";
+		$h .=        "id=\"{$this->domidbase}newmultival\">\n";
+		$h .= dijitButton("{$this->domidbase}addbtn", _('Add'), "{$this->jsname}.addNewMultiVal();");
+		$cont = addContinuationsEntry('AJaddConfigMultiVal', $this->basecdata);
+		$h .= "<input type=\"hidden\" id=\"{$this->domidbase}addcont\" value=\"$cont\">\n";
+		return $h;
+	}
+
+	////////////////////////////////////////////////////////////////////////////////
+	///
+	/// \fn AJaddConfigMultiVal()
+	///
+	/// \brief adds a multi value setting
+	///
+	////////////////////////////////////////////////////////////////////////////////
+	function AJaddConfigMultiVal() {
+		$newval = processInputVar('multival', ARG_STRING);
+		if(! $this->validateValue($newval)) {
+			$arr = array('status' => 'failed',
+			             'msgid' => "{$this->domidbase}msg",
+			             'btn' => "{$this->domidbase}addbtn",
+			             'errmsg' => _("Invalid value submitted"));
+			if(isset($this->invalidvaluemsg))
+				$arr['errmsg'] = $this->invalidvaluemsg;
+			sendJSON($arr);
+			return;
+		}
+		$_newval = mysql_real_escape_string($newval);
+		$query = "INSERT INTO affiliation (name) VALUES ('$_newval')";
+		doQuery($query);
+		$arr = array('status' => 'success',
+		             'msgid' => "{$this->domidbase}msg",
+		             'extrafunc' => "{$this->jsname}.pagerefresh",
+		             'msg' => $this->addmsg);
+		sendJSON($arr);
+	}
+
+	////////////////////////////////////////////////////////////////////////////////
+	///
+	/// \fn deleteValue($key)
+	///
+	/// \param $key - key of value to delete from $this->values
+	///
+	/// \brief deletes a multi value setting
+	///
+	////////////////////////////////////////////////////////////////////////////////
+	function deleteValue($key) {
+		$used = 0;
+		$tables = array('loginlog', 'user', 'usergroup');
+		foreach($tables as $table) {
+			$query = "SELECT affiliationid FROM $table WHERE affiliationid = $key LIMIT 1";
+			$qh = doQuery($query);
+			if(mysql_num_rows($qh)) {
+				$used = 1;
+				break;
+			}
+		}
+		if($used) {
+			$this->invalidvaluemsg = "{$this->units[$key]['name']} has been used. Affiliations that have been used cannot be deleted.";
+			return 0;
+		}
+		$affilname = getAffiliationName($key);
+		$query = "DELETE FROM statgraphcache WHERE affiliationid = $key";
+		doQuery($query);
+		$query = "DELETE FROM winKMS WHERE affiliationid = $key";
+		doQuery($query);
+		$query = "DELETE FROM winProductKey WHERE affiliationid = $key";
+		doQuery($query);
+		$query = "DELETE FROM affiliation WHERE id = $key";
+		doQuery($query);
+		$query = "DELETE FROM variable WHERE name REGEXP '^usermessage\\|[^\\|]+\\|$affilname$'";
+		doQuery($query);
+		$query = "DELETE FROM variable WHERE name REGEXP '^ignore_connections_gte\\|$affilname$'";
+		doQuery($query);
+		$query = "DELETE FROM variable WHERE name REGEXP '^acknowledgetimeout\\|$affilname$'";
+		doQuery($query);
+		$query = "DELETE FROM variable WHERE name REGEXP '^initialconnecttimeout\\|$affilname$'";
+		doQuery($query);
+		$query = "DELETE FROM variable WHERE name REGEXP '^reconnecttimeout\\|$affilname$'";
+		doQuery($query);
+		$query = "DELETE FROM variable WHERE name REGEXP '^general_inuse_check\\|$affilname$'";
+		doQuery($query);
+		$query = "DELETE FROM variable WHERE name REGEXP '^server_inuse_check\\|$affilname$'";
+		doQuery($query);
+		$query = "DELETE FROM variable WHERE name REGEXP '^cluster_inuse_check\\|$affilname$'";
+		doQuery($query);
+		$query = "DELETE FROM variable WHERE name REGEXP '^general_end_notice_first\\|$affilname$'";
+		doQuery($query);
+		$query = "DELETE FROM variable WHERE name REGEXP '^general_end_notice_second\\|$affilname$'";
+		doQuery($query);
+		return 1;
+	}
+
+	////////////////////////////////////////////////////////////////////////////////
+	///
+	/// \fn updateValue($key, $val)
+	///
+	/// \param $key - key of value to update from $this->values
+	/// \param $val - new value for $key
+	///
+	/// \brief updates value for $key
+	///
+	////////////////////////////////////////////////////////////////////////////////
+	function updateValue($key, $val) {
+		$tmp = explode('|', $key);
+		$key = $tmp[1];
+		$_val = mysql_real_escape_string($val);
+		$query = "UPDATE affiliation SET name = '$_val' WHERE id = $key";
+		doQuery($query);
+	}
+
+	////////////////////////////////////////////////////////////////////////////////
+	///
+	/// \fn validateValue($val, $key)
+	///
+	/// \param $val - value to be validated
+	/// \param $key - (optional, default=NULL) corresponding key if existing value
+	///
+	/// \return 0 if invalid, 1 if valid
+	///
+	/// \brief validates that a new value is okay
+	///
+	////////////////////////////////////////////////////////////////////////////////
+	function validateValue($val, $key=NULL) {
+		if(! preg_match("/{$this->constraint}/", $val))
+			return 0;
+		$testid = getAffiliationID($val);
+		if(is_null($key)) {
+			if(! is_null($testid)) {
+				$this->invalidvaluemsg = i('Affiliation already exists');
+				return 0;
+			}
+		}
+		else {
+			if(! is_null($testid) && $testid != $key) {
+				$this->invalidvaluemsg = i('Conflicting Affiliation submitted');
+				return 0;
+			}
 		}
 		return 1;
 	}
