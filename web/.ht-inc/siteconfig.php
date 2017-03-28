@@ -71,11 +71,11 @@ function generalOptions($globalopts) {
 	$h .= "<div id=\"siteconfiglayout\">\n";
 
 	# -------- left column ---------
+	$h .= "<div id=\"siteconfigleftcol\">\n";
 	if(! checkUserHasPerm('Site Configuration (global)')) {
-		$h .= "<div id=\"siteconfigleftcol\">\n";
 		$obj = new Affiliations();
+		$h .= $obj->getHTML($globalopts);
 	}
-	$h .= $obj->getHTML($globalopts);
 	$obj = new connectedUserCheck();
 	$h .= $obj->getHTML($globalopts);
 	$obj = new acknowledge();
