@@ -72,7 +72,7 @@ function generalOptions($globalopts) {
 
 	# -------- left column ---------
 	$h .= "<div id=\"siteconfigleftcol\">\n";
-	if(! checkUserHasPerm('Site Configuration (global)')) {
+	if(checkUserHasPerm('Site Configuration (global)')) {
 		$obj = new Affiliations();
 		$h .= $obj->getHTML($globalopts);
 	}
