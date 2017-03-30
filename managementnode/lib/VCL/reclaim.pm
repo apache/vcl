@@ -131,13 +131,13 @@ sub process {
 	if ($self->nathost_os(0)) {
 		my $nathost_hostname = $self->data->get_nathost_hostname();
 		if ($self->nathost_os->firewall()) {
-			if ($self->nathost_os->firewall->can('sanitize_reservation')) {
-				if (!$self->nathost_os->firewall->sanitize_reservation()) {
+			if ($self->nathost_os->firewall->can('sanitize_nat_reservation')) {
+				if (!$self->nathost_os->firewall->sanitize_nat_reservation()) {
 					notify($ERRORS{'CRITICAL'}, 0, "failed to sanitize firewall for reservation on NAT host $nathost_hostname");
 				}
 			}
 			else {
-				notify($ERRORS{'WARNING'}, 0, "unable to sanitize firewall for reservation on NAT host $nathost_hostname, " . ref($self->nathost_os->firewall) . " does not implement a 'sanitize_reservation' subroutine");
+				notify($ERRORS{'WARNING'}, 0, "unable to sanitize firewall for reservation on NAT host $nathost_hostname, " . ref($self->nathost_os->firewall) . " does not implement a 'sanitize_nat_reservation' subroutine");
 			}
 			
 		}
@@ -277,7 +277,7 @@ sub insert_reload_and_exit {
 			notify($ERRORS{'WARNING'}, 0, "predictor module did not return required information, calling get_next_image_default from utils");
 			($next_image_name, $next_image_id, $next_imagerevision_id) = get_next_image_default($computer_id);
 		}
-
+		
 		# Update the DataStructure object with the next image values
 		# These will be used by insert_reload_request()
 		$self->data->set_image_name($next_image_name);

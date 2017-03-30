@@ -421,12 +421,16 @@ sub retrieve_image {
 	}
 	
 	# Copy each file path to the image repository directory
+	my $total_file_count = scalar(keys %{$partner_info{$retrieval_partner}{file_paths}});
+	my $file_number = 0;
 	for my $partner_file_path (sort {lc($a) cmp lc($b)} keys %{$partner_info{$retrieval_partner}{file_paths}}) {
+		$file_number++;
 		my $file_name = $partner_info{$retrieval_partner}{file_paths}{$partner_file_path}{file_name};
 		my $local_file_path = "$image_repository_path_local/$file_name";
 		
+		notify($ERRORS{'DEBUG'}, 0, "file $file_number/$total_file_count: retrieving image from $retrieval_partner_hostname: $partner_file_path -->");
 		if (run_scp_command("$partner_info{$retrieval_partner}{user}\@$retrieval_partner:$partner_file_path", $local_file_path, $partner_info{$retrieval_partner}{key}, $partner_info{$retrieval_partner}{port})) {
-			notify($ERRORS{'OK'}, 0, "image $image_name was copied from $retrieval_partner_hostname");
+			notify($ERRORS{'OK'}, 0, "file $file_number/$total_file_count: retrieved image from $retrieval_partner_hostname: --> $local_file_path");
 		}
 		else {
 			notify($ERRORS{'WARNING'}, 0, "failed to copy image $image_name from $retrieval_partner_hostname");

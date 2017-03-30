@@ -129,6 +129,7 @@ our @EXPORT = qw(
 	get_database_table_names
 	get_code_ref_package_name
 	get_code_ref_subroutine_name
+	get_collapsed_hash_reference
 	get_computer_current_private_ip_address
 	get_computer_current_state_name
 	get_computer_grp_members
@@ -14934,6 +14935,79 @@ EOF
 	notify($ERRORS{'DEBUG'}, 0, "retrieved credentials for $domain_dns_name domain from database, username: '$username', password: '$password'");
 	$ENV{active_directory_domain_credentials}{$domain_dns_name} = [$username, $password];
 	return @{$ENV{active_directory_domain_credentials}{$domain_dns_name}};
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_collapsed_hash_reference
+
+ Parameters  : $hash_reference
+ Returns     : array
+ Description : Takes a potentially multi-level hash reference and generates a
+               new single-level hash with key names constructed by concatenating
+               the levels of key names. Example:
+               Argument:
+               {
+                  "match_extensions" => {
+                     "tcp" => {
+                        "dport" => 22,
+                     },
+                  },
+                  "parameters" => {
+                     "jump" => {
+                        "target" => "ACCEPT",
+                        },
+                     "protocol" => "tcp",
+                  },
+               }
+               
+               Result:
+               {
+                  "{'match_extensions'}{'tcp'}{'dport'}" => 22,
+                  "{'parameters'}{'jump'}{'target'}" => "ACCEPT",
+                  "{'parameters'}{'protocol'}" => "tcp"
+               }
+               
+               This is potentially useful when 2 multi-level hashes need to be
+               compared. The hash keys in the resultant hash can be used in an
+               eval block to check if another hash has a key with the same name
+               and/or value.
+
+=cut
+
+sub get_collapsed_hash_reference {
+	my ($hash_reference, @parent_keys) = @_;
+	if (!defined($hash_reference)) {
+		notify($ERRORS{'WARNING'}, 0, "hash reference argument was not specified");
+		return;
+	}
+	elsif (!ref($hash_reference) || ref($hash_reference) ne 'HASH') {
+		notify($ERRORS{'WARNING'}, 0, "argument is not a hash reference:\n" . format_data($hash_reference));
+		return;
+	}
+	
+	my %collapsed_hash;
+	
+	for my $key (keys %$hash_reference) {
+		if (ref($hash_reference->{$key})) {
+			if (ref($hash_reference->{$key}) eq 'HASH') {
+				my $child_collapsed_hash_ref = get_collapsed_hash_reference($hash_reference->{$key}, (@parent_keys, $key)) || {};
+				%collapsed_hash = (%collapsed_hash, %$child_collapsed_hash_ref);
+			}
+		}
+		else {
+			my $value = $hash_reference->{$key};
+			
+			my $key_path;
+			for my $parent_key (@parent_keys) {
+				$key_path .= "{'$parent_key'}";
+			}
+			$key_path .= "{'$key'}";
+			
+			$collapsed_hash{$key_path} = $value;
+		}
+	}
+	return \%collapsed_hash;
 }
 
 #/////////////////////////////////////////////////////////////////////////////

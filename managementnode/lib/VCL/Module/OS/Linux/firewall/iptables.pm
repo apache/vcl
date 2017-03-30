@@ -50,6 +50,8 @@ use strict;
 use warnings;
 use diagnostics;
 
+use English '-no_match_vars';
+
 use VCL::utils;
 
 ##############################################################################
@@ -93,14 +95,435 @@ sub initialize {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 process_post_load
+
+ Parameters  : none
+ Returns     : boolean
+ Description : Performs the initial iptables firewall configuration after an
+               image is loaded:
+               * A vcl-post_load chain is created in the filter table with a
+                 rule is added to this chain to allow traffic on any port from
+                 the management node's IP address.
+               * All existing rules explicitly allowing traffic to TCP/22 are
+                 deleted.
+               * All other chains in the filter table named vcl-* are deleted to
+                 clean up any possible remnants.
+
+=cut
+
+sub process_post_load {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module::OS::Linux::firewall/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return 0;
+	}
+	
+	my $computer_name = $self->data->get_computer_short_name();
+	
+	notify($ERRORS{'DEBUG'}, 0, "beginning firewall post-load configuration on $computer_name");
+	
+	my $timestamp = makedatestring();
+	my $post_load_chain_name = $self->get_post_load_chain_name();
+	
+	# Try to determine the IP address the management node uses to connect to remote hosts
+	# managementnode.IPaddress is not necessarily the private IP used to connect to computers being loaded
+	my @mn_ip_addresses = $self->os->get_management_node_connected_ip_address();
+	
+	# If unable to determine the connecting IP, open up access to all MN IP's
+	if (!@mn_ip_addresses) {
+		# Get all of the IP addresses in use on the management node
+		@mn_ip_addresses = $self->mn_os->get_ip_addresses();
+		if (!@mn_ip_addresses) {
+			notify($ERRORS{'WARNING'}, 0, "failed to complete firewall post-load configuration on $computer_name, management node IP addresses could not be determined");
+			return;
+		}
+	}
+	
+	# Create a chain and add a jump rule to INPUT
+	$self->create_chain('filter', $post_load_chain_name);
+	if (!$self->insert_rule('filter', 'INPUT',
+		{
+			'parameters' => {
+				'jump' => $post_load_chain_name,
+			},
+			'match_extensions' => {
+				'comment' => {
+					'comment' => "VCL: jump to rules added during the post-load stage ($timestamp)",
+				},
+			},
+		}
+	)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to complete firewall post-load configuration on $computer_name, failed to create rule in INPUT chain to jump to '$post_load_chain_name' chain");
+		return;
+	}
+	
+	# Allow traffic from any of the management node IP addresses
+	if (!$self->insert_rule('filter', $post_load_chain_name,
+		{
+			'parameters' => {
+				'source' => join(',', @mn_ip_addresses),
+				'jump' => 'ACCEPT',
+			},
+			'match_extensions' => {
+				'comment' => {
+					'comment' => "VCL: Allow traffic from management node ($timestamp)",
+				},
+			},
+		}
+	)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to complete firewall post-load configuration on $computer_name, failed to add rule allowing traffic from management node IP addresses to $post_load_chain_name chain");
+		return;
+	}
+	
+	# Delete other vcl-* chains added by vcld
+	my $table_info = $self->get_table_info();
+	for my $chain_name (keys %$table_info) {
+		if ($chain_name ne $post_load_chain_name && $chain_name =~ /^vcl-/) {
+			$self->delete_chain('filter', $chain_name);
+		}
+	}
+	
+	# Legacy code may have been used previously for a reservation, before an upgrade
+	# Clean up old connect method rules from the INPUT chain
+	# Delete all rules from INPUT chain matching connect method protocols and ports
+	$self->delete_connect_method_rules();
+	
+	# Delete all TCP/22 rules
+	# Images captured prior to VCL 2.5 are saved with an expicit TCP/22 allow rule from any address
+	$self->delete_rules('filter', 'INPUT',
+		{
+			"match_extensions" => {
+				"tcp" => {
+					"dport" => 22,
+				},
+			},
+			"parameters" => {
+				"jump" => "ACCEPT",
+			},
+		}
+	);
+	
+	$self->save_configuration();
+	
+	notify($ERRORS{'DEBUG'}, 0, "completed firewall post-load configuration on $computer_name");
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 process_reserved
+
+ Parameters  : none
+ Returns     : boolean
+ Description : Configures the iptables firewall for the reserved state:
+               * A vcl-reserved chain is created with rules allowing traffic to
+                 the connect method ports from any IP address.
+
+=cut
+
+sub process_reserved {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module::OS::Linux::firewall/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return 0;
+	}
+	
+	# Make sure the post-load steps were done
+	if (!$self->chain_exists('filter', $self->get_post_load_chain_name())) {
+		$self->process_post_load();
+	}
+	
+	my $timestamp = makedatestring();
+	my $computer_name = $self->data->get_computer_short_name();
+	notify($ERRORS{'DEBUG'}, 0, "beginning firewall configuration on $computer_name for reserved state");
+	
+	my $reserved_chain_name = $self->get_reserved_chain_name();
+	
+	# Delete existing chain if one exists to prevent inconsistent results
+	# Create a chain and add a jump rule to INPUT
+	$self->create_chain('filter', $reserved_chain_name);
+	if (!$self->insert_rule('filter', 'INPUT',
+		{
+			'parameters' => {
+				'jump' => $reserved_chain_name,
+			},
+			'match_extensions' => {
+				'comment' => {
+					'comment' => "VCL: jump to rules added during the reserved stage ($timestamp)",
+				},
+			},
+		}
+	)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to complete firewall reserved configuration on $computer_name, failed to create rule in INPUT chain to jump to '$reserved_chain_name' chain");
+		return;
+	}
+	
+	my @protocol_ports = $self->data->get_connect_method_protocol_port_array();
+	for my $protocol_port (@protocol_ports) {
+		my ($protocol, $port) = @$protocol_port;
+		if (!$self->insert_rule('filter', $reserved_chain_name,
+			{
+				'parameters' => {
+					'protocol' => $protocol,
+					'jump' => 'ACCEPT',
+				},
+				'match_extensions' => {
+					$protocol => {
+						'dport' => $port,
+					},
+					'comment' => {
+						'comment' => "VCL: Allow traffic from any IP address to connect method ports during reserved stage ($timestamp)",
+					},
+				},
+			}
+		)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to complete firewall reserved configuration on $computer_name, failed to add rule to allow traffic to '$reserved_chain_name' chain, protocol: $protocol, port: $port");
+			return;
+		}
+	}
+	
+	$self->save_configuration();
+
+	notify($ERRORS{'DEBUG'}, 0, "completed firewall reserved configuration on $computer_name");
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 process_inuse
+
+ Parameters  : $remote_ip_address (optional)
+ Returns     : boolean
+ Description : Configures the iptables firewall for the inuse state:
+               * A vcl-inuse chain is created if it does not already exist.
+               * Rules are added to the vcl-inuse chain allowing to allow
+                 traffic to the connect method ports from the end user's
+                 specific IP address.
+               * The vcl-reserved chain is deleted if it exists.
+               
+               This subroutine can be called over and over again. It will not
+               remove rules previously added to the vcl-inuse chain. If a user's
+               remote IP address changes, this subroutine will add a new rule to
+               the vcl-inuse chain.
+
+=cut
+
+sub process_inuse {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module::OS::Linux::firewall/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return 0;
+	}
+	
+	# Make sure the post-load steps were done
+	if (!$self->chain_exists('filter', $self->get_post_load_chain_name())) {
+		$self->process_post_load();
+	}
+	
+	my $timestamp = makedatestring();
+	my $computer_name = $self->data->get_computer_short_name();
+	
+	my $remote_ip_address = shift || $self->data->get_reservation_remote_ip();
+	if (!$remote_ip_address) {
+		notify($ERRORS{'WARNING'}, 0, "failed to complete firewall inuse configuration on $computer_name, remote IP could not be retrieved for reservation");
+		return;
+	}
+	
+	notify($ERRORS{'DEBUG'}, 0, "beginning firewall configuration on $computer_name for inuse state");
+	
+	my $inuse_chain_name = $self->get_inuse_chain_name();
+	my $reserved_chain_name = $self->get_reserved_chain_name();
+	
+	# Delete existing chain if one exists to prevent inconsistent results
+	# Create a chain and add a jump rule to INPUT
+	$self->create_chain('filter', $inuse_chain_name);
+	if (!$self->insert_rule('filter', 'INPUT',
+		{
+			'parameters' => {
+				'jump' => $inuse_chain_name,
+			},
+			'match_extensions' => {
+				'comment' => {
+					'comment' => "VCL: jump to rules added during the inuse stage ($timestamp)",
+				},
+			},
+		}
+	)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to complete firewall inuse configuration on $computer_name, failed to create rule in INPUT chain to jump to '$inuse_chain_name' chain");
+		return;
+	}
+	
+	my @protocol_ports = $self->data->get_connect_method_protocol_port_array();
+	for my $protocol_port (@protocol_ports) {
+		my ($protocol, $port) = @$protocol_port;
+		if (!$self->insert_rule('filter', $inuse_chain_name,
+			{
+				'parameters' => {
+					'protocol' => $protocol,
+					'source' => "$remote_ip_address",
+					'jump' => 'ACCEPT',
+				},
+				'match_extensions' => {
+					$protocol => {
+						'dport' => $port,
+					},
+					'comment' => {
+						'comment' => "VCL: Allow traffic from $remote_ip_address to $protocol/$port ($timestamp)",
+					},
+				},
+			}
+		)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to complete firewall inuse configuration on $computer_name, failed to add rule to allow traffic to '$inuse_chain_name' chain, protocol: $protocol, port: $port");
+			return;
+		}
+	}
+	
+	# Delete the reserved chain which allows traffic from any address
+	$self->delete_chain('filter', $reserved_chain_name);
+	
+	$self->save_configuration();
+
+	notify($ERRORS{'DEBUG'}, 0, "completed firewall inuse configuration on $computer_name");
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 process_sanitize
+
+ Parameters  : none
+ Returns     : boolean
+ Description : Performs the same iptables firewall configuration steps as
+               process_post_load.
+
+=cut
+
+sub process_sanitize {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module::OS::Linux::firewall/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return 0;
+	}
+	
+	return $self->process_post_load();
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 process_pre_capture
+
+ Parameters  : none
+ Returns     : boolean
+ Description : Performs the iptables firewall configuration prior to capturing
+               an image:
+               * A vcl-pre_capture chain is added to the filter table
+                 with a rule allowing TCP/22 traffic from any IP address.
+               * Rules matching any of the management node's IP addresses are
+                 deleted.
+               * Any other chains named vcl-* are flushed and deleted.
+
+=cut
+
+sub process_pre_capture {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module::OS::Linux::firewall/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return 0;
+	}
+	
+	my $timestamp = makedatestring();
+	my $computer_name = $self->data->get_computer_short_name();
+	notify($ERRORS{'DEBUG'}, 0, "beginning firewall pre-capture configuration on $computer_name");
+	
+	my $pre_capture_chain_name = $self->get_pre_capture_chain_name();
+	
+	# Create a chain and add a jump rule to INPUT
+	if (!$self->create_chain('filter', $pre_capture_chain_name)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to complete firewall pre-capture configuration on $computer_name, failed to create '$pre_capture_chain_name' chain");
+		return;
+	}
+	if (!$self->insert_rule('filter', 'INPUT',
+		{
+			'parameters' => {
+				'jump' => $pre_capture_chain_name,
+			},
+			'match_extensions' => {
+				'comment' => {
+					'comment' => "VCL: jump to rules added during the pre-capture stage ($timestamp)",
+				},
+			},
+		}
+	)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to complete firewall pre-capture configuration on $computer_name, failed to create rule in INPUT chain to jump to '$pre_capture_chain_name' chain");
+		return;
+	}
+	
+	# Allow unrestricted SSH traffic
+	if (!$self->insert_rule('filter', $pre_capture_chain_name,
+		{
+			'parameters' => {
+				'jump' => 'ACCEPT',
+				'protocol' => 'tcp',
+			},
+			'match_extensions' => {
+				'tcp' => {
+					'destination-port' => 22,
+				},
+				'comment' => {
+					'comment' => "VCL: Allow traffic to SSH port 22 from any IP address ($timestamp)",
+				},
+			},
+		}
+	)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to complete firewall pre-capture configuration on $computer_name, failed to add rule to allow traffic on port 22 to $pre_capture_chain_name chain");
+		return;
+	}
+	
+	# Delete all rules explicitly defined for any of the management node IP addresses
+	# Legacy firewall code would add rules directly to the filter/INPUT table for each management node address
+	my @mn_ip_addresses = $self->mn_os->get_ip_addresses();
+	for my $mn_ip_address (@mn_ip_addresses) {
+		$self->delete_rules('filter', 'INPUT',
+			{
+				'parameters' => {
+					'source' => $mn_ip_address,
+				},
+			}
+		);
+	}
+	
+	# Legacy code may have been used previously for a reservation, before an upgrade
+	# Clean up old connect method rules from the INPUT chain
+	# Delete all rules from INPUT chain matching connect method protocols and ports
+	$self->delete_connect_method_rules();
+	
+	# Delete other vcl-* chains added by vcld
+	my $table_info = $self->get_table_info();
+	for my $chain_name (keys %$table_info) {
+		if ($chain_name ne $pre_capture_chain_name && $chain_name =~ /^vcl-/) {
+			$self->delete_chain('filter', $chain_name);
+		}
+	}
+	
+	$self->save_configuration();
+	
+	notify($ERRORS{'DEBUG'}, 0, "completed firewall pre-capture configuration on $computer_name");
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 =head2 get_iptables_semaphore
 
  Parameters  : none
- Returns     : VCL::Semaphore object reference
- Description : Obtains and returns a VCL::Semaphore object. This should be
-               called prior to executing iptables commands which must be run
-               individually. Otherwise, the following error is generated:
-               iptables: Resource temporarily unavailable.
+ Returns     : true or VCL::Semaphore object reference
+ Description : Obtains and returns a VCL::Semaphore object if called from a
+               subroutine containing 'nat' in the name. This should always be
+               called prior to executing iptables commands on a host this could
+               potentially be controlled by multiple vcld processes at the same
+               time. If multiple iptables commands are attempted at the same
+               time, the following error is generated:
+                  iptables: Resource temporarily unavailable.
 
 =cut
 
@@ -109,6 +532,12 @@ sub get_iptables_semaphore {
 	if (ref($self) !~ /VCL::Module/i) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return 0;
+	}
+	
+	# Check if the calling subroutine contains 'nat'
+	my $calling_subroutine = get_calling_subroutine();
+	if ($calling_subroutine !~ /(nat)/) {
+		return 1;
 	}
 	
 	my $computer_id = $self->data->get_computer_id();
@@ -120,16 +549,10 @@ sub get_iptables_semaphore {
 
 =head2 insert_rule
 
- Parameters  : hash reference
+ Parameters  : $table_name, $chain_name, $rule_specification_hashref
  Returns     : boolean
  Description : Inserts an iptables rule. The argument must be a properly
                constructed hash reference. Supported top-level hash keys are:
-               * {table} => '<string>' (optional)
-                    Specifies the name of the table the rule will be added to.
-                    If ommitted, the rule will be added to the filter table by
-                    default.
-               * {chain} => '<string>' (mandatory)
-                    Specifies the name of the chain the rule will be added to.
                * {parameters} => {<hash reference>} (optional)
                     Allows any of the options under the iptables man page
                     "PARAMETERS" section to be specified. Full parameter names
@@ -150,28 +573,30 @@ sub get_iptables_semaphore {
                     should be a hash reference whose key names should be the
                     names of the supported options for that target extension
                     module.
+               
                Example:
-               {
-                  'table' => 'nat',
-                  'chain' => 'PREROUTING',
-                  'parameters' => {
-                     'protocol' => 'tcp',
-                     'in-interface' => 'eth1',
-                  },
-                  'match_extensions' => {
-                     'comment' => {
-                        'comment' => "forward: eth1:50443 --> 10.1.2.3.4:443 (tcp)",
+               $self->os->firewall->create_chain('nat', 'test');
+               $self->os->firewall->insert_rule('nat', 'test',
+                  {
+                     'parameters' => {
+                        'protocol' => 'tcp',
+                        'in-interface' => 'eth1',
                      },
-                     $protocol => {
-                        'destination-port' => 50443,
+                     'match_extensions' => {
+                        'comment' => {
+                           'comment' => "forward: eth1:50443 --> 10.1.2.3:443 (tcp)",
+                        },
+                        'tcp' => {
+                           'destination-port' => 50443,
+                        },
                      },
-                  },
-                  'target_extensions' => {
-                     'DNAT' => {
-                        'to-destination' => "10.1.2.3.4:443",
+                     'target_extensions' => {
+                        'DNAT' => {
+                           'to-destination' => "10.1.2.3:443",
+                        },
                      },
-                  },
-               }
+                  }
+               );
 
 =cut
 
@@ -182,35 +607,43 @@ sub insert_rule {
 		return 0;
 	}
 	
-	my $arguments = shift;
-	if (!$arguments) {
-		notify($ERRORS{'WARNING'}, 0, "argument was not supplied");
+	my ($table_name, $chain_name, $rule_specification_hashref, $check_already_exists) = @_;
+	if (!$table_name) {
+		notify($ERRORS{'WARNING'}, 0, "table name argument was not specified");
 		return;
 	}
-	elsif (!ref($arguments) || ref($arguments) ne 'HASH') {
-		notify($ERRORS{'WARNING'}, 0, "argument is not a hash reference");
+	elsif (!$chain_name) {
+		notify($ERRORS{'WARNING'}, 0, "chain name argument was not specified");
 		return;
 	}
+	elsif (!$rule_specification_hashref) {
+		notify($ERRORS{'WARNING'}, 0, "rule specification hash reference argument was not specified");
+		return;
+	}
+	elsif (!ref($rule_specification_hashref) || ref($rule_specification_hashref) ne 'HASH') {
+		notify($ERRORS{'WARNING'}, 0, "rule specification argument is not a hash reference:\n" . format_data($rule_specification_hashref));
+		return;
+	}
+	elsif (!scalar(keys(%$rule_specification_hashref))) {
+		notify($ERRORS{'WARNING'}, 0, "rule specification argument does not contain any keys");
+		return;
+	}
+	
 	my $computer_name = $self->data->get_computer_hostname();
 	
-	my $command = '/sbin/iptables';
-	
-	# Add the table argument if specified
-	if ($arguments->{table}) {
-		$command .= " -t $arguments->{table}";
+	# Avoid duplicate/redundant rules
+	my @matching_rules = $self->get_matching_rules($table_name, $chain_name, $rule_specification_hashref);
+	if (@matching_rules) {
+		my @specification_strings = map { $_->{"rule_specification"} } @matching_rules;
+		notify($ERRORS{'OK'}, 0, "$chain_name chain rule in $table_name table already exists on $computer_name:\n" . join("\n", @specification_strings));
+		return 1;
 	}
 	
-	# Get the chain argument
-	my $chain = $arguments->{chain};
-	if (!defined($chain)) {
-		notify($ERRORS{'WARNING'}, 0, "chain argument was not specified:\n" . format_data($arguments));
-		return;
-	}
-	$command .= " -I $chain";
+	my $command = "/sbin/iptables -t $table_name -I $chain_name";
 	
 	# Add the parameters to the command
-	for my $parameter (sort keys %{$arguments->{parameters}}) {
-		my $value = $arguments->{parameters}{$parameter};
+	for my $parameter (sort keys %{$rule_specification_hashref->{parameters}}) {
+		my $value = $rule_specification_hashref->{parameters}{$parameter};
 		
 		if ($parameter =~ /^\!/) {
 			$command .= " !";
@@ -220,10 +653,10 @@ sub insert_rule {
 	}
 	
 	# Add the match extension to the command
-	for my $match_extension (sort keys %{$arguments->{match_extensions}}) {
+	for my $match_extension (sort keys %{$rule_specification_hashref->{match_extensions}}) {
 		$command .= " --match $match_extension";
-		for my $option (sort keys %{$arguments->{match_extensions}{$match_extension}}) {
-			my $value = $arguments->{match_extensions}{$match_extension}{$option};
+		for my $option (sort keys %{$rule_specification_hashref->{match_extensions}{$match_extension}}) {
+			my $value = $rule_specification_hashref->{match_extensions}{$match_extension}{$option};
 			
 			if ($option =~ /(comment)/) {
 				$value = "\"$value\"";
@@ -241,10 +674,10 @@ sub insert_rule {
 	}
 	
 	# Add the target extensions to the command
-	for my $target_extension (sort keys %{$arguments->{target_extensions}}) {
+	for my $target_extension (sort keys %{$rule_specification_hashref->{target_extensions}}) {
 		$command .= " --jump $target_extension";
-		for my $option (sort keys %{$arguments->{target_extensions}{$target_extension}}) {
-			my $value = $arguments->{target_extensions}{$target_extension}{$option};
+		for my $option (sort keys %{$rule_specification_hashref->{target_extensions}{$target_extension}}) {
+			my $value = $rule_specification_hashref->{target_extensions}{$target_extension}{$option};
 			$command .= " --$option " if $option;
 			$command .= $value;
 		}
@@ -253,120 +686,293 @@ sub insert_rule {
 	my $semaphore = $self->get_iptables_semaphore();
 	my ($exit_status, $output) = $self->os->execute($command, 0);
 	if (!defined($output)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to execute command $computer_name: $command");
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command on $computer_name: $command");
 		return;
 	}
 	elsif ($exit_status ne '0') {
-		notify($ERRORS{'WARNING'}, 0, "failed to add iptables rule on $computer_name, exit status: $exit_status, command:\n$command\noutput:\n" . join("\n", @$output));
+		notify($ERRORS{'WARNING'}, 0, "failed to add iptables rule to $chain_name chain in $table_name table on $computer_name, exit status: $exit_status, command:\n$command\noutput:\n" . join("\n", @$output));
 		return 0;
 	}
 	else {
-		notify($ERRORS{'OK'}, 0, "added iptables rule on $computer_name, command: $command");
+		notify($ERRORS{'OK'}, 0, "added iptables rule to $chain_name chain in $table_name table on $computer_name, command: $command");
 		return 1;
 	}
 }
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 delete_rule
+=head2 get_matching_rules
 
- Parameters  : hash reference
-               -or-
-               $table_name, $chain_name, $rule_specification
- Returns     : boolean
- Description : Deletes a rule.
+ Parameters  : $table_name, $chain_name, $rule_specification_hashref
+ Returns     : array
+ Description : Checks the chain for any rules that match all parameters
+               specified in the $rule_specification_hashref argument. For
+               example, to find all TCP/22 rules:
+                  $self->os->firewall->get_matching_rules('filter', 'INPUT',
+                     {
+                        'parameters' => {
+                           'protocol' => 'tcp',
+                        },
+                        'match_extensions' => {
+                           'tcp' => {
+                              'dport' => 22,
+                           },
+                        },
+                     }
+                  );
 
 =cut
 
-sub delete_rule {
+sub get_matching_rules {
 	my $self = shift;
 	if (ref($self) !~ /VCL::Module/i) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return 0;
 	}
 	
-	my $argument = shift;
-	if (!$argument) {
-		notify($ERRORS{'WARNING'}, 0, "argument was not supplied");
+	my ($table_name, $chain_name, $rule_specification_hashref) = @_;
+	if (!$table_name) {
+		notify($ERRORS{'WARNING'}, 0, "table name argument was not specified");
+		return;
+	}
+	elsif (!$chain_name) {
+		notify($ERRORS{'WARNING'}, 0, "chain name argument was not specified");
+		return;
+	}
+	elsif (!$rule_specification_hashref) {
+		notify($ERRORS{'WARNING'}, 0, "rule specification hash reference argument was not specified");
+		return;
+	}
+	elsif (!ref($rule_specification_hashref) || ref($rule_specification_hashref) ne 'HASH') {
+		notify($ERRORS{'WARNING'}, 0, "rule specification argument is not a hash reference:\n" . format_data($rule_specification_hashref));
+		return;
+	}
+	elsif (!scalar(keys(%$rule_specification_hashref))) {
+		notify($ERRORS{'WARNING'}, 0, "rule specification argument does not contain any keys");
 		return;
 	}
 	
 	my $computer_name = $self->data->get_computer_hostname();
 	
-	my $command = '/sbin/iptables';
+	my @matching_rules;
 	
+	my $table_info = $self->get_table_info($table_name) || return;
+	if (!defined($table_info->{$chain_name})) {
+		notify($ERRORS{'DEBUG'}, 0, "no rules match on $computer_name, $table_name table does not contain a '$chain_name' chain");
+		return @matching_rules;
+	}
+	elsif (!defined($table_info->{$chain_name}{rules})) {
+		notify($ERRORS{'DEBUG'}, 0, "no rules match on $computer_name, $chain_name chain in $table_name table contains no rules");
+		return @matching_rules;
+	}
 	
-	if (ref($argument) && ref($argument) eq 'HASH') {
-		# Add the table argument if specified
-		if ($argument->{table}) {
-			$command .= " -t $argument->{table}";
-		}
-		
-		# Get the chain argument
-		my $chain = $argument->{chain};
-		if (!defined($chain)) {
-			notify($ERRORS{'WARNING'}, 0, "chain argument was not specified:\n" . format_data($argument));
-			return;
-		}
-		$command .= " -D $chain";
-		
-		# Add the parameters to the command
-		for my $parameter (sort keys %{$argument->{parameters}}) {
-			my $value = $argument->{parameters}{$parameter};
-			$command .= " --$parameter $value";
-		}
-		
-		# Add the match extension to the command
-		for my $match_extension (sort keys %{$argument->{match_extensions}}) {
-			$command .= " --match $match_extension";
-			for my $option (sort keys %{$argument->{match_extensions}{$match_extension}}) {
-				my $value = $argument->{match_extensions}{$match_extension}{$option};
-				
-				if ($option =~ /(comment)/) {
-					$value = "\"$value\"";
+	# This sub was designed to accept a hash reference argument to match other
+	# parts of this module. However, we need to compare the hash reference
+	# argument to the hash reference which contains current rule info. Comparing
+	# the two as-is is extremely difficult and would require complex recursion.
+	# Instead, get_collapsed_hash_reference takes the input multi-level hash
+	# reference, finds all of the keys which contain a scalar value, and
+	# constucts concatenated key names containing the values. The key names can
+	# used in an eval statement to compare another hash reference.
+	
+	my $collapsed_specification = get_collapsed_hash_reference($rule_specification_hashref);
+	if (!$collapsed_specification) {
+		notify($ERRORS{'WARNING'}, 0, "failed to determine if any rules match on $computer_name, failed to parse rule specification hash reference argument:\n" . format_data($rule_specification_hashref));
+		return;
+	}
+	elsif (!scalar keys(%$collapsed_specification)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to determine if any rules match on $computer_name, attempt to collapse the rule specification hash reference argument produced a result with no keys:\n" . format_data($rule_specification_hashref));
+		return;
+	}
+	notify($ERRORS{'DEBUG'}, 0, "checking if $chain_name chain in $table_name table on $computer_name has any rules matching specifications:\n" . format_data($collapsed_specification));
+	
+	# Some iptables options may take multiple forms
+	# Attempt to try all forms
+	my $alternate_option_names = {
+		'destination-port' => 'dport',
+		'source-port' => 'sport',
+	};
+	
+	RULE: for my $rule (@{$table_info->{$chain_name}{rules}}) {
+		for my $specification_key (keys %$collapsed_specification) {
+			# Ignore comments when comparing
+			if ($specification_key =~ /(comment)/i) {
+				next;
+			}
+			
+			my $specification_value = $collapsed_specification->{$specification_key};
+			
+			# Check if matches known alternate ('source-port' <--> 'sport')
+			my $alternate_specification_key;
+			for my $original_name (keys %$alternate_option_names) {
+				if ($specification_key =~ /$original_name/i) {
+					my $alternate_name = $alternate_option_names->{$original_name};
+					$alternate_specification_key = $specification_key;
+					$alternate_specification_key =~ s/$original_name/$alternate_name/i;
 				}
-				
-				$command .= " --$option $value";
+			}
+			
+			# $specification_key will contain a string such as:
+			#    "{'match_extensions'}{'tcp'}{'dport'}"
+			# Use this in an eval block to check if the current rule has a matching key and the same value
+			my $rule_value;
+			my $eval_string;
+			if ($alternate_specification_key) {
+				$eval_string = "\$rule_value = (\$rule->$specification_key || \$rule->$alternate_specification_key)";
+			}
+			else {
+				$eval_string = "\$rule_value = \$rule->$specification_key";
+			}
+			eval($eval_string);
+			if ($EVAL_ERROR) {
+				notify($ERRORS{'WARNING'}, 0, "failed to determine value of $specification_key key from rule on $computer_name, code evaluated: '$eval_string', error: $EVAL_ERROR, rule:\n" . format_data($rule));
+				return;
+			}
+			elsif (!defined($rule_value)) {
+				#notify($ERRORS{'DEBUG'}, 0, "ignoring rule on $computer_name, it does not contain a $specification_key value");
+				next RULE;
+			}
+			
+			if ($rule_value ne $specification_value && $rule_value !~ /^$specification_value(\/32)?$/i) {
+				#notify($ERRORS{'DEBUG'}, 0, "ignoring rule on $computer_name, $specification_key value does not match, rule: '$rule_value', argument:'$specification_value'");
+				next RULE;
 			}
 		}
 		
-		# Add the target extensions to the command
-		for my $target_extension (sort keys %{$argument->{target_extensions}}) {
-			$command .= " --jump $target_extension";
-			for my $option (sort keys %{$argument->{target_extensions}{$target_extension}}) {
-				my $value = $argument->{target_extensions}{$target_extension}{$option};
-				$command .= " --$option $value";
-			}
-		}
-	}
-	elsif (my $type = ref($argument)) {
-		notify($ERRORS{'WARNING'}, 0, "argument $type reference not supported, argument must only be a HASH reference or scalar");
-		return;
-	}
-	else {
-		my $table_name = $argument;
-		my ($chain_name, $specification) = @_;
-		if (!defined($chain_name) || !defined($specification)) {
-			notify($ERRORS{'WARNING'}, 0, "1st argument is a scalar, 2nd chain name and 3rd rule specification arguments not provided");
-			return;
-		}
-		$command .= " -D $chain_name -t $table_name $specification";
+		notify($ERRORS{'DEBUG'}, 0, "rule matches: " . $rule->{rule_specification});
+		push @matching_rules, $rule;
 	}
 	
-	my $semaphore = $self->get_iptables_semaphore();
-	my ($exit_status, $output) = $self->os->execute($command, 0);
-	if (!defined($output)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to execute command $computer_name: $command");
-		return;
-	}
-	elsif ($exit_status ne '0') {
-		notify($ERRORS{'WARNING'}, 0, "failed to delete iptables rule on $computer_name, exit status: $exit_status, command:\n$command\noutput:\n" . join("\n", @$output));
+	my $matching_rule_count = scalar(@matching_rules);
+	notify($ERRORS{'DEBUG'}, 0, "found $matching_rule_count matching rule" . ($matching_rule_count == 1 ? '' : 's'));
+	return @matching_rules;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 delete_rules
+
+ Parameters  : $table_name, $chain_name, $rule_specification_hashref
+ Returns     : boolean
+ Description : Deletes all rules matching the table, chain, and specification
+               hash reference. The hash must be in the same format that is
+               returned by get_table_info, such as:
+                  {
+                     "match_extensions" => {
+                        "tcp" => {
+                           "dport" => 22,
+                        },
+                     },
+                     "parameters" => {
+                        "jump" => {
+                           "target" => "ACCEPT",
+                           },
+                        "protocol" => "tcp",
+                     },
+                  }
+               
+               An existing rule will be deleted if and only if it contains
+               exactly all of the keys defined in the argument, case sensitive.
+               The actual value must match but is checked case insensitive.
+
+=cut
+
+sub delete_rules {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return 0;
 	}
-	else {
-		notify($ERRORS{'OK'}, 0, "deleted iptables rule on $computer_name, command: $command");
-		return 1;
+	
+	my ($table_name, $chain_name, $rule_specification_hashref) = @_;
+	if (!$table_name) {
+		notify($ERRORS{'WARNING'}, 0, "table name argument was not specified");
+		return;
 	}
+	elsif (!$chain_name) {
+		notify($ERRORS{'WARNING'}, 0, "chain name argument was not specified");
+		return;
+	}
+	elsif (!$rule_specification_hashref) {
+		notify($ERRORS{'WARNING'}, 0, "rule specification hash reference argument was not specified");
+		return;
+	}
+	elsif (!ref($rule_specification_hashref) || ref($rule_specification_hashref) ne 'HASH') {
+		notify($ERRORS{'WARNING'}, 0, "rule specification argument is not a hash reference:\n" . format_data($rule_specification_hashref));
+		return;
+	}
+	elsif (!scalar(keys(%$rule_specification_hashref))) {
+		notify($ERRORS{'WARNING'}, 0, "rule specification argument does not contain any keys");
+		return;
+	}
+	
+	my $computer_name = $self->data->get_computer_hostname();
+	
+	my @matching_rules = $self->get_matching_rules($table_name, $chain_name, $rule_specification_hashref);
+	for my $rule (@matching_rules) {
+		# Make sure rule has a 'rule_specification' value or else it can't be deleted
+		my $rule_specification_string = $rule->{rule_specification};
+		if (!$rule_specification_string) {
+			notify($ERRORS{'DEBUG'}, 0, "ignoring rule on $computer_name because it does not contain a 'rule_specification' key:\n" . format_data($rule));
+			next RULE;
+		}
+		
+		notify($ERRORS{'DEBUG'}, 0, "attempting to delete rule on $computer_name: $rule_specification_string");
+		my $semaphore = $self->get_iptables_semaphore();
+		my $command = "/sbin/iptables --delete $chain_name -t $table_name $rule_specification_string";
+		my ($exit_status, $output) = $self->os->execute($command, 0);
+		if (!defined($output)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to execute command on $computer_name: $command");
+			return;
+		}
+		elsif ($exit_status ne '0') {
+			notify($ERRORS{'WARNING'}, 0, "failed to delete rule on $computer_name, exit status: $exit_status, command:\n$command\noutput:\n" . join("\n", @$output));
+			return;
+		}
+		else {
+			notify($ERRORS{'OK'}, 0, "deleted rule on $computer_name with specification: '$rule_specification_string'");
+		}
+	}
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 delete_connect_method_rules
+
+ Parameters  : none
+ Returns     : boolean
+ Description : Deletes all rules from the INPUT chain in the filter table
+               matching any connect method ports.
+
+=cut
+
+sub delete_connect_method_rules {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return 0;
+	}
+	
+	my @protocol_ports = $self->data->get_connect_method_protocol_port_array();
+	for my $protocol_port (@protocol_ports) {
+		my ($protocol, $port) = @$protocol_port;
+		$self->delete_rules('filter', 'INPUT',
+			{
+				'parameters' => {
+					'protocol' => $protocol,
+				},
+				'match_extensions' => {
+					$protocol => {
+						'dport' => $port,
+					},
+				},
+			}
+		);
+	}
+	
+	notify($ERRORS{'DEBUG'}, 0, "deleted explicit rules from INPUT chain in filter table for all connect method ports");
+	return 1;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -399,9 +1005,9 @@ sub create_chain {
 	
 	my $computer_name = $self->data->get_computer_hostname();
 	
-	my $command = "/sbin/iptables --new-chain $chain_name --table $table_name";
-	
 	my $semaphore = $self->get_iptables_semaphore();
+	
+	my $command = "/sbin/iptables --new-chain $chain_name --table $table_name";
 	my ($exit_status, $output) = $self->os->execute($command, 0);
 	if (!defined($output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to execute command $computer_name: $command");
@@ -427,7 +1033,7 @@ sub create_chain {
 
  Parameters  : $table_name, $chain_name
  Returns     : boolean
- Description : Deletes the specified chain from the specified table. All rules
+ Description : Deletes the specified chain from the table. All rules
                which exist in the chain or reference the chain are deleted prior
                to deletion of the chain.
 
@@ -494,16 +1100,104 @@ sub delete_chain {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 sanitize_reservation
+=head2 delete_chain_references
 
- Parameters  : $reservation_id (optional)
+ Parameters  : $table_name, $chain_name
  Returns     : boolean
- Description : Deletes the chains created for the reservation. Saves the
-               iptables configuration.
+ Description : Checks all chains in the specified table for references to the
+               $chain_name argument. If found, the referencing rules are
+               deleted.
 
 =cut
 
-sub sanitize_reservation {
+sub delete_chain_references {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return 0;
+	}
+	
+	my ($table_name, $chain_name) = @_;
+	if (!defined($table_name)) {
+		notify($ERRORS{'WARNING'}, 0, "table name argument was not specified");
+		return;
+	}
+	elsif (!defined($chain_name)) {
+		notify($ERRORS{'WARNING'}, 0, "chain name argument was not specified");
+		return;
+	}
+	
+	my $computer_name = $self->data->get_computer_hostname();
+	
+	my $table_info = $self->get_table_info($table_name);
+	for my $referencing_chain_name (keys %$table_info) {
+		for my $rule (@{$table_info->{$referencing_chain_name}{rules}}) {
+			my $rule_specification_string = $rule->{rule_specification};
+			if ($rule_specification_string =~ /-j $chain_name(\s|$)/) {
+				notify($ERRORS{'DEBUG'}, 0, "rule in '$table_name' table references '$chain_name' chain, referencing chain: $referencing_chain_name, rule specification: $rule_specification_string");
+				if (!$self->delete_rules($table_name, $referencing_chain_name, {'rule_specification' => $rule_specification_string})) {
+					return;
+				}
+			}
+		}
+	}
+	
+	notify($ERRORS{'DEBUG'}, 0, "deleted all rules in '$table_name' table referencing '$chain_name' chain on $computer_name");
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 chain_exists
+
+ Parameters  : $table_name, $chain_name
+ Returns     : boolean
+ Description : Determines if an iptables chain exists in the table specified.
+
+=cut
+
+sub chain_exists {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return 0;
+	}
+	
+	my ($table_name, $chain_name) = @_;
+	if (!defined($table_name)) {
+		notify($ERRORS{'WARNING'}, 0, "table name argument was not specified");
+		return;
+	}
+	elsif (!defined($chain_name)) {
+		notify($ERRORS{'WARNING'}, 0, "chain name argument was not specified");
+		return;
+	}
+	
+	my $computer_name = $self->data->get_computer_hostname();
+	
+	my $table_info = $self->get_table_info($table_name) || return;
+	if (defined($table_info->{$chain_name})) {
+		notify($ERRORS{'DEBUG'}, 0, "$chain_name chain exists in $table_name table on $computer_name");
+		return 1;
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "'$chain_name' chain does NOT exist in '$table_name' table on $computer_name");
+		return 0;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 sanitize_nat_reservation
+
+ Parameters  : $reservation_id (optional)
+ Returns     : boolean
+ Description : Deletes the chains created for a reservation on a NAT host. Saves
+               the iptables configuration.
+
+=cut
+
+sub sanitize_nat_reservation {
 	my $self = shift;
 	if (ref($self) !~ /VCL::Module/i) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
@@ -518,54 +1212,6 @@ sub sanitize_reservation {
 	}
 	
 	$self->save_configuration();
-	return 1;
-}
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 delete_chain_references
-
- Parameters  : $table_name, $referenced_chain_name
- Returns     : boolean
- Description : Checks all chains in the specified table for references to the
-               $referenced_chain_name argument. If found, the referencing rules
-               are deleted.
-
-=cut
-
-sub delete_chain_references {
-	my $self = shift;
-	if (ref($self) !~ /VCL::Module/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return 0;
-	}
-	
-	my ($table_name, $referenced_chain_name) = @_;
-	if (!defined($table_name)) {
-		notify($ERRORS{'WARNING'}, 0, "table name argument was not specified");
-		return;
-	}
-	elsif (!defined($referenced_chain_name)) {
-		notify($ERRORS{'WARNING'}, 0, "referenced chain name argument was not specified");
-		return;
-	}
-	
-	my $computer_name = $self->data->get_computer_hostname();
-	
-	my $table_info = $self->get_table_info($table_name);
-	for my $referencing_chain_name (keys %$table_info) {
-		for my $rule (@{$table_info->{$referencing_chain_name}{rules}}) {
-			my $rule_specification = $rule->{rule_specification};
-			if ($rule_specification =~ /-j $referenced_chain_name(\s|$)/) {
-				notify($ERRORS{'DEBUG'}, 0, "rule in '$table_name' table references '$referenced_chain_name' chain, referencing chain: $referencing_chain_name, rule specification: $rule_specification");
-				if (!$self->delete_rule($table_name, $referencing_chain_name, $rule_specification)) {
-					return;
-				}
-			}
-		}
-	}
-	
-	notify($ERRORS{'DEBUG'}, 0, "deleted all rules in '$table_name' table referencing '$referenced_chain_name' chain on $computer_name");
 	return 1;
 }
 
@@ -626,11 +1272,12 @@ sub flush_chain {
 
 =head2 get_table_info
 
- Parameters  : $table_name, $chain_name (optional)
+ Parameters  : $table_name (optional)
  Returns     : boolean
  Description : Retrieves the configuration of an iptables table and constructs a
-               hash reference. Example:
-               {
+               hash reference. Information from the 'filter' table is returned
+               if the $table_name argument is not specified. Example:
+					{
                  "OUTPUT" => {
                    "policy" => "ACCEPT"
                  },
@@ -681,23 +1328,13 @@ sub get_table_info {
 		return 0;
 	}
 	
-	my ($table_name, $chain_name) = @_;
-	if (!defined($table_name)) {
-		notify($ERRORS{'WARNING'}, 0, "table name argument was not specified");
-		return;
-	}
+	my $table_name = shift || 'filter';
 	
 	$ENV{iptables_get_table_info_count}{$table_name}++;
 	
 	my $computer_name = $self->data->get_computer_hostname();
 	
-	my $command = "/sbin/iptables --list-rules";
-	my $chain_text = '';
-	if (defined($chain_name)) {
-		$command .= " $chain_name";
-		$chain_text = "of '$chain_name' chain ";
-	}
-	$command .= " --table $table_name";
+	my $command = "/sbin/iptables --list-rules --table $table_name";
 	
 	my ($exit_status, $output) = $self->os->execute($command, 0);
 	if (!defined($output)) {
@@ -705,7 +1342,7 @@ sub get_table_info {
 		return;
 	}
 	elsif ($exit_status ne '0') {
-		notify($ERRORS{'WARNING'}, 0, "failed to list rules " . $chain_text . "from '$table_name' table on $computer_name, exit status: $exit_status, command:\n$command\noutput:\n" . join("\n", @$output));
+		notify($ERRORS{'WARNING'}, 0, "failed to list rules from '$table_name' table on $computer_name, exit status: $exit_status, command:\n$command\noutput:\n" . join("\n", @$output));
 		return 0;
 	}
 
@@ -795,6 +1432,9 @@ sub get_table_info {
 				'goto' => '\s*(-g|--goto)\s+([^\s]+)\s*(.*)',
 			};
 			
+			# -j ACCEPT
+			# -j REJECT --reject-with icmp-host-prohibited
+			
 			# Parse the parameters which specify targets
 			TARGET_PARAMETER: for my $target_parameter (keys %$target_parameters) {
 				my $pattern = $target_parameters->{$target_parameter};
@@ -804,7 +1444,7 @@ sub get_table_info {
 				# Assemble a regex to remove the target specification from the overall specification
 				my $target_parameter_regex = "\\s*$target_parameter_match\\s+$target\\s*";
 				
-				$rule->{parameters}{$target_parameter}{target} = $target;
+				$rule->{parameters}{$target_parameter} = $target;
 				
 				my $target_extension_option_name;
 				my @target_extension_option_sections = split(/\s+/, $target_extension_option_string);
@@ -817,8 +1457,8 @@ sub get_table_info {
 					# Check if this is the beginning of a target extension option
 					if ($target_extension_option_section =~ /^[-]+(\w[\w-]+)/) {
 						$target_extension_option_name = $1;
-						#notify($ERRORS{'DEBUG'}, 0, "located $target_parameter target extension option: $target_extension_option_name");
-						$rule->{parameters}{$target_parameter}{$target_extension_option_name} = undef;
+						#notify($ERRORS{'DEBUG'}, 0, "located $target_parameter/$target target extension option: $target_extension_option_name");
+						$rule->{target_extensions}{$target}{$target_extension_option_name} = undef;
 					}
 					elsif (!$target_extension_option_name) {
 						# If here, the section should be a target extension option value
@@ -830,7 +1470,7 @@ sub get_table_info {
 					}
 					else {
 						# Found target extension option value
-						$rule->{parameters}{$target_parameter}{$target_extension_option_name} = $target_extension_option_section;
+						$rule->{target_extensions}{$target}{$target_extension_option_name} = $target_extension_option_section;
 						$target_extension_option_name = undef;
 					}
 					
@@ -939,14 +1579,14 @@ sub get_table_info {
 		}
 	}
 	
-	#notify($ERRORS{'DEBUG'}, 0, "retrieved rules " . $chain_text . "from iptables $table_name table from $computer_name:\n" . format_data($table_info));
+	#notify($ERRORS{'DEBUG'}, 0, "retrieved rules from iptables $table_name table from $computer_name:\n" . format_data($table_info));
 	return $table_info;
 }
 
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 configure_nat
+=head2 nat_configure_host
 
  Parameters  : $public_ip_address, $internal_ip_address
  Returns     : boolean
@@ -954,7 +1594,7 @@ sub get_table_info {
 
 =cut
 
-sub configure_nat {
+sub nat_configure_host {
 	my $self = shift;
 	if (ref($self) !~ /VCL::Module/i) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
@@ -995,9 +1635,9 @@ sub configure_nat {
 	
 	# Check if NAT has previously been configured
 	for my $rule (@{$nat_table_info->{POSTROUTING}{rules}}) {
-		my $rule_specification = $rule->{rule_specification};
-		if ($rule_specification =~ /MASQUERADE/) {
-			notify($ERRORS{'DEBUG'}, 0, "POSTROUTING chain in nat table contains a MASQUERADE rule, assuming NAT has already been configured: $rule_specification");
+		my $rule_specification_string = $rule->{rule_specification};
+		if ($rule_specification_string =~ /MASQUERADE/) {
+			notify($ERRORS{'DEBUG'}, 0, "POSTROUTING chain in nat table contains a MASQUERADE rule, assuming NAT has already been configured: $rule_specification_string");
 			return 1;
 		}
 	}
@@ -1051,98 +1691,102 @@ sub configure_nat {
 		$destination_ports .= "$start_port:$end_port";
 	}
 	
-	if (!$self->insert_rule({
-		'table' => 'nat',
-		'chain' => 'POSTROUTING',
-		'parameters' => {
-			'out-interface' => $public_interface_name,
-			'!destination' => "$internal_network_address/$internal_network_bits",
-			'jump' => 'MASQUERADE',
-		},
-		'match_extensions' => {
-			'comment' => {
-				'comment' => "change IP of outbound $public_interface_name packets to NAT host IP address $public_ip_address",
+	if (!$self->insert_rule('nat', 'POSTROUTING',
+		{
+			'parameters' => {
+				'out-interface' => $public_interface_name,
+				'!destination' => "$internal_network_address/$internal_network_bits",
+				'jump' => 'MASQUERADE',
 			},
-		},
-	})) {
+			'match_extensions' => {
+				'comment' => {
+					'comment' => "change IP of outbound $public_interface_name packets to NAT host IP address $public_ip_address",
+				},
+			},
+		}
+	)) {
 		return;
 	}
 	
-	if (!$self->insert_rule({
-		'chain' => 'INPUT',
-		'parameters' => {
-			'in-interface' => $public_interface_name,
-			'destination' => $public_ip_address,
-			'jump' => 'ACCEPT',
-			'protocol' => 'tcp',
-		},
-		'match_extensions' => {
-			'state' => {
-				'state' => 'NEW,RELATED,ESTABLISHED',
+	if (!$self->insert_rule('filter', 'INPUT',
+		{
+			'parameters' => {
+				'in-interface' => $public_interface_name,
+				'destination' => $public_ip_address,
+				'jump' => 'ACCEPT',
+				'protocol' => 'tcp',
 			},
-			'multiport' => {
-				'destination-ports' => $destination_ports,
+			'match_extensions' => {
+				'state' => {
+					'state' => 'NEW,RELATED,ESTABLISHED',
+				},
+				'multiport' => {
+					'destination-ports' => $destination_ports,
+				},
 			},
-		},
-	})) {
+		}
+	)) {
 		return;
 	}
 	
-	if (!$self->insert_rule({
-		'chain' => 'INPUT',
-		'parameters' => {
-			'in-interface' => $public_interface_name,
-			'destination' => $public_ip_address,
-			'jump' => 'ACCEPT',
-			'protocol' => 'udp',
-		},
-		'match_extensions' => {
-			'state' => {
-				'state' => 'NEW,RELATED,ESTABLISHED',
+	if (!$self->insert_rule('filter', 'INPUT',
+		{
+			'parameters' => {
+				'in-interface' => $public_interface_name,
+				'destination' => $public_ip_address,
+				'jump' => 'ACCEPT',
+				'protocol' => 'udp',
 			},
-			'multiport' => {
-				'destination-ports' => $destination_ports,
+			'match_extensions' => {
+				'state' => {
+					'state' => 'NEW,RELATED,ESTABLISHED',
+				},
+				'multiport' => {
+					'destination-ports' => $destination_ports,
+				},
 			},
-		},
-	})) {
+		}
+	)) {
 		return;
 	}
 	
-	if (!$self->insert_rule({
-		'chain' => 'FORWARD',
-		'parameters' => {
-			'in-interface' => $public_interface_name,
-			'out-interface' => $internal_interface_name,
-			'jump' => 'ACCEPT',
-		},
-		'match_extensions' => {
-			'state' => {
-				'state' => 'NEW,RELATED,ESTABLISHED',
+	if (!$self->insert_rule('filter', 'FORWARD',
+		{
+			'parameters' => {
+				'in-interface' => $public_interface_name,
+				'out-interface' => $internal_interface_name,
+				'jump' => 'ACCEPT',
 			},
-			'comment' => {
-				'comment' => "forward inbound packets from public $public_interface_name to internal $internal_interface_name",
-			},
-		},	
-	})) {
+			'match_extensions' => {
+				'state' => {
+					'state' => 'NEW,RELATED,ESTABLISHED',
+				},
+				'comment' => {
+					'comment' => "forward inbound packets from public $public_interface_name to internal $internal_interface_name",
+				},
+			},	
+		}
+	)) {
 		return;
 	}
 	
-	if (!$self->insert_rule({
-		'chain' => 'FORWARD',
-		'parameters' => {
-			'in-interface' => $internal_interface_name,
-			'out-interface' => $public_interface_name,
-			'jump' => 'ACCEPT',
-		},
-		'match_extensions' => {
-			'state' => {
-				'state' => 'NEW,RELATED,ESTABLISHED',
+	if (!$self->insert_rule('filter', 'FORWARD',
+		{
+			'parameters' => {
+				'in-interface' => $internal_interface_name,
+				'out-interface' => $public_interface_name,
+				'jump' => 'ACCEPT',
 			},
-			'comment' => {
-				'comment' => "forward outbound packets from internal $internal_interface_name to public $public_interface_name",
+			'match_extensions' => {
+				'state' => {
+					'state' => 'NEW,RELATED,ESTABLISHED',
+				},
+				'comment' => {
+					'comment' => "forward outbound packets from internal $internal_interface_name to public $public_interface_name",
+				},
 			},
-		},
-	})) {
+		}
+	)) {
 		return;
 	}
 	
@@ -1152,7 +1796,7 @@ sub configure_nat {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 configure_nat_reservation
+=head2 nat_configure_reservation
 
  Parameters  : none
  Returns     : boolean
@@ -1162,7 +1806,7 @@ sub configure_nat {
 
 =cut
 
-sub configure_nat_reservation {
+sub nat_configure_reservation {
 	my $self = shift;
 	if (ref($self) !~ /VCL::Module/i) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
@@ -1191,21 +1835,21 @@ sub configure_nat_reservation {
 	
 	# Check if rule to jump to reservation's chain already exists in the PREROUTING table
 	for my $rule (@{$nat_table_info->{PREROUTING}{rules}}) {
-		my $rule_specification = $rule->{rule_specification};
-		if ($rule_specification =~ /-j $chain_name(\s|$)/) {
-			notify($ERRORS{'DEBUG'}, 0, "PREROUTING chain in nat table on $computer_name already contains a rule to jump to '$chain_name' chain: $rule_specification");
+		my $rule_specification_string = $rule->{rule_specification};
+		if ($rule_specification_string =~ /-j $chain_name(\s|$)/) {
+			notify($ERRORS{'DEBUG'}, 0, "PREROUTING chain in nat table on $computer_name already contains a rule to jump to '$chain_name' chain: $rule_specification_string");
 			return 1;;
 		}
 	}
 	
 	# Add a rule to the nat PREROUTING chain
-	if (!$self->insert_rule({
-		'table' => 'nat',
-		'chain' => 'PREROUTING',
-		'parameters' => {
-			'jump' => $chain_name,
-		},
-	})) {
+	if (!$self->insert_rule('nat', 'PREROUTING',
+		{
+			'parameters' => {
+				'jump' => $chain_name,
+			},
+		}
+	)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to configure NAT host $computer_name for reservation, failed to create rule in PREROUTING chain in nat table to jump to '$chain_name' chain");
 		return;
 	}
@@ -1216,15 +1860,15 @@ sub configure_nat_reservation {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 add_nat_port_forward
+=head2 nat_add_port_forward
 
- Parameters  : $protocol, $source_port, $destination_ip_address, $destination_port, $chain_name (optional)
+ Parameters  : $protocol, $source_port, $destination_ip_address, $destination_port
  Returns     : boolean
  Description : Forwards a port via DNAT.
 
 =cut
 
-sub add_nat_port_forward {
+sub nat_add_port_forward {
 	my $self = shift;
 	if (ref($self) !~ /VCL::Module/i) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
@@ -1233,7 +1877,7 @@ sub add_nat_port_forward {
 
 	my $computer_name = $self->data->get_computer_hostname();
 	
-	my ($protocol, $source_port, $destination_ip_address, $destination_port, $chain_name) = @_;
+	my ($protocol, $source_port, $destination_ip_address, $destination_port) = @_;
 	if (!defined($protocol)) {
 		notify($ERRORS{'WARNING'}, 0, "protocol argument was not provided");
 		return;
@@ -1250,7 +1894,8 @@ sub add_nat_port_forward {
 		notify($ERRORS{'WARNING'}, 0, "destination port argument was not provided");
 		return;
 	}
-	$chain_name = $self->get_reservation_chain_name() unless defined $chain_name;
+	
+	my $chain_name = $self->get_reservation_chain_name();
 	
 	$protocol = lc($protocol);
 	
@@ -1264,56 +1909,56 @@ sub add_nat_port_forward {
 	
 	# Check if rule has previously been added
 	for my $rule (@{$nat_table_info->{$chain_name}{rules}}) {
-		my $rule_target = $rule->{parameters}{jump}{target} || '<not set>';
+		my $rule_target = $rule->{parameters}{jump} || '<not set>';
 		if ($rule_target ne 'DNAT') {
-			#notify($ERRORS{'DEBUG'}, 0, "ignoring rule, target is not DNAT: $rule_target");
+			notify($ERRORS{'DEBUG'}, 0, "ignoring rule, target is not DNAT: $rule_target");
 			next;
 		}
 		
 		my $rule_protocol = $rule->{parameters}{protocol} || '<not set>';
 		if (lc($rule_protocol) ne $protocol) {
-			#notify($ERRORS{'DEBUG'}, 0, "ignoring rule, protocol '$rule_protocol' does not match protocol argument: '$protocol'");
+			notify($ERRORS{'DEBUG'}, 0, "ignoring rule, protocol '$rule_protocol' does not match protocol argument: '$protocol'");
 			next;
 		}
 		
 		my $rule_source_port = $rule->{match_extensions}{$protocol}{dport} || '<not set>';
 		if ($rule_source_port ne $source_port) {
-			#notify($ERRORS{'DEBUG'}, 0, "ignoring rule, source port $rule_source_port does not match argument: $source_port");
+			notify($ERRORS{'DEBUG'}, 0, "ignoring rule, source port $rule_source_port does not match argument: $source_port");
 			next;
 		}
 		
-		my $rule_destination = $rule->{parameters}{jump}{'to-destination'} || '<not set>';
+		my $rule_destination = $rule->{target_extensions}{DNAT}{'to-destination'} || '<not set>';
 		if ($rule_destination ne "$destination_ip_address:$destination_port") {
-			#notify($ERRORS{'DEBUG'}, 0, "ignoring rule, destination $rule_destination does not match argument: $destination_ip_address:$destination_port");
+			notify($ERRORS{'DEBUG'}, 0, "ignoring rule, destination $rule_destination does not match argument: $destination_ip_address:$destination_port");
 			next;
 		}
 		
-		my $rule_specification = $rule->{'rule_specification'};
-		notify($ERRORS{'DEBUG'}, 0, "NAT port forwared rule already exists, chain: $chain_name, protocol: $protocol, source port: $source_port, destination: $destination_ip_address:$destination_port\nrule specification:\n$rule_specification");
+		my $rule_specification_string = $rule->{'rule_specification'};
+		notify($ERRORS{'DEBUG'}, 0, "NAT port forwared rule already exists, chain: $chain_name, protocol: $protocol, source port: $source_port, destination: $destination_ip_address:$destination_port\nrule specification:\n$rule_specification_string");
 		return 1;
 	}
 	
-	if ($self->insert_rule({
-		'table' => 'nat',
-		'chain' => $chain_name,
-		'parameters' => {
-			'protocol' => $protocol,
-			'in-interface' => $public_interface_name,
-		},
-		'match_extensions' => {
-			'comment' => {
-				'comment' => "forward: $public_interface_name:$source_port --> $destination_ip_address:$destination_port ($protocol)",
+	if ($self->insert_rule('nat', $chain_name,
+		{
+			'parameters' => {
+				'protocol' => $protocol,
+				'in-interface' => $public_interface_name,
 			},
-			$protocol => {
-				'destination-port' => $source_port,
+			'match_extensions' => {
+				'comment' => {
+					'comment' => "forward: $public_interface_name:$source_port --> $destination_ip_address:$destination_port ($protocol)",
+				},
+				$protocol => {
+					'destination-port' => $source_port,
+				},
 			},
-		},
-		'target_extensions' => {
-			'DNAT' => {
-				'to-destination' => "$destination_ip_address:$destination_port",
+			'target_extensions' => {
+				'DNAT' => {
+					'to-destination' => "$destination_ip_address:$destination_port",
+				},
 			},
-		},
-	})) {
+		}
+	)) {
 		notify($ERRORS{'OK'}, 0, "added NAT port forward on $computer_name: $public_interface_name:$source_port --> $destination_ip_address:$destination_port");
 		return 1;
 	}
@@ -1321,28 +1966,6 @@ sub add_nat_port_forward {
 		notify($ERRORS{'WARNING'}, 0, "failed to add NAT port forward on $computer_name: $public_interface_name:$source_port --> $destination_ip_address:$destination_port");
 		return;
 	}
-}
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 get_reservation_chain_name
-
- Parameters  : $reservation_id (optional)
- Returns     : string
- Description : Returns the name of the iptables chain containing rules for a
-               single VCL reservation.
-
-=cut
-
-sub get_reservation_chain_name {
-	my $self = shift;
-	if (ref($self) !~ /VCL::Module/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return 0;
-	}
-	
-	my $reservation_id = shift || $self->data->get_reservation_id();
-	return "$PROCESSNAME-$reservation_id";
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -1383,8 +2006,6 @@ sub save_configuration {
 		return 0;
 	}
 	
-	my $file_exists = $self->os->file_exists($file_path);
-	
 	# Make sure output contains at least 1 line beginning with "-A"
 	# If the iptables service is stopped the output will be blank
 	# If the iptables service is stopped but "iptables -L" is executed the output may contain something like:
@@ -1399,22 +2020,106 @@ sub save_configuration {
 		notify($ERRORS{'WARNING'}, 0, "failed to save iptables configuration on $computer_name, iptables service may not be running, no output was returned from $command");
 		return 0;
 	}
-	elsif (!grep(/^-A/, @$output) && ($file_exists || $file_path eq '/etc/sysconfig/iptables')) {
+	elsif (!grep(/^-A/, @$output)) {
 		notify($ERRORS{'WARNING'}, 0, "iptables configuration not saved to $file_path on $computer_name for safety, iptables service may not be running, output of $command does not contain any lines beginning with '-A':\n" . join("\n", @$output));
 		return 0;
 	}
 	
-	# Attempt to get a semaphore if the file already exists
-	my $semaphore;
-	if ($file_exists) {
-		$semaphore = $self->get_semaphore("iptables-save_configuration-$computer_id", (30 * 1));
-		if (!$semaphore) {
-			notify($ERRORS{'WARNING'}, 0, "failed to save iptables configuration on $computer_name, $file_path already exists and semaphore could not be obtained to avoid multiple processes writing to the file at the same time");
-			return;
-		}
+	my $semaphore = $self->get_iptables_semaphore();
+	if (!$semaphore) {
+		notify($ERRORS{'WARNING'}, 0, "failed to save iptables configuration on $computer_name, $file_path already exists and semaphore could not be obtained to avoid multiple processes writing to the file at the same time");
+		return;
 	}
 	
 	return $self->os->create_text_file($file_path, join("\n", @$output));
+}
+
+
+
+
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_pre_capture_chain_name
+
+ Parameters  : none
+ Returns     : string
+ Description : Returns 'vcl-pre_capture'.
+
+=cut
+
+sub get_pre_capture_chain_name {
+	return 'vcl-pre_capture';
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_post_load_chain_name
+
+ Parameters  : none
+ Returns     : string
+ Description : Returns 'vcl-post_load'.
+
+=cut
+
+sub get_post_load_chain_name {
+	return 'vcl-post_load';
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_reserved_chain_name
+
+ Parameters  : none
+ Returns     : string
+ Description : Returns 'vcl-reserved'.
+
+=cut
+
+sub get_reserved_chain_name {
+	return 'vcl-reserved';
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_reservation_chain_name
+
+ Parameters  : $reservation_id (optional)
+ Returns     : string
+ Description : Returns the name of the iptables chain containing rules for a
+               VCL reservation: '<vcld process name>-<reservation ID>'
+
+=cut
+
+sub get_reservation_chain_name {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return 0;
+	}
+	
+	my $reservation_id = shift || $self->data->get_reservation_id();
+	return "$PROCESSNAME-$reservation_id";
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_inuse_chain_name
+
+ Parameters  : $reservation_id (optional)
+ Returns     : string
+ Description : Returns the name of the iptables chain containing rules added
+               during the inuse state for a VCL reservation.
+
+=cut
+
+sub get_inuse_chain_name {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return 0;
+	}
+	return 'vcl-inuse';
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -1423,7 +2128,7 @@ sub save_configuration {
 
  Parameters  : none
  Returns     : true
- Description : 
+ Description : Prints the number of calls to get_table_info.
 
 =cut
 

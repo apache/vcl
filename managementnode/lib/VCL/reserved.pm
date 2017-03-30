@@ -270,8 +270,13 @@ sub process {
 	# Tighten up the firewall
 	# Process the connect methods again, lock the firewall down to the address the user connected from
 	my $remote_ip = $self->data->get_reservation_remote_ip();
-	if (!$self->os->process_connect_methods($remote_ip, 1)) {
-		notify($ERRORS{'CRITICAL'}, 0, "failed to process connect methods after user connected to computer");
+	if ($self->os->can('firewall') && $self->os->firewall->can('process_inuse')) {
+		$self->os->firewall->process_inuse($remote_ip);
+	}
+	else {
+		if (!$self->os->process_connect_methods($remote_ip, 1)) {
+			notify($ERRORS{'CRITICAL'}, 0, "failed to process connect methods after user connected to computer");
+		}
 	}
 	
 	# Run custom post_initial_connection scripts residing on the management node
