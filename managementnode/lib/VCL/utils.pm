@@ -113,6 +113,7 @@ our @EXPORT = qw(
 	delete_vcld_semaphore
 	determine_remote_connection_target
 	escape_file_path
+	format_array_reference
 	format_data
 	format_hash_keys
 	format_number
@@ -4404,8 +4405,8 @@ sub run_ssh_command {
 		$ssh_output =~ s/Offending key.*//ig;
 		$ssh_output =~ s/Matching host key in.*//ig;
 		$ssh_output =~ s/.*POSSIBLE BREAK-IN ATTEMPT.*//ig;
-		$ssh_output =~ s/.*ssh-askpass:[^\n]*//igs;
-		$ssh_output =~ s/.*bad permissions:[^\n]*//igs;
+		$ssh_output =~ s/.*ssh-askpass:[^\n]*//ig;
+		$ssh_output =~ s/.*bad permissions:[^\n]*//ig;
 		
 		# Remove any spaces from the beginning and end of the output
 		$ssh_output =~ s/(^\s+)|(\s+$)//g;
@@ -8764,14 +8765,14 @@ sub format_data {
 
 =head2 format_hash_keys
 
- Parameters  : $hash_ref, $level (optional), $parent_keys (optional)
+ Parameters  : $hash_ref, $display_parent_keys, $display_values_hashref, $parents
  Returns     : hash reference
  Description : 
 
 =cut
 
 sub format_hash_keys {
-	my ($hash_ref, $display_parent_keys, $display_values_hashref, $parent_keys) = @_;
+	my ($hash_ref, $parents) = @_;
 	if (!$hash_ref) {
 		notify($ERRORS{'WARNING'}, 0, "hash reference argument was not supplied");
 		return;
@@ -8781,6 +8782,8 @@ sub format_hash_keys {
 		return;
 	}
 	
+	my $indent_character = ' ';
+	
 	my $return_string;
 	if ($return_string) {
 		$return_string .= "\n";
@@ -8789,54 +8792,103 @@ sub format_hash_keys {
 		$return_string = '';
 	}
 	
-	if (!defined($parent_keys)) {
-		$parent_keys = [];
+	if (!defined($parents)) {
+		$return_string .= "{\n";
+		$return_string .= format_hash_keys($hash_ref, ['']);
+		$return_string .= "}";
+		return $return_string;
 	}
 	
-	my $level = scalar(@$parent_keys);
-	
-	# Add specific values specified in $display_values_hashref to the return string
-	if (@$parent_keys && $display_values_hashref) {
-		my $parent_key = @$parent_keys[-1];
-		for my $key (sort { lc($a) cmp lc($b) } keys %$hash_ref) {
-			my $value = $hash_ref->{$key} || '<NULL>';
-			next if ref($value);
-			for my $display_parent_key (sort { lc($a) cmp lc($b) } keys %$display_values_hashref) {
-				my $display_key = $display_values_hashref->{$display_parent_key};
-				next if ($parent_key ne $display_parent_key || $key ne $display_key);
-				$return_string .= '-' x ($level * 3);
-				$return_string .= join('', map { "{$_}" } @$parent_keys) if ($display_parent_keys);
-				$return_string .= "{$key} => '$value'";
-				$return_string .= "\n";
-			}
-		}
-	}
+	my $level = scalar(@$parents);
 	
 	for my $key (sort { lc($a) cmp lc($b) } keys %$hash_ref) {
 		my $value = $hash_ref->{$key};
 		my $type = ref($value);
-		if (!$type) {
-			next;
-		}
 		
-		$return_string .= '-' x ($level * 3);
+		$return_string .= $indent_character x ($level * 3);
 		
 		if ($type eq 'HASH') {
-			$return_string .= join('', map { "{$_}" } @$parent_keys) if ($display_parent_keys);
-			$return_string .= "{$key}";
-			$return_string .= "\n";
+			push @$parents, $key;
 			
-			push @$parent_keys, $key;
-			$return_string .= format_hash_keys($value, $display_parent_keys, $display_values_hashref, $parent_keys);
-			pop @$parent_keys;
+			$return_string .= "$key = {\n";
+			$return_string .= format_hash_keys($value, $parents);
+			$return_string .= $indent_character x ($level * 3);
+			$return_string .= "},\n";
+			
+			pop @$parents;
 		}
 		elsif ($type eq 'ARRAY') {
-			$return_string .= "[$key]\n";
+			$return_string .= "$key => [],\n";
 		}
-		else {
+		elsif ($type) {
 			$return_string .= "<$type: $key>\n";
 		}
+		else {
+			$return_string .= "$key = '',\n";
+		}
 	}
+	
+	return $return_string;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 format_array_reference
+
+ Parameters  : $data, $max_depth, $parents
+ Returns     : none
+ Description : 
+
+=cut
+
+sub format_array_reference {
+	my ($data, $max_depth, $parents) = @_;
+	
+	$parents = [] unless $parents;
+	
+	my $indent_character = ' ';
+	my $indent_count = 3;
+	
+	my $data_type = ref($data);
+	if ($data_type !~ /(ARRAY|HASH)/) {
+		return "'',\n";
+	}
+	
+	
+	
+
+	my $hash_ref;
+	my $opening_char;
+	my $closing_char;
+	if ($data_type eq 'ARRAY') {
+		$opening_char = '[';
+		$closing_char = ']';
+		for (my $index = 0; $index < scalar(@$data); $index++) {
+			$hash_ref->{"[$index]"}	= $data->[$index];
+		}
+	}
+	elsif ($data_type eq 'HASH') {
+		$opening_char = '{';
+		$closing_char = '}';
+		$hash_ref = $data;
+	}
+	
+	
+	
+	my $return_string = "$opening_char";
+	
+	if (!$max_depth || scalar(@$parents) < $max_depth) {
+		$return_string .= "\n";
+		for my $key (sort keys %$hash_ref) {
+			my $value = $hash_ref->{$key};
+			push @$parents, $key;
+			$return_string .= $indent_character x (scalar(@$parents) * $indent_count);
+			$return_string .= "$key = " . format_array_reference($value, $max_depth, $parents);
+			pop @$parents;
+		}
+		$return_string .= $indent_character x (scalar(@$parents) * $indent_count);
+	}
+	$return_string .= "$closing_char,\n";
 	
 	return $return_string;
 }
