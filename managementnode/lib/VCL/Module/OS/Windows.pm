@@ -12693,7 +12693,7 @@ sub _get_os_perl_package {
 	elsif ($product_name =~ /(XP|2003)/i) {
 		$perl_package = "VCL::Module::OS::Windows::Version_5::$1";
 	}
-	elsif ($product_name =~ /(Vista|2008|2012|7|8)/ig) {
+	elsif ($product_name =~ /(Vista|2008|2012|2016|7|8|10)/ig) {
 		$perl_package = "VCL::Module::OS::Windows::Version_6::$1";
 	}
 	else {
