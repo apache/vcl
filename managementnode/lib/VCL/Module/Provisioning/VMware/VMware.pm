@@ -289,7 +289,9 @@ sub initialize {
 		return;
 	}
 	
-	return 1 if ($self->data->get_request_state_name() =~ /test/i);
+	my $force = shift;
+	
+	return 1 if (!$force && $self->data->get_request_state_name() =~ /test/i);
 	notify($ERRORS{'DEBUG'}, 0, "initializing " . ref($self) . " object");
 	
 	# Get a DataStructure object containing data for the VM host computer
@@ -1353,8 +1355,15 @@ sub api {
 	}
 	
 	if (!$self->{api}) {
-		notify($ERRORS{'WARNING'}, 0, "api object is not defined");
-		return;
+		notify($ERRORS{'DEBUG'}, 0, "attempting to initialize");
+		if (!$self->initialize()) {
+			notify($ERRORS{'WARNING'}, 0, "failed to initialize");
+			return;
+		}
+		elsif (!$self->{api}) {
+			notify($ERRORS{'WARNING'}, 0, "api object is not defined");
+			return;
+		}
 	}
 	
 	return $self->{api};
