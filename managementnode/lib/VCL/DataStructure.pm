@@ -471,9 +471,9 @@ $SUBROUTINE_MAPPINGS{user_login_id} = '$self->request_data->{user}{unityid}';
 $SUBROUTINE_MAPPINGS{user_width} = '$self->request_data->{user}{width}';
 $SUBROUTINE_MAPPINGS{user_adminlevel_name} = '$self->request_data->{user}{adminlevel}{name}';
 $SUBROUTINE_MAPPINGS{user_affiliation_dataupdatetext} = '$self->request_data->{user}{affiliation}{dataUpdateText}';
-$SUBROUTINE_MAPPINGS{user_affiliation_helpaddress} = '$self->request_data->{user}{affiliation}{helpaddress}';
+#$SUBROUTINE_MAPPINGS{user_affiliation_helpaddress} = '$self->request_data->{user}{affiliation}{helpaddress}';
 $SUBROUTINE_MAPPINGS{user_affiliation_name} = '$self->request_data->{user}{affiliation}{name}';
-$SUBROUTINE_MAPPINGS{user_affiliation_sitewwwaddress} = '$self->request_data->{user}{affiliation}{sitewwwaddress}';
+#$SUBROUTINE_MAPPINGS{user_affiliation_sitewwwaddress} = '$self->request_data->{user}{affiliation}{sitewwwaddress}';
 $SUBROUTINE_MAPPINGS{user_imtype_name} = '$self->request_data->{user}{IMtype}{name}';
 $SUBROUTINE_MAPPINGS{user_use_public_keys} = '$self->request_data->{user}{usepublickeys}';
 $SUBROUTINE_MAPPINGS{user_ssh_public_keys} = '$self->request_data->{user}{sshpublickeys}';
@@ -2422,6 +2422,73 @@ sub get_connect_method_protocol_port_array {
 		}
 	}
 	return @protocol_port_array;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_user_affiliation_sitewwwaddress
+
+ Parameters  : none
+ Returns     : string
+ Description : Returns the affiliation.sitewwwaddress for the user's affiliation
+               if populated. If not, returns the value for the Global
+               affiliation. If that's not populated, returns vcl.apache.org.
+
+=cut
+
+sub get_user_affiliation_sitewwwaddress {
+	my $self = shift;
+	if (ref($self) !~ /VCL::/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return 0;
+	}
+	
+	# Try to retrieve the value for the user's affiliation
+	if ($self->request_data->{user}{affiliation}{sitewwwaddress}) {
+		return $self->request_data->{user}{affiliation}{sitewwwaddress};
+	}
+	
+	# Try to retrieve the value for the Global affiliation
+	my $affiliation_info = get_affiliation_info('Global');
+	if ($affiliation_info && $affiliation_info->{sitewwwaddress}) {
+		return $affiliation_info->{sitewwwaddress};
+	}
+	
+	return 'vcl.apache.org';
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_user_affiliation_helpaddress
+
+ Parameters  : none
+ Returns     : string
+ Description : Returns the affiliation.helpaddress for the user's affiliation
+               if populated. If not, returns the value for the Global
+               affiliation. If that's not populated, returns
+               'help@vcl.example.edu'.
+
+=cut
+
+sub get_user_affiliation_helpaddress {
+	my $self = shift;
+	if (ref($self) !~ /VCL::/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return 0;
+	}
+	
+	# Try to retrieve the value for the user's affiliation
+	if ($self->request_data->{user}{affiliation}{helpaddress}) {
+		return $self->request_data->{user}{affiliation}{helpaddress};
+	}
+	
+	# Try to retrieve the value for the Global affiliation
+	my $affiliation_info = get_affiliation_info('Global');
+	if ($affiliation_info && $affiliation_info->{helpaddress}) {
+		return $affiliation_info->{helpaddress};
+	}
+	
+	return 'help@vcl.example.edu';
 }
 
 #/////////////////////////////////////////////////////////////////////////////

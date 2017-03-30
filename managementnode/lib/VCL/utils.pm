@@ -7021,14 +7021,6 @@ EOF
 		$user_info->{STANDALONE} = 1;
 	}
 	
-	# Set the user's affiliation sitewwwaddress and help address if not defined or blank
-	if (!$user_info->{affiliation}{sitewwwaddress}) {
-		$user_info->{affiliation}{sitewwwaddress} = 'http://cwiki.apache.org/VCL';
-	}
-	if (!$user_info->{affiliation}{helpaddress}) {
-		$user_info->{affiliation}{helpaddress} = 'nobody@example.com';
-	}
-	
 	#notify($ERRORS{'DEBUG'}, 0, "retrieved info for user '$user_identifier', affiliation: '$affiliation_identifier':\n" . format_data($user_info));
 	$ENV{user_info}{$user_identifier} = $user_info;
 	$ENV{user_info}{$user_identifier}{RETRIEVAL_TIME} = time;
