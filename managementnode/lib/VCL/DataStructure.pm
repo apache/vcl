@@ -2388,6 +2388,44 @@ sub get_connect_method_info_matching_name {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 get_connect_method_protocol_port_array
+
+ Parameters  : none
+ Returns     : array
+ Description : Processes all of the connect methods assigned to the image
+               revision and constructs an simpler array for easier processing.
+               An array is returned. Each array element is an array reference
+               with exactly 2 elements, a protocol name and port number:
+                  (
+                     ["tcp", 22],
+                     ["tcp", 3389],
+                     ["udp", 3389],
+                  )
+
+=cut
+
+sub get_connect_method_protocol_port_array {
+	my $self = shift;
+	if (ref($self) !~ /VCL::/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return 0;
+	}
+	
+	my @protocol_port_array;
+	
+	my $connect_method_info = $self->get_connect_methods();
+	for my $connect_method_id (sort keys %{$connect_method_info}) {
+		for my $connect_method_port_id (keys %{$connect_method_info->{$connect_method_id}{connectmethodport}}) {
+			my $protocol = $connect_method_info->{$connect_method_id}{connectmethodport}{$connect_method_port_id}{protocol};
+			my $port = $connect_method_info->{$connect_method_id}{connectmethodport}{$connect_method_port_id}{port};
+			push @protocol_port_array, [lc($protocol), $port],
+		}
+	}
+	return @protocol_port_array;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 1;
 __END__
 

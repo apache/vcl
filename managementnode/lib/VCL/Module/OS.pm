@@ -3585,14 +3585,14 @@ sub process_connect_methods {
 		
 		# Perform general NAT configuration
 		if ($nathost_internal_ip_address) {
-			if ($self->nathost_os->firewall->can('configure_nat')) {
-				if (!$self->nathost_os->firewall->configure_nat($nathost_public_ip_address, $nathost_internal_ip_address)) {
+			if ($self->nathost_os->firewall->can('nat_configure_host')) {
+				if (!$self->nathost_os->firewall->nat_configure_host($nathost_public_ip_address, $nathost_internal_ip_address)) {
 					notify($ERRORS{'WARNING'}, 0, "unable to process connect methods, failed to configure NAT on $nathost_hostname");
 					return;
 				}
 			}
 			else {
-				notify($ERRORS{'DEBUG'}, 0, "NAT not configured on $nathost_hostname, " . ref($self->nathost_os->firewall) . " does not implement a 'configure_nat' subroutine");
+				notify($ERRORS{'DEBUG'}, 0, "NAT not configured on $nathost_hostname, " . ref($self->nathost_os->firewall) . " does not implement a 'nat_configure_host' subroutine");
 			}
 		}
 		else {
@@ -3600,14 +3600,14 @@ sub process_connect_methods {
 		}
 		
 		# Perform reservation-specific NAT configuration
-		if ($self->nathost_os->firewall->can('configure_nat_reservation')) {
-			if (!$self->nathost_os->firewall->configure_nat_reservation()) {
+		if ($self->nathost_os->firewall->can('nat_configure_reservation')) {
+			if (!$self->nathost_os->firewall->nat_configure_reservation()) {
 				notify($ERRORS{'WARNING'}, 0, "unable to process connect methods, failed to configure NAT on $nathost_hostname for this reservation");
 				return;
 			}
 		}
 		else {
-			notify($ERRORS{'DEBUG'}, 0, "NAT not configured on $nathost_hostname for this reservation, " . ref($self->nathost_os->firewall) . " does not implement a 'configure_nat_reservation' subroutine");
+			notify($ERRORS{'DEBUG'}, 0, "NAT not configured on $nathost_hostname for this reservation, " . ref($self->nathost_os->firewall) . " does not implement a 'nat_configure_reservation' subroutine");
 		}
 	}
 	
@@ -3698,7 +3698,7 @@ sub process_connect_methods {
 						return;
 					}
 					
-					if ($self->nathost_os->firewall->add_nat_port_forward($protocol, $nat_public_port, $computer_ip_address, $port)) {
+					if ($self->nathost_os->firewall->nat_add_port_forward($protocol, $nat_public_port, $computer_ip_address, $port)) {
 						notify($ERRORS{'OK'}, 0, "NAT port forwarding configured on $nathost_hostname for '$name' connect method: $nathost_public_ip_address:$nat_public_port --> $computer_ip_address:$port ($protocol)");
 					}
 					else {
@@ -4590,16 +4590,21 @@ sub firewall_compare_update {
 		return;
 	}
 	
-	# Make sure the OS module implements get_firewall_configuration and enable_firewall_port subroutine
-	return 1 unless $self->can('enable_firewall_port');
-	return 1 unless $self->can('get_firewall_configuration');
-	
 	my $computer_node_name = $self->data->get_computer_node_name();
 	
 	my $remote_ip = $self->data->get_reservation_remote_ip();
 	if (!$remote_ip) {
 		notify($ERRORS{'WARNING'}, 0, "unable to update firewall on $computer_node_name, remote IP could not be retrieved for reservation");
 		return;
+	}
+	
+	if ($self->can('firewall') && $self->firewall->can('process_inuse')) {
+		return $self->firewall->process_inuse($remote_ip);
+	}
+	
+	# Make sure the OS module implements get_firewall_configuration and enable_firewall_port subroutine
+	unless ($self->can('enable_firewall_port') && $self->can('get_firewall_configuration')) {
+		return 1;
 	}
 	
 	# Retrieve the connect method info
