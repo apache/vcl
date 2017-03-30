@@ -567,9 +567,11 @@ sub reload_image {
 		
 		# OS currently installed on computer may not be the same type as $self->os
 		# Attempt to create a new OS object representing OS currently installed and check if that object implements a 'pre_reload' subroutine
-		my $computer_current_os = $self->create_current_os_object($computer_id, 1);
-		if ($computer_current_os && $computer_current_os->can('pre_reload')) {
-			$computer_current_os->pre_reload();
+		if ($self->os->is_ssh_responding()) {
+			my $computer_current_os = $self->create_current_os_object($computer_id, 1);
+			if ($computer_current_os && $computer_current_os->can('pre_reload')) {
+				$computer_current_os->pre_reload();
+			}
 		}
 		
 		# Update the computer state to reloading
