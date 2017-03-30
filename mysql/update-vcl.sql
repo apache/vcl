@@ -1725,6 +1725,7 @@ INSERT IGNORE INTO `module` (`name`, `prettyname`, `description`, `perlpackage`)
 INSERT IGNORE INTO `module` (`name`, `prettyname`, `description`, `perlpackage`) VALUES ('provisioning_openstack', 'OpenStack Provisioning Module', '', 'VCL::Module::Provisioning::openstack');
 INSERT IGNORE INTO `module` (`name`, `prettyname`, `description`, `perlpackage`) VALUES ('provisioning_one', 'OpenNebula Provisioning Module', '', 'VCL::Module::Provisioning::one');
 INSERT IGNORE INTO `module` (`name`, `prettyname`, `description`, `perlpackage`) VALUES ('os_win10', 'Windows 10.x OS Module', '', 'VCL::Module::OS::Windows::Version_10::10');
+INSERT IGNORE INTO `module` (`name`, `prettyname`, `description`, `perlpackage`) VALUES ('os_win2016', 'Windows Server 2016 OS Module', '', 'VCL::Module::OS::Windows::Version_10::2016');
 
 -- --------------------------------------------------------
 

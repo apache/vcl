@@ -1778,7 +1778,8 @@ INSERT IGNORE INTO `module` (`id`, `name`, `prettyname`, `description`, `perlpac
 (31, 'predictive_level_2', 'Unload/power off after reservation', 'Power off computer. If a virtual machine, it will be also destroyed.', 'VCL::Module::Predictive::Level_2'),
 (32, 'provisioning_openstack', 'OpenStack Provisioning Module', '', 'VCL::Module::Provisioning::openstack'),
 (33, 'provisioning_one', 'OpenNebula Provisioning Module', '', 'VCL::Module::Provisioning::one'),
-(34, 'os_win10', 'Windows 10.x OS Module', '', 'VCL::Module::OS::Windows::Version_10::10');
+(34, 'os_win10', 'Windows 10.x OS Module', '', 'VCL::Module::OS::Windows::Version_10::10'),
+(35, 'os_win2016', 'Windows Server 2016 OS Module', '', 'VCL::Module::OS::Windows::Version_10::2016');
 
 -- 
 -- Dumping data for table `OStype`
