@@ -228,13 +228,16 @@ sub process_reserved {
 		return 0;
 	}
 	
+	my $reservation_id = $self->data->get_reservation_id();
+	my $computer_name = $self->data->get_computer_short_name();
+	
 	# Make sure the post-load steps were done
 	if (!$self->chain_exists('filter', $self->get_post_load_chain_name())) {
 		$self->process_post_load();
 	}
 	
 	my $timestamp = makedatestring();
-	my $computer_name = $self->data->get_computer_short_name();
+	
 	notify($ERRORS{'DEBUG'}, 0, "beginning firewall configuration on $computer_name for reserved state");
 	
 	my $reserved_chain_name = $self->get_reserved_chain_name();
@@ -249,7 +252,7 @@ sub process_reserved {
 			},
 			'match_extensions' => {
 				'comment' => {
-					'comment' => "VCL: jump to rules added during the reserved stage ($timestamp)",
+					'comment' => "VCL: jump to rules added during the reserved stage of reservation $reservation_id ($timestamp)",
 				},
 			},
 		}
@@ -272,7 +275,7 @@ sub process_reserved {
 						'dport' => $port,
 					},
 					'comment' => {
-						'comment' => "VCL: Allow traffic from any IP address to connect method ports during reserved stage ($timestamp)",
+						'comment' => "VCL: Allow traffic from any IP address to connect method ports during reserved stage of reservation $reservation_id ($timestamp)",
 					},
 				},
 			}
@@ -315,13 +318,15 @@ sub process_inuse {
 		return 0;
 	}
 	
+	my $reservation_id = $self->data->get_reservation_id();
+	my $computer_name = $self->data->get_computer_short_name();
+	
 	# Make sure the post-load steps were done
 	if (!$self->chain_exists('filter', $self->get_post_load_chain_name())) {
 		$self->process_post_load();
 	}
 	
 	my $timestamp = makedatestring();
-	my $computer_name = $self->data->get_computer_short_name();
 	
 	my $remote_ip_address = shift || $self->data->get_reservation_remote_ip();
 	if (!$remote_ip_address) {
@@ -344,7 +349,7 @@ sub process_inuse {
 			},
 			'match_extensions' => {
 				'comment' => {
-					'comment' => "VCL: jump to rules added during the inuse stage ($timestamp)",
+					'comment' => "VCL: jump to rules added during the inuse stage of reservation $reservation_id ($timestamp)",
 				},
 			},
 		}
@@ -368,7 +373,7 @@ sub process_inuse {
 						'dport' => $port,
 					},
 					'comment' => {
-						'comment' => "VCL: Allow traffic from $remote_ip_address to $protocol/$port ($timestamp)",
+						'comment' => "VCL: Allow traffic from $remote_ip_address to $protocol/$port during the inuse stage of reservation $reservation_id ($timestamp)",
 					},
 				},
 			}
@@ -508,6 +513,82 @@ sub process_pre_capture {
 	$self->save_configuration();
 	
 	notify($ERRORS{'DEBUG'}, 0, "completed firewall pre-capture configuration on $computer_name");
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 process_cluster
+
+ Parameters  : none
+ Returns     : boolean
+ Description : Performs the iptables firewall configuration to allow all traffic
+               from other computers assigned to a cluster request.
+
+=cut
+
+sub process_cluster {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module::OS::Linux::firewall/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return 0;
+	}
+	
+	my $timestamp = makedatestring();
+	my $request_id = $self->data->get_request_id();
+	my $computer_name = $self->data->get_computer_short_name();
+	notify($ERRORS{'DEBUG'}, 0, "beginning firewall cluster configuration on $computer_name");
+	
+	my $cluster_chain_name = $self->get_cluster_chain_name();
+	
+	my @cluster_computer_public_ip_addresses = $self->data->get_other_cluster_computer_public_ip_addresses();
+	
+	# Delete existing chain or else duplicate rules will be added
+	# This subroutine really should only need to be called once
+	$self->delete_chain('filter', $cluster_chain_name);
+	
+	# Create a chain and add a jump rule to INPUT
+	if (!$self->create_chain('filter', $cluster_chain_name)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to complete firewall cluster configuration on $computer_name, failed to create '$cluster_chain_name' chain");
+		return;
+	}
+	if (!$self->insert_rule('filter', 'INPUT',
+		{
+			'parameters' => {
+				'jump' => $cluster_chain_name,
+			},
+			'match_extensions' => {
+				'comment' => {
+					'comment' => "VCL: jump to rules added during the cluster stage ($timestamp)",
+				},
+			},
+		}
+	)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to complete firewall cluster configuration on $computer_name, failed to create rule in INPUT chain to jump to '$cluster_chain_name' chain");
+		return;
+	}
+	
+	# Allow all traffic from other cluster computer public IP addresses
+	if (!$self->insert_rule('filter', $cluster_chain_name,
+		{
+			'parameters' => {
+				'source' => join(',', @cluster_computer_public_ip_addresses),
+				'jump' => 'ACCEPT',
+			},
+			'match_extensions' => {
+				'comment' => {
+					'comment' => "VCL: Allow all traffic from other computers assigned to cluster request $request_id ($timestamp)",
+				},
+			},
+		}
+	)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to complete firewall cluster configuration on $computer_name, failed to add rule allowing traffic from cluster computer public IP addresses to $cluster_chain_name chain");
+		return;
+	}
+	
+	$self->save_configuration();
+	
+	notify($ERRORS{'DEBUG'}, 0, "completed firewall cluster configuration on $computer_name");
 	return 1;
 }
 
@@ -2034,10 +2115,6 @@ sub save_configuration {
 	return $self->os->create_text_file($file_path, join("\n", @$output));
 }
 
-
-
-
-
 #/////////////////////////////////////////////////////////////////////////////
 
 =head2 get_pre_capture_chain_name
@@ -2120,6 +2197,20 @@ sub get_inuse_chain_name {
 		return 0;
 	}
 	return 'vcl-inuse';
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_cluster_chain_name
+
+ Parameters  : none
+ Returns     : string
+ Description : Returns 'vcl-cluster'.
+
+=cut
+
+sub get_cluster_chain_name {
+	return 'vcl-cluster';
 }
 
 #/////////////////////////////////////////////////////////////////////////////

@@ -2493,6 +2493,90 @@ sub get_user_affiliation_helpaddress {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 is_cluster_request
+
+ Parameters  : none
+ Returns     : boolean
+ Description : Determines if the current request is a cluster request.
+
+=cut
+
+sub is_cluster_request {
+	my $self = shift;
+	if (ref($self) !~ /VCL::/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return 0;
+	}
+	
+	my $reservation_count = $self->get_request_reservation_count(0) || 0;
+	if ($reservation_count > 1) {
+		return 1;
+	}
+	else {
+		return 0;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_other_cluster_computer_public_ip_addresses
+
+ Parameters  : none
+ Returns     : array
+ Description : Retrieves the public IP addresses of all other computers assigned
+               to a cluster request. Returns an empty array if this is not a
+               cluster request.
+
+=cut
+
+sub get_other_cluster_computer_public_ip_addresses {
+	my $self = shift;
+	if (ref($self) !~ /VCL::/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return 0;
+	}
+	
+	# Make sure this is a cluster request
+	if (!$self->is_cluster_request()) {
+		notify($ERRORS{'WARNING'}, 0, "unable to retrieve cluster computer public IP addresses, this is not a cluster request");
+		return ();
+	}
+	
+	my $current_reservation_id = $self->reservation_id;
+	my $current_computer_public_ip_address = $self->get_computer_public_ip_address();
+	my @reservation_ids = $self->get_reservation_ids();
+	
+	my @cluster_computer_public_ip_addresses;
+	for my $cluster_reservation_id (@reservation_ids) {
+		next if $cluster_reservation_id eq $current_reservation_id;
+		
+		# Get a DataStructure object for each reservation
+		my $reservation_data = $self->get_reservation_data($cluster_reservation_id);
+		if (!$reservation_data) {
+			notify($ERRORS{'WARNING'}, 0, "failed to retrieve cluster computer public IP addresses, data could not be retrieved for reservation $cluster_reservation_id");
+			next;
+		}
+		
+		# Get the public IP address
+		my $cluster_computer_public_ip_address = $reservation_data->get_computer_public_ip_address();
+		if (!$cluster_computer_public_ip_address) {
+			notify($ERRORS{'WARNING'}, 0, "failed to retrieve cluster computer public IP address for computer assigned to reservation $cluster_reservation_id");
+			return;
+		}
+		elsif ($cluster_computer_public_ip_address eq $current_computer_public_ip_address) {
+			notify($ERRORS{'WARNING'}, 0, "computer assigned to reservation $cluster_reservation_id has the same public IP address as the computer assigned to this reservation: $current_computer_public_ip_address");
+			next;
+		}
+		
+		push @cluster_computer_public_ip_addresses, $cluster_computer_public_ip_address;
+	}
+	
+	notify($ERRORS{'DEBUG'}, 0, "retrieves public IP addresses of other reservations assigned to this cluster request:\n" . join("\n", @cluster_computer_public_ip_addresses));
+	return sort @cluster_computer_public_ip_addresses;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 1;
 __END__
 

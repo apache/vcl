@@ -4713,6 +4713,11 @@ sub update_cluster {
 		return;
 	}
 	
+	# Call the OS firewall module's process_cluster if available
+	if ($self->can('firewall') && $self->firewall->can('process_cluster')) {
+		return $self->firewall->process_cluster();
+	}
+	
 	# Open the firewall allowing other cluster reservations computers access
 	if (@public_ip_addresses && $self->can('enable_firewall_port')) {
 		my $firewall_scope = join(",", @public_ip_addresses);
