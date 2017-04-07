@@ -139,7 +139,7 @@ sub process_post_load {
 		}
 	}
 	
-	# Create a chain and add a jump rule to INPUT
+	# Create a chain and add a jump rule to INPUT chain
 	$self->create_chain('filter', $post_load_chain_name);
 	if (!$self->insert_rule('filter', 'INPUT',
 		{
@@ -156,7 +156,7 @@ sub process_post_load {
 		notify($ERRORS{'WARNING'}, 0, "failed to complete firewall post-load configuration on $computer_name, failed to create rule in INPUT chain to jump to '$post_load_chain_name' chain");
 		return;
 	}
-	
+
 	# Allow traffic from any of the management node IP addresses
 	if (!$self->insert_rule('filter', $post_load_chain_name,
 		{
@@ -174,7 +174,7 @@ sub process_post_load {
 		notify($ERRORS{'WARNING'}, 0, "failed to complete firewall post-load configuration on $computer_name, failed to add rule allowing traffic from management node IP addresses to $post_load_chain_name chain");
 		return;
 	}
-	
+
 	# Delete other vcl-* chains added by vcld
 	my $table_info = $self->get_table_info();
 	for my $chain_name (keys %$table_info) {
@@ -183,27 +183,29 @@ sub process_post_load {
 		}
 	}
 	
-	# Legacy code may have been used previously for a reservation, before an upgrade
-	# Clean up old connect method rules from the INPUT chain
-	# Delete all rules from INPUT chain matching connect method protocols and ports
-	$self->delete_connect_method_rules();
-	
-	# Delete all TCP/22 rules
-	# Images captured prior to VCL 2.5 are saved with an expicit TCP/22 allow rule from any address
-	$self->delete_rules('filter', 'INPUT',
-		{
-			"match_extensions" => {
-				"tcp" => {
-					"dport" => 22,
+	if (!$self->isa('VCL::Module::OS::Linux::firewall::firewalld')) {
+		# Legacy code may have been used previously for a reservation, before an upgrade
+		# Clean up old connect method rules from the INPUT chain
+		# Delete all rules from INPUT chain matching connect method protocols and ports
+		$self->delete_connect_method_rules();
+		
+		# Delete all TCP/22 rules
+		# Images captured prior to VCL 2.5 are saved with an expicit TCP/22 allow rule from any address
+		$self->delete_rules('filter', 'INPUT',
+			{
+				"match_extensions" => {
+					"tcp" => {
+						"dport" => 22,
+					},
 				},
-			},
-			"parameters" => {
-				"jump" => "ACCEPT",
-			},
-		}
-	);
-	
-	$self->save_configuration();
+				"parameters" => {
+					"jump" => "ACCEPT",
+				},
+			}
+		);
+		
+		$self->save_configuration();
+	}
 	
 	notify($ERRORS{'DEBUG'}, 0, "completed firewall post-load configuration on $computer_name");
 	return 1;
@@ -243,7 +245,7 @@ sub process_reserved {
 	my $reserved_chain_name = $self->get_reserved_chain_name();
 	
 	# Delete existing chain if one exists to prevent inconsistent results
-	# Create a chain and add a jump rule to INPUT
+	# Create a chain and add a jump rule to INPUT chain
 	$self->create_chain('filter', $reserved_chain_name);
 	if (!$self->insert_rule('filter', 'INPUT',
 		{
@@ -340,7 +342,7 @@ sub process_inuse {
 	my $reserved_chain_name = $self->get_reserved_chain_name();
 	
 	# Delete existing chain if one exists to prevent inconsistent results
-	# Create a chain and add a jump rule to INPUT
+	# Create a chain and add a jump rule to INPUT chain
 	$self->create_chain('filter', $inuse_chain_name);
 	if (!$self->insert_rule('filter', 'INPUT',
 		{
@@ -442,7 +444,7 @@ sub process_pre_capture {
 	
 	my $pre_capture_chain_name = $self->get_pre_capture_chain_name();
 	
-	# Create a chain and add a jump rule to INPUT
+	# Create a chain and add a jump rule to INPUT chain
 	if (!$self->create_chain('filter', $pre_capture_chain_name)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to complete firewall pre-capture configuration on $computer_name, failed to create '$pre_capture_chain_name' chain");
 		return;
@@ -484,23 +486,25 @@ sub process_pre_capture {
 		return;
 	}
 	
-	# Delete all rules explicitly defined for any of the management node IP addresses
-	# Legacy firewall code would add rules directly to the filter/INPUT table for each management node address
-	my @mn_ip_addresses = $self->mn_os->get_ip_addresses();
-	for my $mn_ip_address (@mn_ip_addresses) {
-		$self->delete_rules('filter', 'INPUT',
-			{
-				'parameters' => {
-					'source' => $mn_ip_address,
-				},
-			}
-		);
+	if (!$self->isa('VCL::Module::OS::Linux::firewall::firewalld')) {
+		# Delete all rules explicitly defined for any of the management node IP addresses
+		# Legacy firewall code would add rules directly to the filter/INPUT table for each management node address
+		my @mn_ip_addresses = $self->mn_os->get_ip_addresses();
+		for my $mn_ip_address (@mn_ip_addresses) {
+			$self->delete_rules('filter', 'INPUT',
+				{
+					'parameters' => {
+						'source' => $mn_ip_address,
+					},
+				}
+			);
+		}
+		
+		# Legacy code may have been used previously for a reservation, before an upgrade
+		# Clean up old connect method rules from the INPUT chain
+		# Delete all rules from INPUT chain matching connect method protocols and ports
+		$self->delete_connect_method_rules();
 	}
-	
-	# Legacy code may have been used previously for a reservation, before an upgrade
-	# Clean up old connect method rules from the INPUT chain
-	# Delete all rules from INPUT chain matching connect method protocols and ports
-	$self->delete_connect_method_rules();
 	
 	# Delete other vcl-* chains added by vcld
 	my $table_info = $self->get_table_info();
@@ -547,7 +551,7 @@ sub process_cluster {
 	# This subroutine really should only need to be called once
 	$self->delete_chain('filter', $cluster_chain_name);
 	
-	# Create a chain and add a jump rule to INPUT
+	# Create a chain and add a jump rule to INPUT chain
 	if (!$self->create_chain('filter', $cluster_chain_name)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to complete firewall cluster configuration on $computer_name, failed to create '$cluster_chain_name' chain");
 		return;
@@ -720,51 +724,39 @@ sub insert_rule {
 		return 1;
 	}
 	
-	my $command = "/sbin/iptables -t $table_name -I $chain_name";
-	
-	# Add the parameters to the command
-	for my $parameter (sort keys %{$rule_specification_hashref->{parameters}}) {
-		my $value = $rule_specification_hashref->{parameters}{$parameter};
-		
-		if ($parameter =~ /^\!/) {
-			$command .= " !";
-			$parameter =~ s/^\!//;
-		}
-		$command .= " --$parameter $value";
-	}
-	
-	# Add the match extension to the command
-	for my $match_extension (sort keys %{$rule_specification_hashref->{match_extensions}}) {
-		$command .= " --match $match_extension";
-		for my $option (sort keys %{$rule_specification_hashref->{match_extensions}{$match_extension}}) {
-			my $value = $rule_specification_hashref->{match_extensions}{$match_extension}{$option};
-			
-			if ($option =~ /(comment)/) {
-				$value = "\"$value\"";
-			}
-			
-			if ($option =~ /^\!/) {
-				$command .= " !";
-				$option =~ s/^\!//;
-			}
-			
-			$command .= " ";
-			$command .= "--$option " if $option;
-			$command .= $value;
-		}
-	}
-	
-	# Add the target extensions to the command
-	for my $target_extension (sort keys %{$rule_specification_hashref->{target_extensions}}) {
-		$command .= " --jump $target_extension";
-		for my $option (sort keys %{$rule_specification_hashref->{target_extensions}{$target_extension}}) {
-			my $value = $rule_specification_hashref->{target_extensions}{$target_extension}{$option};
-			$command .= " --$option " if $option;
-			$command .= $value;
-		}
+	# Convert the specification into valid iptables command arguments
+	my $argument_string = $self->get_insert_rule_argument_string($rule_specification_hashref);
+	if (!$argument_string) {
+		notify($ERRORS{'WARNING'}, 0, "failed to add iptables rule to $chain_name chain in $table_name table on $computer_name, rule specification hash reference could not be converted into an iptables command argument string:\n" . format_data($rule_specification_hashref));
+		return;
 	}
 	
 	my $semaphore = $self->get_iptables_semaphore();
+	return $self->_insert_rule($table_name, $chain_name, $argument_string);
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 _insert_rule
+
+ Parameters  : $table_name, $chain_name, $argument_string
+ Returns     : boolean
+ Description : Executes the command to insert a rule. This is a helper
+               subroutine and should only be called by insert_rule.
+
+=cut
+
+sub _insert_rule {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return 0;
+	}
+	
+	my ($table_name, $chain_name, $argument_string) = @_;
+	my $computer_name = $self->data->get_computer_hostname();
+	
+	my $command = "/sbin/iptables -t $table_name -I $chain_name $argument_string";
 	my ($exit_status, $output) = $self->os->execute($command, 0);
 	if (!defined($output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to execute command on $computer_name: $command");
@@ -778,6 +770,85 @@ sub insert_rule {
 		notify($ERRORS{'OK'}, 0, "added iptables rule to $chain_name chain in $table_name table on $computer_name, command: $command");
 		return 1;
 	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_insert_rule_argument_string
+
+ Parameters  : $rule_specification_hashref
+ Returns     : string
+ Description : 
+
+=cut
+
+sub get_insert_rule_argument_string {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return 0;
+	}
+	
+	my ($rule_specification_hashref) = @_;
+	if (!$rule_specification_hashref) {
+		notify($ERRORS{'WARNING'}, 0, "rule specification hash reference argument was not specified");
+		return;
+	}
+	elsif (!ref($rule_specification_hashref) || ref($rule_specification_hashref) ne 'HASH') {
+		notify($ERRORS{'WARNING'}, 0, "rule specification argument is not a hash reference:\n" . format_data($rule_specification_hashref));
+		return;
+	}
+	elsif (!scalar(keys(%$rule_specification_hashref))) {
+		notify($ERRORS{'WARNING'}, 0, "rule specification argument does not contain any keys");
+		return;
+	}
+	
+	my $argument_string;
+	
+	# Add the parameters to the arguments string
+	for my $parameter (sort keys %{$rule_specification_hashref->{parameters}}) {
+		my $value = $rule_specification_hashref->{parameters}{$parameter};
+		
+		if ($parameter =~ /^\!/) {
+			$argument_string .= "! ";
+			$parameter =~ s/^\!//;
+		}
+		$argument_string .= "--$parameter $value ";
+	}
+	
+	# Add the match extension to the arguments string
+	for my $match_extension (sort keys %{$rule_specification_hashref->{match_extensions}}) {
+		$argument_string .= "--match $match_extension ";
+		for my $option (sort keys %{$rule_specification_hashref->{match_extensions}{$match_extension}}) {
+			my $value = $rule_specification_hashref->{match_extensions}{$match_extension}{$option};
+			
+			if ($option =~ /(comment)/) {
+				$value = "\"$value\"";
+			}
+			
+			if ($option =~ /^\!/) {
+				$argument_string .= "! ";
+				$option =~ s/^\!//;
+			}
+			
+			$argument_string .= "--$option " if $option;
+			$argument_string .= "$value ";
+		}
+	}
+	
+	# Add the target extensions to the arguments string
+	for my $target_extension (sort keys %{$rule_specification_hashref->{target_extensions}}) {
+		$argument_string .= "--jump $target_extension ";
+		for my $option (sort keys %{$rule_specification_hashref->{target_extensions}{$target_extension}}) {
+			my $value = $rule_specification_hashref->{target_extensions}{$target_extension}{$option};
+			$argument_string .= "--$option " if $option;
+			$argument_string .= "$value ";
+		}
+	}
+	
+	$argument_string =~ s/\s+$//g;
+	
+	return $argument_string;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -865,7 +936,7 @@ sub get_matching_rules {
 		notify($ERRORS{'WARNING'}, 0, "failed to determine if any rules match on $computer_name, attempt to collapse the rule specification hash reference argument produced a result with no keys:\n" . format_data($rule_specification_hashref));
 		return;
 	}
-	notify($ERRORS{'DEBUG'}, 0, "checking if $chain_name chain in $table_name table on $computer_name has any rules matching specifications:\n" . format_data($collapsed_specification));
+	#notify($ERRORS{'DEBUG'}, 0, "checking if $chain_name chain in $table_name table on $computer_name has any rules matching specifications:\n" . format_data($collapsed_specification));
 	
 	# Some iptables options may take multiple forms
 	# Attempt to try all forms
@@ -925,7 +996,7 @@ sub get_matching_rules {
 	}
 	
 	my $matching_rule_count = scalar(@matching_rules);
-	notify($ERRORS{'DEBUG'}, 0, "found $matching_rule_count matching rule" . ($matching_rule_count == 1 ? '' : 's'));
+	#notify($ERRORS{'DEBUG'}, 0, "found $matching_rule_count matching rule" . ($matching_rule_count == 1 ? '' : 's')) if $matching_rule_count;
 	return @matching_rules;
 }
 
@@ -1000,21 +1071,46 @@ sub delete_rules {
 		
 		notify($ERRORS{'DEBUG'}, 0, "attempting to delete rule on $computer_name: $rule_specification_string");
 		my $semaphore = $self->get_iptables_semaphore();
-		my $command = "/sbin/iptables --delete $chain_name -t $table_name $rule_specification_string";
-		my ($exit_status, $output) = $self->os->execute($command, 0);
-		if (!defined($output)) {
-			notify($ERRORS{'WARNING'}, 0, "failed to execute command on $computer_name: $command");
-			return;
-		}
-		elsif ($exit_status ne '0') {
-			notify($ERRORS{'WARNING'}, 0, "failed to delete rule on $computer_name, exit status: $exit_status, command:\n$command\noutput:\n" . join("\n", @$output));
-			return;
-		}
-		else {
-			notify($ERRORS{'OK'}, 0, "deleted rule on $computer_name with specification: '$rule_specification_string'");
-		}
+		$self->_delete_rule($table_name, $chain_name, $rule_specification_string) || return;
 	}
 	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 _delete_rule
+
+ Parameters  : $table_name, $chain_name, $rule_specification_string
+ Returns     : boolean
+ Description : Executes the command to delete a rule. This is a helper
+               subroutine and should only be called by delete_rules.
+
+=cut
+
+sub _delete_rule {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return 0;
+	}
+	
+	my ($table_name, $chain_name, $rule_specification_string) = @_;
+	my $computer_name = $self->data->get_computer_hostname();
+	
+	my $command = "/sbin/iptables --delete $chain_name -t $table_name $rule_specification_string";
+	my ($exit_status, $output) = $self->os->execute($command, 0);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command on $computer_name: $command");
+		return;
+	}
+	elsif ($exit_status ne '0') {
+		notify($ERRORS{'WARNING'}, 0, "failed to delete rule on $computer_name, exit status: $exit_status, command:\n$command\noutput:\n" . join("\n", @$output));
+		return;
+	}
+	else {
+		notify($ERRORS{'OK'}, 0, "deleted rule on $computer_name with specification: '$rule_specification_string'");
+		return 1;
+	}
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -1214,7 +1310,7 @@ sub delete_chain_references {
 	for my $referencing_chain_name (keys %$table_info) {
 		for my $rule (@{$table_info->{$referencing_chain_name}{rules}}) {
 			my $rule_specification_string = $rule->{rule_specification};
-			if ($rule_specification_string =~ /-j $chain_name(\s|$)/) {
+			if ($rule_specification_string =~ /(-j|--jump) $chain_name(\s|$)/) {
 				notify($ERRORS{'DEBUG'}, 0, "rule in '$table_name' table references '$chain_name' chain, referencing chain: $referencing_chain_name, rule specification: $rule_specification_string");
 				if (!$self->delete_rules($table_name, $referencing_chain_name, {'rule_specification' => $rule_specification_string})) {
 					return;
@@ -1325,13 +1421,7 @@ sub flush_chain {
 	
 	my $computer_name = $self->data->get_computer_hostname();
 	
-	my $command = "/sbin/iptables --flush";
-	my $chain_text = 'all chains';
-	if ($chain_name ne '*') {
-		$chain_text = "'$chain_name' chain";
-		$command .= " $chain_name";
-	}
-	$command .= " --table $table_name";
+	my $command = "/sbin/iptables --flush $chain_name --table $table_name";
 	
 	my $semaphore = $self->get_iptables_semaphore();
 	my ($exit_status, $output) = $self->os->execute($command, 0);
@@ -1340,11 +1430,11 @@ sub flush_chain {
 		return;
 	}
 	elsif ($exit_status ne '0') {
-		notify($ERRORS{'WARNING'}, 0, "failed to flush $chain_text in '$table_name' table on $computer_name, exit status: $exit_status, command:\n$command\noutput:\n" . join("\n", @$output));
+		notify($ERRORS{'WARNING'}, 0, "failed to flush '$chain_name' chain in '$table_name' table on $computer_name, exit status: $exit_status, command:\n$command\noutput:\n" . join("\n", @$output));
 		return 0;
 	}
 	else {
-		notify($ERRORS{'OK'}, 0, "flushed $chain_text in '$table_name' table on $computer_name");
+		notify($ERRORS{'OK'}, 0, "flushed '$chain_name' chain in '$table_name' table on $computer_name");
 		return 1;
 	}
 }
@@ -1353,7 +1443,7 @@ sub flush_chain {
 
 =head2 get_table_info
 
- Parameters  : $table_name (optional)
+ Parameters  : $table_name, $no_cache
  Returns     : boolean
  Description : Retrieves the configuration of an iptables table and constructs a
                hash reference. Information from the 'filter' table is returned
@@ -1409,7 +1499,13 @@ sub get_table_info {
 		return 0;
 	}
 	
-	my $table_name = shift || 'filter';
+	my ($table_name, $no_cache) = @_;
+	
+	$table_name = 'filter' unless $table_name;
+	
+	if (!$no_cache && defined($self->{table_info}) && defined($self->{table_info}{$table_name})) {
+		return $self->{table_info}{$table_name};
+	}
 	
 	$ENV{iptables_get_table_info_count}{$table_name}++;
 	
@@ -1426,9 +1522,44 @@ sub get_table_info {
 		notify($ERRORS{'WARNING'}, 0, "failed to list rules from '$table_name' table on $computer_name, exit status: $exit_status, command:\n$command\noutput:\n" . join("\n", @$output));
 		return 0;
 	}
-
+	
+	my @lines = @$output;
+	
+	if ($self->can('get_all_direct_rules')) {
+		# Convert:
+		#    ipv4 filter vcl-pre_capture 0 --jump ACCEPT --protocol tcp --match comment --comment 'VCL: ...' --match tcp --destination-port 22
+		# To:
+		#    -A vcl-pre_capture -p tcp -m comment --comment "VCL: ..." -m tcp --dport 22 -j ACCEPT
+		DIRECT_RULE: for my $direct_rule ($self->get_all_direct_rules()) {
+			my ($rule_protocol, $rule_table, $rule_chain, $rule_priority, $rule_specification) = $direct_rule =~
+				/^
+				(\S+)\s+
+				(\S+)\s+
+				(\S+)\s+
+				(\d+)\s+
+				(\S.*)
+				$/x
+			;
+			if (!defined($rule_specification)) {
+				notify($ERRORS{'WARNING'}, 0, "failed to parse firewalld direct rule: $direct_rule");
+				next DIRECT_RULE;
+			}
+			elsif ($rule_table ne $table_name) {
+				notify($ERRORS{'DEBUG'}, 0, "ignoring rule, table does not match '$table_name': $direct_rule");
+				next DIRECT_RULE;
+			}
+			
+			my $converted_rule = "-A $rule_chain $rule_specification";
+			notify($ERRORS{'DEBUG'}, 0, "converted iptables direct rule to iptables format:\n" .
+				"direct rule     : $direct_rule\n" .
+				"iptables format : $converted_rule"
+			);
+			push @lines, $converted_rule;
+		}
+	}
+	
 	my $table_info = {};
-	LINE: for my $line (@$output) {
+	LINE: for my $line (@lines) {
 		# Split the rule, samples:
 		#    -P OUTPUT ACCEPT
 		#    -N vcld-3115
@@ -1528,12 +1659,26 @@ sub get_table_info {
 				$rule->{parameters}{$target_parameter} = $target;
 				
 				my $target_extension_option_name;
-				my @target_extension_option_sections = split(/\s+/, $target_extension_option_string);
+				
+				# Need to split line not just by spaces, but also find sections enclosed in quotes:
+				#    -j REJECT --reject-with icmp-host-prohibited
+				#    -j LOG --log-prefix "IN_public_DROP: "
+				my @target_extension_option_sections = $target_extension_option_string =~
+				/
+					(
+						['"][^'"]*['"]
+						|
+						[^\s]+
+					)
+				/gx;
+				
 				TARGET_OPTION_SECTION: for my $target_extension_option_section (@target_extension_option_sections) {
 					# Stop parsing if the start of a match extension specification if found
 					if ($target_extension_option_section =~ /^(-m|--match)$/) {
 						last TARGET_OPTION_SECTION;
 					}
+					
+					
 					
 					# Check if this is the beginning of a target extension option
 					if ($target_extension_option_section =~ /^[-]+(\w[\w-]+)/) {
@@ -1544,8 +1689,9 @@ sub get_table_info {
 					elsif (!$target_extension_option_name) {
 						# If here, the section should be a target extension option value
 						notify($ERRORS{'WARNING'}, 0, "failed to parse iptables rule, target extension option name was not detected before this section: '$target_extension_option_section'\n" .
-							"iptables command: $line\n" .
-							"preceeding target parameter: $target_parameter --> $target"
+							"output line: $line\n" .
+							"preceeding target parameter: $target_parameter\n" .
+							"target value: $target"
 						);
 						next LINE;
 					}
@@ -1572,8 +1718,20 @@ sub get_table_info {
 			
 			
 			# The only text remaining in $rule_specification_string should be match extension information
-			# Split the remaining string by spaces
-			my @match_extension_sections = split(/\s+/, $rule_specification_string);
+			
+			# --match comment--comment 'my comment'
+			# --match tcp--destination-port
+			$rule_specification_string =~ s/(--match [^\s-]+)--/$1 --/g;
+			
+			# Split the remaining string by spaces or sections enclosed in quotes
+			my @match_extension_sections = $rule_specification_string =~
+				/
+					(
+						['"][^'"]*['"]
+						|
+						[^\s]+
+					)
+				/gx;
 			
 			# Match extensions will be in the form:
 			# -m,--match <module> [!] -<x>,--<option> <value> [[!] -<x>,--<option> <value>...]
@@ -1581,6 +1739,8 @@ sub get_table_info {
 			my $match_extension_option;
 			my $match_extension_option_inverted = 0;
 			my $comment;
+			
+			
 			
 			MATCH_EXTENSION_SECTION: for my $match_extension_section (@match_extension_sections) {
 				next MATCH_EXTENSION_SECTION if !$match_extension_section;
@@ -1660,6 +1820,7 @@ sub get_table_info {
 		}
 	}
 	
+	$self->{table_info}{$table_name} = $table_info;
 	#notify($ERRORS{'DEBUG'}, 0, "retrieved rules from iptables $table_name table from $computer_name:\n" . format_data($table_info));
 	return $table_info;
 }
