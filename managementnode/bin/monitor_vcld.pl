@@ -60,9 +60,13 @@ use warnings;
 use diagnostics;
 no warnings 'redefine';
 
+use English -no_match_vars;
 use Getopt::Long;
 
 ###############################################################################
+
+our $LOGFILE = '/var/log/monitor_vcld.log';
+our $DAEMON_MODE = 0;
 
 INIT {
 	Getopt::Long::Configure('pass_through');
@@ -76,17 +80,19 @@ INIT {
 use VCL::utils;
 use VCL::Module;
 
-$DAEMON_MODE = 0;
-
+#..............................................................................
+# Get the command line options
 my $options = {};
 GetOptions($options, 'service-name=s');
 GetOptions($options, 'warning-seconds=s');
 GetOptions($options, 'critical-seconds=s');
 
+# Set default option values if not specified on the command line
 my $vcld_service_name = defined($options->{'service-name'}) ? $options->{'service-name'} : 'vcld';
 my $lastcheckin_warning_seconds = defined($options->{'warning-seconds'}) ? $options->{'warning-seconds'} : 60;
 my $lastcheckin_critical_seconds = defined($options->{'critical-seconds'}) ? $options->{'critical-seconds'} : 180;
 
+# Verify explicit option values
 if ($lastcheckin_warning_seconds !~ /^\d+$/) {
 	print_warning("--warning-seconds argument is not an integer: $lastcheckin_warning_seconds");
 	help();
@@ -100,6 +106,7 @@ elsif ($lastcheckin_warning_seconds > $lastcheckin_critical_seconds) {
 	help();
 }
 
+#..............................................................................
 # Create a management node OS object
 my $mn_os_perl_package = 'VCL::Module::OS::Linux::ManagementNode';
 my $mn_os = VCL::Module::create_object($mn_os_perl_package);
@@ -114,8 +121,9 @@ $mn_os->set_mn_os($mn_os);
 
 my $management_node_name = $mn_os->data->get_management_node_short_name();
 
-print_message('[' . makedatestring() . "] checking $vcld_service_name service on $management_node_name, last checkin thresholds, warning: $lastcheckin_warning_seconds seconds, critical: $lastcheckin_critical_seconds");
+#..............................................................................
 
+print_message("checking $vcld_service_name service on $management_node_name, last checkin thresholds, warning: $lastcheckin_warning_seconds seconds, critical: $lastcheckin_critical_seconds");
 
 # Check if the vcld service exists
 if (!$mn_os->service_exists($vcld_service_name)) {
@@ -130,7 +138,7 @@ if (!defined($service_status)) {
 	exit 1;
 }
 elsif ($service_status) {
-	print_ok("$vcld_service_name service is running on $management_node_name");
+	print_message("$vcld_service_name service is running on $management_node_name");
 }
 else {
 	print_warning("$vcld_service_name service is not running on $management_node_name");
@@ -167,10 +175,9 @@ my $lastcheckin_seconds_ago = ($current_epoch_seconds - $lastcheckin_epoch_secon
 
 if ($lastcheckin_seconds_ago < 0) {
 	print_warning("$management_node_name last checkin time is in the future: $lastcheckin_timestamp, exiting");
-	exit 1;
 }
 elsif ($lastcheckin_seconds_ago < $lastcheckin_warning_seconds) {
-	print_ok("$management_node_name last checked in $lastcheckin_seconds_ago seconds ago at $lastcheckin_timestamp");
+	print_message("$management_node_name last checked in $lastcheckin_seconds_ago seconds ago at $lastcheckin_timestamp");
 }
 elsif ($lastcheckin_seconds_ago >= $lastcheckin_critical_seconds) {
 	my $critical_message = "critical threshold exceeded, $management_node_name last checked in $lastcheckin_seconds_ago seconds ago at $lastcheckin_timestamp";
@@ -186,8 +193,26 @@ else {
 	print_critical("last checkin warning threshold exceeded, $management_node_name last checked in $lastcheckin_seconds_ago seconds ago at $lastcheckin_timestamp");
 }
 
-print_message('[' . makedatestring() . "] done");
+print_message('done');
+
 exit 0;
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_message_prefix
+
+ Parameters  : none
+ Returns     : string
+ Description : 
+
+=cut
+
+sub get_message_prefix {
+	my $calling_line = (caller(1))[2];
+	
+	# 2017-04-08 06:20:03|13772|||vcld|monitor_vcld.pl:print_message|222|vcld service is running on imgr05
+	return makedatestring() . "|$PID||||monitor_vcld.pl:main|$calling_line|";
+}
 
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -201,24 +226,7 @@ exit 0;
 
 sub print_message {
 	my ($message) = @_;
-	print "$message\n";
-	VCL::utils::notify($ERRORS{'DEBUG'}, 0, $message);
-	return 1;
-}
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 print_ok
-
- Parameters  : $message
- Returns     : 1
- Description : 
-
-=cut
-
-sub print_ok {
-	my ($message) = @_;
-	print "OK: $message\n";
+	print get_message_prefix() . "$message\n";
 	VCL::utils::notify($ERRORS{'OK'}, 0, $message);
 	return 1;
 }
@@ -235,7 +243,7 @@ sub print_ok {
 
 sub print_warning {
 	my ($message) = @_;
-	print "WARNING: $message\n";
+	print get_message_prefix() . "WARNING: $message\n";
 	VCL::utils::notify($ERRORS{'WARNING'}, 0, $message);
 	return 1;
 }
@@ -252,7 +260,7 @@ sub print_warning {
 
 sub print_critical {
 	my ($message) = @_;
-	print "CRITICAL: $message\n";
+	print get_message_prefix() . "CRITICAL: $message\n";
 	VCL::utils::notify($ERRORS{'CRITICAL'}, 0, $message);
 	return 1;
 }
@@ -276,17 +284,25 @@ Checks the VCL management node daemon service. Starts the service if it is not
 running. Restarts the service if number of seconds since the management node
 last checked into the VCL database is greater than the critical threashold.
 
-  --service-name=NAME      name of the service to check (default: vcld)
+  --service-name=NAME      name of the service to check
+                          (default: vcld)
   --warning-seconds=NUM    a notice is sent to the VCL system administrators if
                            the management node last checked into the VCL
-                           database more than NUM seconds ago (default: 60)
+                           database more than NUM seconds ago
+                           (default: 60 seconds)
   --critical-seconds=NUM   the service is restarted and a warning message is
                            sent to the VCL system administrators if the
                            management node last checked into the VCL database
-                           more than NUM seconds ago (default: 180)
+                           more than NUM seconds ago
+                           (default: 180 seconds)
+   --conf=<path>           specify monitory_vcld.pl configuration file
+                           (default: /etc/vcl/vcld.conf)
+   --log=<path>            specify vcld log file
+                           (default: /var/log/monitory_vcld.log)
+   --verbose               generate verbose log output
 
 EOF
-	
+
 	exit 1;
 }
 
