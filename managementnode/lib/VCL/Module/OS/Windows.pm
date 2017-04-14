@@ -828,6 +828,37 @@ sub post_load {
 
 =item *
 
+ Update the public IP address
+
+=cut
+
+	if (!$self->update_public_ip_address()) {
+		my $public_ip_configuration = $self->data->get_management_node_public_ip_configuration();
+		if ($public_ip_configuration =~ /dhcp/i) {
+			notify($ERRORS{'WARNING'}, 0, "computer should have received a public IP address from DHCP but the address could not be determined, attempting to execute 'ipconfig /renew'");
+			
+			if (!$self->ipconfig_renew()) {
+				notify($ERRORS{'WARNING'}, 0, "public IP address from DHCP but the address could not be determined, 'ipconfig /renew' failed");
+				return;
+			}
+			
+			# Try to update the public IP address again
+			if (!$self->update_public_ip_address()) {
+				notify($ERRORS{'WARNING'}, 0, "computer should have received a public IP address from DHCP but the address could not be determined on second attempt after executing 'ipconfig /renew'");
+				return;
+			}
+			else {
+				notify($ERRORS{'DEBUG'}, 0, "computer initially failed to obtain a public IP address from DHCP, executed 'ipconfig /renew', public IP address could then be determined");
+			}
+		}
+		else { 
+			notify($ERRORS{'WARNING'}, 0, "management node failed to set a static public IP address on the computer");
+			return;
+		}
+	}
+
+=item *
+
  Set persistent public default route
 
 =cut
@@ -835,17 +866,7 @@ sub post_load {
 	if (!$self->set_public_default_route()) {
 		notify($ERRORS{'WARNING'}, 0, "unable to set persistent public default route");
 	}
-	
-=item *
 
- Update the public IP address
-
-=cut
-
-	if (!$self->update_public_ip_address()) {
-		notify($ERRORS{'WARNING'}, 0, "unable to retrieve or set the public IP address");
-	}
-	
 =item *
 
  Configure and synchronize time
@@ -6277,7 +6298,7 @@ sub is_dhcp_enabled {
 
 =head2 ipconfig_renew
 
- Parameters  : $interface_name, $release_first (optional)
+ Parameters  : 
  Returns     :
  Description : 
 
@@ -6297,51 +6318,29 @@ sub ipconfig_renew {
 	delete $self->{public_interface_name};
 	delete $self->{private_interface_name};
 	
-	my $interface_name = shift;
-	if (!$interface_name) {
-		notify($ERRORS{'WARNING'}, 0, "interface name argument was not supplied");
-		return;
-	}
-	elsif ($interface_name =~ /^public$/i) {
-		$interface_name = $self->get_public_interface_name() || return;
-	}
-	elsif ($interface_name =~ /^private$/i) {
-		$interface_name = $self->get_private_interface_name() || return;
-	}
-	
-	# Delete cached network configuration information again
-	delete $self->{network_configuration};
-	delete $self->{public_interface_name};
-	delete $self->{private_interface_name};
-	
-	my $release_first = shift;
-	
 	# Assemble the ipconfig command, include the interface name if argument was specified
-	my $ipconfig_command;
-	if ($release_first) {
-		$ipconfig_command = "$system32_path/ipconfig.exe /release \"$interface_name\" ; ";
-	}
-	$ipconfig_command .= "$system32_path/ipconfig.exe /renew \"$interface_name\"";
+	my $ipconfig_command = "$system32_path/ipconfig.exe /renew";
+	notify($ERRORS{'OK'}, 0, "attempting to renew IP configuration");
+	my ($ipconfig_status, $ipconfig_output) = $self->execute({
+		command => $ipconfig_command,
+		timeout => 65,
+		max_attempts => 1,
+		ignore_error => 1
+	});
 	
-		# Run ipconfig
-		my ($ipconfig_status, $ipconfig_output) = $self->execute({command => $ipconfig_command, timeout => 65, ignore_error => 1});
-		if (!defined($ipconfig_output)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to execute command to renew IP configuration for interface '$interface_name'");
+	if (!defined($ipconfig_output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to renew IP configuration");
 		return;
-		}
-		elsif (grep(/error occurred/i, @$ipconfig_output)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to renew IP configuration for interface '$interface_name', exit status: $ipconfig_status, output:\n" . join("\n", @$ipconfig_output));
-			return;
-		}
-		elsif ($ipconfig_status ne '0' || grep(/error occurred/i, @$ipconfig_output)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to renew IP configuration for interface '$interface_name', exit status: $ipconfig_status, command: '$ipconfig_command', output:\n" . join("\n", @$ipconfig_output));
-		return;
-		}
-		else {
-			notify($ERRORS{'OK'}, 0, "renewed IP configuration for interface '$interface_name', output:\n" . join("\n", @$ipconfig_output));
-			return 1;
-		}
 	}
+	elsif ($ipconfig_status ne 0) {
+		notify($ERRORS{'WARNING'}, 0, "failed to renew IP configuration, exit status: $ipconfig_status, output:\n" . join("\n", @$ipconfig_output));
+		return;
+	}
+	else {
+		notify($ERRORS{'OK'}, 0, "renewed IP configuration, output:\n" . join("\n", @$ipconfig_output));
+		return 1;
+	}
+}
 	
 #/////////////////////////////////////////////////////////////////////////////
 

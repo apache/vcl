@@ -2030,8 +2030,12 @@ sub wait_for_response {
 	my $initial_delay_seconds;
 	my $ssh_response_timeout_seconds;
 	
-	if ($self->data->get_imagemeta_sysprep()) {
+	if ($self->data->get_computer_type() eq 'virtualmachine') {
 		$initial_delay_seconds = 5;
+		$ssh_response_timeout_seconds = 300; 
+	}
+	elsif ($self->data->get_imagemeta_sysprep()) {
+		$initial_delay_seconds = 60;
 		$ssh_response_timeout_seconds = 1800; 
 	}
 	else {
@@ -2039,8 +2043,23 @@ sub wait_for_response {
 		$ssh_response_timeout_seconds = 600; 
 	}
 	
-	# Call parent class's wait_for_response subroutine
-	return $self->SUPER::wait_for_response($initial_delay_seconds, $ssh_response_timeout_seconds);
+	if ($self->SUPER::wait_for_response($initial_delay_seconds, $ssh_response_timeout_seconds, 5)) {
+		return 1;
+	}
+	
+	if ($self->provisioner->can('power_reset')) {
+		if ($self->provisioner->power_reset()) {
+			return $self->SUPER::wait_for_response(15, 600, 5);
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "computer never responded and provisioning module failed to perform a power reset, returning false");
+			return;
+		}
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "computer never responded and provisioning does not implement a power_reset subroutine, returning false");
+		return;
+	}
 }
 
 #/////////////////////////////////////////////////////////////////////////////
