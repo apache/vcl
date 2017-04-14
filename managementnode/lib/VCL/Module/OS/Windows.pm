@@ -3588,26 +3588,22 @@ sub create_startup_scheduled_task {
 	# Run schtasks.exe to add the task
 	# Occasionally see this error even though it schtasks.exe returns exit status 0:
 	# WARNING: The Scheduled task "System Startup Script" has been created, but may not run because the account information could not be set.
-	my $create_task_command = "$system32_path/schtasks.exe /Create /RU \"$task_user\" /RP \"$task_password\" /SC ONSTART /TN \"$task_name\" /TR \"$task_command\"";
-	my ($create_task_exit_status, $create_task_output) = $self->execute($create_task_command);
-	if (defined($create_task_output) && grep(/could not be set/i, @{$create_task_output})) {
-		notify($ERRORS{'WARNING'}, 0, "created scheduled task '$task_name' on $computer_node_name but error occurred: " . join("\n", @{$create_task_output}));
-		return 0;
-	}
-	elsif (defined($create_task_exit_status) && $create_task_exit_status == 0) {
-		notify($ERRORS{'OK'}, 0, "created scheduled task '$task_name' on $computer_node_name");
-	}
-	elsif (defined($create_task_exit_status)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to create scheduled task '$task_name' on $computer_node_name, exit status: $create_task_exit_status, output:\n@{$create_task_output}");
-		return 0;
-	}
-	else {
+	my $command = "$system32_path/schtasks.exe /Create /RU \"$task_user\" /RP \"$task_password\" /SC ONSTART /TN \"$task_name\" /TR \"$task_command\"";
+	my ($exit_status, $output) = $self->execute($command);
+	if (!defined($output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to execute ssh command created scheduled task '$task_name' on $computer_node_name");
 		return;
 	}
-
+	elsif ($exit_status != 0) {
+		notify($ERRORS{'WARNING'}, 0, "failed to create scheduled task '$task_name' on $computer_node_name, exit status: $exit_status, command: '$command', output:\n@$output");
+		return 0;
+	}
+	else {
+		notify($ERRORS{'OK'}, 0, "created scheduled task '$task_name' on $computer_node_name");
+	}
+	
 	return 1;
-} ## end sub create_startup_scheduled_task
+}
 
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -3632,14 +3628,25 @@ sub create_update_cygwin_startup_scheduled_task {
 		return 1;
 	}
 	
-	my $root_password = $self->{root_password};
-	if (!$root_password) {
-		$root_password = getpw();
-		$self->{root_password} = $root_password;
-		if (!$self->set_password('root', $root_password)) {
-			notify($ERRORS{'WARNING'}, 0, "unable to create startup scheduled task to update Cygwin, failed to set root password");
-			return;
+	my $request_state = $self->data->get_request_state_name();
+	
+	my $root_password;
+	if ($request_state eq 'image') {
+		$root_password = $WINDOWS_ROOT_PASSWORD;
+	}
+	else {
+		if ($self->{root_password}) {
+			$root_password = $self->{root_password};
 		}
+		else {
+			$root_password = getpw();
+			$self->{root_password} = $root_password;
+		}
+	}
+	
+	if (!$self->set_password('root', $root_password)) {
+		notify($ERRORS{'WARNING'}, 0, "unable to create startup scheduled task to update Cygwin, failed to set root password");
+		return;
 	}
 	
 	# Create a scheduled task to run post_load.cmd when the image boots
