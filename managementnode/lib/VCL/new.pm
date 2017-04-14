@@ -525,6 +525,17 @@ sub reload_image {
 			return;
 		}
 		
+		# Update the computer state to reloading
+		if (update_computer_state($computer_id, "reloading")) {
+			notify($ERRORS{'OK'}, 0, "computer $computer_short_name state set to reloading");
+			insertloadlog($reservation_id, $computer_id, "info", "computer state updated to reloading");
+		}
+		else {
+			notify($ERRORS{'CRITICAL'}, 0, "unable to set $computer_short_name into reloading state, returning");
+			insertloadlog($reservation_id, $computer_id, "failed", "unable to set computer $computer_short_name state to reloading");
+			return;
+		}
+		
 		# Make sure the image exists on this management node's local disks
 		# Attempt to retrieve it if necessary
 		if ($self->provisioner->can("does_image_exist")) {
@@ -572,17 +583,6 @@ sub reload_image {
 			if ($computer_current_os && $computer_current_os->can('pre_reload')) {
 				$computer_current_os->pre_reload();
 			}
-		}
-		
-		# Update the computer state to reloading
-		if (update_computer_state($computer_id, "reloading")) {
-			notify($ERRORS{'OK'}, 0, "computer $computer_short_name state set to reloading");
-			insertloadlog($reservation_id, $computer_id, "info", "computer state updated to reloading");
-		}
-		else {
-			notify($ERRORS{'CRITICAL'}, 0, "unable to set $computer_short_name into reloading state, returning");
-			insertloadlog($reservation_id, $computer_id, "failed", "unable to set computer $computer_short_name state to reloading");
-			return;
 		}
 		
 		# Call provisioning module's load() subroutine
