@@ -599,8 +599,18 @@ sub copy_virtual_disk {
 		$source_file_paths_string = '"' . join('" "', @source_file_paths) . '"';
 	#}
 	
+	my $options = '';
+	# VCL-911: If copying to the repository, save the image qcow2 version 0.10, the traditional image format that can be read by any QEMU since 0.10
+	my $repository_image_file_path = $self->get_repository_image_file_path();
+	if (1 || $destination_file_path eq $repository_image_file_path) {
+		$options .= ' -o compat=0.10';
+	}
+	
 	#my $command = "qemu-img convert -f vmdk -O $disk_format $source_file_paths_string \"$destination_file_path\" && qemu-img info \"$destination_file_path\"";
-	my $command = "qemu-img convert $source_file_paths_string -O $disk_format \"$destination_file_path\" && qemu-img info \"$destination_file_path\"";
+	my $command = "qemu-img convert $source_file_paths_string -O $disk_format";
+	$command .= $options;
+	$command .= " \"$destination_file_path\"";
+	$command .= " && qemu-img info \"$destination_file_path\"";
 
 	## If the image had to be converted to raw format first, add command to delete raw files
 	#if ($raw_file_directory_path) {
@@ -611,6 +621,15 @@ sub copy_virtual_disk {
 	
 	my $start_time = time;
 	my ($exit_status, $output) = $self->vmhost_os->execute($command, 0, 7200);
+	if (defined($output && grep(/Unknown option.*compat/, @$output))) {
+		# Check for older versions which don't support '-o compat=':
+		#    Unknown option 'compat'
+		#    qemu-img: Invalid options for file format 'qcow2'.
+		# Remove the option from the command and try again
+		$command =~ s/ -o compat=0.10//;
+		notify($ERRORS{'DEBUG'}, 0, "version of qemu-img on $node_name does not appear to support the '-o compat=' option, trying again without it, output from first attempt:\n" . join("\n", @$output));
+		($exit_status, $output) = $self->vmhost_os->execute($command, 0, 7200);
+	}
 	if (!defined($exit_status)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to execute command to copy/convert virtual disk on $node_name:\n$command");
 		return;
