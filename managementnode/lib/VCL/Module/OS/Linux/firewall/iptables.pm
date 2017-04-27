@@ -1235,7 +1235,7 @@ sub delete_chain {
 	
 	my $computer_name = $self->data->get_computer_hostname();
 	
-	my $table_info = $self->get_table_info($table_name);
+	my $table_info = $self->get_table_info($table_name, 1);
 	if (!defined($table_info->{$chain_name})) {
 		notify($ERRORS{'DEBUG'}, 0, "'$chain_name' chain in '$table_name' table does not exist on $computer_name");
 		return 1;
@@ -1308,15 +1308,14 @@ sub delete_chain_references {
 	
 	my $table_info = $self->get_table_info($table_name);
 	for my $referencing_chain_name (keys %$table_info) {
-		for my $rule (@{$table_info->{$referencing_chain_name}{rules}}) {
-			my $rule_specification_string = $rule->{rule_specification};
-			if ($rule_specification_string =~ /(-j|--jump) $chain_name(\s|$)/) {
-				notify($ERRORS{'DEBUG'}, 0, "rule in '$table_name' table references '$chain_name' chain, referencing chain: $referencing_chain_name, rule specification: $rule_specification_string");
-				if (!$self->delete_rules($table_name, $referencing_chain_name, {'rule_specification' => $rule_specification_string})) {
-					return;
-				}
+		
+		$self->delete_rules($table_name, $referencing_chain_name,
+			{
+				"parameters" => {
+					"jump" => $chain_name,
+				},
 			}
-		}
+		);
 	}
 	
 	notify($ERRORS{'DEBUG'}, 0, "deleted all rules in '$table_name' table referencing '$chain_name' chain on $computer_name");
