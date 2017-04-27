@@ -602,7 +602,7 @@ sub copy_virtual_disk {
 	my $options = '';
 	# VCL-911: If copying to the repository, save the image qcow2 version 0.10, the traditional image format that can be read by any QEMU since 0.10
 	my $repository_image_file_path = $self->get_repository_image_file_path();
-	if (1 || $destination_file_path eq $repository_image_file_path) {
+	if ($destination_file_path eq $repository_image_file_path) {
 		$options .= ' -o compat=0.10';
 	}
 	
