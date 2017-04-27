@@ -3499,11 +3499,18 @@ sub set_scheduled_task_credentials {
 		return 1;
 	}
 	elsif (grep (/The parameter is incorrect/, @$output)) {
-		notify($ERRORS{'WARNING'}, 0, "unable to change password for scheduled task '$task_name' due to Windows bug\ncommand: '$command'\noutput:\n" . join("\n", @$output));
-		# Don't return false - There is a bug in Windows 7
-		# If a scheduled task is created using the GUI using a schedule the password cannot be set via schtasks.exe
-		# schtasks.exe displays: ERROR: The parameter is incorrect.
-		# If the same task is changed to run on an event such as logon it works
+		if ($task_name =~ /{/) {
+			# Ignore task such as: \User_Feed_Synchronization-{88DE35B9-C115-4DE3-AB5E-B9D2C4A2DB66}
+			# This one always fails and is not important
+			notify($ERRORS{'DEGUG'}, 0, "unable to change password for scheduled task '$task_name' due to Windows bug\ncommand: '$command'\noutput:\n" . join("\n", @$output));
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "unable to change password for scheduled task '$task_name' due to Windows bug\ncommand: '$command'\noutput:\n" . join("\n", @$output));
+			# Don't return false - There is a bug in Windows 7
+			# If a scheduled task is created using the GUI using a schedule the password cannot be set via schtasks.exe
+			# schtasks.exe displays: ERROR: The parameter is incorrect.
+			# If the same task is changed to run on an event such as logon it works	
+		}
 		return 1;
 	}
 	elsif (grep (/^ERROR:/, @$output)) {
