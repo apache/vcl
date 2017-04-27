@@ -129,62 +129,13 @@ sub process_post_load {
 	# Call subroutine in iptables.pm
 	return unless $self->SUPER::process_post_load();
 	
-#### Remove ssh from public zone
-###return unless $self->remove_service('public', 'ssh');
+	# Remove ssh from public zone
+	return unless $self->remove_service('public', 'ssh');
 	
 	$self->save_configuration();
 	
 	notify($ERRORS{'DEBUG'}, 0, "completed firewalld post-load configuration on $computer_name");
 	return 1;
-}
-
-#/////////////////////////////////////////////////////////////////////////////
-
-=head2 remove_service
-
- Parameters  : $zone_name, $service_name
- Returns     : boolean
- Description : Removes a service from a firewalld zone.
-
-=cut
-
-sub remove_service {
-	my $self = shift;
-	if (ref($self) !~ /VCL::Module/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return 0;
-	}
-	
-	my ($zone_name, $service_name) = @_;
-	if (!defined($zone_name)) {
-		notify($ERRORS{'WARNING'}, 0, "zone name argument was not specified");
-		return;
-	}
-	elsif (!defined($service_name)) {
-		notify($ERRORS{'WARNING'}, 0, "service name argument was not specified");
-		return;
-	}
-	
-	my $computer_name = $self->data->get_computer_hostname();
-	
-	my $command = "firewall-cmd --permanent --zone=$zone_name --remove-service=$service_name";
-	my ($exit_status, $output) = $self->os->execute($command, 0);
-	if (!defined($output)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to execute command to remove '$service_name' service from '$zone_name' zone on $computer_name: $command");
-		return;
-	}
-	elsif (grep(/NOT_ENABLED/, @$output)) {
-		notify($ERRORS{'DEBUG'}, 0, "'$service_name' service is not enabled in '$zone_name' zone on $computer_name");
-		return 1;
-	}
-	elsif ($exit_status ne '0') {
-		notify($ERRORS{'WARNING'}, 0, "failed to remove '$service_name' service from '$zone_name' zone on $computer_name, exit status: $exit_status, command:\n$command\noutput:\n" . join("\n", @$output));
-		return;
-	}
-	else {
-		notify($ERRORS{'OK'}, 0, "removed '$service_name' service from '$zone_name' zone on $computer_name, output:\n" . join("\n", @$output));
-		return 1;
-	}
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -611,6 +562,620 @@ sub _delete_rule {
 		#$self->save_configuration();
 		return 1;
 	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 remove_service
+
+ Parameters  : $zone_name, $service
+ Returns     : boolean
+ Description : 
+
+=cut
+
+sub remove_service {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return 0;
+	}
+	
+	my ($zone_name, $service) = @_;
+	if (!defined($zone_name)) {
+		notify($ERRORS{'WARNING'}, 0, "zone name argument was not supplied");
+		return;
+	}
+	elsif (!defined($service)) {
+		notify($ERRORS{'WARNING'}, 0, "interface name argument was not supplied");
+		return;
+	}
+	$service = 'tcp' unless $service;
+	
+	my $computer_name = $self->data->get_computer_hostname();
+	
+	# [--permanent] [--zone=zone] --remove-service=serviceid[-serviceid]/service
+	#            Remove the service from zone. If zone is omitted, default zone will be used. This option can be specified
+	#            multiple times.
+	
+	my $command = "firewall-cmd --permanent --zone=$zone_name --remove-service=$service";
+	my ($exit_status, $output) = $self->os->execute($command, 0);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to remove $service service from '$zone_name' zone on $computer_name: $command");
+		return;
+	}
+	
+	# Remove color controls
+	(my $output_string = join("\n", @$output)) =~ s/\e\[\d+m//g;
+
+	if ($exit_status ne '0') {
+		notify($ERRORS{'WARNING'}, 0, "failed to remove $service service from '$zone_name' zone on $computer_name, exit status: $exit_status, command:\n$command\noutput:\n$output_string");
+		return;
+	}
+	elsif (grep(/NOT_ENABLED/, @$output)) {
+		notify($ERRORS{'OK'}, 0, "$service service has not been added to '$zone_name' zone on $computer_name");
+	}
+	else {
+		notify($ERRORS{'OK'}, 0, "removed $service service from '$zone_name' zone on $computer_name");
+	}
+	
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 create_zone
+
+ Parameters  : $zone_name
+ Returns     : boolean
+ Description : Creates a new firewalld zone on the computer.
+
+=cut
+
+sub create_zone {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return 0;
+	}
+	
+	my ($zone_name) = @_;
+	my $computer_name = $self->data->get_computer_hostname();
+	
+	my $command = "firewall-cmd --permanent --new-zone=$zone_name";
+	my ($exit_status, $output) = $self->os->execute($command, 0);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to create '$zone_name' zone on $computer_name: $command");
+		return;
+	}
+	
+	# Remove color controls
+	(my $output_string = join("\n", @$output)) =~ s/\e\[\d+m//g;
+	
+	if (grep(/NAME_CONFLICT/, @$output)) {
+		# Error: NAME_CONFLICT: new_zone(): 'vcl-test'
+		notify($ERRORS{'OK'}, 0, "'$zone_name' zone already exists on $computer_name");
+		return 1;
+	}
+	elsif ($exit_status ne '0') {
+		notify($ERRORS{'WARNING'}, 0, "failed to create '$zone_name' zone on $computer_name, exit status: $exit_status, command:\n$command\noutput:\n$output_string");
+		return;
+	}
+	else {
+		notify($ERRORS{'OK'}, 0, "created '$zone_name' zone on $computer_name");
+		return 1;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 delete_zone
+
+ Parameters  : $zone_name
+ Returns     : boolean
+ Description : Deletes a firewalld zone from the computer.
+
+=cut
+
+sub delete_zone {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return 0;
+	}
+	
+	my ($zone_name) = @_;
+	my $computer_name = $self->data->get_computer_hostname();
+	
+	my $command = "firewall-cmd --permanent --delete-zone=$zone_name";
+	my ($exit_status, $output) = $self->os->execute($command, 0);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to delete '$zone_name' zone on $computer_name: $command");
+		return;
+	}
+	
+	# Remove color controls
+	(my $output_string = join("\n", @$output)) =~ s/\e\[\d+m//g;
+	
+	if (grep(/INVALID_ZONE/, @$output)) {
+		# Error: INVALID_ZONE: vcl-test
+		notify($ERRORS{'OK'}, 0, "'$zone_name' zone does not exist on $computer_name");
+		return 1;
+	}
+	elsif ($exit_status ne '0') {
+		notify($ERRORS{'WARNING'}, 0, "failed to delete '$zone_name' zone on $computer_name, exit status: $exit_status, command:\n$command\noutput:\n$output_string");
+		return;
+	}
+	else {
+		notify($ERRORS{'OK'}, 0, "deleted '$zone_name' zone on $computer_name");
+		return 1;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 get_zone_info
+
+ Parameters  : $zone_name
+ Returns     : hash reference
+ Description : Retrieves information about a firewalld zone from the computer
+               and constructs a hash reference:
+                  {
+                    "forward-ports" => "",
+                    "icmp-block-inversion" => "no",
+                    "icmp-blocks" => "",
+                    "interfaces" => "",
+                    "masquerade" => "no",
+                    "ports" => "",
+                    "protocols" => "",
+                    "rich rules" => "",
+                    "services" => "",
+                    "sourceports" => "",
+                    "sources" => "",
+                    "target" => "default"
+                  }
+
+=cut
+
+sub get_zone_info {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return 0;
+	}
+	
+	my ($zone_name) = @_;
+	my $computer_name = $self->data->get_computer_hostname();
+	
+	my $command = "firewall-cmd --info-zone $zone_name";
+	my ($exit_status, $output) = $self->os->execute($command, 0);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to delete '$zone_name' zone on $computer_name: $command");
+		return;
+	}
+	
+	# Remove color controls
+	(my $output_string = join("\n", @$output)) =~ s/\e\[\d+m//g;
+	
+	if ($exit_status ne '0' || grep(/Error:/, @$output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve info for '$zone_name' zone from $computer_name, exit status: $exit_status, command:\n$command\noutput:\n$output_string");
+		return;
+	}
+	
+	# vcl-test
+	#   target: default
+	#   icmp-block-inversion: no
+	#   interfaces:
+	#   sources:
+	#   services:
+	#   ports:
+	#   protocols:
+	#   masquerade: no
+	#   forward-ports:
+	#   sourceports:
+	#   icmp-blocks:
+	#   rich rules:
+
+	my $zone_info = {};
+	for my $line (@$output) {
+		my ($property, $value) = $line =~ /\s*(\S[^:]+)\s*:\s*(.*)/g;
+		if (!defined($property)) {
+			notify($ERRORS{'DEBUG'}, 0, "ignoring line: '$line'") if ($line !~ /^$zone_name/);
+			next;
+		}
+		$zone_info->{$property} = $value;
+	}
+	
+	notify($ERRORS{'OK'}, 0, "retrieved info for '$zone_name' zone on $computer_name:\n" . format_data($zone_info));
+	return $zone_info;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 set_zone_target
+
+ Parameters  : $zone_name, $target
+ Returns     : boolean
+ Description : Sets the target for a firewalld zone.
+
+=cut
+
+sub set_zone_target {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return 0;
+	}
+	
+	my ($zone_name, $target) = @_;
+	if (!defined($zone_name)) {
+		notify($ERRORS{'WARNING'}, 0, "zone name argument was not supplied");
+		return;
+	}
+	elsif (!defined($target)) {
+		notify($ERRORS{'WARNING'}, 0, "target argument was not supplied");
+		return;
+	}
+	elsif ($target !~ /^(ACCEPT|DROP|REJECT)$/i) {
+		notify($ERRORS{'WARNING'}, 0, "target argument is not valid: $target, it must be 'ACCEPT', 'DROP', or 'REJECT'");
+		return;
+	}
+	$target = uc($target);
+	
+	my $computer_name = $self->data->get_computer_hostname();
+	
+	# --permanent [--zone=zone] --set-target=target
+	#           Set the target of a permanent zone.  target is one of: default, ACCEPT, DROP, REJECT
+	my $command = "firewall-cmd --permanent --zone=$zone_name --set-target=$target";
+	my ($exit_status, $output) = $self->os->execute($command, 0);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to set target of '$zone_name' zone to '$target' on $computer_name: $command");
+		return;
+	}
+	
+	# Remove color controls
+	(my $output_string = join("\n", @$output)) =~ s/\e\[\d+m//g;
+	
+	if ($exit_status ne '0') {
+		notify($ERRORS{'WARNING'}, 0, "failed to set target of '$zone_name' zone to '$target' on $computer_name, exit status: $exit_status, command:\n$command\noutput:\n$output_string");
+		return;
+	}
+	else {
+		notify($ERRORS{'OK'}, 0, "set target of '$zone_name' zone to '$target' on $computer_name");
+		return 1;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 add_source
+
+ Parameters  : $zone_name, $source
+ Returns     : boolean
+ Description : 
+
+=cut
+
+sub add_source {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return 0;
+	}
+	
+	my ($zone_name, $source) = @_;
+	if (!defined($zone_name)) {
+		notify($ERRORS{'WARNING'}, 0, "zone name argument was not supplied");
+		return;
+	}
+	elsif (!defined($source)) {
+		notify($ERRORS{'WARNING'}, 0, "source argument was not supplied");
+		return;
+	}
+	
+	my $computer_name = $self->data->get_computer_hostname();
+	
+	# [--permanent] [--zone=zone] --add-source=source[/mask]|MAC|ipset:ipset
+	
+	my $command = "firewall-cmd --permanent --zone=$zone_name --add-source=$source";
+	my ($exit_status, $output) = $self->os->execute($command, 0);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to add '$source' source to '$zone_name' zone on $computer_name: $command");
+		return;
+	}
+	
+	# Remove color controls
+	(my $output_string = join("\n", @$output)) =~ s/\e\[\d+m//g;
+	
+	if ($exit_status ne '0') {
+		notify($ERRORS{'WARNING'}, 0, "failed to add source to '$zone_name' zone on $computer_name: $source, exit status: $exit_status, command:\n$command\noutput:\n$output_string");
+		return;
+	}
+	elsif (grep(/ALREADY_ENABLED/, @$output)) {
+		# Warning: ALREADY_ENABLED: 10.1.2.3
+		notify($ERRORS{'OK'}, 0, "source was previously added to '$zone_name' zone on $computer_name: $source");
+	}
+	else {
+		notify($ERRORS{'OK'}, 0, "added source to '$zone_name' zone on $computer_name: $source");
+	}
+	
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 remove_source
+
+ Parameters  : $zone_name, $source
+ Returns     : boolean
+ Description : 
+
+=cut
+
+sub remove_source {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return 0;
+	}
+	
+	my ($zone_name, $source) = @_;
+	if (!defined($zone_name)) {
+		notify($ERRORS{'WARNING'}, 0, "zone name argument was not supplied");
+		return;
+	}
+	elsif (!defined($source)) {
+		notify($ERRORS{'WARNING'}, 0, "source argument was not supplied");
+		return;
+	}
+	
+	my $computer_name = $self->data->get_computer_hostname();
+	
+	# [--permanent] --remove-source=source[/mask]|MAC|ipset:ipset
+	
+	my $command = "firewall-cmd --permanent --zone=$zone_name --remove-source=$source";
+	my ($exit_status, $output) = $self->os->execute($command, 0);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to remove '$source' source from '$zone_name' zone on $computer_name: $command");
+		return;
+	}
+	
+	# Remove color controls
+	(my $output_string = join("\n", @$output)) =~ s/\e\[\d+m//g;
+	
+	if ($exit_status ne '0') {
+		notify($ERRORS{'WARNING'}, 0, "failed to remove source from '$zone_name' zone on $computer_name: $source, exit status: $exit_status, command:\n$command\noutput:\n$output_string");
+		return;
+	}
+	elsif (grep(/NOT_ENABLED/, @$output)) {
+		notify($ERRORS{'OK'}, 0, "source is not specified in '$zone_name' zone on $computer_name: $source");
+	}
+	else {
+		notify($ERRORS{'OK'}, 0, "removed source from '$zone_name' zone on $computer_name: $source");
+	}
+	
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 add_interface
+
+ Parameters  : $zone_name, $interface_name
+ Returns     : boolean
+ Description : 
+
+=cut
+
+sub add_interface {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return 0;
+	}
+	
+	my ($zone_name, $interface_name) = @_;
+	if (!defined($zone_name)) {
+		notify($ERRORS{'WARNING'}, 0, "zone name argument was not supplied");
+		return;
+	}
+	elsif (!defined($interface_name)) {
+		notify($ERRORS{'WARNING'}, 0, "interface name argument was not supplied");
+		return;
+	}
+	
+	my $computer_name = $self->data->get_computer_hostname();
+	
+	# [--permanent] [--zone=zone] --add-interface=interface
+	
+	my $command = "firewall-cmd --permanent --zone=$zone_name --add-interface=$interface_name";
+	my ($exit_status, $output) = $self->os->execute($command, 0);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to add '$interface_name' interface to '$zone_name' zone on $computer_name: $command");
+		return;
+	}
+	
+	# Remove color controls
+	(my $output_string = join("\n", @$output)) =~ s/\e\[\d+m//g;
+	if ($exit_status ne '0') {
+		notify($ERRORS{'WARNING'}, 0, "failed to add interface to '$zone_name' zone on $computer_name: $interface_name, exit status: $exit_status, command:\n$command\noutput:\n$output_string");
+		return;
+	}
+	elsif (grep(/already bound/, @$output)) {
+		# The interface is under control of NetworkManager and already bound to 'public'
+		notify($ERRORS{'OK'}, 0, "interface is already bound to '$zone_name' zone on $computer_name: $interface_name");
+	}
+	else {
+		notify($ERRORS{'OK'}, 0, "bound interface to '$zone_name' zone on $computer_name: $interface_name");
+	}
+	
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 add_port
+
+ Parameters  : $zone_name, $port, $protocol (optional)
+ Returns     : boolean
+ Description : 
+
+=cut
+
+sub add_port {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return 0;
+	}
+	
+	my ($zone_name, $port, $protocol) = @_;
+	if (!defined($zone_name)) {
+		notify($ERRORS{'WARNING'}, 0, "zone name argument was not supplied");
+		return;
+	}
+	elsif (!defined($port)) {
+		notify($ERRORS{'WARNING'}, 0, "interface name argument was not supplied");
+		return;
+	}
+	$protocol = 'tcp' unless $protocol;
+	
+	my $computer_name = $self->data->get_computer_hostname();
+	
+	# [--permanent] [--zone=zone] --add-port=portid[-portid]/protocol [--timeout=timeval]
+	
+	my $command = "firewall-cmd --permanent --zone=$zone_name --add-port=$port/$protocol";
+	my ($exit_status, $output) = $self->os->execute($command, 0);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to add port $port/$protocol to '$zone_name' zone on $computer_name: $command");
+		return;
+	}
+	
+	# Remove color controls
+	(my $output_string = join("\n", @$output)) =~ s/\e\[\d+m//g;
+	
+	if ($exit_status ne '0') {
+		notify($ERRORS{'WARNING'}, 0, "failed to add port $port/$protocol to '$zone_name' zone on $computer_name, exit status: $exit_status, command:\n$command\noutput:\n$output_string");
+		return;
+	}
+	elsif (grep(/ALREADY_ENABLED/, @$output)) {
+		notify($ERRORS{'OK'}, 0, "port $port/$protocol was previously added to '$zone_name' zone on $computer_name");
+	}
+	else {
+		notify($ERRORS{'OK'}, 0, "added port $port/$protocol to '$zone_name' zone on $computer_name");
+	}
+	
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 remove_port
+
+ Parameters  : $zone_name, $port, $protocol (optional)
+ Returns     : boolean
+ Description : 
+
+=cut
+
+sub remove_port {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return 0;
+	}
+	
+	my ($zone_name, $port, $protocol) = @_;
+	if (!defined($zone_name)) {
+		notify($ERRORS{'WARNING'}, 0, "zone name argument was not supplied");
+		return;
+	}
+	elsif (!defined($port)) {
+		notify($ERRORS{'WARNING'}, 0, "interface name argument was not supplied");
+		return;
+	}
+	$protocol = 'tcp' unless $protocol;
+	
+	my $computer_name = $self->data->get_computer_hostname();
+	
+	# [--permanent] [--zone=zone] --remove-port=portid[-portid]/protocol
+	my $command = "firewall-cmd --permanent --zone=$zone_name --remove-port=$port/$protocol";
+	my ($exit_status, $output) = $self->os->execute($command, 0);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to remove port $port/$protocol from '$zone_name' zone on $computer_name: $command");
+		return;
+	}
+	
+	# Remove color controls
+	(my $output_string = join("\n", @$output)) =~ s/\e\[\d+m//g;
+
+	if ($exit_status ne '0') {
+		notify($ERRORS{'WARNING'}, 0, "failed to remove port $port/$protocol from '$zone_name' zone on $computer_name, exit status: $exit_status, command:\n$command\noutput:\n$output_string");
+		return;
+	}
+	elsif (grep(/NOT_ENABLED/, @$output)) {
+		notify($ERRORS{'OK'}, 0, "port $port/$protocol has not been added from '$zone_name' zone on $computer_name");
+	}
+	else {
+		notify($ERRORS{'OK'}, 0, "removed port $port/$protocol from '$zone_name' zone on $computer_name");
+	}
+	
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 add_service
+
+ Parameters  : $zone_name, $service
+ Returns     : boolean
+ Description : 
+
+=cut
+
+sub add_service {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return 0;
+	}
+	
+	my ($zone_name, $service) = @_;
+	if (!defined($zone_name)) {
+		notify($ERRORS{'WARNING'}, 0, "zone name argument was not supplied");
+		return;
+	}
+	elsif (!defined($service)) {
+		notify($ERRORS{'WARNING'}, 0, "interface name argument was not supplied");
+		return;
+	}
+	$service = 'tcp' unless $service;
+	
+	my $computer_name = $self->data->get_computer_hostname();
+	
+	# [--permanent] [--zone=zone] --add-service=service [--timeout=timeval]
+	my $command = "firewall-cmd --permanent --zone=$zone_name --add-service=$service";
+	my ($exit_status, $output) = $self->os->execute($command, 0);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to add $service service to '$zone_name' zone on $computer_name: $command");
+		return;
+	}
+	
+	# Remove color controls
+	(my $output_string = join("\n", @$output)) =~ s/\e\[\d+m//g;
+	
+	if ($exit_status ne '0') {
+		notify($ERRORS{'WARNING'}, 0, "failed to add $service service to '$zone_name' zone on $computer_name, exit status: $exit_status, command:\n$command\noutput:\n$output_string");
+		return;
+	}
+	elsif (grep(/ALREADY_ENABLED/, @$output)) {
+		notify($ERRORS{'OK'}, 0, "$service service was previously added to '$zone_name' zone on $computer_name");
+	}
+	else {
+		notify($ERRORS{'OK'}, 0, "added $service service to '$zone_name' zone on $computer_name");
+	}
+	
+	return 1;
 }
 
 #/////////////////////////////////////////////////////////////////////////////
