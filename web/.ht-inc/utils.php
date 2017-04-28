@@ -1649,19 +1649,19 @@ function getImageConnectMethods($imageid, $revisionid=0, $nostatic=0) {
 		       . "SELECT DISTINCT i.id, "
 		       .                 "ir.id, "
 		       .                 "c.id, "
-		      .                  "c.description, "
+		       .                 "c.description, "
 		       .                 "cm.disabled "
-		      . "FROM image i "
-		      . "LEFT JOIN OS o ON (o.id = i.OSid) "
-		      . "LEFT JOIN OStype ot ON (ot.name = o.type) "
-		      . "LEFT JOIN imagerevision ir ON (ir.imageid = i.id) "
+		       . "FROM image i "
+		       . "LEFT JOIN OS o ON (o.id = i.OSid) "
+		       . "LEFT JOIN OStype ot ON (ot.name = o.type) "
+		       . "LEFT JOIN imagerevision ir ON (ir.imageid = i.id) "
 		       . "LEFT JOIN connectmethodmap cm ON (%s) "
-		      . "LEFT JOIN connectmethod c ON (cm.connectmethodid = c.id) "
-		      . "WHERE cm.autoprovisioned IS NULL  "
+		       . "LEFT JOIN connectmethod c ON (cm.connectmethodid = c.id) "
+		       . "WHERE cm.autoprovisioned IS NULL "
 		       . "HAVING c.id IS NOT NULL "
-		      . "ORDER BY i.id, "
-		      .          "cm.disabled, "
-		      .          "c.description";
+		       . "ORDER BY i.id, "
+		       .          "cm.disabled, "
+		       .          "c.description";
 		$query = sprintf($qbase, "cm.OStypeid = ot.id");
 		doQuery($query);
 		$query = sprintf($qbase, "cm.OSid = o.id");
@@ -2569,9 +2569,9 @@ function encryptData($data) {
 	if(! $data)
 		return false;
 	if(! function_exists('openssl_encrypt')) {
-	$aes = new Crypt_AES();
-	$aes->setKey($cryptkey);
-	$cryptdata = $aes->encrypt($data);
+		$aes = new Crypt_AES();
+		$aes->setKey($cryptkey);
+		$cryptdata = $aes->encrypt($data);
 	}
 	else {
 		static $key;
@@ -2600,9 +2600,9 @@ function decryptData($data) {
 		return false;
 	$cryptdata = base64_decode($data);
 	if(! function_exists('openssl_encrypt')) {
-	$aes = new Crypt_AES();
-	$aes->setKey($cryptkey);
-	$decryptdata = $aes->decrypt($cryptdata);
+		$aes = new Crypt_AES();
+		$aes->setKey($cryptkey);
+		$decryptdata = $aes->decrypt($cryptdata);
 	}
 	else {
 		static $key;
@@ -2973,7 +2973,7 @@ function getResourceGroupMemberships($type="all") {
 		$qh = doQuery($query, 282);
 		while($row = mysql_fetch_assoc($qh))
 			$return[$type][$row["id"]][] = $row["groupid"];
-			}
+	}
 	return $return;
 }
 
@@ -3346,12 +3346,16 @@ function getAffiliationDataUpdateText($affilid=0) {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function getAffiliationTheme($affilid) {
-	$query = "SELECT theme FROM affiliation WHERE id = $affilid";
+	$query = "SELECT COALESCE(a1.theme, a2.theme) AS theme "
+	       . "FROM affiliation a1, "
+  	       .      "affiliation a2 "
+	       . "WHERE a1.id = $affilid AND "
+  	       .       "a2.name = 'Global'";
 	$qh = doQuery($query);
 	if(($row = mysql_fetch_assoc($qh)) && ! empty($row['theme']))
 		return $row['theme'];
 	else
-		return 'default';
+		return DEFAULTTHEME;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -4325,7 +4329,7 @@ function isAvailable($images, $imageid, $imagerevisionid, $start, $end,
 				if($debug) {
 					$cnt = count($resources['computer']);
 					print "console.log('computers available to user: $cnt');";
-			}
+				}
 			}
 			$alloccompids = implode(",", $allocatedcompids);
 
@@ -7545,7 +7549,7 @@ function showTimeTable($links) {
 			if(array_key_exists('tzoffset', $_SESSION['persistdata']))
 				$label = date('n/d/Y+g:i+a', $stamp + $_SESSION['persistdata']['tzoffset'] * 60);
 			else
-			$label = date('n/d/Y+g:i+a', $stamp);
+				$label = date('n/d/Y+g:i+a', $stamp);
 			$label = str_replace('+', '&nbsp;', $label);
 			$yesterday = $stampArr["mday"];
 		}
@@ -7553,7 +7557,7 @@ function showTimeTable($links) {
 			if(array_key_exists('tzoffset', $_SESSION['persistdata']))
 				$label = date('g:i a', $stamp + $_SESSION['persistdata']['tzoffset'] * 60);
 			else
-			$label = date('g:i a', $stamp);
+				$label = date('g:i a', $stamp);
 		}
 		print "          <TH align=right>$label</TH>\n";
 		$free = 0;
@@ -13696,9 +13700,9 @@ function printHTMLFooter() {
 function changeLocale() {
 	global $locale, $authed, $authMechs;
 	if($authed) {
-	$newlocale = getContinuationVar('locale');
-	$oldmode = getContinuationVar('oldmode');
-	$authtype = getContinuationVar('authtype', '');
+		$newlocale = getContinuationVar('locale');
+		$oldmode = getContinuationVar('oldmode');
+		$authtype = getContinuationVar('authtype', '');
 	}
 	else {
 		$newlocale = processInputVar('locale', ARG_STRING);
@@ -13800,23 +13804,23 @@ function getSelectLanguagePulldown() {
 	$rt  = "<form name=\"localeform\" class=\"localeform\" action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
 	if($authed) {
 		$rt .= "<select name=\"continuation\" onChange=\"this.form.submit();\" autocomplete=\"off\">\n";
-	$cdata = array('IP' => $remoteIP, 'oldmode' => $mode);
-	if($mode == 'selectauth') {
-		$type = processInputVar('authtype', ARG_STRING);
-		if(! empty($type) && array_key_exists($type, $authMechs))
-			$cdata['authtype'] = $type;
-	}
-	foreach($locales as $dir => $lang) {
-		$cdata['locale'] = $dir;
-		$tmp = explode('/', $dir);
-		$testlocale = array_pop($tmp);
-		$cont = addContinuationsEntry('changeLocale', $cdata, 86400);
-		if($locale == $testlocale)
-			$rt .= "<option value=\"$cont\" selected>{$lang}</option>\n";
-		else
-			$rt .= "<option value=\"$cont\">{$lang}</option>\n";
-	}
-	$rt .= "</select>\n";
+		$cdata = array('IP' => $remoteIP, 'oldmode' => $mode);
+		if($mode == 'selectauth') {
+			$type = processInputVar('authtype', ARG_STRING);
+			if(! empty($type) && array_key_exists($type, $authMechs))
+				$cdata['authtype'] = $type;
+		}
+		foreach($locales as $dir => $lang) {
+			$cdata['locale'] = $dir;
+			$tmp = explode('/', $dir);
+			$testlocale = array_pop($tmp);
+			$cont = addContinuationsEntry('changeLocale', $cdata, 86400);
+			if($locale == $testlocale)
+				$rt .= "<option value=\"$cont\" selected>{$lang}</option>\n";
+			else
+				$rt .= "<option value=\"$cont\">{$lang}</option>\n";
+		}
+		$rt .= "</select>\n";
 	}
 	else {
 		$rt .= "<select name=\"locale\" onChange=\"this.form.submit();\" autocomplete=\"off\">\n";

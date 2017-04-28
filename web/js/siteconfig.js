@@ -290,7 +290,10 @@ AffilTextVariable.prototype.addAffiliationSettingCBextra = function(data) {
 	if(dijit.byId(this.domidbase + 'newaffilid').options.length == 0)
 		dojo.addClass(this.domidbase + 'adddiv', 'hidden');
 	var keys = dojo.byId(this.domidbase + 'savekeys').value.split(',');
-	keys.push(data.items.id);
+	if(keys.length == 1 && keys[0] == '')
+		keys[0] = data.items.id;
+	else
+		keys.push(data.items.id);
 	dojo.byId(this.domidbase + 'savekeys').value = keys.join(',');
 }
 
@@ -302,7 +305,11 @@ AffilTextVariable.prototype.saveSettings = function() {
 			dijit.byId(keys[i]).focus();
 			return;
 		}
-		data[keys[i]] = dijit.byId(keys[i]).get('value');
+		var newval = dijit.byId(keys[i]).get('value');
+		if(newval === 0)
+			data[keys[i]] = 'zero';
+		else
+			data[keys[i]] = newval;
 	}
 	dijit.byId(this.domidbase + 'btn').set('disabled', true);
 	RPCwrapper(data, generalSiteConfigCB, 1);
@@ -337,6 +344,13 @@ function affilhelpaddr() {
 affilhelpaddr.prototype = new AffilTextVariable();
 var affilhelpaddr = new affilhelpaddr();
 
+function affilwebaddr() {
+	AffilTextVariable.apply(this, Array.prototype.slice.call(arguments));
+	this.domidbase = 'affilwebaddr';
+}
+affilwebaddr.prototype = new AffilTextVariable();
+var affilwebaddr = new affilwebaddr();
+
 function affilkmsserver() {
 	AffilTextVariable.apply(this, Array.prototype.slice.call(arguments));
 	this.domidbase = 'affilkmsserver';
@@ -350,6 +364,20 @@ function affiltheme() {
 }
 affiltheme.prototype = new AffilTextVariable();
 var affiltheme = new affiltheme();
+
+function affilshibonly() {
+	AffilTextVariable.apply(this, Array.prototype.slice.call(arguments));
+	this.domidbase = 'affilshibonly';
+}
+affilshibonly.prototype = new AffilTextVariable();
+var affilshibonly = new affilshibonly();
+
+function affilshibname() {
+	AffilTextVariable.apply(this, Array.prototype.slice.call(arguments));
+	this.domidbase = 'affilshibname';
+}
+affilshibname.prototype = new AffilTextVariable();
+var affilshibname = new affilshibname();
 
 function GlobalSingleVariable() {}
 
@@ -551,7 +579,10 @@ function messages() {
 }
 messages.prototype.init = function() {
 	if(typeof dijit !== 'object' || dijit.byId('messagesselid') === undefined) {
-		setTimeout(this.init, 500);
+		if('init' in messages)
+			setTimeout(messages.init, 500);
+		else
+			setTimeout(messages.prototype.init, 500);
 		return;
 	}
 	messages.setContents(1);

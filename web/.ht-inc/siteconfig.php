@@ -55,6 +55,7 @@ function siteconfig() {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function generalOptions($globalopts) {
+	global $user;
 	$h = '';
 	#$h .= "<div id=\"globalopts\" dojoType=\"dijit.layout.ContentPane\" title=\"Global Options\">\n";
 
@@ -72,10 +73,36 @@ function generalOptions($globalopts) {
 
 	# -------- left column ---------
 	$h .= "<div id=\"siteconfigleftcol\">\n";
-	if(checkUserHasPerm('Site Configuration (global)')) {
+	if($globalopts) {
+		$obj = new userPasswordLength();
+		$h .= $obj->getHTML();
+		$obj = new userPasswordSpecialChar();
+		$h .= $obj->getHTML();
 		$obj = new Affiliations();
 		$h .= $obj->getHTML($globalopts);
 	}
+	$obj = new AffilHelpAddress();
+	$h .= $obj->getHTML($globalopts);
+	$obj = new AffilWebAddress();
+	$h .= $obj->getHTML($globalopts);
+	$obj = new AffilTheme();
+	$h .= $obj->getHTML($globalopts);
+	if($globalopts) {
+		$obj = new AffilShibOnly();
+		$h .= $obj->getHTML($globalopts);
+	}
+	if($globalopts || $user['affiliationid'] != getAffiliationID('Local')) {
+		$obj = new AffilShibName();
+		$h .= $obj->getHTML($globalopts);
+	}
+	$obj = new AffilKMSserver();
+	$h .= $obj->getHTML($globalopts);
+	$h .= "</div>\n"; # siteconfigleftcol
+	# -------- end left column ---------
+
+
+	# ---------- right column ---------
+	$h .= "<div id=\"siteconfigrightcol\">\n";
 	$obj = new connectedUserCheck();
 	$h .= $obj->getHTML($globalopts);
 	$obj = new acknowledge();
@@ -84,20 +111,6 @@ function generalOptions($globalopts) {
 	$h .= $obj->getHTML($globalopts);
 	$obj = new reconnecttimeout();
 	$h .= $obj->getHTML($globalopts);
-	if($globalopts) {
-		$obj = new userPasswordLength();
-		$h .= $obj->getHTML();
-		$obj = new userPasswordSpecialChar();
-		$h .= $obj->getHTML();
-	}
-	$obj = new AffilHelpAddress();
-	$h .= $obj->getHTML($globalopts);
-	$h .= "</div>\n"; # siteconfigleftcol
-	# -------- end left column ---------
-
-
-	# ---------- right column ---------
-	$h .= "<div id=\"siteconfigrightcol\">\n";
 	$obj = new generalInuse();
 	$h .= $obj->getHTML($globalopts);
 	$obj = new serverInuse();
@@ -112,10 +125,6 @@ function generalOptions($globalopts) {
 		$obj = new NATportRange();
 		$h .= $obj->getHTML();
 	}
-	$obj = new AffilKMSserver();
-	$h .= $obj->getHTML($globalopts);
-	$obj = new AffilTheme();
-	$h .= $obj->getHTML($globalopts);
 	$h .= "</div>\n"; # siteconfigrightcol
 	# -------- end right column --------
 
@@ -842,6 +851,11 @@ class AffilTextVariable {
 	var $width;
 	var $vartype;
 	var $allowdelete;
+	var $updatefailmsg;
+	var $affils;
+	var $allowempty;
+	var $allowglobalempty;
+	var $globalid;
 
 	/////////////////////////////////////////////////////////////////////////////
 	///
@@ -856,6 +870,11 @@ class AffilTextVariable {
 		$this->width = '200px';
 		$this->vartype = 'text';
 		$this->allowdelete = 1;
+		$this->updatefailmsg = i('Failed to update data for these affiliations:');
+		$this->affils = getAffiliations();
+		$this->allowempty = 0;
+		$this->allowglobalempty = 0;
+		$this->globalid = getAffiliationID('Global');
 	}
 
 	/////////////////////////////////////////////////////////////////////////////
@@ -913,7 +932,8 @@ class AffilTextVariable {
 	///
 	/////////////////////////////////////////////////////////////////////////////
 	function validateValue($value) {
-		if(preg_match("/{$this->constraints}/", $value))
+		$test = str_replace("/", "\/", $this->constraints);
+		if(preg_match("/$test/", $value))
 			return 1;
 		return 0;
 	}
@@ -935,27 +955,41 @@ class AffilTextVariable {
 		$h .= $this->desc;
 		$h .= "<br><br></div>\n";
 
-		$affils = getAffiliations();
+		$affils = $this->affils;
 		$saveids = array();
 
+		$required = 0;
+
 		if($globalopts) {
-			$id = getAffiliationID('Global');
-			$key = "{$this->domidbase}_$id";
-			$val = $this->values[$id];
-			$label = i('Global');
-			unset_by_val(i('Global'), $affils);
+			if(isset($this->values[$this->globalid])) {
+				$key = "{$this->domidbase}_{$this->globalid}";
+				$val = $this->values[$this->globalid];
+				$label = i('Global');
+				unset_by_val(i('Global'), $affils);
+				$required = ! $this->allowglobalempty;
+			}
 		}
 		else {
+			if(isset($this->values[$this->globalid])) {
+				$defaultval = $this->values[$this->globalid];
+				$h .= i('Default value') . ": $defaultval<br>\n";
+			}
 			$key = "{$this->domidbase}_{$user['affiliationid']}";
 			$val = $this->values[$user['affiliationid']];
+			if($this->vartype != 'text' && $val === NULL)
+				$val = $defaultval;
 			$label = $user['affiliation'];
 		}
-		$saveids[] = $key;
-		$h .= labeledFormItem($key, $label, $this->vartype, $this->constraints, 1, $val, $this->errmsg, '', '', $this->width); 
+		if(isset($key)) {
+			$saveids[] = $key;
+			$h .= labeledFormItem($key, $label, $this->vartype, $this->constraints, $required, $val, $this->errmsg, '', '', $this->width); 
+		}
 		if($globalopts) {
 			$h .= "<div id=\"{$this->domidbase}affildiv\">\n";
 			foreach($affils as $affil => $name) {
-				if(is_null($this->values[$affil]) || $this->values[$affil] == '')
+				if(! isset($this->values[$affil]))
+					continue;
+				if($this->values[$affil] === NULL || $this->values[$affil] === '')
 					continue;
 				$key = "{$this->domidbase}_$affil";
 				$saveids[] = $key;
@@ -1024,7 +1058,7 @@ class AffilTextVariable {
 			return;
 		}
 		$affilid = processInputVar('affilid', ARG_NUMERIC);
-		$affils = getAffiliations();
+		$affils = $this->affils;
 		if(! array_key_exists($affilid, $affils)) {
 			$arr = array('status' => 'failed',
 			             'msgid' => "{$this->domidbase}msg",
@@ -1086,6 +1120,7 @@ class AffilTextVariable {
 	///
 	////////////////////////////////////////////////////////////////////////////////
 	function AJupdateAllSettings() {
+		global $user;
 		if(! checkUserHasPerm('Site Configuration (global)') &&
 		   ! checkUserHasPerm('Site Configuration (affiliation only)')) {
 			$arr = array('status' => 'noaccess',
@@ -1093,24 +1128,32 @@ class AffilTextVariable {
 			sendJSON($arr);
 			return;
 		}
+		$affilonly = 0;
+		if(! checkUserHasPerm('Site Configuration (global)'))
+			$affilonly = 1;
 		$origvals = getContinuationVar('origvals');
 		$newvals = array();
 		foreach($origvals as $affilid => $val) {
+			if($affilonly && $affilid != $user['affiliationid'])
+				continue;
 			$id = "{$this->domidbase}_$affilid";
 			$newval = processInputVar($id, ARG_STRING);
-			if($newval === NULL)
-				continue;
-			if(! $this->validateValue($newval)) {
-				$affil = getAffiliationName($affilid);
-				$arr = array('status' => 'failed',
-				             'msgid' => "{$this->domidbase}msg",
-				             'btn' => "{$this->domidbase}btn",
-				             'errmsg' => i("Invalid value submitted for ") . $affil);
-				sendJSON($arr);
-				return;
+			if($newval !== NULL || # TODO test further
+	   		! $this->allowempty ||
+				($affilid == $this->globalid && ! $this->allowglobalempty)) {
+				if(! $this->validateValue($newval)) {
+					$affil = getAffiliationName($affilid);
+					$arr = array('status' => 'failed',
+					             'msgid' => "{$this->domidbase}msg",
+					             'btn' => "{$this->domidbase}btn",
+					             'errmsg' => i("Invalid value submitted for ") . $affil);
+					sendJSON($arr);
+					return;
+				}
 			}
 			if($newval != $val)
 				$newvals[$affilid] = $newval;
+
 		}
 		$fails = array();
 		foreach($newvals as $affilid => $val) {
@@ -1125,7 +1168,7 @@ class AffilTextVariable {
 		$savecont = addContinuationsEntry('AJupdateAllSettings', $cdata);
 
 		if(count($fails)) {
-			$msg = i("Failed to update address for these affiliations: ") . implode(', ', $fails);
+			$msg = $this->updatefailmsg . ' ' . implode(', ', $fails);
 			$arr = array('status' => 'failed',
 			             'msgid' => "{$this->domidbase}msg",
 			             'errmsg' => $msg,
@@ -1227,6 +1270,7 @@ class AffilHelpAddress extends AffilTextVariable {
 		$this->addmsg = i("Help Email Address added for %s");
 		$this->updatemsg = i("Update successful");
 		$this->delmsg = i("Address for %s deleted");
+		$this->allowempty = 1;
 	}
 
 	/////////////////////////////////////////////////////////////////////////////
@@ -1259,9 +1303,14 @@ class AffilHelpAddress extends AffilTextVariable {
 	/////////////////////////////////////////////////////////////////////////////
 	function setValue($affilid, $value) {
 		global $mysql_link_vcl;
-		$esc_value = mysql_real_escape_string($value);
+		if($value === NULL)
+			$newval = 'NULL';
+		else {
+			$esc_value = mysql_real_escape_string($value);
+			$newval = "'$esc_value'";
+		}
 		$query = "UPDATE affiliation "
-		       . "SET helpaddress = '$esc_value' "
+		       . "SET helpaddress = $newval "
 		       . "WHERE id = $affilid";
 		doQuery($query);
 		$rc = mysql_affected_rows($mysql_link_vcl);
@@ -1285,6 +1334,105 @@ class AffilHelpAddress extends AffilTextVariable {
 		global $mysql_link_vcl;
 		$query = "UPDATE affiliation "
 		       . "SET helpaddress = NULL "
+		       . "WHERE id = $affilid";
+		doQuery($query);
+		$rc = mysql_affected_rows($mysql_link_vcl);
+		if($rc == 1)
+			return 1;
+		return 0;
+	}
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \class AffilWebAddress
+///
+/// \brief extends AffilTextVariable to implement AffilWebAddress
+///
+////////////////////////////////////////////////////////////////////////////////
+class AffilWebAddress extends AffilTextVariable {
+	/////////////////////////////////////////////////////////////////////////////
+	///
+	/// \fn __construct()
+	///
+	/// \brief class construstor
+	///
+	/////////////////////////////////////////////////////////////////////////////
+	function __construct() {
+		parent::__construct();
+		$this->name = i("Site Web Address");
+		$this->desc = i("This is the web address in emails sent by the VCL system to users.");
+		$this->constraints = '^http(s)?://([-A-Za-z0-9]{1,63})(\.[A-Za-z0-9-_]+)*(\.?[A-Za-z0-9])(/[-a-zA-Z0-9\._~&\+,=:@]*)*$';
+		$this->errmsg = i("Invalid web address(es) specified");
+		$this->domidbase = "affilwebaddr";
+		$this->jsname = "affilwebaddr";
+		$this->addmsg = i("Web Address added for %s");
+		$this->updatemsg = i("Update successful");
+		$this->delmsg = i("Web Address for %s deleted");
+		$this->allowempty = 1;
+	}
+
+	/////////////////////////////////////////////////////////////////////////////
+	///
+	/// \fn getValues()
+	///
+	/// \brief gets assigned values from database and sets in $this->values
+	///
+	/////////////////////////////////////////////////////////////////////////////
+	function getValues() {
+		$this->values = array();
+		$query = "SELECT id, sitewwwaddress FROM affiliation ORDER BY name";
+		$qh = doQuery($query);
+		while($row = mysql_fetch_assoc($qh))
+			$this->values[$row['id']] = $row['sitewwwaddress'];
+	}
+
+	/////////////////////////////////////////////////////////////////////////////
+	///
+	/// \fn setValue($affilid, $value)
+	///
+	/// \param $affilid - affiliationid
+	/// \param $value - value to be set for $affilid
+	///
+	/// \brief sets values in database
+	///
+	/// \return 1 if successfully set values, 0 if error encountered setting
+	/// values
+	///
+	/////////////////////////////////////////////////////////////////////////////
+	function setValue($affilid, $value) {
+		global $mysql_link_vcl;
+		if($value === NULL)
+			$newval = 'NULL';
+		else {
+			$esc_value = mysql_real_escape_string($value);
+			$newval = "'$esc_value'";
+		}
+		$query = "UPDATE affiliation "
+		       . "SET sitewwwaddress = $newval "
+		       . "WHERE id = $affilid";
+		doQuery($query);
+		$rc = mysql_affected_rows($mysql_link_vcl);
+		if($rc == 1)
+			return 1;
+		return 0;
+	}
+
+	/////////////////////////////////////////////////////////////////////////////
+	///
+	/// \fn deleteValue($affilid)
+	///
+	/// \param $affilid - affiliationid
+	///
+	/// \brief deletes a value from the database
+	///
+	/// \return 1 if successfully deleted value, 0 if error encountered
+	///
+	/////////////////////////////////////////////////////////////////////////////
+	function deleteValue($affilid) {
+		global $mysql_link_vcl;
+		$query = "UPDATE affiliation "
+		       . "SET sitewwwaddress = NULL "
 		       . "WHERE id = $affilid";
 		doQuery($query);
 		$rc = mysql_affected_rows($mysql_link_vcl);
@@ -1322,6 +1470,8 @@ class AffilKMSserver extends AffilTextVariable {
 		$this->updatemsg = i("Update successful");
 		$this->delmsg = i("KMS server for %s deleted");
 		$this->width = '350px';
+		$this->allowempty = 1;
+		$this->allowglobalempty = 1;
 	}
 
 	/////////////////////////////////////////////////////////////////////////////
@@ -1524,7 +1674,8 @@ class AffilTheme extends AffilTextVariable {
 		$this->delmsg = i("Theme setting for %s deleted");
 		$this->getValidValues();
 		$this->vartype = 'selectonly';
-		$this->allowdelete = 0;
+		$this->allowdelete = 1;
+		$this->allowempty = 1;
 	}
 
 	/////////////////////////////////////////////////////////////////////////////
@@ -1598,6 +1749,14 @@ class AffilTheme extends AffilTextVariable {
 	///
 	/////////////////////////////////////////////////////////////////////////////
 	function deleteValue($affilid) {
+		global $mysql_link_vcl;
+		$query = "UPDATE affiliation "
+		       . "SET theme = NULL "
+		       . "WHERE id = $affilid";
+		doQuery($query);
+		$rc = mysql_affected_rows($mysql_link_vcl);
+		if($rc == 1)
+			return 1;
 		return 0;
 	}
 
@@ -1614,6 +1773,223 @@ class AffilTheme extends AffilTextVariable {
 	/////////////////////////////////////////////////////////////////////////////
 	function validateValue($value) {
 		if(in_array($value, $this->constraints))
+			return 1;
+		return 0;
+	}
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \class AffilShibOnly
+///
+/// \brief extends AffilTextVariable to implement AffilShibOnly
+///
+////////////////////////////////////////////////////////////////////////////////
+class AffilShibOnly extends AffilTextVariable {
+	/////////////////////////////////////////////////////////////////////////////
+	///
+	/// \fn __construct()
+	///
+	/// \brief class construstor
+	///
+	/////////////////////////////////////////////////////////////////////////////
+	function __construct() {
+		$this->constraints = array('False', 'True');
+		parent::__construct();
+		$this->name = i("LDAP Lookup for Shibboleth Authenticated Users");
+		$this->desc = i("If an affiliation gets configured for Shibboleth authentication, this specifies that LDAP authentication has also been configured for that affiliation so that VCL can perform lookups for new users before they log in to VCL.");
+		$this->errmsg = i("Invalid value submitted");
+		$this->domidbase = "affilshibonly";
+		$this->jsname = "affilshibonly";
+		$this->addmsg = i("LDAP lookup setting added for %s");
+		$this->updatemsg = i("Update successful");
+		$this->delmsg = i("LDAP lookup setting for %s deleted");
+		$this->vartype = 'selectonly';
+		$this->allowdelete = 0;
+		$this->allowempty = 1;
+		unset_by_val(i('Global'), $this->affils);
+		unset_by_val(i('Local'), $this->affils);
+	}
+
+	/////////////////////////////////////////////////////////////////////////////
+	///
+	/// \fn getValues()
+	///
+	/// \brief gets assigned values from database and sets in $this->values
+	///
+	/////////////////////////////////////////////////////////////////////////////
+	function getValues() {
+		$this->values = array();
+		$query = "SELECT id, "
+		       .        "shibonly "
+		       . "FROM affiliation "
+		       . "WHERE name NOT IN ('Global', 'Local') "
+		       . "ORDER BY name";
+		$qh = doQuery($query);
+		while($row = mysql_fetch_assoc($qh))
+			$this->values[$row['id']] = (int)(! $row['shibonly']);
+	}
+
+	/////////////////////////////////////////////////////////////////////////////
+	///
+	/// \fn setValue($affilid, $value)
+	///
+	/// \param $affilid - affiliationid
+	/// \param $value - value to be set for $affilid
+	///
+	/// \brief sets values in database
+	///
+	/// \return 1 if successfully set values, 0 if error encountered setting
+	/// values
+	///
+	/////////////////////////////////////////////////////////////////////////////
+	function setValue($affilid, $value) {
+		global $mysql_link_vcl;
+		$value = (int)(! $value);
+		$query = "UPDATE affiliation "
+		       . "SET shibonly = $value "
+		       . "WHERE id = $affilid";
+		doQuery($query);
+		$rc = mysql_affected_rows($mysql_link_vcl);
+		if($rc == 1)
+			return 1;
+		return 0;
+	}
+
+	/////////////////////////////////////////////////////////////////////////////
+	///
+	/// \fn deleteValue($affilid)
+	///
+	/// \param $affilid - affiliationid
+	///
+	/// \brief deletes a value from the database
+	///
+	/// \return 1 if successfully deleted value, 0 if error encountered
+	///
+	/////////////////////////////////////////////////////////////////////////////
+	function deleteValue($affilid) {
+		return 0;
+	}
+
+	/////////////////////////////////////////////////////////////////////////////
+	///
+	/// \fn validateValue($value)
+	///
+	/// \param $value - value to be validated
+	///
+	/// \brief validates a submitted value
+	///
+	/// \return 1 if $value is valid, 0 if $value is not valid
+	///
+	/////////////////////////////////////////////////////////////////////////////
+	function validateValue($value) {
+		if($value === 0 || $value == 1)
+			return 1;
+		return 0;
+	}
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \class AffilShibName
+///
+/// \brief extends AffilTextVariable to implement AffilShibName
+///
+////////////////////////////////////////////////////////////////////////////////
+class AffilShibName extends AffilTextVariable {
+	/////////////////////////////////////////////////////////////////////////////
+	///
+	/// \fn __construct()
+	///
+	/// \brief class construstor
+	///
+	/////////////////////////////////////////////////////////////////////////////
+	function __construct() {
+		parent::__construct();
+		$this->name = i("Shibboleth Scope");
+		$this->desc = i("This is the Shibboleth scope for an affiliation when Shibboleth authentication is enabled.");
+		$this->errmsg = i("Invalid value submitted");
+		$this->domidbase = "affilshibname";
+		$this->jsname = "affilshibname";
+		$this->addmsg = i("Shibboleth scope added for %s");
+		$this->updatemsg = i("Update successful");
+		$this->delmsg = i("Shibboleth scope for %s deleted");
+		$this->vartype = 'text';
+		$this->constraints = '^([-A-Za-z0-9]{1,63})(\.[A-Za-z0-9-_]+)*(\.?[A-Za-z0-9])$$';
+		unset_by_val(i('Global'), $this->affils);
+		unset_by_val(i('Local'), $this->affils);
+		$this->allowempty = 1;
+	}
+
+	/////////////////////////////////////////////////////////////////////////////
+	///
+	/// \fn getValues()
+	///
+	/// \brief gets assigned values from database and sets in $this->values
+	///
+	/////////////////////////////////////////////////////////////////////////////
+	function getValues() {
+		$this->values = array();
+		$query = "SELECT id, "
+		       .        "shibname "
+		       . "FROM affiliation "
+		       . "WHERE name NOT IN ('Global', 'Local') "
+		       . "ORDER BY name";
+		$qh = doQuery($query);
+		while($row = mysql_fetch_assoc($qh))
+			$this->values[$row['id']] = $row['shibname'];
+	}
+
+	/////////////////////////////////////////////////////////////////////////////
+	///
+	/// \fn setValue($affilid, $value)
+	///
+	/// \param $affilid - affiliationid
+	/// \param $value - value to be set for $affilid
+	///
+	/// \brief sets values in database
+	///
+	/// \return 1 if successfully set values, 0 if error encountered setting
+	/// values
+	///
+	/////////////////////////////////////////////////////////////////////////////
+	function setValue($affilid, $value) {
+		global $mysql_link_vcl;
+		if($value === NULL)
+			$newval = 'NULL';
+		else {
+			$esc_value = mysql_real_escape_string($value);
+			$newval = "'$esc_value'";
+		}
+		$query = "UPDATE affiliation "
+		       . "SET shibname = $newval "
+		       . "WHERE id = $affilid";
+		doQuery($query);
+		$rc = mysql_affected_rows($mysql_link_vcl);
+		if($rc == 1)
+			return 1;
+		return 0;
+	}
+
+	/////////////////////////////////////////////////////////////////////////////
+	///
+	/// \fn deleteValue($affilid)
+	///
+	/// \param $affilid - affiliationid
+	///
+	/// \brief deletes a value from the database
+	///
+	/// \return 1 if successfully deleted value, 0 if error encountered
+	///
+	/////////////////////////////////////////////////////////////////////////////
+	function deleteValue($affilid) {
+		global $mysql_link_vcl;
+		$query = "UPDATE affiliation "
+		       . "SET shibname = NULL "
+		       . "WHERE id = $affilid";
+		doQuery($query);
+		$rc = mysql_affected_rows($mysql_link_vcl);
+		if($rc == 1)
 			return 1;
 		return 0;
 	}

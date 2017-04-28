@@ -595,8 +595,11 @@ $actions['classmapping']['nfsmounts'] = 'siteconfig';
 $actions['classmapping']['affiliations'] = 'siteconfig';
 $actions['classmapping']['messages'] = 'siteconfig';
 $actions['classmapping']['affilhelpaddress'] = 'siteconfig';
+$actions['classmapping']['affilwebaddress'] = 'siteconfig';
 $actions['classmapping']['affilkmsserver'] = 'siteconfig';
 $actions['classmapping']['affiltheme'] = 'siteconfig';
+$actions['classmapping']['affilshibonly'] = 'siteconfig';
+$actions['classmapping']['affilshibname'] = 'siteconfig';
 
 # resource
 $actions['mode']['resource'] = "resource";
