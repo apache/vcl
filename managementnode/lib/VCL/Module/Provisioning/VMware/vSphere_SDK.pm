@@ -4338,6 +4338,50 @@ sub get_vm_virtual_disk_file_paths {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 is_nested_virtualization_supported
+
+ Parameters  : none
+ Returns     : boolean
+ Description : Determines whether or not the VMware host supports nested
+               hardware-assisted virtualization.
+
+=cut
+
+sub is_nested_virtualization_supported {
+	my $self = shift;
+	if (ref($self) !~ /module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $vmhost_computer_name = $self->data->get_vmhost_short_name();
+	
+	my $host_system_view = $self->_get_host_system_view() || return;
+	
+	if (!$host_system_view) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine if nested virtualization is supported on $vmhost_computer_name, failed to retrieve host system view");
+		return;
+	}
+	elsif (!defined($host_system_view->{capability})) {
+		notify($ERRORS{'DEBUG'}, 0, "nested virtualization is NOT supported on $vmhost_computer_name, host system view does NOT contain a 'capability' key:\n" . format_hash_keys($host_system_view));
+		return 0;
+	}
+	elsif (!defined($host_system_view->{capability}{nestedHVSupported})) {
+		notify($ERRORS{'DEBUG'}, 0, "nested virtualization is NOT supported on $vmhost_computer_name, host system view capability info does NOT contain a 'nestedHVSupported' key:\n" . format_hash_keys($host_system_view->{capability}));
+		return 0;
+	}
+	elsif ($host_system_view->{capability}{nestedHVSupported} != 1) {
+		notify($ERRORS{'DEBUG'}, 0, "nested virtualization is NOT supported on $vmhost_computer_name, nestedHVSupported value: $host_system_view->{capability}{nestedHVSupported}");
+		return 0;
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "nested virtualization is supported on $vmhost_computer_name, nestedHVSupported value: $host_system_view->{capability}{nestedHVSupported}");
+		return 1;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 =head2 DESTROY
 
  Parameters  : none

@@ -1747,17 +1747,12 @@ sub prepare_vmx {
 		".encoding" => "UTF-8",
 		#"bios.bootDelay" => "1000",
 		"config.version" => "8",
-		"cpuid.1.ecx" => "--------------------------H-----",
 		"cpuid.coresPerSocket" => "$vm_cores_per_socket",
 		"displayName" => "$display_name",
-		"featMask.vm.hv.capable" => "Min:1",
 		"floppy0.present" => "FALSE",
 		"guestOS" => "$guest_os",
 		"gui.exitOnCLIHLT" => "TRUE",	# causes the virtual machine to power off automatically when you choose Start > Shut Down from the Windows guest
-		"hypervisor.cpuid.v0" => "FALSE",
 		"memsize" => "$vm_ram",
-		"monitor.virtual_mmu" => "hardware",
-		"monitor.virtual_exec" => "hardware",
 		"mem.hotadd" => "TRUE",
 		"msg.autoAnswer" => "TRUE",	# tries to automatically answer all questions that may occur at boot-time.
 		#"mks.enable3d" => "TRUE",
@@ -1781,10 +1776,20 @@ sub prepare_vmx {
 		"usb.present" => "TRUE",
 		"uuid.action" => "keep",	# Keep the VM's uuid, keeps existing MAC
 		"vcpu.hotadd" => "TRUE",
-		"vhv.enable" => "TRUE",
 		"virtualHW.version" => "$vm_hardware_version",
 		"workingDir" => "$vmx_directory_path",
 	);
+	
+	if ($self->api->is_nested_virtualization_supported()) {
+		%vmx_parameters = (%vmx_parameters, (
+			"cpuid.1.ecx" => "--------------------------H-----",
+			"featMask.vm.hv.capable" => "Min:1",
+			"hypervisor.cpuid.v0" => "FALSE",
+			"monitor.virtual_mmu" => "hardware",
+			"monitor.virtual_exec" => "hardware",
+			"vhv.enable" => "TRUE",
+		));
+	}
 	
 	#>>>>>>>>>>
 	## Experimental - Support for VMware ESXi's built in VNC server functionality

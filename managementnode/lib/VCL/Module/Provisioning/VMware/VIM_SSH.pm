@@ -3012,6 +3012,138 @@ sub _print_compatible_guest_os_hardware_versions {
 
 #/////////////////////////////////////////////////////////////////////////////
 
+=head2 get_host_capability_info
+
+ Parameters  : none
+ Returns     : hash reference
+ Description : Retrieves information about the capabilities of the VMware host.
+               A hash reference is returned similar to:
+                  {
+                    "bootOptionsSupported" => "true",
+                    "bootRetryOptionsSupported" => "true",
+                    "canConnectUSBDevices" => "<unset>",
+                    "changeTrackingSupported" => "false",
+                    "consolePreferencesSupported" => "true",
+                    "cpuFeatureMaskSupported" => "true",
+                    "disableSnapshotsSupported" => "false",
+                    "diskSharesSupported" => "true",
+                    "featureRequirementSupported" => "true",
+                    "guestAutoLockSupported" => "true",
+                    "hostBasedReplicationSupported" => "true",
+                    "lockSnapshotsSupported" => "false",
+                    "memoryReservationLockSupported" => "true",
+                    "memorySnapshotsSupported" => "true",
+                    "messageBusSupported" => "true",
+                    "multipleCoresPerSocketSupported" => "true",
+                    "multipleSnapshotsSupported" => "true",
+                    "nestedHVSupported" => "true",
+                    "npivWwnOnNonRdmVmSupported" => "true",
+                    "perVmEvcSupported" => "<unset>",
+                    "poweredOffSnapshotsSupported" => "true",
+                    "poweredOnMonitorTypeChangeSupported" => "true",
+                    "quiescedSnapshotsSupported" => "true",
+                    "recordReplaySupported" => "true",
+                    "revertToSnapshotSupported" => "true",
+                    "s1AcpiManagementSupported" => "true",
+                    "seSparseDiskSupported" => "true",
+                    "secureBootSupported" => "<unset>",
+                    "settingDisplayTopologyModesSupported" => "true",
+                    "settingDisplayTopologySupported" => "false",
+                    "settingScreenResolutionSupported" => "true",
+                    "settingVideoRamSizeSupported" => "true",
+                    "snapshotConfigSupported" => "true",
+                    "snapshotOperationsSupported" => "true",
+                    "swapPlacementSupported" => "true",
+                    "toolsAutoUpdateSupported" => "false",
+                    "toolsRebootPredictSupported" => "<unset>",
+                    "toolsSyncTimeSupported" => "true",
+                    "vPMCSupported" => "true",
+                    "virtualMmuUsageSupported" => "true",
+                    "vmNpivWwnDisableSupported" => "true",
+                    "vmNpivWwnSupported" => "true",
+                    "vmNpivWwnUpdateSupported" => "true",
+                    "vmfsNativeSnapshotSupported" => "false"
+                  }
+
+=cut
+
+sub get_host_capability_info {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	if (defined($self->{host_capability_info})) {
+		return $self->{host_capability_info};
+	}
+	
+	my $vmhost_computer_name = $self->data->get_vmhost_short_name();
+	
+	my $version_key = $self->get_highest_vm_hardware_version_key();
+	if (!$version_key) {
+		notify($ERRORS{'WARNING'}, 0, "unable to retrieve host capability info from $vmhost_computer_name, failed to retrieve highest supported virtual machine hardware");
+		return;
+	}
+	
+	my $config_option_info = $self->get_config_option_info($version_key);
+	if (!$config_option_info) {
+		notify($ERRORS{'WARNING'}, 0, "unable to retrieve host capability info from $vmhost_computer_name, failed to retrieve host config option info");
+		return;
+	}
+	
+	if ($config_option_info->{capabilities}) {
+		$self->{host_capability_info} = $config_option_info->{capabilities};
+		return $self->{host_capability_info};
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve host capability info from $vmhost_computer_name, config option info does not contain a 'capabilities' key:\n" . format_hash_keys($config_option_info));
+		return;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 is_nested_virtualization_supported
+
+ Parameters  : none
+ Returns     : boolean
+ Description : Determines whether or not the VMware host supports nested
+               hardware-assisted virtualization.
+
+=cut
+
+sub is_nested_virtualization_supported {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $vmhost_computer_name = $self->data->get_vmhost_short_name();
+	
+	my $host_capability_info = $self->get_host_capability_info();
+	if (!$host_capability_info) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine if nested virtualization is supported on $vmhost_computer_name, failed to retrieve host capability info");
+		return;
+	}
+	
+	if (!defined($host_capability_info->{nestedHVSupported})) {
+		notify($ERRORS{'DEBUG'}, 0, "nested virtualization is NOT supported on $vmhost_computer_name, host capability info does not contain a 'nestedHVSupported' key:\n" . format_hash_keys($host_capability_info));
+		return 0;
+	}
+	elsif ($host_capability_info->{nestedHVSupported} !~ /true/i) {
+		notify($ERRORS{'DEBUG'}, 0, "nested virtualization is NOT supported on $vmhost_computer_name, nestedHVSupported value: $host_capability_info->{nestedHVSupported}");
+		return 0;
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "nested virtualization is supported on $vmhost_computer_name, nestedHVSupported value: $host_capability_info->{nestedHVSupported}");
+		return 1;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
 =head2 _parse_vim_cmd_output
 
  Parameters  : $vim_cmd_output
