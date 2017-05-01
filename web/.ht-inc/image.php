@@ -494,7 +494,7 @@ class Image extends Resource {
 		$h .= dijitButton('addeditbtn', i("Confirm"), "saveResource();");
 		$script  = "    dijit.byId('addeditdlg').hide();\n";
 		$script .= "    dijit.registry.filter(function(widget, index){return widget.id.match(/^comments/);}).forEach(function(widget) {widget.destroy();});\n";
-		$h .= dijitButton('', i("Cancel"), $script);
+		$h .= dijitButton('', i("Close"), $script);
 		$h .= "</div>\n"; # editdlgbtns
 
 		if(! $add) {
