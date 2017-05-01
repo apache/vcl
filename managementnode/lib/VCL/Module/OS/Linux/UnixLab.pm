@@ -293,6 +293,31 @@ sub delete_reservation_info_json_file { return 1; }
 
 #//////////////////////////////////////////////////////////////////////////////
 
+=head2 firewall
+
+ Parameters  : none
+ Returns     : VCL::Module::OS::Linux::firewall object
+ Description : Creates and returns a generic VCL::Module::OS::Linux::firewall
+               object.
+
+=cut
+
+sub firewall {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	return $self->{firewall} if $self->{firewall};
+	
+	notify($ERRORS{'DEBUG'}, 0, "creating generic VCL::Module::OS::Linux::firewall object");
+	$self->{firewall} = bless {}, 'VCL::Module::OS::Linux::firewall';
+	return $self->{firewall};
+}
+
+#//////////////////////////////////////////////////////////////////////////////
+
 =head2 firewall_compare_update
 
 =cut

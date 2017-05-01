@@ -89,6 +89,22 @@ sub initialize {
 		return 0;
 	}
 	
+	# Make sure 'iptables -L' works, it won't if the management node does not have root access
+	# This is likely for computers provisioned by Lab.pm
+	# The iptables command may exist but generates this error:
+	#    iptables v1.4.7: can't initialize iptables table `filter': Permission denied (you must be root)
+	#    Perhaps iptables or your kernel needs to be upgraded.
+	my $command = "iptables -L";
+	my ($exit_status, $output) = $self->os->execute($command);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, ref($self) . " object not initialized to control $computer_name, failed to execute command to test if management node has access to configure iptables on the computer");
+		return;
+	}
+	elsif (grep(/(can't initialize|Permission denied|you must be root)/i, @$output)) {
+		notify($ERRORS{'DEBUG'}, 0, ref($self) . " object not initialized to control $computer_name, iptables command exists but cannot be controlled by the management node user:\n" . join("\n", @$output));
+		return 0;
+	}
+	
 	notify($ERRORS{'DEBUG'}, 0, ref($self) . " object initialized to control $computer_name");
 	return 1;
 }
