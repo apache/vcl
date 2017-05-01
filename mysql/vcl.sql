@@ -1848,7 +1848,9 @@ INSERT IGNORE INTO `OS` (`id`, `name`, `prettyname`, `type`, `installtype`, `sou
 (53, 'centos7image', 'CentOS 7 (Bare Metal) Image', 'linux', 'partimage', 'image', 5),
 (54, 'rhelimage', 'Red Hat Based Image', 'linux', 'partimage', 'image', 5),
 (55, 'win10', 'Windows 10.x (Bare Metal)', 'windows', 'partimage', 'image', 34),
-(56, 'vmwarewin10', 'Windows 10.x (VMware)', 'windows', 'vmware', 'vmware_images', 34);
+(56, 'vmwarewin10', 'Windows 10.x (VMware)', 'windows', 'vmware', 'vmware_images', 34),
+(57, 'win2016', 'Windows Server 2016 (Bare Metal)', 'windows', 'partimage', 'image', 35),
+(58, 'vmwarewin2016', 'Windows Server 2016 (VMware)', 'windows', 'vmware', 'vmware_images', 35);
 
 UPDATE OS SET minram = 1024 WHERE name REGEXP 'win.*';
 UPDATE OS SET minram = 2048 WHERE name REGEXP 'win.*(7|8|10|2008|2012)';
