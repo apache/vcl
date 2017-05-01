@@ -337,8 +337,8 @@ sub firewall {
 		}
 	}
 	
-	notify($ERRORS{'WARNING'}, 0, "failed to create firewall object to control $computer_node_name");
-	return;
+	notify($ERRORS{'DEBUG'}, 0, "unable to initialize suitable specific firewall module, returning generic VCL::Module::OS::Linux::firewall object");
+	return bless {}, 'VCL::Module::OS::Linux::firewall';
 }
 
 #/////////////////////////////////////////////////////////////////////////////
