@@ -43,7 +43,8 @@ function initViewRequests(imaging) {
 	if(typeof(dijit) == "undefined" ||
 	   typeof(dijit.byId) == "undefined" ||
 	   typeof(images) == "undefined" ||
-	   dojo.byId('limitstart') == null) {
+	   dojo.byId('limitstart') == null ||
+	   (imaging && typeof(dijit.byId('deployimage')) == 'undefined')) {
 		setTimeout(function() {initViewRequests(imaging);}, 100);
 		return;
 	}
