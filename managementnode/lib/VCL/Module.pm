@@ -775,7 +775,7 @@ my $self = shift;
 
 =head2 create_provisioning_object
 
- Parameters  : none
+ Parameters  : $provisioning_perl_package (optional)
  Returns     : VCL::Module::Provisioning object reference
  Description : Creates an provisioning module object if one has not already been
                created for the calling object.
@@ -804,7 +804,7 @@ sub create_provisioning_object {
 	}
 	
 	# Get the Perl package for the provisioning module
-	my $provisioning_perl_package = $self->data->get_computer_provisioning_module_perl_package();
+	my $provisioning_perl_package = shift || $self->data->get_computer_provisioning_module_perl_package();
 	if (!$provisioning_perl_package) {
 		notify($ERRORS{'WARNING'}, 0, "provisioning object could not be created, provisioning module Perl package could not be retrieved");
 		return;

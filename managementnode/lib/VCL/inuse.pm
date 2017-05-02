@@ -207,11 +207,11 @@ sub process {
 			$request_remaining_minutes = ($end_time_notify_minutes - $iteration);
 			notify($ERRORS{'OK'}, 0, "minutes until end of end of request: $request_remaining_minutes");
 			
-			# Check if user deleted the request
-			$self->state_exit() if is_request_deleted($request_id);
-			
-			# Check if this is an imaging request, causes process to exit if state or laststate = image
-			$self->check_imaging_request();
+			# Check if the request state changed for any reason
+			# This will occur if the user deletes the request, makeproduction is initiated, reboot is initiated, image capture is started
+			if ($self->request_state_changed()) {
+				$self->state_exit();
+			}
 			
 			# Get the current request end time from the database
 			my $current_request_end = get_request_end($request_id);
@@ -436,7 +436,7 @@ sub notify_user_endtime_imminent {
 	my $user_imtype_name             = $self->data->get_user_imtype_name();
 	my $user_im_id                   = $self->data->get_user_im_id();
 	my $is_parent_reservation        = $self->data->is_parent_reservation();
-	my $request_forimaging           = $self->check_imaging_request();
+	my $request_forimaging           = $self->data->get_request_forimaging();
 	
 	my $user_message_key;
 	if ($request_forimaging) {

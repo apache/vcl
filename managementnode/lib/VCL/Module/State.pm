@@ -269,11 +269,11 @@ sub user_connected {
 	my $ignore_connections_gte_min   = $self->os->get_timings('ignore_connections_gte');
 	my $ignore_connections_gte       = floor($ignore_connections_gte_min / 60);
 	
-	# Check if user deleted the request
-	$self->state_exit() if is_request_deleted($request_id);
-	
-	# Check if this is an imaging request, causes process to exit if state or laststate = image
-	$self->check_imaging_request();
+	# Check if the request state changed for any reason
+	# This will occur if the user deletes the request, makeproduction is initiated, reboot is initiated, image capture is started
+	if ($self->request_state_changed()) {
+		$self->state_exit();
+	}
 	
 	# Check if this is a server request, causes process to exit if server request
 	if ($server_request_id) {
@@ -317,23 +317,43 @@ sub user_connected {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 check_imaging_request
+=head2 request_state_changed
 
  Parameters  : none
  Returns     : boolean
- Description : The inuse process exits if the request state or laststate are set
-               to image, or if the forimaging flag has been set.
+ Description : Returns true if the neither current request state changed after
+               the process began, including:
+               * Request deleted
+               * Request deleted and makeproduction initiated
+               * Image capture initiated
+               * Checkpoint capture initiated
+               * Reboot initiated
 
 =cut
 
-sub check_imaging_request {
+sub request_state_changed {
 	my $self = shift;
-	my $request_id = $self->data->get_request_id();
+	if (ref($self) !~ /VCL::/) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method, reservation failure tasks not attempted, process exiting");
+		exit 1;
+	}
 	
-	my $imaging_result = is_request_imaging($request_id);
-	if ($imaging_result eq 'image') {
-		notify($ERRORS{'OK'}, 0, "image creation process has begun, exiting");
-		$self->state_exit();
+	my $request_id = $self->data->get_request_id();
+	my $processing_request_state_name = $self->data->get_request_state_name();
+	
+	my ($current_state_name, $current_laststate_name) = get_request_current_state_name($request_id);
+	if (!$current_state_name || !$current_laststate_name) {
+		notify($ERRORS{'WARNING'}, 0, "request $request_id state data could not be retrieved, assuming request is deleted and was removed from the database, returning true");
+		return 1;
+	}
+	elsif (($current_state_name ne 'pending' and $current_state_name ne $processing_request_state_name) ||
+		($current_state_name eq 'pending' and $current_laststate_name ne $processing_request_state_name)) {
+		notify($ERRORS{'OK'}, 0, "request state changed after this process begain: $processing_request_state_name --> $current_state_name/$current_laststate_name, returning true");
+		return 1;
+	}
+	else {
+		notify($ERRORS{'OK'}, 0, "request state has NOT changed after this process begain: $processing_request_state_name --> $current_state_name/$current_laststate_name, returning false");
+		return 0;
 	}
 }
 
