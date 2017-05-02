@@ -938,8 +938,17 @@ sub get_driver_name {
                will vary based on the base image used.
                
                If the request state is anything other than 'image', the domain
-               name is constructed from the computer and image names, example:
-               'vclv99-197:vmwarewin7-Windows764bit1846-v3'
+               name is constructed from the computer name, image display name
+               pruned of non-alphanumeric characters, image ID, and revision
+               number:
+               <computer name>_<image display name>_<image ID>-v<revision number>'
+               
+               Example:
+               'vm4-22_CentOS7Base64bitVM_3081-v5'
+               
+               Parts of the name may be omitted if the overall length exceeds
+               the maximum domain name length on some early versions of
+               libvirt/KVM - 48 characters.
 
 =cut
 
@@ -950,11 +959,19 @@ sub get_domain_name {
 		return;
 	}
 	
-	return $self->{domain_name} if defined $self->{domain_name};
+	# Only use argument for testing different lengths
+	my $max_length = shift;
+	if (!$max_length) {
+		return $self->{domain_name} if defined $self->{domain_name};
+		$max_length = 48;
+	}
 	
-	my $node_name = $self->data->get_vmhost_short_name();
 	my $request_state_name = $self->data->get_request_state_name();
-	my $computer_short_name = $self->data->get_computer_short_name();
+	my $computer_id = $self->data->get_computer_id();
+	my $computer_name = $self->data->get_computer_short_name();
+	my $image_id = $self->data->get_image_id();
+	my $image_pretty_name = $self->data->get_image_prettyname();
+	my $revision_number = $self->data->get_imagerevision_revision();
 	
 	# If request state is image the domain name will be that of the image used as the base image, not the image being created
 	# Must find existing loaded domain on node in order to determine name
@@ -971,10 +988,62 @@ sub get_domain_name {
 	}
 	
 	# Request state is not image, construct the domain name
-	my $image_name = $self->data->get_image_name();
+	# Make sure the computer name by itself isn't too long
+	# This shouldn't ever happen unless very long computer names are used
+	my $computer_name_length = length($computer_name);
+	if ($computer_name_length > $max_length) {
+		$self->{domain_name} = $computer_id;
+		notify($ERRORS{'WARNING'}, 0, "computer name '$computer_name' is longer ($computer_name_length characters) than the maximum domain name length ($max_length characters), domain name will be the computer ID: '$self->{domain_name}'");
+		return $self->{domain_name};
+	}
 	
-	$self->{domain_name} = $computer_short_name . '_' . $image_name;
-	notify($ERRORS{'DEBUG'}, 0, "constructed domain name: '$self->{domain_name}'");
+	my $prefix = "$computer_name\_";
+	my $prefix_length = length($prefix);
+	
+	my $suffix = "$image_id-v$revision_number";
+	my $suffix_length = length($suffix);
+	
+	my $prefix_suffix_length = ($prefix_length + $suffix_length);
+	
+	# Make sure computer name prefix + revision suffix don't exceed the maximum length
+	# If so, just use the computer name
+	if ($prefix_suffix_length > $max_length) {
+		$self->{domain_name} = $computer_name;
+		notify($ERRORS{'DEBUG'}, 0, "length of domain name prefix '$prefix' and suffix '$suffix' ($prefix_suffix_length characters) exceeds the maximum domain name length ($max_length characters), domain name will only contain the computer name: '$self->{domain_name}'");
+		return $self->{domain_name};
+	}
+	elsif ($prefix_suffix_length == $max_length) {
+		$self->{domain_name} = $prefix . $suffix;
+		notify($ERRORS{'DEBUG'}, 0, "length of domain name prefix '$prefix' and suffix '$suffix' ($prefix_suffix_length characters) equals the maximum domain name length ($max_length characters), domain name will only contain these components: '$self->{domain_name}'");
+		return $self->{domain_name};
+	}
+	
+	# Figure out the maximum number of characters to include in the middle section
+	# Subtract 1 for the separator character
+	my $max_middle_length = ($max_length - $prefix_suffix_length - 1);
+	if ($max_middle_length < 5) {
+		# Don't bother adding if middle section would be less than 5 characters
+		$self->{domain_name} = $prefix . $suffix;
+		notify($ERRORS{'DEBUG'}, 0, "length of domain name prefix '$prefix' and suffix '$suffix' ($prefix_suffix_length characters) is close to the maximum domain name length ($max_length characters), domain name will only contain these components: '$self->{domain_name}'");
+		return$self->{domain_name};
+	}
+	
+	my $middle_section = '';
+	
+	# Remove all characters except letters and numbers
+	(my $image_pretty_name_reduced = $image_pretty_name) =~ s/[^a-z0-9]+//ig;
+	my $image_pretty_name_reduced_length = length($image_pretty_name_reduced);
+	if (length($image_pretty_name_reduced) <= $max_middle_length) {
+		$middle_section = $image_pretty_name_reduced;
+	}
+	else {
+		$middle_section = substr($image_pretty_name_reduced, 0, $max_middle_length);
+		notify($ERRORS{'DEBUG'}, 0, "truncating middle section of domain name so overall length is $max_length characters: '$image_pretty_name_reduced' --> '$middle_section'");
+	}
+	
+	$self->{domain_name} = $prefix . $middle_section . '_' . $suffix;
+	my $domain_name_length = length($self->{domain_name});
+	notify($ERRORS{'DEBUG'}, 0, "constructed domain name: '$self->{domain_name}', length: $domain_name_length characters");
 	return $self->{domain_name};
 }
 
@@ -1652,10 +1721,15 @@ sub generate_domain_xml {
 		return;
 	}
 	
+	my $request_id = $self->data->get_request_id();
+	my $reservation_id = $self->data->get_reservation_id();
 	my $image_name = $self->data->get_image_name();
 	my $image_display_name = $self->data->get_image_prettyname();
 	my $image_os_type = $self->data->get_image_os_type();
 	my $computer_name = $self->data->get_computer_short_name();
+	my $management_node_name = $self->data->get_management_node_short_name();
+	
+	my $timestamp = makedatestring();
 	
 	my $domain_name = $self->get_domain_name();
 	my $domain_type = $self->driver->get_domain_type();
@@ -1710,6 +1784,15 @@ sub generate_domain_xml {
 	}
 	my $memory_kb = ($memory_mb * 1024);
 	
+	my $description = <<EOF;
+image: $image_display_name
+revision: $image_name
+load time: $timestamp
+management node: $management_node_name
+request ID: $request_id
+reservation ID: $reservation_id
+EOF
+
 	# Per libvirt documentation:
 	#   "The guest clock is typically initialized from the host clock.
 	#    Most operating systems expect the hardware clock to be kept in UTC, and this is the default.
@@ -1718,7 +1801,7 @@ sub generate_domain_xml {
 	
 	my $xml_hashref = {
 		'type' => $domain_type,
-		'description' => [$image_display_name],
+		'description' => [$description],
 		'name' => [$domain_name],
 		'on_poweroff' => ['preserve'],
 		'on_reboot' => ['restart'],
@@ -2792,6 +2875,9 @@ sub get_master_xml_device_info {
 	
 	if (!defined($self->{master_xml_device_info})) {
 		my $master_xml_info = $self->get_master_xml_info() || return;
+		if(scalar(keys %$master_xml_info) == 0) {
+			return;
+		}
 		
 		# Should always be a 'devices' key which contains an array ref with a single array value: $master_xml_info->{devices}->[0]
 		my $devices_array_ref = $master_xml_info->{devices};
