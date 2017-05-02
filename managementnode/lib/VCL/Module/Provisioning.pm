@@ -421,16 +421,28 @@ sub retrieve_image {
 	}
 	
 	# Copy each file path to the image repository directory
-	my $total_file_count = scalar(keys %{$partner_info{$retrieval_partner}{file_paths}});
-	my $file_number = 0;
+	my $image_size_total_bytes = $partner_info{$retrieval_partner}{image_size};
+	my $image_size_total_gb = format_number(($image_size_total_bytes / 1024 / 1024 / 1024), 1);
+	
+	my $image_size_retrieved_bytes = 0;
+	my $image_size_retrieved_gb = 0.0;
+	
+	my $file_total_count = scalar(keys %{$partner_info{$retrieval_partner}{file_paths}});
+	my $file_retrieved_count = 0;
+	
 	for my $partner_file_path (sort {lc($a) cmp lc($b)} keys %{$partner_info{$retrieval_partner}{file_paths}}) {
-		$file_number++;
+		$file_retrieved_count++;
 		my $file_name = $partner_info{$retrieval_partner}{file_paths}{$partner_file_path}{file_name};
 		my $local_file_path = "$image_repository_path_local/$file_name";
 		
-		notify($ERRORS{'DEBUG'}, 0, "file $file_number/$total_file_count: retrieving image from $retrieval_partner_hostname: $partner_file_path -->");
+		my $file_size_bytes = $partner_info{$retrieval_partner}{file_paths}{$partner_file_path}{file_size};
+		
+		notify($ERRORS{'DEBUG'}, 0, "retrieving image file $file_retrieved_count/$file_total_count from $retrieval_partner_hostname: $partner_file_path --> $local_file_path (" . get_file_size_info_string($file_size_bytes) . ')');
 		if (run_scp_command("$partner_info{$retrieval_partner}{user}\@$retrieval_partner:$partner_file_path", $local_file_path, $partner_info{$retrieval_partner}{key}, $partner_info{$retrieval_partner}{port})) {
-			notify($ERRORS{'OK'}, 0, "file $file_number/$total_file_count: retrieved image from $retrieval_partner_hostname: --> $local_file_path");
+			$image_size_retrieved_bytes += $file_size_bytes;
+			$image_size_retrieved_gb = format_number(($image_size_retrieved_bytes / 1024 / 1024 / 1024), 1);
+			my $retrieved_percent = format_number(int($image_size_retrieved_bytes / $image_size_total_bytes * 100), 0);			
+			notify($ERRORS{'OK'}, 0, "retrieved image file $file_retrieved_count/$file_total_count, $retrieved_percent\% complete, $image_size_retrieved_gb/$image_size_total_gb GB");
 		}
 		else {
 			notify($ERRORS{'WARNING'}, 0, "failed to copy image $image_name from $retrieval_partner_hostname");
