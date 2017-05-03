@@ -88,7 +88,7 @@ sub get_next_image {
 	my $current_image_name  = $self->data->get_image_name();
 	my $current_imagerevision_id = $self->data->get_imagerevision_id();
 
-	my @current_image_ret_array = ('reload', $current_image_name, $current_image_id, $current_imagerevision_id );
+	my @current_image_ret_array = ('reload', $current_image_name, $current_image_id, $current_imagerevision_id);
 	
 	my $notify_prefix = "predictive_reload_Level_0: ";
 	my @ret_array;

@@ -679,7 +679,7 @@ sub _initialize : Init {
 			notify($ERRORS{'WARNING'}, 0, "DataStructure object could not be initialized, failed to retrieve data for computer: $computer_identifier");
 			
 			# Throw an exception because simply returning undefined (return;) does not result in this DataStructure object being undefined
-			Exception::Class::Base->throw( error => "DataStructure object could not be initialized, failed to retrieve data for computer: $computer_identifier");
+			Exception::Class::Base->throw(error => "DataStructure object could not be initialized, failed to retrieve data for computer: $computer_identifier");
 			return;
 		}
 		
@@ -694,7 +694,7 @@ sub _initialize : Init {
 			notify($ERRORS{'WARNING'}, 0, "DataStructure object could not be initialized, failed to retrieve data for VM host: $vmhost_identifier");
 			
 			# Throw an exception because simply returning undefined (return;) does not result in this DataStructure object being undefined
-			Exception::Class::Base->throw( error => "DataStructure object could not be initialized, failed to retrieve data for VM host: $vmhost_identifier");
+			Exception::Class::Base->throw(error => "DataStructure object could not be initialized, failed to retrieve data for VM host: $vmhost_identifier");
 			return;
 		}
 		$self->request_data->{reservation}{$self->reservation_id}{computer}{vmhost} = $vmhost_info;
@@ -725,7 +725,7 @@ sub _initialize : Init {
 						$imagerevision_info = get_production_imagerevision_info($image_id);
 					}
 					else {
-						Exception::Class::Base->throw( error => "DataStructure object could not be initialized, computer's current imagerevision ID could not be retrieved from the current DataStructure data:\n" . format_data($self->get_request_data));
+						Exception::Class::Base->throw(error => "DataStructure object could not be initialized, computer's current imagerevision ID could not be retrieved from the current DataStructure data:\n" . format_data($self->get_request_data));
 						return;
 					}
 				}
@@ -734,7 +734,7 @@ sub _initialize : Init {
 				}
 			}
 			else {
-				Exception::Class::Base->throw( error => "DataStructure object could not be initialized, computer's current imagerevision ID could not be retrieved from the current DataStructure data:\n" . format_data($self->get_request_data));
+				Exception::Class::Base->throw(error => "DataStructure object could not be initialized, computer's current imagerevision ID could not be retrieved from the current DataStructure data:\n" . format_data($self->get_request_data));
 				return;
 			}
 		}
@@ -745,13 +745,13 @@ sub _initialize : Init {
 			$self->request_data->{reservation}{$self->reservation_id}{imagerevision} = $imagerevision_info;
 		}
 		else {
-			Exception::Class::Base->throw( error => "DataStructure object could not be initialized, failed to retrieve imagerevision data");
+			Exception::Class::Base->throw(error => "DataStructure object could not be initialized, failed to retrieve imagerevision data");
 			return;
 		}
 		
 		my $image_id = $imagerevision_info->{imageid};
 		if (!defined($image_id)) {
-			Exception::Class::Base->throw( error => "DataStructure object could not be initialized, failed to retrieve image ID from the imagerevision data:\n" . format_data($imagerevision_info));
+			Exception::Class::Base->throw(error => "DataStructure object could not be initialized, failed to retrieve image ID from the imagerevision data:\n" . format_data($imagerevision_info));
 			return;
 		}
 		
@@ -761,7 +761,7 @@ sub _initialize : Init {
 			$self->request_data->{reservation}{$self->reservation_id}{image} = $image_info;
 		}
 		else {
-			Exception::Class::Base->throw( error => "DataStructure object could not be initialized, failed to retrieve data for image ID: " . $self->image_id);
+			Exception::Class::Base->throw(error => "DataStructure object could not be initialized, failed to retrieve data for image ID: " . $self->image_id);
 			return;
 		}
 	}
