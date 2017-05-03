@@ -57,11 +57,11 @@ use 5.008000;
 use strict;
 use warnings;
 use diagnostics;
-use English qw( -no_match_vars );
+use English qw(-no_match_vars);
 use IO::File;
 use Fcntl qw(:DEFAULT :flock);
-use File::Temp qw( tempfile );
-use List::Util qw( max );
+use File::Temp qw(tempfile);
+use List::Util qw(max);
 use Storable qw(dclone);
 use Term::ANSIColor 2.00 qw(:constants colored);
 

@@ -54,10 +54,10 @@ use diagnostics;
 no warnings 'redefine';
 
 use VCL::utils;
-use English qw( -no_match_vars );
+use English qw(-no_match_vars);
 use Net::Netmask;
 use File::Basename;
-use File::Temp qw( tempfile mktemp );
+use File::Temp qw(tempfile mktemp);
 
 ##############################################################################
 
@@ -2912,7 +2912,7 @@ sub create_user {
 		my $home_directory_root = "/home";
 		my $home_directory_path = "$home_directory_root/$username";
 		my $home_directory_on_local_disk = $self->is_file_on_local_disk($home_directory_root);
-		if ($home_directory_on_local_disk ) {
+		if ($home_directory_on_local_disk) {
 			my $useradd_command = "/usr/sbin/useradd -s /bin/bash -m -d /home/$username -g vcl";
 			$useradd_command .= " -u $uid" if ($uid);
 			$useradd_command .= " $username";
@@ -2944,8 +2944,8 @@ sub create_user {
 	}
 
 	# Process connect_methods
-	if($self->can("grant_connect_method_access")) {
-		if(!$self->grant_connect_method_access({
+	if ($self->can("grant_connect_method_access")) {
+		if (!$self->grant_connect_method_access({
 			username => $username,
 			uid => $uid,
 			ssh_public_keys => $ssh_public_keys,

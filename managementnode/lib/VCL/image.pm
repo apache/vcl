@@ -596,7 +596,7 @@ sub setup_capture_base_image {
 		# if 0 selected, delete all reservations related to $computer_node_name
 		# Set $computer_node_name to available, proceed with questions
 		my $epoch_time = convert_to_epoch_seconds;
-		if ($chosen_request_id == 0 ) {
+		if ($chosen_request_id == 0) {
 			delete $existing_requests_array_choices{0};
 			
 			foreach my $request_id_del (sort keys %existing_requests_array_choices) {
@@ -812,7 +812,7 @@ EOF
 INSERT INTO imagerevision
 (imageid, revision, userid, datecreated, deleted, production, imagename)
 VALUES
-($image_id, '0', '$user_id', NOW( ), '1', '1', '$image_name')
+($image_id, '0', '$user_id', NOW(), '1', '1', '$image_name')
 EOF
 
 	my $imagerevision_id = database_execute($insert_imagerevision_statement);
@@ -882,7 +882,7 @@ EOF
 		while (my $output = <COMMAND>) {
 			if ($output =~ /$reservation_id/) {
 				print $output;
-				if ($output =~ /complete/i ) {
+				if ($output =~ /complete/i) {
 					last;
 				}
 			}

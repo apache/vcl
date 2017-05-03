@@ -1216,7 +1216,7 @@ sub grant_access {
 	my $system32_path        = $self->get_system32_path();
 	my $request_forimaging   = $self->data->get_request_forimaging();
 	
-	if ($self->process_connect_methods("", 1) ) {
+	if ($self->process_connect_methods("", 1)) {
 		notify($ERRORS{'OK'}, 0, "processed connection methods on $computer_node_name");
 	}
 	else {
@@ -8499,7 +8499,7 @@ sub set_static_public_address {
 	# Make sure public IP configuration is static or this is a server request
 	my $ip_configuration = $self->data->get_management_node_public_ip_configuration();
 	if ($ip_configuration !~ /static/i) {
-		if ( !$server_request_fixed_ip ) {
+		if (!$server_request_fixed_ip) {
 			notify($ERRORS{'WARNING'}, 0, "static public address can only be set if IP configuration is static, current value: $ip_configuration \nserver_request_fixed_ip=$server_request_fixed_ip");
 			return;
 		}
@@ -8884,7 +8884,7 @@ sub configure_time_synchronization {
 		$time_source = get_variable($variable_name);
 		notify($ERRORS{'DEBUG'}, 0, "time_source is $time_source  set for $variable_name");
 	}
-	elsif (is_variable_set($variable_name_global) ) {
+	elsif (is_variable_set($variable_name_global)) {
 		$time_source = get_variable($variable_name_global);
 		notify($ERRORS{'DEBUG'}, 0, "time_source is $time_source  set for $variable_name");
 	}

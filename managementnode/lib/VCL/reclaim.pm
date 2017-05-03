@@ -265,7 +265,7 @@ sub insert_reload_and_exit {
 		}
 	}
 	else {
-	#elsif ( $action =~ /reload/i ) {
+	#elsif ($action =~ /reload/i) {
 		if (!$next_image_name || !$next_image_id || !$next_imagerevision_id) {
 			notify($ERRORS{'WARNING'}, 0, "predictor module did not return required information, calling get_next_image_default from utils");
 			($next_image_name, $next_image_id, $next_imagerevision_id) = get_next_image_default($computer_id);

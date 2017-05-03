@@ -142,7 +142,7 @@ sub pre_capture {
 
 	notify($ERRORS{'OK'}, 0, "beginning OSX image PRE_CAPTURE() preparation tasks on $computer_node_name");
 
-	# copy pre_capture configuration files to the computer ( scripts, etc )
+	# copy pre_capture configuration files to the computer (scripts, etc)
 	if (!$self->copy_capture_configuration_files()) {
 		notify($ERRORS{'WARNING'}, 0, "unable to copy OSX script files to $computer_node_name");
 		return 0;
@@ -693,7 +693,7 @@ sub enable_firewall_port {
 	my $rule=0;
 	my $upper_limit=12300;
 	my $found=0;
-	while ( $rule == 0  &&  $upper_limit > 0 ) {
+	while ($rule == 0  &&  $upper_limit > 0) {
 		foreach my $line (@{$output}) {
 			if ($line =~ /^$upper_limit\s+/) {
 				$found=1;
@@ -1040,7 +1040,7 @@ sub delete_user {
 		return 0;
 	}
 	
-	if ( $user_login_id eq "root" || $user_login_id eq "administrator" ) {
+	if ($user_login_id eq "root" || $user_login_id eq "administrator" ) {
 		notify($ERRORS{'WARNING'}, 0, "$user_login_id MUST not be deleted");
 		return 0;
 	}

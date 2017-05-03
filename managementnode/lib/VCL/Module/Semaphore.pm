@@ -59,7 +59,7 @@ use strict;
 use warnings;
 use diagnostics;
 
-use English qw( -no_match_vars );
+use English qw(-no_match_vars);
 use IO::File;
 use Fcntl qw(:flock);
 

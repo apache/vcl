@@ -922,7 +922,7 @@ sub check_endtimenotice_interval {
 	$diff_seconds -= $diff_weeks * 604800;
 	
 	my $diff_days = int($diff_seconds/86400);
-	my $Total_days = int($epoch_until_end/86400);
+	my $total_days = int($epoch_until_end/86400);
 	$diff_seconds -= $diff_days * 86400;
 	
 	my $diff_hours = int($diff_seconds/3600);
@@ -939,27 +939,27 @@ sub check_endtimenotice_interval {
 		return 0;
 	}
 	#2 week: between 14 days and a 14 day -6 minutes window
-	elsif ($Total_days >= 13 && $diff_hours >= 23 && $diff_minutes >= 55) {
+	elsif ($total_days >= 13 && $diff_hours >= 23 && $diff_minutes >= 55) {
 		return "2 weeks";
 	}
 	#Ignore: between 7 days and 14 day - 6 minute window
-	elsif ($Total_days >=7) {
+	elsif ($total_days >=7) {
 		return 0;
 	}
 	# 1 week notice: between 7 days and a 7 day -6 minute window
-	elsif ($Total_days >= 6 && $diff_hours >= 23 && $diff_minutes >= 55) {
+	elsif ($total_days >= 6 && $diff_hours >= 23 && $diff_minutes >= 55) {
 		return "1 week";
 	}
 	# Ignore: between 2 days and 7 day - 15 minute window
-	elsif ($Total_days >= 2) {
+	elsif ($total_days >= 2) {
 		return 0;
 	}
 	# 2 day notice: between 2 days and a 2 day -6 minute window
-	elsif ($Total_days >= 1 && $diff_hours >= 23 && $diff_minutes >= 55) {
+	elsif ($total_days >= 1 && $diff_hours >= 23 && $diff_minutes >= 55) {
 		return "2 days";
 	}
 	# 1 day notice: between 1 days and a 1 day -6 minute window
-	elsif ($Total_days >= 0 && $diff_hours >= 23 && $diff_minutes >= 55) {
+	elsif ($total_days >= 0 && $diff_hours >= 23 && $diff_minutes >= 55) {
 		return "24 hours";
 	}
 	
@@ -1512,7 +1512,7 @@ sub update_computer_lastcheck {
 	notify($ERRORS{'WARNING'}, $log, "computer id is not defined") unless (defined($computer_id));
 	return 0 unless (defined $computer_id);
 
-	unless (defined($datestring) ) {
+	unless (defined($datestring)) {
 		$datestring = makedatestring;
 	}
 
@@ -3149,7 +3149,7 @@ EOF
 			$request_info->{checkuser} = 0;
 			$request_info->{reservation}{$reservation_id}{serverrequest}{ALLOW_USERS} = $request_info->{user}{unityid};
 		}
-		elsif ($request_info->{DURATION} >= (60 * 60 * 24) ) {
+		elsif ($request_info->{DURATION} >= (60 * 60 * 24)) {
 			#notify($ERRORS{'DEBUG'}, 0, "request length > 24 hours, disabling user checks");
 			$request_info->{checkuser} = 0;
 		}
@@ -4895,7 +4895,7 @@ sub update_computer_imagename {
 
 	#get computer infomation based on imagename
 	my $imagerevision_info;
-	if ( $imagerevision_info = get_imagerevision_info($imagename)) {
+	if ($imagerevision_info = get_imagerevision_info($imagename)) {
 		notify($ERRORS{'DEBUG'}, 0, "successfully retreived image info for $imagename");
 	}
 	else {
@@ -5724,7 +5724,7 @@ SET
 image.name = \'$new_image_name\',
 EOF
 
-	if (defined($new_image_pretty_name) ) {
+	if (defined($new_image_pretty_name)) {
 		$update_statement .= <<EOF;
 image.prettyname = \'$new_image_pretty_name\',
 EOF
@@ -6527,11 +6527,11 @@ sub get_management_node_blockrequests {
 	
 	WHERE
 	blockRequest.managementnodeid = $managementnode_id AND
-   blockRequest.status = 'accepted' AND
+	blockRequest.status = 'accepted' AND
 	blockTimes.processed = '0' AND
-	(blockTimes.skip = '0' AND blockTimes.start < (NOW() + INTERVAL 360 MINUTE )) OR
-   blockTimes.end < NOW() 
-   ";
+	(blockTimes.skip = '0' AND blockTimes.start < (NOW() + INTERVAL 360 MINUTE)) OR
+	blockTimes.end < NOW() 
+	";
 
 	# Call the database select subroutine
 	# This will return an array of one or more rows based on the select statement
@@ -6662,7 +6662,7 @@ sub get_computers_controlled_by_mn {
 
 			foreach my $id (keys %{ $info{manageable_resoucegroups}{$grp_id} } ) {
 				my $computer_group_id = $info{manageable_resoucegroups}{$grp_id}{$id}{groupid};
-				if ($info{"manageable_computer_grps"}{$id}{"members"} = get_computer_grp_members($computer_group_id) ) {
+				if ($info{"manageable_computer_grps"}{$id}{"members"} = get_computer_grp_members($computer_group_id)) {
 					notify($ERRORS{'DEBUG'}, $LOGFILE, "retrieved computers from computer groupname= $info{manageable_resoucegroups}{$grp_id}{$id}{groupname}");
 				}
 				else {
@@ -6682,7 +6682,7 @@ sub get_computers_controlled_by_mn {
 
 	foreach my $computergroup (keys %{ $info{manageable_computer_grps}}) {
 		foreach my $computerid (keys %{ $info{manageable_computer_grps}{$computergroup}{members} }) {
-			if ( !(exists $computer_list{$computerid}) ) {
+			if (!(exists $computer_list{$computerid})) {
 				# add to return list
 				$computer_list{$computerid}{"computer_id"}=$computerid;
 			}
@@ -9688,7 +9688,7 @@ sub string_to_ascii {
 			$ascii_value_string .= "\n" if $ascii_code == 10;
 			$previous_code = $ascii_code;
 		}
-		elsif($ascii_code > 126) {
+		elsif ($ascii_code > 126) {
 			$ascii_value_string .= pack("C*", $ascii_code) . "<$ascii_code>";
 			$previous_code = -1;
 		}
@@ -12173,9 +12173,9 @@ sub get_current_image_contents_no_data_structure {
 
 sub is_ip_assigned_query {
 	
-	my ($IPaddress) = @_;
+	my ($ip_address) = @_;
 
-   if (!defined($IPaddress)) {
+   if (!defined($ip_address)) {
       notify($ERRORS{'WARNING'}, 0, "IPaddress  argument was not supplied");
       return;
    }	
@@ -12188,7 +12188,7 @@ computer.stateid AS computer_stateid,
 state.name AS state_name
 FROM computer, state
 WHERE
-computer.IPaddress = '$IPaddress' AND
+computer.IPaddress = '$ip_address' AND
 computer.stateid = state.id AND
 state.name != 'deleted' AND
 computer.vmhostid IS NOT NULL
@@ -12199,11 +12199,11 @@ EOF
 
    # Check to make sure 1 row was returned
    if (scalar @selected_rows == 0) {
-      notify($ERRORS{'OK'}, 0, "zero rows were returned from database select statement $IPaddress is available");
+      notify($ERRORS{'OK'}, 0, "zero rows were returned from database select statement $ip_address is available");
       return 0;
    }
 	elsif (scalar @selected_rows >= 1) {
-      notify($ERRORS{'OK'}, 0, scalar @selected_rows . " rows were returned from database select statement: $IPaddress is assigned");
+      notify($ERRORS{'OK'}, 0, scalar @selected_rows . " rows were returned from database select statement: $ip_address is assigned");
       return 1;
    }
 
@@ -14532,7 +14532,7 @@ sub ip_address_to_network_address {
 	}
 	
 	my $netmask_object = new Net::Netmask("$ip_address/$subnet_mask");
-	if(!$netmask_object) {
+	if (!$netmask_object) {
 		notify($ERRORS{'WARNING'}, 0, "failed to create Net::Netmask object, IP address: $ip_address, subnet mask: $subnet_mask");
 		return;
 	}

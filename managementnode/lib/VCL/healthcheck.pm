@@ -51,7 +51,7 @@ use 5.008000;
 use strict;
 use warnings;
 use diagnostics;
-use English qw( -no_match_vars );
+use English qw(-no_match_vars);
 
 use VCL::utils;
 use VCL::DataStructure;
@@ -229,7 +229,7 @@ sub process {
 			#next;
 			$computer_short_name = $computer_hostname;
 		}
-		#next if($computer_type eq "blade");
+		#next if ($computer_type eq "blade");
 		#next if ($computer_type eq "virtualmachine");
 		
 		my %node_status;
@@ -245,7 +245,7 @@ sub process {
 		my $node_status_string = "reload";
 		
 		notify($ERRORS{'OK'}, 0, "pinging node $computer_short_name ");
-		if (_pingnode($computer_short_name) ) {
+		if (_pingnode($computer_short_name)) {
 			$node_status{ping} = 1;	 
 			# Try nmap to see if any of the ssh ports are open before attempting to run a test command
 			my $port_22_status = nmap_port($computer_short_name, 22) ? "open" : "closed";
@@ -290,14 +290,14 @@ sub process {
 				my @currentimage_txt_contents = get_current_image_contents_no_data_structure($computer_short_name);
 				foreach my $l (@currentimage_txt_contents) {
 					#notify($ERRORS{'OK'}, 0, "NODE l=$l");
-					if ( $l =~ /imagerevision_id/i ) {
+					if ($l =~ /imagerevision_id/i) {
 						chomp($l);
 						my ($b,$imagerevision_id) = split(/=/,$l);
 						$node_status{imagerevision_id} = $imagerevision_id;
 						$node_status_string = "post_load";
 						$node_status{status} = "post_load";
 					}
-					if ($l =~ /vcld_post_load/ ) {
+					if ($l =~ /vcld_post_load/) {
 						$node_status_string = "ready";
 						$node_status{status} = "ready";
 					}

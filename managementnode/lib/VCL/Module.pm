@@ -2315,7 +2315,7 @@ sub setup_test_rpc_xml {
 	
 	my $response = xmlrpc_call(@xmlrpc_arguments);
 	if ($response && $response->value) {
-		print "SUCCESS: RPC-XML access is configured correctly\n" . format_data($response->value) . "\n" if($verbose == 1);
+		print "SUCCESS: RPC-XML access is configured correctly\n" . format_data($response->value) . "\n" if ($verbose == 1);
 		return 1;
 	}
 	

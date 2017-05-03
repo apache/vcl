@@ -58,7 +58,7 @@ use 5.008000;
 use strict;
 use warnings;
 use diagnostics;
-use English qw( -no_match_vars );
+use English qw(-no_match_vars);
 
 use VCL::utils;
 use Fcntl qw(:DEFAULT :flock);
@@ -341,7 +341,7 @@ sub load {
 			
 			if (my ($dhcpack_line) = grep(/DHCPACK/i, @dhcp_lines)) {
 				notify($ERRORS{'DEBUG'}, 0, "$computer_node_name acquired DHCP lease: '$dhcpack_line'");
-				if(!$dhcp_ack) {
+				if (!$dhcp_ack) {
 					insertloadlog($reservation_id, $computer_id, "xcatstage2", "acquired DHCP lease");
 					insertloadlog($reservation_id, $computer_id, "xcatround2", "waiting for boot flag");
 					$dhcp_ack=1;

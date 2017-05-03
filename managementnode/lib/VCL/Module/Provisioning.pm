@@ -51,7 +51,7 @@ use 5.008000;
 use strict;
 use warnings;
 use diagnostics;
-use English qw( -no_match_vars );
+use English qw(-no_match_vars);
 use File::Basename;
 
 use VCL::utils;

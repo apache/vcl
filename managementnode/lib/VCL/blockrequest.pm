@@ -220,7 +220,7 @@ sub process {
 				notify($ERRORS{'OK'}, 0, "success blockTimes id $blocktime_id already processed");
 			}
 			
-			sleep 5 if(!$completed);
+			sleep 5 if (!$completed);
 		}
 		
 		my $body;
@@ -236,8 +236,8 @@ sub process {
 			$body .= "Environment name = $image_prettyname\n";
 			$body .= "Allocated = $allocated\n"; 
 			$body .= "Block requested = $blockrequest_number_machines\n"; 
-			$body .= "xmlrpc warn msg = $warningmsg\n" if(defined($warningmsg));
-			$body .= "xmlrpc error msg = $errormsg\n" if(defined($errormsg));
+			$body .= "xmlrpc warn msg = $warningmsg\n" if (defined($warningmsg));
+			$body .= "xmlrpc error msg = $errormsg\n" if (defined($errormsg));
 			$body .= "\n";
 			
 			notify($ERRORS{'CRITICAL'}, 0, "$body");
@@ -367,20 +367,20 @@ sub process_block_time {
 	my $xml_ret = xmlrpc_call(@argument_string);
 
 	my %info;
-	if ( ref($xml_ret) =~ /STRUCT/i) {
+	if (ref($xml_ret) =~ /STRUCT/i) {
 		$info{status} = $xml_ret->value->{status};
-		$info{allocated} = $xml_ret->value->{allocated} if(defined($xml_ret->value->{allocated})) ;
-		$info{unallocated} = $xml_ret->value->{unallocated} if(defined($xml_ret->value->{unallocated}));
+		$info{allocated} = $xml_ret->value->{allocated} if (defined($xml_ret->value->{allocated})) ;
+		$info{unallocated} = $xml_ret->value->{unallocated} if (defined($xml_ret->value->{unallocated}));
 		#error
-		$info{errorcode} = $xml_ret->value->{errorcode} if(defined($xml_ret->value->{errorcode}));
-		$info{errormsg} = $xml_ret->value->{errormsg} if(defined($xml_ret->value->{errormsg}));
+		$info{errorcode} = $xml_ret->value->{errorcode} if (defined($xml_ret->value->{errorcode}));
+		$info{errormsg} = $xml_ret->value->{errormsg} if (defined($xml_ret->value->{errormsg}));
 		#warning
-		$info{warningcode} = $xml_ret->value->{warningcode} if(defined($xml_ret->value->{warningcode}));
-		$info{warningmsg} = $xml_ret->value->{warningmsg} if(defined($xml_ret->value->{warningmsg}));
+		$info{warningcode} = $xml_ret->value->{warningcode} if (defined($xml_ret->value->{warningcode}));
+		$info{warningmsg} = $xml_ret->value->{warningmsg} if (defined($xml_ret->value->{warningmsg}));
 		#$info{reqidlists} = $xml_ret->value->{requestids};
 		}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "return argument XMLRPCprocessBlockTime was not a STRUCT as expected" . ref($xml_ret) );
+		notify($ERRORS{'WARNING'}, 0, "return argument XMLRPCprocessBlockTime was not a STRUCT as expected" . ref($xml_ret));
 		if (ref($xml_ret) =~ /fault/) {
 			$info{status} = "fault";
 		}

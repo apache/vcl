@@ -51,7 +51,7 @@ use 5.008000;
 use strict;
 use warnings;
 use diagnostics;
-use English qw( -no_match_vars );
+use English qw(-no_match_vars);
 
 use VCL::utils;
 use Fcntl qw(:DEFAULT :flock);
@@ -316,7 +316,7 @@ sub capture {
 		$old_image_name = $self->_one_get_vm_disk($vmid);
 		
 		my @savedisk = $one{'server'}->call('one.vm.savedisk', $one{'auth'},$vmid,0,$image_name,'OS',$one{'false'});
-		if ( $savedisk[0][0]->value() ) {
+		if ($savedisk[0][0]->value()) {
 			notify($ERRORS{'OK'}, 0, "VM $vmid will be captured as $image_name");
 			
 		} else {
@@ -342,7 +342,7 @@ sub capture {
 	}
 	
 	# pre_capture was called with {end_state => 'on'}. Need to shutdown VM via ACPI.
-	if(!$self->power_off()) {
+	if (!$self->power_off()) {
 		notify($ERRORS{'CRITICAL'}, 0, "Couldn't shutdown $computer_name with power_off()");
 		return 0;
 	} else {
@@ -451,7 +451,7 @@ sub capture {
 					my $template = $data->{TEMPLATE};
 					$template->{NAME} = $image_name;
 					
-					if ( (ref($template->{DISK})) eq "ARRAY" ) { # template has multiple disks, update [0]
+					if ((ref($template->{DISK})) eq "ARRAY" ) { # template has multiple disks, update [0]
 						$template->{DISK}[0]{IMAGE_ID} = $one_new_image_id;
 					} else { #template has one disk
 						$template->{DISK}{IMAGE_ID} = $one_new_image_id;
@@ -468,7 +468,7 @@ sub capture {
 			}
 			return 1;
 		}
-		if ( $wait_time <= 0 ) {
+		if ($wait_time <= 0) {
 			notify($ERRORS{'CRITICAL'}, 0, "disk save failed, image id $one_new_image_id is NOT READY. Fail.");
 			return 0;
 		}	
@@ -509,7 +509,7 @@ sub power_off {
 		@poweroff = $one{'server'}->call('one.vm.action', $one{'auth'},'shutdown',$vmid);
 	}
 	
-	if ( $poweroff[0][0]->value() ) {
+	if ($poweroff[0][0]->value()) {
 		notify($ERRORS{'OK'}, 0, "Sent shutdown signal to VM $vmid");
 		return 1;
 	} else {
@@ -533,7 +533,7 @@ sub power_reset() {
 	my $vmid = $self->_one_get_object_id("computer",$computer_name);
 	my @poweroff = $one{'server'}->call('one.vm.action', $one{'auth'},'reboot',$vmid);
 	
-	if ( $poweroff[0][0]->value() ) {
+	if ($poweroff[0][0]->value()) {
 		notify($ERRORS{'OK'}, 0, "Sent reboot signal to VM $vmid");
 		return 1;
 	} else {
@@ -568,7 +568,7 @@ sub power_status {
 	my $vmid = $self->_one_get_object_id("computer",$computer_name);
 	
 	my @result = $one{'server'}->call('one.vm.info', $one{'auth'},$vmid);
-	if ( $result[0][0]->value() ) {
+	if ($result[0][0]->value()) {
 		my $data = $xml->XMLin($result[0][1]);
 		if ($data->{STATE} == 3) {
 			if ($data->{LCM_STATE} == 3) {
@@ -632,7 +632,7 @@ sub _one_get_image_tag_value {
 	
 	my $imid = $self->_one_get_object_id("image",$image_name);
 	my @result = $one{server}->call('one.image.info',$one{'auth'},$imid);
-	if ( $result[0][0]->value() ) {
+	if ($result[0][0]->value()) {
 		my $data = $xml->XMLin($result[0][1]);
 		
 		if ($tag eq 'SIZE') {
@@ -723,7 +723,7 @@ sub _one_get_virtio {
 	
 	my @reply = $one{'server'}->call('one.image.info',$one{'auth'},$one_image_id);
 	
-	if ( $reply[0][0]->value() ) {
+	if ($reply[0][0]->value()) {
 		my $data = $xml->XMLin($reply[0][1]);
 		if ($data->{TEMPLATE}{DEV_PREFIX} eq 'vd' ) {
 			return ',MODEL="virtio"';
@@ -768,7 +768,7 @@ sub _one_wait_for_vm_state {
 		notify($ERRORS{'OK'}, 0, "Check state of VM $vmid ...");
 		my $ttime;
 		my $one_vm_state = $self->_one_get_vm_state($vmid);
-		if ( $self->_one_get_vm_state($vmid) == $num_state ) {
+		if ($self->_one_get_vm_state($vmid) == $num_state) {
 			notify($ERRORS{'OK'}, 0, "VM $vmid is in $state state");
 			return 1;
 		} else {
@@ -792,7 +792,7 @@ sub _one_get_vm_state {
 	my $vmid = shift;
 	
 	my @result = $one{'server'}->call('one.vm.info', $one{'auth'},$vmid);
-	if ( $result[0][0]->value() ) {
+	if ($result[0][0]->value()) {
 		my $data = $xml->XMLin($result[0][1]);
 		return $data->{STATE}; 
 	} else {
@@ -807,7 +807,7 @@ sub _one_get_vm_lcm_state {
 	my $vmid = shift;
 	
 	my @result = $one{'server'}->call('one.vm.info', $one{'auth'},$vmid);
-	if ( $result[0][0]->value() ) {
+	if ($result[0][0]->value()) {
 		my $data = $xml->XMLin($result[0][1]);
 		if ($data->{STATE} == 3) {
 			return $data->{LCM_STATE}; 
@@ -826,7 +826,7 @@ sub _one_get_image_state {
 	my $image_id = shift;
 	
 	my @status = $one{'server'}->call('one.image.info',$one{'auth'},$image_id);
-	if ( $status[0][0]->value() ) {
+	if ($status[0][0]->value()) {
 		my $data = $xml->XMLin($status[0][1]);
 		return $data->{STATE};
 	} else {
@@ -851,11 +851,11 @@ sub _one_get_object_id {
 	if ($o_type eq "computer") {
 		notify($ERRORS{'OK'}, 0, "Searching for running VM $o_name ...");
 		my @reply = $one{'server'}->call('one.vmpool.info',$one{'auth'},-3,-1,-1,-1);
-		if ( $reply[0][0]->value() ) {
+		if ($reply[0][0]->value()) {
 			
 			my $data = $xml->XMLin($reply[0][1]);
 			
-			if ( (ref($data->{VM})) eq "ARRAY"){
+			if ((ref($data->{VM})) eq "ARRAY") {
 				foreach (@{$data->{VM}}) {
 					if ($_->{NAME} =~ /^$o_name\s/) {
 						notify($ERRORS{'OK'}, 0, "Found ".$_->{NAME}." matching $o_name in ARRAY");
@@ -863,7 +863,7 @@ sub _one_get_object_id {
 					}
 			  	}
 			} else { #HASH, found only one entry
-				unless ( defined($data->{VM}{NAME}) ) {return 0;}
+				unless (defined($data->{VM}{NAME})) {return 0;}
 				
 				if ($data->{VM}{NAME} =~ /^$o_name\s/) {
 					notify($ERRORS{'OK'}, 0, "Found ".$data->{VM}{NAME}." matching $o_name in HASH");
@@ -876,10 +876,10 @@ sub _one_get_object_id {
 		}	
 	} elsif ($o_type eq "image") {
 		my @reply = $one{'server'}->call('one.imagepool.info', $one{'auth'},-3,-1,-1);
-		if ( $reply[0][0]->value() ) {
+		if ($reply[0][0]->value()) {
 			
 			my $rs_data = $xml->XMLin($reply[0][1]);
-				if ( (ref($rs_data->{IMAGE})) eq "ARRAY" ) {
+				if ((ref($rs_data->{IMAGE})) eq "ARRAY" ) {
 					foreach (@{$rs_data->{IMAGE}}) {
 						if ($_->{NAME} eq $o_name) {
  							return $_->{ID};
@@ -941,7 +941,7 @@ sub _one_delete_vm {
 	my @reply;
 	
 	@reply = $one{'server'}->call('one.vm.action', $one{'auth'},'delete',$vmid);
-	if ( $reply[0][0]->value() ) {
+	if ($reply[0][0]->value()) {
 		notify($ERRORS{'OK'}, 0, "ONE VM $vmid deleted");
 	} else {
 		notify($ERRORS{'CRITICAL'}, 0, $reply[0][1]);
@@ -955,7 +955,7 @@ sub _one_create_vm {
 	my $self = shift;
 	my $VM_TEMPLATE = shift;
 	my @vm_allocate = $one{'server'}->call('one.vm.allocate',$one{'auth'},$VM_TEMPLATE,$one{'false'});
-	if ( $vm_allocate[0][0]->value() ) {	
+	if ($vm_allocate[0][0]->value()) {	
 		return $vm_allocate[0][1];
 	} else {
 		notify($ERRORS{'CRITICAL'}, 0, "Error while making one.vm.allocate call : $vm_allocate[0][1]");
@@ -987,7 +987,7 @@ sub _one_get_vm_disk {
 	if ($vm_info[0][0]->value()) {
 		my $data = $xml->XMLin($vm_info[0][1]);
 		
-		if ( (ref($data->{TEMPLATE}{DISK})) eq "ARRAY" ) { # template has multiple disks, return [0]
+		if ((ref($data->{TEMPLATE}{DISK})) eq "ARRAY" ) { # template has multiple disks, return [0]
 			return $data->{TEMPLATE}{DISK}[0]{IMAGE};
 		} else { #template has one disk
 			return $data->{TEMPLATE}{DISK}{IMAGE};

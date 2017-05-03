@@ -54,7 +54,7 @@ use 5.008000;
 use strict;
 use warnings;
 use diagnostics;
-use English qw( -no_match_vars );
+use English qw(-no_match_vars);
 use File::Basename;
 
 use VCL::utils;
@@ -2875,7 +2875,7 @@ sub get_master_xml_device_info {
 	
 	if (!defined($self->{master_xml_device_info})) {
 		my $master_xml_info = $self->get_master_xml_info() || return;
-		if(scalar(keys %$master_xml_info) == 0) {
+		if (scalar(keys %$master_xml_info) == 0) {
 			return;
 		}
 		
@@ -2885,15 +2885,15 @@ sub get_master_xml_device_info {
 			notify($ERRORS{'WARNING'}, 0, "failed to retrieve device info from master XML file: $master_xml_file_path, 'devices' key is missing:\n" . format_data($master_xml_info));
 			return;
 		}
-		elsif(!ref($devices_array_ref) || ref($devices_array_ref) ne 'ARRAY') {
+		elsif (!ref($devices_array_ref) || ref($devices_array_ref) ne 'ARRAY') {
 			notify($ERRORS{'WARNING'}, 0, "failed to retrieve device info from master XML file: $master_xml_file_path, 'devices' key is not an array reference:\n" . format_data($master_xml_info));
 			return;
 		}
-		elsif(scalar(@$devices_array_ref) == 0) {
+		elsif (scalar(@$devices_array_ref) == 0) {
 			notify($ERRORS{'WARNING'}, 0, "failed to retrieve device info from master XML file: $master_xml_file_path, 'devices' array reference is empty:\n" . format_data($master_xml_info));
 			return;
 		}
-		elsif(scalar(@$devices_array_ref) > 1) {
+		elsif (scalar(@$devices_array_ref) > 1) {
 			notify($ERRORS{'WARNING'}, 0, "retrieved device info from master XML file: $master_xml_file_path, 'devices' array reference contains multiple values:\n" . format_data($devices_array_ref));
 		}
 		

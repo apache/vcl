@@ -55,9 +55,9 @@ use 5.008000;
 use strict;
 use warnings;
 use diagnostics;
-use English qw( -no_match_vars );
-use File::Temp qw( tempdir );
-use List::Util qw( max );
+use English qw(-no_match_vars);
+use File::Temp qw(tempdir);
+use List::Util qw(max);
 
 use VCL::utils;
 
@@ -627,7 +627,7 @@ sub copy_virtual_disk {
 	}
 	
 	# Check the disk type argument, the string must match exactly or the copy will fail
-	my @valid_disk_types = qw( eagerZeroedThick flatMonolithic preallocated raw rdm rdmp sparse2Gb sparseMonolithic thick thick2Gb thin );
+	my @valid_disk_types = qw(eagerZeroedThick flatMonolithic preallocated raw rdm rdmp sparse2Gb sparseMonolithic thick thick2Gb thin);
 	if (!grep(/^$destination_disk_type$/, @valid_disk_types)) {
 		notify($ERRORS{'WARNING'}, 0, "disk type argument is not valid: '$destination_disk_type', it must exactly match (case sensitive) one of the following strings:\n" . join("\n", @valid_disk_types));
 		return;
@@ -1908,7 +1908,7 @@ sub get_file_contents {
 	
 	# Create a temp directory to store the file and construct the temp file path
 	# The temp directory is automatically deleted then this variable goes out of scope
-	my $temp_directory_path = tempdir( CLEANUP => 1 );
+	my $temp_directory_path = tempdir(CLEANUP => 1);
 	my $source_file_name = $self->_get_file_name($path);
 	my $temp_file_path = "$temp_directory_path/$source_file_name";
 	
