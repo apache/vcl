@@ -350,11 +350,11 @@ sub reserve { return 1; }
 
 #//////////////////////////////////////////////////////////////////////////////
 
-=head2 run_management_node_tools_scripts
+=head2 run_stage_scripts_on_computer
 
 =cut
 
-sub run_management_node_tools_scripts { return 1; }
+sub run_stage_scripts_on_computer { return 1; }
 
 #/////////////////////////////////////////////////////////////////////////////
 

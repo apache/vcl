@@ -276,6 +276,9 @@ sub post_load {
 	
 	$self->activate_irapp();
 	
+	# arkurth: added for possible future use, don't have a way to test
+	# Use the following line to enable execution of stage scripts:
+	# return $self->SUPER::post_load();
 	notify($ERRORS{'OK'}, 0, "returning 1");
 	return 1;
 

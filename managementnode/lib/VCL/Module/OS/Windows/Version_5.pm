@@ -150,43 +150,16 @@ sub post_load {
 	
 	notify($ERRORS{'DEBUG'}, 0, "beginning Windows version 5.x post-load tasks");
 
-=item * Call parent class's post_load() subroutine
+=item * Call Windows.pm::post_load()
 
 =cut
 
-	notify($ERRORS{'DEBUG'}, 0, "calling parent class post_load() subroutine");
-	if ($self->SUPER::post_load()) {
-		notify($ERRORS{'OK'}, 0, "successfully executed parent class post_load() subroutine");
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to execute parent class post_load() subroutine");
-		return;
-	}
-
-=item * Run custom post_load scripts residing on the management node
-
-=cut
-
-	$self->run_management_node_tools_scripts('post_load');
-
-=item * Run custom post_load scripts residing in the image
-
-=cut
-
-	my $script_path = '$SYSTEMROOT/vcl_post_load.cmd';
-	if (!$self->file_exists($script_path)) {
-		notify($ERRORS{'DEBUG'}, 0, "custom post_load script does NOT exist in image: $script_path");
-	}
-	else {
-		$self->run_script($script_path);
-	}
+	return $self->SUPER::post_load();
 
 =back
 
 =cut
 
-	notify($ERRORS{'DEBUG'}, 0, "Windows version 5.x post-load tasks complete");
-	return 1;
 }
 
 ##############################################################################

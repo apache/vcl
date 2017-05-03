@@ -69,11 +69,11 @@ use VCL::utils;
                reservation.
                
                Example:
-               /usr/local/vcl/tools/mn_stage_scripts
+               /usr/local/vcl/tools/ManagementNode/Scripts
 
 =cut
 
-our $MN_STAGE_SCRIPTS_DIRECTORY = "$TOOLS/mn_stage_scripts";
+our $MN_STAGE_SCRIPTS_DIRECTORY = "$TOOLS/ManagementNode/Scripts";
 
 ##############################################################################
 
@@ -374,7 +374,7 @@ sub delete_management_node_reservation_info_json_file {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 run_management_node_stage_scripts
+=head2 run_stage_scripts_on_management_node
 
  Parameters  : $stage
  Returns     : boolean
@@ -384,20 +384,21 @@ sub delete_management_node_reservation_info_json_file {
                specifically for each reservation.
                
                The stage argument may be any of the following:
-               * pre_capture
-               * post_capture
-               * post_load
-               * post_reserve
-               * post_initial_connection
-               * post_reservation
+					* post_capture
+					* post_initial_connection
+					* post_load
+					* post_reservation
+					* post_reserve
+					* pre_capture
+					* pre_reload
                
                The scripts are stored on the management node under:
-               /usr/local/vcl/tools/mn_stage_scripts
+               /usr/local/vcl/tools/ManagementNode/Scripts
                
                No scripts exist by default. When the vcld process reaches the
                stage specified by the argument, it will check the subdirectory
                with a name that matches the stage name. For example:
-               /usr/local/vcl/tools/mn_stage_scripts/post_capture
+               /usr/local/vcl/tools/ManagementNode/Scripts/post_capture
                
                It will attempt to execute any files under this directory.
                
@@ -417,7 +418,7 @@ sub delete_management_node_reservation_info_json_file {
 
 =cut
 
-sub run_management_node_stage_scripts {
+sub run_stage_scripts_on_management_node {
 	my $self = shift;
 	if (ref($self) !~ /VCL::/i) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
@@ -430,9 +431,25 @@ sub run_management_node_stage_scripts {
 		notify($ERRORS{'WARNING'}, 0, "stage argument was not supplied");
 		return;
 	}
-	elsif ($stage !~ /(pre_capture|post_capture|post_load|post_reserve|post_initial_connection|post_reservation)/) {
+	
+	my $management_node_stages = {
+		'post_capture' => 1,
+		'post_initial_connection' => 1,
+		'post_load' => 1,
+		'post_reservation' => 1,
+		'post_reserve' => 1,
+		'pre_capture' => 1,
+		'pre_reload' => 1,
+	};
+	
+	if (!defined($management_node_stages->{$stage})) {
 		notify($ERRORS{'WARNING'}, 0, "invalid stage argument was supplied: $stage");
 		return;
+	}
+	elsif (!$management_node_stages->{$stage}) {
+		# Note: Not currently used, could someday if a particular stage is defined for computer scripts but not MN scripts
+		notify($ERRORS{'DEBUG'}, 0, "'$stage' stage scripts are not supported to be run on a managment node");
+		return 1;
 	}
 	
 	# Override the die handler 

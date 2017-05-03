@@ -549,10 +549,12 @@ Please read the README and INSTALLATION files in the source directory.
 Documentation is available at http://cwiki.apache.org/VCL.
 
 Command line options:
+-conf=<path> | Specify vcld configuration file (default: /etc/vcl/vcld.conf)
+-log=<path>  | Specify vcld log file (default: /var/log/vcld.log)
 -setup       | Run management node setup
--conf=<path> | Specify vcld configuration file
 -verbose     | Run vcld in verbose mode
--debug       | Run vcld in non-daemon mode
+-nodaemon    | Run vcld in non-daemon mode
+-exn         | Use persistent SSH connections (experimental)
 -help        | Display this help information
 ============================================================================
 END
@@ -1107,6 +1109,9 @@ sub check_time {
 	my $lastcheck_diff_minutes = round($lastcheck_diff_seconds / 60);
 	my $start_diff_minutes     = round($start_diff_seconds / 60);
 	my $end_diff_minutes       = round($end_diff_seconds / 60);
+	
+	my $preload_window_minutes_prior_high = 35;
+	my $preload_window_minutes_prior_low = 25;
 
 	# Print the time differences
 	#notify($ERRORS{'OK'}, 0, "reservation lastcheck difference: $lastcheck_diff_minutes minutes ($lastcheck_diff_seconds seconds)");
@@ -1115,20 +1120,24 @@ sub check_time {
 	#notify($ERRORS{'OK'}, 0, "changelog timestamp difference:   $changelog_diff_seconds seconds");
 
 	# Check the state, and then figure out the return code
-	if ($request_state_name =~ /new|imageprep|reload|tovmhostinuse/) {
+	if ($request_state_name =~ /(new|imageprep|reload|tovmhostinuse|test)/) {
 		if ($start_diff_minutes > 0) {
 			# Start time is either now or in future, $start_diff_minutes is positive
-			
-			if ($start_diff_minutes > 35) {
-				#notify($ERRORS{'DEBUG'}, 0, "reservation will start in more than 35 minutes ($start_diff_minutes)");
+			my $preload_start_minutes = ($start_diff_minutes - $preload_window_minutes_prior_high);
+			if ($start_diff_minutes > $preload_window_minutes_prior_high) {
+				if (($preload_start_minutes <= 5 || $start_diff_minutes % 5 == 0) && ($start_diff_seconds % 60) >= 50) {
+					notify($ERRORS{'DEBUG'}, 0, "$request_state_name request start time is $start_diff_minutes minutes from now, preload process will begin in $preload_start_minutes minutes ($preload_window_minutes_prior_high minutes prior to request start time), returning 0");
+				}
 				return "0";
 			}
-			elsif ($start_diff_minutes >= 25 && $start_diff_minutes <= 35) {
-				notify($ERRORS{'DEBUG'}, 0, "reservation will start in 25-35 minutes ($start_diff_minutes)");
+			elsif ($start_diff_minutes >= $preload_window_minutes_prior_low && $start_diff_minutes <= $preload_window_minutes_prior_high) {
+				notify($ERRORS{'DEBUG'}, 0, "$request_state_name request start time is $start_diff_minutes minutes from now, returning 'preload'");
 				return "preload";
 			}
 			else {
-				#notify($ERRORS{'DEBUG'}, 0, "reservation will start less than 25 minutes ($start_diff_minutes)");
+				if (($start_diff_minutes <= 5 || $start_diff_minutes % 5 == 0) && ($start_diff_seconds % 60) >= 50) {
+					notify($ERRORS{'DEBUG'}, 0, "$request_state_name request will be processed in $start_diff_minutes minutes, returning 0");
+				}
 				return "0";
 			}
 		} ## end if ($start_diff_minutes > 0)
@@ -1138,28 +1147,33 @@ sub check_time {
 			#Start time is fairly old - something is off
 			#send warning to log for tracking purposes
 			if ($start_diff_minutes < -17) {
-				notify($ERRORS{'WARNING'}, 0, "reservation start time was in the past 17 minutes ($start_diff_minutes)");
+				notify($ERRORS{'WARNING'}, 0, "reservation start time was in the past 17 minutes ($start_diff_minutes), returning 'start'");
+			}
+			else {
+				notify($ERRORS{'DEBUG'}, 0, "reservation start time was $start_diff_minutes minutes ago, returning 'start'");
 			}
 			
 			return "start";
 			
 		} ## end else [ if ($start_diff_minutes > 0)
 	}
-	elsif ($request_state_name =~ /tomaintenance/) {
+	elsif ($request_state_name =~ /(tomaintenance)/) {
+		# Only display this once per hour at most, tomaintenance can be far into the future
 		if ($start_diff_minutes > 0) {
-			# Start time is either now or in future, $start_diff_minutes is positive
-			notify($ERRORS{'DEBUG'}, 0, "$request_state_name request will be processed in $start_diff_minutes minutes");
+			if ($start_diff_minutes % 60 == 0 && ($start_diff_seconds % 60) >= 50) {
+				notify($ERRORS{'DEBUG'}, 0, "$request_state_name request will be processed in $start_diff_minutes minutes, returning 0");
+			}
 			return "0";
 		}
 		else {
 			# Start time is in past, $start_diff_minutes is negative
-			notify($ERRORS{'DEBUG'}, 0, "$request_state_name request will be processed now");
+			notify($ERRORS{'DEBUG'}, 0, "$request_state_name request will be processed now, returning 'start'");
 			return "start";
 		}
 	}
-	elsif ($request_state_name =~ /inuse/) {
+	elsif ($request_state_name =~ /(inuse)/) {
 		if ($end_diff_minutes <= 10) {
-			notify($ERRORS{'DEBUG'}, 0, "reservation will end in 10 minutes or less ($end_diff_minutes)");
+			notify($ERRORS{'DEBUG'}, 0, "reservation will end in 10 minutes or less ($end_diff_minutes), returning 'end'");
 			return "end";
 		}
 		elsif ($lastcheck_epoch_seconds < $changelog_epoch_seconds && $changelog_diff_seconds < 0) {
@@ -1194,32 +1208,31 @@ sub check_time {
 					return "poll";
 				}
 				else {
-					#notify($ERRORS{'DEBUG'}, 0, "reservation has been checked within the past $general_inuse_check_time minutes ($lastcheck_diff_minutes)");
+					#notify($ERRORS{'DEBUG'}, 0, "reservation has been checked within the past $general_inuse_check_time minutes ($lastcheck_diff_minutes), returning 0");
 					return 0;
 				}
 			}
 		} ## end else [ if ($end_diff_minutes <= 10)
 	} ## end elsif ($request_state_name =~ /inuse|imageinuse/) [ if ($request_state_name =~ /new|imageprep|reload|tomaintenance|tovmhostinuse/)
-
-	elsif ($request_state_name =~ /complete|failed/) {
+	elsif ($request_state_name =~ /(complete|failed)/) {
 		# Don't need to keep requests in database if laststate was...
 		if ($request_laststate_name =~ /image|deleted|makeproduction|reload|tomaintenance|tovmhostinuse/) {
+			notify($ERRORS{'DEBUG'}, 0, "request laststate is '$request_laststate_name', returning 'remove'");
 			return "remove";
 		}
-
-		if ($end_diff_minutes < 0) {
-			notify($ERRORS{'DEBUG'}, 0, "reservation end time was in the past ($end_diff_minutes)");
+		elsif ($end_diff_minutes < 0) {
+			notify($ERRORS{'DEBUG'}, 0, "reservation end time was in the past ($end_diff_minutes), returning 'remove'");
 			return "remove";
 		}
 		else {
 			# End time is now or in the future
-			#notify($ERRORS{'DEBUG'}, 0, "reservation end time is either right now or in the future ($end_diff_minutes)");
+			notify($ERRORS{'DEBUG'}, 0, "reservation end time is either right now or in the future ($end_diff_minutes), returning 0");
 			return "0";
 		}
 	}    # Close if state is complete or failed
-
 	# Just return start for all other states
 	else {
+		notify($ERRORS{'DEBUG'}, 0, "request state is '$request_state_name', returning 'start'");
 		return "start";
 	}
 
@@ -8841,13 +8854,20 @@ sub format_array_reference {
 	my $indent_character = ' ';
 	my $indent_count = 3;
 	
-	my $data_type = ref($data);
-	if ($data_type !~ /(ARRAY|HASH)/) {
-		return "'',\n";
+	if (!defined($data)) {
+		return "<undef>,\n";
 	}
 	
-	
-	
+	my $data_type = ref($data);
+	if (!$data_type) {
+		if (length($data) > 100) {
+			$data = substr($data, 0, 100) . '<truncated>';
+		}
+		return "'" . $data . "',\n";
+	}
+	elsif ($data_type !~ /(ARRAY|HASH)/) {
+		return "<ref:$data_type>,\n";
+	}
 
 	my $hash_ref;
 	my $opening_char;
@@ -10620,6 +10640,11 @@ sub get_file_size_info_string {
 sub get_copy_speed_info_string {
 	my ($copied_bytes, $duration_seconds) = @_;
 	
+	# Avoid divide by zero errors
+	if ($duration_seconds == 0) {
+		$duration_seconds = 1;
+	}
+
 	my $minutes = ($duration_seconds / 60);
 	$minutes =~ s/\..*//g;
 	my $seconds = ($duration_seconds - ($minutes * 60));

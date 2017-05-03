@@ -527,9 +527,6 @@ sub post_load {
 		$self->update_public_hostname();
 	}
 	
-	# Run custom post_load scripts residing on the management node
-	$self->run_management_node_tools_scripts('post_load');
-	
 	# Run the vcl_post_load script if it exists in the image
 	my @post_load_script_paths = ('/usr/local/vcl/vcl_post_load', '/etc/init.d/vcl_post_load');	
 
@@ -549,8 +546,8 @@ sub post_load {
 		}
 	}
 	
-	return 1;
-} ## end sub post_load
+	return $self->SUPER::post_load();
+}
 
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -573,17 +570,7 @@ sub post_reserve {
 	my $image_name = $self->data->get_image_name();
 	my $computer_short_name = $self->data->get_computer_short_name();
 	
-	notify($ERRORS{'OK'}, 0, "initiating Linux post_reserve: $image_name on $computer_short_name");
 	
-	# Run custom post_reserve scripts on the management node
-	my $enable_experimental_features = get_variable('enable_experimental_features', 0);
-	if ($enable_experimental_features) {
-		$self->mn_os->run_management_node_stage_scripts('post_reserve');
-	}
-	
-	# Run custom post_reserve scripts residing on the management node
-	$self->run_management_node_tools_scripts('post_reserve');
-
 	# User supplied data
 	#check if variable is set
 	#get variable from variable table related to server reservation id ‘userdata|<reservation id>’
@@ -637,7 +624,8 @@ sub post_reserve {
 			}
 		}
 	}
-	return 1;
+	
+	return $self->SUPER::post_reserve();
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -658,9 +646,6 @@ sub post_reservation {
 		return 0;
 	}
 	
-	# Run custom post_reservation scripts residing on the management node
-	$self->run_management_node_tools_scripts('post_reservation');
-	
 	my $script_path = '/usr/local/vcl/vcl_post_reservation';
 	
 	# Check if script exists
@@ -672,13 +657,7 @@ sub post_reservation {
 		notify($ERRORS{'DEBUG'}, 0, "script does NOT exist: $script_path");
 	}
 	
-	# Run custom post_reserve scripts on the management node
-	my $enable_experimental_features = get_variable('enable_experimental_features', 0);
-	if ($enable_experimental_features) {
-		$self->mn_os->run_management_node_stage_scripts('post_reservation');
-	}
-	
-	return 1;
+	return $self->SUPER::post_reservation();
 }
 
 #/////////////////////////////////////////////////////////////////////////////

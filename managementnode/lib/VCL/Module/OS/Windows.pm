@@ -995,15 +995,34 @@ sub post_load {
 		}
 		delete $self->{reboot_required};
 	}
-	
+
+=item *
+
+ Run custom post_load scripts residing in the image
+
+=cut
+
+	my $script_path = '$SYSTEMROOT/vcl_post_load.cmd';
+	if (!$self->file_exists($script_path)) {
+		notify($ERRORS{'DEBUG'}, 0, "custom post_load script does NOT exist in image: $script_path");
+	}
+	else {
+		$self->run_script($script_path);
+	}
+
+=item *
+
+ Call OS.pm::post_load
+
+=cut
+
+	return $self->SUPER::post_load();
 
 =back
 
 =cut
 
-	notify($ERRORS{'DEBUG'}, 0, "Windows common post-load tasks complete");
-	return 1;
-} ## end sub post_load
+}
 
 #/////////////////////////////////////////////////////////////////////////////
 
@@ -1060,16 +1079,9 @@ sub post_reserve {
 		return 0;
 	}
 	
-	# Run custom post_reserve scripts residing on the management node
-	$self->run_management_node_tools_scripts('post_reserve');
-	
 	# Check if custom post_reserve script exists in the image
 	my $script_path = '$SYSTEMROOT/vcl_post_reserve.cmd';
-	if (!$self->file_exists($script_path)) {
-		notify($ERRORS{'DEBUG'}, 0, "custom post_reserve script does NOT exist in image: $script_path");
-		return 1;
-	}
-	else {
+	if ($self->file_exists($script_path)) {
 		# If post_reserve script exists, assume it does user or reservation-specific actions
 		# If the user never connects and the reservation times out, there's no way to revert these actions in order to clean the computer for another user
 		# Tag the image as tainted so it is reloaded
@@ -1078,8 +1090,11 @@ sub post_reserve {
 		# Run the post_reserve script
 		$self->run_script($script_path);
 	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "custom post_reserve script does NOT exist in image: $script_path");
+	}
 	
-	return 1;
+	return $self->SUPER::post_reserve();
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -1100,9 +1115,6 @@ sub post_reservation {
 		return 0;
 	}
 	
-	# Run custom post_reservation scripts residing on the management node
-	$self->run_management_node_tools_scripts('post_reservation');
-	
 	# Check if custom post_reservation script exists in image
 	my $script_path = '$SYSTEMROOT/vcl_post_reservation.cmd';
 	if ($self->file_exists($script_path)) {
@@ -1113,7 +1125,7 @@ sub post_reservation {
 		notify($ERRORS{'DEBUG'}, 0, "custom post_reservation script does NOT exist in image: $script_path");
 	}
 	
-	return 1;
+	return $self->SUPER::post_reservation();
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -1142,7 +1154,7 @@ sub pre_reload {
 		$self->ad_delete_computer($computer_name, $computer_current_domain_name);
 	}
 	
-	return 1;
+	return $self->SUPER::pre_reload();
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -12706,8 +12718,11 @@ sub _get_os_perl_package {
 	elsif ($product_name =~ /(XP|2003)/i) {
 		$perl_package = "VCL::Module::OS::Windows::Version_5::$1";
 	}
-	elsif ($product_name =~ /(Vista|2008|2012|2016|7|8|10)/ig) {
+	elsif ($product_name =~ /(Vista|2008|2012|7|8)/ig) {
 		$perl_package = "VCL::Module::OS::Windows::Version_6::$1";
+	}
+	elsif ($product_name =~ /(2016|10)/ig) {
+		$perl_package = "VCL::Module::OS::Windows::Version_10::$1";
 	}
 	else {
 		notify($ERRORS{'WARNING'}, 0, "failed to determine OS installed on computer, unsupported Windows product name: $product_name");

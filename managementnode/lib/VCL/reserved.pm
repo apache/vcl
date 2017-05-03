@@ -279,8 +279,8 @@ sub process {
 		}
 	}
 	
-	# Run custom post_initial_connection scripts residing on the management node
-	$self->os->run_management_node_tools_scripts('post_initial_connection');
+	# Perform steps after a user makes an initial connection
+	$self->os->post_initial_connection();
 	
 	# For cluster reservations, the parent must wait until all child reserved processes have exited
 	# Otherwise, the state will change to inuse while the child processes are still finishing up the reserved state

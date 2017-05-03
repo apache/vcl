@@ -183,21 +183,15 @@ sub post_load {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine can only be called as a VCL::Module object method");
 		return;
 	}
-	
-	notify($ERRORS{'DEBUG'}, 0, "beginning Windows version 6 post-load tasks");
 
 =item * Call parent class's post_load() subroutine
 
 =cut
 
-	notify($ERRORS{'DEBUG'}, 0, "calling parent class post_load() subroutine");
-	if ($self->SUPER::post_load()) {
-		notify($ERRORS{'OK'}, 0, "successfully executed parent class post_load() subroutine");
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to execute parent class post_load() subroutine");
-		return;
-	}
+	$self->SUPER::post_load() || return;
+	
+	
+	notify($ERRORS{'DEBUG'}, 0, "beginning Windows version 6 post-load tasks");
 
 =item * Ignore default routes configured for the private interface and use default routes configured for the public interface
 
@@ -210,24 +204,6 @@ sub post_load {
 =cut
 
 	$self->activate();
-
-=item * Run custom post_load scripts residing on the management node
-
-=cut
-
-	$self->run_management_node_tools_scripts('post_load');
-
-=item * Run custom post_load scripts residing in the image
-
-=cut
-
-	my $script_path = '$SYSTEMROOT/vcl_post_load.cmd';
-	if (!$self->file_exists($script_path)) {
-		notify($ERRORS{'DEBUG'}, 0, "custom post_load script does NOT exist in image: $script_path");
-	}
-	else {
-		$self->run_script($script_path);
-	}
 
 =back
 

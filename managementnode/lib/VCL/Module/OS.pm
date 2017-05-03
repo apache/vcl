@@ -130,14 +130,8 @@ sub pre_capture {
 		return 0;
 	}
 	
-	# Run custom pre_capture scripts on the management node
-	my $enable_experimental_features = get_variable('enable_experimental_features', 0);
-	if ($enable_experimental_features) {
-		$self->mn_os->run_management_node_stage_scripts('pre_capture');
-	}
-	
-	# Run custom pre_capture scripts on the computer
-	$self->run_management_node_tools_scripts('pre_capture');
+	# Run custom pre_capture scripts
+	$self->run_stage_scripts('pre_capture');
 	
 	notify($ERRORS{'OK'}, 0, "completed common image capture preparation tasks");
 	return 1;
@@ -163,11 +157,31 @@ sub post_capture {
 		return;
 	}
 	
-	# Run custom post_capture scripts on the management node
-	my $enable_experimental_features = get_variable('enable_experimental_features', 0);
-	if ($enable_experimental_features) {
-		$self->mn_os->run_management_node_stage_scripts('post_capture');
+	# Run custom post_capture scripts
+	$self->run_stage_scripts('post_capture');
+	
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 post_load
+
+ Parameters  : none
+ Returns     : boolean
+ Description : Performs common OS steps after an image is loaded.
+
+=cut
+
+sub post_load {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
 	}
+	
+	# Run custom post_load scripts
+	$self->run_stage_scripts('post_load');
 	
 	return 1;
 }
@@ -203,6 +217,99 @@ sub reserve {
 		notify($ERRORS{'WARNING'}, 0, "unable to reserve computer, failed add user accounts");
 		return;
 	}
+	
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 post_reserve
+
+ Parameters  : none
+ Returns     : boolean
+ Description : Performs common OS steps after an image is loaded.
+
+=cut
+
+sub post_reserve {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return 0;
+	}
+	
+	# Run custom post_reserve scripts
+	$self->run_stage_scripts('post_reserve');
+	
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 post_initial_connection
+
+ Parameters  : none
+ Returns     : boolean
+ Description : Performs common OS steps after a user makes an initial
+               connection.
+
+=cut
+
+sub post_initial_connection {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Run custom post_initial_connection scripts
+	$self->run_stage_scripts('post_initial_connection');
+	
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 post_reservation
+
+ Parameters  : none
+ Returns     : boolean
+ Description : Performs common OS steps after a user's reservation is over.
+
+=cut
+
+sub post_reservation {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return 0;
+	}
+	
+	# Run custom post_reservation scripts
+	$self->run_stage_scripts('post_reservation');
+	
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 pre_reload
+
+ Parameters  : none
+ Returns     : boolean
+ Description : Performs common OS steps prior to a computer being reloaded.
+
+=cut
+
+sub pre_reload {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return 0;
+	}
+	
+	# Run custom pre_reload scripts
+	$self->run_stage_scripts('pre_reload');
 	
 	return 1;
 }
@@ -4346,17 +4453,51 @@ sub get_timings {
 
 #/////////////////////////////////////////////////////////////////////////////
 
-=head2 run_management_node_tools_scripts
+=head2 run_stage_scripts
+
+Parameters  : $stage
+ Returns     : boolean
+ Description : Runs scripts on both the management node and computer intended
+               for the reservation stage specified by the argument. Management
+               node scripts are executed first.
+
+=cut
+
+sub run_stage_scripts {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Get the stage argument
+	my $stage = shift;
+	if (!$stage) {
+		notify($ERRORS{'WARNING'}, 0, "stage argument was not supplied");
+		return;
+	}
+	
+	notify($ERRORS{'DEBUG'}, 0, "attempting to execute custom scripts for '$stage' stage if any exist");
+	
+	my $computer_result = $self->run_stage_scripts_on_computer($stage);
+	my $management_node_result = $self->mn_os->run_stage_scripts_on_management_node($stage);
+	return $computer_result && $management_node_result;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 run_stage_scripts_on_computer
 
  Parameters  : $stage
  Returns     : boolean
  Description : Runs scripts on the computer intended for the state specified by
                the argument. The stage argument may be any of the following:
-               * pre_capture
                * post_load
-               * post_reserve
-               * post_initial_connection
-               * post_reservation
+					* post_reserve
+					* post_initial_connection
+					* post_reservation
+					* pre_reload
+					* pre_capture
                
                Scripts are stored in various directories under tools matching
                the OS of the image being loaded. For example, scripts residing
@@ -4390,7 +4531,7 @@ sub get_timings {
 
 =cut
 
-sub run_management_node_tools_scripts {
+sub run_stage_scripts_on_computer {
 	my $self = shift;
 	if (ref($self) !~ /VCL::Module/) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
@@ -4403,9 +4544,24 @@ sub run_management_node_tools_scripts {
 		notify($ERRORS{'WARNING'}, 0, "stage argument was not supplied");
 		return;
 	}
-	elsif ($stage !~ /(pre_capture|post_load|post_reserve|post_initial_connection|post_reservation)/) {
+	
+	my $computer_stages = {
+		'post_capture' => 0,
+		'post_initial_connection' => 1,
+		'post_load' => 1,
+		'post_reservation' => 1,
+		'post_reserve' => 1,
+		'pre_capture' => 1,
+		'pre_reload' => 1,
+	};
+	
+	if (!defined($computer_stages->{$stage})) {
 		notify($ERRORS{'WARNING'}, 0, "invalid stage argument was supplied: $stage");
 		return;
+	}
+	elsif (!$computer_stages->{$stage}) {
+		notify($ERRORS{'DEBUG'}, 0, "'$stage' stage scripts are not supported to be run on a computer");
+		return 1;
 	}
 	
 	my $computer_node_name = $self->data->get_computer_node_name();
