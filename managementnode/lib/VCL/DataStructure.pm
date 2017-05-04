@@ -55,7 +55,7 @@ VCL::DataStructure - VCL data structure module
 
 =cut
 
-##############################################################################
+###############################################################################
 package VCL::DataStructure;
 
 # Specify the lib path using FindBin
@@ -84,7 +84,7 @@ use Storable qw(dclone);
 
 use VCL::utils;
 
-##############################################################################
+###############################################################################
 
 =head1 CLASS ATTRIBUTES
 
@@ -95,7 +95,7 @@ use VCL::utils;
  Data type   : hash
  Description : %SUBROUTINE_MAPPINGS hash maps subroutine names to hash keys.
                It is used by AUTOMETHOD to return the corresponding hash data
-					when an undefined subroutine is called on a DataStructure object.
+               when an undefined subroutine is called on a DataStructure object.
 
 =cut
 
@@ -518,7 +518,7 @@ $SUBROUTINE_MAPPINGS{cluster_inuse_check} = '$ENV{management_node_info}{cluster_
 
 $SUBROUTINE_MAPPINGS{subroutine_mappings} = '\%SUBROUTINE_MAPPINGS';
 
-##############################################################################
+###############################################################################
 
 =head1 OBJECT ATTRIBUTES
 
@@ -625,7 +625,7 @@ my @imagerevision_identifier : Field : Arg('Name' => 'imagerevision_identifier')
 my @mn_os : Field : Arg('Name' => 'mn_os') : Get('Name' => 'mn_os', 'Private' => 1) : Set('Name' => 'set_mn_os');
 
 
-##############################################################################
+###############################################################################
 
 =head1 PRIVATE OBJECT METHODS
 
@@ -633,7 +633,7 @@ my @mn_os : Field : Arg('Name' => 'mn_os') : Get('Name' => 'mn_os', 'Private' =>
 
 =head2 initialize
 
- Parameters  : None
+ Parameters  : none
  Returns     : 1 if successful, 0 if failed
  Description : This subroutine initializes the DataStructure object. It
                retrieves the data for the specified request ID from the
@@ -769,7 +769,7 @@ sub _initialize : Init {
 	return 1;
 }
 
-#/////////////////////////////////////////////////////////////////////////////
+#//////////////////////////////////////////////////////////////////////////////
 
 =head2 automethod
 
@@ -936,11 +936,11 @@ sub _automethod : Automethod {
 	} ## end elsif ($mode =~ /set/)  [ if ($mode =~ /get/)
 } ## end sub _automethod :
 
-#/////////////////////////////////////////////////////////////////////////////
+#//////////////////////////////////////////////////////////////////////////////
 
 =head2 get_request_data (deprecated)
 
- Parameters  : None
+ Parameters  : none
  Returns     : scalar
  Description : Returns the request data hash.
 
@@ -951,7 +951,7 @@ sub get_request_data {
 	return $self->request_data;
 }
 
-#/////////////////////////////////////////////////////////////////////////////
+#//////////////////////////////////////////////////////////////////////////////
 
 =head2 can
 
@@ -980,13 +980,14 @@ sub can {
 	}
 }
 
-#/////////////////////////////////////////////////////////////////////////////
+#//////////////////////////////////////////////////////////////////////////////
 
 =head2 refresh
 
- Parameters  : None
- Returns     : 
- Description : 
+ Parameters  : none
+ Returns     : true
+ Description : Retrieves current request info from the database and replaces the
+               data contained in this object.
 
 =cut
 
@@ -1019,11 +1020,11 @@ sub refresh {
 	return 1;
 } ## end sub refresh
 
-#/////////////////////////////////////////////////////////////////////////////
+#//////////////////////////////////////////////////////////////////////////////
 
 =head2 get_blockrequest_data (deprecated)
 
- Parameters  : None
+ Parameters  : none
  Returns     : scalar
  Description : Returns the block request data hash.
 
@@ -1054,11 +1055,11 @@ sub get_blockrequest_data {
 	return $self->blockrequest_data->{$self->blockrequest_id};
 } ## end sub get_blockrequest_data
 
-#/////////////////////////////////////////////////////////////////////////////
+#//////////////////////////////////////////////////////////////////////////////
 
 =head2 get_reservation_count
 
- Parameters  : None
+ Parameters  : none
  Returns     : scalar
  Description : Returns the number of reservations for the request
                associated with this reservation's DataStructure object.
@@ -1072,7 +1073,7 @@ sub get_reservation_count {
 	return $reservation_count;
 }
 
-#/////////////////////////////////////////////////////////////////////////////
+#//////////////////////////////////////////////////////////////////////////////
 
 =head2 get_reservation_ids
 
@@ -1090,7 +1091,7 @@ sub get_reservation_ids {
 	return @reservation_ids;
 }
 
-#/////////////////////////////////////////////////////////////////////////////
+#//////////////////////////////////////////////////////////////////////////////
 
 =head2 get_child_reservation_ids
 
@@ -1110,7 +1111,7 @@ sub get_child_reservation_ids {
 	return @child_reservation_ids;
 }
 
-#/////////////////////////////////////////////////////////////////////////////
+#//////////////////////////////////////////////////////////////////////////////
 
 =head2 get_parent_reservation_id
 
@@ -1128,16 +1129,16 @@ sub get_parent_reservation_id {
 	return min $self->get_reservation_ids();
 }
 
-#/////////////////////////////////////////////////////////////////////////////
+#//////////////////////////////////////////////////////////////////////////////
 
 =head2 is_parent_reservation
 
- Parameters  : None
+ Parameters  : none
  Returns     : scalar, either 1 or 0
  Description : This subroutine returns 1 if this is the parent reservation for
                the request or if the request has 1 reservation associated with
-					it. It returns 0 if there are multiple reservations associated
-					with the request and this reservation is a child.
+               it. It returns 0 if there are multiple reservations associated
+               with the request and this reservation is a child.
 
 =cut
 
@@ -1157,7 +1158,7 @@ sub is_parent_reservation {
 	}
 } ## end sub is_parent_reservation
 
-#/////////////////////////////////////////////////////////////////////////////
+#//////////////////////////////////////////////////////////////////////////////
 
 =head2 get_reservation_data
 
@@ -1207,7 +1208,7 @@ sub get_reservation_data {
 	return $sibling_data_structure;
 } ## end sub get_reservation_data
 
-#/////////////////////////////////////////////////////////////////////////////
+#//////////////////////////////////////////////////////////////////////////////
 
 =head2 set_reservation_remote_ip
 
@@ -1252,11 +1253,11 @@ EOF
 	}
 } ## end sub set_reservation_remote_ip
 
-#/////////////////////////////////////////////////////////////////////////////
+#//////////////////////////////////////////////////////////////////////////////
 
 =head2 get_reservation_remote_ip
 
- Parameters  : None
+ Parameters  : none
  Returns     : string
  Description : 
 
@@ -1312,17 +1313,17 @@ sub get_reservation_remote_ip {
 	return $selected_rows[0]{remoteIP};
 } ## end sub get_reservation_remote_ip
 
-#/////////////////////////////////////////////////////////////////////////////
+#//////////////////////////////////////////////////////////////////////////////
 
 =head2 get_state_name
 
- Parameters  : None
+ Parameters  : none
  Returns     : string
  Description : Returns either the request state name or 'blockrequest'. Useful
                for vcld when make_new_child needs to figure out which module
-					to call.  Without this subroutine, it would need to include
-					if statement and then call get_request_state_name or hack the
-					name if it's processing a block request;
+               to call.  Without this subroutine, it would need to include
+               if statement and then call get_request_state_name or hack the
+               name if it's processing a block request;
 
 =cut
 
@@ -1341,14 +1342,14 @@ sub get_state_name {
 	}
 } ## end sub get_state_name
 
-#/////////////////////////////////////////////////////////////////////////////
+#//////////////////////////////////////////////////////////////////////////////
 
 =head2 get_next_image_data_structure
 
  Parameters  : none
  Returns     : array 
  Description : called mainly from reclaim module. Refreshes predictive load 
-					module information from database, loads module and calls next_image. 
+               module information from database, loads module and calls next_image. 
 
 =cut
 
@@ -1423,7 +1424,7 @@ sub get_next_image_data_structure {
 		return @current_image;
 	}
 }
-#/////////////////////////////////////////////////////////////////////////////
+#//////////////////////////////////////////////////////////////////////////////
 
 =head2 print_data
 
@@ -1442,7 +1443,7 @@ sub print_data {
 	notify($ERRORS{'OK'}, 0, "request data:\n$request_data\n\nmanagement node info:\n$management_node_info");
 }
 
-#/////////////////////////////////////////////////////////////////////////////
+#//////////////////////////////////////////////////////////////////////////////
 
 =head2 print_subroutines
 
@@ -1466,7 +1467,7 @@ sub print_subroutines {
 	notify($ERRORS{'OK'}, 0, "valid subroutines:\n$output");
 } ## end sub print_subroutines
 
-#/////////////////////////////////////////////////////////////////////////////
+#//////////////////////////////////////////////////////////////////////////////
 
 =head2 get_log_data
 
@@ -1540,7 +1541,7 @@ sub get_log_data {
 	return $self->request_data->{log};
 }
 
-#/////////////////////////////////////////////////////////////////////////////
+#//////////////////////////////////////////////////////////////////////////////
 
 =head2 get_computer_private_ip_address
 
@@ -1614,7 +1615,7 @@ sub get_computer_private_ip_address {
 	}
 }
 
-#/////////////////////////////////////////////////////////////////////////////
+#//////////////////////////////////////////////////////////////////////////////
 
 =head2 set_computer_private_ip_address
 
@@ -1675,11 +1676,11 @@ sub set_computer_private_ip_address {
 	return 1;
 }
 
-#/////////////////////////////////////////////////////////////////////////////
+#//////////////////////////////////////////////////////////////////////////////
 
 =head2 get_image_affiliation_name
 
- Parameters  : None.
+ Parameters  : none
  Returns     : If successful: string containing affiliation name
                If failed: false
  Description : This subroutine determines the affiliation name for the image
@@ -1723,11 +1724,11 @@ sub get_image_affiliation_name {
 	return $image_affiliation_name;
 }
 
-#/////////////////////////////////////////////////////////////////////////////
+#//////////////////////////////////////////////////////////////////////////////
 
 =head2 get_image_affiliation_id
 
- Parameters  : None.
+ Parameters  : none
  Returns     : If successful: string containing affiliation id
                If failed: false
  Description : This subroutine determines the affiliation id for the image
@@ -1771,11 +1772,11 @@ sub get_image_affiliation_id {
 	return $image_affiliation_id;
 }
 
-#/////////////////////////////////////////////////////////////////////////////
+#//////////////////////////////////////////////////////////////////////////////
 
 =head2 is_blockrequest
 
- Parameters  : None.
+ Parameters  : none
  Returns     : If DataStructure contains blockrequest data: true
                If DataStructure does not contain blockrequest data: false
  Description : This subroutine determines whether or not the DataStructure
@@ -1801,11 +1802,11 @@ sub is_blockrequest {
 	}
 }
 
-#/////////////////////////////////////////////////////////////////////////////
+#//////////////////////////////////////////////////////////////////////////////
 
 =head2 is_server_request
 
- Parameters  : None.
+ Parameters  : none
  Returns     : 
  Description : This subroutine determines whether or not the DataStructure
                contains data for a server request.
@@ -1824,11 +1825,11 @@ sub is_server_request {
 	return $self->get_server_request_id() ? 1 : 0;
 }
 
-#/////////////////////////////////////////////////////////////////////////////
+#//////////////////////////////////////////////////////////////////////////////
 
 =head2 get_management_node_public_default_gateway
 
- Parameters  : None
+ Parameters  : none
  Returns     : If successful: string containing IP address
                If failed: false
  Description : Returns the management node's default gateway IP address. This
@@ -1923,7 +1924,7 @@ sub get_management_node_public_default_gateway {
 	return;
 }
 
-#/////////////////////////////////////////////////////////////////////////////
+#//////////////////////////////////////////////////////////////////////////////
 
 =head2 get_image_domain_dns_servers
 
@@ -1951,11 +1952,11 @@ sub get_image_domain_dns_servers {
 }
 
 
-#/////////////////////////////////////////////////////////////////////////////
+#//////////////////////////////////////////////////////////////////////////////
 
 =head2 get_management_node_public_dns_servers
 
- Parameters  : None
+ Parameters  : none
  Returns     : If successful: array containing IP addresses
                If failed: false
  Description : Returns an array containing the addresses of the public DNS
@@ -1980,11 +1981,11 @@ sub get_management_node_public_dns_servers {
 	return split(/\s*[,;]\s*/, $dns_address_string);
 }
 
-#/////////////////////////////////////////////////////////////////////////////
+#//////////////////////////////////////////////////////////////////////////////
 
 =head2 get_management_node_identity_key_paths
 
- Parameters  : None
+ Parameters  : none
  Returns     : If successful: array containing paths to SSH identity keys
                If failed: false
  Description : Returns an array containing the paths to SSH identity keys
@@ -2008,7 +2009,7 @@ sub get_management_node_identity_key_paths {
 	return split(/\s*[,;]\s*/, $keys_string);
 }
 
-#/////////////////////////////////////////////////////////////////////////////
+#//////////////////////////////////////////////////////////////////////////////
 
 =head2 get_computer_state_name
 
@@ -2097,11 +2098,11 @@ sub get_computer_state_name {
 	}
 }
 
-#/////////////////////////////////////////////////////////////////////////////
+#//////////////////////////////////////////////////////////////////////////////
 
 =head2 get_reservation_info_string
 
- Parameters  : None.
+ Parameters  : none
  Returns     : String
  Description : Assembles a string containing reservation information for
                debugging purposes.
@@ -2223,7 +2224,7 @@ sub get_reservation_info_string {
 	return $string;
 }
 
-#/////////////////////////////////////////////////////////////////////////////
+#//////////////////////////////////////////////////////////////////////////////
 
 =head2 get_reservation_user_login_ids
 
@@ -2248,7 +2249,7 @@ sub get_reservation_user_login_ids {
 	return @reservation_users;
 }
 
-#/////////////////////////////////////////////////////////////////////////////
+#//////////////////////////////////////////////////////////////////////////////
 
 =head2 get_image_minram
 
@@ -2275,7 +2276,7 @@ sub get_image_minram {
 	return $minram;
 }
 
-#/////////////////////////////////////////////////////////////////////////////
+#//////////////////////////////////////////////////////////////////////////////
 
 =head2 get_reservation_info_json_string
 
@@ -2333,7 +2334,7 @@ sub get_reservation_info_json_string {
 }
 
 
-#/////////////////////////////////////////////////////////////////////////////
+#//////////////////////////////////////////////////////////////////////////////
 
 =head2 get_connect_method_info_matching_name
 
@@ -2386,7 +2387,7 @@ sub get_connect_method_info_matching_name {
 	return $matching_connect_method_info;
 }
 
-#/////////////////////////////////////////////////////////////////////////////
+#//////////////////////////////////////////////////////////////////////////////
 
 =head2 get_connect_method_protocol_port_array
 
@@ -2424,7 +2425,7 @@ sub get_connect_method_protocol_port_array {
 	return @protocol_port_array;
 }
 
-#/////////////////////////////////////////////////////////////////////////////
+#//////////////////////////////////////////////////////////////////////////////
 
 =head2 get_user_affiliation_sitewwwaddress
 
@@ -2457,7 +2458,7 @@ sub get_user_affiliation_sitewwwaddress {
 	return 'vcl.apache.org';
 }
 
-#/////////////////////////////////////////////////////////////////////////////
+#//////////////////////////////////////////////////////////////////////////////
 
 =head2 get_user_affiliation_helpaddress
 
@@ -2491,7 +2492,7 @@ sub get_user_affiliation_helpaddress {
 	return 'help@vcl.example.edu';
 }
 
-#/////////////////////////////////////////////////////////////////////////////
+#//////////////////////////////////////////////////////////////////////////////
 
 =head2 is_cluster_request
 
@@ -2517,7 +2518,7 @@ sub is_cluster_request {
 	}
 }
 
-#/////////////////////////////////////////////////////////////////////////////
+#//////////////////////////////////////////////////////////////////////////////
 
 =head2 get_other_cluster_computer_public_ip_addresses
 
@@ -2575,7 +2576,113 @@ sub get_other_cluster_computer_public_ip_addresses {
 	return sort @cluster_computer_public_ip_addresses;
 }
 
-#/////////////////////////////////////////////////////////////////////////////
+#//////////////////////////////////////////////////////////////////////////////
+
+=head2 substitute_string_variables
+
+ Parameters  : $input_string, $variable_identifier_regex (optional)
+ Returns     : $string
+ Description : Replaces sections of the input string matching
+               $variable_identifier_regex with values from the DataStructure
+               object. The default pattern used to locate sections to replace
+               is:
+                  \[[a-z][a-z_]+[a-z]\]
+               
+               Meaning, all patterns to replace are enclosed in square brackets.
+               The text within the brackets must exactly match one of the keys
+               of the %SUBROUTINE_MAPPINGS hash defined above. The text must
+               begin and end with lowercase letters and contains any number of
+               lowercase letters and underscores in between.
+               
+               Example:
+               This is input text for user [user_login_id]'s reservation with
+               request/reservation IDs of [request_id]/[reservation_id].
+               
+               Each section within square brackets gets prepended with 'get_'
+               and the resulting string is executed against this DataStructure
+               object:
+               [user_login_id] --> $self->get_user_login_id(0);
+               
+               The value returned is substituted in the input text:
+               This is input text for user jdoe23's reservation with
+               request/reservation IDs of 3118/3265.
+
+=cut
+
+sub substitute_string_variables {
+	my $self = shift;
+	if (ref($self) !~ /VCL::/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return 0;
+	}
+	
+	my ($input_string, $variable_identifier_regex) = @_;
+	if (!defined($input_string)) {
+		notify($ERRORS{'WARNING'}, 0, "input string argument was not supplied");
+		return;
+	}	
+	if (!$variable_identifier_regex) {
+		$variable_identifier_regex = '\[[a-z][a-z_]+[a-z]\]';
+	}
+	
+	my $output_string = $input_string;
+	
+	# Extract all sections of input string which should be replaced
+	my @input_substitute_sections = $input_string =~ /($variable_identifier_regex)/g;
+	if (!@input_substitute_sections) {
+		notify($ERRORS{'DEBUG'}, 0, "input string does not contain any sections to replace matching the substitution identifier pattern: '$variable_identifier_regex', returning original input string:\n" . $input_string);
+		return $input_string;
+	}
+	notify($ERRORS{'DEBUG'}, 0, "found sections of input string that match the substitution identifier pattern '$variable_identifier_regex', input string:\n$input_string\n\nmatching sections:\n" . join("\n", @input_substitute_sections));
+	
+	for my $input_substitute_section (remove_array_duplicates(@input_substitute_sections)) {
+		# Remove brackets, etc from matching section: '[user_login_id]' --> 'user_login_id'
+		my ($subroutine_mapping_key) = $input_substitute_section =~ /^[^a-z]*([a-z][a-z_]+[a-z])[^a-z]*$/;
+		if (!$subroutine_mapping_key) {
+			notify($ERRORS{'CRITICAL'}, 0, "failed to extract subroutine mapping key from section of input string matching substitution identifier pattern '$variable_identifier_regex': '$input_substitute_section'");
+			return;
+		}
+		#notify($ERRORS{'DEBUG'}, 0, "extracted subroutine mapping key from section of input string: '$input_substitute_section' --> '$subroutine_mapping_key'");
+		
+		# Attempt to retrieve the substitution value from the DataStructure data
+		# Check if DataStructure.pm implements a matching 'get_' function
+		my $get_function_name = "get_$subroutine_mapping_key";
+		if (!$self->can($get_function_name)) {
+			notify($ERRORS{'CRITICAL'}, 0, "failed to determine replacement value for substitution section: '$input_substitute_section', DataStructure does not implement a '$get_function_name' function");
+			return;
+		}
+		
+		# Assemble a code string to retrieve the value from the DataStructure:
+		my $eval_code = "\$self->$get_function_name(0)";
+		
+		# Evaluate the code string:
+		my $substitution_value = eval $eval_code;
+		if (!defined($substitution_value)) {
+			notify($ERRORS{'CRITICAL'}, 0, "failed to determine replacement value for substitution section: '$input_substitute_section', $eval_code returned undefined");
+			return;
+		}
+		notify($ERRORS{'DEBUG'}, 0, "determined replacement value for substitution section: '$input_substitute_section', $eval_code = '$substitution_value'");
+		
+		# Replace substitution section with the retrieved value
+		my $output_string_before = $output_string;
+		# Need to escape brackets or else pattern won't match
+		my $input_substitute_section_escaped = quotemeta($input_substitute_section);
+		$output_string =~ s/$input_substitute_section_escaped/$substitution_value/g;
+		
+		# Make sure the substitution worked
+		if ($output_string_before eq $output_string) {
+			notify($ERRORS{'CRITICAL'}, 0, "failed to replace sections of input string: '$input_substitute_section' (escaped: '$input_substitute_section_escaped') --> '$substitution_value', input string did not change:\n$output_string");
+		}
+		else {
+			#notify($ERRORS{'DEBUG'}, 0, "replaced sections of input string: '$input_substitute_section' --> '$substitution_value'\nbefore:\n$output_string_before\nafter:\n$output_string");
+		}
+	}
+	
+	notify($ERRORS{'OK'}, 0, "replaced all matching sections of input string with values retrieved from this DataStructure object:\ninput string:\n$input_string\noutput string:\n$output_string");
+	return $output_string;
+}
+
+#//////////////////////////////////////////////////////////////////////////////
 
 1;
 __END__
