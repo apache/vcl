@@ -118,33 +118,119 @@ sub get_service_names {
 		return;
 	}
 	
-	my $computer_node_name = $self->data->get_computer_node_name();
-	
-	my $service_info = {};
-	
-	my $command = "initctl list";
-	my ($exit_status, $output) = $self->os->execute($command, 0);
-	if (!defined($output)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to execute command to list Upstart services on $computer_node_name");
+	my $service_info = $self->_get_service_info() || {};
+	return sort keys %$service_info;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 _get_service_info
+
+ Parameters  : $use_cache (optional)
+ Returns     : hash reference
+ Description : Calls 'initctl list' to retrieve the list of services controlled
+               by Upstart on the computer. Also calls 'service --status-all' to
+               determine SysV-style services controlled by Upstart. A hash
+               reference is returned. Hash keys are service names. Values are
+               either 'initctl' or 'service' indicating if Upstart's initctl
+               command can be used to control the service or the service command
+               must be used:
+                  {
+                    "acpid" => "initctl",
+                    "open-vm-tools" => "service",
+                    "ssh" => "initctl",
+                    "sshd" => "initctl",
+                    "xrdp" => "service"
+                  }
+               By default, the service info is retrieved every time this
+               subroutine is called. To use cached info, the $use_cache argument
+               must be explicitely set to true.
+
+=cut
+
+sub _get_service_info {
+	my $self = shift;
+	if (ref($self) !~ /linux/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return;
 	}
 	
-	# Format of initctl list output lines:
-	# splash-manager stop/waiting
-	# Add to hash then extract keys to remove duplicates
-	my %service_name_hash;
+	my $use_cache = shift;
+	if ($use_cache && defined($self->{service_info})) {
+		return $self->{service_info};
+	}
+	else {
+		$self->{service_info} = {};
+	}
+	
+	my $computer_node_name = $self->data->get_computer_node_name();
+	
 	my %service_name_mappings_reversed = reverse %$SERVICE_NAME_MAPPINGS;
-	for my $line (@$output) {
-		my ($service_name) = $line =~ /^([^\s\t]+)/;
-		next unless $service_name;
-		$service_name_hash{$service_name} = 1 if $service_name;
-		if (my $service_name_mapping = $service_name_mappings_reversed{$service_name}) {
-			$service_name_hash{$service_name_mapping} = 1;
+	
+	my $initctl_command = "initctl list";
+	my ($initctl_exit_status, $initctl_output) = $self->os->execute($initctl_command, 0);
+	if (!defined($initctl_output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to list Upstart services on $computer_node_name");
+		return;
+	}
+	elsif ($initctl_exit_status ne '0') {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve list of all services on $computer_node_name using the initctl command, exit status: $initctl_exit_status, command:\n$initctl_command\noutput:\n" . join("\n", @$initctl_output));
+		return;
+	}
+	else {
+		# Format of initctl list output lines:
+		#    splash-manager stop/waiting
+		#    network-interface-security (network-interface/eth1) start/running
+		#    tty1 start/running, process 1400
+		for my $line (@$initctl_output) {
+			my ($service_name) = $line =~ /^([^\s\t]+)/;
+			if ($service_name) {
+				$self->{service_info}{$service_name} = 'initctl';
+			}
+			else {
+				notify($ERRORS{'WARNING'}, 0, "failed to parse service name from '$initctl_command' line: '$line'");
+			}
 		}
 	}
-	my @service_names = sort(keys %service_name_hash);
-	notify($ERRORS{'DEBUG'}, 0, "retrieved Upstart service names from $computer_node_name: " . join(", ", @service_names));
-	return @service_names;
+	
+	# VCL-966
+	# Legacy SysV-style services are not reported by 'initctl list'
+	# The SysV.pm module cannot control these services becuase the chkconfig command is not available on Ubuntu
+	
+	my $service_command = "service --status-all";
+	my ($service_exit_status, $service_output) = $self->os->execute($service_command);
+	if (!defined($service_output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to retrieve list of all services on $computer_node_name using the service command: $service_command");
+		return;
+	}
+	elsif ($service_exit_status ne '0') {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve list of all services on $computer_node_name using the service command, exit status: $service_exit_status, command:\n$service_command\noutput:\n" . join("\n", @$service_output));
+	}
+	else {
+		# Lines should be formatted as:
+		#    [ + ]  acpid
+		#    [ ? ]  apport
+		#    [ - ]  dbus
+		for my $line (@$service_output) {
+			my ($service_name) = $line =~ /(\S+)\s*$/;
+			if (!$service_name) {
+				notify($ERRORS{'WARNING'}, 0, "failed to parse service name from '$service_command' line: '$line'");
+			}
+			elsif (!defined($self->{service_info}{$service_name})) {
+				$self->{service_info}{$service_name} = 'service';
+			}
+		}
+	}
+	
+	for my $service_name (keys($self->{service_info})) {
+		my $service_name_mapping = $service_name_mappings_reversed{$service_name};
+		if ($service_name_mapping) {
+			$self->{service_info}{$service_name_mapping} = $self->{service_info}{$service_name};
+		}
+	}
+	
+	notify($ERRORS{'DEBUG'}, 0, "retrieved services info from $computer_node_name:\n" . format_data($self->{service_info}));
+	return $self->{service_info};
 }
 
 #/////////////////////////////////////////////////////////////////////////////
@@ -218,6 +304,11 @@ sub start_service {
 	}
 	$service_name = $SERVICE_NAME_MAPPINGS->{$service_name} || $service_name;
 	
+	# Check if initctl cannot be used to control service
+	if ($self->_controlled_by_service_command($service_name)) {
+		return $self->_call_service_start($service_name);
+	}
+	
 	my $computer_node_name = $self->data->get_computer_node_name();
 	
 	my $command = "initctl start $service_name";
@@ -264,47 +355,43 @@ sub stop_service {
 		return;
 	}
 	
-	my $service_name_argument = shift;
-	if (!$service_name_argument) {
+	my $service_name = shift;
+	if (!$service_name) {
 		notify($ERRORS{'WARNING'}, 0, "service name argument was not supplied");
 		return;
 	}
+	$service_name = $SERVICE_NAME_MAPPINGS->{$service_name} || $service_name;
 	
-	# Need to attempt to stop both the service with a name matching the argument as well as the mapped service name
-	my @service_names = ($service_name_argument);
-	
-	# If a mapped service name also exists, attempt to stop it as well
-	if ($SERVICE_NAME_MAPPINGS->{$service_name_argument}) {
-		push @service_names, $SERVICE_NAME_MAPPINGS->{$service_name_argument};
+	# Check if initctl cannot be used to control service
+	if ($self->_controlled_by_service_command($service_name)) {
+		return $self->_call_service_stop($service_name);
 	}
 	
 	my $computer_node_name = $self->data->get_computer_node_name();
 	
-	for my $service_name (@service_names) {
-		my $command = "initctl stop $service_name";
-		my ($exit_status, $output) = $self->os->execute($command);
-		if (!defined($output)) {
-			notify($ERRORS{'WARNING'}, 0, "failed to execute command to stop '$service_name' service on $computer_node_name");
-			return;
-		}
-		elsif (grep(/Unknown job/i, @$output)) {
-			# Output if the service doesn't exist: 'initctl: Unknown job: <service name>'
-			notify($ERRORS{'DEBUG'}, 0, "'$service_name' service does not exist on $computer_node_name");
-		}
-		elsif (grep(/Unknown instance/i, @$output)) {
-			# Output if the service is not running: 'initctl: Unknown instance:'
-			notify($ERRORS{'DEBUG'}, 0, "'$service_name' is already stopped on $computer_node_name");
-			return 1;
-		}
-		elsif (grep(/ stop\//i, @$output)) {
-			# Output if the service was stopped: '<service name> stop/waiting'
-			notify($ERRORS{'DEBUG'}, 0, "stopped '$service_name' service on $computer_node_name");
-			return 1;
-		}
-		else {
-			notify($ERRORS{'WARNING'}, 0, "failed to stop '$service_name' service on $computer_node_name, exit status: $exit_status, command: '$command', output:\n" . join("\n", @$output));
-			return;
-		}
+	my $command = "initctl stop $service_name";
+	my ($exit_status, $output) = $self->os->execute($command);
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to stop '$service_name' service on $computer_node_name");
+		return;
+	}
+	elsif (grep(/Unknown job/i, @$output)) {
+		# Output if the service doesn't exist: 'initctl: Unknown job: <service name>'
+		notify($ERRORS{'DEBUG'}, 0, "'$service_name' service does not exist on $computer_node_name");
+	}
+	elsif (grep(/Unknown instance/i, @$output)) {
+		# Output if the service is not running: 'initctl: Unknown instance:'
+		notify($ERRORS{'DEBUG'}, 0, "'$service_name' is already stopped on $computer_node_name");
+		return 1;
+	}
+	elsif (grep(/ stop\//i, @$output)) {
+		# Output if the service was stopped: '<service name> stop/waiting'
+		notify($ERRORS{'DEBUG'}, 0, "stopped '$service_name' service on $computer_node_name");
+		return 1;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to stop '$service_name' service on $computer_node_name, exit status: $exit_status, command: '$command', output:\n" . join("\n", @$output));
+		return;
 	}
 	
 	return 1;
@@ -333,6 +420,11 @@ sub restart_service {
 		return;
 	}
 	$service_name = $SERVICE_NAME_MAPPINGS->{$service_name} || $service_name;
+	
+	# Check if initctl cannot be used to control service
+	if ($self->_controlled_by_service_command($service_name)) {
+		return $self->_call_service_restart($service_name);
+	}
 	
 	my $computer_node_name = $self->data->get_computer_node_name();
 	
@@ -445,6 +537,11 @@ sub service_running {
 		return;
 	}
 	$service_name = $SERVICE_NAME_MAPPINGS->{$service_name} || $service_name;
+	
+	# Check if initctl cannot be used to control service
+	if ($self->_controlled_by_service_command($service_name)) {
+		return $self->_call_service_status($service_name);
+	}
 	
 	my $computer_node_name = $self->data->get_computer_node_name();
 	
@@ -622,6 +719,231 @@ sub disable_service {
 	}
 	else {
 		notify($ERRORS{'WARNING'}, 0, "unable to disable '$service_name' service, failed to create override file: $service_override_file_path");
+		return;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 _controlled_by_service_command
+
+ Parameters  : $service_name
+ Returns     : boolean
+ Description : Returns true if the service exists but cannot be controlled by
+               the 'initctl' command. The 'service' command must be used for
+               basic service control.
+
+=cut
+
+sub _controlled_by_service_command {
+	my $self = shift;
+	if (ref($self) !~ /linux/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $service_name = shift;
+	if (!$service_name) {
+		notify($ERRORS{'WARNING'}, 0, "service name argument was not supplied");
+		return;
+	}
+	
+	my $service_info = $self->_get_service_info(1) || return;
+	if ($service_info->{$service_name} && $service_info->{$service_name} eq 'service') {
+		notify($ERRORS{'DEBUG'}, 0, "'$service_name' service cannot be controlled by the initctl command, the service command will be used");
+		return 1;
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "'$service_name' service will be controlled by the initctl command");
+		return 0;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 _call_service_start
+
+ Parameters  : $service_name
+ Returns     : boolean
+ Description : Calls 'service <$service_name> start' to start a service that
+               can't be controlled by initctl.
+
+=cut
+
+sub _call_service_start {
+	my $self = shift;
+	if (ref($self) !~ /linux/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $service_name = shift;
+	
+	my $computer_node_name = $self->data->get_computer_node_name();
+	
+	my $service_command = "service $service_name start";
+	my ($service_exit_status, $service_output) = $self->os->execute($service_command);
+	if (!defined($service_output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to start '$service_name' service on $computer_node_name using the service command: $service_command");
+		return;
+	}
+	elsif ($service_exit_status eq '0' || grep(/done/, @$service_output)) {
+		notify($ERRORS{'OK'}, 0, "started '$service_name' service on $computer_node_name using the service command: '$service_command', output:\n" . join("\n", @$service_output));
+		return 1;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to start '$service_name' service on $computer_node_name using the service command, exit status: $service_exit_status, command:\n$service_command\noutput:\n" . join("\n", @$service_output));
+		return;
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 _call_service_stop
+
+ Parameters  : $service_name
+ Returns     : boolean
+ Description : Calls 'service <$service_name> stop' to stop a service that
+               can't be controlled by initctl.
+
+=cut
+
+sub _call_service_stop {
+	my $self = shift;
+	if (ref($self) !~ /linux/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $service_name = shift;
+	
+	my $computer_node_name = $self->data->get_computer_node_name();
+	
+	my $service_command = "service $service_name stop";
+	my ($service_exit_status, $service_output) = $self->os->execute($service_command);
+	if (!defined($service_output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to stop '$service_name' service on $computer_node_name using the service command: $service_command");
+		return;
+	}
+	elsif ($service_exit_status eq '0' || grep(/done/, @$service_output)) {
+		notify($ERRORS{'OK'}, 0, "stopped '$service_name' service on $computer_node_name using the service command: '$service_command', output:\n" . join("\n", @$service_output));
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to stop '$service_name' service on $computer_node_name using the service command, exit status: $service_exit_status, command:\n$service_command\noutput:\n" . join("\n", @$service_output));
+		return;
+	}
+	
+	# Try to fix common xRDP bug on Ubuntu, service start/stop/restart often leaves behind the .pid file
+	# Service can't be completly restarted until file is manually deleted
+	my @pid_files = $self->os->find_files('/var/run', "$service_name.pid", 1, 'f');
+	if (scalar(@pid_files) == 1) {
+		my $pid_file = $pid_files[0];
+		notify($ERRORS{'DEBUG'}, 0, "'$service_name' may not have cleaned up .pid file when service was stopped, attempting to delete file: $pid_file");
+		$self->os->delete_file($pid_file)
+	}
+	
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 _call_service_restart
+
+ Parameters  : $service_name
+ Returns     : boolean
+ Description : Calls 'service <$service_name> stop' and then
+					'service <$service_name> start' to restart a service that can't
+					be controlled by initctl.
+
+=cut
+
+sub _call_service_restart {
+	my $self = shift;
+	if (ref($self) !~ /linux/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $service_name = shift;
+	
+	my $computer_node_name = $self->data->get_computer_node_name();
+	
+	my $service_command = "service $service_name restart";
+	my ($service_exit_status, $service_output) = $self->os->execute($service_command);
+	if (!defined($service_output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to restart '$service_name' service on $computer_node_name using the service command: $service_command");
+		return;
+	}
+	elsif ($service_exit_status eq '0' || grep(/done/, @$service_output)) {
+		notify($ERRORS{'OK'}, 0, "restarted '$service_name' service on $computer_node_name using the service command: '$service_command', output:\n" . join("\n", @$service_output));
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to restart '$service_name' service on $computer_node_name using the service command, exit status: $service_exit_status, command:\n$service_command\noutput:\n" . join("\n", @$service_output));
+		return;
+	}
+	
+	if ($self->_call_service_status($service_name)) {
+		return 1;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "'$service_name' service does not seem to be running after restarting it, attempting to stop and start service");
+		$self->_call_service_stop($service_name);
+		$self->_call_service_start($service_name);
+		return $self->_call_service_status($service_name);
+	}
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 _call_service_status
+
+ Parameters  : $service_name
+ Returns     : boolean
+ Description : Calls 'service <$service_name> status' to get the status of a
+               service that can't be controlled by initctl.
+
+=cut
+
+sub _call_service_status {
+	my $self = shift;
+	if (ref($self) !~ /linux/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $service_name = shift;
+	
+	my $computer_node_name = $self->data->get_computer_node_name();
+	
+	my $service_command = "service $service_name status";
+	my ($service_exit_status, $service_output) = $self->os->execute($service_command);
+	if (!defined($service_output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to retrieve status of '$service_name' service on $computer_node_name using the service command: $service_command");
+		return;
+	}
+	
+	# Output if service is running:
+	# * Checking status of Remote Desktop Protocol server xrdp
+	#   ...done.
+	# * Checking status of RDP Session Manager sesman
+	#   ...done.
+	
+	# Output if service is stopped:
+	# * Checking status of Remote Desktop Protocol server xrdp
+	#   ...fail!
+	# * Checking status of RDP Session Manager sesman
+	#   ...fail!
+	
+	if (grep(/done/, @$service_output) && !grep(/fail/, @$service_output)) {
+		notify($ERRORS{'OK'}, 0, "'$service_name' service is running on $computer_node_name, output of '$service_command':\n" . join("\n", @$service_output));
+		return 1;
+	}
+	elsif (grep(/fail/, @$service_output)) {
+		notify($ERRORS{'OK'}, 0, "'$service_name' service is NOT running on $computer_node_name, output of '$service_command':\n" . join("\n", @$service_output));
+		return 0;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to determine if '$service_name' service is running on $computer_node_name using the service command, output does not contain 'done' or 'fail', exit status: $service_exit_status, command:\n$service_command\noutput:\n" . join("\n", @$service_output));
 		return;
 	}
 }

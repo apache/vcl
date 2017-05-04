@@ -158,7 +158,7 @@ sub get_node_configuration_directory {
 =head2 get_init_modules
 
  Parameters  : none
- Returns     : Linux init module reference
+ Returns     : array of Linux init module references
  Description : Determines the Linux init daemon being used by the computer
                (SysV, systemd, etc.) and creates an object. The default is SysV
                if no other modules in the lib/VCL/Module/OS/Linux/init directory
