@@ -13751,11 +13751,13 @@ sub ad_join {
 		$domain_computer_command_section = "-OUPath \"$computer_ou_dn\"";
 	}
 	
+	my $domain_user_string = "$domain_username\@$domain_dns_name";
+	
 	notify($ERRORS{'DEBUG'}, 0, "attempting to join $computer_name to AD\n" .
-		"domain DNS name: $domain_dns_name\n" .
-		"domain user: $domain_username\n" .
-		"domain password: $domain_password\n" .
-		"domain computer OU DN: " . ($computer_ou_dn ? $computer_ou_dn : '<not configured>')
+		"domain DNS name    : $domain_dns_name\n" .
+		"domain user string : $domain_user_string\n" .
+		"domain password    : $domain_password\n" .
+		"domain computer OU : " . ($computer_ou_dn ? $computer_ou_dn : '<not configured>')
 	);
 	
 	# Perform preparation tasks
@@ -13763,7 +13765,7 @@ sub ad_join {
 	
 	# Assemble the PowerShell script
 	my $ad_powershell_script = <<EOF;
-\$ps_credential = New-Object System.Management.Automation.PsCredential("$domain_dns_name\\$domain_username", (ConvertTo-SecureString "$domain_password" -AsPlainText -Force))
+\$ps_credential = New-Object System.Management.Automation.PsCredential("$domain_user_string", (ConvertTo-SecureString "$domain_password" -AsPlainText -Force))
 Add-Computer -DomainName "$domain_dns_name" -Credential \$ps_credential $domain_computer_command_section -Verbose -ErrorAction Stop
 EOF
 
@@ -13837,6 +13839,181 @@ EOF
 		notify($ERRORS{'OK'}, 0, "executed PowerShell script to join $computer_name to Active Directory domain, output:\n" . join("\n", @$output));
 	}
 
+	# Reboot, computer should be joined to AD with the correct hostname
+	# If computer had to be rebooted to be renamed, certain tasks in reboot() don't need to be performed again
+	# Set reboot()'s last $pre_configure flag accordingly
+	my $ad_join_reboot_pre_configure = ($rename_computer_reboot_duration ? 0 : 1);
+	
+	my $ad_join_reboot_start = time;
+	if (!$self->reboot(300, 3, 1, $ad_join_reboot_pre_configure)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to join $computer_name to Active Directory domain, failed to reboot computer after it joined the domain");
+		return;
+	}
+	$ad_join_reboot_duration = (time - $ad_join_reboot_start);
+	
+	my $total_duration = (time - $start_time);
+	my $other_tasks_duration = ($total_duration - $rename_computer_reboot_duration - $ad_join_reboot_duration);
+	
+	notify($ERRORS{'DEBUG'}, 0, "successfully joined $computer_name to Active Directory domain: $domain_dns_name, time statistics:\n" .
+		"computer rename reboot : $rename_computer_reboot_duration seconds\n" .
+		"AD join reboot         : $ad_join_reboot_duration seconds\n" .
+		"other tasks            : $other_tasks_duration seconds\n" .
+		"total                  : $total_duration seconds"
+	);
+	return 1;
+}
+
+#//////////////////////////////////////////////////////////////////////////////
+
+=head2 ad_join_wmic
+
+ Parameters  : none
+ Returns     : boolean
+ Description : Joins the computer to the Active Directory domain configured for
+               the image using the wmic.exe utility as opposed to a PowerShell
+               script.
+
+=cut
+
+sub ad_join_wmic {
+	my $self = shift;	
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	# Calculate how long the tasks take
+	my $start_time = time;
+	my $rename_computer_reboot_duration = 0;
+	my $ad_join_reboot_duration = 0;
+	
+	my $computer_name	= $self->data->get_computer_node_name();
+	my $image_name	= $self->data->get_image_name();
+	
+	my $system32_path = $self->get_system32_path() || return;
+	
+	my $domain_dns_name = $self->data->get_image_domain_dns_name();
+	my $domain_username = $self->data->get_image_domain_username();
+	my $domain_password = $self->data->get_image_domain_password();
+	my $computer_ou_dn = $self->get_ad_computer_ou_dn();
+	
+	if (!defined($domain_dns_name)) {
+		notify($ERRORS{'WARNING'}, 0, "unable to add $computer_name to AD, image $image_name is not assigned to a domain");
+		return;
+	}
+	elsif (!defined($domain_username)) {
+		notify($ERRORS{'WARNING'}, 0, "unable to add $computer_name to AD, user name is not configured for $domain_dns_name domain");
+		return;
+	}
+	elsif (!defined($domain_password)) {
+		notify($ERRORS{'WARNING'}, 0, "unable to add $computer_name to AD, password is not configured for $domain_dns_name domain");
+		return;
+	}
+	
+	if ($computer_ou_dn) {
+		# OU=testOU,DC=domain,DC=Domain,DC=com --> OU=testOU; DC=domain; DC=Domain; DC=com
+		$computer_ou_dn =~ s/\s*,\s*/; /g;
+	}
+	
+	my $domain_password_escaped = quotemeta($domain_password);
+	
+	# Check if the computer needs to be renamed
+	my $current_computer_hostname = $self->get_current_computer_hostname() || '<unknown>';
+	if (lc($current_computer_hostname) ne lc($computer_name)) {
+		notify($ERRORS{'DEBUG'}, 0, "$computer_name needs to be renamed, current hostname: '$current_computer_hostname'");
+		
+		if (!$self->set_computer_hostname()) {
+			notify($ERRORS{'WARNING'}, 0, "failed to join $computer_name to Active Directory domain, PowerShell version does NOT support Rename-Computer, failed to rename using traditional method");
+			return;
+		}
+			
+		my $rename_computer_reboot_start = time;
+		if (!$self->reboot(300, 3, 1)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to join $computer_name to Active Directory domain, failed to reboot computer after it was renamed");
+			return;
+		}
+		$rename_computer_reboot_duration = (time - $rename_computer_reboot_start);
+	}
+	
+	my $error_messages = {
+		5    => 'Access is denied',
+		53   => 'Network path not found',
+		87   => 'The parameter is incorrect',
+		110  => 'The system cannot open the specified object',
+		1323 => 'Unable to update the password',
+		1332 =>'No mapping between account names and security IDs was done',
+		1326 => 'Logon failure: unknown username or bad password',
+		1355 => 'The specified domain either does not exist or could not be contacted',
+		1909 => 'User account locked out',
+		2224 => 'The account already exists',
+		2691 => 'The machine is already joined to the domain',
+		2692 => 'The machine is not currently joined to a domain',
+		2695 => 'The specified workgroup name is invalid',
+		2697 => 'The specified computer account could not be found',
+		8206 => 'The directory service is busy',
+	};
+
+	# Perform preparation tasks
+	$self->ad_join_prepare() || return;
+	
+	# NETSETUP_JOIN_DOMAIN                      1 (0x00000001) - Join domain. If not specified, joins workgroup.
+	# NETSETUP_ACCT_CREATE                      2 (0x00000002) - Create domain computer account
+	# NETSETUP_DOMAIN_JOIN_IF_JOINED           32 (0x00000020) - Join domain if computer is already joined to a domain.
+	# NETSETUP_DEFER_SPN_SET                  256 (0x00000100) - Don't update service principal name (SPN) and the DnsHostName properties on the computer. They should be updated in a subsequent call to Rename
+	# NETSETUP_JOIN_WITH_NEW_NAME             512 (0x00000400) - 
+	my $join_options = 0;
+	$join_options += 1;
+	$join_options += 2;
+	#$join_options += 32;
+	#$join_options += 256;
+	#$join_options += 512;
+	
+	# Assemble the join command
+	#    Name - domain or workgroup to join
+	#    Password
+	#    UserName - NetBIOS name Domain\sAMAccountName or user principal name: username@domain.
+	#    AccountOU - format: "OU=testOU; DC=domain; DC=Domain; DC=com"
+	#    FJoinOptions - join option bit flags, (0) Default. No join options.
+	my $join_command = 'echo | cmd.exe /c "';
+	$join_command .= "$system32_path/Wbem/wmic.exe /INTERACTIVE:OFF ComputerSystem WHERE Name=\\\"%COMPUTERNAME%\\\" Call JoinDomainOrWorkgroup";
+	$join_command .= " Name=$domain_dns_name";
+	$join_command .= " UserName=\\\"$domain_username\@$domain_dns_name\\\"";
+	$join_command .= " Password=\"$domain_password_escaped\"";
+	$join_command .= " AccountOU=\\\"$computer_ou_dn\\\"" if ($computer_ou_dn);
+	$join_command .= " FjoinOptions=$join_options";
+	$join_command .= '"';
+	
+	notify($ERRORS{'DEBUG'}, 0, "attempting to join $computer_name to Active Directory domain $domain_dns_name using wmic.exe, command:\n$join_command");
+	my ($join_exit_status, $join_output) = $self->execute($join_command);
+	if (!defined($join_output)) {
+		notify($ERRORS{'DEBUG'}, 0, "failed to execute command to join $computer_name to Active Directory domain $domain_dns_name using wmic.exe");
+		return;
+	}
+	# Executing (\\WIN7\ROOT\CIMV2:Win32_ComputerSystem.Name="WIN7")->JoinDomainOrWorkgroup()
+	# Method execution successful.
+	# Out Parameters:
+	# instance of __PARAMETERS
+	# {
+	#    ReturnValue = 0;
+	# };
+	my $join_output_string = join("\n", @$join_output);
+	my ($join_return_value) = $join_output_string =~ /ReturnValue = (\d+);/;
+	if (!defined($join_return_value)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to join $computer_name to Active Directory domain $domain_dns_name using wmic.exe, output does not contain 'ReturnValue =':\n$join_output_string");
+		return;
+	}
+	elsif ($join_return_value == 0) {
+		notify($ERRORS{'OK'}, 0, "joined $computer_name to Active Directory domain $domain_dns_name using wmic.exe");
+	}
+	elsif (my $error_message = $error_messages->{$join_return_value}) {
+		notify($ERRORS{'WARNING'}, 0, "failed to join $computer_name to Active Directory domain $domain_dns_name using wmic.exe\nreason: $error_message\noutput:\n$join_output_string");
+		return;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to join $computer_name to Active Directory domain $domain_dns_name using wmic.exe for an unknown reason, to troubleshoot, search the web for 'wmic.exe ComputerSystem JoinDomainOrWorkgroup ReturnValue $join_return_value', output:\n$join_output_string");
+		return;
+	}
+	
 	# Reboot, computer should be joined to AD with the correct hostname
 	# If computer had to be rebooted to be renamed, certain tasks in reboot() don't need to be performed again
 	# Set reboot()'s last $pre_configure flag accordingly
@@ -13970,7 +14147,7 @@ sub ad_unjoin {
 	#	# Assemble the PowerShell script
 	#	my $ad_powershell_script = <<EOF;
 	#\$Host.UI.RawUI.BufferSize = New-Object Management.Automation.Host.Size(5000, 500)
-	#\$ps_credential = New-Object System.Management.Automation.PsCredential("$domain_dns_name\\$domain_username", (ConvertTo-SecureString "$domain_password" -AsPlainText -Force))
+	#\$ps_credential = New-Object System.Management.Automation.PsCredential("$domain_username\@$domain_dns_name", (ConvertTo-SecureString "$domain_password" -AsPlainText -Force))
 	#try {
 	#   Add-Computer -WorkgroupName VCL -Credential \$ps_credential -ErrorAction Stop
 	#}
@@ -14172,7 +14349,7 @@ sub ad_search {
 $Host.UI.RawUI.BufferSize = New-Object Management.Automation.Host.Size(5000, 500)
 
 $domain_dns_name = '[domain_dns_name]'
-$domain_username = '[domain_username]'
+$domain_username = '[domain_username]@[domain_dns_name]'
 $domain_password = '[domain_password]'
 $ldap_filter = '[ldap_filter]'
 $delete = '[delete]'
@@ -14189,14 +14366,12 @@ catch {
    else {
       $exception_message = $_.Exception.Message
    }
-   Write-Host "ERROR: failed to connect to $domain_dns_name domain, error: $exception_message"
+   Write-Host "ERROR: failed to connect to $domain_dns_name domain, username: $domain_username, password: $domain_password, error: $exception_message"
    exit
 }
 
-
 $searcher = New-Object System.DirectoryServices.DirectorySearcher($domain.GetDirectoryEntry())
 $searcher.filter = "$ldap_filter"
-
 try {
    $results = $searcher.FindAll()
    # Try to output the results to catch this exception:
@@ -14221,7 +14396,6 @@ Write-Host "delete true : $delete"
    }
 }
 
-
 ForEach($result in $results) {
    $entry = $result.GetDirectoryEntry();
    $dn = $entry.distinguishedName
@@ -14242,16 +14416,16 @@ ForEach($result in $results) {
 }
 EOF
 	
-	$powershell_script_contents =~ s/\[domain_dns_name\]/$domain_dns_name/;
-	$powershell_script_contents =~ s/\[domain_username\]/$domain_username/;
-	$powershell_script_contents =~ s/\[domain_password\]/$domain_password/;
+	$powershell_script_contents =~ s/\[domain_dns_name\]/$domain_dns_name/g;
+	$powershell_script_contents =~ s/\[domain_username\]/$domain_username/g;
+	$powershell_script_contents =~ s/\[domain_password\]/$domain_password/g;
 	$powershell_script_contents =~ s/\[ldap_filter\]/$ldap_filter/;
 	
 	if ($operation eq 'delete') {
-		$powershell_script_contents =~ s/\[delete\]/1/;
+		$powershell_script_contents =~ s/\[delete\]/1/g;
 	}
 	else {
-		$powershell_script_contents =~ s/\[delete\]/0/;
+		$powershell_script_contents =~ s/\[delete\]/0/g;
 	}
 	
 	my ($exit_status, $output);
