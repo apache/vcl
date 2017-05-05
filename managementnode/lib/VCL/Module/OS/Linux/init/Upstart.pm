@@ -222,7 +222,7 @@ sub _get_service_info {
 		}
 	}
 	
-	for my $service_name (keys($self->{service_info})) {
+	for my $service_name (keys %{$self->{service_info}}) {
 		my $service_name_mapping = $service_name_mappings_reversed{$service_name};
 		if ($service_name_mapping) {
 			$self->{service_info}{$service_name_mapping} = $self->{service_info}{$service_name};
