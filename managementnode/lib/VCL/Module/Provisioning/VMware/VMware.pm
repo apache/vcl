@@ -289,11 +289,6 @@ sub initialize {
 		return;
 	}
 	
-	my $force = shift;
-	
-	return 1 if (!$force && $self->data->get_request_state_name() =~ /test/i);
-	notify($ERRORS{'DEBUG'}, 0, "initializing " . ref($self) . " object");
-	
 	# Get a DataStructure object containing data for the VM host computer
 	my $vmhost_data = $self->get_vmhost_datastructure();
 	if (!$vmhost_data) {
@@ -309,6 +304,19 @@ sub initialize {
 	my $vmhost_computer_id = $self->data->get_vmhost_computer_id();
 	my $vmprofile_name = $self->data->get_vmhost_profile_name();
 	my $vmprofile_password = $self->data->get_vmhost_profile_password(0);
+	
+	# Used only for development/testing
+	# If request state is 'test', full initialization is bypassed by default to speed things up
+	# Passing '1' as the argument causes full initialization
+	if ($request_state_name eq 'test') {
+		my $argument = shift;
+		unless (defined($argument) && !ref($argument) && $argument eq '1') {
+			notify($ERRORS{'DEBUG'}, 0, "request state is '$request_state_name', bypassing full " . ref($self) . " object initialization");
+			return 1;
+		}
+	}
+	
+	notify($ERRORS{'DEBUG'}, 0, "initializing " . ref($self) . " object");
 	
 	my $vmware_api;
 	
