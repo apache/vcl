@@ -12669,6 +12669,9 @@ sub set_computer_hostname {
 		$dns_suffix = $2;
 	}
 	
+	# Disable 'Change primary DNS suffix when domain membership changes'
+	$self->reg_add('HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\services\Tcpip\Parameters', 'SyncDomainWithMembership', 'REG_DWORD', 0);
+	
 	# Assemble the command
 	my $command = "echo | cmd.exe /c \"$system32_path/Wbem/wmic.exe COMPUTERSYSTEM WHERE Name=\\\"%COMPUTERNAME%\\\" Rename \\\"$new_computer_name\\\"\"";
 	my ($exit_status, $output) = $self->execute($command);
@@ -13764,25 +13767,27 @@ sub ad_join {
 	$self->ad_join_prepare() || return;
 	
 	# Assemble the PowerShell script
-	my $ad_powershell_script = <<EOF;
-\$ps_credential = New-Object System.Management.Automation.PsCredential("$domain_user_string", (ConvertTo-SecureString "$domain_password" -AsPlainText -Force))
-Add-Computer -DomainName "$domain_dns_name" -Credential \$ps_credential $domain_computer_command_section -Verbose -ErrorAction Stop
-EOF
-
+	my $ad_powershell_script;
+	$ad_powershell_script .= "\$ps_credential = New-Object System.Management.Automation.PsCredential(\"$domain_user_string\", (ConvertTo-SecureString \"$domain_password\" -AsPlainText -Force))\n";
+	$ad_powershell_script .= "Add-Computer -DomainName \"$domain_dns_name\" -Credential \$ps_credential $domain_computer_command_section -Verbose -ErrorAction Stop\n";
+	
+	# Note: commented out because this isn't consistently working
+	# The rename occasionally fails with 'The directory service is busy.'
 	# Check if the computer needs to be renamed
-	my $current_computer_hostname = $self->get_current_computer_hostname() || '<unknown>';
-	if (lc($current_computer_hostname) ne lc($computer_name)) {
-		notify($ERRORS{'DEBUG'}, 0, "$computer_name needs to be renamed, current hostname: '$current_computer_hostname'");
-		
-		# Check if computer supports PowerShell Rename-Computer cmdlet
-		# If it does, computer can be renamed and joined to AD in 1 step with 1 reboot
-		# Otherwise, computer name needs to be changed, rebooted, then added to AD
-		my $powershell_supports_rename = $self->powershell_command_exists('Rename-Computer');
-		if ($powershell_supports_rename) {
-			$ad_powershell_script .= "Rename-Computer -NewName $computer_name -DomainCredential \$ps_credential -Force -Verbose";
-		}
-		else {
-			notify($ERRORS{'DEBUG'}, 0, "PowerShell version on $computer_name does NOT support Rename-Computer, renaming computer");
+	#my $current_computer_hostname = $self->get_current_computer_hostname() || '<unknown>';
+	#if (lc($current_computer_hostname) ne lc($computer_name)) {
+	#	notify($ERRORS{'DEBUG'}, 0, "$computer_name needs to be renamed, current hostname: '$current_computer_hostname'");
+	#	
+	#	# Check if computer supports PowerShell Rename-Computer cmdlet
+	#	# If it does, computer can be renamed and joined to AD in 1 step with 1 reboot
+	#	# Otherwise, computer name needs to be changed, rebooted, then added to AD
+	#	my $powershell_supports_rename = $self->powershell_command_exists('Rename-Computer');
+	#	if ($powershell_supports_rename) {
+	#		$ad_powershell_script .= "Start-Sleep -Seconds 10\n";
+	#		$ad_powershell_script .= "Rename-Computer -NewName $computer_name -DomainCredential \$ps_credential -Force -Verbose\n";
+	#	}
+	#	else {
+	#		notify($ERRORS{'DEBUG'}, 0, "PowerShell version on $computer_name does NOT support Rename-Computer, renaming computer");
 			if (!$self->set_computer_hostname()) {
 				notify($ERRORS{'WARNING'}, 0, "failed to join $computer_name to Active Directory domain, PowerShell version does NOT support Rename-Computer, failed to rename using traditional method");
 				return;
@@ -13794,9 +13799,13 @@ EOF
 				return;
 			}
 			$rename_computer_reboot_duration = (time - $rename_computer_reboot_start);
-		}
-	}
-
+	#	}
+	#}
+	
+	
+	
+	notify($ERRORS{'DEBUG'}, 0, "PowerShell script contents:\n$ad_powershell_script");
+	
 	# Success:
 	# WARNING: The changes will take effect after you restart the computer
 	# VCLV98-248.
