@@ -384,9 +384,9 @@ sub user_acknowledged {
 	
 	my $request_id = $self->data->get_request_id();
 	
-	# Check if user deleted the request
-	if (is_request_deleted($request_id)) {
-		notify($ERRORS{'DEBUG'}, 0, "request deleted, exiting");
+	# Check if the request state changed for any reason
+	# This will occur if the user deletes the request or makeproduction is initiated before the user acknowledges
+	if ($self->request_state_changed()) {
 		$self->state_exit();
 	}
 	
