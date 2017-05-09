@@ -52,6 +52,7 @@ use strict;
 use warnings;
 use diagnostics;
 use English '-no_match_vars';
+use File::Temp qw(tempdir);
 use POSIX qw(tmpnam);
 use Net::SSH::Expect;
 use List::Util qw(min max);
@@ -4988,6 +4989,212 @@ sub delete_reservation_info_json_file {
 	
 	my $json_file_path = $self->get_reservation_info_json_file_path() || return;
 	return $self->delete_file($json_file_path);
+}
+
+#//////////////////////////////////////////////////////////////////////////////
+
+=head2 mount_nfs_shares
+
+ Parameters  : none
+ Returns     : boolean
+ Description : Checks if a 'nfsmount|<managementnode.id>' variable exists in the
+               database. If so, it parses the value and attempts to mount one or
+               more shares on the reservation computer. There variable value may
+               contain substitution components enclosed in square brackets such
+               as:
+               [user_login_id]
+               
+               See DataStructure.pm::substitute_string_variables for more
+               information.
+               
+               If the last part of a remote directory specification contains a
+               substitution value and the directory could not be mounted on the
+               computer because it doesn't exist, the parent remote directory is
+               temporarily mounted on the management node in a subdirectory with
+               a random name under /tmp. If successfully mounted, a subdirectory
+               with a name containing substituted values based on the
+               reservation data is created. For example, if the nfsmount
+               variable contains:
+               /user_data/share/user-[user_login_id]-[user-uid]
+               
+               A directory should be mounted on the reservation computer named
+               something like:
+               /user_data/share/user-jdoe-3459
+               
+               If the user-jdoe-3459 directory does not exist, this subroutine
+               will:
+               * Attempt to mount /user_data/share on the management node under
+                 /tmp
+               * Create a subdirectory named 'user-jdoe-3459'
+               * If any part of the directory name specification contains a
+                 substitution component that includes '[user_*]', the newly
+                 created directory's owner is set to the user.uid value in the
+                 database and the directory permissions are set to 0700.
+               * The directory is unmounted from the management node.
+               * The directory under /tmp is deleted
+               * The share is mounted on the reservation computer.
+               
+               This subroutine will currently only attempt to automatically
+               create directories if the last component contains a substitution
+               component. Substitution components are allowed in the
+               intermediate directory path such as:
+               /schools/[affiliation_name]/share
+               
+               However, no attempt will be made to create the
+               <[affiliation_name]> directory. It must exist prior to the
+               reservation.
+
+=cut
+
+sub mount_nfs_shares {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $management_node_id = $self->data->get_management_node_id();
+	my $computer_name = $self->data->get_computer_short_name();;
+	my $user_uid = $self->data->get_user_uid();
+	
+	# Get the NFS mount information configured for the management node from the variable table
+	my $nfsmount_variable_name = "nfsmount|$management_node_id";
+	my $nfsmount_variable_value = get_variable($nfsmount_variable_name);
+	if (!$nfsmount_variable_value) {
+		notify($ERRORS{'DEBUG'}, 0, "'$nfsmount_variable_name' variable is NOT configured for management node $management_node_id");
+		return 1;
+	}
+	notify($ERRORS{'DEBUG'}, 0, "retrieved '$nfsmount_variable_name' variable configured for management node: '$nfsmount_variable_value'");
+	
+	my $error_encountered = 0;
+	
+	MOUNT_SPECIFICATION: for my $mount_specification (split(/;/, $nfsmount_variable_value)) {
+		# Format:
+		#    <IP/hostname>:<remote directory>,<local directory>
+		# Example:
+		#    10.0.0.12:/users/home/[username],/home/[username]
+		my ($remote_host, $remote_specification, $local_specification) = $mount_specification =~
+			/
+				^\s*
+				([^:\s]+)             # $remote_host
+				\s*:\s*               # :
+				(\/[^,]*[^,\s\/])\/?  # $remote_specification
+				\s*,\s*               # ,
+				(\/.*[^\s\/])\/?      # $local_specification
+				\s*$
+			/gx;
+		if (!defined($remote_host) || !defined($remote_specification) || !defined($local_specification)) {
+			notify($ERRORS{'CRITICAL'}, 0, "failed to parse mount specification: '$mount_specification'");
+			$error_encountered = 1;
+			next MOUNT_SPECIFICATION;
+		}
+		
+		# Replace variables in local and remote directory paths
+		my $local_substituted = $self->data->substitute_string_variables($local_specification);
+		my $remote_substituted = $self->data->substitute_string_variables($remote_specification);
+		my $remote_target = "$remote_host:$remote_substituted";
+		
+		notify($ERRORS{'DEBUG'}, 0, "parsed mount definition: '$mount_specification'\n" .
+			"remote storage target : $remote_target" . ($remote_specification ne $remote_substituted ? " (specification: $remote_specification)" : '') . "\n" .
+			"local mount directory : $local_substituted " . ($local_specification ne $local_substituted ? " (specification: $local_specification)" : '')
+		);
+		
+		# Specify ignore error option to prevent warnings on first attempt
+		my $mount_result = $self->mount_nfs_share($remote_target, $local_substituted, 1);
+		# If successful or failed and returned undefined, stop processing this share
+		if (!defined($mount_result)) {
+			# Unrepairable error encountered
+			$error_encountered = 1;
+			next MOUNT_SPECIFICATION;
+		}
+		elsif ($mount_result == 1) {
+			# Successfully mounted share
+			next MOUNT_SPECIFICATION;
+		}
+		
+		# mount_nfs_share() returned 0 indicating the remote directory does not exist
+		notify($ERRORS{'OK'}, 0, "unable to mount $remote_target on $computer_name on first attempt, checking if directories need to be created");
+		
+		# Get the last component of the remote directory specification following the last forward slash
+		my ($remote_directory_name_specification) = $remote_specification =~
+			/
+				\/
+				(
+					[^
+						\/
+					]+
+				)
+				$
+			/gx;
+		if (!$remote_directory_name_specification) {
+			notify($ERRORS{'WARNING'}, 0, "failed to mount share on $computer_name: $remote_target --> $local_substituted, no attempt made to create user/reservation-specific directory on share because the remote directory name specification could not be determined: $remote_specification");
+			return;
+		}
+		elsif ($remote_directory_name_specification !~
+			/
+				\[
+				[^
+					\]
+				]+
+				\]
+			/gx) {
+			notify($ERRORS{'WARNING'}, 0, "failed to mount share on $computer_name: $remote_target --> $local_substituted, no attempt made to create user/reservation-specific directory on share because the remote directory name specification does not contain a substitution value: $remote_directory_name_specification");
+			return;
+		}
+		
+		# Get the remote directory name and its parent directory path
+		my ($remote_parent_directory_path, $remote_directory_name) = $remote_substituted =~
+			/
+				^
+				(
+					\/.+
+				)
+				\/
+				(
+					[^
+						\/
+					]+
+				)
+				$
+			/gx;
+		if (!defined($remote_directory_name)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to mount share on $computer_name: $remote_target --> $local_substituted, no attempt made to create user/reservation-specific directory on share because the remote directory name and its parent directory path could not be determined: $remote_substituted");
+			return;
+		}
+		
+		notify($ERRORS{'DEBUG'}, 0, "attempting to create user/reservation-specific directory on share, remote directory name specification contains a substitution value: $remote_directory_name_specification --> $remote_directory_name");
+		
+		# Attempt to mount the remote parent directory on the management node
+		my $mn_temp_remote_target = "$remote_host:$remote_parent_directory_path";
+		my $mn_temp_mount_directory_path = tempdir(CLEANUP => 1);
+		my $mn_temp_create_directory_path = "$mn_temp_mount_directory_path/$remote_directory_name";
+		if (!$self->mn_os->mount_nfs_share($mn_temp_remote_target, $mn_temp_mount_directory_path)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to mount share on $computer_name: $remote_target --> $local_substituted, failed to temporarily mount remote parent directory share on management node: $mn_temp_remote_target --> $mn_temp_mount_directory_path");
+			return;
+		}
+		
+		# Try to create the directory containing the substitution value
+		if (!$self->mn_os->create_directory($mn_temp_create_directory_path)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to mount share on $computer_name: $remote_target --> $local_substituted, mounted temporary remote parent directory share on management node ($mn_temp_remote_target) but failed to create '$remote_directory_name' subdirectory under it");
+			$self->mn_os->unmount_nfs_share($mn_temp_mount_directory_path);
+			return;
+		}
+		
+		# Check if the directory name contains a substitution for user-specific data
+		if ($remote_directory_name_specification =~ /\[user/) {
+			$self->mn_os->set_file_owner($mn_temp_create_directory_path, $user_uid);
+			
+			# Set the permissions on the directory to 700 so other users can't read contents
+			$self->mn_os->set_file_permissions($mn_temp_create_directory_path, '700');
+		}
+		
+		
+		$self->mn_os->unmount_nfs_share($mn_temp_mount_directory_path);
+		
+		# Try to mount the share on the computer again
+		$self->mount_nfs_share($remote_target, $local_substituted) || $error_encountered++;
+	}
+	return !$error_encountered
 }
 
 #//////////////////////////////////////////////////////////////////////////////

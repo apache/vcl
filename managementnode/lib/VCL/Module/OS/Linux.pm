@@ -1227,7 +1227,7 @@ sub logoff_user {
  Parameters  : none
  Returns     : boolean
  Description : Performs the steps necessary to reserve a computer for a user.
-               A "vcl" user group is added to the.
+               A "vcl" user group is added.
 
 =cut
 
@@ -1240,23 +1240,22 @@ sub reserve {
 	
 	notify($ERRORS{'OK'}, 0, "beginning Linux reserve tasks");
 	
-	my $computer_node_name = $self->data->get_computer_node_name();
+	# Add a local vcl user group if it doesn't already exist
+	# Do this before OS.pm::reserve calls add_user_accounts
+	$self->add_vcl_usergroup();
+	
+	$self->SUPER::reserve() || return;
 	
 	# Configure sshd to only listen on the private interface and add ext_sshd service listening on the public interface
-	# This needs to be done after update_public_ip_address is called
-	if (!$self->configure_ext_sshd()) {
-		notify($ERRORS{'WARNING'}, 0, "failed to configure ext_sshd on $computer_node_name");
-		return 0;
-	}
+	# This needs to be done after update_public_ip_address is called from OS.pm::reserve
+	$self->configure_ext_sshd() || return
 	
-	if (!$self->add_vcl_usergroup()) {
-		notify($ERRORS{'WARNING'}, 0, "failed to add vcl user group to $computer_node_name");
-	}
+	# Attempt to mount NFS shares configured for the management node (Site Configuration > NFS Mounts)
+	$self->mount_nfs_shares();
+	
 	
 	notify($ERRORS{'OK'}, 0, "Linux reserve tasks complete");
-	
-	# Call OS.pm's reserve subroutine
-	return unless $self->SUPER::reserve();
+	return 1;
 } ## end sub reserve
 
 #//////////////////////////////////////////////////////////////////////////////
@@ -1807,7 +1806,7 @@ sub clear_file {
 
 =head2 create_directory
 
- Parameters  : $directory_path, $mode (optional)
+ Parameters  : $directory_path
  Returns     : boolean
  Description : Creates a directory on the Linux computer as indicated by the
                $directory_path argument.
@@ -6059,7 +6058,7 @@ sub mount_nfs_share {
 		return;
 	}
 	
-	my ($remote_nfs_share, $local_mount_directory, $options, $is_retry_attempt) = @_;
+	my ($remote_nfs_share, $local_mount_directory, $ignore_missing_remote_directory_error, $nfs_options, $is_retry_attempt) = @_;
 	if (!defined($remote_nfs_share)) {
 		notify($ERRORS{'WARNING'}, 0, "remote target argument was not supplied");
 		return;
@@ -6109,8 +6108,8 @@ sub mount_nfs_share {
 	}
 	
 	my $mount_command = "mount -t nfs $remote_nfs_share \"$local_mount_directory\" -v";
-	if ($options) {
-		$mount_command .= " -o $options";
+	if ($nfs_options) {
+		$mount_command .= " -o $nfs_options";
 	}
 	
 	notify($ERRORS{'DEBUG'}, 0, "attempting to mount NFS share on $computer_name: $mount_command");
@@ -6120,7 +6119,7 @@ sub mount_nfs_share {
 		max_attempts => 2,
 	});
 	if (!defined($mount_exit_status)) {
-		notify($ERRORS{'CRITICAL'}, 0, "failed to execute command to mount NFS share on $computer_name: $mount_command");
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to mount NFS share on $computer_name: $mount_command");
 		return;
 	}
 	elsif ($mount_exit_status eq 0) {
@@ -6137,6 +6136,17 @@ sub mount_nfs_share {
 			return;
 		}
 	}
+	elsif (grep(/(No such file or directory)/, @$mount_output)) {
+		# mount.nfs: mount(2): No such file or directory
+		# mount.nfs: mounting <hostname>:/<remote directory> failed, reason given by server: No such file or directory
+		if ($ignore_missing_remote_directory_error) {
+			notify($ERRORS{'DEBUG'}, 0, "unable to mount NFS share on $computer_name because remote directory does not exist: $remote_nfs_share, returning 0");
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "unable to mount NFS share on $computer_name because remote directory does not exist: $remote_nfs_share, returning 0, command: '$mount_command', exit status: $mount_exit_status, output:\n" . join("\n", @$mount_output));
+		}
+		return 0;
+	}
 	elsif (grep(/(Invalid argument|incorrect mount option|Usage:)/, @$mount_output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to mount NFS share on $computer_name: $remote_nfs_share --> $local_mount_directory, command: '$mount_command', exit status: $mount_exit_status, output:\n" . join("\n", @$mount_output));
 		return;
@@ -6150,7 +6160,7 @@ sub mount_nfs_share {
 			notify($ERRORS{'WARNING'}, 0, "failed to mount NFS share on $computer_name on 1st attempt: $remote_nfs_share --> $local_mount_directory, command: '$mount_command', exit status: $mount_exit_status, output:\n" . join("\n", @$mount_output));
 			
 			# Try to mount the NFS share again, set retry flag to avoid endless loop
-			return $self->mount_nfs_share($remote_nfs_share, $local_mount_directory, $options, 1);
+			return $self->mount_nfs_share($remote_nfs_share, $local_mount_directory, $ignore_missing_remote_directory_error, $nfs_options, 1);
 		}
 	}
 }

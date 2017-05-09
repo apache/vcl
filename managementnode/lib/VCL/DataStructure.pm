@@ -2630,10 +2630,10 @@ sub substitute_string_variables {
 	# Extract all sections of input string which should be replaced
 	my @input_substitute_sections = $input_string =~ /($variable_identifier_regex)/g;
 	if (!@input_substitute_sections) {
-		notify($ERRORS{'DEBUG'}, 0, "input string does not contain any sections to replace matching the substitution identifier pattern: '$variable_identifier_regex', returning original input string:\n" . $input_string);
+		notify($ERRORS{'DEBUG'}, 0, "input string does not contain any sections to replace matching the substitution identifier pattern: '$variable_identifier_regex', returning original input string: '$input_string'");
 		return $input_string;
 	}
-	notify($ERRORS{'DEBUG'}, 0, "found sections of input string that match the substitution identifier pattern '$variable_identifier_regex', input string:\n$input_string\n\nmatching sections:\n" . join("\n", @input_substitute_sections));
+	#notify($ERRORS{'DEBUG'}, 0, "found sections of input string that match the substitution identifier pattern '$variable_identifier_regex', input string:\n$input_string\n\nmatching sections:\n" . join("\n", @input_substitute_sections));
 	
 	for my $input_substitute_section (remove_array_duplicates(@input_substitute_sections)) {
 		# Remove brackets, etc from matching section: '[user_login_id]' --> 'user_login_id'
@@ -2678,7 +2678,7 @@ sub substitute_string_variables {
 		}
 	}
 	
-	notify($ERRORS{'OK'}, 0, "replaced all matching sections of input string with values retrieved from this DataStructure object:\ninput string:\n$input_string\noutput string:\n$output_string");
+	notify($ERRORS{'OK'}, 0, "replaced all matching sections of input string with values retrieved from this DataStructure object:\ninput string: '$input_string'\noutput string: '$output_string'");
 	return $output_string;
 }
 
