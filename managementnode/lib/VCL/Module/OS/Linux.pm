@@ -6081,10 +6081,13 @@ sub mount_nfs_share {
 		#    In some cases useful info is found in syslog - try
 		#    dmesg | tail  or so
 		if (!$self->command_exists('mount.nfs')) {
-			$self->install_package('nfs-utils');
-			
-			# On Ubuntu:
-			$self->install_package('nfs-common');
+			if (ref($self) =~ /Ubuntu/) {
+				# On Ubuntu:
+				$self->install_package('nfs-common');
+			}
+			else {
+				$self->install_package('nfs-utils');
+			}
 		}
 		
 		# Check if the rpcbind service exists, if not, try to install it
@@ -6157,7 +6160,7 @@ sub mount_nfs_share {
 			return;
 		}
 		else {
-			notify($ERRORS{'WARNING'}, 0, "failed to mount NFS share on $computer_name on 1st attempt: $remote_nfs_share --> $local_mount_directory, command: '$mount_command', exit status: $mount_exit_status, output:\n" . join("\n", @$mount_output));
+			notify($ERRORS{'OK'}, 0, "failed to mount NFS share on $computer_name on 1st attempt: $remote_nfs_share --> $local_mount_directory, command: '$mount_command', exit status: $mount_exit_status, output:\n" . join("\n", @$mount_output));
 			
 			# Try to mount the NFS share again, set retry flag to avoid endless loop
 			return $self->mount_nfs_share($remote_nfs_share, $local_mount_directory, $ignore_missing_remote_directory_error, $nfs_options, 1);
