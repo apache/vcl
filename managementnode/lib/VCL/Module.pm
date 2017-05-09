@@ -750,7 +750,15 @@ my $self = shift;
 		}
 		my $computer_os_package = $computer_info->{currentimagerevision}{image}{OS}{module}{perlpackage};
 		
-		notify($ERRORS{'DEBUG'}, 0, "NAT host resource type is $nathost_resource_type, creating $computer_os_package OS object to control $nathost_hostname");
+		# Make sure the OS module for NAT host computer.currentimagerevision is Linux and not UnixLab
+		# UnixLab.pm overrides the firewall initialization step and will have a generic VCL::Module::OS::Linux::firewall object which doesn't implement nat_configure_reservation
+		if ($computer_os_package !~ /VCL::Module::OS::Linux/ || $computer_os_package =~ /UnixLab/) {
+			notify($ERRORS{'DEBUG'}, 0, "NAT host resource type is $nathost_resource_type, OS module that controls $nathost_hostname\'s current computer.currentimagerevision value is $computer_os_package, overriding to VCL::Module::OS::Linux");
+			$computer_os_package = 'VCL::Module::OS::Linux';
+		}
+		else {
+			notify($ERRORS{'DEBUG'}, 0, "NAT host resource type is $nathost_resource_type, creating $computer_os_package OS object to control $nathost_hostname based its current computer.currentimagerevision value");
+		}
 		
 		my $nathost_os = $self->create_object($computer_os_package, {
 			#request_data => $request_data,
