@@ -348,11 +348,11 @@ sub request_state_changed {
 	}
 	elsif (($current_state_name ne 'pending' and $current_state_name ne $processing_request_state_name) ||
 		($current_state_name eq 'pending' and $current_laststate_name ne $processing_request_state_name)) {
-		notify($ERRORS{'OK'}, 0, "request state changed after this process begain: $processing_request_state_name --> $current_state_name/$current_laststate_name, returning true");
+		notify($ERRORS{'OK'}, 0, "request state changed after this process began: $processing_request_state_name --> $current_state_name/$current_laststate_name, returning true");
 		return 1;
 	}
 	else {
-		notify($ERRORS{'OK'}, 0, "request state has NOT changed after this process begain: $processing_request_state_name --> $current_state_name/$current_laststate_name, returning false");
+		notify($ERRORS{'DEBUG'}, 0, "request state has NOT changed after this process began: $processing_request_state_name --> $current_state_name/$current_laststate_name, returning false");
 		return 0;
 	}
 }

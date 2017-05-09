@@ -5054,7 +5054,7 @@ sub mount_nfs_shares {
 	}
 	
 	my $management_node_id = $self->data->get_management_node_id();
-	my $computer_name = $self->data->get_computer_short_name();;
+	my $computer_name = $self->data->get_computer_short_name();
 	my $user_uid = $self->data->get_user_uid();
 	
 	# Get the NFS mount information configured for the management node from the variable table
