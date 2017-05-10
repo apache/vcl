@@ -1251,7 +1251,7 @@ sub delete_chain {
 	
 	my $computer_name = $self->data->get_computer_hostname();
 	
-	my $table_info = $self->get_table_info($table_name, 1);
+	my $table_info = $self->get_table_info($table_name);
 	if (!defined($table_info->{$chain_name})) {
 		notify($ERRORS{'DEBUG'}, 0, "'$chain_name' chain in '$table_name' table does not exist on $computer_name");
 		return 1;
@@ -1458,7 +1458,7 @@ sub flush_chain {
 
 =head2 get_table_info
 
- Parameters  : $table_name, $no_cache
+ Parameters  : $table_name
  Returns     : boolean
  Description : Retrieves the configuration of an iptables table and constructs a
                hash reference. Information from the 'filter' table is returned
@@ -1514,13 +1514,8 @@ sub get_table_info {
 		return 0;
 	}
 	
-	my ($table_name, $no_cache) = @_;
-	
+	my ($table_name) = @_;
 	$table_name = 'filter' unless $table_name;
-	
-	if (!$no_cache && defined($self->{table_info}) && defined($self->{table_info}{$table_name})) {
-		return $self->{table_info}{$table_name};
-	}
 	
 	$ENV{iptables_get_table_info_count}{$table_name}++;
 	
@@ -1555,7 +1550,7 @@ sub get_table_info {
 			# Extract lines like:
 			# -A INPUT -p tcp...
 			@lines = grep(/^-[A-Z]\s/, @$iptables_save_output);
-			notify($ERRORS{'DEBUG'}, 0, "parsed iptables-save output for command lines, output:\n" . join("\n", @$iptables_save_output) . "\ncommand lines:\n" . join("\n", @lines));
+			#notify($ERRORS{'DEBUG'}, 0, "parsed iptables-save output for command lines, output:\n" . join("\n", @$iptables_save_output) . "\ncommand lines:\n" . join("\n", @lines));
 		}
 	}
 	elsif ($exit_status ne '0') {
@@ -1861,7 +1856,6 @@ sub get_table_info {
 		}
 	}
 	
-	$self->{table_info}{$table_name} = $table_info;
 	#notify($ERRORS{'DEBUG'}, 0, "retrieved rules from iptables $table_name table from $computer_name:\n" . format_data($table_info));
 	return $table_info;
 }
