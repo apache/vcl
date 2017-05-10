@@ -772,7 +772,7 @@ sub _insert_rule {
 	my ($table_name, $chain_name, $argument_string) = @_;
 	my $computer_name = $self->data->get_computer_hostname();
 	
-	my $command = "/sbin/iptables -t $table_name -I $chain_name $argument_string";
+	my $command = "/sbin/iptables --insert $chain_name --table $table_name $argument_string";
 	my ($exit_status, $output) = $self->os->execute($command, 0);
 	if (!defined($output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to execute command on $computer_name: $command");
@@ -1526,19 +1526,45 @@ sub get_table_info {
 	
 	my $computer_name = $self->data->get_computer_hostname();
 	
-	my $command = "/sbin/iptables --list-rules --table $table_name";
+	my @lines;
 	
+	my $command = "/sbin/iptables --list-rules --table $table_name";
 	my ($exit_status, $output) = $self->os->execute($command, 0);
 	if (!defined($output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to execute command $computer_name: $command");
 		return;
 	}
+	elsif (grep(/Unknown arg/i, @$output)) {
+		# Older versions of iptables don't support --list-rules
+		# Error output:
+		#    iptables v1.3.5: Unknown arg `--list-rules'
+		# Try iptables-save
+		notify($ERRORS{'DEBUG'}, 0, "version of iptables installed on $computer_name does NOT support the --list-rules option, trying iptables-save");
+		
+		my $iptables_save_command = "/sbin/iptables-save";
+		my ($iptables_save_exit_status, $iptables_save_output) = $self->os->execute($iptables_save_command, 0);
+		if (!defined($iptables_save_output)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to execute command $computer_name: $iptables_save_command");
+			return;
+		}
+		elsif ($iptables_save_exit_status ne '0') {
+			notify($ERRORS{'WARNING'}, 0, "failed to list rules from '$table_name' table on $computer_name, iptables does not support the --list-rules option and iptables-save returned exit status: $iptables_save_exit_status, command:\n$iptables_save_command\noutput:\n" . join("\n", @$iptables_save_output));
+			return 0;
+		}
+		else {
+			# Extract lines like:
+			# -A INPUT -p tcp...
+			@lines = grep(/^-[A-Z]\s/, @$iptables_save_output);
+			notify($ERRORS{'DEBUG'}, 0, "parsed iptables-save output for command lines, output:\n" . join("\n", @$iptables_save_output) . "\ncommand lines:\n" . join("\n", @lines));
+		}
+	}
 	elsif ($exit_status ne '0') {
 		notify($ERRORS{'WARNING'}, 0, "failed to list rules from '$table_name' table on $computer_name, exit status: $exit_status, command:\n$command\noutput:\n" . join("\n", @$output));
 		return 0;
 	}
-	
-	my @lines = @$output;
+	else {
+		@lines = @$output;
+	}
 	
 	if ($self->can('get_all_direct_rules')) {
 		# Convert:
