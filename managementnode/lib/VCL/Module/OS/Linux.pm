@@ -408,6 +408,10 @@ sub pre_capture {
 		return;
 	}
 	
+	# Attempt to unmount NFS shares configured for the management node (Site Configuration > NFS Mounts)
+	$self->unmount_nfs_shares() || return;
+	$self->remove_matching_fstab_lines('Added by VCL');
+	
 	if ($self->can('firewall') && $self->firewall->can('process_pre_capture')) {
 		$self->firewall->process_pre_capture() || return;
 	}
@@ -1461,6 +1465,8 @@ sub sanitize {
 	
 	# Attempt to unmount NFS shares configured for the management node (Site Configuration > NFS Mounts)
 	$self->unmount_nfs_shares() || return;
+	
+	$self->remove_matching_fstab_lines('Added by VCL');
 	
 	notify($ERRORS{'OK'}, 0, "$computer_node_name has been sanitized");
 	return 1;
@@ -6413,6 +6419,10 @@ sub add_fstab_nfs_mount {
 		return;
 	}
 	
+	# Add a trailing comment to identify it was added automatically
+	my $timestamp = POSIX::strftime("%Y-%m-%d %H-%M-%S", localtime);
+	$nfs_mount_string .= "\t# Added by VCL ($timestamp)";
+	
 	# Remove existing line matching the local mount directory followed by "nfs" to avoid duplicate lines
 	$self->remove_matching_fstab_lines("$local_mount_directory nfs");
 	
@@ -6420,7 +6430,6 @@ sub add_fstab_nfs_mount {
 	push @fstab_lines, $nfs_mount_string;
 	my $new_fstab_contents = join("\n", @fstab_lines);
 	
-	my $timestamp = POSIX::strftime("%Y-%m-%d_%H-%M-%S\n", localtime);
 	$self->copy_file('/etc/fstab', "/tmp/fstab.$timestamp");
 	
 	if ($self->create_text_file('/etc/fstab', $new_fstab_contents)) {
