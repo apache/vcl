@@ -3763,14 +3763,14 @@ sub process_connect_methods {
 					}
 				}
 				else {
-					notify($ERRORS{'WARNING'}, 0, "'$service_name' service for '$name' connect method does NOT exist on $computer_node_name, connect method install script is not defined");
+					notify($ERRORS{'OK'}, 0, "'$service_name' service for '$name' connect method does NOT exist on $computer_node_name, connect method install script is not defined");
 				}
 			}
 			
 			# Run the startup script if the service is not started
 			if (!$service_started && defined($startup_script)) {
 				if (!$self->file_exists($startup_script)) {
-					notify($ERRORS{'WARNING'}, 0, "'$service_name' service startup script for '$name' connect method does not exist on $computer_node_name: $startup_script");
+					notify($ERRORS{'OK'}, 0, "'$service_name' service startup script for '$name' connect method does not exist on $computer_node_name: $startup_script");
 				}
 				else {
 					notify($ERRORS{'DEBUG'}, 0, "attempting to run startup script '$startup_script' for '$name' connect method on $computer_node_name");
@@ -5100,7 +5100,7 @@ sub mount_nfs_shares {
 		);
 		
 		# Specify ignore error option to prevent warnings on first attempt
-		my $mount_result = $self->mount_nfs_share($remote_target, $local_substituted, 1);
+		my $mount_result = $self->nfs_mount_share($remote_target, $local_substituted, 1);
 		# If successful or failed and returned undefined, stop processing this share
 		if (!defined($mount_result)) {
 			# Unrepairable error encountered
@@ -5112,7 +5112,7 @@ sub mount_nfs_shares {
 			next MOUNT_SPECIFICATION;
 		}
 		
-		# mount_nfs_share() returned 0 indicating the remote directory does not exist
+		# nfs_mount_share() returned 0 indicating the remote directory does not exist
 		notify($ERRORS{'OK'}, 0, "unable to mount $remote_target on $computer_name on first attempt, checking if directories need to be created");
 		
 		# Get the last component of the remote directory specification following the last forward slash
@@ -5168,7 +5168,7 @@ sub mount_nfs_shares {
 		my $mn_temp_remote_target = "$remote_host:$remote_parent_directory_path";
 		my $mn_temp_mount_directory_path = tempdir(CLEANUP => 1);
 		my $mn_temp_create_directory_path = "$mn_temp_mount_directory_path/$remote_directory_name";
-		if (!$self->mn_os->mount_nfs_share($mn_temp_remote_target, $mn_temp_mount_directory_path)) {
+		if (!$self->mn_os->nfs_mount_share($mn_temp_remote_target, $mn_temp_mount_directory_path)) {
 			notify($ERRORS{'WARNING'}, 0, "failed to mount share on $computer_name: $remote_target --> $local_substituted, failed to temporarily mount remote parent directory share on management node: $mn_temp_remote_target --> $mn_temp_mount_directory_path");
 			return;
 		}
@@ -5176,7 +5176,7 @@ sub mount_nfs_shares {
 		# Try to create the directory containing the substitution value
 		if (!$self->mn_os->create_directory($mn_temp_create_directory_path)) {
 			notify($ERRORS{'WARNING'}, 0, "failed to mount share on $computer_name: $remote_target --> $local_substituted, mounted temporary remote parent directory share on management node ($mn_temp_remote_target) but failed to create '$remote_directory_name' subdirectory under it");
-			$self->mn_os->unmount_nfs_share($mn_temp_mount_directory_path);
+			$self->mn_os->nfs_unmount_share($mn_temp_mount_directory_path);
 			return;
 		}
 		
@@ -5189,10 +5189,75 @@ sub mount_nfs_shares {
 		}
 		
 		
-		$self->mn_os->unmount_nfs_share($mn_temp_mount_directory_path);
+		$self->mn_os->nfs_unmount_share($mn_temp_mount_directory_path);
 		
 		# Try to mount the share on the computer again
-		$self->mount_nfs_share($remote_target, $local_substituted) || $error_encountered++;
+		$self->nfs_mount_share($remote_target, $local_substituted) || $error_encountered++;
+	}
+	return !$error_encountered
+}
+
+#//////////////////////////////////////////////////////////////////////////////
+
+=head2 unmount_nfs_shares
+
+ Parameters  : none
+ Returns     : boolean
+ Description : Unmounts any shares that were added by mount_nfs_shares.
+
+=cut
+
+sub unmount_nfs_shares {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $management_node_id = $self->data->get_management_node_id();
+	my $computer_name = $self->data->get_computer_short_name();
+	my $user_uid = $self->data->get_user_uid();
+	
+	# Get the NFS mount information configured for the management node from the variable table
+	my $nfsmount_variable_name = "nfsmount|$management_node_id";
+	my $nfsmount_variable_value = get_variable($nfsmount_variable_name);
+	if (!$nfsmount_variable_value) {
+		notify($ERRORS{'DEBUG'}, 0, "'$nfsmount_variable_name' variable is NOT configured for management node $management_node_id");
+		return 1;
+	}
+	notify($ERRORS{'DEBUG'}, 0, "retrieved '$nfsmount_variable_name' variable configured for management node: '$nfsmount_variable_value'");
+	
+	my $error_encountered = 0;
+	
+	MOUNT_SPECIFICATION: for my $mount_specification (split(/;/, $nfsmount_variable_value)) {
+		# Format:
+		#    <IP/hostname>:<remote directory>,<local directory>
+		# Example:
+		#    10.0.0.12:/users/home/[username],/home/[username]
+		my ($remote_host, $remote_specification, $local_specification) = $mount_specification =~
+			/
+				^\s*
+				([^:\s]+)             # $remote_host
+				\s*:\s*               # :
+				(\/[^,]*[^,\s\/])\/?  # $remote_specification
+				\s*,\s*               # ,
+				(\/.*[^\s\/])\/?      # $local_specification
+				\s*$
+			/gx;
+		if (!defined($remote_host) || !defined($remote_specification) || !defined($local_specification)) {
+			notify($ERRORS{'CRITICAL'}, 0, "failed to parse mount specification: '$mount_specification'");
+			$error_encountered = 1;
+			next MOUNT_SPECIFICATION;
+		}
+		
+		# Replace variables in local and remote directory paths
+		my $local_substituted = $self->data->substitute_string_variables($local_specification);
+		
+		# Specify ignore error option to prevent warnings on first attempt
+		my $unmount_result = $self->nfs_unmount_share($local_substituted);
+		if (!$unmount_result) {
+			$error_encountered = 1;
+		}
 	}
 	return !$error_encountered
 }

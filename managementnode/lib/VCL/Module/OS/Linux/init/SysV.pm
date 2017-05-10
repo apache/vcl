@@ -119,10 +119,13 @@ sub get_service_names {
 	}
 	
 	# Format out chkconfig --list output lines:
+	# Note: This output shows SysV services only and does not include native
+	#    systemd services. SysV configuration data might be overridden by native
+	#    ...
 	# sshd            0:off   1:off   2:on    3:on    4:on    5:on    6:off
 	my %service_name_hash;
 	for my $line (@$output) {
-		my ($service_name) = $line =~ /^([^\s\t]+)/;
+		my ($service_name) = $line =~ /^([^\s\t]+)[\s\t]+\d/;
 		$service_name_hash{$service_name} = 1 if $service_name;
 	}
 	my @service_names = sort(keys %service_name_hash);

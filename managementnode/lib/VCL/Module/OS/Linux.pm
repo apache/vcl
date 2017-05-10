@@ -1248,11 +1248,10 @@ sub reserve {
 	
 	# Configure sshd to only listen on the private interface and add ext_sshd service listening on the public interface
 	# This needs to be done after update_public_ip_address is called from OS.pm::reserve
-	$self->configure_ext_sshd() || return
+	$self->configure_ext_sshd() || return;
 	
 	# Attempt to mount NFS shares configured for the management node (Site Configuration > NFS Mounts)
 	$self->mount_nfs_shares();
-	
 	
 	notify($ERRORS{'OK'}, 0, "Linux reserve tasks complete");
 	return 1;
@@ -1459,6 +1458,9 @@ sub sanitize {
 	
 	# Make sure ext_sshd is stopped
 	$self->stop_external_sshd() || return;
+	
+	# Attempt to unmount NFS shares configured for the management node (Site Configuration > NFS Mounts)
+	$self->unmount_nfs_shares() || return;
 	
 	notify($ERRORS{'OK'}, 0, "$computer_node_name has been sanitized");
 	return 1;
@@ -3511,9 +3513,36 @@ sub get_network_bridge_info {
 
 #//////////////////////////////////////////////////////////////////////////////
 
+=head2 _delete_cached_service_info
+
+ Parameters  : none
+ Returns     : true
+ Description :
+
+=cut
+
+sub _delete_cached_service_info {
+	my $self = shift;
+	if (ref($self) !~ /linux/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	if (defined($self->{service_init_module})) {
+		delete $self->{service_init_module};
+		notify($ERRORS{'DEBUG'}, 0, "deleted cached service init module info stored in \$self->{service_init_module}");
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "cached service init module info is NOT stored in \$self->{service_init_module}");
+	}
+	
+	return 1;
+}
+#//////////////////////////////////////////////////////////////////////////////
+
 =head2 service_exists
 
- Parameters  : $service_name
+ Parameters  : $service_name, $no_cache (optional)
  Returns     : If called in scalar/boolean context: boolean
                If called in array context: array
  Description : Checks if the service exists on the computer. The return value
@@ -3552,68 +3581,49 @@ sub service_exists {
 		return;
 	}
 	
-	my $service_name = shift;
+	my ($service_name, $no_cache) = @_;
 	if (!$service_name) {
 		notify($ERRORS{'WARNING'}, 0, "service name was not passed as an argument");
 		return;
 	}
 	
-	# Check if this service has already been checked
-	if (defined($self->{service_init_module}{$service_name})) {
-		my $init_module_index = $self->{service_init_module}{$service_name}{init_module_index};
-		my $init_module_name = $self->{service_init_module}{$service_name}{init_module_name};
-		
-		if (defined($init_module_index)) {
-			#notify($ERRORS{'DEBUG'}, 0, "'$service_name' service has already been checked and exists, contolled by $init_module_name init module ($init_module_index)");
-			return (wantarray) ? ($init_module_index) : 1;
-		}
-		else {
-			#notify($ERRORS{'DEBUG'}, 0, "'$service_name' service has already been checked and does NOT exist");
-			return (wantarray) ? () : 0;
-		}
+	if ($no_cache) {
+		$self->_delete_cached_service_info();
 	}
 	
 	my $computer_node_name = $self->data->get_computer_node_name();
 	
-	my @init_modules = $self->get_init_modules();
-	my $init_module_index = 0;
-	for my $init (@init_modules) {
-		my ($init_module_name) = ref($init) =~ /([^:]+)$/;
-		
-		# Check if the service names have already been retrieved by this particular init module object
-		my @service_names;
-		if ($init->{service_names}) {
-			@service_names = @{$init->{service_names}};
-		}
-		else {
-			@service_names = $init->get_service_names();
-			$init->{service_names} = \@service_names;
-		}
-		
-		if (grep(/^$service_name$/, @service_names)) {
-			$self->{service_init_module}{$service_name} = {
-				init_module_index => $init_module_index,
-				init_module_name => $init_module_name,
-			};
-			
-			if (wantarray) {
-				notify($ERRORS{'DEBUG'}, 0, "'$service_name' service exists on $computer_node_name, controlled by $init_module_name init module ($init_module_index), returning array: ($init_module_index)");
-				return $init_module_index;
-			}
-			else {
-				notify($ERRORS{'DEBUG'}, 0, "'$service_name' service exists on $computer_node_name, controlled by $init_module_name init module ($init_module_index), returning scalar: 1");
-				return 1;
+	if (!defined($self->{service_init_module}{$service_name})) {
+		my @init_modules = $self->get_init_modules();
+		for (my $init_module_index = 0; $init_module_index < scalar(@init_modules); $init_module_index++) {
+			my $init_module = $init_modules[$init_module_index];
+			my ($init_module_name) = ref($init_module) =~ /([^:]+)$/;
+			my @service_names = $init_module->get_service_names();;
+			for my $service_name (@service_names) {
+				$self->{service_init_module}{$service_name} = {
+					init_module_index => $init_module_index,
+					init_module_name => $init_module_name,
+				};
 			}
 		}
-		else {
-			notify($ERRORS{'DEBUG'}, 0, "'$service_name' service is not controlled by $init_module_name init module ($init_module_index)");
-		}
-		$init_module_index++;
 	}
 	
-	notify($ERRORS{'DEBUG'}, 0, "'$service_name' service does not exist on $computer_node_name");
-	$self->{service_init_module}{$service_name} = {};
-	return (wantarray) ? () : 0;
+	# Initialize an empty hash reference if the service name was not found to
+	# prevent another full retrieval if this is called again for the same service
+	if (!defined($self->{service_init_module}{$service_name})) {
+		$self->{service_init_module}{$service_name} = {};
+	}
+	
+	my $init_module_index = $self->{service_init_module}{$service_name}{init_module_index};
+	my $init_module_name = $self->{service_init_module}{$service_name}{init_module_name};
+	if (defined($init_module_index)) {
+		notify($ERRORS{'DEBUG'}, 0, "'$service_name' exists, contolled by $init_module_name init module ($init_module_index)");
+		return (wantarray) ? ($init_module_index) : 1;
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "'$service_name' does NOT exist");
+		return (wantarray) ? () : 0;
+	}
 }
 
 #//////////////////////////////////////////////////////////////////////////////
@@ -3903,7 +3913,7 @@ sub delete_service {
 	
 	my $computer_node_name = $self->data->get_computer_node_name();
 	
-	my ($init_module_index) = $self->service_exists($service_name);
+	my ($init_module_index) = $self->service_exists($service_name, 1);
 	if (!defined($init_module_index)) {
 		notify($ERRORS{'DEBUG'}, 0, "unable to delete '$service_name' service because it does not exist on $computer_node_name");
 		return 1;
@@ -3911,17 +3921,10 @@ sub delete_service {
 	
 	my $init_module = ($self->get_init_modules())[$init_module_index];
 	if ($init_module->delete_service($service_name)) {
-		# Delete the cached service name array
-		delete $self->{service_init_module}{$service_name};
-		delete $init_module->{service_names};
+		$self->_delete_cached_service_info();
 	}
 	else {
 		return;
-	}
-	
-	# Delete external_sshd_config if deleting the ext_sshd service
-	if ($service_name =~ /ext_ssh/) {
-		$self->delete_file('/etc/ssh/external_sshd_config');
 	}
 	
 	return 1;
@@ -4773,7 +4776,7 @@ sub configure_default_sshd {
 	
 	my $computer_node_name = $self->data->get_computer_node_name();
 	
-	if (!$self->service_exists('sshd')) {
+	if (!$self->service_exists('sshd', 1)) {
 		notify($ERRORS{'DEBUG'}, 0, "skipping default sshd configuation, sshd service does not exist");
 		return 1;
 	}
@@ -4828,7 +4831,7 @@ sub configure_ext_sshd {
 		return;
 	}
 	
-	if (!$self->service_exists('sshd')) {
+	if (!$self->service_exists('sshd', 1)) {
 		notify($ERRORS{'DEBUG'}, 0, "skipping ext_sshd configuation, sshd service does not exist");
 		return 1;
 	}
@@ -4852,7 +4855,7 @@ sub configure_ext_sshd {
 	}
 	
 	# Deterine which init module is currently controlling sshd, use the same module to control ext_sshd
-	my ($init_module_index) = $self->service_exists('sshd');
+	my ($init_module_index) = $self->service_exists('sshd', 1);
 	if (!defined($init_module_index)) {
 		notify($ERRORS{'WARNING'}, 0, "unable to configure ext_sshd, init module controlling sshd could not be determined");
 		return;
@@ -4860,15 +4863,14 @@ sub configure_ext_sshd {
 	
 	my $init_module = ($self->get_init_modules())[$init_module_index];
 	
-	# Delete the cached service name array
-	delete $init_module->{service_names};
-	delete $self->{service_init_module}{ext_sshd};
-	
 	# Add the ext_sshd service
 	if (!$init_module->add_ext_sshd_service()) {
 		notify($ERRORS{'WARNING'}, 0, "unable to configure ext_sshd, failed to add the ext_sshd service to $computer_node_name");
 		return;
 	}
+	
+	# Delete the cached service info to make sure ext_sshd isn't incorrectly reported as not existing
+	$self->_delete_cached_service_info();
 	
 	# Stop ext_sshd if it is running
 	$self->stop_service('ext_sshd');
@@ -5650,7 +5652,7 @@ sub is_display_manager_running {
 	}
 	else {
 		notify($ERRORS{'DEBUG'}, 0, "display manager is not running on $computer_name");
-		return 0
+		return 0;
 	}
 }
 
@@ -6004,6 +6006,9 @@ sub install_package {
 	
 	$timeout_seconds = 120 unless $timeout_seconds;
 	
+	# Delete service info in case package adds a service that was previously detected as not existing
+	$self->_delete_cached_service_info();
+	
 	my $command = "yum install -q -y $package_name";
 	notify($ERRORS{'DEBUG'}, 0, "attempting to install $package_name using yum on $computer_name, timeout seconds: $timeout_seconds");
 	my ($exit_status, $output) = $self->execute({
@@ -6031,7 +6036,7 @@ sub install_package {
 
 #//////////////////////////////////////////////////////////////////////////////
 
-=head2 mount_nfs_share
+=head2 nfs_mount_share
 
  Parameters  : $remote_nfs_share, $local_mount_directory, $options
  Returns     : boolean
@@ -6051,7 +6056,7 @@ sub install_package {
 
 =cut
 
-sub mount_nfs_share {
+sub nfs_mount_share {
 	my $self = shift;
 	if (ref($self) !~ /linux/i) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
@@ -6082,7 +6087,6 @@ sub mount_nfs_share {
 		#    dmesg | tail  or so
 		if (!$self->command_exists('mount.nfs')) {
 			if (ref($self) =~ /Ubuntu/) {
-				# On Ubuntu:
 				$self->install_package('nfs-common');
 			}
 			else {
@@ -6095,25 +6099,27 @@ sub mount_nfs_share {
 		#    mount.nfs: rpc.statd is not running but is required for remote locking.
 		#    mount.nfs: Either use '-o nolock' to keep locks local, or start statd.
 		#    mount.nfs: an incorrect mount option was specified
-		if (!$self->service_exists('rpcbind')) {
-			$self->install_package('rpcbind');
-		}
+		$self->install_package('rpcbind') if !$self->service_exists('rpcbind');
 		
 		# Try to start the service
-		$self->start_service('rpcbind');
+		$self->start_service('rpcbind') if $self->service_exists('rpcbind');
 	}
-	else {
-		# Create the local mount point directory if it does not exist
-		if (!$self->create_directory($local_mount_directory)) {
-			notify($ERRORS{'WARNING'}, 0, "unable to mount $remote_nfs_share on $computer_name, failed to create directory: $local_mount_directory");
-			return;
-		}
+	
+	# Create the local mount point directory if it does not exist
+	my $local_mount_directory_previously_existed = $self->file_exists($local_mount_directory);
+	if (!$local_mount_directory_previously_existed && !$self->create_directory($local_mount_directory)) {
+		notify($ERRORS{'WARNING'}, 0, "unable to mount $remote_nfs_share on $computer_name, failed to create directory: $local_mount_directory");
+		return;
 	}
 	
 	my $mount_command = "mount -t nfs $remote_nfs_share \"$local_mount_directory\" -v";
 	if ($nfs_options) {
 		$mount_command .= " -o $nfs_options";
 	}
+	
+	# Save return value if error is encountered and don't return immediately
+	# Facilitates a single call to clean up local directory just created if it didn't previously exist
+	my $return_value;
 	
 	notify($ERRORS{'DEBUG'}, 0, "attempting to mount NFS share on $computer_name: $mount_command");
 	my ($mount_exit_status, $mount_output) = $self->execute({
@@ -6123,10 +6129,14 @@ sub mount_nfs_share {
 	});
 	if (!defined($mount_exit_status)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to execute command to mount NFS share on $computer_name: $mount_command");
-		return;
+		$return_value = undef;
 	}
 	elsif ($mount_exit_status eq 0) {
 		notify($ERRORS{'OK'}, 0, "mounted NFS share on $computer_name: $remote_nfs_share --> $local_mount_directory");
+		
+		# Add the share to /etc/fstab
+		$self->add_fstab_nfs_mount($remote_nfs_share, $local_mount_directory);
+		
 		return 1;
 	}
 	elsif (grep(/already mounted/, @$mount_output)) {
@@ -6136,7 +6146,7 @@ sub mount_nfs_share {
 		}
 		else {
 			notify($ERRORS{'WARNING'}, 0, "failed to mount NFS share on $computer_name: $remote_nfs_share --> $local_mount_directory, mount command output indicates 'already mounted' but failed to verify mount in /proc/mounts, mount command: '$mount_command', exit status: $mount_exit_status, mount output:\n" . join("\n", @$mount_output));
-			return;
+			$return_value = undef;
 		}
 	}
 	elsif (grep(/(No such file or directory)/, @$mount_output)) {
@@ -6148,29 +6158,44 @@ sub mount_nfs_share {
 		else {
 			notify($ERRORS{'WARNING'}, 0, "unable to mount NFS share on $computer_name because remote directory does not exist: $remote_nfs_share, returning 0, command: '$mount_command', exit status: $mount_exit_status, output:\n" . join("\n", @$mount_output));
 		}
-		return 0;
+		$return_value = 0;
 	}
 	elsif (grep(/(Invalid argument|incorrect mount option|Usage:)/, @$mount_output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to mount NFS share on $computer_name: $remote_nfs_share --> $local_mount_directory, command: '$mount_command', exit status: $mount_exit_status, output:\n" . join("\n", @$mount_output));
-		return;
+		$return_value = undef;
+	}
+	elsif ($is_retry_attempt) {
+		notify($ERRORS{'WARNING'}, 0, "failed to mount NFS share on $computer_name on 2nd attempt: $remote_nfs_share --> $local_mount_directory, command: '$mount_command', exit status: $mount_exit_status, output:\n" . join("\n", @$mount_output));
+		$return_value = undef;
 	}
 	else {
-		if ($is_retry_attempt) {
-			notify($ERRORS{'WARNING'}, 0, "failed to mount NFS share on $computer_name on 2nd attempt: $remote_nfs_share --> $local_mount_directory, command: '$mount_command', exit status: $mount_exit_status, output:\n" . join("\n", @$mount_output));
-			return;
+		notify($ERRORS{'OK'}, 0, "failed to mount NFS share on $computer_name on 1st attempt: $remote_nfs_share --> $local_mount_directory, command: '$mount_command', exit status: $mount_exit_status, output:\n" . join("\n", @$mount_output));
+	}
+	
+	# Clean up local directory if it didn't previously exist
+	if (!$local_mount_directory_previously_existed) {
+		my @local_mount_directory_files = $self->find_files($local_mount_directory, '*', 1);
+		if (@local_mount_directory_files) {
+			notify($ERRORS{'WARNING'}, 0, "local mount directory just created will NOT be deleted: $local_mount_directory, NFS mount seemed to have failed but directory is not empty:\n" . join("\n", @local_mount_directory_files));
 		}
 		else {
-			notify($ERRORS{'OK'}, 0, "failed to mount NFS share on $computer_name on 1st attempt: $remote_nfs_share --> $local_mount_directory, command: '$mount_command', exit status: $mount_exit_status, output:\n" . join("\n", @$mount_output));
-			
-			# Try to mount the NFS share again, set retry flag to avoid endless loop
-			return $self->mount_nfs_share($remote_nfs_share, $local_mount_directory, $ignore_missing_remote_directory_error, $nfs_options, 1);
+			notify($ERRORS{'DEBUG'}, 0, "local mount directory just created will be deleted: $local_mount_directory");
+			$self->delete_file($local_mount_directory);
 		}
+	}
+	
+	if ($is_retry_attempt) {
+		return $return_value;
+	}
+	else {
+		# Try to mount the NFS share again, set retry flag to avoid endless loop
+		return $self->nfs_mount_share($remote_nfs_share, $local_mount_directory, $ignore_missing_remote_directory_error, $nfs_options, 1);
 	}
 }
 
 #//////////////////////////////////////////////////////////////////////////////
 
-=head2 unmount_nfs_share
+=head2 nfs_unmount_share
 
  Parameters  : $local_mount_directory
  Returns     : boolean
@@ -6178,7 +6203,7 @@ sub mount_nfs_share {
 
 =cut
 
-sub unmount_nfs_share {
+sub nfs_unmount_share {
 	my $self = shift;
 	if (ref($self) !~ /linux/i) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
@@ -6193,6 +6218,13 @@ sub unmount_nfs_share {
 	
 	my $computer_name = $self->data->get_computer_node_name();
 	
+	my $result;
+	
+	# Make sure lines are removed from /etc/fstab regardless of unmount result
+	(my $local_mount_directory_pattern = $local_mount_directory) =~ s/\//\\\//g;
+	$local_mount_directory_pattern = '[\s\t]' . $local_mount_directory_pattern . '[\s\t]';
+	$self->remove_matching_fstab_lines($local_mount_directory_pattern);
+	
 	my $umount_command = "umount -v \"$local_mount_directory\"";
 	my ($umount_exit_status, $umount_output) = $self->execute({
 		command => $umount_command,
@@ -6205,29 +6237,44 @@ sub unmount_nfs_share {
 	}
 	elsif ($umount_exit_status eq 0 || grep(/\sumounted/, @$umount_output)) {
 		notify($ERRORS{'OK'}, 0, "unmounted NFS share on $computer_name: $local_mount_directory, output:\n" . join("\n", @$umount_output));
-		return 1;
+		$result = 1;
 	}
-	elsif (grep(/not mounted/, @$umount_output)) {
+	elsif (grep(/(not mounted|not found|Could not find)/i, @$umount_output)) {
+		# umount: /nfs-share: not found
+		# Could not find /nfs-share in mtab
 		notify($ERRORS{'OK'}, 0, "NFS share is not mounted on $computer_name: $local_mount_directory");
-		return 1;
-	}
-	
-	notify($ERRORS{'WARNING'}, 0, "lazy unmount will be attempted after failing to perform normal NFS unmount on $computer_name: $local_mount_directory, command: '$umount_command', exit status: $umount_exit_status, output:\n" . join("\n", @$umount_output));
-	my $umount_lazy_command = "umount -v -l \"$local_mount_directory\"";
-	my ($umount_lazy_exit_status, $umount_lazy_output) = $self->execute({
-		command => $umount_lazy_command,
-		timeout_seconds => 30,
-		max_attempts => 1,
-	});
-	
-	if ($self->is_nfs_share_mounted('.*', $local_mount_directory)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to unmount NFS share on $computer_name: $local_mount_directory, command: '$umount_command', exit status: $umount_exit_status, output:\n" . join("\n", @$umount_output));
-		return 0;
+		$result = 1;
 	}
 	else {
-		notify($ERRORS{'OK'}, 0, "lazy unmounted of NFS share on $computer_name: $local_mount_directory");
-		return 1;
+		notify($ERRORS{'WARNING'}, 0, "lazy unmount will be attempted after failing to perform normal NFS unmount on $computer_name: $local_mount_directory, command: '$umount_command', exit status: $umount_exit_status, output:\n" . join("\n", @$umount_output));
+		my $umount_lazy_command = "umount -v -l \"$local_mount_directory\"";
+		my ($umount_lazy_exit_status, $umount_lazy_output) = $self->execute({
+			command => $umount_lazy_command,
+			timeout_seconds => 30,
+			max_attempts => 1,
+		});
+		
+		if ($self->is_nfs_share_mounted('.*', $local_mount_directory)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to unmount NFS share on $computer_name: $local_mount_directory, command: '$umount_command', exit status: $umount_exit_status, output:\n" . join("\n", @$umount_output));
+			$result = 0;
+		}
+		else {
+			notify($ERRORS{'OK'}, 0, "lazy unmounted of NFS share on $computer_name: $local_mount_directory");
+			$result = 1;
+		}
 	}
+	
+	# Clean up local directory if it didn't previously exist
+	my @local_mount_directory_files = $self->find_files($local_mount_directory, '*', 1);
+	if (@local_mount_directory_files) {
+		notify($ERRORS{'WARNING'}, 0, "local mount directory will NOT be deleted: $local_mount_directory, directory is not empty:\n" . join("\n", @local_mount_directory_files));
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "unmounted directory is empty and will be deleted: $local_mount_directory");
+		$self->delete_file($local_mount_directory);
+	}
+	
+	return $result;
 }
 
 #//////////////////////////////////////////////////////////////////////////////
@@ -6420,18 +6467,18 @@ sub remove_matching_fstab_lines {
 		
 		if ($fstab_line =~ m|$regex_pattern| || $fstab_line_cleaned =~ m|$regex_pattern|) {
 			push @matching_lines, $fstab_line;
-			notify($ERRORS{'DEBUG'}, 0, "removing line in /etc/fstab matching pattern: $regex_pattern\n$fstab_line");
+			notify($ERRORS{'DEBUG'}, 0, "removing lines from /etc/fstab matching pattern: $regex_pattern\n$fstab_line");
 			next;
 		}
 		$updated_fstab_contents .= "$fstab_line\n";
 	}
 	
-	if (!@matching_lines) {
+	my $matching_line_count = scalar(@matching_lines);
+	if (!$matching_line_count) {
 		notify($ERRORS{'DEBUG'}, 0, "/etc/fstab does not contain any lines matching pattern: $regex_pattern");
 		return 1;
 	}
-	
-	notify($ERRORS{'DEBUG'}, 0, "removing " . scalar(@matching_lines) . " lines from /etc/fstab on $computer_name:\n" . join("\n", @matching_lines));
+	notify($ERRORS{'DEBUG'}, 0, "removing $matching_line_count line" . ($matching_line_count == 1 ? '' : 's') . " from /etc/fstab on $computer_name:\n" . join("\n", @matching_lines));
 	
 	# Save a backup
 	my $timestamp = POSIX::strftime("%Y-%m-%d_%H-%M-%S\n", localtime);

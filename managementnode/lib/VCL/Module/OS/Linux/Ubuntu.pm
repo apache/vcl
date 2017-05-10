@@ -788,6 +788,9 @@ sub install_package {
 	
 	my $computer_name = $self->data->get_computer_node_name();
 	
+	# Delete service info in case package adds a service that was previously detected as not existing
+	$self->_delete_cached_service_info();
+	
 	# Run apt-get update before installing package - only do this once
 	$self->apt_get_update();
 	

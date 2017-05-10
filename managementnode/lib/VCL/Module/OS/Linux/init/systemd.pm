@@ -130,42 +130,6 @@ sub get_service_names {
 
 #//////////////////////////////////////////////////////////////////////////////
 
-=head2 service_exists
-
- Parameters  : $service_name
- Returns     : boolean
- Description : Determines if a service controlled by systemd exists on the
-               computer.
-
-=cut
-
-sub service_exists {
-	my $self = shift;
-	if (ref($self) !~ /linux/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return;
-	}
-	my ($service_name) = @_;
-	if (!defined($service_name)) {
-		notify($ERRORS{'WARNING'}, 0, "service name argument was not supplied");
-		return;
-	}
-	
-	my $computer_node_name = $self->data->get_computer_node_name();
-	
-	my @service_names = $self->get_service_names();
-	if (grep { $_ eq $service_name } @service_names) {
-		notify($ERRORS{'DEBUG'}, 0, "$service_name service exists on $computer_node_name");
-		return 1;
-	}
-	else {
-		notify($ERRORS{'DEBUG'}, 0, "$service_name service does not exist on $computer_node_name");
-		return 0;
-	}
-}
-
-#//////////////////////////////////////////////////////////////////////////////
-
 =head2 service_running
 
  Parameters  : $service_name
@@ -391,10 +355,8 @@ sub delete_service {
 	
 	for my $service_name (@service_names) {
 		# Disable the service before deleting it
-		if ($self->service_exists($service_name)) {
-			$self->stop_service($service_name) || return;
-			$self->disable_service($service_name) || return;
-		}
+		$self->stop_service($service_name) || return;
+		$self->disable_service($service_name) || return;
 		
 		# Delete the service configuration file
 		my $service_file_path = "/lib/systemd/system/$service_name.service";

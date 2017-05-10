@@ -352,7 +352,7 @@ sub request_state_changed {
 		return 1;
 	}
 	else {
-		notify($ERRORS{'DEBUG'}, 0, "request state has NOT changed after this process began: $processing_request_state_name --> $current_state_name/$current_laststate_name, returning false");
+		#notify($ERRORS{'DEBUG'}, 0, "request state has NOT changed after this process began: $processing_request_state_name --> $current_state_name/$current_laststate_name, returning false");
 		return 0;
 	}
 }

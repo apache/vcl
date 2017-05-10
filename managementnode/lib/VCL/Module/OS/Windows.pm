@@ -5175,7 +5175,7 @@ sub parse_firewall_scope {
 		
 		else {
 			notify($ERRORS{'WARNING'}, 0, "unexpected scope format: '$scope_string'");
-			return
+			return;
 		}
 	}
 	

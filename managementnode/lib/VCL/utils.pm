@@ -5320,7 +5320,7 @@ sub get_request_by_computerid {
 	# Check the passed parameter
 	if (!defined($computer_id)) {
 		notify($ERRORS{'WARNING'}, 0, "computer ID argument was not specified");
-		return
+		return;
 	}
 
 	# Create the select statement
