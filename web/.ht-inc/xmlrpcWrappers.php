@@ -1353,7 +1353,12 @@ function XMLRPCautoCapture($requestid) {
 		              'reload' => 20,
 		              'comments' => $comments,
 		              'connectmethodids' => implode(',', array_keys($connectmethods)),
+		              'adauthenabled' => $imageData[$imageid]['adauthenabled'],
 		              'autocaptured' => 1);
+		if($data['adauthenabled']) {
+			$data['addomainid'] = $imageData[$imageid]['addomainid'];
+			$data['baseou'] = $imageData[$imageid]['baseOU'];
+		}
 		$obj = new Image();
 		$imageid = $obj->addResource($data);
 		if($imageid == 0) {
