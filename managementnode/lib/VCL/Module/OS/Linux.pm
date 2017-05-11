@@ -585,7 +585,7 @@ sub post_reserve {
 	my $variable_data;
 	my $target_location = "/root/.vclcontrol/post_reserve_userdata";
 	if ($self->data->is_variable_set($variable_name)) {
-		$variable_data = $self->data->get_variable($variable_name);
+		$variable_data = get_variable($variable_name);
 		
 		#write to local temp file
 		my $tmpfile = "/tmp/$reservation_id" ."_post_reserve_userdata";
@@ -6057,6 +6057,15 @@ sub install_package {
                such as:
                rsize=1048576,wsize=1048576,vers=3
                
+               A 'retry=0' option is included in the mount command if $options
+               does not explicitly include it. This causes a single mount
+               attempt to be made rather than the default behavior of trying for
+               up to 2 minutes. This is required because the VCL code will
+               timeout before the Linux mount command gives up. As a result, VCL
+               does not receive the error message. This prevents automatic
+               corrective actions to happen such as creating the remote
+               directory.
+               
                The $options string must be formatted correctly and is passed
                directly to the mount command.
 
@@ -6120,7 +6129,16 @@ sub nfs_mount_share {
 	
 	my $mount_command = "mount -t nfs $remote_nfs_share \"$local_mount_directory\" -v";
 	if ($nfs_options) {
-		$mount_command .= " -o $nfs_options";
+		# Add retry=0 if it wasn't explicitly specified in the argument
+		if ($nfs_options =~ /retry/) {
+			$mount_command .= " -o $nfs_options";
+		}
+		else {
+			$mount_command .= " -o retry=0,$nfs_options";
+		}
+	}
+	else {
+		$mount_command .= " -o retry=0";
 	}
 	
 	# Save return value if error is encountered and don't return immediately
