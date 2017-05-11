@@ -2642,26 +2642,33 @@ sub substitute_string_variables {
 		my ($subroutine_mapping_key) = $input_substitute_section =~ /^[^a-z]*([a-z][a-z_]+[a-z])[^a-z]*$/;
 		if (!$subroutine_mapping_key) {
 			notify($ERRORS{'CRITICAL'}, 0, "failed to extract subroutine mapping key from section of input string matching substitution identifier pattern '$variable_identifier_regex': '$input_substitute_section'");
-			return;
+			next;
 		}
 		#notify($ERRORS{'DEBUG'}, 0, "extracted subroutine mapping key from section of input string: '$input_substitute_section' --> '$subroutine_mapping_key'");
 		
 		# Attempt to retrieve the substitution value from the DataStructure data
 		# Check if DataStructure.pm implements a matching 'get_' function
-		my $get_function_name = "get_$subroutine_mapping_key";
-		if (!$self->can($get_function_name)) {
-			notify($ERRORS{'CRITICAL'}, 0, "failed to determine replacement value for substitution section: '$input_substitute_section', DataStructure does not implement a '$get_function_name' function");
-			return;
+		my $function_name = "get_$subroutine_mapping_key";
+		if (!$self->can($function_name)) {
+			# Check if implemented without 'get_'
+			# This allows explicit subroutines such as is_server_request to be substituted
+			if ($self->can($subroutine_mapping_key)) {
+				$function_name = $subroutine_mapping_key;
+			}
+			else {
+				notify($ERRORS{'CRITICAL'}, 0, "failed to determine replacement value for substitution section: '$input_substitute_section', DataStructure does not implement a '$function_name' function");
+				next;
+			}
 		}
 		
 		# Assemble a code string to retrieve the value from the DataStructure:
-		my $eval_code = "\$self->$get_function_name(0)";
+		my $eval_code = "\$self->$function_name(0)";
 		
 		# Evaluate the code string:
 		my $substitution_value = eval $eval_code;
 		if (!defined($substitution_value)) {
 			notify($ERRORS{'CRITICAL'}, 0, "failed to determine replacement value for substitution section: '$input_substitute_section', $eval_code returned undefined");
-			return;
+			next;
 		}
 		notify($ERRORS{'DEBUG'}, 0, "determined replacement value for substitution section: '$input_substitute_section', $eval_code = '$substitution_value'");
 		
@@ -2682,6 +2689,83 @@ sub substitute_string_variables {
 	
 	notify($ERRORS{'OK'}, 0, "replaced all matching sections of input string with values retrieved from this DataStructure object:\ninput string: '$input_string'\noutput string: '$output_string'");
 	return $output_string;
+}
+
+#//////////////////////////////////////////////////////////////////////////////
+
+=head2 get_invalid_substitution_identifiers
+
+ Parameters  : $input_string, $variable_identifier_regex (optional)
+ Returns     : array
+ Description : Checks the input string for invalid substitution identifiers. A
+					substitution identifier is valid if it corresponds to one of the
+					keys defined in %SUBROUTINE_MAPPINGS or matches one of the
+					subroutines explicitly defined in DataStructure.pm. Examples:
+               * [user_id]
+               * [computer_short_name]
+               * [is_parent_reservation]
+               
+               An identifier is invalid if it contains a typo or doesn't match
+               any keys or subroutine names:
+               * [usr_id]
+               * [foo_bar]
+               
+               If any invalid subroutines are found, an array is returned
+               containing the strings found in the input string which appear to
+               be intended as substitution identifiers but don't correlate:
+               ('[usr_id]', '[foo_bar]')
+					
+					Note: This subroutine does not need to be called as an object
+					method via $self->data. It's intended to be called from utils.pm.
+=cut
+
+sub get_invalid_substitution_identifiers {
+	my $input_string = shift;
+	if (ref($input_string)) {
+		$input_string = shift;
+	}
+	if (!defined($input_string)) {
+		notify($ERRORS{'WARNING'}, 0, "input string argument was not supplied");
+		return;
+	}
+	elsif (ref($input_string)) {
+		notify($ERRORS{'WARNING'}, 0, "input string argument is a reference:\n" . format_data($input_string));
+		return;
+	}
+	
+	my $variable_identifier_regex = shift;
+	if (!$variable_identifier_regex) {
+		$variable_identifier_regex = '\[[a-z][a-z_]+[a-z]\]';
+	}
+	
+	my @invalid_string_variable_identifiers;
+	
+	my @input_string_variable_identifiers = $input_string =~ /($variable_identifier_regex)/g;
+	for my $input_string_variable_identifier (remove_array_duplicates(@input_string_variable_identifiers)) {
+		my ($subroutine_mapping_key) = $input_string_variable_identifier =~ /^[^a-z]*([a-z][a-z_]+[a-z])[^a-z]*$/;
+		if (defined($SUBROUTINE_MAPPINGS{$subroutine_mapping_key})) {
+			next;
+		}
+		elsif (exists(&$subroutine_mapping_key)) {
+			notify($ERRORS{'DEBUG'}, 0, "explicit subroutine exists in DataStructure.pm: $subroutine_mapping_key");
+			next;
+		}
+		
+		my $get_subroutine_mapping_key = 'get_' . $subroutine_mapping_key;
+		if (exists(&$get_subroutine_mapping_key)) {
+			notify($ERRORS{'DEBUG'}, 0, "explicit subroutine exists in DataStructure.pm: $get_subroutine_mapping_key");
+			next;
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "neither mapping key not explicit subroutine exists in DataStructure.pm: $subroutine_mapping_key");
+			push @invalid_string_variable_identifiers, $input_string_variable_identifier;
+		}
+	}
+	
+	if (@invalid_string_variable_identifiers) {
+		notify($ERRORS{'WARNING'}, 0, "input string contains invalid substitution identifiers: " . join(', ', @invalid_string_variable_identifiers) . "\ninput string:\n$input_string");
+	}
+	return @invalid_string_variable_identifiers;
 }
 
 #//////////////////////////////////////////////////////////////////////////////

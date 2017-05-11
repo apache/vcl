@@ -167,6 +167,7 @@ our @EXPORT = qw(
 	get_management_node_requests
 	get_management_node_vmhost_ids
 	get_management_node_vmhost_info
+	get_message_variable_info
 	get_module_info
 	get_nathost_assigned_public_ports
 	get_natport_ranges
@@ -224,6 +225,7 @@ our @EXPORT = qw(
 	known_hosts
 	mail
 	makedatestring
+	message_needs_validating
 	nmap_port
 	normalize_file_path
 	notify
@@ -13274,10 +13276,11 @@ sub set_variable {
 	}
 	
 	# Construct a string indicating where the variable was set from
+	my $management_node_name = get_management_node_info()->{SHORTNAME} || hostname;
 	my @caller = caller(0);
 	(my $calling_file) = $caller[1] =~ /([^\/]*)$/;
 	my $calling_line = $caller[2];
-	my $caller_string = "$calling_file:$calling_line";
+	my $caller_string = "$management_node_name:$calling_file:$calling_line";
 	
 	# Attempt to serialize the value if necessary
 	my $database_value;
@@ -15033,6 +15036,208 @@ sub get_collapsed_hash_reference {
 		}
 	}
 	return \%collapsed_hash;
+}
+
+#//////////////////////////////////////////////////////////////////////////////
+
+=head2 get_message_variable_info
+
+ Parameters  : none
+ Returns     : hash reference
+ Description : Retrieves info for all adminmessage and usermessage entries from
+               the variable table. A hash is constructed. The keys are the
+               variable.name values:
+               {
+                  "usermessage|endtime_reached|Global" => {
+                    "id" => 957,
+                    "serialization" => "yaml",
+                    "setby" => undef,
+                    "timestamp" => "0000-00-00 00:00:00",
+                    "value" => "---\nmessage: |\n  Your reservation of [image_prettyname]\nshort_message: ~\nsubject: 'VCL -- End of reservation'\n"
+                  },
+                  "usermessage|reserved|Global" => {
+                    "id" => 973,
+                    "serialization" => "yaml",
+                    "setby" => undef,
+                    "timestamp" => "0000-00-00 00:00:00",
+                    "value" => "---\nmessage: |\n  The rer_affiliation_sitewwwaddress]..."
+                  },
+                  ...
+               }
+
+=cut
+
+sub get_message_variable_info {
+	my $select_statement = <<EOF;
+SELECT
+*
+FROM
+variable
+WHERE
+variable.name REGEXP '^(admin|user)message'
+EOF
+
+	my @rows = database_select($select_statement);
+	
+	my $info = {};
+	for my $row (@rows) {
+		my $variable_name = $row->{name};
+		$info->{$variable_name} = $row;
+		delete $info->{$variable_name}{name};
+	}
+	
+	notify($ERRORS{'DEBUG'}, 0, "retrieved info for all admin and user messages from the variable table:\n" . format_data($info));
+	return $info;
+}
+
+#//////////////////////////////////////////////////////////////////////////////
+
+=head2 message_needs_validating
+
+ Parameters  : none
+ Returns     : boolean
+ Description : If the variable table has an entry named
+               'usermessage_needs_validating' with a value is set to 1 the
+               management node's name, this subroutine proceeds to:
+               * Set value of 'usermessage_needs_validating' to its hostname so
+                 that other management nodes don't attempt to validate the
+                 messages at the same time
+               * Retrieves all of the adminmessage and usermessage rows from the
+                 variable table
+               * Checks the subject, message, and short_message strings
+                 contained in variable.value for invalid substitution
+                 identifiers (strings such as [request_foo] which don't
+                 correspond to a function that DataStructure.pm implements)
+               * If any invalid identifiers are found, a
+                 'usermessage_invalid_fields' variable is added with a value
+                 containing a hash reference:
+                     {
+                       "adminmessage|image_creation_started" => {
+                         "message" => [
+                           "[this_be_invalid_yo]"
+                         ]
+                       },
+                       "usermessage|endtime_reached|Local" => {
+                         "message" => [
+                           "[is_blah]"
+                         ],
+                         "subject" => [
+                           "[usr_login_id]"
+                         ]
+                       }
+                     }
+               
+               If no invalid fields are found, the 'usermessage_invalid_fields'
+               variable will be deleted if it was previously created.
+               
+               After validating is complete, the 'usermessage_needs_validating'
+               variable is deleted.
+
+=cut
+
+sub message_needs_validating {
+	my $management_node_name = get_management_node_info()->{SHORTNAME} || hostname;
+	
+	my $validate_variable_name = 'usermessage_needs_validating';
+	my $invalid_variable_name = 'usermessage_invalid_fields';
+	
+	# Just get the id to minimize this query since it runs with every vcld daemon loop
+	my $select_id_statement = <<EOF;
+SELECT
+id
+FROM
+variable
+WHERE
+variable.name = '$validate_variable_name'
+EOF
+	my @id_rows = database_select($select_id_statement);
+	if (!@id_rows) {
+		notify($ERRORS{'DEBUG'}, 0, "admin and user message variables to NOT need to be validated, $validate_variable_name variable does NOT exist in the database");
+		return 0;
+	}
+	my $validate_variable_id = $id_rows[0]->{id};
+	notify($ERRORS{'DEBUG'}, 0, "$validate_variable_name variable exists in the database, ID: $validate_variable_id, attempting to update its value to '$management_node_name'");
+	
+	
+	# Set the $validate_variable_name entry's variable.value to the management node name
+	my $update_statement = <<EOF;
+UPDATE
+variable
+SET
+value = '$management_node_name',
+timestamp = NOW()
+WHERE
+variable.id = $validate_variable_id
+AND (
+   variable.value = '1'
+	OR variable.value = '$management_node_name'
+)
+EOF
+	my $update_result = database_execute($update_statement);
+	if ($update_result) {
+		notify($ERRORS{'OK'}, 0, "attempted to update value of $validate_variable_name variable (ID: $validate_variable_id) to '$management_node_name', verifying the update was successful");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to update value of $validate_variable_name variable (ID: $validate_variable_id) to '$management_node_name', another management node may have processed the verification and deleted the entry");
+		return;
+	}
+	
+	# Make sure the value was updated, database_execute returns true if the syntax is valid but 0 rows were updated
+	my $verify_statement = <<EOF;
+SELECT
+*
+FROM
+variable
+WHERE
+variable.id = $validate_variable_id
+EOF
+	my @verify_rows = database_select($verify_statement);
+	if (!@verify_rows) {
+		notify($ERRORS{'WARNING'}, 0, "failed to verify the value of $validate_variable_name variable (ID: $validate_variable_id) was updated to '$management_node_name', another management node may have processed the verification and deleted the entry");
+		return;
+	}
+	if ($verify_rows[0]->{value} && $verify_rows[0]->{value} eq $management_node_name) {
+		notify($ERRORS{'DEBUG'}, 0, "admin and user message variables need to be validated, updated value of $validate_variable_name variable to '$verify_rows[0]->{value}'");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to update the value of $validate_variable_name variable (ID: $validate_variable_id) to '$management_node_name', its current value is '$verify_rows[0]->{value}', another management node may have started processing the verification");
+		return 0;
+	}
+	
+	# Check all of the admin and user messages
+	my $variable_info = get_message_variable_info();
+	my $invalid_info;
+	for my $variable_name (sort keys %$variable_info) {
+		my $yaml_string_value = $variable_info->{$variable_name}{value};
+		my $hash_reference_value = yaml_deserialize($yaml_string_value);
+		if (!defined($hash_reference_value)) {
+			notify($ERRORS{'WARNING'}, 0, "unable to validate '$variable_name' variable, YAML string could not be deserialized:\n$yaml_string_value");
+			next;
+		}
+		elsif (!ref($hash_reference_value) || ref($hash_reference_value) ne 'HASH') {
+			notify($ERRORS{'WARNING'}, 0, "unable to validate '$variable_name' variable, deserialized value is not a hash reference:\n" . format_data($hash_reference_value));
+			next;
+		}
+		
+		for my $key ('subject', 'message', 'short_message') {
+			my $input_string = $hash_reference_value->{$key} || next;
+			notify($ERRORS{'DEBUG'}, 0, "validating substitution identifiers contained in '$variable_name' $key");
+			my @invalid_substitution_identifiers = VCL::DataStructure::get_invalid_substitution_identifiers($input_string);
+			if (@invalid_substitution_identifiers) {
+				$invalid_info->{$variable_name}{$key} = \@invalid_substitution_identifiers;
+			}
+		}
+	}
+	
+	if ($invalid_info) {
+		notify($ERRORS{'WARNING'}, 0, "message variables with invalid substitution identifiers found, setting '$invalid_variable_name' variable with value:\n" . format_data($invalid_info));
+		set_variable($invalid_variable_name, $invalid_info);
+	}
+	else {
+		delete_variable($invalid_variable_name);
+	}
+	delete_variable($validate_variable_name);
+	return 1;
 }
 
 #//////////////////////////////////////////////////////////////////////////////
