@@ -243,7 +243,6 @@ our @EXPORT = qw(
 	run_command
 	run_scp_command
 	run_ssh_command
-	set_hash_process_id
 	set_logfile_path
 	set_managementnode_state
 	set_reservation_lastcheck
@@ -3017,7 +3016,8 @@ EOF
 
 	# Build the hash
 	my $request_info;
-
+	my $request_state_name;
+	
 	for my $reservation_row (@selected_rows) {
 		my $reservation_id = $reservation_row->{'reservation-id'};
 		if (!$reservation_id) {
@@ -3047,6 +3047,8 @@ EOF
 			}
 		}
 		
+		$request_state_name = $request_info->{state}{name};
+		
 		# Store duration in epoch seconds format
 		my $request_start_epoch = convert_to_epoch_seconds($request_info->{start});
 		my $request_end_epoch = convert_to_epoch_seconds($request_info->{end});
@@ -3072,7 +3074,6 @@ EOF
 		if (defined $ENV{reservation_id} && $ENV{reservation_id} eq $reservation_id) {
 			my $caller_trace = get_caller_trace(5);
 			if ($caller_trace !~ /populate_reservation_natport/) {
-				my $request_state_name = $request_info->{state}{name};
 				if ($request_state_name =~ /(new|reserved|modified|test)/) {
 					if (!populate_reservation_natport($reservation_id)) {
 						notify($ERRORS{'CRITICAL'}, 0, "failed to populate natport table for reservation");
@@ -3159,15 +3160,24 @@ EOF
 	
 	# Set some default non-database values for the entire request
 	# All data ever added to the hash should be initialized here
-	$request_info->{PID}              = '';
-	$request_info->{PPID}             = '';
-	$request_info->{PARENTIMAGE}      = '';
+	$request_info->{PID}              = $PID;
+	$request_info->{PPID}             = getppid();
 	$request_info->{PRELOADONLY}      = '0';
-	$request_info->{SUBIMAGE}         = '';
 	$request_info->{CHECKTIME}        = '';
 	$request_info->{NOTICEINTERVAL}   = '';
 	$request_info->{RESERVATIONCOUNT} = scalar keys %{$request_info->{reservation}};
 	$request_info->{UPDATED}          = '0';
+	$request_info->{NOTICE_INTERVAL}  = '';
+	
+	if ($request_state_name eq 'image') {
+		$request_info->{IMAGE_CAPTURE_TYPE} = 'Capture';
+	}
+	elsif ($request_state_name eq 'checkpoint') {
+		$request_info->{IMAGE_CAPTURE_TYPE} = 'Checkpoint';
+	}
+	else {
+		$request_info->{IMAGE_CAPTURE_TYPE} = '';
+	}
 	
 	#notify($ERRORS{'DEBUG'}, 0, "retrieved request info:\n" . format_data($request_info));
 	return $request_info;
@@ -6121,55 +6131,12 @@ EOF
 
 #//////////////////////////////////////////////////////////////////////////////
 
-=head2 set_hash_process_id
-
- Parameters  : Reference to a hash
- Returns     : 0 or 1
- Description : Sets the process ID of the current process and parent process ID
-               in a hash, to which a reference was passed.
-               $hash{PID} = process ID
-               $hash{PPID} = parent process ID
-
-=cut
-
-sub set_hash_process_id {
-	my ($hash_ref) = @_;
-
-	my ($package, $filename, $line, $sub) = caller(0);
-
-	# Check the passed parameter
-	if (!(defined($hash_ref))) {
-		notify($ERRORS{'WARNING'}, 0, "hash reference was not specified");
-		return 0;
-	}
-
-	# Make sure it's a hash reference
-	if (ref($hash_ref) ne "HASH") {
-		notify($ERRORS{'WARNING'}, 0, "passed parameter is not a hash reference");
-		return 0;
-	}
-
-	# Get the parent PID and this process's PID
-	# getppid() doesn't work under Windows so just set it to 0
-	my $ppid = 0;
-	$ppid = getppid() if ($^O !~ /win/i);
-	$hash_ref->{PPID} = $ppid;
-	my $pid = $$;
-	$hash_ref->{PID} = $pid;
-
-	return 1;
-} ## end sub set_hash_process_id
-
-#//////////////////////////////////////////////////////////////////////////////
-
 =head2 rename_vcld_process
 
  Parameters  : hash - Reference to hash containing request data
  Returns     : boolean
  Description : Renames running process based on request information. Appends the
                state name, request ID, and reservation ID to the process name.
-               Sets PARENTIMAGE and SUBIMAGE in the hash depending on whether or
-               reservation ID is the lowest for a request.
 
 =cut
 
@@ -6239,29 +6206,18 @@ sub rename_vcld_process {
 
 			if ($reservation_count > 1) {
 				if ($reservation_is_parent) {
-					$data_structure->get_request_data->{PARENTIMAGE} = 1;
-					$data_structure->get_request_data->{SUBIMAGE}    = 0;
 					$new_process_name .= " (cluster=parent)";
 				}
 				else {
-					$data_structure->get_request_data->{PARENTIMAGE} = 0;
-					$data_structure->get_request_data->{SUBIMAGE}    = 1;
 					$new_process_name .= " (cluster=child)";
 				}
 			} ## end if ($reservation_count > 1)
-			else {
-				$data_structure->get_request_data->{PARENTIMAGE} = 1;
-				$data_structure->get_request_data->{SUBIMAGE}    = 0;
-			}
-
-			notify($ERRORS{'DEBUG'}, 0, "PARENTIMAGE: " . $data_structure->get_request_data->{PARENTIMAGE});
-			notify($ERRORS{'DEBUG'}, 0, "SUBIMAGE: " . $data_structure->get_request_data->{SUBIMAGE});
 		} ## end if ($state_name ne 'blockrequest')
 		else {
 			my $blockrequest_id   = $data_structure->get_blockrequest_id();
 			my $blockrequest_name = $data_structure->get_blockrequest_name();
 			my $blocktime_id      = $data_structure->get_blocktime_id();
-
+			
 			# Append the IDs if they are set
 			$new_process_name .= " $blockrequest_id:$blocktime_id";
 			$new_process_name .= " '$blockrequest_name'";

@@ -1643,7 +1643,7 @@ sub get_semaphore {
 
 =head2 set_admin_message_variable
 
- Parameters  : $admin_message_key, $subject, $message, $substitution_hashref (optional)
+ Parameters  : $admin_message_key, $subject, $message
  Returns     : boolean
  Description : Sets an administrative message variable in the database.
 
@@ -1656,7 +1656,7 @@ sub set_admin_message_variable {
 		return;
 	}
 	
-	my ($admin_message_key, $subject, $message, $substitution_hashref) = @_;
+	my ($admin_message_key, $subject, $message) = @_;
 	if (!defined($admin_message_key)) {
 		notify($ERRORS{'WARNING'}, 0, "message key argument was not supplied");
 		return;
@@ -1675,7 +1675,6 @@ sub set_admin_message_variable {
 	my $variable_value = {
 		subject => $subject,
 		message => $message,
-		substitutions => $substitution_hashref,
 	};
 	
 	if (!set_variable($variable_name, $variable_value)) {
@@ -1683,14 +1682,14 @@ sub set_admin_message_variable {
 	}
 	
 	# Test retrieving the variable
-	return $self->get_admin_message($admin_message_key, $substitution_hashref);
+	return $self->get_admin_message($admin_message_key);
 }
 
 #//////////////////////////////////////////////////////////////////////////////
 
 =head2 set_user_message_variable
 
- Parameters  : $user_message_key, $affiliation_identifier, $subject, $message, $short_message (optional), $substitution_hashref (optional)
+ Parameters  : $user_message_key, $affiliation_identifier, $subject, $message, $short_message (optional)
  Returns     : boolean
  Description : Sets a user message variable in the database.
 
@@ -1703,7 +1702,7 @@ sub set_user_message_variable {
 		return;
 	}
 	
-	my ($user_message_key, $affiliation_identifier, $subject, $message, $short_message, $substitution_hashref) = @_;
+	my ($user_message_key, $affiliation_identifier, $subject, $message, $short_message) = @_;
 	if (!defined($user_message_key)) {
 		notify($ERRORS{'WARNING'}, 0, "key argument was not supplied");
 		return;
@@ -1736,7 +1735,6 @@ sub set_user_message_variable {
 		subject => $subject,
 		message => $message,
 		short_message => $short_message,
-		substitutions => $substitution_hashref,
 	};
 	
 	if (!set_variable($variable_name, $variable_value)) {
@@ -1744,14 +1742,14 @@ sub set_user_message_variable {
 	}
 	
 	# Test retrieving the variable
-	return $self->_get_message_variable($user_message_key, $substitution_hashref);
+	return $self->_get_message_variable($user_message_key);
 }
 
 #//////////////////////////////////////////////////////////////////////////////
 
 =head2 _get_message_variable
 
- Parameters  : $message_key, $substitution_hashref (optional), $return_short_message (optional), $admin_message (optional)
+ Parameters  : $message_key, $return_short_message (optional), $admin_message (optional)
  Returns     : array context, array: ($subject, $message)
                scalar context, string: $message
  Description : Retrieves message components from the variable table in the
@@ -1795,36 +1793,10 @@ sub set_user_message_variable {
                * subject (required)
                * message (required)
                * short_message (optional)
-               * substitutions (optional)
                
                The subject and message values will be used when sending email
                messages. The short_message key is optional and will be used when
                sending console, desktop, or IM messages to users.
-               
-               The substitutions key is optional and is intended to only be used
-               to verify when message variables added or modified in the
-               database. Ideally, every variable entry which has custom
-               (uppercase) substitution strings in subject, message, or
-               short_message should have corresponding substitutions hash keys
-               and values:
-               variable.name: 'usermessage|TestKey|Global'
-               variable.value:
-               {
-                  'message' => "[MY_USERNAME]'s reservation will timeout in [NOTICE_INTERVAL]",
-                  'substitutions' => {
-                     'MY_USERNAME' => 'some-default-username',
-                     'NOTICE_INTERVAL' => 'xxx minutes',
-                  },
-               }
-               
-               The $substitution_hashref argument must be provided if subject,
-               message, or short_message contains custom strings to be replaced.
-               There must be a $substitution_hashref key for every custom,
-               upper-case replacement string. For example:
-               my $message = $self->_get_message_variable('TestKey', { 'MY_USERNAME' => 'slappy', NOTICE_INTERVAL' => '5 minutes' });
-               
-               ...would return the string:
-               "slappy's reservation will timeout in 5 minutes"
                
                The $return_short_message argument controls whether to return the
                value of message (default) or short_message.
@@ -1842,29 +1814,11 @@ sub _get_message_variable {
 		return;
 	}
 	
-	my ($message_key, $substitution_hashref, $return_short_message, $admin_message) = @_;
+	my ($message_key, $return_short_message, $admin_message) = @_;
 	if (!defined($message_key)) {
 		notify($ERRORS{'WARNING'}, 0, "key argument was not supplied");
 		return;
 	}
-	
-	# Initialize hash reference if argument was not supplied
-	if (defined($substitution_hashref)) {
-		my $type = ref($substitution_hashref);
-		if (!$type || $type ne 'HASH') {
-			notify($ERRORS{'WARNING'}, 0, "substitution argument is not a hash reference:\n" . format_data($substitution_hashref));
-			return;
-		}
-		elsif (keys(%$substitution_hashref)) {
-			notify($ERRORS{'DEBUG'}, 0, "substitution hash reference was specified:\n" . format_data($substitution_hashref));
-		}
-	}
-	else {
-		$substitution_hashref = {};
-	}
-	
-	# Set common substitution values
-	$substitution_hashref->{PID} = $$;
 	
 	my $message_type = ($admin_message ? 'admin' : 'user');
 	
@@ -1896,7 +1850,7 @@ sub _get_message_variable {
 	# Make sure the variable contains subject key
 	my $subject = $variable->{subject};
 	if (!defined($subject)) {
-		notify($ERRORS{'WARNING'}, 0, "unable to retrieve $message_type message variable, '$variable_name' variable stored in database does not contain a {subject} key:\n" . format_data($variable));
+		notify($ERRORS{'WARNING'}, 0, "unable to retrieve $message_type message variable: '$variable_name', variable stored in database does not contain a {subject} key:\n" . format_data($variable));
 		return;
 	}
 	
@@ -1914,74 +1868,30 @@ sub _get_message_variable {
 	
 	# Make sure message was determined
 	if (!defined($message)) {
-		notify($ERRORS{'WARNING'}, 0, "unable to retrieve $message_type message variable, '$variable_name' variable stored in database does not contain a {message} key:\n" . format_data($variable));
+		notify($ERRORS{'WARNING'}, 0, "unable to retrieve $message_type message variable: '$variable_name', variable stored in database does not contain a {message} key:\n" . format_data($variable));
 		return;
 	}
 	
-	# Extract all substitution string sections from the subject and message in the form: [foo]
-	my @substitution_strings = "$subject $message" =~ /\[([\w_]+)\]/g;
-	@substitution_strings = remove_array_duplicates(@substitution_strings);
-	
-	for my $substitution_string (@substitution_strings) {
-		my $substitution_value;
-		
-		# Check if the string matches a key in the optional substitution hash reference
-		if (defined($substitution_hashref->{$substitution_string})) {
-			$substitution_value = $substitution_hashref->{$substitution_string};
-			notify($ERRORS{'DEBUG'}, 0, "determined substitution value from supplied hash reference for '$variable_name' $message_type variable: $substitution_string --> $substitution_value");
-		}
-		elsif (defined($variable->{substitutions}{$substitution_string})) {
-			$substitution_value = $variable->{substitutions}{$substitution_string};
-			notify($ERRORS{'DEBUG'}, 0, "determined substitution value from variable definition substitutions for '$variable_name' $message_type variable: $substitution_string --> $substitution_value");
-		}
-		else {
-			#notify($ERRORS{'DEBUG'}, 0, "substitution hash reference does not contain a '$substitution_string' key:\n" . format_data($substitution_hashref));
-			
-			# Attempt to retrieve the substitution value from the DataStructure
-			# String in subject or message must be in a form such as: [image_name]
-			# Brackets were removed in earlier regex, so $substitution_string would now contain: image_name
-			
-			# Check if DataStructure.pm implements get_ function
-			if (!$self->data->can("get_$substitution_string")) {
-				notify($ERRORS{'CRITICAL'}, 0, "$message_type variable: '$variable_name', failed to determine substitution value for substitution string: $substitution_string, DataStructure does not implement a get_$substitution_string function\n" .
-					"substitution hash reference argument:\n" . format_data($substitution_hashref) . "\n" .
-					"variable definition substitution hash reference:\n" . format_data($variable->{substitutions})
-				);
-				return;
-			}
-			
-			# Assemble a code string to retrieve the value from the DataStructure:
-			my $eval_string = "\$self->data->get_$substitution_string(0)";
-			
-			# Evaluate the code string:
-			$substitution_value = eval $eval_string;
-			if (defined($substitution_value)) {
-				#notify($ERRORS{'DEBUG'}, 0, "determined DataStructure substitution value: $eval_string --> $substitution_value");
-			}
-			else {
-				$substitution_value = '<undefined>';
-			}
-		}
-		
-		# Replace the substitution strings in the subject and message
-		$subject =~ s/\[$substitution_string\]/$substitution_value/g;
-		$message =~ s/\[$substitution_string\]/$substitution_value/g;	
+	my $subject_substituted = $self->data->substitute_string_variables($subject);
+	my $message_substituted = $self->data->substitute_string_variables($message);
+	if (!defined($subject_substituted) || !defined($message_substituted)) {
+		notify($ERRORS{'WARNING'}, 0, "retrieved $message_type message variable '$variable_name' but failed to substitute text");
+		return;
 	}
 	
 	# Remove leading and trailing newlines from message
-	$message =~ s/^\n+//g;
-	$message =~ s/\n+$//g;
+	$message_substituted =~ s/(^\n+|\n+$)//g;
 	
 	if (wantarray) {
-		notify($ERRORS{'DEBUG'}, 0, "retrieved '$variable_name' $message_type message variable and substituted text, returning array:\n" .
-			"subject: $subject\n" .
-			"message:\n$message"
+		notify($ERRORS{'DEBUG'}, 0, "retrieved $message_type message variable: $variable_name, returning array:\n" .
+			"subject: $subject_substituted\n" .
+			"message:\n$message_substituted"
 		);
-		return ($subject, $message);
+		return ($subject_substituted, $message_substituted);
 	}
 	else {
-		notify($ERRORS{'DEBUG'}, 0, "retrieved '$variable_name' $message_type message variable and substituted text, returning message string:\n$message");
-		return $message;
+		notify($ERRORS{'DEBUG'}, 0, "retrieved $message_type message variable: '$variable_name', returning message string:\n$message_substituted");
+		return $message_substituted;
 	}
 }
 
@@ -1989,7 +1899,7 @@ sub _get_message_variable {
 
 =head2 get_user_message
 
- Parameters  : $user_message_key, $substitution_hashref (optional)
+ Parameters  : $user_message_key
  Returns     : array context, array: ($subject, $message)
                scalar context, string: $message
  Description : Retrieves user messages.
@@ -2003,15 +1913,15 @@ sub get_user_message {
 		return;
 	}
 	
-	my ($user_message_key, $substitution_hashref) = @_;
-	return $self->_get_message_variable($user_message_key, $substitution_hashref);
+	my ($user_message_key) = @_;
+	return $self->_get_message_variable($user_message_key);
 }
 
 #//////////////////////////////////////////////////////////////////////////////
 
 =head2 get_user_short_message
 
- Parameters  : $user_message_key, $substitution_hashref (optional)
+ Parameters  : $user_message_key
  Returns     : array context, array: ($subject, $short_message)
                scalar context, string: $short_message
  Description : Retrieves user short messages.
@@ -2025,15 +1935,15 @@ sub get_user_short_message {
 		return;
 	}
 	
-	my ($user_message_key, $substitution_hashref) = @_;
-	return $self->_get_message_variable($user_message_key, $substitution_hashref, 1);
+	my ($user_message_key) = @_;
+	return $self->_get_message_variable($user_message_key, 1);
 }
 
 #//////////////////////////////////////////////////////////////////////////////
 
 =head2 get_admin_message
 
- Parameters  : $admin_message_key, $substitution_hashref (optional)
+ Parameters  : $admin_message_key
  Returns     : array context, array: ($subject, $message)
                scalar context, string: $message
  Description : Retrieves administrative messages.
@@ -2047,8 +1957,8 @@ sub get_admin_message {
 		return;
 	}
 	
-	my ($admin_message_key, $substitution_hashref) = @_;
-	return $self->_get_message_variable($admin_message_key, $substitution_hashref, 0, 1);
+	my ($admin_message_key) = @_;
+	return $self->_get_message_variable($admin_message_key, 0, 1);
 }
 
 #//////////////////////////////////////////////////////////////////////////////

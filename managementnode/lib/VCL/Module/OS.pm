@@ -4410,8 +4410,6 @@ sub update_fixed_ip_info {
 
 =cut
 
-#//////////////////////////////////////////////////////////////////////////////
-
 sub get_timings {
 	my $self = shift;
 	my $variable = shift;
@@ -4651,7 +4649,7 @@ sub get_connect_method_remote_ip_addresses {
 	my $mn_public_ip_address = $self->mn_os->get_public_ip_address();
 	
 	# Get the ignored remote IP address variable from the database if it is configured
-	my $ignored_remote_ip_address_string = $self->data->get_variable('ignored_remote_ip_addresses') || '';
+	my $ignored_remote_ip_address_string = get_variable('ignored_remote_ip_addresses') || '';
 	my @ignored_remote_ip_addresses = split(/[,; ]+/, $ignored_remote_ip_address_string);
 	notify($ERRORS{'DEBUG'}, 0, "connections to $computer_node_name from any of the following IP addresses will be ignored: " . join(', ', @ignored_remote_ip_addresses)) if (@ignored_remote_ip_addresses);
 	

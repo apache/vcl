@@ -354,13 +354,15 @@ sub process {
 
 sub notify_user_future_endtime {
 	my $self = shift;
-	my $notice_interval = shift;
 	
 	# Check to make sure notice interval is set
+	my $notice_interval = shift;
 	if (!defined($notice_interval)) {
 		notify($ERRORS{'WARNING'}, 0, "end time message not set, notice interval was not passed");
 		return 0;
 	}
+	# Set the notice interval in the DataStructure object so that the text can contain [notice_interval]
+	$self->data->set_notice_interval($notice_interval);
 	
 	my $is_parent_reservation        = $self->data->is_parent_reservation();
 	my $computer_short_name          = $self->data->get_computer_short_name();
@@ -376,13 +378,13 @@ sub notify_user_future_endtime {
 	
 	# Send a message to the user notifying them the reservation end time is coming up
 	if ($is_parent_reservation && $user_emailnotices) {
-		my ($user_subject, $user_message) = $self->get_user_message($user_message_key, { NOTICE_INTERVAL => $notice_interval});
+		my ($user_subject, $user_message) = $self->get_user_message($user_message_key);
 		if (defined($user_subject) && defined($user_message)) {
 			mail($user_email, $user_subject, $user_message, $user_affiliation_helpaddress);
 		}
 	}
 	
-	my $user_short_message = $self->get_user_short_message($user_message_key, { NOTICE_INTERVAL => $notice_interval});
+	my $user_short_message = $self->get_user_short_message($user_message_key);
 	if ($user_short_message) {
 		# Display a message on the console or desktop if the OS module supports it
 		if ($self->os->can('notify_user_console')) {
@@ -419,13 +421,15 @@ sub notify_user_future_endtime {
 
 sub notify_user_endtime_imminent {
 	my $self = shift;
-	my $notice_interval = shift;
 	
-	# Check to make sure disconnect time was passed
+	# Check to make sure notice interval is set
+	my $notice_interval = shift;
 	if (!defined($notice_interval)) {
-		notify($ERRORS{'WARNING'}, 0, "disconnect time message not set, disconnect time was not passed");
+		notify($ERRORS{'WARNING'}, 0, "disconnect time message not set, notice interval was not passed");
 		return 0;
 	}
+	# Set the notice interval in the DataStructure object so that the text can contain [notice_interval]
+	$self->data->set_notice_interval($notice_interval);
 	
 	my $computer_short_name          = $self->data->get_computer_short_name();
 	my $image_os_type                = $self->data->get_image_os_type();
@@ -449,13 +453,13 @@ sub notify_user_endtime_imminent {
 	
 	# Send a message to the user notifying them the reservation end time is close
 	if ($is_parent_reservation && $user_emailnotices) {
-		my ($user_subject, $user_message) = $self->get_user_message($user_message_key, { NOTICE_INTERVAL => $notice_interval});
+		my ($user_subject, $user_message) = $self->get_user_message($user_message_key);
 		if (defined($user_subject) && defined($user_message)) {
 			mail($user_email, $user_subject, $user_message, $user_affiliation_helpaddress);
 		}
 	}
 	
-	my $user_short_message = $self->get_user_short_message($user_message_key, { NOTICE_INTERVAL => $notice_interval});
+	my $user_short_message = $self->get_user_short_message($user_message_key);
 	if ($user_short_message) {
 		# Display a message on the console or desktop if the OS module supports it
 		if ($self->os->can('notify_user_console')) {

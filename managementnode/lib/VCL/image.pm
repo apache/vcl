@@ -260,16 +260,12 @@ sub reservation_successful {
 	my $computer_id                = $self->data->get_computer_id();
 	my $sysadmin_mail_address      = $self->data->get_management_node_sysadmin_email(0);
 	
-	my $image_capture_type;
-	
 	# Send a capture completed message to the image owner
 	my ($user_subject, $user_message);
 	if ($request_state_name =~ /(checkpoint)/i) {
-		$image_capture_type = 'Checkpoint';
 		($user_subject, $user_message) = $self->get_user_message('image_checkpoint_success');
 	}
 	else {
-		$image_capture_type = 'Capture';
 		($user_subject, $user_message) = $self->get_user_message('image_creation_success');
 	}
 	if (defined($user_subject) && defined($user_message)) {
@@ -279,8 +275,7 @@ sub reservation_successful {
 	# Send mail to administrators
 	if ($sysadmin_mail_address) {
 		# Get the administrator email subject and message
-		# Pass a hash containing an IMAGE_CAPTURE_TYPE key - this gets replaced in the subject of the message
-		my ($admin_subject, $admin_message) = $self->get_admin_message('image_creation_complete', { 'IMAGE_CAPTURE_TYPE' => $image_capture_type, IMAGE_SIZE_OLD => $image_size_old });
+		my ($admin_subject, $admin_message) = $self->get_admin_message('image_creation_complete');
 		if (defined($admin_subject) && defined($admin_message)) {
 			mail($sysadmin_mail_address, $admin_subject, $admin_message, $affiliation_helpaddress);
 		}
@@ -326,18 +321,10 @@ sub reservation_failed {
 	my $computer_id                = $self->data->get_computer_id();
 	my $computer_shortname         = $self->data->get_computer_short_name();
 	my $sysadmin_mail_address      = $self->data->get_management_node_sysadmin_email(0);
-	
-	my $message = shift;
-	
-	my $image_capture_type;
-	if ($request_state_name =~ /(checkpoint)/i) {
-		$image_capture_type = 'Checkpoint';
-	}
-	else {
-		$image_capture_type = 'Creation';
-	}
+	my $image_capture_type         = $self->data->get_image_capture_type();
 	
 	# Image process failed
+	my $message = shift;
 	if ($message) {
 		notify($ERRORS{'CRITICAL'}, 0, "$image_name Image $image_capture_type Failed - $message");
 	}
@@ -357,7 +344,7 @@ sub reservation_failed {
 		# Get the administrator email subject and message
 		# Pass a hash containing an IMAGE_CAPTURE_TYPE key - this gets replaced in the subject of the message
 		my $admin_message_key = 'image_creation_failed';
-		my ($admin_subject, $admin_message) = $self->get_admin_message($admin_message_key, { 'IMAGE_CAPTURE_TYPE' => $image_capture_type });
+		my ($admin_subject, $admin_message) = $self->get_admin_message($admin_message_key);
 		if (defined($admin_subject) && defined($admin_message)) {
 			mail($sysadmin_mail_address, $admin_subject, $admin_message, $affiliation_helpaddress);
 		}

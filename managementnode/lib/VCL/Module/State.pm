@@ -157,13 +157,10 @@ sub initialize {
 		notify($ERRORS{'DEBUG'}, 0, "child reservation, not updating request state to 'pending'");
 	}
 	
-	# Set the PARENTIMAGE and SUBIMAGE keys in the request data hash
-	# These are deprecated, DataStructure's is_parent_reservation function should be used
-	$self->data->get_request_data->{PARENTIMAGE} = ($self->data->is_parent_reservation() + 0);
-	$self->data->get_request_data->{SUBIMAGE}    = (!$self->data->is_parent_reservation() + 0);
-	
-	# Set the parent PID and this process's PID in the hash
-	set_hash_process_id($self->data->get_request_data);
+	# Set the PID and PPID in the DataStructure
+	# These will be wrong if set in get_request_info before the state process is forked
+	$self->data->set_process_pid($PID);
+	$self->data->set_process_ppid(getppid() || '<unknown>');
 	
 	# Create an OS object
 	if (my $os = $self->create_os_object()) {

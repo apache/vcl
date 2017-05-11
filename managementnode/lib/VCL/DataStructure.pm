@@ -101,6 +101,12 @@ use VCL::utils;
 
 my %SUBROUTINE_MAPPINGS;
 
+# TODO: Move all keys which don't come straight from the database to the top
+$SUBROUTINE_MAPPINGS{process_pid} = '$self->request_data->{PID}';
+$SUBROUTINE_MAPPINGS{process_ppid} = '$self->request_data->{PPID}';
+$SUBROUTINE_MAPPINGS{image_capture_type} = '$self->request_data->{IMAGE_CAPTURE_TYPE}';
+$SUBROUTINE_MAPPINGS{notice_interval} = '$self->request_data->{NOTICE_INTERVAL}';
+
 $SUBROUTINE_MAPPINGS{blockrequest_id} = '$self->blockrequest_data->{BLOCKREQUEST_ID}{id}';
 $SUBROUTINE_MAPPINGS{blockrequest_name} = '$self->blockrequest_data->{BLOCKREQUEST_ID}{name}';
 $SUBROUTINE_MAPPINGS{blockrequest_image_id} = '$self->blockrequest_data->{BLOCKREQUEST_ID}{imageid}';
@@ -136,9 +142,6 @@ $SUBROUTINE_MAPPINGS{request_id} = '$self->request_data->{id}';
 $SUBROUTINE_MAPPINGS{request_laststate_id} = '$self->request_data->{laststateid}';
 $SUBROUTINE_MAPPINGS{request_log_id} = '$self->request_data->{logid}';
 $SUBROUTINE_MAPPINGS{request_notice_interval} = '$self->request_data->{NOTICEINTERVAL}';
-$SUBROUTINE_MAPPINGS{request_is_cluster_parent} = '$self->request_data->{PARENTIMAGE}';
-$SUBROUTINE_MAPPINGS{request_pid} = '$self->request_data->{PID}';
-$SUBROUTINE_MAPPINGS{request_ppid} = '$self->request_data->{PPID}';
 $SUBROUTINE_MAPPINGS{request_preload} = '$self->request_data->{preload}';
 $SUBROUTINE_MAPPINGS{request_preload_only} = '$self->request_data->{PRELOADONLY}';
 $SUBROUTINE_MAPPINGS{request_reservation_count} = '$self->request_data->{RESERVATIONCOUNT}';
@@ -146,7 +149,6 @@ $SUBROUTINE_MAPPINGS{request_start_time} = '$self->request_data->{start}';
 $SUBROUTINE_MAPPINGS{request_duration_epoch} = '$self->request_data->{DURATION}';
 $SUBROUTINE_MAPPINGS{request_checkuser} = '$self->request_data->{checkuser}';
 #$SUBROUTINE_MAPPINGS{request_stateid} = '$self->request_data->{stateid}';
-$SUBROUTINE_MAPPINGS{request_is_cluster_child} = '$self->request_data->{SUBIMAGE}';
 $SUBROUTINE_MAPPINGS{request_test} = '$self->request_data->{test}';
 $SUBROUTINE_MAPPINGS{request_updated} = '$self->request_data->{UPDATED}';
 #$SUBROUTINE_MAPPINGS{request_userid} = '$self->request_data->{userid}';
@@ -819,7 +821,7 @@ sub _automethod : Automethod {
 	}
 	
 	my $calling_subroutine = get_calling_subroutine();
-	
+
 	# Check if the sub name is defined in the subroutine mappings hash
 	# Return if it isn't
 	if (!defined $SUBROUTINE_MAPPINGS{$data_identifier}) {
@@ -2140,7 +2142,7 @@ sub get_reservation_info_string {
 		if (defined($reservation_count) && $reservation_count > 1) {
 			$string .= "cluster reservation: yes\n";
 			$string .= "reservation count: $reservation_count\n";
-			$string .= "parent reservation: " . (defined($_ = $self->get_request_is_cluster_parent(0)) ? ($_ ? 'yes' : 'no') : '<undefined>') . "\n";
+			$string .= "parent reservation: " . (defined($_ = $self->is_parent_reservation(0)) ? ($_ ? 'yes' : 'no') : '<undefined>') . "\n";
 		}
 	}
 	
