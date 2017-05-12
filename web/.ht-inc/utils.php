@@ -2578,7 +2578,7 @@ function encryptData($data) {
 		static $iv;
 		$key = base64_decode($cryptkey);
 		$iv = base64_decode($cryptiv);
-		$cryptdata = openssl_encrypt($data, 'AES-128-CBC', $key, OPENSSL_RAW_DATA, $iv);
+		$cryptdata = openssl_encrypt($data, 'AES-128-CBC', $key, 1, $iv);
 	}
 	return trim(base64_encode($cryptdata));
 }
@@ -2609,7 +2609,7 @@ function decryptData($data) {
 		static $iv;
 		$key = base64_decode($cryptkey);
 		$iv = base64_decode($cryptiv);
-		$decryptdata = openssl_decrypt($cryptdata, 'AES-128-CBC', $key, OPENSSL_RAW_DATA, $iv);
+		$decryptdata = openssl_decrypt($cryptdata, 'AES-128-CBC', $key, 1, $iv);
 	}
 	return trim($decryptdata);
 }
