@@ -324,7 +324,7 @@ sub process {
 		elsif ($request_duration_hours > 24) {
 			notify($ERRORS{'OK'}, 0, "never detected user connection, skipping timeout, request duration: $request_duration_hours hours");
 		}
-		elsif (is_request_deleted($request_id)) {
+		elsif (is_request_deleted($request_id) || $self->request_state_changed()) {
 			$self->state_exit();
 		}
 		else {

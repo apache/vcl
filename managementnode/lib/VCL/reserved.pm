@@ -252,7 +252,7 @@ sub process {
 		elsif ($is_server_request) {
 			notify($ERRORS{'OK'}, 0, "never detected user connection, skipping timeout, server reservation");
 		}
-		elsif (is_request_deleted($request_id)) {
+		elsif (is_request_deleted($request_id) || $self->request_state_changed()) {
 			$self->state_exit();
 		}
 		else {
