@@ -2588,7 +2588,7 @@ sub get_other_cluster_computer_public_ip_addresses {
                $variable_identifier_regex with values from the DataStructure
                object. The default pattern used to locate sections to replace
                is:
-                  \[[a-z][a-z_]+[a-z]\]
+                  \[[^\]]*\]'
                
                Meaning, all patterns to replace are enclosed in square brackets.
                The text within the brackets must exactly match one of the keys
@@ -2624,7 +2624,7 @@ sub substitute_string_variables {
 		return;
 	}	
 	if (!$variable_identifier_regex) {
-		$variable_identifier_regex = '\[[a-z][a-z_]+[a-z]\]';
+		$variable_identifier_regex = '\[[^\]]*\]';
 	}
 	
 	my $output_string = $input_string;
@@ -2639,8 +2639,8 @@ sub substitute_string_variables {
 	
 	for my $input_substitute_section (remove_array_duplicates(@input_substitute_sections)) {
 		# Remove brackets, etc from matching section: '[user_login_id]' --> 'user_login_id'
-		my ($subroutine_mapping_key) = $input_substitute_section =~ /^[^a-z]*([a-z][a-z_]+[a-z])[^a-z]*$/;
-		if (!$subroutine_mapping_key) {
+		my ($subroutine_mapping_key) = $input_substitute_section =~ /\[(.*)\]/;
+		if (!defined($subroutine_mapping_key)) {
 			notify($ERRORS{'CRITICAL'}, 0, "failed to extract subroutine mapping key from section of input string matching substitution identifier pattern '$variable_identifier_regex': '$input_substitute_section'");
 			next;
 		}
@@ -2735,15 +2735,15 @@ sub get_invalid_substitution_identifiers {
 	
 	my $variable_identifier_regex = shift;
 	if (!$variable_identifier_regex) {
-		$variable_identifier_regex = '\[[a-z][a-z_]+[a-z]\]';
+		$variable_identifier_regex = '\[[^\]]*\]';
 	}
 	
 	my @invalid_string_variable_identifiers;
 	
 	my @input_string_variable_identifiers = $input_string =~ /($variable_identifier_regex)/g;
 	for my $input_string_variable_identifier (remove_array_duplicates(@input_string_variable_identifiers)) {
-		my ($subroutine_mapping_key) = $input_string_variable_identifier =~ /^[^a-z]*([a-z][a-z_]+[a-z])[^a-z]*$/;
-		if (defined($SUBROUTINE_MAPPINGS{$subroutine_mapping_key})) {
+		my ($subroutine_mapping_key) = $input_string_variable_identifier =~ /\[(.*)\]/;
+		if ($subroutine_mapping_key && defined($SUBROUTINE_MAPPINGS{$subroutine_mapping_key})) {
 			next;
 		}
 		elsif (exists(&$subroutine_mapping_key)) {
@@ -2757,13 +2757,13 @@ sub get_invalid_substitution_identifiers {
 			next;
 		}
 		else {
-			notify($ERRORS{'WARNING'}, 0, "neither mapping key not explicit subroutine exists in DataStructure.pm: $subroutine_mapping_key");
+			notify($ERRORS{'OK'}, 0, "neither mapping key not explicit subroutine exists in DataStructure.pm: $subroutine_mapping_key");
 			push @invalid_string_variable_identifiers, $input_string_variable_identifier;
 		}
 	}
 	
 	if (@invalid_string_variable_identifiers) {
-		notify($ERRORS{'WARNING'}, 0, "input string contains invalid substitution identifiers: " . join(', ', @invalid_string_variable_identifiers) . "\ninput string:\n$input_string");
+		notify($ERRORS{'OK'}, 0, "input string contains invalid substitution identifiers: " . join(', ', @invalid_string_variable_identifiers));
 	}
 	return @invalid_string_variable_identifiers;
 }

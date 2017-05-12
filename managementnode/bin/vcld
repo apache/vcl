@@ -148,6 +148,10 @@ sub main () {
 		delete $ENV{state};
 		delete $ENV{data};
 		
+		# Web site inserts into variable table whenever an admin or user message is modified
+		# Check if the variable exists, if so, validate all of the messages
+		check_messages_need_validating();
+		
 		my $data_age_seconds = (time - $ENV{management_node_info}{$management_node_id}{RETRIEVAL_TIME});
 		if ($data_age_seconds > 120 ) {
 			notify($ERRORS{'DEBUG'}, $LOGFILE, "retrieving management node info for '$management_node_id', cached data is stale: $data_age_seconds seconds old");
@@ -731,7 +735,7 @@ sub REAPER {
 	my $child_exit_status = $? >> 8;
 	my $signal_number = $? & 127;
 	my $dumped_core = $? & 128;
-	notify($ERRORS{'DEBUG'}, 0, "REAPER called: signal: $signal, initial value of \$?: $status_save");
+	#notify($ERRORS{'DEBUG'}, 0, "REAPER called: signal: $signal, initial value of \$?: $status_save");
 	
 	# Wait for a child processes to die
 	my $dead_pid = -1;

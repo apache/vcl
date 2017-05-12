@@ -97,6 +97,7 @@ our @EXPORT = qw(
 	character_to_ascii_value
 	check_blockrequest_time
 	check_endtimenotice_interval
+	check_messages_need_validating
 	check_ssh
 	check_time
 	clear_next_image_id
@@ -225,7 +226,6 @@ our @EXPORT = qw(
 	known_hosts
 	mail
 	makedatestring
-	message_needs_validating
 	nmap_port
 	normalize_file_path
 	notify
@@ -2847,7 +2847,13 @@ sub database_select {
 
 	# Execute the statement handle
 	if (!($select_handle->execute())) {
-		notify($ERRORS{'WARNING'}, 0, "could not execute statement on $database database, $select_statement\nerror: " . $dbh->errstr());
+		(my $select_statement_condensed = $select_statement) =~ s/[\n\s]+/ /g;
+		notify($ERRORS{'WARNING'}, 0, "failed to execute statement on $database database:\n$select_statement\n" .
+			"---\n" .
+			"copy/paste select statement:\n$select_statement_condensed\n" .
+			"---\n" .
+			"error: " . $dbh->errstr()
+		);
 		$select_handle->finish;
 		$dbh->disconnect if !defined $ENV{dbh};
 		return ();
@@ -2869,9 +2875,7 @@ sub database_select {
  Parameters  : $sql_statement, $database (optional)
  Returns     : boolean
  Description : Executes an SQL statement. If $sql_statement is an INSERT
-               statement, the ID of the row inserted is returned. For other
-               statements such as UPDATE, the number of rows updated is
-               returned.
+               statement, the ID of the row inserted is returned.
 
 =cut
 
@@ -2917,7 +2921,7 @@ sub database_execute {
 	}
 	
 	# Get the id of the last inserted record if this is an INSERT statement
-	if ($sql_statement =~ /insert/i) {
+	if ($sql_statement =~ /^\s*insert/i) {
 		my $sql_insertid = $statement_handle->{'mysql_insertid'};
 		my $sql_warning_count = $statement_handle->{'mysql_warning_count'};
 		$statement_handle->finish;
@@ -2936,6 +2940,72 @@ sub database_execute {
 	}
 
 } ## end sub database_execute
+
+#//////////////////////////////////////////////////////////////////////////////
+
+=head2 database_update
+
+ Parameters  : $update_statement, $database (optional)
+ Returns     : boolean
+ Description : Executes an SQL UPDATE statement. Returns the number of rows
+               updated. 0 is returned if the statement was successfully executed
+               but no rows were updated. Undefined is returned if the statement
+               failed to execute.
+
+=cut
+
+sub database_update {
+	my ($update_statement, $database) = @_;
+	if (!$update_statement) {
+		notify($ERRORS{'WARNING'}, 0, "SQL UPDATE statement argument not supplied");
+		return;
+	}
+	elsif ($update_statement !~ /^\s*UPDATE\s/i) {
+		notify($ERRORS{'WARNING'}, 0, "invalid SQL UPDATE statement argument, it does not begin with 'UPDATE':\n$update_statement");
+		return;
+	}
+	
+	
+	my $dbh = getnewdbh($database);
+	if (!$dbh) {
+		sleep_uninterrupted(3);
+		$dbh = getnewdbh($database);
+		if (!$dbh) {
+			notify($ERRORS{'WARNING'}, 0, "unable to obtain database handle, " . DBI::errstr());
+			return;
+		}
+	}
+	
+	# Prepare the statement handle
+	my $statement_handle = $dbh->prepare($update_statement);
+	
+	# Check the statement handle
+	if (!$statement_handle) {
+		my $error_string = $dbh->errstr() || '<unknown error>';
+		notify($ERRORS{'WARNING'}, 0, "failed to prepare SQL UPDATE statement, $update_statement, $error_string");
+		$dbh->disconnect if !defined $ENV{dbh};
+		return;
+	}
+	
+	# Execute the statement handle
+	my $result = $statement_handle->execute();
+	
+	if (!defined($result)) {
+		my $error_string = $dbh->errstr() || '<unknown error>';
+		$statement_handle->finish;
+		$dbh->disconnect if !defined $ENV{dbh};
+		notify($ERRORS{'WARNING'}, 0, "failed to execute SQL UPDATE statement: $update_statement\nerror:\n$error_string");
+		return;
+	}
+	
+	my $updated_row_count = $statement_handle->rows;
+	$statement_handle->finish;
+	$dbh->disconnect if !defined $ENV{dbh};
+	
+	$update_statement =~ s/[\n\s]+/ /g;
+	notify($ERRORS{'DEBUG'}, 0, "returning number of rows affected by UPDATE statement: $updated_row_count\n$update_statement");
+	return $updated_row_count;
+}
 
 #//////////////////////////////////////////////////////////////////////////////
 
@@ -15044,8 +15114,8 @@ sub get_collapsed_hash_reference {
 
  Parameters  : none
  Returns     : hash reference
- Description : Retrieves info for all adminmessage and usermessage entries from
-               the variable table. A hash is constructed. The keys are the
+ Description : Retrieves info for all 'adminmessage|' and 'usermessage|' entries
+               from the variable table. A hash is constructed. The keys are the
                variable.name values:
                {
                   "usermessage|endtime_reached|Global" => {
@@ -15074,7 +15144,7 @@ SELECT
 FROM
 variable
 WHERE
-variable.name REGEXP '^(admin|user)message'
+variable.name REGEXP '^(admin|user)message\\\\|'
 EOF
 
 	my @rows = database_select($select_statement);
@@ -15086,13 +15156,13 @@ EOF
 		delete $info->{$variable_name}{name};
 	}
 	
-	notify($ERRORS{'DEBUG'}, 0, "retrieved info for all admin and user messages from the variable table:\n" . format_data($info));
+	notify($ERRORS{'DEBUG'}, 0, "retrieved info for all admin and user messages from the variable table:\n" . join("\n", sort keys %$info));
 	return $info;
 }
 
 #//////////////////////////////////////////////////////////////////////////////
 
-=head2 message_needs_validating
+=head2 check_messages_need_validating
 
  Parameters  : none
  Returns     : boolean
@@ -15108,59 +15178,53 @@ EOF
                  contained in variable.value for invalid substitution
                  identifiers (strings such as [request_foo] which don't
                  correspond to a function that DataStructure.pm implements)
-               * If any invalid identifiers are found, a
-                 'usermessage_invalid_fields' variable is added with a value
-                 containing a hash reference:
+					* If any invalid identifiers are found, an 'invalidfields' key is
+					  added to variable.value containing a hash reference:
                      {
-                       "adminmessage|image_creation_started" => {
-                         "message" => [
-                           "[this_be_invalid_yo]"
-                         ]
-                       },
-                       "usermessage|endtime_reached|Local" => {
-                         "message" => [
-                           "[is_blah]"
-                         ],
-                         "subject" => [
-                           "[usr_login_id]"
-                         ]
-                       }
+								"message" => [
+								  "[is_blah]"
+								],
+								"subject" => [
+								  "[usr_login_id]"
+								]
                      }
-               
-               If no invalid fields are found, the 'usermessage_invalid_fields'
-               variable will be deleted if it was previously created.
                
                After validating is complete, the 'usermessage_needs_validating'
                variable is deleted.
 
 =cut
 
-sub message_needs_validating {
+sub check_messages_need_validating {
 	my $management_node_name = get_management_node_info()->{SHORTNAME} || hostname;
-	
 	my $validate_variable_name = 'usermessage_needs_validating';
-	my $invalid_variable_name = 'usermessage_invalid_fields';
 	
+	#...........................................................................
+	# Check if any messages have been updated
 	# Just get the id to minimize this query since it runs with every vcld daemon loop
 	my $select_id_statement = <<EOF;
 SELECT
-id
+id,
+timestamp
 FROM
 variable
 WHERE
 variable.name = '$validate_variable_name'
 EOF
-	my @id_rows = database_select($select_id_statement);
-	if (!@id_rows) {
-		notify($ERRORS{'DEBUG'}, 0, "admin and user message variables to NOT need to be validated, $validate_variable_name variable does NOT exist in the database");
+	my @select_needs_validating_rows = database_select($select_id_statement);
+	if (!@select_needs_validating_rows) {
+		#notify($ERRORS{'DEBUG'}, 0, "admin and user message variables to NOT need to be validated, $validate_variable_name variable does NOT exist in the database");
 		return 0;
 	}
-	my $validate_variable_id = $id_rows[0]->{id};
-	notify($ERRORS{'DEBUG'}, 0, "$validate_variable_name variable exists in the database, ID: $validate_variable_id, attempting to update its value to '$management_node_name'");
+	my $validate_variable_id = $select_needs_validating_rows[0]->{id};
+	my $validate_variable_timestamp = $select_needs_validating_rows[0]->{timestamp};
+	notify($ERRORS{'DEBUG'}, 0, "$validate_variable_name variable exists in the database, ID: $validate_variable_id, attempting to update variable value to '$management_node_name'");
 	
 	
-	# Set the $validate_variable_name entry's variable.value to the management node name
-	my $update_statement = <<EOF;
+	#...........................................................................
+	# Messages have been updated and need validation
+	# Try to allow only a single management node to processing the validation
+	# Set usermessage_needs_validating variable.value --> <management node name>
+	my $update_needs_validating_statement = <<EOF;
 UPDATE
 variable
 SET
@@ -15168,74 +15232,62 @@ value = '$management_node_name',
 timestamp = NOW()
 WHERE
 variable.id = $validate_variable_id
+AND variable.timestamp = '$validate_variable_timestamp'
 AND (
    variable.value = '1'
 	OR variable.value = '$management_node_name'
 )
 EOF
-	my $update_result = database_execute($update_statement);
-	if ($update_result) {
-		notify($ERRORS{'OK'}, 0, "attempted to update value of $validate_variable_name variable (ID: $validate_variable_id) to '$management_node_name', verifying the update was successful");
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to update value of $validate_variable_name variable (ID: $validate_variable_id) to '$management_node_name', another management node may have processed the verification and deleted the entry");
+	my $updated_needs_validating_rows = database_update($update_needs_validating_statement);
+	if (!defined($updated_needs_validating_rows)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to update value of $validate_variable_name variable (ID: $validate_variable_id) to '$management_node_name'");
 		return;
 	}
-	
-	# Make sure the value was updated, database_execute returns true if the syntax is valid but 0 rows were updated
-	my $verify_statement = <<EOF;
-SELECT
-*
-FROM
-variable
-WHERE
-variable.id = $validate_variable_id
-EOF
-	my @verify_rows = database_select($verify_statement);
-	if (!@verify_rows) {
-		notify($ERRORS{'WARNING'}, 0, "failed to verify the value of $validate_variable_name variable (ID: $validate_variable_id) was updated to '$management_node_name', another management node may have processed the verification and deleted the entry");
-		return;
-	}
-	if ($verify_rows[0]->{value} && $verify_rows[0]->{value} eq $management_node_name) {
-		notify($ERRORS{'DEBUG'}, 0, "admin and user message variables need to be validated, updated value of $validate_variable_name variable to '$verify_rows[0]->{value}'");
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to update the value of $validate_variable_name variable (ID: $validate_variable_id) to '$management_node_name', its current value is '$verify_rows[0]->{value}', another management node may have started processing the verification");
+	elsif (!$updated_needs_validating_rows) {
+		notify($ERRORS{'WARNING'}, 0, "no rows were affected in attempt to update value of $validate_variable_name variable (ID: $validate_variable_id) to '$management_node_name', another management node may have processed the verification and deleted the entry");
 		return 0;
 	}
+	notify($ERRORS{'OK'}, 0, "updated the value of $validate_variable_name variable to '$management_node_name'");
 	
+	
+	#...........................................................................
 	# Check all of the admin and user messages
-	my $variable_info = get_message_variable_info();
-	my $invalid_info;
-	for my $variable_name (sort keys %$variable_info) {
-		my $yaml_string_value = $variable_info->{$variable_name}{value};
+	my $message_variable_info = get_message_variable_info();
+	for my $message_variable_name (sort keys %$message_variable_info) {
+		my $yaml_string_value = $message_variable_info->{$message_variable_name}{value};
 		my $hash_reference_value = yaml_deserialize($yaml_string_value);
 		if (!defined($hash_reference_value)) {
-			notify($ERRORS{'WARNING'}, 0, "unable to validate '$variable_name' variable, YAML string could not be deserialized:\n$yaml_string_value");
+			notify($ERRORS{'WARNING'}, 0, "unable to validate '$message_variable_name' variable, YAML string could not be deserialized:\n$yaml_string_value");
 			next;
 		}
 		elsif (!ref($hash_reference_value) || ref($hash_reference_value) ne 'HASH') {
-			notify($ERRORS{'WARNING'}, 0, "unable to validate '$variable_name' variable, deserialized value is not a hash reference:\n" . format_data($hash_reference_value));
+			notify($ERRORS{'WARNING'}, 0, "unable to validate '$message_variable_name' variable, deserialized value is not a hash reference:\n" . format_data($hash_reference_value));
 			next;
 		}
 		
+		my $invalid_message_info;
 		for my $key ('subject', 'message', 'short_message') {
 			my $input_string = $hash_reference_value->{$key} || next;
-			notify($ERRORS{'DEBUG'}, 0, "validating substitution identifiers contained in '$variable_name' $key");
+			notify($ERRORS{'DEBUG'}, 0, "validating substitution identifiers contained in '$message_variable_name' $key");
 			my @invalid_substitution_identifiers = VCL::DataStructure::get_invalid_substitution_identifiers($input_string);
 			if (@invalid_substitution_identifiers) {
-				$invalid_info->{$variable_name}{$key} = \@invalid_substitution_identifiers;
+				$invalid_message_info->{$key} = \@invalid_substitution_identifiers;
 			}
+		}
+		
+		if ($invalid_message_info) {
+			notify($ERRORS{'WARNING'}, 0, "'$message_variable_name' variable's value contains invalid substitution identifiers, setting 'invalidfields' key in variable.value to:\n" . format_data($invalid_message_info));
+			$hash_reference_value->{invalidfields} = $invalid_message_info;
+			set_variable($message_variable_name, $hash_reference_value);
+		}
+		elsif (defined($hash_reference_value->{invalidfields})) {
+			# No invalid identifiers were found, 'invalidfields' was previously set for the variable, remove it
+			notify($ERRORS{'WARNING'}, 0, "'$message_variable_name' variable's value contains an 'invalidfields' key but no invalid substitution identifiers were found, removing the key");
+			delete $hash_reference_value->{invalidfields};
+			set_variable($message_variable_name, $hash_reference_value);
 		}
 	}
 	
-	if ($invalid_info) {
-		notify($ERRORS{'WARNING'}, 0, "message variables with invalid substitution identifiers found, setting '$invalid_variable_name' variable with value:\n" . format_data($invalid_info));
-		set_variable($invalid_variable_name, $invalid_info);
-	}
-	else {
-		delete_variable($invalid_variable_name);
-	}
 	delete_variable($validate_variable_name);
 	return 1;
 }
