@@ -4298,7 +4298,7 @@ sub run_ssh_command {
 	# Locate the path to the ssh binary
 	my $ssh_path;
 	if (-f '/usr/bin/ssh') {
-		$ssh_path = '/usr/bin/ssh';
+		$ssh_path = '/usr/bin/ssh -n -f';
 	}
 	elsif (-f 'C:/cygwin/bin/ssh.exe') {
 		$ssh_path = 'C:/cygwin/bin/ssh.exe';
@@ -11720,6 +11720,11 @@ EOF
 
 sub kill_child_processes {
 	my @parent_pids = @_;
+	if (!@parent_pids) {
+		notify($ERRORS{'WARNING'}, 0, "parent PID argument not supplied");
+		return;
+	}
+	
 	my $parent_pid = $parent_pids[-1];
 	my $parent_process_string = "parent PID: " . join(" > ", @parent_pids);
 	
@@ -11736,7 +11741,7 @@ sub kill_child_processes {
 	my ($exit_status, $output) = run_command($command, 1);
 	for my $line (@$output) {
 		# Make sure the line only contains a PID
-		my ($child_pid, $parent_pid, $child_command) = $line =~ /^(\d+)\s+(\d+)\s+(.*)/;
+		my ($child_pid, $parent_pid, $child_command) = $line =~ /^\s*(\d+)\s+(\d+)\s+(.*)/;
 		if (!defined($child_pid)) {
 			notify($ERRORS{'WARNING'}, 0, "$parent_process_string: output line does not contain a PID:\nline: '$line'");
 			next;
