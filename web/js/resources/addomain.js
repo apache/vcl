@@ -28,8 +28,8 @@ function addNewResource(title) {
 	dijit.byId('addeditbtn').set('label', title);
 	dojo.byId('editresid').value = 0;
 	resetEditResource();
-	dijit.byId('password').set('required', true);
-	dijit.byId('password2').set('required', true);
+	dijit.byId('password').set('value', '');
+	dijit.byId('password2').set('value', '');
 	dijit.byId('addeditdlg').show();
 }
 
@@ -46,8 +46,8 @@ function inlineEditResourceCB(data, ioArgs) {
 		dijit.byId('username').set('value', data.items.data.username);
 		dijit.byId('dnsservers').set('value', data.items.data.dnsservers);
 
-		dijit.byId('password').set('required', false);
-		dijit.byId('password2').set('required', false);
+		dijit.byId('password').set('value', '********');
+		dijit.byId('password2').set('value', 'xxxxxxxx');
 
 		dojo.byId('addeditdlgerrmsg').innerHTML = '';
 		dijit.byId('addeditdlg').show();
@@ -79,7 +79,13 @@ function saveResource() {
 			return;
 		data[fields[i]] = dijit.byId(fields[i]).get('value');
 	}
-	if(dijit.byId('password').get('value') != dijit.byId('password2').get('value')) {
+	if(dojo.byId('editresid').value != 0 &&
+	   dijit.byId('password').get('value') == '********' &&
+	   dijit.byId('password2').get('value') == 'xxxxxxxx') {
+		data['password'] = '';
+		data['password2'] = '';
+	}
+	else if(dijit.byId('password').get('value') != dijit.byId('password2').get('value')) {
 		dojo.byId('addeditdlgerrmsg').innerHTML = _('Passwords do not match');
 		return;
 	}

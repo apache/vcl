@@ -339,9 +339,9 @@ class ADdomain extends Resource {
 		                      1, '', $errmsg, '', '', '200px', helpIcon('usernamehelp')); 
 		# password
 		$errmsg = i("Password must be at least 4 characters long");
-		$h .= labeledFormItem('password', i('Password'), 'password', '^.{4,256}$', 0, '', $errmsg, '', '', '200px'); 
+		$h .= labeledFormItem('password', i('Password'), 'password', '^.{4,256}$', 1, '', $errmsg, '', '', '200px'); 
 		# confirm password
-		$h .= labeledFormItem('password2', i('Confirm Password'), 'password', '', 0, '', '', '', '', '200px'); 
+		$h .= labeledFormItem('password2', i('Confirm Password'), 'password', '', 1, '', '', '', '', '200px'); 
 		$h .= "<br>\n";
 		# dns server list
 		$ipreg = '(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)';
@@ -416,6 +416,7 @@ class ADdomain extends Resource {
 	/////////////////////////////////////////////////////////////////////////////
 	function validateResourceData() {
 		global $user;
+		$add = getContinuationVar('add', 0);
 
 		$return = array('error' => 0);
 		$errormsg = array();
@@ -456,9 +457,8 @@ class ADdomain extends Resource {
 			$errormsg[] = i("Username cannot contain single (') or double (&quot;) quotes, less than (&lt;), or greater than (&gt;) and can be from 2 to 64 characters long");
 		}
 
-		if((! empty($return['password']) ||
-		   ! empty($return['password2'])) &&
-		   ! preg_match('/^.{4,256}$/', $return['password'])) {
+		if(! preg_match('/^.{4,256}$/', $return['password']) &&
+		   ($add || ! (empty($return['password']) && empty($return['password2'])))) {
 			$return['error'] = 1;
 			$errormsg[] = i("Password must be at least 4 characters long");
 		}
