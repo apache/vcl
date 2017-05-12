@@ -1616,6 +1616,19 @@ function userLookup() {
 			print "      No additional user group permissions\n";
 		print "    </TD>\n";
 		print "  </TR>\n";
+
+		$times = getUserMaxTimes($userdata['id']);
+		$times['initial'] = getReservationLength($times['initial']);
+		$times['extend'] = getReservationLength($times['extend']);
+		$times['total'] = getReservationLength($times['total']);
+		print "  <TR>\n";
+		print "    <TH align=right style=\"vertical-align: top\">User Max Times:</TH>\n";
+		print "    <TD>\n";
+		print "      Initial: {$times['initial']}<br>\n";
+		print "      Extend: {$times['extend']}<br>\n";
+		print "      Total: {$times['total']}<br>\n";
+		print "  </TR>\n";
+
 		print "  <TR>\n";
 		print "    <TH align=right style=\"vertical-align: top\">Privileges (found somewhere in the tree):</TH>\n";
 		print "    <TD>\n";
