@@ -11807,7 +11807,7 @@ function getShibauthData($id) {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function getVariable($key, $default=NULL, $incparams=0) {
-	if(array_key_exists($key, $_SESSION['variables']))
+	if(array_key_exists($key, $_SESSION['variables']) && ! $incparams)
 		return $_SESSION['variables'][$key];
 	$query = "SELECT serialization, ";
 	if($incparams)
