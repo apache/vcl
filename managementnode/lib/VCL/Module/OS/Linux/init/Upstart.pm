@@ -81,6 +81,18 @@ our $INIT_DAEMON_ORDER = 10;
 
 our @REQUIRED_COMMANDS = ('initctl');
 
+=head2 @PROHIBITED_COMMANDS
+
+ Data type   : array
+ Values      : initctl
+ Description : List of commands that must not exist on the computer if the
+					Upstart.pm module is to be used. This array contains:
+					'chkconfig'.
+
+=cut
+
+our @PROHIBITED_COMMANDS = ('chkconfig');
+
 =head2 $SERVICE_NAME_MAPPINGS
 
  Data type   : hash reference
@@ -185,10 +197,11 @@ sub _get_service_info {
 		for my $line (@$initctl_output) {
 			my ($service_name) = $line =~ /^([^\s\t]+)/;
 			if ($service_name) {
+				#notify($ERRORS{'DEBUG'}, 0, "found '$service_name' service via '$initctl_command', line: '$line'");
 				$self->{service_info}{$service_name} = 'initctl';
 			}
 			else {
-				notify($ERRORS{'WARNING'}, 0, "failed to parse service name from '$initctl_command' line: '$line'");
+				notify($ERRORS{'WARNING'}, 0, "failed to parse service name on $computer_node_name, command: '$initctl_command', line: '$line', output:\n" . join("\n", @$initctl_output));
 			}
 		}
 	}
@@ -212,12 +225,13 @@ sub _get_service_info {
 		#    [ ? ]  apport
 		#    [ - ]  dbus
 		for my $line (@$service_output) {
-			my ($service_name) = $line =~ /(\S+)\s*$/;
-			if (!$service_name) {
-				notify($ERRORS{'WARNING'}, 0, "failed to parse service name from '$service_command' line: '$line'");
-			}
-			elsif (!defined($self->{service_info}{$service_name})) {
+			my ($service_name) = $line =~ /\]\s*(\S+)\s*$/;
+			if ($service_name) {
+				#notify($ERRORS{'DEBUG'}, 0, "found '$service_name' service via '$service_command', line: '$line'");
 				$self->{service_info}{$service_name} = 'service';
+			}
+			else {
+				#notify($ERRORS{'WARNING'}, 0, "failed to parse service name on $computer_node_name, command: '$service_command', line: '" . string_to_ascii($line) . "'\noutput:\n" . join("\n", @$service_output));
 			}
 		}
 	}

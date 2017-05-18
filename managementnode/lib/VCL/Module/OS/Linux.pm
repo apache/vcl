@@ -218,12 +218,24 @@ sub get_init_modules {
 				notify($ERRORS{'CRITICAL'}, 0, "\@REQUIRED_COMMANDS variable is not defined in the $init_perl_package Linux init daemon module");
 				next INIT_MODULE;
 			}
-			
-			for my $command (@required_commands) {
-				if (!$self->command_exists($command)) {
-					next INIT_MODULE;
+			if (@required_commands) {
+				for my $command (@required_commands) {
+					if (!$self->command_exists($command)) {
+						next INIT_MODULE;
+					}
 				}
 			}
+			
+			my @prohibited_commands = eval "@" . $init_perl_package . "::PROHIBITED_COMMANDS";
+			if (@prohibited_commands) {
+				for my $command (@prohibited_commands) {
+					if ($self->command_exists($command)) {
+						notify($ERRORS{'DEBUG'}, 0, "ignoring $init_perl_package Linux init daemon module, '$command' command exists on $computer_node_name");
+						next INIT_MODULE;
+					}
+				}
+			}
+			
 			
 			# init object successfully created, retrieve the module's $INIT_DAEMON_ORDER variable
 			# An OS may have/support multiple Linux init daemons, services may be registered under different init daemons
