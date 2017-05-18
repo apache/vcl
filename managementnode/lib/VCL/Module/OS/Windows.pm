@@ -10415,69 +10415,9 @@ sub setup_get_menu {
 				'Configure Key Management Service (KMS) Activation' => \&setup_kms_servers,
 			}
 		},
-		'Check Configuration' => {
-			'Check Windows OS Module' => \&setup_check,
-		},
 	};
 	
 	return $menu;
-}
-
-#//////////////////////////////////////////////////////////////////////////////
-
-=head2 setup_check
-
- Parameters  : none
- Returns     :
- Description : Checks various configuration settings and displays a message to
-					the user if any important settings are not configured.
-
-=cut
-
-sub setup_check {
-	my $self = shift;
-	unless (ref($self) && $self->isa('VCL::Module')) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return;
-	}
-	
-	my @messages;
-	
-	# Get a hash containing all of the information from the affiliation table
-	my $affiliation_info = get_affiliation_info();
-	if (!$affiliation_info) {
-		notify($ERRORS{'WARNING'}, 0, "unable to retrieve affiliation info");
-		return;
-	}
-	
-	my ($global_affiliation_id) = grep { $affiliation_info->{$_}{name} =~ /^global$/i } (keys %$affiliation_info);
-	if (!defined($global_affiliation_id)) {
-		print "ERROR: unable to determine global affiliation ID:\n" . format_data($affiliation_info) . "\n";
-		return;
-	}
-	
-	# Get the product key information from the database
-	my $product_key_info = $self->get_product_key_info();
-	if (!defined($product_key_info)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to retrieve product key information from the database");
-		return;
-	}
-	
-	my @product_names = keys %{$product_key_info->{$global_affiliation_id}};
-	
-	if (!grep(/Windows XP/, @product_names)) {
-		push @messages, "A Windows XP product key is not configured for the Global affiliation. Captured Windows XP images using Sysprep may fail to load if the product key is not configured.";
-	}
-	if (!grep(/Server 2003/, @product_names)) {
-		push @messages, "A Windows Server 2003 product key is not configured for the Global affiliation. Captured Windows Server 2003 images using Sysprep may fail to load if the product key is not configured.";
-	}
-	
-	for my $message (@messages) {
-		chomp $message;
-		setup_print_wrap("*** $message ***\n\n");
-	}
-	
-	return 1;
 }
 
 #//////////////////////////////////////////////////////////////////////////////
