@@ -282,7 +282,7 @@ sub reservation_successful {
 	}
 	
 	if ($request_state_name eq 'checkpoint') {
-		switch_state($request_data, 'reserved', 'checkpoint');
+		$self->state_exit('reserved', 'checkpoint');
 	}
 	else {
 		# Insert reload request data into the datbase
@@ -291,10 +291,8 @@ sub reservation_successful {
 		}
 		
 		# Switch the request state to complete, leave the computer state as is, update log ending to EOR, exit
-		switch_state($request_data, 'complete', '', 'EOR', '1');
+		$self->state_exit('complete', undef, 'EOR');
 	}
-	
-	exit;
 } ## end sub reservation_successful
 
 #//////////////////////////////////////////////////////////////////////////////
@@ -349,25 +347,8 @@ sub reservation_failed {
 			mail($sysadmin_mail_address, $admin_subject, $admin_message, $affiliation_helpaddress);
 		}
 	}
-
-	# Update the request state to maintenance, laststate to image
-	if (update_request_state($request_id, "maintenance", $request_state_name)) {
-		notify($ERRORS{'OK'}, 0, "request state set to maintenance, laststate to $request_state_name");
-	}
-	else {
-		notify($ERRORS{'CRITICAL'}, 0, "unable to set request state to maintenance, laststate to image");
-	}
-
-	# Update the computer state to maintenance
-	if (update_computer_state($computer_id, "maintenance")) {
-		notify($ERRORS{'OK'}, 0, "$computer_shortname state set to maintenance");
-	}
-	else {
-		notify($ERRORS{'CRITICAL'}, 0, "unable to set $computer_shortname state to maintenance");
-	}
-
-	notify($ERRORS{'OK'}, 0, "exiting");
-	exit;
+	
+	$self->state_exit('maintenance', 'maintenance');
 } ## end sub reservation_failed
 
 #//////////////////////////////////////////////////////////////////////////////

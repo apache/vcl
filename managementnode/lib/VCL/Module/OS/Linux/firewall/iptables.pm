@@ -1380,7 +1380,7 @@ sub chain_exists {
 
 #//////////////////////////////////////////////////////////////////////////////
 
-=head2 sanitize_nat_reservation
+=head2 nat_sanitize_reservation
 
  Parameters  : $reservation_id (optional)
  Returns     : boolean
@@ -1389,7 +1389,7 @@ sub chain_exists {
 
 =cut
 
-sub sanitize_nat_reservation {
+sub nat_sanitize_reservation {
 	my $self = shift;
 	if (ref($self) !~ /VCL::Module/i) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");

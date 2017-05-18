@@ -127,25 +127,6 @@ sub process {
 		}
 	}
 	
-	# Clean up rules on the NAT host if NAT is used
-	if ($self->nathost_os(0)) {
-		my $nathost_hostname = $self->data->get_nathost_hostname();
-		if ($self->nathost_os->firewall()) {
-			if ($self->nathost_os->firewall->can('sanitize_nat_reservation')) {
-				if (!$self->nathost_os->firewall->sanitize_nat_reservation()) {
-					notify($ERRORS{'CRITICAL'}, 0, "failed to sanitize firewall for reservation on NAT host $nathost_hostname");
-				}
-			}
-			else {
-				notify($ERRORS{'WARNING'}, 0, "unable to sanitize firewall for reservation on NAT host $nathost_hostname, " . ref($self->nathost_os->firewall) . " does not implement a 'sanitize_nat_reservation' subroutine");
-			}
-			
-		}
-		else {
-			notify($ERRORS{'WARNING'}, 0, "unable to sanitize firewall for reservation on NAT host $nathost_hostname, NAT host OS firewall object is not available");
-		}
-	}
-	
 	# Insert into computerloadlog if request state = timeout
 	if ($request_state_name =~ /timeout|deleted/) {
 		insertloadlog($reservation_id, $computer_id, $request_state_name, "reclaim: starting $request_state_name process");
