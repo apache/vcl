@@ -514,10 +514,6 @@ $SUBROUTINE_MAPPINGS{management_node_predictive_module_pretty_name} = '$ENV{mana
 $SUBROUTINE_MAPPINGS{management_node_predictive_module_description} = '$ENV{management_node_info}{predictive_description}';
 $SUBROUTINE_MAPPINGS{management_node_predictive_module_perl_package} = '$ENV{management_node_info}{predictive_perlpackage}';
 
-$SUBROUTINE_MAPPINGS{general_inuse_check} = '$ENV{management_node_info}{GENERAL_INUSE_CHECK}';
-$SUBROUTINE_MAPPINGS{server_inuse_check} = '$ENV{management_node_info}{SERVER_INUSE_CHECK}';
-$SUBROUTINE_MAPPINGS{cluster_inuse_check} = '$ENV{management_node_info}{cluster_INUSE_CHECK}';
-
 $SUBROUTINE_MAPPINGS{subroutine_mappings} = '\%SUBROUTINE_MAPPINGS';
 
 ###############################################################################
@@ -887,7 +883,7 @@ sub _automethod : Automethod {
 			# If no argument was specified get_management_node_info will return data for this management node
 			my $management_node_info_retrieved = get_management_node_info($args[0]);
 			unless ($management_node_info_retrieved) {
-				notify($ERRORS{'WARNING'}, 0, "failed to retrieve data for management node: $args[0]");
+				notify($ERRORS{'WARNING'}, 0, "failed to retrieve data for management node");
 				return sub { };
 			}
 			
