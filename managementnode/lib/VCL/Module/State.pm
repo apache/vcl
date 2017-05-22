@@ -879,12 +879,12 @@ sub state_exit {
 	$ENV{state_exit} = 1;
 	
 	my ($request_state_name_new, $computer_state_name_new, $request_log_ending) = @_;
+	notify($ERRORS{'DEBUG'}, 0, "beginning state module exit tasks, " .
+		"request state argument: " . ($request_state_name_new ? $request_state_name_new : '<not specified>') . ', ' .
+		"computer state argument: " . ($computer_state_name_new ? $computer_state_name_new : '<not specified>') . ', ' .
+		"log ending argument: " . ($request_log_ending ? $request_log_ending : '<not specified>')
+	);
 	
-	my $string = "beginning state module exit tasks\n";
-	$string .= "request state argument: " . ($request_state_name_new ? $request_state_name_new : '<not specified>') . "\n";
-	$string .= "computer state argument: " . ($computer_state_name_new ? $computer_state_name_new : '<not specified>') . "\n";
-	$string .= "log ending argument: " . ($request_log_ending ? $request_log_ending : '<not specified>');
-	notify($ERRORS{'DEBUG'}, 0, $string);
 	
 	my $calling_sub = get_calling_subroutine();
 	
@@ -898,6 +898,7 @@ sub state_exit {
 	my $request_laststate_name_old = $self->data->get_request_laststate_name();
 	my $computer_id                = $self->data->get_computer_id();
 	my $computer_shortname         = $self->data->get_computer_short_name();
+	my $nathost_hostname           = $self->data->get_nathost_hostname(0);
 
 	if ($is_parent_reservation) {
 		# If parent of a cluster request, wait for child processes to exit before switching the state
@@ -1006,8 +1007,7 @@ sub state_exit {
 	
 	# If $request_log_ending was passed this should be the end of the reservation
 	# If NAT is used, rules added to the NAT host should be removed
-	if ($self->nathost_os(0) && $self->nathost_os->firewall() && $self->nathost_os->firewall->can('nat_sanitize_reservation')) {
-		my $nathost_hostname = $self->data->get_nathost_hostname();
+	if ($nathost_hostname) {
 		my $nat_sanitize_needed = 0;
 		if ($request_log_ending) {
 			notify($ERRORS{'DEBUG'}, 0, "attempting to sanitize firewall rules created for reservation $reservation_id on NAT host $nathost_hostname, \$request_log_ending argument was specified");
@@ -1017,8 +1017,20 @@ sub state_exit {
 			notify($ERRORS{'DEBUG'}, 0, "attempting to sanitize firewall rules created for reservation $reservation_id on NAT host $nathost_hostname, next request state is '$request_state_name_new'");
 			$nat_sanitize_needed = 1;
 		}
+		
 		if ($nat_sanitize_needed) {
-			$self->nathost_os->firewall->nat_sanitize_reservation();
+			if (!$self->nathost_os(0)) {
+				notify($ERRORS{'WARNING'}, 0, "unable to sanitize firewall rules from NAT host $nathost_hostname, NAT host OS object is not available");
+			}
+			elsif (!$self->nathost_os->firewall()) {
+				notify($ERRORS{'WARNING'}, 0, "unable to sanitize firewall rules from NAT host $nathost_hostname, NAT host OS object's firewall method returned false");
+			}
+			elsif (!$self->nathost_os->firewall->can('nat_sanitize_reservation')) {
+				notify($ERRORS{'WARNING'}, 0, "unable to sanitize firewall rules from NAT host $nathost_hostname, NAT host OS firewall object does not implement a 'nat_sanitize_reservation' method");
+			}
+			else {
+				$self->nathost_os->firewall->nat_sanitize_reservation();
+			}
 		}
 	}
 	
