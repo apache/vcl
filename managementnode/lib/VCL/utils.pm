@@ -710,7 +710,7 @@ sub notify {
 	
 	# WARNING
 	if ($error == 1) {
-		my $caller_trace = get_caller_trace(6);
+		my $caller_trace = get_caller_trace();
 		$log_message = "\n---- WARNING ---- \n$log_message\n$caller_trace\n\n";
 	}
 
@@ -5575,50 +5575,42 @@ EOF
 
 =head2 update_log_ending
 
- Parameters  : $log_id, $ending
- Returns     : 0 or 1
- Description : Updates the finalend and ending fields in the log table for the
-               specified log ID
+ Parameters  : $log_id, $log_ending
+ Returns     : boolean
+ Description : Updates log.ending to the value specified by the argument and
+               log.finalend to the current time.
 
 =cut
 
 sub update_log_ending {
-	my ($log_id, $ending) = @_;
-
-	my ($package, $filename, $line, $sub) = caller(0);
-
-	# Check the passed parameter
-	if (!(defined($log_id))) {
-		notify($ERRORS{'WARNING'}, 0, "$0: log ID was not specified");
-		return ();
+	my ($log_id, $log_ending) = @_;
+	if (!defined($log_id)) {
+		notify($ERRORS{'WARNING'}, 0, "log ID argument was not specified");
+		return;
 	}
-
-	# Check the passed parameter
-	if (!(defined($ending))) {
-		notify($ERRORS{'WARNING'}, 0, "$0: ending string was not specified");
-		return ();
+	elsif (!defined($log_ending)) {
+		notify($ERRORS{'WARNING'}, 0, "log ending argument was not specified");
+		return;
 	}
-
-	my $datestring = makedatestring();
-
+	
 	# Construct the update statement
-	my $update_statement = "
-      UPDATE
-		log
-		SET
-		finalend = \'$datestring\',
-		ending = \'$ending\'
-		WHERE
-		id = $log_id
-   ";
+	my $update_statement = <<EOF;
+UPDATE
+log
+SET
+log.finalend = NOW(),
+log.ending = '$log_ending'
+WHERE
+log.id = $log_id
+EOF
 
 	# Call the database execute subroutine
 	if (database_execute($update_statement)) {
-		notify($ERRORS{'DEBUG'}, 0, "log id $log_id ending set to '$ending'");
+		notify($ERRORS{'DEBUG'}, 0, "updated log ID $log_id, set log.ending to '$log_ending', log.finalend to now");
 		return 1;
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to set log id $log_id ending to '$ending'");
+		notify($ERRORS{'WARNING'}, 0, "failed to update log ID $log_id, set log.ending to '$log_ending', log.finalend to now");
 		return 0;
 	}
 } ## end sub update_log_ending
