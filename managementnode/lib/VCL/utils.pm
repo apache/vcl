@@ -119,6 +119,7 @@ our @EXPORT = qw(
 	format_hash_keys
 	format_number
 	get_active_directory_domain_credentials
+	get_all_reservation_ids
 	get_affiliation_info
 	get_array_intersection
 	get_block_request_image_info
@@ -8231,6 +8232,24 @@ sub get_reservation_request_id {
 	notify($ERRORS{'DEBUG'}, 0, "retrieved reservation $reservation_id request ID: $request_id");
 	$ENV{reservation_request_id}{$reservation_id} = $request_id;
 	return $request_id;
+}
+
+#//////////////////////////////////////////////////////////////////////////////
+
+=head2 get_all_reservation_ids
+
+ Parameters  : none
+ Returns     : array
+ Description : Retrieves the IDs of all reservations regardless of state or any
+               other attributes.
+
+=cut
+
+sub get_all_reservation_ids {
+	my @rows = database_select('SELECT id FROM reservation');
+	my @reservation_ids = sort {$a <=> $b} map { $_->{id} } @rows;
+	notify($ERRORS{'DEBUG'}, 0, "retrieved all reservation IDs currently defined in the database: " . join(', ', @reservation_ids));
+	return @reservation_ids;
 }
 
 #//////////////////////////////////////////////////////////////////////////////

@@ -1380,6 +1380,37 @@ sub chain_exists {
 
 #//////////////////////////////////////////////////////////////////////////////
 
+=head2 get_table_chain_names
+
+ Parameters  : $table_name
+ Returns     : array
+ Description : Returns an array containing the chain names defined for a table.
+
+=cut
+
+sub get_table_chain_names {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return 0;
+	}
+	
+	my ($table_name) = @_;
+	if (!defined($table_name)) {
+		notify($ERRORS{'WARNING'}, 0, "table name argument was not specified");
+		return;
+	}
+	
+	my $computer_name = $self->data->get_computer_hostname();
+	
+	my $table_info = $self->get_table_info($table_name, 1) || return;
+	my @table_chain_names = sort keys %$table_info;
+	notify($ERRORS{'DEBUG'}, 0, "retrieved chain names defined in $table_name table on $computer_name:\n" . join("\n", @table_chain_names));
+	return @table_chain_names;
+}
+
+#//////////////////////////////////////////////////////////////////////////////
+
 =head2 nat_sanitize_reservation
 
  Parameters  : $reservation_id (optional)
@@ -1564,6 +1595,7 @@ sub get_table_info {
 	if ($self->can('get_all_direct_rules')) {
 		# Convert:
 		#    ipv4 filter vcl-pre_capture 0 --jump ACCEPT --protocol tcp --match comment --comment 'VCL: ...' --match tcp --destination-port 22
+		#    ipv4 nat POSTROUTING 0 '!' --destination 10.0.0.0/20 --jump MASQUERADE --out-interface eth1 --match comment --comment 'blah... blah'
 		# To:
 		#    -A vcl-pre_capture -p tcp -m comment --comment "VCL: ..." -m tcp --dport 22 -j ACCEPT
 		DIRECT_RULE: for my $direct_rule ($self->get_all_direct_rules()) {
@@ -1581,15 +1613,15 @@ sub get_table_info {
 				next DIRECT_RULE;
 			}
 			elsif ($rule_table ne $table_name) {
-				notify($ERRORS{'DEBUG'}, 0, "ignoring rule, table does not match '$table_name': $direct_rule");
+				#notify($ERRORS{'DEBUG'}, 0, "ignoring rule, table does not match '$table_name': $direct_rule");
 				next DIRECT_RULE;
 			}
 			
 			my $converted_rule = "-A $rule_chain $rule_specification";
-			notify($ERRORS{'DEBUG'}, 0, "converted iptables direct rule to iptables format:\n" .
-				"direct rule     : $direct_rule\n" .
-				"iptables format : $converted_rule"
-			);
+			#notify($ERRORS{'DEBUG'}, 0, "converted iptables direct rule to iptables format:\n" .
+			#	"direct rule     : $direct_rule\n" .
+			#	"iptables format : $converted_rule"
+			#);
 			push @lines, $converted_rule;
 		}
 	}
@@ -1629,6 +1661,13 @@ sub get_table_info {
 		# Remove spaces from end of rule specification
 		$rule_specification_string =~ s/\s+$//;
 		
+		#notify($ERRORS{'DEBUG'}, 0, "split iptables line:\n" .
+		#	"line          : '$line'\n" .
+		#	"command       : '$iptables_command'\n" .
+		#	"chain         : '$chain_name'\n" .
+		#	"specification : '$rule_specification_string'"
+		#);
+		
 		if ($iptables_command =~ /^(-P|--policy)/) {
 			# -P, --policy chain target (Set  the policy for the chain to the given target)
 			$table_info->{$chain_name}{policy} = $rule_specification_string;
@@ -1648,13 +1687,15 @@ sub get_table_info {
 			$rule->{rule_specification} = $rule_specification_string;
 			
 			# Parse the rule parameters
+			# Be sure to check for ! enclosed in quotes:
+			#    -A POSTROUTING '!' --destination 10.10.0.0/20 --jump MASQUERADE
 			my $parameters = {
-				'protocol'      => '\s*(\!?)\s*(-p|--protocol)\s+([^\s]+)',
-				'source'        => '\s*(\!?)\s*(-s|--source)\s+([\d\.\/]+)',
-				'destination'   => '\s*(\!?)\s*(-d|--destination)\s+([\d\.\/]+)',
-				'in-interface'  => '\s*(\!?)\s*(-i|--in-interface)\s+([^\s]+)',
-				'out-interface' => '\s*(\!?)\s*(-o|--out-interface)\s+([^\s]+)',
-				'fragment'      => '\s*(\!?)\s*(-f|--fragment)',
+				'protocol'      => '\s*\'?(\!?)\'?\s*(-p|--protocol)\s+([^\s]+)',
+				'source'        => '\s*\'?(\!?)\'?\s*(-s|--source)\s+([\d\.\/]+)',
+				'destination'   => '\s*\'?(\!?)\'?\s*(-d|--destination)\s+([\d\.\/]+)',
+				'in-interface'  => '\s*\'?(\!?)\'?\s*(-i|--in-interface)\s+([^\s]+)',
+				'out-interface' => '\s*\'?(\!?)\'?\s*(-o|--out-interface)\s+([^\s]+)',
+				'fragment'      => '\s*\'?(\!?)\'?\s*(-f|--fragment)',
 			};
 			
 			PARAMETER: for my $parameter (keys %$parameters) {
@@ -1724,7 +1765,7 @@ sub get_table_info {
 					}
 					elsif (!$target_extension_option_name) {
 						# If here, the section should be a target extension option value
-						notify($ERRORS{'WARNING'}, 0, "failed to parse iptables rule, target extension option name was not detected before this section: '$target_extension_option_section'\n" .
+						notify($ERRORS{'WARNING'}, 0, "failed to parse iptables rule on $computer_name, target extension option name was not detected before this section: '$target_extension_option_section'\n" .
 							"output line: $line\n" .
 							"preceeding target parameter: $target_parameter\n" .
 							"target value: $target"
@@ -1799,9 +1840,11 @@ sub get_table_info {
 						next MATCH_EXTENSION_SECTION;
 					}
 					else {
-						notify($ERRORS{'WARNING'}, 0, "failed to parse iptables rule, match extension module name was not detected before this section: '$match_extension_section'\n" .
-							"iptables rule specification: $rule_specification_string\n" .
-							"iptables command: $line"
+						notify($ERRORS{'WARNING'}, 0, "failed to parse iptables rule in $table_name table on $computer_name\n" .
+							"match extension module name was not detected before this section:\n" .
+							"match extension section:\n$match_extension_section\n" .
+							"iptables rule specification:\n$rule_specification_string\n" .
+							"iptables command: \n$line"
 						);
 						next LINE;
 					}
@@ -2067,6 +2110,7 @@ sub nat_configure_host {
 		return;
 	}
 	
+	$self->save_configuration();
 	notify($ERRORS{'DEBUG'}, 0, "successfully configured NAT on $computer_name");
 	return 1;
 }
@@ -2237,6 +2281,7 @@ sub nat_add_port_forward {
 		}
 	)) {
 		notify($ERRORS{'OK'}, 0, "added NAT port forward on $computer_name: $public_interface_name:$source_port --> $destination_ip_address:$destination_port");
+		$self->save_configuration();
 		return 1;
 	}
 	else {
@@ -2407,6 +2452,80 @@ sub get_inuse_chain_name {
 
 sub get_cluster_chain_name {
 	return 'vcl-cluster';
+}
+
+#//////////////////////////////////////////////////////////////////////////////
+
+=head2 nat_delete_orphaned_reservation_chains
+
+ Parameters  : none
+ Returns     : boolean
+ Description : Checks all of the chains that exist in the nat table on a NAT
+               host. Chains which don't begin with the vcld process name
+               followed by a hyphen (ex. 'vcld-') are ignored. Retrieves list of
+               all reservation IDs currently in the database. If a chain exists
+               but a corresponding reservation does not, the chain is deleted.
+
+=cut
+
+sub nat_delete_orphaned_reservation_chains {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return 0;
+	}
+	
+	my $computer_name = $self->data->get_computer_hostname();
+	
+	my @reservation_ids = get_all_reservation_ids();
+	if (!@reservation_ids) {
+		notify($ERRORS{'WARNING'}, 0, "not deleting orphaned reservation chains on $computer_name, failed to retrieve all reservation IDs from the database");
+		return;
+	}
+	my %reservation_id_hash = map { $_ => 1 } @reservation_ids;
+	
+	my @chain_names = $self->get_table_chain_names('nat');
+	my @chains_ignored;
+	my @chains_with_reservation;
+	my @chains_deleted;
+	
+	for my $chain_name (@chain_names) {
+		if ($chain_name !~ /^$PROCESSNAME-/) {
+			notify($ERRORS{'DEBUG'}, 0, "ignoring chain in nat table on $computer_name: $chain_name, name does not begin with '$PROCESSNAME-'");
+			push @chains_ignored, $chain_name;
+			next;
+		}
+		my ($chain_reservation_id) = $chain_name =~ /^$PROCESSNAME-(\d+)$/;
+		if (!defined($chain_reservation_id)) {
+			notify($ERRORS{'DEBUG'}, 0, "ignoring chain in nat table on $computer_name: $chain_name, reservation ID could not be determined from chain name, pattern: '$PROCESSNAME-<reservation ID>'");
+			push @chains_ignored, $chain_name;
+			next;
+		}
+		elsif (defined($reservation_id_hash{$chain_reservation_id})) {
+			notify($ERRORS{'DEBUG'}, 0, "ignoring chain in nat table on $computer_name: $chain_name, reservation $chain_reservation_id exists");
+			push @chains_with_reservation, $chain_name;
+			next;
+		}
+		
+		notify($ERRORS{'OK'}, 0, "deleting orphaned chain in nat table on $computer_name: $chain_name, reservation $chain_reservation_id does NOT exist");
+		if ($self->delete_chain('nat', $chain_name)) {
+			push @chains_deleted, $chain_name;
+		}
+		else {
+			return;
+		}
+	}
+	
+	if (scalar(@chains_deleted)) {
+		$self->save_configuration();
+	}
+	
+	notify($ERRORS{'DEBUG'}, 0, "checked for orphaned reservation chains on NAT host $computer_name:\n" .
+		"chains ignored (" . scalar(@chains_ignored) . "): " . join(', ', @chains_ignored) . "\n" .
+		"chains with a current reservation (" . scalar(@chains_with_reservation) . "): " . join(', ', @chains_with_reservation) . "\n" .
+		"chains deleted (" . scalar(@chains_deleted) . "): " . join(', ', @chains_deleted)
+	);
+	return 1;
 }
 
 #//////////////////////////////////////////////////////////////////////////////
