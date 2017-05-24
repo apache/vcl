@@ -725,22 +725,39 @@ my $self = shift;
 		return;
 	}
 	
-	# Make sure computer is mapped to a NAT host
-	my $nathost_id = $self->data->get_nathost_id();
-	if (!$nathost_id) {
-		notify($ERRORS{'WARNING'}, 0, "NAT host OS object not created, computer is not mapped to a NAT host");
-		return;
-	}
-	
 	my $request_data = $self->data->get_request_data();
 	my $reservation_id = $self->data->get_reservation_id();
 	
+	my $nathost_id = $self->data->get_nathost_id();
 	my $nathost_hostname = $self->data->get_nathost_hostname();
+	my $nathost_public_ip_address = $self->data->get_nathost_public_ip_address(0);
+	my $nathost_internal_ip_address = $self->data->get_nathost_internal_ip_address(0);
 	my $nathost_resource_subid = $self->data->get_nathost_resource_subid();
 	my $nathost_resource_type = $self->data->get_nathost_resource_type();
+	
+	# Make sure computer is mapped to a NAT host and all the required variables are set
+	if (!defined($nathost_id)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to create NAT host OS object, NAT host ID is not defined");
+		return;
+	}
+	elsif (!defined($nathost_hostname)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to create NAT host OS object, NAT host hostname is not defined");
+		return;
+	}
+	elsif (!defined($nathost_public_ip_address)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to create NAT host OS object, NAT host public IP address is not defined");
+		return;
+	}
+	elsif (!defined($nathost_internal_ip_address)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to create NAT host OS object, NAT host internal IP address is not defined");
+		return;
+	}
+	
+	my $nathost_os;
+	
 	if ($nathost_resource_type eq 'managementnode') {
 		notify($ERRORS{'DEBUG'}, 0, "NAT host resource type is $nathost_resource_type, returning management node OS object to control $nathost_hostname");
-		return $self->mn_os();
+		$nathost_os = $self->mn_os();
 	}
 	elsif ($nathost_resource_type eq 'computer') {
 		# Get the computer info in order to determine the OS module to use
@@ -760,15 +777,12 @@ my $self = shift;
 			notify($ERRORS{'DEBUG'}, 0, "NAT host resource type is $nathost_resource_type, creating $computer_os_package OS object to control $nathost_hostname based its current computer.currentimagerevision value");
 		}
 		
-		my $nathost_os = $self->create_object($computer_os_package, {
+		$nathost_os = $self->create_object($computer_os_package, {
 			#request_data => $request_data,
 			reservation_id => $reservation_id,
 			computer_identifier => $nathost_resource_subid
 		});
-		if ($nathost_os) {
-			return $nathost_os;
-		}
-		else {
+		if (!$nathost_os) {
 			notify($ERRORS{'WARNING'}, 0, "failed to create NAT host OS object to control $nathost_hostname");
 			return;
 		}
@@ -777,6 +791,29 @@ my $self = shift;
 		notify($ERRORS{'WARNING'}, 0, "unable to create NAT host OS object to control $nathost_hostname, NAT host resource type is not supported: $nathost_resource_type, NAT host info:\n" . format_data($self->data->get_nathost_info()));
 		return;
 	}
+	
+	# All of the following should always be configured
+	my $nathost_os_type = ref($nathost_os);
+	if (!$nathost_os->firewall()) {
+		notify($ERRORS{'WARNING'}, 0, "created $nathost_os_type NAT host OS object but firewall object is not available");
+		return;
+	}
+	
+	my $firewall_type = ref($nathost_os->firewall());
+	if (!$nathost_os->firewall->can('nat_configure_host')) {
+		notify($ERRORS{'WARNING'}, 0, "created $nathost_os_type NAT host OS object but NAT host OS's $firewall_type firewall object does NOT implement a 'nat_configure_host' method");
+		return;
+	}
+	elsif (!$nathost_os->firewall->can('nat_configure_reservation')) {
+		notify($ERRORS{'WARNING'}, 0, "created $nathost_os_type NAT host OS object but NAT host OS's $firewall_type firewall object does NOT implement a 'nat_configure_reservation' method");
+		return;
+	}
+	
+	# Set NAT host DataStructure values so they can be accessed from $self->nathost_os and $self->nathost_os->firewall
+	$nathost_os->data->set_nathost_public_ip_address($nathost_public_ip_address);
+	$nathost_os->data->set_nathost_internal_ip_address($nathost_internal_ip_address);
+	
+	return $nathost_os
 }
 
 #//////////////////////////////////////////////////////////////////////////////

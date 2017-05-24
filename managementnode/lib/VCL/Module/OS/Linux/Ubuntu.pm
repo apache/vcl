@@ -534,7 +534,7 @@ sub set_static_public_address {
 	}
 	
 	# Set the default gateway
-	if (!$self->set_default_gateway($public_default_gateway, $public_interface_name)) {
+	if (!$self->set_static_default_gateway($public_default_gateway, $public_interface_name)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to set static public IP address to $public_ip_address on $computer_name, failed to set the default gateway");
 		return;
 	}

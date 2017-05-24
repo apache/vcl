@@ -930,10 +930,10 @@ sub get_matching_rules {
 		return @matching_rules;
 	}
 	elsif (!defined($table_info->{$chain_name}{rules})) {
-		notify($ERRORS{'DEBUG'}, 0, "no rules match on $computer_name, $chain_name chain in $table_name table contains no rules");
+		notify($ERRORS{'DEBUG'}, 0, "no rules match on $computer_name, $chain_name chain in $table_name table contains no rules") if ($self->{debug});
 		return @matching_rules;
 	}
-	
+
 	# This sub was designed to accept a hash reference argument to match other
 	# parts of this module. However, we need to compare the hash reference
 	# argument to the hash reference which contains current rule info. Comparing
@@ -952,7 +952,7 @@ sub get_matching_rules {
 		notify($ERRORS{'WARNING'}, 0, "failed to determine if any rules match on $computer_name, attempt to collapse the rule specification hash reference argument produced a result with no keys:\n" . format_data($rule_specification_hashref));
 		return;
 	}
-	#notify($ERRORS{'DEBUG'}, 0, "checking if $chain_name chain in $table_name table on $computer_name has any rules matching specifications:\n" . format_data($collapsed_specification));
+	notify($ERRORS{'DEBUG'}, 0, "checking if $chain_name chain in $table_name table on $computer_name has any rules matching specifications:\n" . format_data($collapsed_specification)) if ($self->{debug});
 	
 	# Some iptables options may take multiple forms
 	# Attempt to try all forms
@@ -962,6 +962,8 @@ sub get_matching_rules {
 	};
 	
 	RULE: for my $rule (@{$table_info->{$chain_name}{rules}}) {
+		my $rule_specification = $rule->{rule_specification};
+		
 		for my $specification_key (keys %$collapsed_specification) {
 			# Ignore comments when comparing
 			if ($specification_key =~ /(comment)/i) {
@@ -997,17 +999,22 @@ sub get_matching_rules {
 				return;
 			}
 			elsif (!defined($rule_value)) {
-				#notify($ERRORS{'DEBUG'}, 0, "ignoring rule on $computer_name, it does not contain a $specification_key value");
+				notify($ERRORS{'DEBUG'}, 0, "ignoring rule on $computer_name, it does not contain a $specification_key value, rule specification: '$rule_specification'") if ($self->{debug});
 				next RULE;
 			}
 			
 			if ($rule_value ne $specification_value && $rule_value !~ /^$specification_value(\/32)?$/i) {
-				#notify($ERRORS{'DEBUG'}, 0, "ignoring rule on $computer_name, $specification_key value does not match, rule: '$rule_value', argument:'$specification_value'");
+				#notify($ERRORS{'DEBUG'}, 0, "ignoring rule on $computer_name:\n" .
+				#	"rule_specification : '$rule_specification'\n" .
+				#	"specification key  : '$specification_key'\n" .
+				#	"argument value     : '$specification_value'\n" .
+				#	"rule value         : '$rule_value'"
+				#);
 				next RULE;
 			}
 		}
 		
-		notify($ERRORS{'DEBUG'}, 0, "rule matches: " . $rule->{rule_specification});
+		notify($ERRORS{'DEBUG'}, 0, "rule matches: $rule_specification");
 		push @matching_rules, $rule;
 	}
 	
@@ -1239,56 +1246,63 @@ sub delete_chain {
 		return 0;
 	}
 	
-	my ($table_name, $chain_name) = @_;
+	my ($table_name, $chain_name_argument) = @_;
 	if (!defined($table_name)) {
 		notify($ERRORS{'WARNING'}, 0, "table name argument was not specified");
 		return;
 	}
-	elsif (!defined($chain_name)) {
+	elsif (!defined($chain_name_argument)) {
 		notify($ERRORS{'WARNING'}, 0, "chain name argument was not specified");
 		return;
 	}
 	
 	my $computer_name = $self->data->get_computer_hostname();
 	
-	my $table_info = $self->get_table_info($table_name);
-	if (!defined($table_info->{$chain_name})) {
-		notify($ERRORS{'DEBUG'}, 0, "'$chain_name' chain in '$table_name' table does not exist on $computer_name");
-		return 1;
+	my @chains_deleted;
+	my @chain_names = $self->get_table_chain_names($table_name);
+	for my $chain_name (@chain_names) {
+		if ($chain_name !~ /^$chain_name_argument$/) {
+			next;
+		}
+		
+		# Flush the chain first - delete will fail if the chain still contains rules
+		if (!$self->flush_chain($table_name, $chain_name)) {
+			notify($ERRORS{'WARNING'}, 0, "unable to delete '$chain_name' chain from '$table_name' table on $computer_name, failed to flush chain prior to deletion");
+			return;
+		}
+		
+		# Delete all rules which reference the chain being deleted or else the chain can't be deleted
+		if (!$self->delete_chain_references($table_name, $chain_name)) {
+			notify($ERRORS{'WARNING'}, 0, "unable to delete '$chain_name' chain from '$table_name' table on $computer_name, failed to delete all rules which reference the chain prior to deletion");
+			return;
+		}
+		
+		my $command = "/sbin/iptables --delete-chain $chain_name --table $table_name";
+		
+		my $semaphore = $self->get_iptables_semaphore();
+		my ($exit_status, $output) = $self->os->execute($command, 0);
+		if (!defined($output)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to execute command $computer_name: $command");
+			return;
+		}
+		elsif (grep(/Too many links/i, @$output)) {
+			notify($ERRORS{'WARNING'}, 0, "unable to delete '$chain_name' chain from '$table_name' table on $computer_name, the chain is referenced by another rule");
+			return;
+		}
+		elsif ($exit_status ne '0') {
+			notify($ERRORS{'WARNING'}, 0, "failed to delete '$chain_name' chain from '$table_name' table on $computer_name, exit status: $exit_status, command:\n$command\noutput:\n" . join("\n", @$output));
+			return;
+		}
+		else {
+			notify($ERRORS{'OK'}, 0, "deleted '$chain_name' chain from '$table_name' table on $computer_name");
+			push @chains_deleted, $chain_name;
+		}
 	}
 	
-	# Flush the chain first - delete will fail if the chain still contains rules
-	if (!$self->flush_chain($table_name, $chain_name)) {
-		notify($ERRORS{'WARNING'}, 0, "unable to delete '$chain_name' chain from '$table_name' table on $computer_name, failed to flush chain prior to deletion");
-		return;
+	if (!@chains_deleted) {
+		notify($ERRORS{'DEBUG'}, 0, "no chains exist in '$table_name' table on $computer_name matching argument: '$chain_name_argument'");
 	}
-	
-	# Delete all rules which reference the chain being deleted or else the chain can't be deleted
-	if (!$self->delete_chain_references($table_name, $chain_name)) {
-		notify($ERRORS{'WARNING'}, 0, "unable to delete '$chain_name' chain from '$table_name' table on $computer_name, failed to delete all rules which reference the chain prior to deletion");
-		return;
-	}
-	
-	my $command = "/sbin/iptables --delete-chain $chain_name --table $table_name";
-	
-	my $semaphore = $self->get_iptables_semaphore();
-	my ($exit_status, $output) = $self->os->execute($command, 0);
-	if (!defined($output)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to execute command $computer_name: $command");
-		return;
-	}
-	elsif (grep(/Too many links/i, @$output)) {
-		notify($ERRORS{'WARNING'}, 0, "unable to delete '$chain_name' chain from '$table_name' table on $computer_name, the chain is referenced by another rule");
-		return 0;
-	}
-	elsif ($exit_status ne '0') {
-		notify($ERRORS{'WARNING'}, 0, "failed to delete '$chain_name' chain from '$table_name' table on $computer_name, exit status: $exit_status, command:\n$command\noutput:\n" . join("\n", @$output));
-		return 0;
-	}
-	else {
-		notify($ERRORS{'OK'}, 0, "deleted '$chain_name' chain from '$table_name' table on $computer_name");
-		return 1;
-	}
+	return 1;
 }
 
 #//////////////////////////////////////////////////////////////////////////////
@@ -1405,7 +1419,7 @@ sub get_table_chain_names {
 	
 	my $table_info = $self->get_table_info($table_name, 1) || return;
 	my @table_chain_names = sort keys %$table_info;
-	notify($ERRORS{'DEBUG'}, 0, "retrieved chain names defined in $table_name table on $computer_name:\n" . join("\n", @table_chain_names));
+	notify($ERRORS{'DEBUG'}, 0, "retrieved chain names defined in $table_name table on $computer_name: " . join(', ', @table_chain_names)) if ($self->{debug});
 	return @table_chain_names;
 }
 
@@ -1428,7 +1442,7 @@ sub nat_sanitize_reservation {
 	}
 	
 	my $reservation_id = shift || $self->data->get_reservation_id();
-	my $reservation_chain_name = $self->get_reservation_chain_name($reservation_id);
+	my $reservation_chain_name = $self->get_nat_reservation_chain_name($reservation_id);
 	
 	if (!$self->delete_chain('nat', $reservation_chain_name)) {
 		return;
@@ -1908,7 +1922,7 @@ sub get_table_info {
 
 =head2 nat_configure_host
 
- Parameters  : $public_ip_address, $internal_ip_address
+ Parameters  : none
  Returns     : boolean
  Description : Configures the iptables firewall to pass NAT traffic.
 
@@ -1922,16 +1936,10 @@ sub nat_configure_host {
 	}
 	
 	my $computer_name = $self->data->get_computer_hostname();
+	my $public_ip_address = $self->data->get_nathost_public_ip_address();
+	my $internal_ip_address = $self->data->get_nathost_internal_ip_address();
 	
-	my ($public_ip_address, $internal_ip_address) = @_;
-	if (!$public_ip_address) {
-		notify($ERRORS{'WARNING'}, 0, "unable to automatically configure NAT, nathost public IP address argument was not specified");
-		return;
-	}
-	if (!$internal_ip_address) {
-		notify($ERRORS{'WARNING'}, 0, "unable to automatically configure NAT, nathost internal IP address argument was not specified");
-		return;
-	}
+	my $nat_host_chain_name = $self->get_nat_host_chain_name();
 	
 	# Enable IP port forwarding
 	if (!$self->os->enable_ip_forwarding()) {
@@ -1954,11 +1962,18 @@ sub nat_configure_host {
 	}
 	
 	# Check if NAT has previously been configured
-	for my $rule (@{$nat_table_info->{POSTROUTING}{rules}}) {
-		my $rule_specification_string = $rule->{rule_specification};
-		if ($rule_specification_string =~ /MASQUERADE/) {
-			notify($ERRORS{'DEBUG'}, 0, "POSTROUTING chain in nat table contains a MASQUERADE rule, assuming NAT has already been configured: $rule_specification_string");
-			return 1;
+	if (defined($nat_table_info->{$nat_host_chain_name})) {
+		notify($ERRORS{'DEBUG'}, 0, "NAT has already been configured on $computer_name, '$nat_host_chain_name' chain exists in nat table");
+		return 1;
+	}
+	else {
+		# Before VCL 2.5, dedicated NAT host chain wasn't created, check if MASQUERADE rule exists
+		for my $rule (@{$nat_table_info->{POSTROUTING}{rules}}) {
+			my $rule_specification_string = $rule->{rule_specification};
+			if ($rule_specification_string =~ /MASQUERADE/) {
+				notify($ERRORS{'DEBUG'}, 0, "POSTROUTING chain in nat table contains a MASQUERADE rule, assuming NAT has already been configured: $rule_specification_string");
+				return 1;
+			}
 		}
 	}
 	
@@ -2011,7 +2026,55 @@ sub nat_configure_host {
 		$destination_ports .= "$start_port:$end_port";
 	}
 	
+	
+	$self->create_chain('filter', $nat_host_chain_name);
+	$self->create_chain('nat', $nat_host_chain_name);
+	if (!$self->insert_rule('filter', 'INPUT',
+		{
+			'parameters' => {
+				'jump' => $nat_host_chain_name,
+			},
+			'match_extensions' => {
+				'comment' => {
+					'comment' => "VCL: jump from filter table INPUT chain to NAT host $nat_host_chain_name chain",
+				},
+			},
+		}
+	)) {
+		return;
+	}
+	
+	if (!$self->insert_rule('filter', 'FORWARD',
+		{
+			'parameters' => {
+				'jump' => $nat_host_chain_name,
+			},
+			'match_extensions' => {
+				'comment' => {
+					'comment' => "VCL: jump from filter table FORWARD chain to NAT host $nat_host_chain_name chain",
+				},
+			},
+		}
+	)) {
+		return;
+	}
+	
 	if (!$self->insert_rule('nat', 'POSTROUTING',
+		{
+			'parameters' => {
+				'jump' => $nat_host_chain_name,
+			},
+			'match_extensions' => {
+				'comment' => {
+					'comment' => "VCL: jump from nat table POSTROUTING chain to to NAT host $nat_host_chain_name chain",
+				},
+			},
+		}
+	)) {
+		return;
+	}
+	
+	if (!$self->insert_rule('nat', $nat_host_chain_name,
 		{
 			'parameters' => {
 				'out-interface' => $public_interface_name,
@@ -2020,7 +2083,7 @@ sub nat_configure_host {
 			},
 			'match_extensions' => {
 				'comment' => {
-					'comment' => "change IP of outbound $public_interface_name packets to NAT host IP address $public_ip_address",
+					'comment' => "VCL: change IP of outbound $public_interface_name packets to NAT host IP address $public_ip_address",
 				},
 			},
 		}
@@ -2028,7 +2091,7 @@ sub nat_configure_host {
 		return;
 	}
 	
-	if (!$self->insert_rule('filter', 'INPUT',
+	if (!$self->insert_rule('filter', $nat_host_chain_name,
 		{
 			'parameters' => {
 				'in-interface' => $public_interface_name,
@@ -2049,7 +2112,7 @@ sub nat_configure_host {
 		return;
 	}
 	
-	if (!$self->insert_rule('filter', 'INPUT',
+	if (!$self->insert_rule('filter', $nat_host_chain_name,
 		{
 			'parameters' => {
 				'in-interface' => $public_interface_name,
@@ -2070,7 +2133,7 @@ sub nat_configure_host {
 		return;
 	}
 	
-	if (!$self->insert_rule('filter', 'FORWARD',
+	if (!$self->insert_rule('filter', $nat_host_chain_name,
 		{
 			'parameters' => {
 				'in-interface' => $public_interface_name,
@@ -2090,7 +2153,7 @@ sub nat_configure_host {
 		return;
 	}
 	
-	if (!$self->insert_rule('filter', 'FORWARD',
+	if (!$self->insert_rule('filter', $nat_host_chain_name,
 		{
 			'parameters' => {
 				'in-interface' => $internal_interface_name,
@@ -2109,6 +2172,7 @@ sub nat_configure_host {
 	)) {
 		return;
 	}
+
 	
 	$self->save_configuration();
 	notify($ERRORS{'DEBUG'}, 0, "successfully configured NAT on $computer_name");
@@ -2143,7 +2207,7 @@ sub nat_configure_reservation {
 		return;
 	}
 	
-	my $chain_name = $self->get_reservation_chain_name();
+	my $chain_name = $self->get_nat_reservation_chain_name();
 	
 	# Check if chain for reservation has already been created
 	if (defined($nat_table_info->{$chain_name})) {
@@ -2216,7 +2280,7 @@ sub nat_add_port_forward {
 		return;
 	}
 	
-	my $chain_name = $self->get_reservation_chain_name();
+	my $chain_name = $self->get_nat_reservation_chain_name();
 	
 	$protocol = lc($protocol);
 	
@@ -2400,7 +2464,28 @@ sub get_reserved_chain_name {
 
 #//////////////////////////////////////////////////////////////////////////////
 
-=head2 get_reservation_chain_name
+=head2 get_nat_host_chain_name
+
+ Parameters  : none
+ Returns     : string
+ Description : Returns the name of the iptables chain on the NAT host containing
+               rules for NAT to function. Returns 'vcl-nat_host'.
+
+=cut
+
+sub get_nat_host_chain_name {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return 0;
+	}
+	
+	return 'vcl-nat_host';
+}
+
+#//////////////////////////////////////////////////////////////////////////////
+
+=head2 get_nat_reservation_chain_name
 
  Parameters  : $reservation_id (optional)
  Returns     : string
@@ -2409,7 +2494,7 @@ sub get_reserved_chain_name {
 
 =cut
 
-sub get_reservation_chain_name {
+sub get_nat_reservation_chain_name {
 	my $self = shift;
 	if (ref($self) !~ /VCL::Module/i) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");

@@ -851,7 +851,7 @@ sub post_load {
 				notify($ERRORS{'DEBUG'}, 0, "computer initially failed to obtain a public IP address from DHCP, executed 'ipconfig /renew', public IP address could then be determined");
 			}
 		}
-		else { 
+		else {
 			notify($ERRORS{'WARNING'}, 0, "management node failed to set a static public IP address on the computer");
 			return;
 		}
@@ -863,7 +863,7 @@ sub post_load {
 
 =cut
 
-	if (!$self->set_public_default_route()) {
+	if (!$self->set_static_default_gateway()) {
 		notify($ERRORS{'WARNING'}, 0, "unable to set persistent public default route");
 	}
 
@@ -8568,7 +8568,7 @@ EOF
 		notify($ERRORS{'OK'}, 0, "set static public IP address: $computer_public_ip_address/$subnet_mask, default gateway: $default_gateway");
 	}
 
-	$self->set_public_default_route() || return;
+	$self->set_static_default_gateway() || return;
 	
 	$self->set_static_dns_servers() || return;
 	
@@ -8747,42 +8747,27 @@ sub delete_default_routes {
 
 #//////////////////////////////////////////////////////////////////////////////
 
-=head2 set_public_default_route
+=head2 set_static_default_gateway
 
- Parameters  : None
- Returns     : If successful: true
-               If failed: false
+ Parameters  : $default_gateway (optional)
+ Returns     : boolean
  Description : Adds a persistent route to the default gateway for the public
                network.
 
 =cut
 
-sub set_public_default_route {
+sub set_static_default_gateway {
 	my $self = shift;
 	unless (ref($self) && $self->isa('VCL::Module')) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine can only be called as a VCL::Module module object method");
 		return;
 	}
 	
-	# Check the management node's DHCP IP configuration mode
-	# Get the default gateway address
-	my $default_gateway;
-	my $ip_configuration = $self->data->get_management_node_public_ip_configuration();
-	if ($ip_configuration && $ip_configuration =~ /static/i) {
-		# Static addresses used, get default gateway address configured for management node
-		$default_gateway = $self->data->get_management_node_public_default_gateway();
-	}
-	else {
-		# Dynamic addresses used, get default gateway address assigned to computer
-		$default_gateway = $self->get_public_default_gateway();
-		if (!$default_gateway) {
-			$default_gateway = $self->data->get_management_node_public_default_gateway();
-		}
-	}
+	my $computer_name = $self->data->get_computer_short_name();
 	
-	# Make sure default gateway was retrieved
+	my $default_gateway = shift || $self->get_correct_default_gateway();
 	if (!$default_gateway) {
-		notify($ERRORS{'WARNING'}, 0, "unable to retrieve default gateway address");
+		notify($ERRORS{'WARNING'}, 0, "unable to set static default gateway on $computer_name, argument was not supplied and correct default gateway IP address could not be determined");
 		return;
 	}
 	
@@ -8794,7 +8779,7 @@ sub set_public_default_route {
 	}
 	
 	# Add a persistent route to the public default gateway
-	my $route_add_command    = "route -p ADD 0.0.0.0 MASK 0.0.0.0 $default_gateway METRIC 1";
+	my $route_add_command = "route -p ADD 0.0.0.0 MASK 0.0.0.0 $default_gateway METRIC 1";
 	my ($route_add_exit_status, $route_add_output) = $self->execute($route_add_command);
 	if (!defined($route_add_output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to execute command to add persistent route to public default gateway: $default_gateway");

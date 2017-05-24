@@ -392,50 +392,67 @@ sub delete_chain {
 		return 0;
 	}
 	
-	my ($table_name, $chain_name) = @_;
+	my ($table_name, $chain_name_argument) = @_;
 	if (!defined($table_name)) {
 		notify($ERRORS{'WARNING'}, 0, "table name argument was not specified");
 		return;
 	}
-	elsif (!defined($chain_name)) {
+	elsif (!defined($chain_name_argument)) {
 		notify($ERRORS{'WARNING'}, 0, "chain name argument was not specified");
 		return;
 	}
 	
 	my $computer_name = $self->data->get_computer_hostname();
 	
-	# Delete all rules which reference the chain being deleted or else the chain can't be deleted
-	# Do this BEFORE checking if the chain exists to clean up leftover references in direct.xml
-	if (!$self->delete_chain_references($table_name, $chain_name)) {
-		notify($ERRORS{'WARNING'}, 0, "unable to delete '$chain_name' chain from '$table_name' table on $computer_name, failed to delete all rules which reference the chain prior to deletion");
-		return;
-	}
-
-	$self->remove_direct_chain_rules($table_name, $chain_name) || return;
+	my @chains_deleted;
+	my @chain_names = $self->get_table_chain_names($table_name);
+	for my $chain_name (@chain_names) {
+		if ($chain_name !~ /^$chain_name_argument$/) {
+			next;
+		}
+		
+		# Delete all rules which reference the chain being deleted or else the chain can't be deleted
+		# Do this BEFORE checking if the chain exists to clean up leftover references in direct.xml
+		if (!$self->delete_chain_references($table_name, $chain_name)) {
+			notify($ERRORS{'WARNING'}, 0, "unable to delete '$chain_name' chain from '$table_name' table on $computer_name, failed to delete all rules which reference the chain prior to deletion");
+			return;
+		}
 	
-	my $command = "firewall-cmd --permanent --direct --remove-chain ipv4 $table_name $chain_name";
-	my ($exit_status, $output) = $self->os->execute($command, 0);
-	if (!defined($output)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to execute command $computer_name: $command");
-		return;
-	}
-	elsif (grep(/NOT_ENABLED/i, @$output)) {
-		notify($ERRORS{'OK'}, 0, "'$chain_name' chain in '$table_name' does not exist on $computer_name");
-	}
-	elsif ($exit_status ne '0') {
-		notify($ERRORS{'WARNING'}, 0, "failed to delete '$chain_name' chain in '$table_name' table on $computer_name, exit status: $exit_status, command:\n$command\noutput:\n" . join("\n", @$output));
-		return 0;
-	}
-	elsif (!grep(/success/, @$output)) {
-		notify($ERRORS{'WARNING'}, 0, "potentially failed to delete '$chain_name' chain in '$table_name' table on $computer_name, output does not contain 'success', exit status: $exit_status, command:\n$command\noutput:\n" . join("\n", @$output));
-	}
-	else {
-		notify($ERRORS{'OK'}, 0, "deleted '$chain_name' chain in '$table_name' table on $computer_name");
-		#$self->save_configuration();
+		$self->remove_direct_chain_rules($table_name, $chain_name) || return;
+		
+		my $command = "firewall-cmd --permanent --direct --remove-chain ipv4 $table_name $chain_name";
+		my ($exit_status, $output) = $self->os->execute($command, 0);
+		if (!defined($output)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to execute command $computer_name: $command");
+			return;
+		}
+		elsif (grep(/NOT_ENABLED/i, @$output)) {
+			notify($ERRORS{'OK'}, 0, "'$chain_name' chain in '$table_name' does not exist on $computer_name");
+		}
+		elsif ($exit_status ne '0') {
+			notify($ERRORS{'WARNING'}, 0, "failed to delete '$chain_name' chain in '$table_name' table on $computer_name, exit status: $exit_status, command:\n$command\noutput:\n" . join("\n", @$output));
+			return 0;
+		}
+		elsif (!grep(/success/, @$output)) {
+			notify($ERRORS{'WARNING'}, 0, "potentially failed to delete '$chain_name' chain in '$table_name' table on $computer_name, output does not contain 'success', exit status: $exit_status, command:\n$command\noutput:\n" . join("\n", @$output));
+		}
+		else {
+			notify($ERRORS{'OK'}, 0, "deleted '$chain_name' chain in '$table_name' table on $computer_name");
+			#$self->save_configuration();
+		}
+		
+		if (!$self->clean_direct_xml($table_name . '.*jump\s+' . $chain_name)) {
+			return;
+		}
+		
+		notify($ERRORS{'OK'}, 0, "deleted '$chain_name' chain from '$table_name' table on $computer_name");
+		push @chains_deleted, $chain_name;
 	}
 	
-	return $self->clean_direct_xml($table_name . '.*jump\s+' . $chain_name);
-	#$self->delete_chain_references($table_name, $chain_name);
+	if (!@chains_deleted) {
+		notify($ERRORS{'DEBUG'}, 0, "no chains exist in '$table_name' table on $computer_name matching argument: '$chain_name_argument'");
+	}
+	return 1;
 }
 
 #//////////////////////////////////////////////////////////////////////////////

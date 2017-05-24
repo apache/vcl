@@ -193,10 +193,17 @@ sub post_load {
 
  Parameters  : none
  Returns     : boolean
- Description : Performs common OS steps to reserve the computer for a user. The
-               public IP address is updated if necessary. User accounts are
-               added. The 'reserve' subroutine should never open the firewall
-               for a connection. This is done by the 'grant_access' subroutine.
+ Description : Performs common OS steps to reserve the computer for a user:
+               * The public IP address is updated if necessary
+					* If the computer is mapped to a NAT host:
+					** General NAT host configuration is performed if not previously
+					   done.
+					** The NAT host is prepared for the reservation but specific port
+					   forwardings are not added.
+					* User accounts are added
+					
+					Note: The 'reserve' subroutine should never open the firewall for
+					a connection. This is done by the 'grant_access' subroutine.
 
 =cut
 
@@ -207,11 +214,31 @@ sub reserve {
 		return;
 	}
 	
+	my $computer_node_name = $self->data->get_computer_node_name();
+	my $nathost_hostname = $self->data->get_nathost_hostname(0);
+	
 	# Make sure the public IP address assigned to the computer matches the database
 	if (!$self->update_public_ip_address()) {
 		notify($ERRORS{'WARNING'}, 0, "unable to reserve computer, failed to update IP address");
 		return;
 	}
+	
+	
+	# Check if the computer is mapped to a NAT host
+	if ($nathost_hostname) {
+		# Perform general NAT host configuration - this only needs to be done once, nat_configure_host checks if it was already done 
+		if (!$self->nathost_os->firewall->nat_configure_host()) {
+			notify($ERRORS{'WARNING'}, 0, "unable to reserve $computer_node_name, failed to configure NAT on $nathost_hostname");
+			return;
+		}
+		
+		# Perform reservation-specific NAT configuration
+		if (!$self->nathost_os->firewall->nat_configure_reservation()) {
+			notify($ERRORS{'WARNING'}, 0, "unable to reserve $computer_node_name, failed to configure NAT on $nathost_hostname for this reservation");
+			return;
+		}
+	}
+	
 	
 	# Add user accounts to the computer
 	if (!$self->add_user_accounts()) {
@@ -1441,6 +1468,8 @@ sub update_public_ip_address {
 	my $image_os_type = $self->data->get_image_os_type() || return;
 	my $computer_public_ip_address = $self->data->get_computer_public_ip_address();
 	my $public_ip_configuration = $self->data->get_management_node_public_ip_configuration() || return;
+	my $nathost_hostname = $self->data->get_nathost_hostname(0);
+	my $nathost_internal_ip_address = $self->data->get_nathost_internal_ip_address(0);
 	
 	if ($public_ip_configuration =~ /dhcp/i) {
 		notify($ERRORS{'DEBUG'}, 0, "IP configuration is set to $public_ip_configuration, attempting to retrieve dynamic public IP address from $computer_node_name");
@@ -1481,6 +1510,19 @@ sub update_public_ip_address {
 			notify($ERRORS{'DEBUG'}, 0, "public IP address in computer table is already correct for $computer_node_name: $computer_public_ip_address");
 		}
 		
+		# If the computer is assigned to a NAT host, make sure default gateway is correct
+		if ($nathost_hostname && $nathost_internal_ip_address) {
+			my $current_default_gateway = $self->get_default_gateway();
+			if ($current_default_gateway) {
+				if ($current_default_gateway eq $nathost_internal_ip_address) {
+					notify($ERRORS{'DEBUG'}, 0, "static default gateway does NOT need to be set on $computer_node_name, default gateway assigned by DHCP matches NAT host internal IP address: $current_default_gateway");
+				}
+				else {
+					notify($ERRORS{'OK'}, 0, "static default gateway needs to be set on $computer_node_name, default gateway assigned by DHCP ($current_default_gateway) does NOT match NAT host internal IP address: $nathost_internal_ip_address");
+					$self->set_static_default_gateway();
+				}
+			}
+		}
 	}
 	elsif ($public_ip_configuration =~ /static/i) {
 		notify($ERRORS{'DEBUG'}, 0, "IP configuration is set to $public_ip_configuration, attempting to set public IP address");
@@ -1506,6 +1548,68 @@ sub update_public_ip_address {
 	}
 	
 	return 1;
+}
+
+#//////////////////////////////////////////////////////////////////////////////
+
+=head2 get_correct_default_gateway
+
+ Parameters  : none
+ Returns     : boolean
+ Description : Determines which IP address should be used for the computer's
+               default gateway:
+               * If the computer is configured to use a NAT host, the computer's
+                 default gateway should be set to the NAT host's internal IP
+                 address
+               * If NAT is not used and the management node profile is
+                 configured to use static public IP addresses, the computer's
+                 default gateway should be set to the management node profile's
+                 "Public Gateway" setting
+               * If NAT is not used and the management node profile is
+                 configured to use DHCP-assigned public IP addresses, the
+                 computer's current default gateway should continue to be used
+
+=cut
+
+sub get_correct_default_gateway {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module::OS/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return 0;
+	}
+	
+	my $computer_name = $self->data->get_computer_short_name();
+	my $nathost_hostname = $self->data->get_nathost_hostname(0);
+	my $nathost_internal_ip_address = $self->data->get_nathost_internal_ip_address(0);
+	my $management_node_ip_configuration = $self->data->get_management_node_public_ip_configuration();
+	
+	if ($nathost_internal_ip_address) {
+		notify($ERRORS{'DEBUG'}, 0, "$computer_name is configured to use NAT host $nathost_hostname, default gateway should be set to NAT host's internal IP address: $nathost_internal_ip_address");
+		return $nathost_internal_ip_address;
+	}
+	elsif ($management_node_ip_configuration =~ /static/i) {
+		my $management_node_public_default_gateway = $self->data->get_management_node_public_default_gateway();
+		if ($management_node_public_default_gateway) {
+			notify($ERRORS{'DEBUG'}, 0, "management node public IP mode is set to $management_node_ip_configuration, default gateway should be set to management node profile's default gateway setting: $management_node_public_default_gateway");
+			return $management_node_public_default_gateway;
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "unable to determine correct default gateway to use on $computer_name, management node public IP mode is set to $management_node_ip_configuration but management node profile's default gateway setting could not be determined");
+			return;
+		}
+	}
+	else {
+		# Management node configured to use DHCP for public IP addresses
+		# Get default gateway address assigned to computer
+		my $current_default_gateway = $self->get_public_default_gateway();
+		if ($current_default_gateway) {
+			notify($ERRORS{'DEBUG'}, 0, "management node public IP mode is set to $management_node_ip_configuration, default gateway currently configured on $computer_name should be used: $current_default_gateway");
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "unable to determine correct default gateway to use on $computer_name, management node public IP mode is set to $management_node_ip_configuration but default gateway currently configured on $computer_name could not be determined");
+			return;
+		}
+	}
 }
 
 #//////////////////////////////////////////////////////////////////////////////
@@ -3013,6 +3117,11 @@ sub remove_lines_from_file {
 	my @lines_removed;
 	my @lines_retained;
 	
+	if (!$self->file_exists($file_path)) {
+		notify($ERRORS{'DEBUG'}, 0, "lines containing '$pattern' not removed because file does NOT exist: $file_path");
+		return 1;
+	}
+	
 	my @lines = $self->get_file_contents($file_path);
 	for my $line (@lines) {
 		if ($line =~ /$pattern/) {
@@ -3664,60 +3773,7 @@ sub process_connect_methods {
 		$overwrite = 0;
 	}
 	
-	# Check if NAT is used
-	my $computer_ip_address;
-	if ($nathost_hostname) {
-		if (!$self->nathost_os(0)) {
-			notify($ERRORS{'WARNING'}, 0, "unable to process connect methods, $computer_node_name is assigned to NAT host $nathost_hostname but NAT host OS object is not available");
-			return;
-		}
-		elsif (!$self->nathost_os->firewall()) {
-			notify($ERRORS{'WARNING'}, 0, "unable to process connect methods, $computer_node_name is assigned to NAT host $nathost_hostname but NAT host OS's firewall object is not available");
-			return;
-		}
-		elsif (!$nathost_public_ip_address) {
-			notify($ERRORS{'WARNING'}, 0, "unable to process connect methods, $computer_node_name is assigned to NAT host $nathost_hostname but NAT host public IP address could not be determined from the nathost table");
-			return;
-		}
-		elsif (!$nathost_internal_ip_address) {
-			notify($ERRORS{'WARNING'}, 0, "unable to process connect methods, $computer_node_name is assigned to NAT host $nathost_hostname but NAT host internal IP address could not be determined from the nathost table");
-			return;
-		}
-		
-		# Get the IP address used to communicate between the NAT host and computer
-		$computer_ip_address = $self->get_public_ip_address();
-		if (!$computer_ip_address) {
-			notify($ERRORS{'WARNING'}, 0, "unable to process connect methods, failed to retrieve public (internal NAT) IP address of computer $computer_node_name, unable to configure NAT port forwarding");
-			return;
-		}
-		
-		# Perform general NAT configuration
-		if ($nathost_internal_ip_address) {
-			if ($self->nathost_os->firewall->can('nat_configure_host')) {
-				if (!$self->nathost_os->firewall->nat_configure_host($nathost_public_ip_address, $nathost_internal_ip_address)) {
-					notify($ERRORS{'WARNING'}, 0, "unable to process connect methods, failed to configure NAT on $nathost_hostname");
-					return;
-				}
-			}
-			else {
-				notify($ERRORS{'DEBUG'}, 0, "NAT not configured on $nathost_hostname, " . ref($self->nathost_os->firewall) . " does not implement a 'nat_configure_host' subroutine");
-			}
-		}
-		else {
-			notify($ERRORS{'DEBUG'}, 0, "unable to configure NAT, nathost.publicIPaddress is not set in the database for $nathost_hostname");
-		}
-		
-		# Perform reservation-specific NAT configuration
-		if ($self->nathost_os->firewall->can('nat_configure_reservation')) {
-			if (!$self->nathost_os->firewall->nat_configure_reservation()) {
-				notify($ERRORS{'WARNING'}, 0, "unable to process connect methods, failed to configure NAT on $nathost_hostname for this reservation");
-				return;
-			}
-		}
-		else {
-			notify($ERRORS{'DEBUG'}, 0, "NAT not configured on $nathost_hostname for this reservation, " . ref($self->nathost_os->firewall) . " does not implement a 'nat_configure_reservation' subroutine");
-		}
-	}
+	my $computer_ip_address = $self->get_public_ip_address();
 	
 	CONNECT_METHOD: for my $connect_method_id (sort keys %{$connect_method_info} ) {
 		my $connect_method = $connect_method_info->{$connect_method_id};
@@ -3805,11 +3861,7 @@ sub process_connect_methods {
 						notify($ERRORS{'WARNING'}, 0, "$computer_node_name is assigned to NAT host $nathost_hostname but connect method info does not contain NAT port information:\n" . format_data($connect_method));
 						return;
 					}
-					
-					if ($self->nathost_os->firewall->nat_add_port_forward($protocol, $nat_public_port, $computer_ip_address, $port)) {
-						notify($ERRORS{'OK'}, 0, "NAT port forwarding configured on $nathost_hostname for '$name' connect method: $nathost_public_ip_address:$nat_public_port --> $computer_ip_address:$port ($protocol)");
-					}
-					else {
+					elsif (!$self->nathost_os->firewall->nat_add_port_forward($protocol, $nat_public_port, $computer_ip_address, $port)) {
 						notify($ERRORS{'WARNING'}, 0, "failed to configure NAT port forwarding on $nathost_hostname for '$name' connect method: $nathost_public_ip_address:$nat_public_port --> $computer_ip_address:$port ($protocol)");
 						return;
 					}
@@ -5258,6 +5310,86 @@ sub unmount_nfs_shares {
 		}
 	}
 	return !$error_encountered
+}
+
+#//////////////////////////////////////////////////////////////////////////////
+
+=head2 set_config_file_parameter
+
+ Parameters  : $file_path, $parameter_name_argument, $delimiter, $parameter_value_argument
+ Returns     : boolean
+ Description : Adds a parameter/value line to a text-based config file. If a
+               line already exists that matches the parameter name, it will be
+               modified if the value is different. If no line already exists
+               that matches the parameter name, a line will be added to the end
+               of the file.
+               
+               The $delimiter argument may contain spaces if a line should be
+               formatted such as: myParam = myValue
+               
+               For this example, the $delimiter argument should be ' = '.
+
+=cut
+
+sub set_config_file_parameter {
+	my $self = shift;
+	if (ref($self) !~ /linux/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return 0;
+	}
+	
+	my ($file_path, $parameter_name_argument, $delimiter, $parameter_value_argument) = @_;
+	if (!defined($file_path)) {
+		notify($ERRORS{'WARNING'}, 0, "file path argument was not supplied");
+		return;
+	}
+	elsif (!defined($parameter_name_argument)) {
+		notify($ERRORS{'WARNING'}, 0, "parameter name argument was not supplied");
+		return;
+	}
+	elsif (!defined($delimiter)) {
+		notify($ERRORS{'WARNING'}, 0, "$delimiter character argument was not supplied");
+		return;
+	}
+	elsif (!defined($parameter_value_argument)) {
+		notify($ERRORS{'WARNING'}, 0, "parameter value argument was not supplied");
+		return;
+	}
+	
+	(my $delimiter_cleaned = $delimiter) =~ s/(^\s+|\s+$)//g;
+	
+	my @original_lines = $self->get_file_contents($file_path);
+	my @updated_lines;
+	my $parameter_found = 0;
+	for my $original_line (@original_lines) {
+		if ($original_line =~ /^\s*$parameter_name_argument\s*$delimiter_cleaned/i) {
+			if (!$parameter_found) {
+				$parameter_found = 1;
+				my $updated_line = $parameter_name_argument . $delimiter . $parameter_value_argument;
+				if ($original_line ne $updated_line) {
+					notify($ERRORS{'DEBUG'}, 0, "updating line in $file_path: '$original_line' --> '$updated_line'");
+					push @updated_lines, $updated_line;
+				}
+				else {
+					notify($ERRORS{'DEBUG'}, 0, "existing line in $file_path does not need to be modified: '$original_line'");
+					push @updated_lines, $original_line;
+				}
+			}
+			else {
+				notify($ERRORS{'DEBUG'}, 0, "omitting duplicate '$parameter_name_argument' line in $file_path: '$original_line'");
+			}
+			next;
+		}
+		else {
+			push @updated_lines, $original_line;
+		}
+	}
+	
+	if (!$parameter_found) {
+		push @updated_lines, $parameter_name_argument . $delimiter . $parameter_value_argument;
+	}
+	
+	return $self->create_text_file($file_path, join("\n", @updated_lines));
 }
 
 #//////////////////////////////////////////////////////////////////////////////

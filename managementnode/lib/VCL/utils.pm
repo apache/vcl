@@ -1228,7 +1228,7 @@ sub check_time {
 		}
 		else {
 			# End time is now or in the future
-			notify($ERRORS{'DEBUG'}, 0, "reservation end time is either right now or in the future ($end_diff_minutes), returning 0");
+			#notify($ERRORS{'DEBUG'}, 0, "reservation end time is either right now or in the future ($end_diff_minutes), returning 0");
 			return "0";
 		}
 	}    # Close if state is complete or failed

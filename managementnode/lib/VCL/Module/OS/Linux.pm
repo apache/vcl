@@ -342,9 +342,11 @@ sub firewall {
 			notify($ERRORS{'DEBUG'}, 0, "$firewall_perl_package object could not be initialized");
 		}
 		else {
-			my $address = sprintf('%x', $firewall_object);
-			notify($ERRORS{'DEBUG'}, 0, "$firewall_perl_package object created, address: $address");
 			$self->{firewall} = $firewall_object;
+			my $linux_address = sprintf('%x', $self);
+			my $firewall_object_address = sprintf('%x', $firewall_object);
+			my $self_firewall_address = sprintf('%x', $self->{firewall});
+			notify($ERRORS{'DEBUG'}, 0, "$firewall_perl_package object created for $computer_node_name, Linux object address: $linux_address, firewall object address: $firewall_object_address, \$self->{firewall} address: $self_firewall_address");
 			return $firewall_object;
 		}
 	}
@@ -433,14 +435,25 @@ sub pre_capture {
 	}
 	
 	# Configure the private and public interfaces to use DHCP
-	if (!$self->enable_dhcp($self->get_private_interface_name())) {
+	my $private_interface_name = $self->get_private_interface_name();
+	my $public_interface_name = $self->get_public_interface_name();
+	
+	if (!$self->enable_dhcp($private_interface_name)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to enable DHCP on the private interface");
 		return;
 	}
-	if (!$self->enable_dhcp($self->get_public_interface_name())) {
+	if (!$self->enable_dhcp($public_interface_name)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to enable DHCP on the public interface");
 		return;
 	}
+	
+	# Delete route files if they exist for either the private or public interface
+	$self->delete_file("/etc/sysconfig/network-scripts/route-$private_interface_name");
+	$self->delete_file("/etc/sysconfig/network-scripts/route-$public_interface_name");
+	
+	# Remove computer/reservation specific lines from network file
+	$self->remove_lines_from_file('/etc/sysconfig/network', 'HOSTNAME');
+	$self->remove_lines_from_file('/etc/sysconfig/network', 'GATEWAY');
 	
 	# Shut the computer down
 	if ($self->{end_state} =~ /off/i) {
@@ -926,7 +939,7 @@ sub set_static_public_address {
 	}
 	
 	# Set default gateway
-	if (!$self->set_default_gateway($default_gateway, $public_interface_name)) {
+	if (!$self->set_static_default_gateway($default_gateway, $public_interface_name)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to set static public IP address on $computer_name, default gateway could not be set");
 		return;
 	}
@@ -1127,42 +1140,45 @@ sub delete_default_gateway {
 
 #//////////////////////////////////////////////////////////////////////////////
 
-=head2 set_default_gateway
+=head2 set_static_default_gateway
 
- Parameters  : $default_gateway, $interface_name (optional)
+ Parameters  : $default_gateway (optional)
  Returns     : boolean
  Description : Sets the default route. If no interface argument is supplied, the
                public interface is used.
 
 =cut
 
-sub set_default_gateway {
+sub set_static_default_gateway {
 	my $self = shift;
 	if (ref($self) !~ /linux/i) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return 0;
 	}
 	
-	my $default_gateway = shift;
-	if (!defined($default_gateway)) {
-		notify($ERRORS{'WARNING'}, 0, "default gateway argument not supplied");
+	my $computer_name = $self->data->get_computer_short_name();
+	
+	my $default_gateway = shift || $self->get_correct_default_gateway();
+	if (!$default_gateway) {
+		notify($ERRORS{'WARNING'}, 0, "unable to set static default gateway on $computer_name, argument was not supplied and correct default gateway IP address could not be determined");
 		return;
 	}
 	
-	my $computer_name = $self->data->get_computer_short_name();
+	my $current_default_gateway = $self->get_public_default_gateway();
+	if ($current_default_gateway eq $default_gateway) {
+		notify($ERRORS{'OK'}, 0, "default gateway on $computer_name is already set to $current_default_gateway");
+		return 1;
+	}
 	
-	my $interface_name = shift;
-	if (!defined($interface_name)) {
-		$interface_name = $self->get_public_interface_name();
-		if (!$interface_name) {
-			notify($ERRORS{'WARNING'}, 0, "unable to set static default gateway on $computer_name, interface name argument was not supplied and public interface name could not be determined");
-			return;
-		}
+	my $interface_name = $self->get_public_interface_name();
+	if (!$interface_name) {
+		notify($ERRORS{'WARNING'}, 0, "unable to set static default gateway on $computer_name, public interface name could not be determined");
+		return;
 	}
 	
 	# Delete existing default gateway or else error will occur: SIOCADDRT: File exists
 	$self->delete_default_gateway();
-
+	
 	my $command = "/sbin/route add default gw $default_gateway metric 0 $interface_name";
 	my ($exit_status, $output) = $self->execute($command);
 	if (!defined($output)) {
@@ -1176,8 +1192,25 @@ sub set_default_gateway {
 	
 	# Create a route file so default route persists across reboots
 	my $route_file_path = "/etc/sysconfig/network-scripts/route-$interface_name";
+	# For testing:
+	#$self->delete_file($route_file_path);
 	my $route_file_contents = "default via $default_gateway dev $interface_name";
 	$self->create_text_file($route_file_path, $route_file_contents);
+	
+	# Adding a route-* file does not prevent computer from obtaining a default route via DHCP
+	# Add a 'DEFROUTE=no' line to the ifcfg-<interface> file
+	my $interface_file = "/etc/sysconfig/network-scripts/ifcfg-$interface_name";
+	# For testing:
+	#$self->remove_lines_from_file($interface_file, 'DEFROUTE');
+	if ($self->file_exists($interface_file)) {
+		$self->set_config_file_parameter($interface_file, 'DEFROUTE', '=', 'no');
+	}
+	
+	# Note: leave for future reference, this doesn't seem to work on CentOS/RHEL 7
+	# Add a 'GATEWAY=' line to /etc/sysconfig/network
+	#my $network_file = "/etc/sysconfig/network";
+	# For testing: $self->remove_lines_from_file($network_file, 'GATEWAY');
+	#$self->set_config_file_parameter($network_file, 'GATEWAY', '=', $default_gateway);
 	
 	notify($ERRORS{'OK'}, 0, "set default gateway on $computer_name to $default_gateway, interface: $interface_name");
 	return 1;
@@ -5284,8 +5317,8 @@ sub get_port_connection_info {
 
  Parameters  : none
  Returns     : boolean
- Description : Enables IP forwarding by executing:
-               echo 1 > /proc/sys/net/ipv4/ip_forward
+ Description : Adds 'net.ipv4.ip_forward=1' to /etc/sysctl.conf if it doesn't
+               already exist. Executes 'sysctl -p' to apply the setting.
 
 =cut
 
@@ -5298,19 +5331,25 @@ sub enable_ip_forwarding {
 	
 	my $computer_node_name = $self->data->get_computer_node_name();
 	
-	my $command = "echo 1 > /proc/sys/net/ipv4/ip_forward";
-	my ($exit_status, $output) = $self->execute($command, 0);
+	my $sysctl_conf_path = '/etc/sysctl.conf';
+	$self->set_config_file_parameter($sysctl_conf_path, 'net.ipv4.ip_forward', '=', '1');
+	
+	my $command = "sysctl -p";
+	my ($exit_status, $output) = $self->execute($command);
 	if (!defined($output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to execute command to enable IP forwarding on $computer_node_name: $command");
 		return;
 	}
-	elsif ($exit_status ne '0') {
-		notify($ERRORS{'WARNING'}, 0, "failed to enable IP forwarding on $computer_node_name, command: '$command', exit status: $exit_status, output:\n" . join("\n", @$output));
-		return 0;
+	
+	# Output should contain:
+	# net.ipv4.ip_forward = 1
+	if ($exit_status eq '0' || grep(/net.ipv4.ip_forward.*1/, @$output)) {
+		notify($ERRORS{'OK'}, 0, "IP forwarding is enabled on $computer_node_name:\n" . join("\n", @$output));
+		return 1;
 	}
 	else {
-		notify($ERRORS{'OK'}, 0, "verified IP forwarding is enabled on $computer_node_name");
-		return 1;
+		notify($ERRORS{'WARNING'}, 0, "failed to enable IP forwarding on $computer_node_name, command: '$command', exit status: $exit_status, output:\n" . join("\n", @$output));
+		return 0;
 	}
 }
 
