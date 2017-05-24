@@ -3739,6 +3739,73 @@ function XMLRPCfinishBaseImageCapture($ownerid, $resourceid, $virtual=1) {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
+/// \fn XMLRPCupdateSecrets()
+///
+/// \return an array with at least one index named 'status' which will have
+/// one of these values:\n
+/// \b error - error occurred; there will be 2 additional elements in the array:\n
+/// \li \b errorcode - error number\n
+/// \li \b errormsg - error string\n
+/// \b success - indicates all secrets were successfully
+/// updated\n
+/// \b noupdate - indicates no missing values were found to be added to
+/// cryptsecret table
+///
+/// \brief checks for any entries in cryptkey that don't have corresponding
+/// entries in cryptsecret and adds them to cryptsecret
+///
+////////////////////////////////////////////////////////////////////////////////
+function XMLRPCupdateSecrets() {
+	global $user, $xmlrpcBlockAPIUsers;
+	if(! in_array($user['id'], $xmlrpcBlockAPIUsers)) {
+		return array('status' => 'error',
+		             'errorcode' => 99,
+		             'errormsg' => 'access denied for call to XMLRPCupdateSecrets');
+	}
+	# query to find any cryptkeys that don't have values in cryptsecret
+	$self = "{$_SERVER['SERVER_ADDR']}::{$_SERVER['SERVER_NAME']}";
+	$mycryptkeyid = getCryptKeyID($self, 'web');
+	if($mycryptkeyid === NULL) {
+		return array('status' => 'error',
+		             'errorcode' => 100,
+		             'errormsg' => 'Encryption key missing for this web server');
+	}
+	$query = "SELECT ck.id as cryptkeyid, "
+	       .        "ck.pubkey as cryptkey, "
+	       .        "s.id as secretid, "
+	       .        "cs.cryptsecret, "
+	       .        "mycs.cryptsecret AS mycryptsecret "
+	       . "FROM cryptkey ck "
+	       . "JOIN (SELECT DISTINCT secretid AS id FROM cryptsecret) AS s "
+	       . "JOIN (SELECT cryptsecret, secretid FROM cryptsecret WHERE cryptkeyid = $mycryptkeyid) AS mycs "
+	       . "LEFT JOIN cryptsecret cs ON (s.id = cs.secretid AND ck.id = cs.cryptkeyid) "
+	       . "WHERE mycs.secretid = s.id AND "
+	       .       "cs.id IS NULL";
+	$qh = doQuery($query);
+	$values = array();
+	while($row = mysql_fetch_assoc($qh)) {
+		# decrypt secret
+		$secret = decryptSecret($row['mycryptsecret']);
+		# encrypt secret with any missing cryptkeys
+		$encsecret = encryptSecret($secret, $row['cryptkey']);
+		# save to cryptsecret
+		$values[] = "({$row['cryptkeyid']}, {$row['secretid']}, '$encsecret')";
+	}
+	if(! empty($values)) {
+		$allvalues = implode(',', $values);
+		$query = "INSERT INTO cryptsecret "
+		       .       "(cryptkeyid, "
+		       .       "secretid, "
+		       .       "cryptsecret) "
+		       . "VALUES $allvalues";
+		doQuery($query);
+		return array('status' => 'success');
+	}
+	return array('status' => 'noupdate');
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
 /// \fn XMLRPCgetOneClickParams($oneclickid)
 ///
 /// \param $oneclickid - id of the one click

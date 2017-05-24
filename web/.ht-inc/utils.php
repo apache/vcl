@@ -19,7 +19,6 @@
 require_once(".ht-inc/secrets.php");
 @include_once("itecsauth/itecsauth.php");
 require_once(".ht-inc/authentication.php");
-require_once(".ht-inc/phpseclib/Crypt/AES.php");
 require_once(".ht-inc/spyc-0.5.1/Spyc.php");
 if(file_exists(".ht-inc/vcldocs.php"))
 	require_once(".ht-inc/vcldocs.php");
@@ -63,7 +62,7 @@ function initGlobals() {
 	global $passwdArray, $skin, $contdata, $lastmode, $inContinuation;
 	global $ERRORS, $actions;
 	global $affilValFunc, $addUserFunc, $updateUserFunc, $addUserFuncArgs;
-	global $uniqid;
+	global $uniqid, $cryptkey, $ivsize;
 
 	define("SECINDAY", 86400);
 	define("SECINWEEK", 604800);
@@ -77,6 +76,20 @@ function initGlobals() {
 		$tmp = explode('.', $pathdata[1]);
 		$_GET["mode"] = $tmp[0];
 	}
+
+	if(function_exists('openssl_encrypt')) {
+		define('USE_PHPSECLIB', 0);
+		$crytpkey = base64_decode($cryptkey);
+	}
+	else {
+		define('USE_PHPSECLIB', 1);
+		require_once(".ht-inc/phpseclib/Crypt/Base.php");
+		require_once(".ht-inc/phpseclib/Crypt/Rijndael.php");
+		require_once(".ht-inc/phpseclib/Crypt/AES.php");
+		require_once(".ht-inc/phpseclib/Crypt/Random.php");
+	}
+	$ivsize = 16;
+
 	$mode = processInputVar("mode", ARG_STRING, 'main');
 	$inContinuation = 0;
 	$contdata = array();
@@ -593,6 +606,87 @@ function checkAccess() {
 			}
 		}
 	}
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn checkCryptkey()
+///
+/// \brief checks for an entry in cryptkey; if missing, generates keys
+///
+////////////////////////////////////////////////////////////////////////////////
+function checkCryptkey() {
+	global $pemkey;
+	$reg = "|" . SCRIPT . "$|";
+	$filebase = preg_replace($reg, '', $_SERVER['SCRIPT_FILENAME']);
+	$filebase .= "/.ht-inc/cryptkey";
+	$idfile = "$filebase/cryptkeyid";
+
+	if(is_file($idfile)) {
+		$fh = fopen($idfile, 'r');
+		$id = fread($fh, 50);
+		fclose($fh);
+		$_id = mysql_real_escape_string($id);
+	
+		$query = "SELECT id "
+		       . "FROM cryptkey  "
+		       . "WHERE id = '$_id'";
+		$qh = doQuery($query);
+		if($row = mysql_fetch_assoc($qh))
+			return;
+	}
+
+	# no id file or no matching entry in cryptkey, create new key
+	if(! is_writable($filebase))
+		return;
+
+	$keyfile = "$filebase/private.pem";
+
+	$args = array('private_key_bits' => 4096,
+	              'private_key_type' => OPENSSL_KEYTYPE_RSA,
+	              'digest_alg' => 'sha512');
+	# open and lock id file before generating key
+	$fh = fopen($idfile, 'w');
+	if(! flock($fh, LOCK_EX | LOCK_NB)) {
+		# assume collision with another web server generating a key
+		# return because when the key is needed, it should exist from
+		# the other server
+		fclose($fh);
+		return;
+	}
+	# generate key pair
+	$prikeyobj = openssl_pkey_new($args);
+	# create and secure private key file
+	touch($keyfile);
+	chmod($keyfile, 0600);
+	# save private key to file
+	$rc = openssl_pkey_export_to_file($prikeyobj, $keyfile, $pemkey);
+	if(! $rc) {
+		# release lock, close and delete file, return
+		flock($fh, LOCK_UN);
+		fclose($fh);
+		unlink($keyfile);
+		return;
+	}
+	# save public key to database
+	$tmp = openssl_pkey_get_details($prikeyobj);
+	$pubkey = $tmp['key'];
+	$query = "INSERT INTO cryptkey "
+	       .        "(hostid, "
+	       .        "hosttype, "
+	       .        "pubkey) "
+	       . "SELECT COALESCE(MAX(hostid), 0) + 1, "
+	       .        "'web', "
+	       .        "'$pubkey' "
+	       . "FROM cryptkey "
+	       . "WHERE hosttype = 'web'";
+	doQuery($query);
+	$cryptkeyid = dbLastInsertID();
+	# save cryptkey id to file
+	fwrite($fh, $cryptkeyid);
+	# unlock file
+	flock($fh, LOCK_UN);
+	fclose($fh);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -2555,61 +2649,71 @@ function getKey($data) {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
-/// \fn encryptData($data)
+/// \fn encryptData($data, $cryptkey)
 ///
 /// \param $data - a string
+/// \param $cryptkey - key for encryption
 ///
-/// \return an encrypted form of the string that has been base64 encoded
+/// \return an encrypted form of $data that has been base64 encoded or NULL if
+/// encryption failed
 ///
-/// \brief encrypts $data with blowfish and base64 encodes it
+/// \brief encrypts $data with AES and base64 encodes it; IV is generated and
+/// prepended to encrypted data before base64 encoding
 ///
 ////////////////////////////////////////////////////////////////////////////////
-function encryptData($data) {
-	global $cryptkey, $cryptiv;
+function encryptData($data, $cryptkey) {
+	global $ivsize;
 	if(! $data)
 		return false;
-	if(! function_exists('openssl_encrypt')) {
+	if(USE_PHPSECLIB) {
+		$iv = crypt_random_string($ivsize);
 		$aes = new Crypt_AES();
 		$aes->setKey($cryptkey);
+		$aes->setIV($iv);
+		$aes->setKeyLength(256);
 		$cryptdata = $aes->encrypt($data);
 	}
 	else {
-		static $key;
-		static $iv;
-		$key = base64_decode($cryptkey);
-		$iv = base64_decode($cryptiv);
-		$cryptdata = openssl_encrypt($data, 'AES-128-CBC', $key, 1, $iv);
+		$iv = openssl_random_pseudo_bytes($ivsize);
+		$cryptdata = openssl_encrypt($data, 'AES-256-CBC', $cryptkey, 1, $iv);
+		if($cryptdata === FALSE)
+			return NULL;
 	}
+	$cryptdata = $iv . $cryptdata;
 	return trim(base64_encode($cryptdata));
 }
  
 ////////////////////////////////////////////////////////////////////////////////
 ///
-/// \fn decryptData($data)
+/// \fn decryptData($data, $cryptkey)
 ///
 /// \param $data - a string
+/// \param $cryptkey - key for decryption
 ///
-/// \return decrypted form of $data
+/// \return decrypted form of $data or false on error
 ///
-/// \brief base64 decodes $data and decrypts it
+/// \brief base64 decodes $data and decrypts it; $data is split into IV and
+/// encrypted data after base64 decoding
 ///
 ////////////////////////////////////////////////////////////////////////////////
-function decryptData($data) {
-	global $cryptkey, $cryptiv;
+function decryptData($data, $cryptkey) {
+	global $ivsize;
 	if(! $data)
 		return false;
 	$cryptdata = base64_decode($data);
-	if(! function_exists('openssl_encrypt')) {
+	$iv = substr($cryptdata, 0, $ivsize);
+	$cryptdata = substr($cryptdata, $ivsize);
+	if(USE_PHPSECLIB) {
 		$aes = new Crypt_AES();
 		$aes->setKey($cryptkey);
+		$aes->setIV($iv);
+		$aes->setKeyLength(256);
 		$decryptdata = $aes->decrypt($cryptdata);
 	}
 	else {
-		static $key;
-		static $iv;
-		$key = base64_decode($cryptkey);
-		$iv = base64_decode($cryptiv);
-		$decryptdata = openssl_decrypt($cryptdata, 'AES-128-CBC', $key, 1, $iv);
+		$decryptdata = openssl_decrypt($cryptdata, 'AES-256-CBC', $cryptkey, 1, $iv);
+		if($decryptdata === FALSE)
+			return false;
 	}
 	return trim($decryptdata);
 }
@@ -2640,6 +2744,260 @@ function encryptDataAsymmetric($data, $public_key){
 
 	$hexformatted = unpack("H*hex", $encrypted);
 	return $hexformatted['hex'];
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn encryptDBdata($data, $secretid)
+///
+/// \param $data - a string
+/// \param $secretid - secretid from cryptsecret table
+///
+/// \return base64-encoded, encrypted form of $data or NULL on error
+///
+/// \brief encrypts $data with secret key from cryptsecret table
+///
+////////////////////////////////////////////////////////////////////////////////
+function encryptDBdata($data, $secretid) {
+	# fetch cryptsecret from db
+	$cryptkeyid = getCryptKeyID();
+	if($cryptkeyid == NULL)
+		return NULL;
+	$query = "SELECT cryptsecret "
+	       . "FROM cryptsecret "
+	       . "WHERE cryptkeyid = $cryptkeyid AND "
+	       .       "secretid = $secretid";
+	$qh = doQuery($query);
+	if(! ($row = mysql_fetch_assoc($qh)))
+		return NULL;
+	$secret = decryptSecret($row['cryptsecret']);
+	if($secret === NULL)
+		return NULL;
+	# encrypt $data using secret
+	if(USE_PHPSECLIB)
+		$iv = crypt_random_string(32);
+	else {
+		$iv = openssl_random_pseudo_bytes(32);
+		if($iv === FALSE)
+			return NULL;
+	}
+	$edata = encryptData($data, $secret, $iv);
+	return $edata;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn decryptSecret($encsecret)
+///
+/// \param $encsecret - encrypted secret
+///
+/// \return string that is decrypted form of $encsecret or NULL on error
+///
+/// \brief decrypts $encsecret using web server's secret key
+///
+////////////////////////////////////////////////////////////////////////////////
+function decryptSecret($encsecret) {
+	global $pemkey;
+	$cryptsecret = base64_decode($encsecret);
+	# read private key from file
+	$reg = "|" . SCRIPT . "$|";
+	$file = preg_replace($reg, '', $_SERVER['SCRIPT_FILENAME']);
+	$file .= "/.ht-inc/cryptkey/private.pem";
+	$prikey = openssl_pkey_get_private("file://$file", $pemkey);
+	# decrypt secret using private key
+	$savehdlr = set_error_handler(create_function('', ''));
+	if(! openssl_private_decrypt($cryptsecret, $secret, $prikey, OPENSSL_PKCS1_OAEP_PADDING)) {
+		set_error_handler($savehdlr);
+		return NULL;
+	}
+	return $secret;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn getSecretID($table, $field, $recordid)
+///
+/// \param $table - name of a database table having a secret
+/// \param $field - name of field in table referencing secretid
+/// \param $recordid - id for record in table
+///
+/// \return id corresponding to a cryptsecret.secretid value; if value not found
+/// and function failed to generate a new secret ID, NULL is returned
+///
+/// \brief gets the id for a cryptsecret.secretid entry from a table containing
+/// an encrypted value; if no entry is found, a new secret is generated and
+/// saved in cryptsecret
+///
+////////////////////////////////////////////////////////////////////////////////
+function getSecretID($table, $field, $recordid) {
+	$query = "SELECT $field FROM $table WHERE id = $recordid";
+	$qh = doQuery($query);
+	if(($row = mysql_fetch_row($qh)) && $row[0] != 0)
+		return $row[0];
+
+	# generate secret key
+	if(USE_PHPSECLIB)
+		$key = crypt_random_string(32);
+	else {
+		$key = openssl_random_pseudo_bytes(32);
+		if($key === FALSE)
+			return NULL;
+	}
+	# encrypt with my public key
+	$cryptkeyid = getCryptKeyID();
+	if($cryptkeyid === NULL)
+		return NULL;
+	$encdata = encryptSecret($key, $cryptkeyid);
+	if($encdata === NULL)
+		return NULL;
+	# write to cryptsecret
+	$query = "INSERT INTO cryptsecret "
+	       .       "(cryptkeyid, "
+	       .       "secretid, "
+	       .       "cryptsecret) "
+	       . "SELECT $cryptkeyid, "
+	       .        "COALESCE(MAX(secretid), 0) + 1, "
+	       .        "'$encdata' "
+	       . "FROM cryptsecret";
+	doQuery($query);
+	$id = dbLastInsertID();
+	$query = "SELECT secretid FROM cryptsecret WHERE id = $id";
+	$qh = doQuery($query);
+	if(! ($row = mysql_fetch_assoc($qh)))
+		return NULL;
+	# encrypt with all other public keys and write to cryptsecret
+	encryptSecrets($key, $row['secretid'], $cryptkeyid);
+	return $row['secretid'];
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn deleteSecrets($secretid)
+///
+/// \param $secretid - secretid value corresponding to cryptsecret.secretid
+///
+/// \brief deletes all entries in cryptsecret for $secretid
+///
+////////////////////////////////////////////////////////////////////////////////
+function deleteSecrets($secretid) {
+	$query = "DELETE FROM cryptsecret WHERE secretid = $secretid";
+	doQuery($query);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn getCryptKeyID()
+///
+/// \return id from cryptkey table corresponding to this web server's file
+/// space; returns NULL on error
+///
+/// \brief reads id from cryptkeyid file in web server's file space; if not
+/// found, calls checkCryptkey to generate a key and then returns it
+///
+////////////////////////////////////////////////////////////////////////////////
+function getCryptKeyID() {
+	$reg = "|" . SCRIPT . "$|";
+	$filebase = preg_replace($reg, '', $_SERVER['SCRIPT_FILENAME']);
+	$filebase .= "/.ht-inc/cryptkey";
+	$idfile = "$filebase/cryptkeyid";
+
+	static $create = 1; # set flag so that recursion only goes one level deep
+
+	if(! is_file($idfile)) {
+		if($create) {
+			$create = 0; # set to 0, subsequent calls to function should never need to create a key
+			checkCryptkey();
+			return getCryptKeyID();
+		}
+		else
+			return NULL;
+	}
+
+	$fh = fopen($idfile, 'r');
+	$id = fread($fh, 50);
+	fclose($fh);
+	$_id = mysql_real_escape_string($id);
+
+	$query = "SELECT id "
+	       . "FROM cryptkey  "
+	       . "WHERE id = '$_id'";
+	$qh = doQuery($query);
+	if($row = mysql_fetch_assoc($qh))
+		return $row['id'];
+
+	if($create) {
+		$create = 0; # set to 0, subsequent calls to function should never need to create a key
+		checkCryptkey();
+		return getCryptKeyID();
+	}
+
+	return NULL;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn encryptSecret($secret, $cryptkey)
+///
+/// \param $secret - secret key to encrypt
+/// \param $cryptkey - id from cryptkey table for public key to use or public
+/// key itself
+///
+/// \return encrypted data; returns NULL on error
+///
+/// \brief encrypts $secret with key for $cryptkeyid
+///
+////////////////////////////////////////////////////////////////////////////////
+function encryptSecret($secret, $cryptkey) {
+	if(is_numeric($cryptkey)) {
+		$query = "SELECT pubkey "
+		       . "FROM cryptkey "
+		       . "WHERE id = $cryptkey";
+		$qh = doQuery($query);
+		if(! ($row = mysql_fetch_assoc($qh)))
+			return NULL;
+		$cryptkey = $row['pubkey'];
+	}
+	$savehdlr = set_error_handler(create_function('', ''));
+	if(@openssl_public_encrypt($secret, $encdata, $cryptkey, OPENSSL_PKCS1_OAEP_PADDING)) {
+		set_error_handler($savehdlr);
+		$b64data = base64_encode($encdata);
+		return $b64data;
+	}
+	set_error_handler($savehdlr);
+	return NULL;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn encryptSecrets($secret, $secretid, $skipkeyid=0)
+///
+/// \param $secret - secret key to encrypt
+/// \param $secretid - id for secret from cryptsecret.secretid
+/// \param $skipkeyid - (optional, default=0) a cryptkey.id to skip (used if
+/// calling from a function that just encrypted $secret for a given cryptkey)
+///
+/// \brief encrypts $secret using any existing cryptkeys in database
+///
+////////////////////////////////////////////////////////////////////////////////
+function encryptSecrets($secret, $secretid, $skipkeyid=0) {
+	$query = "SELECT id, pubkey FROM cryptkey WHERE id != $skipkeyid";
+	$qh = doQuery($query);
+	$values = array();
+	while($row = mysql_fetch_assoc($qh)) {
+		$cryptsecret = encryptSecret($secret, $row['pubkey']);
+		if($cryptsecret === NULL)
+			continue;
+		$values[] = "({$row['id']}, $secretid, '$cryptsecret')";
+	}
+	if(! empty($values)) {
+		$allvalues = implode(',', $values);
+		$query = "INSERT INTO cryptsecret "
+		       .        "(cryptkeyid, "
+		       .        "secretid, "
+		       .        "cryptsecret) "
+		       . "VALUES $allvalues";
+		doQuery($query);
+	}
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -8871,7 +9229,8 @@ function getNATports($resid) {
 /// \b owner\n
 /// \b domaindnsname\n
 /// \b username\n
-/// \b dnsservers
+/// \b dnsservers\n
+/// \b secretid
 ///
 /// \brief builds an array of AD domains
 ///
@@ -8884,7 +9243,8 @@ function getADdomains($addomainid=0) {
 	       .        "CONCAT(u.unityid, '@', a.name) AS owner, "
 	       .        "ad.domainDNSName AS domaindnsname, "
 	       .        "ad.username, "
-	       .        "ad.dnsServers AS dnsservers "
+	       .        "ad.dnsServers AS dnsservers, "
+	       .        "ad.secretid "
 	       . "FROM addomain ad, "
 	       .      "affiliation a, "
 	       .      "user u, "
@@ -11549,7 +11909,7 @@ function getENUMvalues($table, $field) {
 function addContinuationsEntry($nextmode, $data=array(), $duration=SECINWEEK,
                                $deleteFromSelf=1, $multicall=1,
                                $repeatProtect=0) {
-	global $user, $mode, $inContinuation, $continuationid;
+	global $user, $mode, $inContinuation, $continuationid, $cryptkey;
 	if($repeatProtect)
 		$data['______parent'] = $continuationid;
 	$serdata = serialize($data);
@@ -11617,7 +11977,7 @@ function addContinuationsEntry($nextmode, $data=array(), $duration=SECINWEEK,
 	$salt = generateString(8);
 	$now = time();
 	$data = "$salt:$contid:{$user['id']}:$now";
-	$edata = encryptData($data);
+	$edata = encryptData($data, $cryptkey);
 	$udata = urlencode($edata);
 	return $udata;
 }
@@ -11638,12 +11998,12 @@ function addContinuationsEntry($nextmode, $data=array(), $duration=SECINWEEK,
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function getContinuationsData($data) {
-	global $user, $continuationid, $noHTMLwrappers;
+	global $user, $continuationid, $noHTMLwrappers, $cryptkey;
 	if(array_key_exists('continuation', $_POST))
 		$edata = urldecode($data);
 	else
 		$edata = $data;
-	if(! ($ddata = decryptData($edata)))
+	if(! ($ddata = decryptData($edata, $cryptkey)))
 		return array('error' => 'invalid input');
 	$items = explode(':', $ddata);
 	$now = time();
@@ -12079,6 +12439,7 @@ function xmlrpccall() {
 	xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCaddImageGroupToComputerGroup", "xmlRPChandler");
 	xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCremoveImageGroupFromComputerGroup", "xmlRPChandler");
 	xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCfinishBaseImageCapture", "xmlRPChandler");
+	xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCupdateSecrets", "xmlRPChandler");
 
 	print xmlrpc_server_call_method($xmlrpc_handle, $HTTP_RAW_POST_DATA, '');
 	xmlrpc_server_destroy($xmlrpc_handle);

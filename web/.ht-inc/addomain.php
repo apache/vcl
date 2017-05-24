@@ -125,6 +125,25 @@ class ADdomain extends Resource {
 
 	/////////////////////////////////////////////////////////////////////////////
 	///
+	/// \fn submitToggleDeleteResourceExtra($rscid, $deleted)
+	///
+	/// \param $rscid - id of a resource (from table specific to that resource,
+	/// not from the resource table)
+	/// \param $deleted - (optional, default=0) 1 if resource was previously
+	/// deleted; 0 if not
+	///
+	/// \brief function to do any extra stuff specific to a resource type when
+	/// toggling delete for a resource; to be implemented by inheriting class if
+	/// needed
+	///
+	/////////////////////////////////////////////////////////////////////////////
+	function submitToggleDeleteResourceExtra($rscid, $deleted=0) {
+		$data = $this->getData(array('rscid' => $rscid));
+		deleteSecrets($data[$rscid]['secretid']);
+	}
+
+	/////////////////////////////////////////////////////////////////////////////
+	///
 	/// \fn AJsaveResource()
 	///
 	/// \brief saves changes to a resource; must be implemented by inheriting
@@ -166,8 +185,22 @@ class ADdomain extends Resource {
 				$updates[] = "username = '{$data['username']}'";
 			# password
 			if(strlen($data['password'])) {
-				$esc_pass = mysql_real_escape_string($data['password']);
-				$updates[] = "password = '$esc_pass'";
+				if($olddata['secretid'] == 0) {
+					$olddata['secretid'] = getSecretID('addomain', 'secretid', $data['rscid']);
+					if($olddata['secretid'] == NULL) {
+						$ret = array('status' => 'error', 'msg' => "Error encountered while updating password");
+						sendJSON($ret);
+						return;
+					}
+					$updates[] = "secretid = '{$olddata['secretid']}'";
+				}
+				$encpass = encryptDBdata($data['password'], $olddata['secretid']);
+				if($encpass == NULL) {
+					$ret = array('status' => 'error', 'msg' => "Error encountered while updating password");
+					sendJSON($ret);
+					return;
+				}
+				$updates[] = "password = '$encpass'";
 			}
 			# dnsservers
 			if($data['dnsservers'] != $olddata['dnsservers'])
@@ -261,27 +294,26 @@ class ADdomain extends Resource {
 		global $user;
 
 		$ownerid = getUserlistID($data['owner']);
-		$esc_pass = mysql_real_escape_string($data['password']);
 	
 		$query = "INSERT INTO addomain"
 				.	"(name, "
 				.	"ownerid, "
 				.	"domainDNSName, "
 				.	"username, "
-				.	"password, "
+				.	"secretid, "
 				.	"dnsServers) "
 				.	"VALUES ('{$data['name']}', "
 				.	"$ownerid, "
 				.	"'{$data['domaindnsname']}', "
 				.	"'{$data['username']}', "
-				.	"'$esc_pass', "
+				.	"0, "
 				.	"'{$data['dnsservers']}')";
 		doQuery($query);
 
 		$rscid = dbLastInsertID();
-		if($rscid == 0) {
+		if($rscid == 0)
 			return 0;
-		}
+
 		// add entry in resource table
 		$query = "INSERT INTO resource "
 				 .        "(resourcetypeid, "
@@ -289,6 +321,16 @@ class ADdomain extends Resource {
 				 . "VALUES ((SELECT id FROM resourcetype WHERE name = 'addomain'), "
 				 .        "$rscid)";
 		doQuery($query);
+
+		$secretid = getSecretID('addomain', 'secretid', $rscid);
+		$encpass = encryptDBdata($data['password'], $secretid);
+
+		$query = "UPDATE addomain "
+		       . "SET password = '$encpass', "
+		       .     "secretid = $secretid "
+		       . "WHERE id = $rscid";
+		doQuery($query);
+
 		return $rscid;
 	}
 
