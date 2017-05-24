@@ -111,6 +111,9 @@ sub process {
 	# Update the log loaded time to now for this request
 	update_log_loaded_time($request_logid);
 	
+	# Make sure firewall object is initialized early to reduce time it takes to configure things after user clicks Connect
+	$self->os->firewall() if ($self->os->can('firewall'));
+	
 	# Update the computer state to reserved
 	# This causes pending to change to the Connect button on the Current Reservations page
 	update_computer_state($computer_id, 'reserved');

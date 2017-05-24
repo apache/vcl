@@ -955,55 +955,9 @@ sub state_exit {
 				$request_state_name_new = 'inuse';
 				$computer_state_name_new = 'inuse';
 			}
-			
-			# Update the reservation.lastcheck time to now if the next request state is inuse
-			# Do this to ensure that reservations are not processed again quickly after this process exits
-			# For cluster requests, the parent may have had to wait a while for child processes to exit
-			# Resetting reservation.lastcheck causes reservations to wait the full interval between inuse checks
-			if ($request_state_name_new =~ /(reserved|inuse|reboot|server)/) {
-				update_reservation_lastcheck(@reservation_ids);
-			}
-			
-			# Update the request state
-			if ($request_state_name_old ne 'deleted') {
-				if (is_request_deleted($request_id)) {
-					notify($ERRORS{'OK'}, 0, "request has been deleted, request state not updated: $request_state_name_old --> $request_state_name_new");
-				}
-				else {
-					# Check if the request state has already been updated
-					# This can occur if another reservation in a cluster failed
-					my ($request_state_name_current, $request_laststate_name_current) = get_request_current_state_name($request_id);
-					if ($request_state_name_current eq $request_state_name_new && $request_laststate_name_current eq $request_state_name_old) {
-						notify($ERRORS{'OK'}, 0, "request has NOT been deleted, current state already set to: $request_state_name_current/$request_laststate_name_current");
-					}
-					else {
-						notify($ERRORS{'OK'}, 0, "request has NOT been deleted, updating request state: $request_state_name_old/$request_laststate_name_old --> $request_state_name_new/$request_state_name_old");
-						if (!update_request_state($request_id, $request_state_name_new, $request_state_name_old)) {
-							notify($ERRORS{'WARNING'}, 0, "failed to change request state: $request_state_name_old/$request_laststate_name_old --> $request_state_name_new/$request_state_name_old");
-						}
-					}
-				}
-			}
-			else {
-				# Current request state = 'deleted'
-				if ($request_state_name_new =~ /(complete)/) {
-					if (!update_request_state($request_id, $request_state_name_new, $request_state_name_old)) {
-						notify($ERRORS{'WARNING'}, 0, "failed to change request state: $request_state_name_old/$request_laststate_name_old --> $request_state_name_new/$request_state_name_old");
-					}
-				}
-				else {
-					notify($ERRORS{'WARNING'}, 0, "request state not updated: $request_state_name_old --> $request_state_name_new");
-				}
-			}
-		}
-		
-		# Update log.ending if this is the parent reservation and argument was supplied
-		if ($request_logid && $request_log_ending) {
-			if (!update_log_ending($request_logid, $request_log_ending)) {
-				notify($ERRORS{'CRITICAL'}, 0, "failed to set log ending to $request_log_ending, log ID: $request_logid");
-			}
 		}
 	}
+	
 	
 	# If $request_log_ending was passed this should be the end of the reservation
 	# If NAT is used, rules added to the NAT host should be removed
@@ -1013,7 +967,7 @@ sub state_exit {
 			notify($ERRORS{'DEBUG'}, 0, "attempting to sanitize firewall rules created for reservation $reservation_id on NAT host $nathost_hostname, \$request_log_ending argument was specified");
 			$nat_sanitize_needed = 1;
 		}
-		elsif ($request_state_name_new && $request_state_name_new =~ /(timeout|deleted|complete|image|checkpoint)/) {
+		elsif ($request_state_name_new && $request_state_name_new =~ /(timeout|deleted|complete|image|checkpoint|failed)/) {
 			notify($ERRORS{'DEBUG'}, 0, "attempting to sanitize firewall rules created for reservation $reservation_id on NAT host $nathost_hostname, next request state is '$request_state_name_new'");
 			$nat_sanitize_needed = 1;
 		}
@@ -1034,6 +988,7 @@ sub state_exit {
 		}
 	}
 	
+	
 	# Update the computer state if argument was supplied
 	if ($computer_state_name_new) {
 		my $computer_state_name_old = $self->data->get_computer_state_name();
@@ -1046,8 +1001,9 @@ sub state_exit {
 		}
 	}
 	
-	# Clean computerloadlog as late as possible
+	
 	if ($is_parent_reservation) {
+		# Clean computerloadlog as late as possible
 		if ($request_state_name_old =~ /(new|reserved)/) {
 			# Only delete computerloadlog entries with loadstatename = 'begin' for all reservations in this request
 			delete_computerloadlog_reservation(\@reservation_ids, '(begin)');
@@ -1056,11 +1012,64 @@ sub state_exit {
 			# Delete all computerloadlog entries for all reservations in this request
 			delete_computerloadlog_reservation(\@reservation_ids);
 		}
+		
+		# Update log.ending if this is the parent reservation and argument was supplied
+		if ($request_logid && $request_log_ending) {
+			if (!update_log_ending($request_logid, $request_log_ending)) {
+				notify($ERRORS{'CRITICAL'}, 0, "failed to set log ending to $request_log_ending, log ID: $request_logid");
+			}
+		}
+		
+		# Update the reservation.lastcheck time to now if the next request state is inuse
+		# Do this to ensure that reservations are not processed again quickly after this process exits
+		# For cluster requests, the parent may have had to wait a while for child processes to exit
+		# Resetting reservation.lastcheck causes reservations to wait the full interval between inuse checks
+		if ($request_state_name_new && $request_state_name_new =~ /(reserved|inuse|reboot|server)/) {
+			update_reservation_lastcheck(@reservation_ids);
+		}
 	}
 	
 	# Insert a computerloadlog 'exited' entry
 	# This is used by the parent cluster reservation
+	# Do this as late as possible, if request.state is changed to 'complete', vcld may begin processing it before this process exits
+	# Warning will be generated if request is deleted before insertloadlog is executed
 	insertloadlog($reservation_id, $computer_id, "exited", "vcld process exiting");
+	
+	
+	if ($is_parent_reservation && $request_state_name_new) {	
+		# Update the request state
+		if ($request_state_name_old ne 'deleted') {
+			if (is_request_deleted($request_id)) {
+				notify($ERRORS{'OK'}, 0, "request has been deleted, request state not updated: $request_state_name_old --> $request_state_name_new");
+			}
+			else {
+				# Check if the request state has already been updated
+				# This can occur if another reservation in a cluster failed
+				my ($request_state_name_current, $request_laststate_name_current) = get_request_current_state_name($request_id);
+				if ($request_state_name_current eq $request_state_name_new && $request_laststate_name_current eq $request_state_name_old) {
+					notify($ERRORS{'OK'}, 0, "request has NOT been deleted, current state already set to: $request_state_name_current/$request_laststate_name_current");
+				}
+				else {
+					notify($ERRORS{'OK'}, 0, "request has NOT been deleted, updating request state: $request_state_name_old/$request_laststate_name_old --> $request_state_name_new/$request_state_name_old");
+					if (!update_request_state($request_id, $request_state_name_new, $request_state_name_old)) {
+						notify($ERRORS{'WARNING'}, 0, "failed to change request state: $request_state_name_old/$request_laststate_name_old --> $request_state_name_new/$request_state_name_old");
+					}
+				}
+			}
+		}
+		else {
+			# Current request state = 'deleted'
+			if ($request_state_name_new =~ /(complete)/) {
+				if (!update_request_state($request_id, $request_state_name_new, $request_state_name_old)) {
+					notify($ERRORS{'WARNING'}, 0, "failed to change request state: $request_state_name_old/$request_laststate_name_old --> $request_state_name_new/$request_state_name_old");
+				}
+			}
+			else {
+				notify($ERRORS{'WARNING'}, 0, "request state not updated: $request_state_name_old --> $request_state_name_new");
+			}
+		}
+	}
+	
 	
 	# Don't call exit if this was called from DESTROY or else DESTROY gets called again
 	if ($calling_sub) {
