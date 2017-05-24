@@ -557,7 +557,7 @@ function editOrAddGroup($state) {
 			if($state) {
 				$data["name"] = '';
 				$data["affiliationid"] = $user['affiliationid'];
-				$data["owner"] = $user['unityid'];
+				$data["owner"] = "{$user['unityid']}@{$user['affiliation']}";
 				if(array_key_exists('VCLEDITGROUPID', $_COOKIE) &&
 				   (array_key_exists($_COOKIE['VCLEDITGROUPID'], $affilusergroups) ||
 				   $_COOKIE['VCLEDITGROUPID'] == $defaultusergroupid))
