@@ -339,30 +339,22 @@ sub delete_service {
 		return 0;
 	}
 	
-	my $service_name_argument = shift;
-	if (!$service_name_argument) {
+	my $service_name = shift;
+	if (!$service_name) {
 		notify($ERRORS{'WARNING'}, 0, "service name argument was not supplied");
 		return;
 	}
 	
 	my $computer_node_name = $self->data->get_computer_node_name();
 	
-	# Attempt to delete both ext_sshd and ext_ssh if the argument is 
-	my @service_names = ($service_name_argument);
-	if ($service_name_argument =~ /ext_ssh/) {
-		@service_names = ('ext_sshd', 'ext_ssh');
-	}
+	# Disable the service before deleting it
+	$self->stop_service($service_name) || return;
+	$self->disable_service($service_name) || return;
 	
-	for my $service_name (@service_names) {
-		# Disable the service before deleting it
-		$self->stop_service($service_name) || return;
-		$self->disable_service($service_name) || return;
-		
-		# Delete the service configuration file
-		my $service_file_path = "/lib/systemd/system/$service_name.service";
-		if (!$self->os->delete_file($service_file_path)) {
-			return;
-		}
+	# Delete the service configuration file
+	my $service_file_path = "/lib/systemd/system/$service_name.service";
+	if (!$self->os->delete_file($service_file_path)) {
+		return;
 	}
 	
 	$self->_daemon_reload();
@@ -456,7 +448,13 @@ sub stop_service {
 	elsif (grep(/(Failed to issue method call|No such file)/i, @$output)) {
 		# Output if the service doesn't exist
 		# Failed to issue method call: Unit httpdx.service failed to load: No such file or directory.
-		notify($ERRORS{'WARNING'}, 0, "unable to stop '$service_name' service because it does not exist on $computer_node_name");
+		notify($ERRORS{'DEBUG'}, 0, "unable to stop '$service_name' service because it does not exist on $computer_node_name");
+		return 1;
+	}
+	elsif (grep(/(not loaded)/i, @$output)) {
+		# Output if the service isn't loaded
+		# Failed to stop ext_ssh.service: Unit ext_ssh.service not loaded.
+		notify($ERRORS{'DEBUG'}, 0, "unable to stop '$service_name' service because it is not loaded $computer_node_name");
 		return 1;
 	}
 	elsif ($exit_status ne 0 || grep(/(failed)/i, @$output)) {
