@@ -2565,7 +2565,7 @@ sub DESTROY {
 		if (!defined($node) || !defined($request_state_name)) {
 			notify($ERRORS{'DEBUG'}, 0, "skipping xCAT DESTROY tasks, unable to retrieve node name and request state name from DataStructure");
 		}
-		elsif ($request_state_name =~ /^(new|reload|image)$/) {
+		elsif ($request_state_name =~ /^(new|reload|image|checkpoint)$/) {
 			notify($ERRORS{'DEBUG'}, 0, "request state is '$request_state_name', attempting to set nodeset state of $node to 'boot'");
 			$self->_nodeset($node, 'boot');
 		}

@@ -712,7 +712,7 @@ sub computer_not_being_used {
 			notify($ERRORS{'DEBUG'}, 0, "checking reservation assigned to $computer_short_name:\n$competing_request_info_string");
 			
 			# Check for existing image creation requests
-			if ($competing_request_state =~ /^(image)$/ || $competing_request_laststate =~ /^(image)$/) {
+			if ($competing_request_state =~ /^(image|checkpoint)$/ || $competing_request_laststate =~ /^(image|checkpoint)$/) {
 				notify($ERRORS{'WARNING'}, 0, "$computer_short_name is NOT available, it is assigned to an existing imaging reservation:\n$competing_request_info_string");
 				return 0;
 			}
