@@ -1428,7 +1428,7 @@ sub _edit_nodelist {
 	# For HPC, use image project = vclhpc. There should be an xCAT postscript group named 'vclhpc' configured with specific HPC postscripts
 	
 	my $groups;
-	if ($request_state_name eq 'image') {
+	if ($request_state_name =~ /(image|checkpoint)/) {
 		# Image-based install or capture
 		$groups = "all,blade,image";
 	}
@@ -1503,7 +1503,7 @@ sub _edit_nodetype {
 	my $request_state_name = $self->data->get_request_state_name();
 	
 	my $nodetype_os;
-	if ($request_state_name eq 'image' || $image_os_install_type =~ /image/) {
+	if ($request_state_name =~ /(image|checkpoint)/ || $image_os_install_type =~ /image/) {
 		$nodetype_os = 'image';
 	}
 	elsif ($image_os_install_type =~ /kickstart/i) {
