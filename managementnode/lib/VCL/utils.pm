@@ -98,7 +98,6 @@ our @EXPORT = qw(
 	check_blockrequest_time
 	check_endtimenotice_interval
 	check_messages_need_validating
-	check_ssh
 	check_time
 	clear_next_image_id
 	clearfromblockrequest
@@ -201,7 +200,6 @@ our @EXPORT = qw(
 	get_vmhost_info
 	getnewdbh
 	getpw
-	getusergroupmembers
 	hash_to_xml_string
 	help
 	hostname_to_ip_address
@@ -209,7 +207,6 @@ our @EXPORT = qw(
 	insert_natport
 	insert_reload_request
 	insert_request
-	insert_reservation
 	insert_vcld_semaphore
 	insertloadlog
 	ip_address_to_hostname
@@ -219,12 +216,10 @@ our @EXPORT = qw(
 	is_management_node_process_running
 	is_public_ip_address
 	is_request_deleted
-	is_request_imaging
 	is_valid_dns_host_name
 	is_valid_ip_address
 	is_variable_set
 	kill_child_processes
-	known_hosts
 	mail
 	makedatestring
 	nmap_port
@@ -233,6 +228,7 @@ our @EXPORT = qw(
 	notify_via_im
 	notify_via_oascript
 	parent_directory_path
+	pfd
 	populate_reservation_natport
 	preplogfile
 	prune_array_reference
@@ -293,7 +289,6 @@ our @EXPORT = qw(
 	update_preload_flag
 	update_request_checkuser
 	update_request_state
-	update_reservation_addomain
 	update_reservation_lastcheck
 	update_reservation_natlog
 	update_reservation_password
@@ -1215,7 +1210,7 @@ sub check_time {
 				}
 			}
 		} ## end else [ if ($end_diff_minutes <= 10)
-	} ## end elsif ($request_state_name =~ /inuse|imageinuse/) [ if ($request_state_name =~ /new|imageprep|reload|tomaintenance|tovmhostinuse/)
+	}
 	elsif ($request_state_name =~ /(complete|failed)/) {
 		# Don't need to keep requests in database if laststate was...
 		if ($request_laststate_name =~ /image|deleted|makeproduction|reload|tomaintenance|tovmhostinuse/) {
@@ -1728,73 +1723,6 @@ sub is_request_deleted {
 
 #//////////////////////////////////////////////////////////////////////////////
 
-=head2 is_request_imaging
-
- Parameters  : $request_id
- Returns     : return 'image' if request state or laststate is set to image
-               return 'forimaging' if forimaging is set to 1, and neither request state nor laststate is set to image
-               return 0 if forimaging is set to 0, and neither request state nor laststate is set to image
-               return undefined if an error occurred
- Description : checks if request is in imaging mode and if forimaging has been set
-
-=cut
-
-sub is_request_imaging {
-
-	my ($request_id) = @_;
-	
-	# Check the passed parameter
-	if (!(defined($request_id))) {
-		notify($ERRORS{'WARNING'}, 0, "request ID was not specified");
-		return;
-	}
-
-	# Create the select statement
-	my $select_statement = "
-	SELECT
-	request.forimaging AS forimaging,
-	request.stateid AS currentstate_id,
-	request.laststateid AS laststate_id,
-	currentstate.name AS currentstate_name,
-	laststate.name AS laststate_name
-	FROM
-	request, state currentstate, state laststate
-	WHERE
-	request.id = $request_id
-	AND request.stateid = currentstate.id
-	AND request.laststateid = laststate.id
-	";
-
-	# Call the database select subroutine
-	# This will return an array of one or more rows based on the select statement
-	my @selected_rows = database_select($select_statement);
-
-	# Check to make sure 1 row was returned
-	if (scalar @selected_rows != 1) {
-		notify($ERRORS{'WARNING'}, 0, scalar @selected_rows . " rows were returned from database select");
-		return;
-	}
-
-	my $forimaging     = $selected_rows[0]{forimaging};
-	my $state_name     = $selected_rows[0]{currentstate_name};
-	my $laststate_name = $selected_rows[0]{laststate_name};
-	
-	# If request state or laststate has been changed to image, return 1
-	# If forimaging is set, return 0
-	# If neither state is image and forimaging is not set, return undefined
-	if ($state_name eq 'image' || $laststate_name eq 'image') {
-		return 'image';
-	}
-	elsif ($forimaging) {
-		return 'forimaging';
-	}
-	else {
-		return 0;
-	}
-} ## end sub is_request_imaging
-
-#//////////////////////////////////////////////////////////////////////////////
-
 =head2 get_reservation_accounts
 
  Parameters  : $reservation_id
@@ -2131,43 +2059,6 @@ sub setnextimage {
 
 #//////////////////////////////////////////////////////////////////////////////
 
-=head2 check_ssh
-
- Parameters  : $node, $port, $log
- Returns     : 1(active) or 0(inactive)
- Description : uses check_ssh binary from tools dir to check
-               the sshd statuse on the remote node
-
-=cut
-
-sub check_ssh {
-	my ($node, $port, $log) = @_;
-	my ($package, $filename, $line, $sub) = caller(0);
-	$log = 0 if (!(defined($log)));
-	notify($ERRORS{'WARNING'}, $log, "node is not defined") if (!(defined($node)));
-	notify($ERRORS{'WARNING'}, $log, "port is not defined") if (!(defined($port)));
-
-	if (!defined($node)) {
-		return 0;
-	}
-	if (!defined($port)) {
-		$port = 22;
-	}
-
-	if (nmap_port($node,$port)) {
-		notify($ERRORS{'OK'}, $log, " $node ssh port $port open");
-		return 1;
-	}
-	else {
-		notify($ERRORS{'OK'}, $log, " $node ssh port $port closed");
-		return 0;
-	}
-
-		return 0;
-} ## end sub check_ssh
-
-#//////////////////////////////////////////////////////////////////////////////
-
 =head2 nmap_port
 
  Parameters  : $hostname, $port
@@ -2453,144 +2344,6 @@ sub getpw {
 	return $b;
 
 } ## end sub getpw
-
-#//////////////////////////////////////////////////////////////////////////////
-
-=head2 known_hosts
-
- Parameters  : $node , management OS, $ipaddress
- Returns     : 0 or 1
- Description : check for or add nodenames public rsa key to local known_hosts
-               file
-
-=cut
-
-sub known_hosts {
-	my ($node, $mnOS, $ipaddress) = @_;
-	my ($package, $filename, $line, $sub) = caller(0);
-	notify($ERRORS{'CRITICAL'}, 0, "node is not defined")      if (!(defined($node)));
-	notify($ERRORS{'CRITICAL'}, 0, "mnOS is not defined")      if (!(defined($mnOS)));
-	notify($ERRORS{'CRITICAL'}, 0, "ipaddress is not defined") if (!(defined($ipaddress)));
-
-	my ($known_hosts, $existed, $ssh_keyscan, $port);
-	#set up dependiences
-	if ($mnOS eq "solaris") {
-		$known_hosts = "/.ssh/known_hosts";
-		$ssh_keyscan = "/local/openssh/bin/ssh-keyscan";
-		$port        = 24;
-	}
-	elsif ($mnOS eq "linux") {
-		$known_hosts = "/root/.ssh/known_hosts";
-		$ssh_keyscan = "/usr/bin/ssh-keyscan";
-		$port        = 24;
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "unsupported management node OS: $mnOS");
-		return 0;
-	}
-
-	#remove key
-	my @known_hosts_file;
-	if (open(KNOWNHOSTS, "< $known_hosts")) {
-		@known_hosts_file = <KNOWNHOSTS>;
-		close(KNOWNHOSTS);
-	}
-	else {
-		notify($ERRORS{'WARNING'}, 0, "could not read $known_hosts $!");
-	}
-	foreach my $l (@known_hosts_file) {
-		if ($l =~ /$node|$ipaddress/) {
-			$l       = "";
-			$existed = 1;
-		}
-	}
-	#write back
-	if ($existed) {
-		if (open(KNOWNHOSTS, ">$known_hosts")) {
-			print KNOWNHOSTS @known_hosts_file;
-			close(KNOWNHOSTS);
-		}
-		else {
-			notify($ERRORS{'WARNING'}, 0, "could not write to $known_hosts file $!");
-		}
-	}
-	#proceed to get public rsa key
-	#notify($ERRORS{'OK'},0,"executing $ssh_keyscan -t rsa -p $port $node >> $known_hosts");
-	if (open(KEYSCAN, "$ssh_keyscan -t rsa -p $port $node >> $known_hosts 2>&1|")) {
-		my @ret = <KEYSCAN>;
-		close(KEYSCAN);
-		foreach my $r (@ret) {
-			notify($ERRORS{'OK'}, 0, "$r");
-			return 0 if ($r =~ /Name or service not known/);
-
-		}
-		return 1;
-	} ## end if (open(KEYSCAN, "$ssh_keyscan -t rsa -p $port $node >> $known_hosts 2>&1|"...
-	else {
-		notify($ERRORS{'WARNING'}, 0, "could not execute append of $node public key to $known_hosts file $!");
-		return 0;
-	}
-} ## end sub known_hosts
-
-#//////////////////////////////////////////////////////////////////////////////
-
-=head2 getusergroupmembers
-
- Parameters  : usergroupid
- Returns     : array of user group members
- Description : queries database and collects user members of supplied usergroupid
-
-=cut
-
-sub getusergroupmembers {
-	my $usergroupid = $_[0];
-	my ($package, $filename, $line, $sub) = caller(0);
-	notify($ERRORS{'WARNING'}, 0, "usergroupid is not defined") if (!(defined($usergroupid)));
-
-	if (!(defined($usergroupid))) {
-		return ();
-	}
-
-	my $select_statement = "
-   SELECT
-
-   user.unityid,
-   user.uid,
-   user.id
-
-   FROM
-   user,
-   usergroupmembers
-
-   WHERE
-   user.id = usergroupmembers.userid
-   AND usergroupmembers.usergroupid = '$usergroupid'
-	";
-
-	# Call the database select subroutine
-	# This will return an array of one or more rows based on the select statement
-	my @selected_rows = database_select($select_statement);
-	if (scalar @selected_rows == 0) {
-		notify($ERRORS{'OK'}, 0, "no data returned for usergroupid $usergroupid returning empty lists");
-		return ();
-	}
-
-	my %hash;
-	my (@retarray);
-
-	for (@selected_rows) {
-		my %hash = %{$_};
-		if (!defined($hash{uid})) {
-			$hash{uid} = 0;
-		}
-		push(@retarray, "$hash{unityid}:$hash{uid}:$hash{id}");
-	}
-
-	return @retarray;
-
-} ## end sub getusergroupmembers
-
-
 
 #//////////////////////////////////////////////////////////////////////////////
 
@@ -4786,7 +4539,7 @@ sub get_management_node_info {
 			return $ENV{management_node_info}{$management_node_identifier};
 		}
 		else {
-			notify($ERRORS{'DEBUG'}, 0, "retrieving current management node info for '$management_node_identifier' from database, cached data is stale: $data_age_seconds seconds old");
+			#notify($ERRORS{'DEBUG'}, 0, "retrieving current management node info for '$management_node_identifier' from database, cached data is stale: $data_age_seconds seconds old");
 		}
 	}
 	else {
@@ -4948,7 +4701,7 @@ AND managementnode.id != $management_node_id
 	# Save the time when the data was retrieved
 	$ENV{management_node_info}{$management_node_identifier}{RETRIEVAL_TIME} = time;
 	
-	notify($ERRORS{'DEBUG'}, 0, "retrieved management node info: '$management_node_identifier' ($management_node_info->{SHORTNAME})");
+	#notify($ERRORS{'DEBUG'}, 0, "retrieved management node info: '$management_node_identifier' ($management_node_info->{SHORTNAME})");
 	return $management_node_info;
 } ## end sub get_management_node_info
 
@@ -8803,6 +8556,31 @@ sub format_data {
 	map { $_ = ": $_" } @formatted_lines;
 	
 	return join("\n", @formatted_lines);
+}
+
+#//////////////////////////////////////////////////////////////////////////////
+
+=head2 pfd
+
+ Parameters  : $data
+ Returns     : 1
+ Description : Intended as a quick shortcut to call:
+               print format_data($var) . "\n";
+               This should only be used for development. Calls to this should
+               not be committed to the repository.
+
+=cut
+
+
+sub pfd {
+	print "\n";
+	if (scalar(@_) > 1) {
+		print format_data(\@_);
+	}
+	else {
+		print format_data(shift);
+	}
+	print "\n\n";
 }
 
 #//////////////////////////////////////////////////////////////////////////////
@@ -14857,55 +14635,6 @@ sub prune_hash_child_references {
 		}
 	}
 	return $result;
-}
-
-#//////////////////////////////////////////////////////////////////////////////
-
-=head2 update_reservation_addomain
-
- Parameters  : $reservation_id, $addomainid
- Returns     : boolean
- Description : Updates reservation.addomainid in the database.
-
-=cut
-
-sub update_reservation_addomain {
-	my $reservation_id = shift;
-	my $addomain_id = shift;
-	
-	if (!$reservation_id) {
-		notify($ERRORS{'WARNING'}, 0, "reservation ID argument was not specified");
-		return;
-	}
-	
-	if (!$addomain_id) {
-		notify($ERRORS{'WARNING'}, 0, "addomain ID argument was not specified");
-		return;
-	}
-	
-	my $statement = <<EOF;
-INSERT IGNORE INTO 
-reservation
-(
-	id,
-	addomainid
-)
-VALUES
-(
-	'$reservation_id',
-	'$addomain_id'
-)
-ON DUPLICATE KEY UPDATE addomainid = '$addomain_id'
-EOF
-
-	if (database_execute($statement)) {
-		#notify($ERRORS{'OK'}, 0, "executed $statement $reservation_id $addomain_id");
-		return 1;
-	}
-	else {
-		notify($ERRORS{'OK'}, 0, "failed to to execute statement to update reservation table:\n$statement");
-		return 0;
-	}
 }
 
 #//////////////////////////////////////////////////////////////////////////////
