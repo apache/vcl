@@ -88,7 +88,6 @@ use VCL::utils;
 sub process {
 	my $self = shift;
 	
-	my $request_data                    = $self->data->get_request_data();
 	my $request_id                      = $self->data->get_request_id();
 	my $request_state_name              = $self->data->get_request_state_name();
 	my $request_preload_only            = $self->data->get_request_preload_only();
@@ -103,7 +102,6 @@ sub process {
 	my $image_id                        = $self->data->get_image_id();
 	my $image_name                      = $self->data->get_image_name();
 	my $imagerevision_id                = $self->data->get_imagerevision_id();
-	my $user_standalone                 = $self->data->get_user_standalone();
 	
 	# If reload state is reload and computer is part of block allocation confirm imagerevisionid is the production image.
 	if ($request_state_name eq 'reload' && is_inblockrequest($computer_id)) {
@@ -350,7 +348,7 @@ sub process {
 		notify($ERRORS{'OK'}, 0, "request has been deleted, setting computer state to 'available' and exiting");
 		
 		# Update state of computer and exit
-		switch_state($request_data, '', 'available', '', '1');
+		$self->state_exit(undef, 'available');
 	}
 	
 	my $next_computer_state;
@@ -461,7 +459,6 @@ sub reload_image {
 	my $computer_state_name             = $self->data->get_computer_state_name();
 	my $image_id                        = $self->data->get_image_id();
 	my $image_name                      = $self->data->get_image_name();
-	my $image_os_install_type           = $self->data->get_image_os_install_type();
 	my $imagerevision_id                = $self->data->get_imagerevision_id();
 	my $server_request_id               = $self->data->get_server_request_id();
 	my $server_request_fixed_ip         = $self->data->get_server_request_fixed_ip();
@@ -648,9 +645,14 @@ sub computer_not_being_used {
 	my $image_reloadtime                = $self->data->get_image_reload_time();
 	my $request_state_name              = $self->data->get_request_state_name();
 	
-	my $attempt_limit = 5;
+	my $attempt_limit = 10;
 	ATTEMPT: for (my $attempt = 1; $attempt <= $attempt_limit; $attempt++) {
-		notify($ERRORS{'OK'}, 0, "attempt $attempt/$attempt_limit: checking for competing reservations assigned to $computer_short_name");
+		if ($attempt > 2) {
+			notify($ERRORS{'OK'}, 0, "attempt $attempt/$attempt_limit: sleeping 5 seconds before checking if $computer_short_name is not being used");
+			sleep_uninterrupted(5);
+		}
+		
+		notify($ERRORS{'OK'}, 0, "attempt $attempt/$attempt_limit: checking if $computer_short_name is not being used");
 		my $computer_state_name = $self->data->get_computer_state_name();
 		
 		# Return 0 if computer state is deleted, vmhostinuse
@@ -668,7 +670,7 @@ sub computer_not_being_used {
 		
 		# Warn if computer state isn't available or reload - except for reinstall requests
 		if ($request_state_name !~ /^(reinstall)$/ && $computer_state_name !~ /^(available|reload)$/) {
-			notify($ERRORS{'WARNING'}, 0, "$computer_short_name state is $computer_state_name, checking if any conflicting reservations are active");
+			notify($ERRORS{'WARNING'}, 0, "$computer_short_name state is $computer_state_name, checking if any competing reservations are active");
 		}
 		
 		# Check if there is another request using this machine
@@ -677,20 +679,15 @@ sub computer_not_being_used {
 		
 		# There should be at least 1 request -- the one being processed
 		if (!$competing_request_info) {
-			notify($ERRORS{'WARNING'}, 0, "failed to retrieve any requests for computer id=$computer_id, there should be at least 1");
-			return;
-		}
-		
-		# Remove the request currently being processed from the hash
-		delete $competing_request_info->{$request_id};
-		
-		if (!keys(%$competing_request_info)) {
-			notify($ERRORS{'OK'}, 0, "$computer_short_name is not assigned to any other reservations");
-			return 1;
+			notify($ERRORS{'WARNING'}, 0, "failed to retrieve any requests for computer $computer_id, there should probably be at least 1");
+			next ATTEMPT;
 		}
 		
 		# Loop through the competing requests
 		COMPETING_REQUESTS: for my $competing_request_id (sort keys %$competing_request_info) {
+			# Ignore the request currently being processed
+			next if $competing_request_id == $request_id;
+			
 			my $competing_reservation_id    = $competing_request_info->{$competing_request_id}{data}->get_reservation_id();
 			my $competing_request_state     = $competing_request_info->{$competing_request_id}{data}->get_request_state_name();
 			my $competing_request_laststate = $competing_request_info->{$competing_request_id}{data}->get_request_laststate_name();
@@ -714,7 +711,7 @@ sub computer_not_being_used {
 			# Check for existing image creation requests
 			if ($competing_request_state =~ /^(image|checkpoint)$/ || $competing_request_laststate =~ /^(image|checkpoint)$/) {
 				notify($ERRORS{'WARNING'}, 0, "$computer_short_name is NOT available, it is assigned to an existing imaging reservation:\n$competing_request_info_string");
-				return 0;
+				next ATTEMPT;
 			}
 			
 			# Check for any requests in the maintenance state
@@ -817,7 +814,7 @@ sub computer_not_being_used {
 					}
 					
 					# Wait for competing process to end before verifying that it was successfully killed
-					sleep 2;
+					sleep_uninterrupted(2);
 					
 					# Verify that the competing reservation process was killed
 					if (reservation_being_processed($competing_reservation_id)) {
@@ -834,11 +831,11 @@ sub computer_not_being_used {
 			}
 			elsif (reservation_being_processed($competing_reservation_id)) {
 				notify($ERRORS{'WARNING'}, 0, "computer $computer_short_name is NOT available, assigned overlapping reservations, competing reservation is currently being processed:\n$competing_request_info_string");
-				return 0;
+				next ATTEMPT;
 			}
 			else {
 				notify($ERRORS{'WARNING'}, 0, "computer $computer_short_name is NOT available, assigned overlapping reservations, competing reservation is NOT currently being processed:\n$competing_request_info_string");
-				return 0;
+				next ATTEMPT;
 			}
 		}
 		
@@ -924,7 +921,7 @@ sub reserve_computer {
 
 sub wait_for_child_reservations {
 	my $self              = shift;
-	my $request_data      = $self->data->get_request_data();
+	
 	my $request_id        = $self->data->get_request_id();
 	my @reservation_ids   = $self->data->get_reservation_ids();
 	my $reservation_count = $self->data->get_reservation_count();

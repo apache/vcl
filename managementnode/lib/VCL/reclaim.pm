@@ -204,10 +204,6 @@ sub process {
 	else {
 		$self->state_exit('complete', 'available');
 	}
-	
-	notify($ERRORS{'DEBUG'}, 0, "exiting");
-	exit;
-
 } ## end sub process
 
 #//////////////////////////////////////////////////////////////////////////////

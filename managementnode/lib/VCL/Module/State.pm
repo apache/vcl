@@ -945,7 +945,7 @@ sub state_exit {
 		
 		if ($request_state_name_new) {
 			# Never set request state to failed if previous state is image
-			if ($request_state_name_old eq 'image' && $request_state_name_new !~ /(complete|maintenance)/) {
+			if ($request_state_name_old =~ /(image|checkpoint)/ && $request_state_name_new !~ /(complete|maintenance)/) {
 				notify($ERRORS{'CRITICAL'}, 0, "previous request state is $request_state_name_old, not setting request state to $request_state_name_new, setting request and computer state to maintenance");
 				$request_state_name_new = 'maintenance';
 				$computer_state_name_new = 'maintenance';
@@ -973,18 +973,7 @@ sub state_exit {
 		}
 		
 		if ($nat_sanitize_needed) {
-			if (!$self->nathost_os(0)) {
-				notify($ERRORS{'WARNING'}, 0, "unable to sanitize firewall rules from NAT host $nathost_hostname, NAT host OS object is not available");
-			}
-			elsif (!$self->nathost_os->firewall()) {
-				notify($ERRORS{'WARNING'}, 0, "unable to sanitize firewall rules from NAT host $nathost_hostname, NAT host OS object's firewall method returned false");
-			}
-			elsif (!$self->nathost_os->firewall->can('nat_sanitize_reservation')) {
-				notify($ERRORS{'WARNING'}, 0, "unable to sanitize firewall rules from NAT host $nathost_hostname, NAT host OS firewall object does not implement a 'nat_sanitize_reservation' method");
-			}
-			else {
-				$self->nathost_os->firewall->nat_sanitize_reservation();
-			}
+			$self->nathost_os->firewall->nat_sanitize_reservation();
 		}
 	}
 	
@@ -1058,14 +1047,9 @@ sub state_exit {
 			}
 		}
 		else {
-			# Current request state = 'deleted'
-			if ($request_state_name_new =~ /(complete)/) {
-				if (!update_request_state($request_id, $request_state_name_new, $request_state_name_old)) {
-					notify($ERRORS{'WARNING'}, 0, "failed to change request state: $request_state_name_old/$request_laststate_name_old --> $request_state_name_new/$request_state_name_old");
-				}
-			}
-			else {
-				notify($ERRORS{'WARNING'}, 0, "request state not updated: $request_state_name_old --> $request_state_name_new");
+			# Current request state = 'deleted', always set the request state to 'complete'
+			if (!update_request_state($request_id, 'complete', $request_state_name_old)) {
+				notify($ERRORS{'WARNING'}, 0, "failed to change request state: $request_state_name_old/$request_laststate_name_old --> $request_state_name_new/$request_state_name_old");
 			}
 		}
 	}
