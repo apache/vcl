@@ -645,7 +645,7 @@ sub computer_not_being_used {
 	my $image_reloadtime                = $self->data->get_image_reload_time();
 	my $request_state_name              = $self->data->get_request_state_name();
 	
-	my $attempt_limit = 10;
+	my $attempt_limit = 24;
 	ATTEMPT: for (my $attempt = 1; $attempt <= $attempt_limit; $attempt++) {
 		if ($attempt > 2) {
 			notify($ERRORS{'OK'}, 0, "attempt $attempt/$attempt_limit: sleeping 5 seconds before checking if $computer_short_name is not being used");
