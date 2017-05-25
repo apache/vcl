@@ -4098,7 +4098,25 @@ sub run_ssh_command {
 	my $remote_connection_target = determine_remote_connection_target($node);
 	my $node_string = $remote_connection_target;
 	$node_string .= " ($node)" if ($node ne $remote_connection_target);
-
+	
+	# Command argument is enclosed in single quotes in ssh command
+	# Single quotes contained within the command argument won't work without splitting it up
+	# Argument:
+	#   echo 'foo bar' > file
+	# Enclosed in single quotes
+	#    'echo 'foo bar' > file'   <-- won't work
+	# For each single quote in the argument, split the command by adding single quotes before and after
+	# Enclose the original single quote in double quotes
+	#    'echo '"'"'foo bar'"'"' > file'
+	if ($command =~ /'/) {
+		my $original_command = $command;
+		$command =~ s/'/'"'"'/g;
+		notify($ERRORS{'DEBUG'}, 0, "command argument contains single quotes, enclosed all single quotes in double quotes:\n" .
+			"original command: '$original_command'\n" .
+			"modified command: '$command'"
+		);
+	}
+	
 	# Assemble the SSH command
 	# -i <identity_file>, Selects the file from which the identity (private key) for RSA authentication is read.
 	# -l <login_name>, Specifies the user to log in as on the remote machine.
@@ -7304,7 +7322,7 @@ EOF
 		notify($ERRORS{'WARNING'}, 0, "NAT host resource type is not supported: $resource_type, resource ID: $resource_id");
 	}
 	
-	notify($ERRORS{'DEBUG'}, 0, "retrieved info for NAT host mapped to computer computer $computer_identifier:\n" . format_data($nathost_info));
+	#notify($ERRORS{'DEBUG'}, 0, "retrieved info for NAT host mapped to computer computer $computer_identifier:\n" . format_data($nathost_info));
 	$ENV{nathost_info}{$computer_identifier} = $nathost_info;
 	return $ENV{nathost_info}{$computer_identifier};
 }
