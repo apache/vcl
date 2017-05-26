@@ -151,7 +151,7 @@ sub save_configuration {
 	
 	# Call iptables-save
 	# All lines added by vcl should contain a 'vcl-'
-	my $command = "iptables-save |grep 'vcl-'";
+	my $command = "iptables-save";
 	my ($exit_status, $output) = $self->os->execute($command);
 	if (!defined($output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to execute command to retrieve iptables rules containing 'vcl-' from $computer_name: $command");
@@ -167,18 +167,43 @@ sub save_configuration {
 	
 	# Note: Do not use "WARNING" in the message or else it will show up in vcld.log, creating noise when searching for WARNING messages
 	push @updated_lines, <<EOF;
+
 # DISCLAIMER: The remainder of this file has been automatically configured by VCL ($timestamp)
 # Do not modify this line or any lines below
 # Custom firewall configuration lines may be added to this file but must be located above this line
-*filter
 EOF
 	
-	push @updated_lines, @$output;
-	push @updated_lines, 'COMMIT';
+	my @vcl_lines;
+	my $current_table;
+	my $last_table_written = '';
+	LINE: for my $line (@$output) {
+		# Find lines that specify a table name:
+		# *nat
+		# *filter
+		if ($line =~ /^\s*\*(.+)$/) {
+			$current_table = $1;
+		}
+		elsif ($line =~ /(vcl|$PROCESSNAME)-/) {
+			if ($last_table_written ne $current_table) {
+				if ($last_table_written) {
+					push @vcl_lines, "COMMIT\n";
+				}
+				
+				push @vcl_lines, "*$current_table";
+				$last_table_written = $current_table;
+			}
+			
+			push @vcl_lines, $line;
+		}
+	}
+	push @vcl_lines, 'COMMIT';
+	my $vcl_string = join("\n", @vcl_lines);
 	
+	push @updated_lines, @vcl_lines;
 	my $updated_string = join("\n", @updated_lines);
+	
 	if ($self->os->create_text_file($rules_file_path, $updated_string)) {
-		notify($ERRORS{'OK'}, 0, "saved ufw firewall configuration on $computer_name to $rules_file_path:\n$updated_string");
+		notify($ERRORS{'OK'}, 0, "added VCL-specific lines to $rules_file_path on $computer_name:\n$vcl_string");
 	}
 	else {
 		notify($ERRORS{'WARNING'}, 0, "failed to save ufw firewall configuration on $computer_name, $rules_file_path could not be updated");

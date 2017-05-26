@@ -174,7 +174,7 @@ sub get_all_direct_rules {
 	# ipv4 filter INPUT 0 --jump vcl-pre_capture --match comment --comment 'VCL: jump to rules added during the pre-capture stage (2017-04-07 17:19:21)'
 	my @rules = grep(/^(ipv4|ipv6|eb)/, @$output);
 	
-	#notify($ERRORS{'DEBUG'}, 0, "retrieved all firewalld direct rules defined on $computer_name:\n" . join("\n", @rules));
+	notify($ERRORS{'DEBUG'}, 0, "retrieved all firewalld direct rules defined on $computer_name:\n" . join("\n", @rules));
 	return @rules;
 }
 

@@ -1704,12 +1704,12 @@ sub get_table_info {
 			# Be sure to check for ! enclosed in quotes:
 			#    -A POSTROUTING '!' --destination 10.10.0.0/20 --jump MASQUERADE
 			my $parameters = {
-				'protocol'      => '\s*\'?(\!?)\'?\s*(-p|--protocol)\s+([^\s]+)',
-				'source'        => '\s*\'?(\!?)\'?\s*(-s|--source)\s+([\d\.\/]+)',
-				'destination'   => '\s*\'?(\!?)\'?\s*(-d|--destination)\s+([\d\.\/]+)',
-				'in-interface'  => '\s*\'?(\!?)\'?\s*(-i|--in-interface)\s+([^\s]+)',
-				'out-interface' => '\s*\'?(\!?)\'?\s*(-o|--out-interface)\s+([^\s]+)',
-				'fragment'      => '\s*\'?(\!?)\'?\s*(-f|--fragment)',
+				'protocol'      => '(?:\'?(\!?)\'?\s)?(-p|--protocol)\s+([^\s]+)',
+				'source'        => '(?:\'?(\!?)\'?\s)?(-s|--source)\s+([\d\.\/]+)',
+				'destination'   => '(?:\'?(\!?)\'?\s)?(-d|--destination)\s+([\d\.\/]+)',
+				'in-interface'  => '(?:\'?(\!?)\'?\s)?(-i|--in-interface)\s+([^\s]+)',
+				'out-interface' => '(?:\'?(\!?)\'?\s)?(-o|--out-interface)\s+([^\s]+)',
+				'fragment'      => '(?:\'?(\!?)\'?\s)?(-f|--fragment)',
 			};
 			
 			PARAMETER: for my $parameter (keys %$parameters) {
@@ -1726,28 +1726,35 @@ sub get_table_info {
 				
 				# Remove the matching pattern from the rule specification string
 				# This is done to make it easier to parse the match extension parts of the specification later on
-				$rule_specification_string =~ s/(^\s+|$pattern|\s+$)//ig;
+				my $rule_specification_string_before = $rule_specification_string;
+				$rule_specification_string =~ s/(^\s+|$pattern|\s+$)//igx;
+				#notify($ERRORS{'DEBUG'}, 0, "trimmed $parameter parameter:\n" .
+				#	"before : '$rule_specification_string_before'\n" .
+				#	"after  : '$rule_specification_string'"
+				#);
 			}
-			
-			# Parse the target rule parameters
-			my $target_parameters = {
-				'jump' => '\s*(-j|--jump)\s+([^\s]+)\s*(.*)',
-				'goto' => '\s*(-g|--goto)\s+([^\s]+)\s*(.*)',
-			};
-			
+
 			# -j ACCEPT
 			# -j REJECT --reject-with icmp-host-prohibited
+			# -j LOG --log-prefix "[UFW BLOCK] "
 			
-			# Parse the parameters which specify targets
-			TARGET_PARAMETER: for my $target_parameter (keys %$target_parameters) {
-				my $pattern = $target_parameters->{$target_parameter};
-				my ($target_parameter_match, $target, $target_extension_option_string) = $rule_specification_string =~ /$pattern/ig;
-				next TARGET_PARAMETER unless $target_parameter_match;
-				
-				# Assemble a regex to remove the target specification from the overall specification
-				my $target_parameter_regex = "\\s*$target_parameter_match\\s+$target\\s*";
-				
-				$rule->{parameters}{$target_parameter} = $target;
+			my $target_section_regex = <<'EOF';
+(
+	(-[jg]|--(?:jump|goto))
+	\s+
+	([^\s]+)
+	(
+		(?:
+			(?!\s+(?:-m|--match)\s+)
+			.
+		)*
+	)
+)
+EOF
+			my ($target_section_match, $target_parameter_match, $target, $target_extension_option_string) = $rule_specification_string =~ /$target_section_regex/ix;
+			if ($target_parameter_match) {
+				my $target_parameter_type = ($target_parameter_match =~ /j/ ? 'jump' : 'goto');
+				$rule->{parameters}{$target_parameter_type} = $target;
 				
 				my $target_extension_option_name;
 				
@@ -1764,13 +1771,6 @@ sub get_table_info {
 				/gx;
 				
 				TARGET_OPTION_SECTION: for my $target_extension_option_section (@target_extension_option_sections) {
-					# Stop parsing if the start of a match extension specification if found
-					if ($target_extension_option_section =~ /^(-m|--match)$/) {
-						last TARGET_OPTION_SECTION;
-					}
-					
-					
-					
 					# Check if this is the beginning of a target extension option
 					if ($target_extension_option_section =~ /^[-]+(\w[\w-]+)/) {
 						$target_extension_option_name = $1;
@@ -1781,8 +1781,7 @@ sub get_table_info {
 						# If here, the section should be a target extension option value
 						notify($ERRORS{'WARNING'}, 0, "failed to parse iptables rule on $computer_name, target extension option name was not detected before this section: '$target_extension_option_section'\n" .
 							"output line: $line\n" .
-							"preceeding target parameter: $target_parameter\n" .
-							"target value: $target"
+							"target section: $target_section_match"
 						);
 						next LINE;
 					}
@@ -1791,29 +1790,36 @@ sub get_table_info {
 						$rule->{target_extensions}{$target}{$target_extension_option_name} = $target_extension_option_section;
 						$target_extension_option_name = undef;
 					}
-					
-					# Add the section to the regex so it will be removed
-					$target_parameter_regex .= "$target_extension_option_section\\s*";
 				}  # TARGET_OPTION_SECTION
 				
 				my $rule_specification_string_before = $rule_specification_string;
-				$rule_specification_string =~ s/$target_parameter_regex//g;
-				#notify($ERRORS{'DEBUG'}, 0, "parsed iptables target parameter:\n" .
-				#	"target parameter: $target_parameter_match\n" .
-				#	"target: $target\n" .
-				#	"target specification removal regex: $target_parameter_regex\n" .
-				#	"rule specification before: $rule_specification_string_before\n" .
-				#	"rule specification after:  $rule_specification_string"
-				#);
-			}  # TARGET_PARAMETER
-			
+				$rule_specification_string =~ s/(^\s+|$target_section_regex|\s+$)//igx;
+				if ($rule_specification_string_before ne $rule_specification_string) {
+					#notify($ERRORS{'DEBUG'}, 0, "trimmed $target_parameter_type target section:\n" .
+					#	"before : '$rule_specification_string_before'\n" .
+					#	"after  : '$rule_specification_string'"
+					#);
+				}
+				else {
+					notify($ERRORS{'WARNING'}, 0, "regex failed to remove target section from rule specification:\n" .
+						"line                                : $line\n" .
+						"remaining rule specification before : $rule_specification_string_before\n" .
+						"remaining rule specification after  : $rule_specification_string\n" .
+						"target section regex:\n$target_section_regex"
+					);
+				}
+			}
+			else {
+				notify($ERRORS{'WARNING'}, 0, "target section was not found in rule specification: '$rule_specification_string', line: '$line'");
+			}
 			
 			# The only text remaining in $rule_specification_string should be match extension information
 			
+			# Make sure space exists between match extension module name (comment) and the option
 			# --match comment--comment 'my comment'
 			# --match tcp--destination-port
 			$rule_specification_string =~ s/(--match [^\s-]+)--/$1 --/g;
-			
+
 			# Split the remaining string by spaces or sections enclosed in quotes
 			my @match_extension_sections = $rule_specification_string =~
 				/
@@ -1830,8 +1836,6 @@ sub get_table_info {
 			my $match_extension_option;
 			my $match_extension_option_inverted = 0;
 			my $comment;
-			
-			
 			
 			MATCH_EXTENSION_SECTION: for my $match_extension_section (@match_extension_sections) {
 				next MATCH_EXTENSION_SECTION if !$match_extension_section;
@@ -1855,10 +1859,9 @@ sub get_table_info {
 					}
 					else {
 						notify($ERRORS{'WARNING'}, 0, "failed to parse iptables rule in $table_name table on $computer_name\n" .
-							"match extension module name was not detected before this section:\n" .
-							"match extension section:\n$match_extension_section\n" .
-							"iptables rule specification:\n$rule_specification_string\n" .
-							"iptables command: \n$line"
+							"match extension module name was not detected before this section: '$match_extension_section'\n" .
+							"iptables rule specification: '$rule_specification_string'\n" .
+							"iptables command: '$line'"
 						);
 						next LINE;
 					}
