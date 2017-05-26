@@ -35,10 +35,12 @@ CREATE TABLE IF NOT EXISTS `addomain` (
   `name` varchar(30) NOT NULL default '',
   `domainDNSName` varchar(70) NOT NULL default '',
   `dnsServers` varchar(512) default NULL,
-  `username` varchar(64) default NULL,
-  `password` varchar(256) default NULL,
+  `username` varchar(64) NOT NULL default '',
+  `password` varchar(256) NOT NULL default '',
+  `secretid` smallint(5) unsigned NOT NULL,
   PRIMARY KEY (`id`),
-  UNIQUE KEY `domainDNSName` (`domainDNSName`)
+  UNIQUE KEY `domainDNSName` (`domainDNSName`),
+  KEY `secretid` (`secretid`)
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
@@ -414,6 +416,36 @@ CREATE TABLE IF NOT EXISTS `continuations` (
   KEY `deletefromid` (`deletefromid`)
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
+-- --------------------------------------------------------
+
+-- 
+-- Table structure for table `cryptkey`
+-- 
+
+CREATE TABLE IF NOT EXISTS `cryptkey` (
+  `id` smallint(6) unsigned NOT NULL AUTO_INCREMENT,
+  `hostid` smallint(6) unsigned NOT NULL,
+  `hosttype` enum('managementnode','web') NOT NULL DEFAULT 'managementnode',
+  `pubkey` varchar(1000) NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `hostid` (`hostid`)
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+
+-- --------------------------------------------------------
+
+-- 
+-- Table structure for table `cryptsecret`
+-- 
+
+CREATE TABLE IF NOT EXISTS `cryptsecret` (
+  `id` mediumint(8) unsigned NOT NULL AUTO_INCREMENT,
+  `cryptkeyid` smallint(5) unsigned NOT NULL,
+  `secretid` smallint(5) unsigned NOT NULL,
+  `cryptsecret` varchar(1000) NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `cryptkeyid` (`cryptkeyid`,`secretid`),
+  KEY `secretid` (`secretid`)
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
 
@@ -1488,6 +1520,7 @@ CREATE TABLE IF NOT EXISTS `vmprofile` (
   `vmdisk` enum('dedicated','shared') NOT NULL default 'dedicated',
   `username` varchar(80) NULL default NULL,
   `password` varchar(256) NULL default NULL,
+  `secretid` smallint(5) unsigned NULL default NULL,
   `eth0generated` tinyint(1) unsigned NOT NULL default '0',
   `eth1generated` tinyint(1) unsigned NOT NULL default '0',
   `rsapub` text NULL default NULL,
@@ -1497,7 +1530,8 @@ CREATE TABLE IF NOT EXISTS `vmprofile` (
   UNIQUE KEY `profilename` (`profilename`),
   KEY `imageid` (`imageid`),
   KEY `repositoryimagetypeid` (`repositoryimagetypeid`),
-  KEY `datastoreimagetypeid` (`datastoreimagetypeid`)
+  KEY `datastoreimagetypeid` (`datastoreimagetypeid`),
+  KEY `secretid` (`secretid`)
 ) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
@@ -2272,6 +2306,11 @@ INSERT IGNORE INTO `vmtype` (`id`, `name`) VALUES
 -- 
 
 -- 
+-- Constraints for table `addomain`
+-- 
+ALTER TABLE `addomain` ADD CONSTRAINT FOREIGN KEY (`secretid`) REFERENCES `cryptsecret` (`secretid`);
+
+-- 
 -- Constraints for table `blockComputers`
 -- 
 ALTER TABLE `blockComputers` ADD CONSTRAINT FOREIGN KEY (`blockTimeid`) REFERENCES `blockTimes` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
@@ -2369,6 +2408,11 @@ ALTER TABLE `connectmethodport` ADD CONSTRAINT FOREIGN KEY (`connectmethodid`) R
 -- 
 ALTER TABLE `continuations` ADD CONSTRAINT FOREIGN KEY (`userid`) REFERENCES `user` (`id`) ON UPDATE CASCADE;
 ALTER TABLE `continuations` ADD CONSTRAINT FOREIGN KEY (`parentid`) REFERENCES `continuations` (`id`) ON DELETE CASCADE;
+
+-- 
+-- Constraints for table `cryptsecret`
+-- 
+ALTER TABLE `cryptsecret` ADD CONSTRAINT FOREIGN KEY (`cryptkeyid`) REFERENCES `cryptkey` (`id`) ON DELETE CASCADE;
 
 -- 
 -- Constraints for table `image`
@@ -2651,6 +2695,7 @@ ALTER TABLE `vmhost` ADD CONSTRAINT FOREIGN KEY (`computerid`) REFERENCES `compu
 ALTER TABLE `vmprofile` ADD CONSTRAINT FOREIGN KEY (`imageid`) REFERENCES `image` (`id`);
 ALTER TABLE `vmprofile` ADD CONSTRAINT FOREIGN KEY (`repositoryimagetypeid`) REFERENCES `imagetype` (`id`) ON UPDATE CASCADE;
 ALTER TABLE `vmprofile` ADD CONSTRAINT FOREIGN KEY (`datastoreimagetypeid`) REFERENCES `imagetype` (`id`) ON UPDATE CASCADE;
+ALTER TABLE `vmprofile` ADD CONSTRAINT FOREIGN KEY (`secretid`) REFERENCES `cryptsecret` (`secretid`);
 
 --
 -- Constraints for table `winKMS`

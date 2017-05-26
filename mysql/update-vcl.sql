@@ -874,10 +874,12 @@ CREATE TABLE IF NOT EXISTS `addomain` (
   `name` varchar(30) NOT NULL default '',
   `domainDNSName` varchar(70) NOT NULL default '',
   `dnsServers` varchar(512) default NULL,
-  `username` varchar(64) default NULL,
-  `password` varchar(256) default NULL,
+  `username` varchar(64) NOT NULL default '',
+  `password` varchar(256) NOT NULL default '',
+  `secretid` smallint(5) unsigned NOT NULL,
   PRIMARY KEY (`id`),
-  UNIQUE KEY `domainDNSName` (`domainDNSName`)
+  UNIQUE KEY `domainDNSName` (`domainDNSName`),
+  KEY `secretid` (`secretid`)
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
@@ -963,6 +965,37 @@ CREATE TABLE IF NOT EXISTS connectlog (
 --
 
 CALL AddIndexIfNotExists('continuations', 'deletefromid');
+
+-- --------------------------------------------------------
+
+-- 
+-- Table structure for table `cryptkey`
+-- 
+
+CREATE TABLE IF NOT EXISTS `cryptkey` (
+  `id` smallint(6) unsigned NOT NULL AUTO_INCREMENT,
+  `hostid` smallint(6) unsigned NOT NULL,
+  `hosttype` enum('managementnode','web') NOT NULL DEFAULT 'managementnode',
+  `pubkey` varchar(1000) NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `hostid` (`hostid`)
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+
+-- --------------------------------------------------------
+
+-- 
+-- Table structure for table `cryptsecret`
+-- 
+
+CREATE TABLE IF NOT EXISTS `cryptsecret` (
+  `id` mediumint(8) unsigned NOT NULL AUTO_INCREMENT,
+  `cryptkeyid` smallint(5) unsigned NOT NULL,
+  `secretid` smallint(5) unsigned NOT NULL,
+  `cryptsecret` varchar(1000) NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `cryptkeyid` (`cryptkeyid`,`secretid`),
+  KEY `secretid` (`secretid`)
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
 
@@ -1546,6 +1579,7 @@ CALL AddColumnIfNotExists('vmprofile', 'rsapub', "text NULL default NULL AFTER `
 CALL AddColumnIfNotExists('vmprofile', 'rsakey', "varchar(256) NULL default NULL AFTER `rsapub`");
 CALL AddColumnIfNotExists('vmprofile', 'encryptedpasswd', "text NULL default NULL AFTER `rsakey`");
 CALL AddColumnIfNotExists('vmprofile', 'folderpath', "varchar(256) default NULL AFTER resourcepath");
+CALL AddColumnIfNotExists('vmprofile', 'secretid', "smallint(5) unsigned NULL default NULL AFTER password");
 
 CALL AddOrRenameColumn('vmprofile', 'vmware_mac_eth0_generated', 'eth0generated', "tinyint(1) unsigned NOT NULL default '0'");
 CALL AddOrRenameColumn('vmprofile', 'vmware_mac_eth1_generated', 'eth1generated', "tinyint(1) unsigned NOT NULL default '0'");
@@ -1555,6 +1589,7 @@ CALL AlterVMDiskValues();
 CALL AddUniqueIndex('vmprofile', 'profilename');
 CALL AddIndexIfNotExists('vmprofile', 'repositoryimagetypeid');
 CALL AddIndexIfNotExists('vmprofile', 'datastoreimagetypeid');
+CALL AddIndexIfNotExists('vmprofile', 'secretid');
 
 -- --------------------------------------------------------
 
@@ -2056,6 +2091,16 @@ UPDATE vmprofile SET vmprofile.datastoreimagetypeid = (SELECT `id` FROM `imagety
 -- --------------------------------------------------------
 
 --
+-- Constraints for table `addomain`
+--
+
+CALL DropExistingConstraints('addomain', 'secretid');
+
+CALL AddConstraintIfNotExists('addomain', 'secretid', 'cryptsecret', 'secretid', 'none', '');
+
+-- --------------------------------------------------------
+
+--
 -- Constraints for table `blockComputers`
 --
 
@@ -2223,6 +2268,14 @@ CALL AddConstraintIfNotExists('connectmethodport', 'connectmethodid', 'connectme
 --
 
 CALL AddConstraintIfNotExists('continuations', 'userid', 'user', 'id', 'update', 'CASCADE');
+
+-- --------------------------------------------------------
+
+--
+-- Constraints for table `cryptsecret`
+--
+
+CALL AddConstraintIfNotExists('cryptsecret', 'cryptkeyid', 'cryptkey', 'id', 'delete', 'CASCADE');
 
 -- --------------------------------------------------------
 
@@ -2644,6 +2697,7 @@ CALL DropExistingConstraints('vmprofile', 'imageid');
 CALL AddConstraintIfNotExists('vmprofile', 'imageid', 'image', 'id', 'none', '');
 CALL AddConstraintIfNotExists('vmprofile', 'repositoryimagetypeid', 'imagetype', 'id', 'update', 'CASCADE');
 CALL AddConstraintIfNotExists('vmprofile', 'datastoreimagetypeid', 'imagetype', 'id', 'update', 'CASCADE');
+CALL AddConstraintIfNotExists('vmprofile', 'secretid', 'cryptsecret', 'secretid', 'none', '');
 
 -- --------------------------------------------------------
 
