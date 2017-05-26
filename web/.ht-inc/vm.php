@@ -71,11 +71,9 @@ function editVMInfo() {
 		print "</button><br><br>\n";
 		print "<div id=vmhostdata class=hidden>\n";
 		print "<table summary=\"\">\n";
-		#$cont = addContinuationsEntry('changeVMprofile');
 		print "  <tr>\n";
 		print "    <th align=right>VM Profile:</th>\n";
 		print "    <td>\n";
-		#printSelectInput("vmprofileid", $profiles, -1, 0, 0, 'vmprofileid', "onchange=changeVMprofile('$cont')");
 		print "      <div dojoType=\"dijit.TitlePane\" id=vmprofile></div>\n";
 		print "    </td>\n";
 		print "  </tr>\n";
@@ -138,19 +136,6 @@ function editVMInfo() {
 		print "</td>\n";
 		print "</tr><tbody/></table>\n";
 		print "</div><br><br>\n";
-
-		/*print "<div dojoType=\"dijit.Dialog\"\n";
-		print "     id=\"profileDlg\"\n";
-		print "     title=\"Change Profile\">\n";
-		print "You have selected to change the VM Profile for this host.<br>\n";
-		print "Doing this will attempt to move any future reservations on the<br>\n";
-		print "host's VMs to other VMs and will submit a reload reservation for this<br>\n";
-		print "host after any active reservations on its VMs.<br><br>\n";
-		print "Are you sure you want to do this?<br><br>\n";
-		print "<button onclick=\"submitChangeProfile()\">Update VM Profile</button>\n";
-		print "<button onclick=\"dijit.byId('profileDlg').hide()\">Cancel</button>\n";
-		print "<input type=hidden id=changevmcont>\n";
-		print "</div>\n";*/
 	}
 	print "</div>\n";
 
@@ -881,27 +866,60 @@ function AJupdateVMprofileItem() {
 
 	$item = mysql_real_escape_string($item);
 	$profile = getVMProfiles($profileid);
-	if($item == 'password' && $profile[$profileid]['rsapub']) {
-		$encrypted = encryptDataAsymmetric($newvalue, $profile[$profileid]['rsapub']);
-		$escaped = mysql_real_escape_string($encrypted);
-		$query = "UPDATE vmprofile "
-		       . "SET `encryptedpasswd` = '$escaped' "
-		       . "WHERE id = $profileid";
-		doQuery($query, 101);
-		# don't store the unencrypted password
-		$newvalue2 = 'NULL';
-		$newvalue = '';
+	if($item == 'password') {
+		if($profile[$profileid]['rsapub']) {
+			$encrypted = encryptDataAsymmetric($newvalue, $profile[$profileid]['rsapub']);
+			$escaped = mysql_real_escape_string($encrypted);
+			$query = "UPDATE vmprofile "
+			       . "SET `encryptedpasswd` = '$escaped', "
+			       .     "`password` = NULL "
+			       . "WHERE id = $profileid";
+			doQuery($query);
+		}
+		else {
+			$pwdlen = strlen($newvalue);
+			if($pwdlen == 0) {
+				if($profile[$profileid]['pwdlength'] != 0) {
+					$secretid = getSecretID('vmprofile', 'secretid', $profileid);
+					if($secretid === NULL) {
+						print "dojo.byId('savestatus').innerHTML = '';";
+						print "alert('Error saving password');";
+						return;
+					}
+					deleteSecrets($secretid);
+					$query = "UPDATE vmprofile "
+					       . "SET password = NULL, "
+					       .     "secretid = NULL "
+					       . "WHERE id = $profileid";
+					doQuery($query);
+				}
+			}
+			else {
+				$secretid = getSecretID('vmprofile', 'secretid', $profileid);
+				if($secretid === NULL) {
+					print "dojo.byId('savestatus').innerHTML = '';";
+					print "alert('Error saving password');";
+					return;
+				}
+				$encpass = encryptDBdata($newvalue, $secretid);
+				$query = "UPDATE vmprofile "
+				       . "SET password = '$encpass', "
+				       .     "secretid = '$secretid' "
+				       . "WHERE id = $profileid";
+				doQuery($query);
+			}
+		}
+		print "dojo.byId('savestatus').innerHTML = 'Saved'; ";
+		print "setTimeout(function() {dojo.byId('savestatus').innerHTML = '';}, 3000); ";
+		print "curprofile.pwdlength = $pwdlen;";
+		return;
 	}
-	else if($profile[$profileid][$item] == $newvalue)
+	elseif($profile[$profileid][$item] == $newvalue)
 		return;
 	$query = "UPDATE vmprofile "
 	       . "SET `$item` = $newvalue2 "
 	       . "WHERE id = $profileid";
 	doQuery($query, 101);
-	if($item == 'password') {
-		print "document.getElementById('savestatus').innerHTML = 'Saved'; ";
-		print "setTimeout(function() {document.getElementById('savestatus').innerHTML = '';}, 3000); ";
-	}
 	$newvalue = preg_replace("/'/", "\\'", $newvalue);
 	print "curprofile.$item = '$newvalue';";
 }
@@ -927,11 +945,18 @@ function AJnewProfile() {
 		return;
 	}
 	$imageid = getImageId('noimage');
-	$query = "INSERT INTO vmprofile (profilename, imageid) VALUES ('$newprofile', $imageid)";
+	$query = "INSERT INTO vmprofile "
+	       .        "(profilename, "
+	       .        "imageid, "
+	       .        "repositoryimagetypeid, "
+	       .        "datastoreimagetypeid) "
+	       . "VALUES "
+	       .       "('$newprofile', "
+	       .       "$imageid, "
+	       .       "(SELECT id FROM imagetype WHERE name = 'vmdk'), "
+	       .       "(SELECT id FROM imagetype WHERE name = 'vmdk'))";
 	doQuery($query, 101);
-	$qh = doQuery("SELECT LAST_INSERT_ID() FROM vmprofile", 101);
-	$row = mysql_fetch_row($qh);
-	$newid = $row[0];
+	$newid = dbLastInsertID();
 	AJprofileData($newid);
 }
 

@@ -150,56 +150,6 @@ function showVMstate() {
 		dojo.byId('vmstate').innerHTML = '';
 }
 
-function changeVMprofile() {
-	var hostid = dojo.byId('vmhostid').value;
-	var selobj = dojo.byId('vmprofileid');
-	var newid = selobj.options[selobj.selectedIndex].value;
-	dijit.byId('profileDlg').show();
-}
-
-function cancelVMprofileChange() {
-	if(fromok) {
-		fromok = 0;
-	}
-	else {
-		var selobj = dojo.byId('vmprofileid');
-		for(var i = 0; i < selobj.options.length; i++) {
-			if(selobj.options[i].value == curprofileid) {
-				selobj.selectedIndex = i;
-				break;
-			}
-		}
-	}
-}
-
-function submitChangeProfile() {
-	fromok = 1;
-	var hostid = dojo.byId('vmhostid').value;
-	var cont = dojo.byId('changevmcont').value;
-	var selobj = dojo.byId('vmprofileid');
-	var oldid = curprofileid;
-	var newid = selobj.options[selobj.selectedIndex].value;
-	dijit.byId('profileDlg').hide();
-	dojo.xhrPost({
-		url: 'index.php',
-		load: submitChangeProfileCB,
-		handleAs: "json",
-		error: errorHandler,
-		content: {continuation: cont,
-					 vmhostid: hostid,
-					 oldprofileid: oldid,
-					 newprofileid: newid},
-		timeout: 15000
-	});
-}
-
-function submitChangeProfileCB(data, ioArgs) {
-	var selobj = dojo.byId('vmprofileid');
-	curprofileid = selobj.options[selobj.selectedIndex].value;
-	dojo.byId('changevmcont').value = data.items.continuation;
-	alert(data.items.msg);
-}
-
 function vmToHost(cont) {
 	document.body.style.cursor = 'wait';
 	var hostid = dojo.byId('vmhostid').value;
@@ -589,9 +539,15 @@ function getVMprofileDataCB(data, ioArgs) {
 	dijit.byId('pgenmac1').setValue(curprofile.eth1generated);
 	dijit.byId('prsapub').setValue(curprofile.rsapub);
 	dijit.byId('prsakey').setValue(curprofile.rsakey);
-	dojo.byId('ppassword').value = curprofile.password;
-	dojo.byId('ppwdconfirm').value = curprofile.password;
-	checkProfilePassword();
+	if(curprofile.pwdlength == 0) {
+		dojo.byId('ppassword').value = '';
+		dojo.byId('ppwdconfirm').value = '';
+	}
+	else {
+		dojo.byId('ppassword').value = '********';
+		dojo.byId('ppwdconfirm').value = 'xxxxxxxx';
+	}
+	dojo.byId('ppwdmatch').innerHTML = '';
 	dojo.byId('vmprofiledata').className = 'shown';
 	document.body.style.cursor = 'default';
 }
@@ -763,8 +719,15 @@ function updateProfile(id, field) {
 		var newvalue = dojo.byId(id).value;
 	if(curprofile[field] == newvalue && field != 'password')
 		return;
-	if(field == 'password')
+	if(field == 'password') {
+		if(dojo.byId('ppassword').value == '********' &&
+		   dojo.byId('ppwdconfirm').value == 'xxxxxxxx') {
+			dojo.byId('savestatus').innerHTML = '(No change)';
+			setTimeout(function() {dojo.byId('savestatus').innerHTML = '';}, 3000);
+			return;
+		}
 		dojo.byId('savestatus').innerHTML = 'Saving...';
+	}
 	document.body.style.cursor = 'wait';
 	
 	var profileid = dojo.byId('profileid').value;

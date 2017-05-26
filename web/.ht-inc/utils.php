@@ -2976,11 +2976,15 @@ function encryptSecret($secret, $cryptkey) {
 /// \param $skipkeyid - (optional, default=0) a cryptkey.id to skip (used if
 /// calling from a function that just encrypted $secret for a given cryptkey)
 ///
-/// \brief encrypts $secret using any existing cryptkeys in database
+/// \brief encrypts $secret using any existing web server cryptkeys in database
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function encryptSecrets($secret, $secretid, $skipkeyid=0) {
-	$query = "SELECT id, pubkey FROM cryptkey WHERE id != $skipkeyid";
+	$query = "SELECT id, "
+	       .        "pubkey "
+	       . "FROM cryptkey "
+	       . "WHERE id != $skipkeyid AND "
+	       .       "hosttype = 'web'";
 	$qh = doQuery($query);
 	$values = array();
 	while($row = mysql_fetch_assoc($qh)) {
@@ -2995,6 +2999,88 @@ function encryptSecrets($secret, $secretid, $skipkeyid=0) {
 		       .        "(cryptkeyid, "
 		       .        "secretid, "
 		       .        "cryptsecret) "
+		       . "VALUES $allvalues";
+		doQuery($query);
+	}
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn updateSecrets($requestid)
+///
+/// \param $requestid - id from request table
+///
+/// \brief ensures cryptsecret contains any needed entries for vcld to process
+/// $requestid
+///
+////////////////////////////////////////////////////////////////////////////////
+function updateSecrets($requestid) {
+	# determine any secretids needed from addomain
+	$secretids = array();
+	$query = "SELECT ad.secretid, "
+	       .        "rs.managementnodeid "
+	       . "FROM reservation rs "
+	       . "LEFT JOIN imageaddomain ia ON (rs.imageid = ia.imageid) "
+	       . "LEFT JOIN addomain ad ON (ia.addomainid = ad.id) "
+	       . "WHERE rs.requestid = $requestid AND "
+	       .       "ad.secretid IS NOT NULL";
+	$qh = doQuery($query);
+	while($row = mysql_fetch_assoc($qh))
+		$secretids[$row['managementnodeid']][$row['secretid']] = 1;
+	# determine any secretids needed from vmprofile
+	$query = "SELECT vp.secretid, "
+	       .        "rs.managementnodeid "
+	       . "FROM reservation rs "
+	       . "JOIN computer c ON (rs.computerid = c.id) "
+	       . "LEFT JOIN vmhost vh ON (c.vmhostid = vh.id) "
+	       . "LEFT JOIN vmprofile vp ON (vh.vmprofileid = vp.id) "
+	       . "WHERE rs.requestid = $requestid AND "
+	       .       "vp.secretid IS NOT NULL";
+	$qh = doQuery($query);
+	while($row = mysql_fetch_assoc($qh))
+		$secretids[$row['managementnodeid']][$row['secretid']] = 1;
+
+	$mycryptkeyid = getCryptKeyID();
+	if($mycryptkeyid === NULL && count($secretids)) {
+		# corner case, have no way to decrypt existing secrets, silently fail
+		# mn will call API to attempt to have secrets generated, may have success
+		// if hit another web server or may return error at which point mn
+		# can fail reservation
+		return;
+	}
+
+	# find any missing secrets for management nodes
+	$values = array();
+	foreach($secretids as $mnid => $secretids) {
+		$secretids = array_keys($secretids);
+		$allsecretids = implode(',', $secretids);
+		$query = "SELECT ck.id as cryptkeyid, "
+		       .        "ck.pubkey as cryptkey, "
+		       .        "s.id as secretid, "
+		       .        "mycs.cryptsecret AS mycryptsecret "
+		       . "FROM cryptkey ck "
+		       . "JOIN (SELECT DISTINCT secretid AS id FROM cryptsecret) AS s "
+		       . "JOIN (SELECT cryptsecret, secretid FROM cryptsecret WHERE cryptkeyid = $mycryptkeyid) AS mycs "
+		       . "LEFT JOIN cryptsecret cs ON (s.id = cs.secretid AND ck.id = cs.cryptkeyid) "
+		       . "WHERE mycs.secretid = s.id AND "
+		       .       "ck.hostid = $mnid AND "
+		       .       "ck.hosttype = 'managementnode' AND "
+		       .       "s.id in ($allsecretids) AND "
+		       .       "cs.id IS NULL";
+		$qh = doQuery($query);
+		while($row = mysql_fetch_assoc($qh)) {
+			$secret = decryptSecret($row['mycryptsecret']);
+			$encsecret = encryptSecret($secret, $row['cryptkey']);
+			$values[] = "({$row['cryptkeyid']}, {$row['secretid']}, '$encsecret')";
+		}
+	}
+	# add secrets
+	if(! empty($values)) {
+		$allvalues = implode(',', $values);
+		$query = "INSERT INTO cryptsecret "
+		       .       "(cryptkeyid, "
+		       .       "secretid, "
+		       .       "cryptsecret) "
 		       . "VALUES $allvalues";
 		doQuery($query);
 	}
@@ -5696,6 +5782,8 @@ function addRequest($forimaging=0, $revisionid=array(), $checkuser=1) {
 	}
 	// release semaphore lock
 	cleanSemaphore();
+
+	updateSecrets($requestid);
 
 	return $requestid;
 }
@@ -11805,7 +11893,8 @@ function generateString($length=8) {
 /// \b vmdisk - "dedicated" or "shared" - whether or not vm files are
 /// stored on local disk or network attached storage\n
 /// \b username - username associated with this profile\n
-/// \b password - password associated with this profile\n
+/// \b pwdlength - length of password field\n
+/// \b secretid - cryptsecret.secretid for key used to encrypt password\n
 /// \b eth0generated - boolean telling if the MAC address for eth0 should be
 /// autogenerated\n
 /// \b eth1generated - boolean telling if the MAC address for eth1 should be
@@ -11835,7 +11924,8 @@ function getVMProfiles($id="") {
 	       .        "vp.virtualswitch3, "
 	       .        "vp.vmdisk, "
 	       .        "vp.username, "
-	       .        "vp.password, "
+	       .        "CHAR_LENGTH(vp.password) as pwdlength, "
+	       .        "vp.secretid, "
 	       .        "vp.rsakey, "
 	       .        "vp.rsapub, "
 	       .        "vp.eth0generated, "
@@ -12834,7 +12924,7 @@ function sendJSON($arr, $identifier='', $REST=0) {
 	if($REST)
 		print json_encode($arr);
 	elseif(! empty($identifier))
-		print "{} && {identifier: '$identifier', 'items':" . json_encode($arr) . '}';
+		print "{} && {identifier: '$identifier', 'items':" . json_encode($arr) . '}'; # TODO
 	else
 		print '{} && {"items":' . json_encode($arr) . '}';
 }
@@ -13907,9 +13997,6 @@ function getDojoHTML($refresh) {
 			foreach($dojoRequires as $req)
 				$rt .= "   dojo.require(\"$req\");\n";
 			$rt .= "   });\n";
-			$rt .= "dojo.addOnLoad(function() {";
-			$rt .=                   "var dialog = dijit.byId('profileDlg'); ";
-			$rt .=                   "dojo.connect(dialog, 'hide', cancelVMprofileChange);});";
 			$rt .= "</script>\n";
 			return $rt;
 

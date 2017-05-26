@@ -185,15 +185,7 @@ class ADdomain extends Resource {
 				$updates[] = "username = '{$data['username']}'";
 			# password
 			if(strlen($data['password'])) {
-				if($olddata['secretid'] == 0) {
-					$olddata['secretid'] = getSecretID('addomain', 'secretid', $data['rscid']);
-					if($olddata['secretid'] == NULL) {
-						$ret = array('status' => 'error', 'msg' => "Error encountered while updating password");
-						sendJSON($ret);
-						return;
-					}
-					$updates[] = "secretid = '{$olddata['secretid']}'";
-				}
+				// TODO handle this web server not having an entry for this secret in cryptsecret
 				$encpass = encryptDBdata($data['password'], $olddata['secretid']);
 				if($encpass == NULL) {
 					$ret = array('status' => 'error', 'msg' => "Error encountered while updating password");
@@ -294,25 +286,33 @@ class ADdomain extends Resource {
 		global $user;
 
 		$ownerid = getUserlistID($data['owner']);
+
+		$secretid = getSecretID('addomain', 'secretid', 0);
+		$encpass = encryptDBdata($data['password'], $secretid);
 	
 		$query = "INSERT INTO addomain"
 				.	"(name, "
 				.	"ownerid, "
 				.	"domainDNSName, "
 				.	"username, "
+				.	"password, "
 				.	"secretid, "
 				.	"dnsServers) "
 				.	"VALUES ('{$data['name']}', "
 				.	"$ownerid, "
 				.	"'{$data['domaindnsname']}', "
 				.	"'{$data['username']}', "
-				.	"0, "
+				.	"'$encpass', "
+				.	"$secretid, "
 				.	"'{$data['dnsservers']}')";
 		doQuery($query);
 
 		$rscid = dbLastInsertID();
-		if($rscid == 0)
+		if($rscid == 0) {
+			$query = "DELETE FROM cryptsecret WHERE secretid = $secretid";
+			doQuery($query);
 			return 0;
+		}
 
 		// add entry in resource table
 		$query = "INSERT INTO resource "
@@ -320,15 +320,6 @@ class ADdomain extends Resource {
 				 .        "subid) "
 				 . "VALUES ((SELECT id FROM resourcetype WHERE name = 'addomain'), "
 				 .        "$rscid)";
-		doQuery($query);
-
-		$secretid = getSecretID('addomain', 'secretid', $rscid);
-		$encpass = encryptDBdata($data['password'], $secretid);
-
-		$query = "UPDATE addomain "
-		       . "SET password = '$encpass', "
-		       .     "secretid = $secretid "
-		       . "WHERE id = $rscid";
 		doQuery($query);
 
 		return $rscid;

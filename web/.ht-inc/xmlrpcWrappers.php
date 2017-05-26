@@ -3739,7 +3739,9 @@ function XMLRPCfinishBaseImageCapture($ownerid, $resourceid, $virtual=1) {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
-/// \fn XMLRPCupdateSecrets()
+/// \fn XMLRPCupdateSecrets($reservationid)
+///
+/// \param $reservationid - id from reservation table
 ///
 /// \return an array with at least one index named 'status' which will have
 /// one of these values:\n
@@ -3751,11 +3753,11 @@ function XMLRPCfinishBaseImageCapture($ownerid, $resourceid, $virtual=1) {
 /// \b noupdate - indicates no missing values were found to be added to
 /// cryptsecret table
 ///
-/// \brief checks for any entries in cryptkey that don't have corresponding
-/// entries in cryptsecret and adds them to cryptsecret
+/// \brief generates any missing entries in cryptsecret for calling management
+/// node to be able to process $reservationid
 ///
 ////////////////////////////////////////////////////////////////////////////////
-function XMLRPCupdateSecrets() {
+function XMLRPCupdateSecrets($reservationid) {
 	global $user, $xmlrpcBlockAPIUsers;
 	if(! in_array($user['id'], $xmlrpcBlockAPIUsers)) {
 		return array('status' => 'error',
@@ -3763,45 +3765,76 @@ function XMLRPCupdateSecrets() {
 		             'errormsg' => 'access denied for call to XMLRPCupdateSecrets');
 	}
 	# query to find any cryptkeys that don't have values in cryptsecret
-	$self = "{$_SERVER['SERVER_ADDR']}::{$_SERVER['SERVER_NAME']}";
-	$mycryptkeyid = getCryptKeyID($self, 'web');
+	$mycryptkeyid = getCryptKeyID();
 	if($mycryptkeyid === NULL) {
 		return array('status' => 'error',
 		             'errorcode' => 100,
 		             'errormsg' => 'Encryption key missing for this web server');
 	}
+	# determine any secretids needed from addomain
+	$secretids = array();
+	$mnid = 0;
+	$query = "SELECT ad.secretid, "
+	       .        "rs.managementnodeid "
+	       . "FROM reservation rs "
+	       . "LEFT JOIN imageaddomain ia ON (rs.imageid = ia.imageid) "
+	       . "LEFT JOIN addomain ad ON (ia.addomainid = ad.id) "
+	       . "WHERE rs.id = $reservationid AND "
+	       .       "ad.secretid IS NOT NULL";
+	$qh = doQuery($query);
+	while($row = mysql_fetch_assoc($qh)) {
+		$secretids[] = $row['secretid'];
+		$mnid = $row['managementnodeid'];
+	}
+	# determine any secretids needed from vmprofile
+	$query = "SELECT vp.secretid, "
+	       .        "rs.managementnodeid "
+	       . "FROM reservation rs "
+	       . "JOIN computer c ON (rs.computerid = c.id) "
+	       . "LEFT JOIN vmhost vh ON (c.vmhostid = vh.id) "
+	       . "LEFT JOIN vmprofile vp ON (vh.vmprofileid = vp.id) "
+	       . "WHERE rs.id = $reservationid AND "
+	       .       "vp.secretid IS NOT NULL";
+	$qh = doQuery($query);
+	while($row = mysql_fetch_assoc($qh)) {
+		$secretids[] = $row['secretid'];
+		$mnid = $row['managementnodeid'];
+	}
+
+	# find any missing secrets for management nodes
+	$values = array();
+	$allsecretids = implode(',', $secretids);
 	$query = "SELECT ck.id as cryptkeyid, "
 	       .        "ck.pubkey as cryptkey, "
 	       .        "s.id as secretid, "
-	       .        "cs.cryptsecret, "
 	       .        "mycs.cryptsecret AS mycryptsecret "
 	       . "FROM cryptkey ck "
 	       . "JOIN (SELECT DISTINCT secretid AS id FROM cryptsecret) AS s "
 	       . "JOIN (SELECT cryptsecret, secretid FROM cryptsecret WHERE cryptkeyid = $mycryptkeyid) AS mycs "
 	       . "LEFT JOIN cryptsecret cs ON (s.id = cs.secretid AND ck.id = cs.cryptkeyid) "
 	       . "WHERE mycs.secretid = s.id AND "
+	       .       "ck.hostid = $mnid AND "
+	       .       "ck.hosttype = 'managementnode' AND "
+	       .       "s.id in ($allsecretids) AND "
 	       .       "cs.id IS NULL";
 	$qh = doQuery($query);
-	$values = array();
 	while($row = mysql_fetch_assoc($qh)) {
-		# decrypt secret
 		$secret = decryptSecret($row['mycryptsecret']);
-		# encrypt secret with any missing cryptkeys
 		$encsecret = encryptSecret($secret, $row['cryptkey']);
-		# save to cryptsecret
+		$encsecret = mysql_real_escape_string($encsecret);
 		$values[] = "({$row['cryptkeyid']}, {$row['secretid']}, '$encsecret')";
 	}
-	if(! empty($values)) {
-		$allvalues = implode(',', $values);
-		$query = "INSERT INTO cryptsecret "
-		       .       "(cryptkeyid, "
-		       .       "secretid, "
-		       .       "cryptsecret) "
-		       . "VALUES $allvalues";
-		doQuery($query);
-		return array('status' => 'success');
-	}
-	return array('status' => 'noupdate');
+	if(empty($values))
+		return array('status' => 'noupdate');
+
+	$allvalues = implode(',', $values);
+	$query = "INSERT INTO cryptsecret "
+	       .       "(cryptkeyid, "
+	       .       "secretid, "
+	       .       "cryptsecret) "
+	       . "VALUES $allvalues";
+	doQuery($query);
+	return array('status' => 'success');
 }
 
 ////////////////////////////////////////////////////////////////////////////////
