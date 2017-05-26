@@ -3671,7 +3671,7 @@ sub create_update_cygwin_startup_scheduled_task {
 	my $request_state = $self->data->get_request_state_name();
 	
 	my $root_password;
-	if ($request_state eq 'image') {
+	if ($request_state =~ /(image|checkpoint)/) {
 		$root_password = $WINDOWS_ROOT_PASSWORD;
 	}
 	else {

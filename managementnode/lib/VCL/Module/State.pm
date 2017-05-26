@@ -460,7 +460,7 @@ sub reservation_failed {
 		# Display the message
 		notify($ERRORS{'CRITICAL'}, 0, "reservation failed on $computer_short_name" . ($initialize_failed ? ', process failed to initialize' : '') . ": $message");
 		
-		if ($request_state_name eq 'image') {
+		if ($request_state_name =~ /(image|checkpoint)/) {
 			$new_request_state_name = 'maintenance';
 			$new_computer_state_name = 'maintenance';
 		}
