@@ -162,7 +162,7 @@ sub get_service_names {
 
 sub _get_service_info {
 	my $self = shift;
-	if (ref($self) !~ /linux/i) {
+	if (ref($self) !~ /VCL::/i) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return;
 	}
@@ -227,8 +227,12 @@ sub _get_service_info {
 		for my $line (@$service_output) {
 			my ($service_name) = $line =~ /\]\s*(\S+)\s*$/;
 			if ($service_name) {
-				#notify($ERRORS{'DEBUG'}, 0, "found '$service_name' service via '$service_command', line: '$line'");
-				$self->{service_info}{$service_name} = 'service';
+				# The service utility method of controlling services is a fallback
+				# Don't add if previously found by initctl list
+				if (!defined($self->{service_info}{$service_name})) {
+					#notify($ERRORS{'DEBUG'}, 0, "found '$service_name' service via '$service_command', line: '$line'");
+					$self->{service_info}{$service_name} = 'service';
+				}
 			}
 			else {
 				#notify($ERRORS{'WARNING'}, 0, "failed to parse service name on $computer_node_name, command: '$service_command', line: '" . string_to_ascii($line) . "'\noutput:\n" . join("\n", @$service_output));
