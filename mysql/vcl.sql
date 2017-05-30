@@ -2306,11 +2306,6 @@ INSERT IGNORE INTO `vmtype` (`id`, `name`) VALUES
 -- 
 
 -- 
--- Constraints for table `addomain`
--- 
-ALTER TABLE `addomain` ADD CONSTRAINT FOREIGN KEY (`secretid`) REFERENCES `cryptsecret` (`secretid`);
-
--- 
 -- Constraints for table `blockComputers`
 -- 
 ALTER TABLE `blockComputers` ADD CONSTRAINT FOREIGN KEY (`blockTimeid`) REFERENCES `blockTimes` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;

@@ -2090,16 +2090,6 @@ UPDATE vmprofile SET vmprofile.datastoreimagetypeid = (SELECT `id` FROM `imagety
 -- --------------------------------------------------------
 
 --
--- Constraints for table `addomain`
---
-
-CALL DropExistingConstraints('addomain', 'secretid');
-
-CALL AddConstraintIfNotExists('addomain', 'secretid', 'cryptsecret', 'secretid', 'none', '');
-
--- --------------------------------------------------------
-
---
 -- Constraints for table `blockComputers`
 --
 
