@@ -853,7 +853,6 @@ sub set_static_public_address {
 	my $ip_configuration = $self->data->get_management_node_public_ip_configuration();
 	my $public_ip_address = $self->data->get_computer_public_ip_address();
 	my $subnet_mask = $self->data->get_management_node_public_subnet_mask();
-	my $default_gateway = $self->data->get_management_node_public_default_gateway();
 	my @dns_servers = $self->data->get_management_node_public_dns_servers();
 	
 	# TODO: Get this out of here. OS modules shouldn't have to figure this out. $self->data should always return correct value.
@@ -861,7 +860,6 @@ sub set_static_public_address {
 	if ($server_request_fixed_ip) {
 		$public_ip_address = $server_request_fixed_ip;
 		$subnet_mask = $self->data->get_server_request_netmask();
-		$default_gateway = $self->data->get_server_request_router();
 		@dns_servers = $self->data->get_server_request_dns_servers();
 	}
 	
@@ -878,13 +876,9 @@ sub set_static_public_address {
 		notify($ERRORS{'WARNING'}, 0, "failed to retrieve public subnet mask to assign to $computer_name");
 		return;
 	}
-	elsif (!$default_gateway) {
-		notify($ERRORS{'WARNING'}, 0, "failed to retrieve default gateway to assign to $computer_name");
-		return;
-	}
 	
 	# Determine the public interface name
-	my $public_interface_name  = $self->get_public_interface_name();
+	my $public_interface_name = $self->get_public_interface_name();
 	if (!$public_interface_name) {
 		notify($ERRORS{'WARNING'}, 0, "unable to set static public IP address, public interface name could not be determined");
 		return;
@@ -915,15 +909,13 @@ sub set_static_public_address {
 		notify($ERRORS{'DEBUG'}, 0, "attempting to set static public IP address on $computer_name:\n" .
 			"interface: $public_interface_name\n" .
 			"IP address: $public_ip_address\n" .
-			"subnet mask: $subnet_mask\n" .
-			"default gateway: $default_gateway"
+			"subnet mask: $subnet_mask"
 		);
 		
 		my $ifcfg_parameters = {
 			bootproto => 'static',
 			ipaddr => $public_ip_address,
 			netmask => $subnet_mask,
-			gateway => $default_gateway,
 		};
 		
 		if (!$self->generate_ifcfg_file($public_interface_name, $ifcfg_parameters)) {
@@ -939,7 +931,7 @@ sub set_static_public_address {
 	}
 	
 	# Set default gateway
-	if (!$self->set_static_default_gateway($default_gateway, $public_interface_name)) {
+	if (!$self->set_static_default_gateway()) {
 		notify($ERRORS{'WARNING'}, 0, "failed to set static public IP address on $computer_name, default gateway could not be set");
 		return;
 	}
@@ -1142,10 +1134,9 @@ sub delete_default_gateway {
 
 =head2 set_static_default_gateway
 
- Parameters  : $default_gateway (optional)
+ Parameters  : none
  Returns     : boolean
- Description : Sets the default route. If no interface argument is supplied, the
-               public interface is used.
+ Description : Sets the default route.
 
 =cut
 
@@ -1158,9 +1149,9 @@ sub set_static_default_gateway {
 	
 	my $computer_name = $self->data->get_computer_short_name();
 	
-	my $default_gateway = shift || $self->get_correct_default_gateway();
+	my $default_gateway = $self->get_correct_default_gateway();
 	if (!$default_gateway) {
-		notify($ERRORS{'WARNING'}, 0, "unable to set static default gateway on $computer_name, argument was not supplied and correct default gateway IP address could not be determined");
+		notify($ERRORS{'WARNING'}, 0, "unable to set static default gateway on $computer_name, correct default gateway IP address could not be determined");
 		return;
 	}
 	

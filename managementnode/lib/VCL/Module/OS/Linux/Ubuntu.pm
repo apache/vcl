@@ -376,8 +376,9 @@ sub set_static_public_address {
 	my $public_ip_configuration = $self->data->get_management_node_public_ip_configuration();
 	my $public_ip_address       = $self->data->get_computer_public_ip_address();
 	my $public_subnet_mask      = $self->data->get_management_node_public_subnet_mask();
-	my $public_default_gateway  = $self->data->get_management_node_public_default_gateway();
 	my @public_dns_servers      = $self->data->get_management_node_public_dns_servers();
+	
+	my $public_default_gateway  = $self->get_correct_default_gateway();
 	
 	my $server_request_fixed_ip = $self->data->get_server_request_fixed_ip();
 	if ($server_request_fixed_ip) {
@@ -388,10 +389,6 @@ sub set_static_public_address {
 		
 		if (!$public_subnet_mask) {
 			notify($ERRORS{'WARNING'}, 0, "unable to set static public IP address to $public_ip_address on $computer_name, server request fixed IP is set but server request subnet mask could not be retrieved");
-			return;
-		}
-		elsif (!$public_default_gateway) {
-			notify($ERRORS{'WARNING'}, 0, "unable to set static public IP address to $public_ip_address on $computer_name, server request fixed IP is set but server request default gateway could not be retrieved");
 			return;
 		}
 		elsif (!@public_dns_servers) {
@@ -406,7 +403,6 @@ sub set_static_public_address {
 		}
 	}
 	
-
 	# Get the public interface name
 	my $public_interface_name = $self->get_public_interface_name();
 	if (!$public_interface_name) {
@@ -534,7 +530,7 @@ sub set_static_public_address {
 	}
 	
 	# Set the default gateway
-	if (!$self->set_static_default_gateway($public_default_gateway, $public_interface_name)) {
+	if (!$self->set_static_default_gateway()) {
 		notify($ERRORS{'WARNING'}, 0, "failed to set static public IP address to $public_ip_address on $computer_name, failed to set the default gateway");
 		return;
 	}

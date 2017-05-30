@@ -8509,7 +8509,7 @@ sub set_static_public_address {
 	my $interface_name = $self->get_public_interface_name() || '<undefined>';
 	my $computer_public_ip_address = $self->data->get_computer_public_ip_address() || '<undefined>';
 	my $subnet_mask = $self->data->get_management_node_public_subnet_mask() || '<undefined>';
-	my $default_gateway = $self->data->get_management_node_public_default_gateway() || '<undefined>';
+	my $default_gateway = $self->get_correct_default_gateway() || '<undefined>';
 
    if ($server_request_fixed_ip) {
       $computer_public_ip_address = $server_request_fixed_ip;
