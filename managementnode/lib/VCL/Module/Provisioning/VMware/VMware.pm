@@ -57,6 +57,8 @@ use 5.008000;
 use strict;
 use warnings;
 use diagnostics;
+no warnings 'redefine';
+
 use English qw(-no_match_vars);
 use IO::File;
 use Fcntl qw(:DEFAULT :flock);
@@ -829,12 +831,6 @@ sub capture {
 	my $vmprofile_vmdisk = $self->data->get_vmhost_profile_vmdisk();
 	my $vmdk_base_directory_path_shared = $self->get_vmdk_base_directory_path_shared();
 	my $repository_mounted_on_vmhost = $self->is_repository_mounted_on_vmhost();
-	
-	# Make sure the VM profile repository path is configured if the VM profile disk type is local
-	if ($vmprofile_vmdisk =~ /(local|dedicated)/ && !$self->get_repository_vmdk_base_directory_path()) {
-		notify($ERRORS{'CRITICAL'}, 0, "disk type is set to '$vmprofile_vmdisk' but the repository path is NOT configured for VM profile '$vmprofile_name', this configuration is not allowed because it may result in vmdk directories being deleted without a backup copy saved in the image repository");
-		return;
-	}
 	
 	# Determine the vmx file path actively being used by the VM
 	my $vmx_file_path_original = $self->get_active_vmx_file_path();
@@ -2708,9 +2704,15 @@ sub reclaim_vmhost_disk_space {
 		notify($ERRORS{'DEBUG'}, 0, "VM $vmx_file_name can be deleted");
 	}
 	
-	if ($vmhost_profile_vmdisk =~ /(local|dedicated)/) {
+	if ($vmhost_profile_vmdisk !~ /(local|dedicated)/) {
+		notify($ERRORS{'OK'}, 0, "VM disk mode is '$vmhost_profile_vmdisk', no image directories will be deleted from $vmdk_base_directory_path");
+	}
+	elsif (!$self->get_repository_vmdk_base_directory_path()) {
+		notify($ERRORS{'OK'}, 0, "VM disk mode is '$vmhost_profile_vmdisk' but repository path is NOT configured, no image directories will be deleted from $vmdk_base_directory_path");
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "VM disk mode is '$vmhost_profile_vmdisk' and repository path is configured, checking if any image directories can be deleted from $vmdk_base_directory_path");
 		for my $vmdk_directory_path (sort keys %$vmdk_directories) {
-			
 			$vmdk_directories->{$vmdk_directory_path}{deletable} = 1;
 			for my $vmx_file_path (keys %{$vmdk_directories->{$vmdk_directory_path}{vmx_file_paths}}) {
 				$vmdk_directories->{$vmdk_directory_path}{deletable} &= $vmx_files->{$vmx_file_path}{deletable};
@@ -2865,7 +2867,7 @@ sub reclaim_vmhost_disk_space {
 			"vmdk volume potentially available space: " . get_file_size_info_string($vmdk_potential_available_space)
 		);
 	}
-	
+
 	my @delete_stage_order = (
 		['vmdk', 'image_deleted', '1'],
 		['vmx', 'registered', '0'],

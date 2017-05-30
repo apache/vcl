@@ -2561,6 +2561,8 @@ sub get_config_option_descriptor_info {
 		return;
 	}
 	
+	return $self->{config_option_descriptor_info} if $self->{config_option_descriptor_info};
+	
 	my $vim_cmd_arguments = "solo/querycfgoptdesc";
 	my ($exit_status, $output) = $self->_run_vim_cmd($vim_cmd_arguments);
 	return if !$output;
@@ -2593,6 +2595,7 @@ sub get_config_option_descriptor_info {
 	}
 	
 	#notify($ERRORS{'DEBUG'}, 0, "retrieved config option descriptor info:\n" . format_data($config_option_descriptor_info));
+	$self->{config_option_descriptor_info} = $config_option_descriptor_info;
 	return $config_option_descriptor_info;
 }
 
@@ -2616,6 +2619,8 @@ sub get_highest_vm_hardware_version_key {
 		return;
 	}
 	
+	return $self->{highest_vm_hardware_version_key} if defined($self->{highest_vm_hardware_version_key});
+	
 	my $vmhost_hostname = $self->data->get_vmhost_hostname();
 	
 	my $config_option_descriptor_info = $self->get_config_option_descriptor_info();
@@ -2631,6 +2636,7 @@ sub get_highest_vm_hardware_version_key {
 	}
 	
 	notify($ERRORS{'DEBUG'}, 0, "determined highest VM hardware version supported on $vmhost_hostname: $highest_vm_hardware_version_key");
+	$self->{highest_vm_hardware_version_key} = $highest_vm_hardware_version_key;
 	return $highest_vm_hardware_version_key;
 }
 
@@ -2672,6 +2678,8 @@ sub get_config_option_info {
 		return;
 	}
 	
+	return $self->{config_option_info}{$key} if defined($self->{config_option_info}{$key});
+	
 	my $vim_cmd_arguments = "solo/querycfgopt $key";
 	my ($exit_status, $output) = $self->_run_vim_cmd($vim_cmd_arguments);
 	return if !$output;
@@ -2687,6 +2695,7 @@ sub get_config_option_info {
 		return;
 	}
 	
+	$self->{config_option_info}{$key} = $result->{'vim.vm.ConfigOption'};
 	return $result->{'vim.vm.ConfigOption'};
 }
 
@@ -2726,6 +2735,8 @@ sub get_config_option_guest_os_info {
 		return;
 	}
 	
+	return $self->{config_option_guest_os_info}{$key} if defined($self->{config_option_guest_os_info}{$key});
+	
 	my $config_option_info = $self->get_config_option_info($key) || return;
 	
 	my $guest_os_descriptor_array_ref = $config_option_info->{guestOSDescriptor};
@@ -2751,6 +2762,7 @@ sub get_config_option_guest_os_info {
 	}
 	
 	#notify($ERRORS{'DEBUG'}, 0, "retrieved config option guest OS info:\n" . format_data($config_option_guest_os_info));
+	$self->{config_option_guest_os_info}{$key} = $config_option_guest_os_info;
 	return $config_option_guest_os_info;
 }
 
@@ -2785,6 +2797,8 @@ sub get_supported_guest_os_ids {
 		}
 	}
 	
+	return @{$self->{supported_guest_os_ids}{$vm_hardware_version_key}} if defined($self->{supported_guest_os_ids}{$vm_hardware_version_key});
+	
 	my $config_option_info = $self->get_config_option_info($vm_hardware_version_key) || return;
 	
 	my $guest_os_descriptor_array_ref = $config_option_info->{guestOSDescriptor};
@@ -2817,6 +2831,7 @@ sub get_supported_guest_os_ids {
 	}
 	
 	notify($ERRORS{'DEBUG'}, 0, "retrieved supported guest OS names on $vmhost_hostname, VM hardware version: $vm_hardware_version_key: " . join(",", @supported_guest_os_ids));
+	$self->{supported_guest_os_ids}{$vm_hardware_version_key} = \@supported_guest_os_ids;
 	return @supported_guest_os_ids;
 }
 
