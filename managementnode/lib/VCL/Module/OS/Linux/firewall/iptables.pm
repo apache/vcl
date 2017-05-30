@@ -182,7 +182,7 @@ sub process_post_load {
 			},
 			'match_extensions' => {
 				'comment' => {
-					'comment' => "VCL: Allow traffic from management node ($timestamp)",
+					'comment' => "VCL: allow traffic from management node ($timestamp)",
 				},
 			},
 		}
@@ -293,7 +293,7 @@ sub process_reserved {
 						'dport' => $port,
 					},
 					'comment' => {
-						'comment' => "VCL: Allow traffic from any IP address to connect method ports during reserved stage of reservation $reservation_id ($timestamp)",
+						'comment' => "VCL: allow traffic from any IP address to connect method ports during reserved stage of reservation $reservation_id ($timestamp)",
 					},
 				},
 			}
@@ -391,7 +391,7 @@ sub process_inuse {
 						'dport' => $port,
 					},
 					'comment' => {
-						'comment' => "VCL: Allow traffic from $remote_ip_address to $protocol/$port during the inuse stage of reservation $reservation_id ($timestamp)",
+						'comment' => "VCL: allow traffic from $remote_ip_address to $protocol/$port during the inuse stage of reservation $reservation_id ($timestamp)",
 					},
 				},
 			}
@@ -493,7 +493,7 @@ sub process_pre_capture {
 					'destination-port' => 22,
 				},
 				'comment' => {
-					'comment' => "VCL: Allow traffic to SSH port 22 from any IP address ($timestamp)",
+					'comment' => "VCL: allow traffic to SSH port 22 from any IP address ($timestamp)",
 				},
 			},
 		}
@@ -579,7 +579,7 @@ sub process_cluster {
 			},
 			'match_extensions' => {
 				'comment' => {
-					'comment' => "VCL: jump to rules added during the cluster stage ($timestamp)",
+					'comment' => "VCL: jump to rules added during for cluster reservation ($timestamp)",
 				},
 			},
 		}
@@ -597,7 +597,7 @@ sub process_cluster {
 			},
 			'match_extensions' => {
 				'comment' => {
-					'comment' => "VCL: Allow all traffic from other computers assigned to cluster request $request_id ($timestamp)",
+					'comment' => "VCL: allow all traffic from other computers assigned to cluster request $request_id ($timestamp)",
 				},
 			},
 		}
@@ -2069,7 +2069,7 @@ sub nat_configure_host {
 			},
 			'match_extensions' => {
 				'comment' => {
-					'comment' => "VCL: jump from nat table POSTROUTING chain to to NAT host $nat_host_chain_name chain",
+					'comment' => "VCL: jump from nat table POSTROUTING chain to NAT host $nat_host_chain_name chain",
 				},
 			},
 		}
@@ -2109,6 +2109,9 @@ sub nat_configure_host {
 				'multiport' => {
 					'destination-ports' => $destination_ports,
 				},
+				'comment' => {
+					'comment' => "VCL: allow inbound TCP traffic on the NAT port ranges to public $public_interface_name",
+				},
 			},
 		}
 	)) {
@@ -2130,6 +2133,9 @@ sub nat_configure_host {
 				'multiport' => {
 					'destination-ports' => $destination_ports,
 				},
+				'comment' => {
+					'comment' => "VCL: allow inbound UDP traffic on the NAT port ranges to public $public_interface_name",
+				},
 			},
 		}
 	)) {
@@ -2148,7 +2154,7 @@ sub nat_configure_host {
 					'state' => 'NEW,RELATED,ESTABLISHED',
 				},
 				'comment' => {
-					'comment' => "forward inbound packets from public $public_interface_name to internal $internal_interface_name",
+					'comment' => "VCL: forward inbound packets from public $public_interface_name to internal $internal_interface_name",
 				},
 			},	
 		}
@@ -2168,7 +2174,7 @@ sub nat_configure_host {
 					'state' => 'NEW,RELATED,ESTABLISHED',
 				},
 				'comment' => {
-					'comment' => "forward outbound packets from internal $internal_interface_name to public $public_interface_name",
+					'comment' => "VCL: forward outbound packets from internal $internal_interface_name to public $public_interface_name",
 				},
 			},
 		}
@@ -2210,22 +2216,22 @@ sub nat_configure_reservation {
 		return;
 	}
 	
-	my $chain_name = $self->get_nat_reservation_chain_name();
+	my $reservation_nat_chain_name = $self->get_nat_reservation_chain_name();
 	
 	# Check if chain for reservation has already been created
-	if (defined($nat_table_info->{$chain_name})) {
-		notify($ERRORS{'DEBUG'}, 0, "'$chain_name' chain already exists in nat table on $computer_name");
+	if (defined($nat_table_info->{$reservation_nat_chain_name})) {
+		notify($ERRORS{'DEBUG'}, 0, "'$reservation_nat_chain_name' chain already exists in nat table on $computer_name");
 	}
-	elsif (!$self->create_chain('nat', $chain_name)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to configure NAT host $computer_name for reservation, failed to add '$chain_name' chain to nat table");
+	elsif (!$self->create_chain('nat', $reservation_nat_chain_name)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to configure NAT host $computer_name for reservation, failed to add '$reservation_nat_chain_name' chain to nat table");
 		return;
 	}
 	
 	# Check if rule to jump to reservation's chain already exists in the PREROUTING table
 	for my $rule (@{$nat_table_info->{PREROUTING}{rules}}) {
 		my $rule_specification_string = $rule->{rule_specification};
-		if ($rule_specification_string =~ /-j $chain_name(\s|$)/) {
-			notify($ERRORS{'DEBUG'}, 0, "PREROUTING chain in nat table on $computer_name already contains a rule to jump to '$chain_name' chain: $rule_specification_string");
+		if ($rule_specification_string =~ /-j $reservation_nat_chain_name(\s|$)/) {
+			notify($ERRORS{'DEBUG'}, 0, "PREROUTING chain in nat table on $computer_name already contains a rule to jump to '$reservation_nat_chain_name' chain: $rule_specification_string");
 			return 1;;
 		}
 	}
@@ -2234,11 +2240,16 @@ sub nat_configure_reservation {
 	if (!$self->insert_rule('nat', 'PREROUTING',
 		{
 			'parameters' => {
-				'jump' => $chain_name,
+				'jump' => $reservation_nat_chain_name,
+			},
+			'match_extensions' => {
+				'comment' => {
+					'comment' => "VCL: jump from nat table PREROUTING chain to reservation NAT chain $reservation_nat_chain_name",
+				},
 			},
 		}
 	)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to configure NAT host $computer_name for reservation, failed to create rule in PREROUTING chain in nat table to jump to '$chain_name' chain");
+		notify($ERRORS{'WARNING'}, 0, "failed to configure NAT host $computer_name for reservation, failed to create rule in PREROUTING chain in nat table to jump to '$reservation_nat_chain_name' chain");
 		return;
 	}
 	
@@ -2334,7 +2345,7 @@ sub nat_add_port_forward {
 			},
 			'match_extensions' => {
 				'comment' => {
-					'comment' => "forward: $public_interface_name:$source_port --> $destination_ip_address:$destination_port ($protocol)",
+					'comment' => "VCL: forward $public_interface_name:$protocol/$source_port --> $destination_ip_address:$destination_port",
 				},
 				$protocol => {
 					'destination-port' => $source_port,
