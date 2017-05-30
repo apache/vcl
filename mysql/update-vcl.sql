@@ -311,10 +311,9 @@ CREATE PROCEDURE `AddConstraintIfNotExists`(
 BEGIN
   DECLARE EXIT HANDLER FOR SQLEXCEPTION
   BEGIN
-    SELECT CONCAT('WARNING: AddConstraintIfNotExists: ', tableName, '.', columnName, ' --> ', referencedTableName, '.', referencedColumnName) AS '';
     -- GET DIAGNOSTICS CONDITION 1 @sqlstate = RETURNED_SQLSTATE, @errno = MYSQL_ERRNO, @text = MESSAGE_TEXT;
     -- SELECT CONCAT('ERROR ', @errno, ': ', @text) AS '';
-	END;
+  END;
   
   -- CALL PrintMessage((SELECT CONCAT('AddConstraintIfNotExists: ', tableName, '.', columnName, ' --> ', referencedTableName, '.', referencedColumnName)));
   IF NOT EXISTS (
@@ -512,11 +511,11 @@ BEGIN
     SELECT i1.INDEX_NAME FROM information_schema.STATISTICS i1
     LEFT JOIN
     (
-    	SELECT INDEX_NAME, SEQ_IN_INDEX, COLUMN_NAME
-    	FROM information_schema.STATISTICS
-    	WHERE TABLE_SCHEMA = Database()
-    	  AND TABLE_NAME = tableName
-    	  AND SEQ_IN_INDEX = 2
+      SELECT INDEX_NAME, SEQ_IN_INDEX, COLUMN_NAME
+      FROM information_schema.STATISTICS
+      WHERE TABLE_SCHEMA = Database()
+        AND TABLE_NAME = tableName
+        AND SEQ_IN_INDEX = 2
     )
     i2 ON (i1.INDEX_NAME = i2.INDEX_NAME AND i1.SEQ_IN_INDEX = 1 AND i2.SEQ_IN_INDEX = 2)
     WHERE i1.TABLE_SCHEMA = Database()
@@ -1205,16 +1204,16 @@ CALL AddColumnIfNotExists('OS', 'minram', "MEDIUMINT UNSIGNED NOT NULL DEFAULT '
 --
 
 CREATE TABLE IF NOT EXISTS `oneclick` (
-	 `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
-	 `userid` mediumint(8) unsigned NOT NULL,
-	 `imageid` smallint(5) unsigned NOT NULL,
-	 `name` varchar(70) NOT NULL,
-	 `duration` int(11) NOT NULL,
-	 `autologin` tinyint(1) NOT NULL DEFAULT '0',
-	 `status` tinyint(4) NOT NULL DEFAULT '1',
-	 PRIMARY KEY (`id`),
-	 KEY `userid` (`userid`),
-	 KEY `imageid` (`imageid`)
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `userid` mediumint(8) unsigned NOT NULL,
+  `imageid` smallint(5) unsigned NOT NULL,
+  `name` varchar(70) NOT NULL,
+  `duration` int(11) NOT NULL,
+  `autologin` tinyint(1) NOT NULL DEFAULT '0',
+  `status` tinyint(4) NOT NULL DEFAULT '1',
+  PRIMARY KEY (`id`),
+  KEY `userid` (`userid`),
+  KEY `imageid` (`imageid`)
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------

@@ -790,16 +790,16 @@ CREATE TABLE IF NOT EXISTS `natport` (
 --
 
 CREATE TABLE IF NOT EXISTS `oneclick` (
-	 `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
-	 `userid` mediumint(8) unsigned NOT NULL,
-	 `imageid` smallint(5) unsigned NOT NULL,
-	 `name` varchar(70) NOT NULL,
-	 `duration` int(11) NOT NULL,
-	 `autologin` tinyint(1) NOT NULL DEFAULT '0',
-	 `status` tinyint(4) NOT NULL DEFAULT '1',
-	 PRIMARY KEY (`id`),
-	 KEY `userid` (`userid`),
-	 KEY `imageid` (`imageid`)
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `userid` mediumint(8) unsigned NOT NULL,
+  `imageid` smallint(5) unsigned NOT NULL,
+  `name` varchar(70) NOT NULL,
+  `duration` int(11) NOT NULL,
+  `autologin` tinyint(1) NOT NULL DEFAULT '0',
+  `status` tinyint(4) NOT NULL DEFAULT '1',
+  PRIMARY KEY (`id`),
+  KEY `userid` (`userid`),
+  KEY `imageid` (`imageid`)
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
