@@ -107,6 +107,7 @@ our @EXPORT = qw(
 	database_execute
 	database_select
 	delete_computerloadlog_reservation
+	delete_management_node_cryptsecret
 	delete_request
 	delete_reservation_account
 	delete_variable
@@ -165,6 +166,9 @@ our @EXPORT = qw(
 	get_management_node_computer_ids
 	get_management_node_id
 	get_management_node_info
+	get_management_node_cryptkey_pubkey
+	get_management_node_cryptsecret_info
+	get_management_node_cryptsecret_value
 	get_management_node_requests
 	get_management_node_vmhost_ids
 	get_management_node_vmhost_info
@@ -243,6 +247,7 @@ our @EXPORT = qw(
 	run_scp_command
 	run_ssh_command
 	set_logfile_path
+	set_management_node_cryptkey_pubkey
 	set_managementnode_state
 	set_reservation_lastcheck
 	set_variable
@@ -288,6 +293,7 @@ our @EXPORT = qw(
 	update_preload_flag
 	update_request_checkuser
 	update_request_state
+	update_reservation_cryptsecret
 	update_reservation_lastcheck
 	update_reservation_natlog
 	update_reservation_password
@@ -14511,12 +14517,16 @@ sub get_image_active_directory_domain_info {
 		return;
 	}
 	
+	my $management_node_id = get_management_node_id();
+	
 	# Get a hash ref containing the database column names
 	my $database_table_columns = get_database_table_columns();
 	
 	my @tables = (
 		'addomain',
 		'imageaddomain',
+		'cryptsecret',
+		#'cryptkey',
 	);
 	
 	# Construct the select statement
@@ -14538,6 +14548,12 @@ sub get_image_active_directory_domain_info {
 FROM
 imageaddomain,
 addomain
+LEFT JOIN (cryptsecret, cryptkey) ON (
+	addomain.secretid = cryptsecret.secretid AND
+	cryptsecret.cryptkeyid = cryptkey.id AND
+	cryptkey.hosttype = 'managementnode' AND
+	cryptkey.hostid = $management_node_id
+)
 WHERE
 imageaddomain.imageid = $image_id
 AND imageaddomain.addomainid = addomain.id
@@ -14572,6 +14588,9 @@ EOF
 		# Add values for other tables under separate keys
 		if ($table eq $tables[0]) {
 			$info->{$column} = $value;
+		}
+		elsif ($table eq 'cryptkey') {
+			$info->{cryptsecret}{$table}{$column} = $value;
 		}
 		else {
 			$info->{$table}{$column} = $value;
@@ -14891,6 +14910,270 @@ EOF
 	}
 	
 	delete_variable($validate_variable_name);
+	return 1;
+}
+
+#//////////////////////////////////////////////////////////////////////////////
+
+=head2 get_management_node_cryptkey_pubkey
+
+ Parameters  : $management_node_id, $show_warnings (optional)
+ Returns     : string
+ Description : Retrieves the cryptkey.pubkey value for the management node.
+
+=cut
+
+sub get_management_node_cryptkey_pubkey {
+	my ($management_node_id, $show_warnings) = @_;
+	if (!defined($management_node_id)) {
+		notify($ERRORS{'WARNING'}, 0, "management node ID argument was not supplied");
+		return;
+	}
+	
+	$show_warnings = 1 unless defined($show_warnings);
+	
+	my $select_statement = <<EOF;
+SELECT
+cryptkey.pubkey
+FROM
+cryptkey
+WHERE
+cryptkey.hosttype = 'managementnode'
+AND cryptkey.hostid = $management_node_id
+EOF
+	
+	my @rows = database_select($select_statement);
+	if (!@rows) {
+		if ($show_warnings) {
+			notify($ERRORS{'WARNING'}, 0, "cryptkey table does NOT contain a row for management node ID $management_node_id");
+		}
+		else {
+			notify($ERRORS{'DEBUG'}, 0, "cryptkey table does NOT contain a row for management node ID $management_node_id");
+		}
+		return;
+	}
+	
+	my $row = $rows[0];
+	my $public_key_string = $row->{pubkey};
+	notify($ERRORS{'DEBUG'}, 0, "retrieved public key from cryptkey table for management node ID $management_node_id");
+	return $public_key_string;
+}
+
+#//////////////////////////////////////////////////////////////////////////////
+
+=head2 set_management_node_cryptkey_pubkey
+
+ Parameters  : $host_id, $public_key_string
+ Returns     : $cryptkey_id
+ Description : Set or updates the cryptkey.pubkey value for the management node.
+
+=cut
+
+sub set_management_node_cryptkey_pubkey {
+	my ($management_node_id, $public_key_string) = @_;
+	if (!defined($management_node_id)) {
+		notify($ERRORS{'WARNING'}, 0, "management node ID argument was not supplied");
+		return;
+	}
+	elsif (!defined($public_key_string)) {
+		notify($ERRORS{'WARNING'}, 0, "public key string argument was not supplied");
+		return;
+	}
+	
+	my $insert_statement = <<EOF;
+INSERT INTO cryptkey
+(hostid, hosttype, pubkey)
+VALUES
+(
+	$management_node_id,
+	'managementnode',
+	'$public_key_string'
+)
+ON DUPLICATE KEY UPDATE
+pubkey='$public_key_string'
+EOF
+	
+	my $cryptkey_id = database_execute($insert_statement);
+	if ($cryptkey_id) {
+		notify($ERRORS{'DEBUG'}, 0, "set public key in cryptkey table for management node ID $management_node_id, cryptkey ID");
+		return 1;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute insert statement to set public key in cryptkey table for management node ID $management_node_id");
+		return;
+	}
+}
+
+#//////////////////////////////////////////////////////////////////////////////
+
+=head2 get_management_node_cryptsecret_info
+
+ Parameters  : $management_node_id
+ Returns     : hash reference
+ Description : 
+
+=cut
+
+sub get_management_node_cryptsecret_info {
+	my ($management_node_id) = @_;
+	if (!defined($management_node_id)) {
+		notify($ERRORS{'WARNING'}, 0, "management node ID argument was not supplied");
+		return;
+	}
+
+	my $select_statement = <<EOF;
+SELECT
+cryptsecret.*
+FROM
+cryptsecret,
+cryptkey
+WHERE
+cryptkey.hostid = $management_node_id
+AND cryptkey.hosttype = 'managementnode'
+AND cryptsecret.cryptkeyid = cryptkey.id
+EOF
+	
+	my @rows = database_select($select_statement);
+	if (scalar @rows == 0) {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve cryptsecret info from database for management node $management_node_id");
+		return;
+	}
+
+	print format_data(\@rows) . "\n\n";
+}
+
+#//////////////////////////////////////////////////////////////////////////////
+
+=head2 get_management_node_cryptsecret_value
+
+ Parameters  : $management_node_id, $secret_id
+ Returns     : boolean
+ Description : Retrieves the cryptsecret.cryptsecret value matching the
+               cryptsecret.secretid value from the database for the management
+               node.
+
+=cut
+
+sub get_management_node_cryptsecret_value {
+	my ($management_node_id, $secret_id) = @_;
+	if (!defined($management_node_id)) {
+		notify($ERRORS{'WARNING'}, 0, "management node ID argument was not supplied");
+		return;
+	}
+	if (!defined($secret_id)) {
+		notify($ERRORS{'WARNING'}, 0, "secret ID argument was not supplied");
+		return;
+	}
+
+	my $select_statement = <<EOF;
+SELECT
+cryptsecret.cryptsecret
+FROM
+cryptsecret,
+cryptkey
+WHERE
+cryptkey.hostid = $management_node_id
+AND cryptkey.hosttype = 'managementnode'
+AND cryptsecret.secretid = $secret_id
+AND cryptsecret.cryptkeyid = cryptkey.id
+EOF
+	
+	my @rows = database_select($select_statement);
+	if (scalar @rows == 0) {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve cryptsecret from database for management node $management_node_id, secret ID: $secret_id");
+		return;
+	}
+
+	my $cryptsecret = $rows[0]->{cryptsecret};	
+	notify($ERRORS{'DEBUG'}, 0, "retrieved cryptsecret, management node ID: $management_node_id, secret ID: $secret_id");
+	return $cryptsecret;
+}
+
+#//////////////////////////////////////////////////////////////////////////////
+
+=head2 delete_management_node_cryptsecret
+
+ Parameters  : $management_node_id, $secret_id (optional)
+ Returns     : boolean
+ Description : 
+
+=cut
+
+sub delete_management_node_cryptsecret {
+	my ($management_node_id, $secret_id) = @_;
+	if (!defined($management_node_id)) {
+		notify($ERRORS{'WARNING'}, 0, "management node ID argument was not supplied");
+		return;
+	}
+
+	my $delete_statement = <<EOF;
+DELETE
+cryptsecret.*
+FROM
+cryptsecret,
+cryptkey
+WHERE
+cryptkey.hostid = $management_node_id
+AND cryptkey.hosttype = 'managementnode'
+AND cryptsecret.cryptkeyid = cryptkey.id
+EOF
+	if ($secret_id) {
+		$delete_statement .= "AND cryptsecret.secretid = $secret_id";
+	}
+	
+	if (database_execute($delete_statement)) {
+		notify($ERRORS{'OK'}, 0, "deleted entries from cryptsecret table for management node ID $management_node_id" . ($secret_id ? ", secret ID: $secret_id" : ''));
+		return 1;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to delete entries from cryptsecret table for management node ID $management_node_id" . ($secret_id ? ", secret ID: $secret_id" : ''));
+		return 1;
+	}
+}
+
+#//////////////////////////////////////////////////////////////////////////////
+
+=head2 update_reservation_cryptsecret
+
+ Parameters  : none
+ Returns     : boolean
+ Description : Calls the XML-RPC XMLRPCupdateSecrets function to update the
+               cryptsecret table for the reservation.
+
+=cut
+
+sub update_reservation_cryptsecret {
+	my $reservation_id = shift;
+	if (!defined($reservation_id)) {
+		notify($ERRORS{'WARNING'}, 0, "reservation ID argument was not supplied");
+		return;
+	}
+	
+	my $xmlrpc_function = 'XMLRPCupdateSecrets';
+	my @xmlrpc_arguments = (
+		$xmlrpc_function,
+		$reservation_id
+	);
+	
+	my $response = xmlrpc_call(@xmlrpc_arguments);
+	if (!defined($response)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to update cryptsecret table, $xmlrpc_function returned undefined");
+		return;
+	}
+	elsif ($response->value->{status} =~ /success/) {
+		notify($ERRORS{'OK'}, 0, "called XMLRPCupdateSecrets, cryptsecret table successfully updated");
+	}
+	elsif ($response->value->{status} =~ /noupdate/) {
+		notify($ERRORS{'OK'}, 0, "called XMLRPCupdateSecrets, cryptsecret table does not need to be updated");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to update cryptsecret table, $xmlrpc_function returned:\n" .
+			"status        : $response->value->{status}\n" .
+			"error code    : $response->value->{errorcode}\n" .
+			"error message : $response->value->{errormsg}"
+		);
+		return;
+	}
 	return 1;
 }
 

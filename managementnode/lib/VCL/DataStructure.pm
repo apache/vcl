@@ -394,15 +394,17 @@ $SUBROUTINE_MAPPINGS{imagemeta_subimages} = '$self->request_data->{reservation}{
 $SUBROUTINE_MAPPINGS{imagemeta_sysprep} = '$self->request_data->{reservation}{RESERVATION_ID}{image}{imagemeta}{sysprep}';
 $SUBROUTINE_MAPPINGS{imagemeta_rootaccess} = '$self->request_data->{reservation}{RESERVATION_ID}{image}{imagemeta}{rootaccess}';
 $SUBROUTINE_MAPPINGS{imagemeta_sethostname} = '$self->request_data->{reservation}{RESERVATION_ID}{image}{imagemeta}{sethostname}';
-
-$SUBROUTINE_MAPPINGS{image_domain_dns_servers} = '$self->request_data->{reservation}{RESERVATION_ID}{image}{imagedomain}{dnsServers}';
+  
+#$SUBROUTINE_MAPPINGS{image_domain_dns_servers} = '$self->request_data->{reservation}{RESERVATION_ID}{image}{imagedomain}{dnsServers}'; # Explicit subroutine
 $SUBROUTINE_MAPPINGS{image_domain_dns_name} = '$self->request_data->{reservation}{RESERVATION_ID}{image}{imagedomain}{domainDNSName}';
 $SUBROUTINE_MAPPINGS{image_domain_id} = '$self->request_data->{reservation}{RESERVATION_ID}{image}{imagedomain}{id}';
-$SUBROUTINE_MAPPINGS{image_domain_login_description} = '$self->request_data->{reservation}{RESERVATION_ID}{image}{imagedomain}{logindescription}';
-$SUBROUTINE_MAPPINGS{image_domain_password} = '$self->request_data->{reservation}{RESERVATION_ID}{image}{imagedomain}{password}';
-$SUBROUTINE_MAPPINGS{image_domain_prettyname} = '$self->request_data->{reservation}{RESERVATION_ID}{image}{imagedomain}{prettyname}';
+$SUBROUTINE_MAPPINGS{image_domain_name} = '$self->request_data->{reservation}{RESERVATION_ID}{image}{imagedomain}{name}';
+$SUBROUTINE_MAPPINGS{image_domain_owner_id} = '$self->request_data->{reservation}{RESERVATION_ID}{image}{imagedomain}{ownerid}';
+#$SUBROUTINE_MAPPINGS{image_domain_password} = '$self->request_data->{reservation}{RESERVATION_ID}{image}{imagedomain}{password}'; # Explicit subroutine
+$SUBROUTINE_MAPPINGS{image_domain_secret_id} = '$self->request_data->{reservation}{RESERVATION_ID}{image}{imagedomain}{secretid}';
 $SUBROUTINE_MAPPINGS{image_domain_username} = '$self->request_data->{reservation}{RESERVATION_ID}{image}{imagedomain}{username}';
 $SUBROUTINE_MAPPINGS{image_domain_base_ou} = '$self->request_data->{reservation}{RESERVATION_ID}{image}{imagedomain}{imageaddomain}{baseOU}';
+$SUBROUTINE_MAPPINGS{image_domain_cryptsecret} = '$self->request_data->{reservation}{RESERVATION_ID}{image}{imagedomain}{cryptsecret}{cryptsecret}';
 
 $SUBROUTINE_MAPPINGS{image_os_name} = '$self->request_data->{reservation}{RESERVATION_ID}{image}{OS}{name}';
 $SUBROUTINE_MAPPINGS{image_os_prettyname} = '$self->request_data->{reservation}{RESERVATION_ID}{image}{OS}{prettyname}';
@@ -2762,6 +2764,40 @@ sub get_invalid_substitution_identifiers {
 		notify($ERRORS{'OK'}, 0, "input string contains invalid substitution identifiers: " . join(', ', @invalid_string_variable_identifiers));
 	}
 	return @invalid_string_variable_identifiers;
+}
+
+#//////////////////////////////////////////////////////////////////////////////
+
+=head2 get_image_domain_password
+
+ Parameters  : none
+ Returns     : string
+ Description : Returns the decrypted Active Directory domain password.
+
+=cut
+
+sub get_image_domain_password {
+	my $self = shift;
+	if (ref($self) !~ /VCL::/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return 0;
+	}
+	
+	my $reservation_id = $self->reservation_id();
+	
+	my $secret_id = $self->get_image_domain_secret_id();
+	if (!defined($secret_id)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve decrypted domain password, addomain.secretid is not defined in this DataStructure.pm object");
+		return;
+	}
+	
+	my $encrypted_password = $self->request_data->{reservation}{$reservation_id}{image}{imagedomain}{password};
+	if (!defined($encrypted_password)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve decrypted domain password, imagedomain.password is not defined in this DataStructure.pm object");
+		return;
+	}
+	
+	return $self->mn_os->decrypt_cryptsecret($secret_id, $encrypted_password);
 }
 
 #//////////////////////////////////////////////////////////////////////////////

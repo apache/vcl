@@ -55,6 +55,12 @@ use diagnostics;
 
 use VCL::utils;
 
+use Crypt::CBC;
+use Crypt::OpenSSL::RSA;
+use English;
+use File::Basename;
+use MIME::Base64;
+
 ###############################################################################
 
 =head1 CLASS VARIABLES
@@ -74,6 +80,15 @@ use VCL::utils;
 =cut
 
 our $MN_STAGE_SCRIPTS_DIRECTORY = "$TOOLS/ManagementNode/Scripts";
+
+=head2 $MN_PRIVATE_ENCRYPTION_KEY_FILE_PATH
+
+ Data type   : String
+ Description : /root/.vcl/<FQDN>.key
+
+=cut
+
+our $MN_PRIVATE_ENCRYPTION_KEY_FILE_PATH = "/root/.vcl/$FQDN.key";
 
 ###############################################################################
 
@@ -261,7 +276,7 @@ sub create_text_file {
 
 =head2 get_file_contents
 
- Parameters  : $file_path
+ Parameters  : $file_path, $display_warnings (optional)
  Returns     : array or string
  Description : Retrieves the contents of a file on the management node.
 
@@ -274,16 +289,17 @@ sub get_file_contents {
 		return;
 	}
 	
-	my ($file_path) = @_;
+	my ($file_path, $display_warnings) = @_;
 	if (!defined($file_path)) {
 		notify($ERRORS{'WARNING'}, 0, "file path argument was not supplied");
 		return;
 	}
+	$display_warnings = 1 unless defined($display_warnings);
 	
 	my $computer_node_name = $self->data->get_computer_node_name();
 	
 	if (!open FILE, '<', $file_path) {
-		notify($ERRORS{'WARNING'}, 0, "failed to retrieve contents of file on $computer_node_name, file could not be opened: $file_path");
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve contents of file on $computer_node_name, file could not be opened: $file_path") if $display_warnings;
 		return;
 	}
 	my @lines = <FILE>;
@@ -601,6 +617,380 @@ sub setup_get_menu {
 			'Check private IP addresses' => \&check_private_ip_addresses,
 		},
 	};
+}
+
+#//////////////////////////////////////////////////////////////////////////////
+
+=head2 get_private_key_file_path
+
+ Parameters  : none
+ Returns     : string
+ Description : Returns the location on the management node where the private key
+               resides that is used to decrypt secrets: /root/.vcl/<FQDN>.key
+
+=cut
+
+sub get_private_key_file_path {
+	return $MN_PRIVATE_ENCRYPTION_KEY_FILE_PATH;
+}
+
+#//////////////////////////////////////////////////////////////////////////////
+
+=head2 _get_private_key_object_from_file
+
+ Parameters  : none
+ Returns     : string
+ Description : Retrieves the private key string from the file on the management
+               node and creates a Crypt::OpenSSL::RSA object based on it.
+
+=cut
+
+sub _get_private_key_object_from_file {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	return $self->{private_key_object_from_file} if defined($self->{private_key_object_from_file});
+	
+	my $management_node_short_name = $self->data->get_management_node_short_name() || return;
+	
+	my $private_key_file_path = $self->get_private_key_file_path();
+	if (!$self->file_exists($private_key_file_path)) {
+		notify($ERRORS{'OK'}, 0, "unable to retrieve private key from file on $management_node_short_name because file does NOT exist: $private_key_file_path");
+		return;
+	}
+	
+	my $private_key_file_string = $self->get_file_contents($private_key_file_path);
+	if (!$private_key_file_string) {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve private key from file on $management_node_short_name: $private_key_file_path");
+		return;
+	}
+	
+	# Create an RSA object based on the existing private key contained in the file
+	my $rsa_private;
+	eval {
+		$rsa_private = Crypt::OpenSSL::RSA->new_private_key($private_key_file_string);
+	};
+	if ($EVAL_ERROR || !$rsa_private) {
+		notify($ERRORS{'WARNING'}, 0, "failed to create private key file Crypt::OpenSSL::RSA object from $private_key_file_path on $management_node_short_name" . ($EVAL_ERROR ? ", error:\n" . $EVAL_ERROR : ''));
+		return;
+	}
+	
+	$self->{private_key_object_from_file} = $rsa_private;
+	return $rsa_private;
+}
+
+#//////////////////////////////////////////////////////////////////////////////
+
+=head2 extract_public_key_from_private_key_file
+
+ Parameters  : none
+ Returns     : string
+ Description : Retrieves the private key from the file on the management node
+               and extracts the public key from the private key. The public key
+               string is returned.
+
+=cut
+
+sub extract_public_key_from_private_key_file {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $rsa_private = $self->_get_private_key_object_from_file() || return;
+	
+	my $management_node_short_name = $self->data->get_management_node_short_name();
+	my $private_key_file_path = $self->get_private_key_file_path();
+	
+	# Retrieve the public key string from the RSA object
+	my $public_key_string;
+	eval {
+		$public_key_string = $rsa_private->get_public_key_x509_string();
+	};
+	if ($EVAL_ERROR || !$public_key_string) {
+		notify($ERRORS{'WARNING'}, 0, "failed to extract public key from private key file $private_key_file_path on $management_node_short_name, failed to retrieve public key from private key contained in the file" . ($EVAL_ERROR ? ", error:\n" . $EVAL_ERROR : ''));
+		return;
+	}
+	
+	return $public_key_string;
+}
+
+#//////////////////////////////////////////////////////////////////////////////
+
+=head2 check_encryption_keys
+
+ Parameters  : none
+ Returns     : string
+ Description : Retrieves the cryptkeys.pubkey value from the database for the
+               management node and extracts the public key from the private key
+               file on the management node. Returns true if they match. Returns
+               false if they differ or if either could not be retrieved.
+
+=cut
+
+sub check_encryption_keys {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $management_node_id = $self->data->get_management_node_id() || return;
+	my $management_node_short_name = $self->data->get_management_node_short_name() || return;
+	
+	notify($ERRORS{'DEBUG'}, 0, "*** checking encryption keys on $management_node_short_name ***");
+	
+	# Get the cryptkey.pubkey value from the database for the management node
+	my $public_key_string_database_value = get_management_node_cryptkey_pubkey($management_node_id, 0) || return;
+	
+	# Create an RSA object based on the existing public key stored in the database, then extract the (hopefully same) public key from the object
+	# Do this to verify the public key is correctly formatted, the RSA module should strip any extraneous space or newlines
+	my $rsa_public;
+	eval {
+		$rsa_public = Crypt::OpenSSL::RSA->new_public_key($public_key_string_database_value);
+	};
+	if ($EVAL_ERROR || !$rsa_public) {
+		notify($ERRORS{'WARNING'}, 0, "failed to create RSA object from public key stored in database:\n$public_key_string_database_value" . ($EVAL_ERROR ? ", error:\n" . $EVAL_ERROR : ''));
+		return;
+	}
+	
+	# Retrieve the public key string from the RSA object
+	my $public_key_string_database_extracted;
+	eval {
+		$public_key_string_database_extracted = $rsa_public->get_public_key_x509_string();
+	};
+	if ($EVAL_ERROR || !$public_key_string_database_extracted) {
+		notify($ERRORS{'WARNING'}, 0, "retrieved cryptkey.pubkey value from database, created RSA object based on this public key, but failed to extract the public key from the object, there may be a problem with the public key stored in the database:\n$public_key_string_database_value" . ($EVAL_ERROR ? ", error:\n" . $EVAL_ERROR : ''));
+		return;
+	}
+	
+	# Extract the public key string from the private key file stored on the management node
+	my $public_key_string_private_extracted = $self->extract_public_key_from_private_key_file() || return;
+	
+	if ($public_key_string_database_extracted eq $public_key_string_private_extracted) {
+		notify($ERRORS{'OK'}, 0, "public key extracted from private key file on $management_node_short_name matches database cryptkey.pubkey value");
+		return 1;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "public key extracted from private key file on $management_node_short_name does not match database cryptkey.pubkey value:\n" .
+			"public key stored in database (cryptkey.pubkey):\n" . string_to_ascii($public_key_string_database_extracted) . "\n" .
+			"public key extracted from private key file:\n" . string_to_ascii($public_key_string_private_extracted)
+		);
+		return 0;
+	}
+}
+
+#//////////////////////////////////////////////////////////////////////////////
+
+=head2 generate_private_key_file
+
+ Parameters  : none
+ Returns     : boolean
+ Description : Creates a 4096 bit RSA private key file on the management node
+               at /root/.vcl/<FQDN>.key.
+
+=cut
+
+sub generate_private_key_file {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $arguments_hash_ref = shift;
+	if (defined($arguments_hash_ref) && !ref($arguments_hash_ref) || ref($arguments_hash_ref) ne 'HASH') {
+		notify($ERRORS{'WARNING'}, 0, "argument was supplied but is not a hash reference:\n" . format_data($arguments_hash_ref));
+		return;
+	}
+	
+	my $private_key_file_path = $self->get_private_key_file_path();
+	my $bits = 4096;
+	
+	# If provided and true, existing private key file will be deleted if it exists
+	my $force = $arguments_hash_ref->{force};
+	
+	my $management_node_id = $self->data->get_management_node_id() || return;
+	my $management_node_short_name = $self->data->get_management_node_short_name() || return;
+	my $reservation_id = $self->data->get_reservation_id();
+	
+	notify($ERRORS{'DEBUG'}, 0, "*** attempting to generate a new private key file on $management_node_short_name: $private_key_file_path ***");
+	
+	# Make sure the private key file does not already exist
+	if ($self->file_exists($private_key_file_path)) {
+		if ($force) {
+			notify($ERRORS{'OK'}, 0, "force argument was specified, existing private key file will be overwritten: $private_key_file_path");
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "failed to generate encryption keys, private key file already exists: $private_key_file_path");
+			return;
+		}
+	}
+	
+	# Delete cached RSA object
+	if ($self->{private_key_object_from_file}) {
+		notify($ERRORS{'DEBUG'}, 0, "deleting cached RSA private key object");
+		delete $self->{private_key_object_from_file};
+	}
+	
+	# Delete all existing cryptsecret entries for the management node
+	# The website's API won't delete any that may have been created with an earlier key
+	delete_management_node_cryptsecret($management_node_id);
+	
+	# Create a new RSA object containing a private/public key pair
+	# Create an RSA object based on the existing private key contained in the file
+	my $rsa_generate;
+	eval {
+		$rsa_generate = Crypt::OpenSSL::RSA->generate_key($bits);
+	};
+	if ($EVAL_ERROR || !$rsa_generate) {
+		notify($ERRORS{'WARNING'}, 0, "failed to create private key file on management node $management_node_short_name: $private_key_file_path, RSA object could not be created" . ($EVAL_ERROR ? ", error:\n" . $EVAL_ERROR : ''));
+		return;
+	}
+
+	my $private_key_string;
+	eval {
+		$private_key_string = $rsa_generate->get_private_key_string();
+	};
+	if ($EVAL_ERROR || !$private_key_string) {
+		notify($ERRORS{'WARNING'}, 0, "failed to create private key file on management node $management_node_short_name: $private_key_file_path, private key string could not be retireved from RSA object" . ($EVAL_ERROR ? ", error:\n" . $EVAL_ERROR : ''));
+		return;
+	}
+	
+	my $public_key_string;
+	eval {
+		$public_key_string = $rsa_generate->get_public_key_x509_string();
+	};
+	if ($EVAL_ERROR ||  !$public_key_string) {
+		notify($ERRORS{'WARNING'}, 0, "failed to create private key file on management node $management_node_short_name: $private_key_file_path, public key string could not be retireved from RSA object" . ($EVAL_ERROR ? ", error:\n" . $EVAL_ERROR : ''));
+		return;
+	}
+	
+	$self->create_text_file($private_key_file_path, $private_key_string) || return;
+	
+	# Update cryptkey table with the public key string
+	if (!set_management_node_cryptkey_pubkey($management_node_id, $public_key_string)) {
+		notify($ERRORS{'WARNING'}, 0, "created private key file on management node $management_node_short_name: $private_key_file_path, failed to update cryptkey table in database, attempting to delete private key file just created: $private_key_file_path");
+		$self->delete_file($private_key_file_path);
+		return;
+	}
+	
+	# Call the XML-RPC API to create a new cryptsecret entry for this reservation
+	update_reservation_cryptsecret($reservation_id);
+	
+	notify($ERRORS{'OK'}, 0, "created private key file on management node $management_node_short_name: $private_key_file_path, updated cryptkey.pubkey value in database");
+	return 1;
+}
+
+#//////////////////////////////////////////////////////////////////////////////
+
+=head2 decrypt_cryptsecret
+
+ Parameters  : $secret_id, $encrypted_string
+ Returns     : string
+ Description : Decrypts an encrypted string stored in the database such as
+               addomain.password.
+               
+               The $secret_id argument must match a cryptsecret.secretid value
+               in the database. The corresponding cryptsecret.cryptsecret value
+               is a base64-encoded string that is encrypted using the management
+               node's public key stored in cryptkey.pubkey. The management
+               node's private key is used to decrypt it.
+
+=cut
+
+sub decrypt_cryptsecret {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my ($secret_id, $encrypted_string, $recreate_key) = @_;
+	if (!defined($secret_id)) {
+		notify($ERRORS{'WARNING'}, 0, "secret ID argument was not supplied");
+		return;
+	}
+	if (!defined($encrypted_string)) {
+		notify($ERRORS{'WARNING'}, 0, "encrypted string argument was not supplied");
+		return;
+	}
+	
+	my $management_node_id = $self->data->get_management_node_id() || return;
+	my $management_node_short_name = $self->data->get_management_node_short_name() || return;
+	
+	if ($recreate_key) {
+		notify($ERRORS{'DEBUG'}, 0, "previous attempt to decrypt cryptsecret failed, attempting to regenerate private key and cryptsecret entries");
+		if (!$self->generate_private_key_file({force => 1})) {
+			notify($ERRORS{'WARNING'}, 0, "unable to decrypt secret ID $secret_id, failed to verify private key stored in file on management node is valid and its public key matches the cryptkey.pubkey value in the database");
+			return;
+		}
+	}
+	elsif (!$self->check_encryption_keys()) {
+		return $self->decrypt_cryptsecret($secret_id, $encrypted_string, 1);
+	}
+	
+	my $cryptsecret = get_management_node_cryptsecret_value($management_node_id, $secret_id);
+	if (!$cryptsecret) {
+		notify($ERRORS{'WARNING'}, 0, "unable to decrypt secret ID $secret_id, failed to retrieve cryptsecret.cryptsecret value for management node ID $management_node_id");
+		$recreate_key ? return : return $self->decrypt_cryptsecret($secret_id, $encrypted_string, 1);
+	}
+	
+	# The encrypted string (addomain.password, etc) and cryptsecret.cryptsecret should ALWAYS be base64 encoded
+	# They must be decoded to binary before being passed to decrypt functions
+	my $encrypted_string_decoded = decode_base64($encrypted_string);
+	my $cryptsecret_decoded = decode_base64($cryptsecret);
+	
+	my $rsa_private = $self->_get_private_key_object_from_file();
+	if (!$rsa_private) {
+		notify($ERRORS{'WARNING'}, 0, "unable to decrypt secret ID $secret_id, failed to create RSA object based on management node's private key");
+		$recreate_key ? return : return $self->decrypt_cryptsecret($secret_id, $encrypted_string, 1);
+	}
+	
+	my $key;
+	eval {
+		$key = $rsa_private->decrypt($cryptsecret_decoded);
+	};
+	if ($EVAL_ERROR || !$key) {
+		# Wrong key error:
+		# RSA.xs:202: OpenSSL error: oaep decoding error
+		notify($ERRORS{'WARNING'}, 0, "unable to decrypt secret ID $secret_id, failed to decrypt cryptsecret using RSA object based on management node's private key" . ($EVAL_ERROR ? ", error:\n" . $EVAL_ERROR : ''));
+		$recreate_key ? return : return $self->decrypt_cryptsecret($secret_id, $encrypted_string, 1);
+	}
+	
+	my $encrypted_string_length = length($encrypted_string_decoded);
+	if ($encrypted_string_length < 32) {
+		# This should always be at least 32 bytes
+		# If less than 16, the next 2 substr commands may fail with 'substr outside of string' errors
+		notify($ERRORS{'WARNING'}, 0, "unable to decrypt secret ID $secret_id, encrypted string length: $encrypted_string_length bytes, it must be 32 bytes or more:\n$encrypted_string\n\n" . decode_base64($encrypted_string));
+		return;
+	}
+	
+	my $iv = substr($encrypted_string_decoded, 0, 16);
+	my $ciphered_string = substr($encrypted_string_decoded, 16);
+	
+	my $cipher = Crypt::CBC->new(
+		{
+			'key'				=> $key,
+			'cipher'			=> 'Crypt::OpenSSL::AES',
+			'iv'				=> $iv,
+			'header'			=> 'none',
+			'literal_key'	=> 1,
+		}
+	);
+	my $decrypted_string = $cipher->decrypt($ciphered_string);
+	if (defined($decrypted_string)) {
+		notify($ERRORS{'OK'}, 0, "decrypted secret ID $secret_id");
+		return $decrypted_string;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to decrypt secret ID $secret_id");
+		$recreate_key ? return : return $self->decrypt_cryptsecret($secret_id, $encrypted_string, 1);
+	}
 }
 
 #//////////////////////////////////////////////////////////////////////////////

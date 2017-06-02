@@ -57,6 +57,7 @@ my @LINUX_PACKAGES = (
 	'openssl-devel',
 	'perl-Archive-Tar',
 	'perl-CPAN',
+	'perl-Crypt-CBC',
 	'perl-Crypt-OpenSSL-RSA',
 	'perl-DBD-MySQL',
 	'perl-DBI',
