@@ -139,7 +139,7 @@ class ADdomain extends Resource {
 	/////////////////////////////////////////////////////////////////////////////
 	function submitToggleDeleteResourceExtra($rscid, $deleted=0) {
 		$data = $this->getData(array('rscid' => $rscid));
-		deleteSecrets($data[$rscid]['secretid']);
+		deleteSecretKeys($data[$rscid]['secretid']);
 	}
 
 	/////////////////////////////////////////////////////////////////////////////
@@ -185,7 +185,41 @@ class ADdomain extends Resource {
 				$updates[] = "username = '{$data['username']}'";
 			# password
 			if(strlen($data['password'])) {
-				// TODO handle this web server not having an entry for this secret in cryptsecret
+				$oldsecretid = $olddata['secretid'];
+				# check that we have a cryptsecret entry for this secret
+				$cryptkeyid = getCryptKeyID();
+				$query = "SELECT cryptsecret "
+				       . "FROM cryptsecret "
+				       . "WHERE cryptkeyid = $cryptkeyid AND "
+				       .       "secretid = $oldsecretid";
+				$qh = doQuery($query);
+				if(! ($row = mysql_fetch_assoc($qh))) {
+					# generate a new secret
+					$newsecretid = getSecretKeyID('addomain', 'secretid', 0);
+					$delids = array($oldsecretid);
+					if($newsecretid == $oldsecretid) {
+						$delids[] = $newsecretid;
+						$newsecretid = getSecretKeyID('addomain', 'secretid', 0);
+					}
+					$delids = implode(',', $delids);
+					# encrypt new secret with any management node keys
+					$secretidset = array();
+					$query = "SELECT ck.hostid AS mnid "
+					       . "FROM cryptkey ck "
+					       . "JOIN cryptsecret cs ON (ck.id = cs.cryptkeyid) "
+					       . "WHERE cs.secretid = $oldsecretid AND "
+					       .       "ck.hosttype = 'managementnode'";
+					$qh = doQuery($query);
+					while($row = mysql_fetch_assoc($qh))
+						$secretidset[$row['mnid']][$newsecretid] = 1;
+					$values = getMNcryptkeyUpdates($secretidset, $cryptkeyid);
+					addMNcryptkeyUpdates($values);
+					$olddata['secretid'] = $newsecretid;
+					$updates[] = "secretid = $newsecretid";
+					# clean up old cryptsecret entries for management nodes
+					$query = "DELETE FROM cryptsecret WHERE secretid IN ($delids)";
+					doQuery($query);
+				}
 				$encpass = encryptDBdata($data['password'], $olddata['secretid']);
 				if($encpass == NULL) {
 					$ret = array('status' => 'error', 'msg' => "Error encountered while updating password");
@@ -287,7 +321,7 @@ class ADdomain extends Resource {
 
 		$ownerid = getUserlistID($data['owner']);
 
-		$secretid = getSecretID('addomain', 'secretid', 0);
+		$secretid = getSecretKeyID('addomain', 'secretid', 0);
 		$encpass = encryptDBdata($data['password'], $secretid);
 	
 		$query = "INSERT INTO addomain"
@@ -421,10 +455,9 @@ class ADdomain extends Resource {
 		$h .= "</div>\n"; # groupdlg
 
 		$h .= "<div id=\"tooltips\">\n";
-		# todo fill in all help contents
-		$h .= helpTooltip('domaindnsnamehelp', i(""));
+		$h .= helpTooltip('domaindnsnamehelp', i("domain name registered in DNS for Active Directory Domain (ex: ad.example.com)"));
 		$h .= helpTooltip('usernamehelp', i("These credentials will be used to register reserved computers with AD."));
-		$h .= helpTooltip('dnsservershelp', i(""));
+		$h .= helpTooltip('dnsservershelp', i("comma delimited list of IP addresses for DNS servers that handle Domain DNS"));
 		$h .= "</div>\n"; # tooltips
 
 		return $h;

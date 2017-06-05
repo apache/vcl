@@ -259,20 +259,6 @@ function editVMInfo() {
 	print "    </select><img tabindex=0 src=\"images/helpicon.png\" id=\"genmac1help\" /></td>\n";
 	print "  </tr>\n";
 	print "  <tr>\n";
-	print "    <th align=right>RSA Public Key:</th>\n";
-	print "    <td>\n";
-	print "      <span id=prsapub dojoType=\"dijit.InlineEditBox\" editor=\"dijit.form.Textarea\" onChange=\"updateProfile('prsapub','rsapub')\"></span>\n";
-	print "      <img tabindex=0 src=\"images/helpicon.png\" id=\"rsapubhelp\" />\n";
-	print "    </td>\n";
-	print "  </tr>\n";
-	print "  <tr>\n";
-	print "    <th align=right>RSA Private Key File:</th>\n";
-	print "    <td>\n";
-	print "      <span id=prsakey dojoType=\"dijit.InlineEditBox\" onChange=\"updateProfile('prsakey','rsakey');\"></span>\n";
-	print "      <img tabindex=0 src=\"images/helpicon.png\" id=\"rsakeyhelp\" />\n";
-	print "    </td>\n";
-	print "  </tr>\n";
-	print "  <tr>\n";
 	print "    <th align=right>Username:</th>\n";
 	print "    <td><span id=pusername dojoType=\"dijit.InlineEditBox\" onChange=\"updateProfile('pusername', 'username');\"></span><img tabindex=0 src=\"images/helpicon.png\" id=\"usernamehelp\" /></td>\n";
 	print "  </tr>\n";
@@ -345,12 +331,6 @@ function editVMInfo() {
 	print "</div>\n";
 	print "<div dojoType=\"dijit.Tooltip\" connectId=\"genmac1help\">\n";
 	print i("Specifies whether VMs are assigned MAC addresses defined in the VCL database or if random MAC addresses should be assigned.");
-	print "</div>\n";
-	print "<div dojoType=\"dijit.Tooltip\" connectId=\"rsapubhelp\">\n";
-	print i("(Optional) In order to encrypt the VM Host password in the database, create an RSA public/private key pair on the relevant management node. Enter the public key here. Note that while this value will be available to every management node in your system, only those management nodes with the designated private key will be able to decrypt the password.");
-	print "</div>\n";
-	print "<div dojoType=\"dijit.Tooltip\" connectId=\"rsakeyhelp\">\n";
-	print i("(Optional) In order to decrypt an encrypted VM Host password, enter the path to a private key on the management node. Any management node without this private key will not be able to decrypt the password.");
 	print "</div>\n";
 	print "<div dojoType=\"dijit.Tooltip\" connectId=\"usernamehelp\">\n";
 	print i("Name of the administrative or root user residing on the VM host.");
@@ -830,7 +810,7 @@ function AJupdateVMprofileItem() {
 	}
 	$profileid = processInputVar('profileid', ARG_NUMERIC);
 	$item = processInputVar('item', ARG_STRING);
-	if(! preg_match('/^(profilename|imageid|resourcepath|folderpath|repositorypath|repositoryimagetypeid|datastorepath|datastoreimagetypeid|vmdisk|vmpath|virtualswitch[0-3]|username|password|eth0generated|eth1generated|rsakey|rsapub)$/', $item)) {
+	if(! preg_match('/^(profilename|imageid|resourcepath|folderpath|repositorypath|repositoryimagetypeid|datastorepath|datastoreimagetypeid|vmdisk|vmpath|virtualswitch[0-3]|username|password|eth0generated|eth1generated)$/', $item)) {
 		print "alert('Invalid data submitted.');";
 		return;
 	}
@@ -867,47 +847,69 @@ function AJupdateVMprofileItem() {
 	$item = mysql_real_escape_string($item);
 	$profile = getVMProfiles($profileid);
 	if($item == 'password') {
-		if($profile[$profileid]['rsapub']) {
-			$encrypted = encryptDataAsymmetric($newvalue, $profile[$profileid]['rsapub']);
-			$escaped = mysql_real_escape_string($encrypted);
-			$query = "UPDATE vmprofile "
-			       . "SET `encryptedpasswd` = '$escaped', "
-			       .     "`password` = NULL "
-			       . "WHERE id = $profileid";
-			doQuery($query);
-		}
-		else {
-			$pwdlen = strlen($newvalue);
-			if($pwdlen == 0) {
-				if($profile[$profileid]['pwdlength'] != 0) {
-					$secretid = getSecretID('vmprofile', 'secretid', $profileid);
-					if($secretid === NULL) {
-						print "dojo.byId('savestatus').innerHTML = '';";
-						print "alert('Error saving password');";
-						return;
-					}
-					deleteSecrets($secretid);
-					$query = "UPDATE vmprofile "
-					       . "SET password = NULL, "
-					       .     "secretid = NULL "
-					       . "WHERE id = $profileid";
-					doQuery($query);
-				}
-			}
-			else {
-				$secretid = getSecretID('vmprofile', 'secretid', $profileid);
+		$pwdlen = strlen($newvalue);
+		if($pwdlen == 0) {
+			if($profile[$profileid]['pwdlength'] != 0) {
+				$secretid = getSecretKeyID('vmprofile', 'secretid', $profileid);
 				if($secretid === NULL) {
 					print "dojo.byId('savestatus').innerHTML = '';";
 					print "alert('Error saving password');";
 					return;
 				}
-				$encpass = encryptDBdata($newvalue, $secretid);
+				deleteSecretKeys($secretid);
 				$query = "UPDATE vmprofile "
-				       . "SET password = '$encpass', "
-				       .     "secretid = '$secretid' "
+				       . "SET password = NULL, "
+				       .     "secretid = NULL "
 				       . "WHERE id = $profileid";
 				doQuery($query);
 			}
+		}
+		else {
+			$secretid = getSecretKeyID('vmprofile', 'secretid', $profileid);
+			# check that we have a cryptsecret entry for this secret
+			$cryptkeyid = getCryptKeyID();
+			$query = "SELECT cryptsecret "
+			       . "FROM cryptsecret "
+			       . "WHERE cryptkeyid = $cryptkeyid AND "
+			       .       "secretid = $secretid";
+			$qh = doQuery($query);
+			if(! ($row = mysql_fetch_assoc($qh))) {
+				# generate a new secret
+				$newsecretid = getSecretKeyID('vmprofile', 'secretid', 0);
+				$delids = array($secretid);
+				if($newsecretid == $secretid) {
+					$delids[] = $secretid;
+					$newsecretid = getSecretKeyID('addomain', 'secretid', 0);
+				}
+				$delids = implode(',', $delids);
+				# encrypt new secret with any management node keys
+				$secretidset = array();
+				$query = "SELECT ck.hostid AS mnid "
+				       . "FROM cryptkey ck "
+				       . "JOIN cryptsecret cs ON (ck.id = cs.cryptkeyid) "
+				       . "WHERE cs.secretid = $secretid AND "
+				       .       "ck.hosttype = 'managementnode'";
+				$qh = doQuery($query);
+				while($row = mysql_fetch_assoc($qh))
+					$secretidset[$row['mnid']][$newsecretid] = 1;
+				$values = getMNcryptkeyUpdates($secretidset, $cryptkeyid);
+				addMNcryptkeyUpdates($values);
+				$secretid = $newsecretid;
+				# clean up old cryptsecret entries for management nodes
+				$query = "DELETE FROM cryptsecret WHERE secretid IN ($delids)";
+				doQuery($query);
+			}
+			if($secretid === NULL) {
+				print "dojo.byId('savestatus').innerHTML = '';";
+				print "alert('Error saving password');";
+				return;
+			}
+			$encpass = encryptDBdata($newvalue, $secretid);
+			$query = "UPDATE vmprofile "
+			       . "SET password = '$encpass', "
+			       .     "secretid = '$secretid' "
+			       . "WHERE id = $profileid";
+			doQuery($query);
 		}
 		print "dojo.byId('savestatus').innerHTML = 'Saved'; ";
 		print "setTimeout(function() {dojo.byId('savestatus').innerHTML = '';}, 3000); ";
