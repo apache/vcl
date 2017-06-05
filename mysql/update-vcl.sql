@@ -976,8 +976,11 @@ CREATE TABLE IF NOT EXISTS `cryptkey` (
   `hostid` smallint(6) unsigned NOT NULL,
   `hosttype` enum('managementnode','web') NOT NULL DEFAULT 'managementnode',
   `pubkey` varchar(1000) NOT NULL,
+  `algorithm` varchar(80) NOT NULL,
+  `algorithmoption` varchar(255) NOT NULL,
+  `keylength` smallint(5) unsigned NOT NULL,
   PRIMARY KEY (`id`),
-  KEY `hostid` (`hostid`)
+  UNIQUE KEY `hostid` (`hostid`,`hosttype`)
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
@@ -991,6 +994,9 @@ CREATE TABLE IF NOT EXISTS `cryptsecret` (
   `cryptkeyid` smallint(5) unsigned NOT NULL,
   `secretid` smallint(5) unsigned NOT NULL,
   `cryptsecret` varchar(1000) NOT NULL,
+  `algorithm` varchar(80) NOT NULL,
+  `algorithmoption` varchar(255) NOT NULL,
+  `keylength` smallint(5) unsigned NOT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `cryptkeyid` (`cryptkeyid`,`secretid`),
   KEY `secretid` (`secretid`)
