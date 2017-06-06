@@ -492,8 +492,8 @@ class ADdomain extends Resource {
 		$return["owner"] = processInputVar("owner", ARG_STRING, "{$user["unityid"]}@{$user['affiliation']}");
 		$return["domaindnsname"] = processInputVar("domaindnsname", ARG_STRING);
 		$return["username"] = processInputVar("username", ARG_STRING);
-		$return["password"] = processInputVar("password", ARG_STRING);
-		$return["password2"] = processInputVar("password2", ARG_STRING);
+		$return["password"] = $_POST['password'];
+		$return["password2"] = $_POST['password2'];
 		$return["dnsservers"] = processInputVar("dnsservers", ARG_STRING);
 
 		if(! preg_match("/^([A-Za-z0-9-!@#$%^&\*\(\)_=\+\[\]{}\\\|:;,\.\/\?~` ]){2,30}$/", $return['name'])) {
@@ -523,7 +523,8 @@ class ADdomain extends Resource {
 			$errormsg[] = i("Username cannot contain single (') or double (&quot;) quotes, less than (&lt;), or greater than (&gt;) and can be from 2 to 64 characters long");
 		}
 
-		if(! preg_match('/^.{4,256}$/', $return['password']) &&
+		$passlen = strlen($return['password']);
+		if(($passlen < 4 || $passlen > 256) &&
 		   ($add || ! (empty($return['password']) && empty($return['password2'])))) {
 			$return['error'] = 1;
 			$errormsg[] = i("Password must be at least 4 characters long");
