@@ -583,7 +583,6 @@ sub make_new_child {
 			eval "use $state_module";
 			if ($EVAL_ERROR) {
 				notify($ERRORS{'CRITICAL'}, $LOGFILE, "$state_module module could not be loaded, error: $EVAL_ERROR");
-				switch_state($request_data, 'failed', '', 'failed', 1);
 				exit;
 			}
 			
@@ -608,7 +607,6 @@ sub make_new_child {
 				else {
 					notify($ERRORS{'CRITICAL'}, $LOGFILE, "$state_module object could not be created and initialized");
 				}
-				switch_state($request_data, 'failed', '', 'failed', 1);
 			}
 			
 			exit;
@@ -634,12 +632,12 @@ sub make_new_child {
  Returns     : Nothing
  Description : Handles __WARN__ signals. This signal is generated when warn()
                is called. This may occur when the VCL code encounters an
-					error such as:
-					Use of uninitialized value in concatenation (.) or string at
-					
-					If the signal isn't handled, the warning message is dumped
-					to STDOUT and will appear in the log file. This handler
-					causes WARN signals to be logged by the notify() subroutine.
+               error such as:
+               Use of uninitialized value in concatenation (.) or string at
+               
+               If the signal isn't handled, the warning message is dumped
+               to STDOUT and will appear in the log file. This handler
+               causes WARN signals to be logged by the notify() subroutine.
 
 =cut
 
@@ -659,19 +657,23 @@ sub warning_handler {
  Returns     : Nothing
  Description : Handles __DIE__ signals. This signal is generated when die()
                is called. This may occur when the VCL code encounters an
-					error such as:
-					Uncaught exception from user code:
+               error such as:
+               Uncaught exception from user code:
                Undefined subroutine ... called at ...
-					
-					If the signal isn't handled, the output is dumped to STDERR
-					and the process exits quietly.
-
+               
+               If the signal isn't handled, the output is dumped to STDERR
+               and the process exits quietly.
 
 =cut
 
 sub die_handler {
 	# Call notify, passing it a string of whatever is contained in @_
 	notify($ERRORS{'CRITICAL'}, $LOGFILE, "@_");
+	
+	# Prevent requests stuck in pending, try to set state back to original
+	if ($ENV{request_id} && $ENV{state}) {
+		update_request_state($ENV{request_id}, $ENV{state}, $ENV{state});
+	}
 	
 	# Reinstall the signal handler in case of unreliable signals
 	$SIG{__DIE__} = \&die_handler;
@@ -711,14 +713,14 @@ sub HUNTSMAN {
  Returns     : Undefined
  Description : The REAPER subroutine gets called whenever a child process
                stops running or exits. This occurs because the subroutine is
-					configured as the handler for SIGCHLD signals. The system will
-					send a SIGCHLD signal whenever a child process stops running
-					or exits.
+               configured as the handler for SIGCHLD signals. The system will
+               send a SIGCHLD signal whenever a child process stops running
+               or exits.
                
-					The REAPER subroutine manages the child PID hash when a VCL .
-					state process exits. It also captures the exit code of the
-					child process which died and makes sure the special $?
-					variable is set to this value.
+               The REAPER subroutine manages the child PID hash when a VCL .
+               state process exits. It also captures the exit code of the
+               child process which died and makes sure the special $?
+               variable is set to this value.
 
 =cut
 
@@ -829,15 +831,15 @@ sub daemonize {
  Parameters  : None.
  Returns     : 
  Description : Checks each module in the module table for
-					the existance of a subroutine named "setup". Calls the setup
-					subroutine for each module which contains one.
-					
-					The program terminates if a module's setup subroutine returns
-					false. The program continues if a module's setup subroutine
-					returns true.
-					
-					STDOUT "print" statements are printed to the screen. Messages
-					sent to the "notify" subroutine are printed to the logfile.
+               the existance of a subroutine named "setup". Calls the setup
+               subroutine for each module which contains one.
+               
+               The program terminates if a module's setup subroutine returns
+               false. The program continues if a module's setup subroutine
+               returns true.
+               
+               STDOUT "print" statements are printed to the screen. Messages
+               sent to the "notify" subroutine are printed to the logfile.
 
 =cut
 
