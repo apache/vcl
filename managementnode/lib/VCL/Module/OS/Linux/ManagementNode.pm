@@ -896,7 +896,7 @@ sub generate_private_key_file {
 	}
 	
 	# Call the XML-RPC API to create a new cryptsecret entry for this reservation
-	update_reservation_cryptsecret($reservation_id);
+	call_check_crypt_secrets($reservation_id);
 	
 	notify($ERRORS{'OK'}, 0, "created private key file on management node $management_node_short_name: $private_key_file_path, updated cryptkey.pubkey value in database");
 	return 1;

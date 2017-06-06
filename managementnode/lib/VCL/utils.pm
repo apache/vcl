@@ -94,6 +94,7 @@ our @EXPORT = qw(
 	_pingnode
 	add_imageid_to_newimages
 	add_reservation_account
+	call_check_crypt_secrets
 	character_to_ascii_value
 	check_blockrequest_time
 	check_endtimenotice_interval
@@ -293,7 +294,6 @@ our @EXPORT = qw(
 	update_preload_flag
 	update_request_checkuser
 	update_request_state
-	update_reservation_cryptsecret
 	update_reservation_lastcheck
 	update_reservation_natlog
 	update_reservation_password
@@ -15152,23 +15152,23 @@ EOF
 
 #//////////////////////////////////////////////////////////////////////////////
 
-=head2 update_reservation_cryptsecret
+=head2 call_check_crypt_secrets
 
  Parameters  : none
  Returns     : boolean
- Description : Calls the XML-RPC XMLRPCupdateSecrets function to update the
-               cryptsecret table for the reservation.
+ Description : Calls XMLRPCcheckCryptSecrets function to update the cryptsecret
+               table for the reservation.
 
 =cut
 
-sub update_reservation_cryptsecret {
+sub call_check_crypt_secrets {
 	my $reservation_id = shift;
 	if (!defined($reservation_id)) {
 		notify($ERRORS{'WARNING'}, 0, "reservation ID argument was not supplied");
 		return;
 	}
 	
-	my $xmlrpc_function = 'XMLRPCupdateSecrets';
+	my $xmlrpc_function = 'XMLRPCcheckCryptSecrets';
 	my @xmlrpc_arguments = (
 		$xmlrpc_function,
 		$reservation_id
@@ -15180,10 +15180,10 @@ sub update_reservation_cryptsecret {
 		return;
 	}
 	elsif ($response->value->{status} =~ /success/) {
-		notify($ERRORS{'OK'}, 0, "called XMLRPCupdateSecrets, cryptsecret table successfully updated");
+		notify($ERRORS{'OK'}, 0, "called XMLRPCcheckCryptSecrets, cryptsecret table successfully updated");
 	}
 	elsif ($response->value->{status} =~ /noupdate/) {
-		notify($ERRORS{'OK'}, 0, "called XMLRPCupdateSecrets, cryptsecret table does not need to be updated");
+		notify($ERRORS{'OK'}, 0, "called XMLRPCcheckCryptSecrets, cryptsecret table does not need to be updated");
 	}
 	else {
 		notify($ERRORS{'WARNING'}, 0, "failed to update cryptsecret table, $xmlrpc_function returned:\n" .
