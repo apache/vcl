@@ -13243,8 +13243,8 @@ sub run_powershell_command {
  Description : Accepts a string containing the contents of a Powershell script,
                creates the script on the computer under C:\cygwin\VCL\Scripts,
                and executes the script. The script is named after the calling
-               subroutine, so ad_join.ps1 would be generated when invoked from
-               ad_join().
+               subroutine, so ad_join_ps.ps1 would be generated when invoked from
+               ad_join_ps().
                
                By default, the script file is deleted after it is executed for
                safety. This can be overridden if the $retain_script_file
@@ -13556,7 +13556,7 @@ sub ad_check {
 	if (!$computer_current_domain_name) {
 		# Computer is not joined to an AD domain, return the result of attempting to join
 		notify($ERRORS{'OK'}, 0, "image is configured to join the $image_domain_dns_name domain, $computer_name is not joined to a domain, attempting to join the domain");
-		return $self->ad_join();
+		return $self->ad_join_ps();
 	}
 	
 	
@@ -13568,7 +13568,7 @@ sub ad_check {
 			notify($ERRORS{'WARNING'}, 0, "image is configured to join the $image_domain_dns_name, failed to unjoin $computer_name from the $computer_current_domain_name domain, returning undefined");
 			return;
 		}
-		elsif (!$self->ad_join()) {
+		elsif (!$self->ad_join_ps()) {
 			notify($ERRORS{'WARNING'}, 0, "image is configured to join the $image_domain_dns_name, unjoined $computer_name from the incorrect $computer_current_domain_name domain but failed to rejoin the correct $image_domain_dns_name domain, returning undefined");
 			return;
 		}
@@ -13618,7 +13618,7 @@ sub ad_check {
 		notify($ERRORS{'WARNING'}, 0, "failed to unjoin $computer_name from the $computer_current_domain_name domain in order to rejoin in the correct OU, returning undefined");
 		return;
 	}
-	elsif (!$self->ad_join()) {
+	elsif (!$self->ad_join_ps()) {
 		notify($ERRORS{'WARNING'}, 0, "failed to rejoin $computer_name to the correct OU in the $image_domain_dns_name domain: '$image_ou_dn', returning undefined");
 		return;
 	}
@@ -13630,7 +13630,7 @@ sub ad_check {
 
 #//////////////////////////////////////////////////////////////////////////////
 
-=head2 ad_join
+=head2 ad_join_ps
 
  Parameters  : none
  Returns     : boolean
@@ -13639,7 +13639,7 @@ sub ad_check {
 
 =cut
 
-sub ad_join {
+sub ad_join_ps {
 	my $self = shift;	
 	if (ref($self) !~ /windows/i) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
@@ -13657,7 +13657,6 @@ sub ad_join {
 	my $domain_dns_name = $self->data->get_image_domain_dns_name();
 	my $domain_username = $self->data->get_image_domain_username();
 	my $domain_password = $self->data->get_image_domain_password();
-	
 	my $computer_ou_dn = $self->get_ad_computer_ou_dn();
 	
 	if (!defined($domain_dns_name)) {
@@ -13676,25 +13675,23 @@ sub ad_join {
 	# Figure out/fix the computer OU and assemble optional section to add to PowerShell command
 	my $domain_computer_command_section = '';
 	if ($computer_ou_dn) {
-		$domain_computer_command_section = "-OUPath \"$computer_ou_dn\"";
+		$domain_computer_command_section = "-OUPath '$computer_ou_dn'";
 	}
 	
 	my $domain_user_string = "$domain_username\@$domain_dns_name";
 	
+	# Escape single quotes by doubling them
+	(my $domain_password_escaped = $domain_password) =~ s/(['])/$1$1/g;
+	
 	notify($ERRORS{'DEBUG'}, 0, "attempting to join $computer_name to AD\n" .
 		"domain DNS name    : $domain_dns_name\n" .
 		"domain user string : $domain_user_string\n" .
-		"domain password    : $domain_password\n" .
+		"domain password    : $domain_password (escaped: $domain_password_escaped)\n" .
 		"domain computer OU : " . ($computer_ou_dn ? $computer_ou_dn : '<not configured>')
 	);
 	
 	# Perform preparation tasks
 	$self->ad_join_prepare() || return;
-	
-	# Assemble the PowerShell script
-	my $ad_powershell_script;
-	$ad_powershell_script .= "\$ps_credential = New-Object System.Management.Automation.PsCredential(\"$domain_user_string\", (ConvertTo-SecureString \"$domain_password\" -AsPlainText -Force))\n";
-	$ad_powershell_script .= "Add-Computer -DomainName \"$domain_dns_name\" -Credential \$ps_credential $domain_computer_command_section -Verbose -ErrorAction Stop\n";
 	
 	# Note: commented out because this isn't consistently working
 	# The rename occasionally fails with 'The directory service is busy.'
@@ -13728,8 +13725,24 @@ sub ad_join {
 	#}
 	
 	
+	# Assemble the PowerShell script
+	my $ad_powershell_script = <<EOF;
+\$Host.UI.RawUI.BufferSize = New-Object Management.Automation.Host.Size(5000, 500)
+Clear-Host
+\$username = '$domain_user_string'
+\$password = '$domain_password_escaped'
+Write-Host "username (between >*<): `n>\$username<`n"
+Write-Host "password (between >*<): `n>\$password<`n"
+\$ps_credential = New-Object System.Management.Automation.PsCredential(\$username, (ConvertTo-SecureString \$password -AsPlainText -Force))
+Add-Computer -DomainName '$domain_dns_name' -Credential \$ps_credential $domain_computer_command_section -Verbose -ErrorAction Stop
+EOF
 	
-	notify($ERRORS{'DEBUG'}, 0, "PowerShell script contents:\n$ad_powershell_script");
+	notify($ERRORS{'DEBUG'}, 0, "attempting to join $computer_name to $domain_dns_name domain using PowerShell script:\n$ad_powershell_script");
+	my ($exit_status, $output) = $self->run_powershell_as_script($ad_powershell_script, 0, 0); # (path, show output, retain file)
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute PowerShell script to join $computer_name to Active Directory domain");
+		return;
+	}
 	
 	# Success:
 	# WARNING: The changes will take effect after you restart the computer
@@ -13737,7 +13750,7 @@ sub ad_join {
 	
 	# Possible errors:
 	
-	# File C:\Users\Administrator\Desktop\ad_join.ps1 cannot be loaded because
+	# File C:\Users\Administrator\Desktop\ad_join_ps.ps1 cannot be loaded because
 	# the execution of scripts is disabled on this system. Please see "get-help
 	# about_signing" for more details.
 	
@@ -13755,46 +13768,60 @@ sub ad_join {
 	# Add-Computer : This command cannot be executed on target
 	# computer('VCLV98-247') due to following error: The account already exists.
 	
-	my ($exit_status, $output) = $self->run_powershell_as_script($ad_powershell_script, 0, 1);
-	if (!defined($output)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to execute PowerShell script to join $computer_name to Active Directory domain");
-		return;
-	}
-	
-	# Combine the output lines into a single string or else unpredictable text wrapping may occur
-	my $output_string = join(' ', @$output);
-	$output_string =~ s/\s+/ /g;
-	
-	if ($output_string =~ /(error:|does not exist|cannot be loaded)/i) {
-		notify($ERRORS{'WARNING'}, 0, "failed to join $computer_name to Active Directory domain, output:\n$output_string");
+	my $reboot_after_join = 1;
+	if (grep(/(failed to join|error:|does not exist|cannot be loaded)/i, @$output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to join $computer_name to Active Directory domain, output:\n" . join("\n", @$output));
 		return 0;
+	}
+	elsif (grep(/already in that domain/i, @$output)) {
+		# Add-Computer : Cannot add computer '<hostname>' to domain '<domain DNS name>' because it is already in that domain.
+		notify($ERRORS{'OK'}, 0, "$computer_name is already joined to Active Directory domain, output:\n" . join("\n", @$output));
+		$reboot_after_join = 0;
 	}
 	else {
 		notify($ERRORS{'OK'}, 0, "executed PowerShell script to join $computer_name to Active Directory domain, output:\n" . join("\n", @$output));
 	}
-
-	# Reboot, computer should be joined to AD with the correct hostname
-	# If computer had to be rebooted to be renamed, certain tasks in reboot() don't need to be performed again
-	# Set reboot()'s last $pre_configure flag accordingly
-	my $ad_join_reboot_pre_configure = ($rename_computer_reboot_duration ? 0 : 1);
 	
-	my $ad_join_reboot_start = time;
-	if (!$self->reboot(300, 3, 1, $ad_join_reboot_pre_configure)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to join $computer_name to Active Directory domain, failed to reboot computer after it joined the domain");
-		return;
+	if ($reboot_after_join) {
+		# Reboot, computer should be joined to AD with the correct hostname
+		# If computer had to be rebooted to be renamed, certain tasks in reboot() don't need to be performed again
+		# Set reboot()'s last $pre_configure flag accordingly
+		my $ad_join_reboot_pre_configure = ($rename_computer_reboot_duration ? 0 : 1);
+		
+		my $ad_join_reboot_start = time;
+		if (!$self->reboot(300, 3, 1, $ad_join_reboot_pre_configure)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to join $computer_name to Active Directory domain, failed to reboot computer after it joined the domain");
+			return;
+		}
+		$ad_join_reboot_duration = (time - $ad_join_reboot_start);
 	}
-	$ad_join_reboot_duration = (time - $ad_join_reboot_start);
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "$computer_name does NOT need to be rebooted because it was already joined to the domain");
+	}
 	
 	my $total_duration = (time - $start_time);
 	my $other_tasks_duration = ($total_duration - $rename_computer_reboot_duration - $ad_join_reboot_duration);
 	
-	notify($ERRORS{'DEBUG'}, 0, "successfully joined $computer_name to Active Directory domain: $domain_dns_name, time statistics:\n" .
-		"computer rename reboot : $rename_computer_reboot_duration seconds\n" .
-		"AD join reboot         : $ad_join_reboot_duration seconds\n" .
-		"other tasks            : $other_tasks_duration seconds\n" .
-		"total                  : $total_duration seconds"
-	);
-	return 1;
+	# Verify computer is now in the correct AD domain
+	my $current_domain = $self->ad_get_current_domain();
+	if (!$current_domain) {
+		notify($ERRORS{'WARNING'}, 0, "attempted to join $computer_name to $domain_dns_name domain but name of domain computer is currently joined to could not be retrieved, PowerShell script execution output:\n" . join("\n", @$output));
+		return;
+	}
+	elsif ($domain_dns_name !~ /^$current_domain/) {
+		notify($ERRORS{'WARNING'}, 0, "attempted to join $computer_name to $domain_dns_name domain but computer is currently joined to $current_domain domain, PowerShell script execution output:\n" . join("\n", @$output));
+		return;
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "successfully joined $computer_name to Active Directory domain: $domain_dns_name, time statistics:\n" .
+			"computer rename reboot : $rename_computer_reboot_duration seconds\n" .
+			"AD join reboot         : $ad_join_reboot_duration seconds\n" .
+			"other tasks            : $other_tasks_duration seconds\n" .
+			"-------------------------------------\n" .
+			"total                  : $total_duration seconds"
+		);
+		return 1;
+	}
 }
 
 #//////////////////////////////////////////////////////////////////////////////
@@ -13940,7 +13967,7 @@ sub ad_join_wmic {
 		notify($ERRORS{'OK'}, 0, "joined $computer_name to Active Directory domain $domain_dns_name using wmic.exe");
 	}
 	elsif (my $error_message = $error_messages->{$join_return_value}) {
-		notify($ERRORS{'WARNING'}, 0, "failed to join $computer_name to Active Directory domain $domain_dns_name using wmic.exe\nreason: $error_message\noutput:\n$join_output_string");
+		notify($ERRORS{'WARNING'}, 0, "failed to join $computer_name to Active Directory domain $domain_dns_name using wmic.exe, reason: $error_message\noutput:\n$join_output_string");
 		return;
 	}
 	else {
@@ -14091,7 +14118,7 @@ sub ad_unjoin {
 	#}
 	#EOF
 	#
-	#	my ($exit_status, $output) = $self->run_powershell_as_script($ad_powershell_script, 1, 1);
+	#	my ($exit_status, $output) = $self->run_powershell_as_script($ad_powershell_script, 0, 0);
 	#	if (!defined($output)) {
 	#		notify($ERRORS{'WARNING'}, 0, "failed to execute PowerShell script to remove $computer_name from Active Directory domain");
 	#		return;
@@ -14227,9 +14254,9 @@ sub ad_search {
 	my $domain_dns_name;
 	my $domain_username;
 	my $domain_password;
-	if (defined($arguments->{domain_dns_name})) {
+	if (defined($arguments->{domain_dns_name}) && $arguments->{domain_dns_name} ne $self->data->get_image_domain_dns_name()) {
 		$domain_dns_name = $arguments->{domain_dns_name};
-		($domain_username, $domain_password) = get_active_directory_domain_credentials($domain_dns_name);
+		($domain_username, $domain_password) = $self->data->get_domain_credentials($domain_dns_name);
 		if (!defined($domain_username) || !defined($domain_password)) {
 			notify($ERRORS{'WARNING'}, 0, "unable to search domain: $domain_dns_name, domain DNS name argument was specified but credentials could not be determined from existing 'addomain' table entries");
 			return;
@@ -14277,17 +14304,31 @@ sub ad_search {
 	$ldap_filter .= ')' if ($search_attribute_count > 1);
 	notify($ERRORS{'DEBUG'}, 0, "assembled LDAP filter: '$ldap_filter'");
 	
+	my $domain_user_string = "$domain_username\@$domain_dns_name";
+	
+	# Escape single quotes by doubling them
+	(my $domain_password_escaped = $domain_password) =~ s/(['])/$1$1/g;
+	
+	my $delete = ($operation eq 'delete' ? 1 : 0);
 	
 	# Assemble the PowerShell script
-	my $powershell_script_contents = <<'EOF';
-$Host.UI.RawUI.BufferSize = New-Object Management.Automation.Host.Size(5000, 500)
+	my $powershell_script_contents = <<EOF;
+\$Host.UI.RawUI.BufferSize = New-Object Management.Automation.Host.Size(5000, 500)
+Clear-Host
 
-$domain_dns_name = '[domain_dns_name]'
-$domain_username = '[domain_username]@[domain_dns_name]'
-$domain_password = '[domain_password]'
-$ldap_filter = '[ldap_filter]'
-$delete = '[delete]'
+\$domain_dns_name = '$domain_dns_name'
+\$domain_username = '$domain_user_string'
+\$domain_password = '$domain_password_escaped'
+\$ldap_filter = '$ldap_filter'
+\$delete = '$delete'
 
+Write-Host "domain: $domain_dns_name"
+Write-Host "domain username (between >*<): >\$domain_username<"
+Write-Host "domain password (between >*<): >\$domain_password<"
+
+EOF
+
+	$powershell_script_contents .= <<'EOF';
 $type = [System.DirectoryServices.ActiveDirectory.DirectoryContextType]"Domain"
 $directory_context = New-Object System.DirectoryServices.ActiveDirectory.DirectoryContext($type, $domain_dns_name, $domain_username, $domain_password)
 try {
@@ -14350,21 +14391,9 @@ ForEach($result in $results) {
 }
 EOF
 	
-	$powershell_script_contents =~ s/\[domain_dns_name\]/$domain_dns_name/g;
-	$powershell_script_contents =~ s/\[domain_username\]/$domain_username/g;
-	$powershell_script_contents =~ s/\[domain_password\]/$domain_password/g;
-	$powershell_script_contents =~ s/\[ldap_filter\]/$ldap_filter/;
-	
-	if ($operation eq 'delete') {
-		$powershell_script_contents =~ s/\[delete\]/1/g;
-	}
-	else {
-		$powershell_script_contents =~ s/\[delete\]/0/g;
-	}
-	
 	my ($exit_status, $output);
 	for (my $attempt=1; $attempt<=$attempt_limit; $attempt++) {
-		($exit_status, $output) = $self->run_powershell_as_script($powershell_script_contents);
+		($exit_status, $output) = $self->run_powershell_as_script($powershell_script_contents, 0, 0);
 		if (!defined($output)) {
 			notify($ERRORS{'WARNING'}, 0, "failed to execute PowerShell script on $computer_name to $operation objects in $domain_dns_name AD domain matching LDAP filter: '$ldap_filter'");
 			return;
@@ -14388,13 +14417,15 @@ EOF
 	
 	my @matching_dns;
 	for my $line (@$output) {
+		next if ($line !~ /\w/);
+		
 		# Remove leading and trailing spaces
 		$line =~ s/(^\s+|\s+$)//g;
 		if ($line =~ /^[A-Z]{2}=.+/i) {
 			push @matching_dns, $line;
 		}
-		else {
-			notify($ERRORS{'WARNING'}, 0, "unexpected output found $operation objects on $computer_name in $domain_dns_name AD domain matching LDAP filter: '$ldap_filter': '$line'");
+		elsif ($line !~ /^domain.*:/) {
+			notify($ERRORS{'WARNING'}, 0, "unexpected output found $operation objects on $computer_name in $domain_dns_name AD domain matching LDAP filter: '$ldap_filter':\n$line");
 		}
 	}
 	
@@ -14474,7 +14505,7 @@ sub ad_search_computer {
 		return;
 	}
 	
-	my ($computer_samaccountname, $domain_dns_name) = @_;
+	my ($computer_samaccountname, $domain_dns_name, $ad_search_arguments) = @_;
 	
 	$computer_samaccountname = $self->data->get_computer_short_name() unless $computer_samaccountname;
 	
@@ -14482,12 +14513,8 @@ sub ad_search_computer {
 	# A dollar sign will be present if retrieved directly from AD
 	$computer_samaccountname =~ s/\$*$/\$/g;
 	
-	my $ad_search_arguments = {
-		'ldap_filter' => {
-			'objectClass' => 'computer',
-			'sAMAccountName' => $computer_samaccountname,
-		}
-	};
+	$ad_search_arguments->{ldap_filter}{objectClass} = 'computer';
+	$ad_search_arguments->{ldap_filter}{sAMAccountName} = $computer_samaccountname;
 	
 	# If a specific domain was specified, retrieve the username and password for that domain
 	if ($domain_dns_name) {

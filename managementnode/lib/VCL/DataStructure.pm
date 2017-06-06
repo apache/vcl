@@ -2797,7 +2797,44 @@ sub get_image_domain_password {
 		return;
 	}
 	
-	return $self->mn_os->decrypt_cryptsecret($secret_id, $encrypted_password);
+	my $image_domain_password = $self->mn_os->decrypt_cryptsecret($secret_id, $encrypted_password);
+	#notify($ERRORS{'DEBUG'}, 0, string_to_ascii($image_domain_password));
+	return $image_domain_password;
+}
+
+#//////////////////////////////////////////////////////////////////////////////
+
+=head2 get_domain_credentials
+
+ Parameters  : $domain_identifier
+ Returns     : array ($username, $domain_password)
+ Description : Attempts to determine and decrypt the username and password for
+               the domain specified by the argument. 
+
+=cut
+
+sub get_domain_credentials {
+	my $self = shift;
+	if (ref($self) !~ /VCL::/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return 0;
+	}
+	
+	my $domain_identifier = shift;
+	if (!defined($domain_identifier)) {
+		notify($ERRORS{'WARNING'}, 0, "domain identifier argument was not supplied");
+		return;
+	}
+	
+	my $management_node_id = $self->get_management_node_id();
+	
+	my ($username, $secret_id, $encrypted_password) = get_management_node_ad_domain_credentials($management_node_id, $domain_identifier);
+	return unless $username && $secret_id && $encrypted_password;
+	
+	my $domain_password = $self->mn_os->decrypt_cryptsecret($secret_id, $encrypted_password) || return;
+	
+	notify($ERRORS{'DEBUG'}, 0, "retrieved credentials for Active Directory domain:\nusername: '$username'\npassword: '$domain_password'");
+	return ($username, $domain_password);
 }
 
 #//////////////////////////////////////////////////////////////////////////////

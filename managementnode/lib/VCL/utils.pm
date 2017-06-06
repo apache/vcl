@@ -118,7 +118,6 @@ our @EXPORT = qw(
 	format_data
 	format_hash_keys
 	format_number
-	get_active_directory_domain_credentials
 	get_all_reservation_ids
 	get_affiliation_info
 	get_array_intersection
@@ -162,6 +161,7 @@ our @EXPORT = qw(
 	get_imagerevision_reservation_info
 	get_local_user_info
 	get_managable_resource_groups
+	get_management_node_ad_domain_credentials
 	get_management_node_blockrequests
 	get_management_node_computer_ids
 	get_management_node_id
@@ -8687,9 +8687,10 @@ sub get_calling_subroutine {
 
 =head2 get_management_node_id
 
- Parameters  :
- Returns     :
- Description :
+ Parameters  : none
+ Returns     : integer
+ Description : Retrieves the managementnode.id value of the local management
+               node.
 
 =cut
 
@@ -8698,7 +8699,6 @@ sub get_management_node_id {
 
 	# Check the management_node_id environment variable
 	if ($ENV{management_node_id}) {
-		notify($ERRORS{'DEBUG'}, 0, "environment variable: $ENV{management_node_id}");
 		return $ENV{management_node_id};
 	}
 	else {
@@ -14603,61 +14603,6 @@ EOF
 
 #//////////////////////////////////////////////////////////////////////////////
 
-=head2 get_active_directory_domain_credentials
-
- Parameters  : $domain_dns_name, $no_cache (optional)
- Returns     : ($username, $password)
- Description : Attempts to retrieve the username and password for the domain
-               from the addomain table. This is used if a computer needs to be
-               removed from a domain but the reservation image is not configured
-               for Active Directory. When this occurs, the credentials are not
-               available from $self->data.
-
-=cut
-
-sub get_active_directory_domain_credentials {
-	my ($domain_dns_name, $no_cache) = @_;
-	if (!$domain_dns_name) {
-		notify($ERRORS{'WARNING'}, 0, "domain DNS name argument was not specified");
-		return;
-	}
-	
-	if (!$no_cache && defined($ENV{active_directory_domain_credentials}{$domain_dns_name})) {
-		notify($ERRORS{'DEBUG'}, 0, "returning cached Active Directory credentials for $domain_dns_name domain");
-		return @{$ENV{active_directory_domain_credentials}{$domain_dns_name}};
-	}
-	
-	# Construct the select statement
-	my $select_statement = <<EOF;
-SELECT DISTINCT
-username,
-password
-FROM
-addomain
-WHERE
-addomain.domainDNSName = '$domain_dns_name'
-EOF
-	
-	# Call the database select subroutine
-	my @selected_rows = database_select($select_statement);
-
-	# Check to make sure 1 row was returned
-	if (scalar @selected_rows == 0) {
-		notify($ERRORS{'DEBUG'}, 0, "Active Directory domain does not exist in the database: $domain_dns_name");
-		return ();
-	}
-
-	# Get the single row returned from the select statement
-	my $row = $selected_rows[0];
-	my $username = $row->{username};
-	my $password = $row->{password};
-	notify($ERRORS{'DEBUG'}, 0, "retrieved credentials for $domain_dns_name domain from database, username: '$username', password: '$password'");
-	$ENV{active_directory_domain_credentials}{$domain_dns_name} = [$username, $password];
-	return @{$ENV{active_directory_domain_credentials}{$domain_dns_name}};
-}
-
-#//////////////////////////////////////////////////////////////////////////////
-
 =head2 get_collapsed_hash_reference
 
  Parameters  : $hash_reference
@@ -15087,6 +15032,80 @@ EOF
 	my $cryptsecret = $rows[0]->{cryptsecret};	
 	notify($ERRORS{'DEBUG'}, 0, "retrieved cryptsecret, management node ID: $management_node_id, secret ID: $secret_id");
 	return $cryptsecret;
+}
+
+#//////////////////////////////////////////////////////////////////////////////
+
+=head2 get_management_node_ad_domain_credentials
+
+ Parameters  : $management_node_id, $domain_dns_name, $no_cache (optional)
+ Returns     : ($username, $secret_id, $encrypted_password)
+ Description : Attempts to retrieve the username, encrypted password, and secret
+               ID for the domain from the addomain table. This is used if a
+               computer needs to be removed from a domain but the reservation
+               image is not configured for Active Directory. When this occurs,
+               the credentials are not available from $self->data.
+
+=cut
+
+sub get_management_node_ad_domain_credentials {
+	my ($management_node_id, $domain_identifier, $no_cache) = @_;
+	if (!defined($management_node_id)) {
+		notify($ERRORS{'WARNING'}, 0, "management node ID argument was not supplied");
+		return;
+	}
+	elsif (!$domain_identifier) {
+		notify($ERRORS{'WARNING'}, 0, "domain identifier name argument was not specified");
+		return;
+	}
+	
+	if (!$no_cache && defined($ENV{management_node_ad_domain_credentials}{$domain_identifier})) {
+		notify($ERRORS{'DEBUG'}, 0, "returning cached Active Directory credentials for domain: $domain_identifier");
+		return @{$ENV{management_node_ad_domain_credentials}{$domain_identifier}};
+	}
+	
+	# Construct the select statement
+	my $select_statement = <<EOF;
+SELECT DISTINCT
+username,
+password,
+secretid
+FROM
+addomain
+WHERE
+EOF
+	
+	if ($domain_identifier =~ /^\d+$/) {
+		$select_statement .= "addomain.id = $domain_identifier";
+	}
+	else {
+		$select_statement .= "addomain.domainDNSName LIKE '$domain_identifier%'";
+	}
+	
+	# Call the database select subroutine
+	my @selected_rows = database_select($select_statement);
+
+	# Check to make sure 1 row was returned
+	if (scalar @selected_rows == 0) {
+		notify($ERRORS{'DEBUG'}, 0, "Active Directory domain does not exist in the database: $domain_identifier");
+		return ();
+	}
+
+	# Get the single row returned from the select statement
+	my $row = $selected_rows[0];
+	my $username = $row->{username};
+	my $secret_id = $row->{secretid};
+	my $encrypted_password = $row->{password};
+	
+	
+	
+	notify($ERRORS{'DEBUG'}, 0, "retrieved credentials for domain: $domain_identifier\n" .
+		"username           : '$username'\n" .
+		"secret ID          : '$secret_id'\n" .
+		"encrypted password : '$encrypted_password'"
+	);
+	$ENV{management_node_ad_domain_credentials}{$domain_identifier} = [$username, $secret_id, $encrypted_password];
+	return @{$ENV{management_node_ad_domain_credentials}{$domain_identifier}};
 }
 
 #//////////////////////////////////////////////////////////////////////////////
