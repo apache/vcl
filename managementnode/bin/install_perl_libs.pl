@@ -59,6 +59,7 @@ my @LINUX_PACKAGES = (
 	'perl-CPAN',
 	'perl-Crypt-CBC',
 	'perl-Crypt-OpenSSL-RSA',
+	'perl-Crypt-Rijndael',
 	'perl-DBD-MySQL',
 	'perl-DBI',
 	'perl-Digest-SHA1',

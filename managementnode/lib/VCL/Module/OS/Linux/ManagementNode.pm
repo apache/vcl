@@ -57,6 +57,7 @@ use VCL::utils;
 
 use Crypt::CBC;
 use Crypt::OpenSSL::RSA;
+use Crypt::Rijndael;
 use English;
 use File::Basename;
 use MIME::Base64;
@@ -243,6 +244,13 @@ sub create_text_file {
 	}
 	
 	my $computer_node_name = $self->data->get_computer_node_name();
+	
+	# Attempt to create the parent directory if it does not exist
+	my $parent_directory_path = parent_directory_path($file_path);
+	if (!$self->file_exists($parent_directory_path)) {
+		$self->create_directory($parent_directory_path);
+	}
+	
 	
 	my $mode;
 	my $mode_string;
@@ -823,7 +831,15 @@ sub generate_private_key_file {
 	# Make sure the private key file does not already exist
 	if ($self->file_exists($private_key_file_path)) {
 		if ($force) {
-			notify($ERRORS{'OK'}, 0, "force argument was specified, existing private key file will be overwritten: $private_key_file_path");
+			(my $timestamp = makedatestring()) =~ s/\s+/_/g;
+			my $backup_private_key_file_path = $private_key_file_path . "_$timestamp";
+			if ($self->copy_file($private_key_file_path, $backup_private_key_file_path)) {
+				notify($ERRORS{'OK'}, 0, "force argument was specified, existing private key file will be overwritten, created backup copy: $private_key_file_path --> $backup_private_key_file_path");
+			}
+			else {
+				notify($ERRORS{'WARNING'}, 0, "failed to generate encryption keys, force argument was specified, existing private key file exists but failed to create backup copy: $private_key_file_path --> $backup_private_key_file_path");
+				return;
+			}
 		}
 		else {
 			notify($ERRORS{'WARNING'}, 0, "failed to generate encryption keys, private key file already exists: $private_key_file_path");
@@ -973,15 +989,23 @@ sub decrypt_cryptsecret {
 	my $iv = substr($encrypted_string_decoded, 0, 16);
 	my $ciphered_string = substr($encrypted_string_decoded, 16);
 	
-	my $cipher = Crypt::CBC->new(
-		{
-			'key'				=> $key,
-			'cipher'			=> 'Crypt::OpenSSL::AES',
-			'iv'				=> $iv,
-			'header'			=> 'none',
-			'literal_key'	=> 1,
-		}
-	);
+	my $cipher;
+	eval {
+		$cipher = Crypt::CBC->new(
+			{
+				'key'				=> $key,
+				'cipher'			=> 'Crypt::Rijndael',
+				'iv'				=> $iv,
+				'header'			=> 'none',
+				'literal_key'	=> 1,
+			}
+		);
+	};
+	if (!$cipher || $EVAL_ERROR) {
+		notify($ERRORS{'WARNING'}, 0, "unable to decrypt secret ID $secret_id, failed to create Crypt::CBC object" . ($EVAL_ERROR ? ", error:\n" . $EVAL_ERROR : ''));
+		return;
+	}
+	
 	my $decrypted_string = $cipher->decrypt($ciphered_string);
 	if (defined($decrypted_string)) {
 		notify($ERRORS{'OK'}, 0, "decrypted secret ID $secret_id");
