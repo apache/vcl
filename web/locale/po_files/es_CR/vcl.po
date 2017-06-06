@@ -4777,6 +4777,55 @@ msgstr "Nombre del usuario administrativo o root que reside en el host VM."
 msgid "Password of the administrative or root user residing on the VM host."
 msgstr "Contraseña del usuario administrativo o root que reside en el host VM."
 
+#: requests.php:3767 requests.php:3821 requests.php:3834 requests.php:3847
+#: requests.php:3870
+msgid "Settings not related to start/end time were successfully updated."
+msgstr ""
+
+#: image.php:157 image.php:462
+msgid "Use AD Authentication"
+msgstr ""
+
+#: image.php:159 image.php:465
+msgid "AD Domain"
+msgstr ""
+
+#: image.php:161 image.php:469
+msgid "Base OU"
+msgstr ""
+
+#: image.php:352
+msgid "Name cannot contain single (') or double (&quot;) quotes, less than (&lt;), or greater than (&gt;) and can be from 2 to 60 characters long"
+msgstr ""
+
+#: image.php:468
+msgid "Invalid base OU; do not include DC components"
+msgstr ""
+
+#: image.php:527
+msgid "OU where nodes deployed with this image will be registered. Do not enter the domain component (ex OU=Computers,OU=VCL)"
+msgstr ""
+
+#: image.php:1660
+msgid "Name must be from 2 to 60 characters and cannot contain any single (') or double (\") quotes."
+msgstr ""
+
+#: image.php:1734
+msgid "Invalid AD Domain submitted"
+msgstr ""
+
+#: image.php:1738
+msgid "Invalid Base OU submitted, must start with OU="
+msgstr ""
+
+#: image.php:1742
+msgid "Base OU must not contain DC= components"
+msgstr ""
+
+#: authentication.php:306
+msgid "Select a different authentication method"
+msgstr ""
+
 msgid "Image Profiles"
 msgstr "Perfiles de imagen"
 
