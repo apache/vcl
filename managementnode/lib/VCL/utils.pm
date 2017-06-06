@@ -14908,14 +14908,14 @@ EOF
 
 =head2 set_management_node_cryptkey_pubkey
 
- Parameters  : $host_id, $public_key_string
+ Parameters  : $host_id, $public_key_string, $algorithm (optional), $algorithm_option (optional), $key_length (optional)
  Returns     : $cryptkey_id
  Description : Set or updates the cryptkey.pubkey value for the management node.
 
 =cut
 
 sub set_management_node_cryptkey_pubkey {
-	my ($management_node_id, $public_key_string) = @_;
+	my ($management_node_id, $public_key_string, $algorithm, $algorithm_option, $key_length) = @_;
 	if (!defined($management_node_id)) {
 		notify($ERRORS{'WARNING'}, 0, "management node ID argument was not supplied");
 		return;
@@ -14924,18 +14924,27 @@ sub set_management_node_cryptkey_pubkey {
 		notify($ERRORS{'WARNING'}, 0, "public key string argument was not supplied");
 		return;
 	}
+	$algorithm = 'RSA' unless $algorithm;
+	$algorithm_option = 'OAEP' unless $algorithm_option;
+	$key_length = 4096 unless $key_length;
 	
 	my $insert_statement = <<EOF;
 INSERT INTO cryptkey
-(hostid, hosttype, pubkey)
+(hostid, hosttype, pubkey, algorithm, algorithmoption, keylength)
 VALUES
 (
 	$management_node_id,
 	'managementnode',
-	'$public_key_string'
+	'$public_key_string',
+	'$algorithm',
+	'$algorithm_option',
+	$key_length
 )
 ON DUPLICATE KEY UPDATE
-pubkey='$public_key_string'
+pubkey='$public_key_string',
+algorithm='$algorithm',
+algorithmoption='$algorithm_option',
+keylength=$key_length
 EOF
 	
 	my $cryptkey_id = database_execute($insert_statement);
