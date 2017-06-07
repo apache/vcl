@@ -646,10 +646,11 @@ function checkCryptkey() {
 			return;
 	}
 
-	# no id file or no matching entry in cryptkey, create new key
+	// if no id file and cannot write to cryptkey directory, return
 	if(! is_writable($filebase))
 		return;
 
+	# no id file or no matching entry in cryptkey, create new key
 	$keyfile = "$filebase/private.pem";
 
 	$_algorithm = constant("OPENSSL_KEYTYPE_" . ASYMALGO);
@@ -10023,7 +10024,7 @@ function prettyLength($minutes) {
 	elseif($minutes == 60)
 		return i("1 hour");
 	elseif($minutes % 60 == 0)
-		return $minutes / 60 . " " . i("hours");
+		return (int)($minutes / 60) . " " . i("hours");
 	else {
 		$hours = (int)($minutes / 60);
 		$min = (int)($minutes % 60);

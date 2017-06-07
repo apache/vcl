@@ -188,6 +188,11 @@ class ADdomain extends Resource {
 				$oldsecretid = $olddata['secretid'];
 				# check that we have a cryptsecret entry for this secret
 				$cryptkeyid = getCryptKeyID();
+				if($cryptkeyid == NULL) {
+					$ret = array('status' => 'error', 'msg' => "Error encountered while updating password");
+					sendJSON($ret);
+					return;
+				}
 				$query = "SELECT cryptsecret "
 				       . "FROM cryptsecret "
 				       . "WHERE cryptkeyid = $cryptkeyid AND "

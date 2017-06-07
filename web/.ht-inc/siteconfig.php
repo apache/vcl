@@ -1138,7 +1138,7 @@ class AffilTextVariable {
 				continue;
 			$id = "{$this->domidbase}_$affilid";
 			$newval = processInputVar($id, ARG_STRING);
-			if($newval !== NULL || # TODO test further
+			if($newval !== NULL ||
 	   		! $this->allowempty ||
 				($affilid == $this->globalid && ! $this->allowglobalempty)) {
 				if(! $this->validateValue($newval)) {

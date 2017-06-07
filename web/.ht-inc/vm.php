@@ -868,6 +868,11 @@ function AJupdateVMprofileItem() {
 			$secretid = getSecretKeyID('vmprofile', 'secretid', $profileid);
 			# check that we have a cryptsecret entry for this secret
 			$cryptkeyid = getCryptKeyID();
+			if($cryptkeyid === NULL) {
+				print "dojo.byId('savestatus').innerHTML = '';";
+				print "alert('Error saving password');";
+				return;
+			}
 			$query = "SELECT cryptsecret "
 			       . "FROM cryptsecret "
 			       . "WHERE cryptkeyid = $cryptkeyid AND "
