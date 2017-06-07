@@ -1,4 +1,4 @@
-VCL 2.4.2
+VCL 2.5
 
 I. Intro and Description
 
@@ -16,12 +16,17 @@ software to a machine room blade running high end software (i.e. a CAD, GIS,
 statistical package or an Enterprise level application) to a cluster of
 interconnected physical (bare metal) compute nodes.
 
-Also using the scheduling API it can be used to automate the provisioning of
+Also using the scheduling API, it can be used to automate the provisioning of
 servers in a server farm or HPC cluster.
 
 II. Notable Changes
 
 The following are some notable changes from previous releases.
+
+>>>>>> need to update Added/Removed for 2.5 <<<<<<<<<<
+=================================
+
+>>>>>> below are the Added/Removed points for 2.4.2 <<<<<<<<<
 
 Added:
 
@@ -38,10 +43,7 @@ Added:
 Removed: 
 
 * xCAT 1.x no longer supported
-
-NOTE: The release process for 2.4 and 2.4.1 was completed, but bugs were found
-before they were ever announced. So, there never were 2.4 and 2.4.1 releases
-worth using. 2.4.2 was the first usable release of the 2.4 series.
+=================================
 
 III. Getting Involved in the ASF VCL Community
 
