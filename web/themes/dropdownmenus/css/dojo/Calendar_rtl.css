@@ -1,9 +1,0 @@
-/* Calendar */
-
-.dropdownmenus .dijitCalendarRtl .dijitCalendarDecrease {
-	background-position: -30px top;
-}
-
-.dropdownmenus .dijitCalendarRtl .dijitCalendarIncrease {
-	background-position: 0 top;
-}
