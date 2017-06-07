@@ -3796,6 +3796,8 @@ sub get_vmhost_info {
 	
 	return $ENV{vmhost_info}{$vmhost_identifier} if (!$no_cache && $ENV{vmhost_info}{$vmhost_identifier});
 	
+	my $management_node_id = get_management_node_id();
+	
 	# Get a hash ref containing the database column names
 	my $database_table_columns = get_database_table_columns();
 	
@@ -3804,6 +3806,7 @@ sub get_vmhost_info {
 		'vmprofile' => 'vmprofile',
 		'repositoryimagetype' => 'imagetype',
 		'datastoreimagetype' => 'imagetype',
+		'cryptsecret' => 'cryptsecret',
 	);
 	
 	# Construct the select statement
@@ -3817,7 +3820,7 @@ sub get_vmhost_info {
 			$select_statement .= "$table_alias.$column AS '$table_alias-$column',\n";
 		}
 	}
-	
+
 	# Remove the comma after the last column line
 	$select_statement =~ s/,$//;
 	
@@ -3825,7 +3828,13 @@ sub get_vmhost_info {
 	$select_statement .= <<EOF;
 FROM
 vmhost,
-vmprofile,
+vmprofile
+LEFT JOIN (cryptsecret, cryptkey) ON (
+	vmprofile.secretid = cryptsecret.secretid AND
+	cryptsecret.cryptkeyid = cryptkey.id AND
+	cryptkey.hosttype = 'managementnode' AND
+	cryptkey.hostid = $management_node_id
+),
 imagetype repositoryimagetype,
 imagetype datastoreimagetype,
 computer
@@ -3896,6 +3905,9 @@ EOF
 		# Add values for other tables under separate keys
 		if ($table eq 'vmhost') {
 			$vmhost_info->{$column} = $value;
+		}
+		elsif ($table eq 'cryptsecret') {
+			$vmhost_info->{vmprofile}{$table}{$column} = $value;
 		}
 		else {
 			$vmhost_info->{$table}{$column} = $value;
@@ -15000,7 +15012,7 @@ EOF
 
 =head2 get_management_node_cryptsecret_value
 
- Parameters  : $management_node_id, $secret_id
+ Parameters  : $management_node_id, $secret_id, $suppress_warning (optional)
  Returns     : boolean
  Description : Retrieves the cryptsecret.cryptsecret value matching the
                cryptsecret.secretid value from the database for the management
@@ -15009,7 +15021,7 @@ EOF
 =cut
 
 sub get_management_node_cryptsecret_value {
-	my ($management_node_id, $secret_id) = @_;
+	my ($management_node_id, $secret_id, $suppress_warning) = @_;
 	if (!defined($management_node_id)) {
 		notify($ERRORS{'WARNING'}, 0, "management node ID argument was not supplied");
 		return;
@@ -15034,7 +15046,7 @@ EOF
 	
 	my @rows = database_select($select_statement);
 	if (scalar @rows == 0) {
-		notify($ERRORS{'WARNING'}, 0, "failed to retrieve cryptsecret from database for management node $management_node_id, secret ID: $secret_id");
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve cryptsecret from database for management node $management_node_id, secret ID: $secret_id") unless $suppress_warning;
 		return;
 	}
 

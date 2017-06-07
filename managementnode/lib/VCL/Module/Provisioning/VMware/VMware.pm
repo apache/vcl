@@ -299,13 +299,6 @@ sub initialize {
 	}
 	
 	my $request_state_name = $self->data->get_request_state_name();
-	my $vmhost_computer_name = $vmhost_data->get_computer_node_name();
-	my $vmhost_image_name = $vmhost_data->get_image_name();
-	my $vmhost_os_module_package = $vmhost_data->get_image_os_module_perl_package();
-	my $vmhost_lastcheck_time = $vmhost_data->get_computer_lastcheck_time(0);
-	my $vmhost_computer_id = $self->data->get_vmhost_computer_id();
-	my $vmprofile_name = $self->data->get_vmhost_profile_name();
-	my $vmprofile_password = $self->data->get_vmhost_profile_password(0);
 	
 	# Used only for development/testing
 	# If request state is 'test', full initialization is bypassed by default to speed things up
@@ -317,6 +310,14 @@ sub initialize {
 			return 1;
 		}
 	}
+	
+	my $vmhost_computer_name = $vmhost_data->get_computer_node_name();
+	my $vmhost_image_name = $vmhost_data->get_image_name();
+	my $vmhost_os_module_package = $vmhost_data->get_image_os_module_perl_package();
+	my $vmhost_lastcheck_time = $vmhost_data->get_computer_lastcheck_time(0);
+	my $vmhost_computer_id = $self->data->get_vmhost_computer_id();
+	my $vmprofile_name = $self->data->get_vmhost_profile_name();
+	my $vmprofile_password = $self->data->get_vmhost_profile_password(0);
 	
 	notify($ERRORS{'DEBUG'}, 0, "initializing " . ref($self) . " object");
 	

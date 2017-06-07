@@ -2696,7 +2696,6 @@ ALTER TABLE `vmhost` ADD CONSTRAINT FOREIGN KEY (`computerid`) REFERENCES `compu
 ALTER TABLE `vmprofile` ADD CONSTRAINT FOREIGN KEY (`imageid`) REFERENCES `image` (`id`);
 ALTER TABLE `vmprofile` ADD CONSTRAINT FOREIGN KEY (`repositoryimagetypeid`) REFERENCES `imagetype` (`id`) ON UPDATE CASCADE;
 ALTER TABLE `vmprofile` ADD CONSTRAINT FOREIGN KEY (`datastoreimagetypeid`) REFERENCES `imagetype` (`id`) ON UPDATE CASCADE;
-ALTER TABLE `vmprofile` ADD CONSTRAINT FOREIGN KEY (`secretid`) REFERENCES `cryptsecret` (`secretid`);
 
 --
 -- Constraints for table `winKMS`

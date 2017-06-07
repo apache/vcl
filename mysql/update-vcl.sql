@@ -2692,7 +2692,6 @@ CALL DropExistingConstraints('vmprofile', 'imageid');
 CALL AddConstraintIfNotExists('vmprofile', 'imageid', 'image', 'id', 'none', '');
 CALL AddConstraintIfNotExists('vmprofile', 'repositoryimagetypeid', 'imagetype', 'id', 'update', 'CASCADE');
 CALL AddConstraintIfNotExists('vmprofile', 'datastoreimagetypeid', 'imagetype', 'id', 'update', 'CASCADE');
-CALL AddConstraintIfNotExists('vmprofile', 'secretid', 'cryptsecret', 'secretid', 'none', '');
 
 -- --------------------------------------------------------
 

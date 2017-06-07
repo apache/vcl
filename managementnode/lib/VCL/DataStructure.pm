@@ -284,9 +284,10 @@ $SUBROUTINE_MAPPINGS{vmhost_profile_virtualswitch3} = '$self->request_data->{res
 $SUBROUTINE_MAPPINGS{vmhost_profile_vmdisk} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhost}{vmprofile}{vmdisk}';
 $SUBROUTINE_MAPPINGS{vmhost_profile_vmpath} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhost}{vmprofile}{vmpath}';
 $SUBROUTINE_MAPPINGS{vmhost_profile_username} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhost}{vmprofile}{username}';
-$SUBROUTINE_MAPPINGS{vmhost_profile_password} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhost}{vmprofile}{password}';
+#$SUBROUTINE_MAPPINGS{vmhost_profile_password} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhost}{vmprofile}{password}';
 $SUBROUTINE_MAPPINGS{vmhost_profile_eth0generated} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhost}{vmprofile}{eth0generated}';
 $SUBROUTINE_MAPPINGS{vmhost_profile_eth1generated} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhost}{vmprofile}{eth1generated}';
+$SUBROUTINE_MAPPINGS{vmhost_profile_secret_id} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhost}{vmprofile}{secretid}';
 
 $SUBROUTINE_MAPPINGS{vmhost_repository_imagetype_name} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhost}{repositoryimagetype}{name}';
 $SUBROUTINE_MAPPINGS{vmhost_datastore_imagetype_name} = '$self->request_data->{reservation}{RESERVATION_ID}{computer}{vmhost}{datastoreimagetype}{name}';
@@ -2798,7 +2799,7 @@ sub get_image_domain_password {
 	}
 	
 	my $image_domain_password = $self->mn_os->decrypt_cryptsecret($secret_id, $encrypted_password);
-	#notify($ERRORS{'DEBUG'}, 0, string_to_ascii($image_domain_password));
+	#notify($ERRORS{'DEBUG'}, 0, "retrieved Active Directory domain password: '$image_domain_password'");
 	return $image_domain_password;
 }
 
@@ -2835,6 +2836,49 @@ sub get_domain_credentials {
 	
 	notify($ERRORS{'DEBUG'}, 0, "retrieved credentials for Active Directory domain:\nusername: '$username'\npassword: '$domain_password'");
 	return ($username, $domain_password);
+}
+
+#//////////////////////////////////////////////////////////////////////////////
+
+=head2 get_vmhost_profile_password
+
+ Parameters  : $display_warnings (optional)
+ Returns     : string
+ Description : Returns the decrypted VM host profile password if both
+               vmprofile.password and vmprofile.secretid are set. If
+               vmprofile.password is set but vmprofile.secretid is not, assumes
+               the password was set prior to VCL 2.5 and returns raw value of
+               vmprofile.password.
+
+=cut
+
+sub get_vmhost_profile_password {
+	my $self = shift;
+	if (ref($self) !~ /VCL::/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return 0;
+	}
+	
+	my $display_warnings = shift;
+	$display_warnings = 1 unless defined($display_warnings);
+	
+	my $reservation_id = $self->reservation_id();
+	
+	my $password = $self->request_data->{reservation}{$reservation_id}{computer}{vmhost}{vmprofile}{password};
+	if (!defined($password)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve decrypted VM profile password, vmprofile.password is not defined in this DataStructure.pm object") if $display_warnings;
+		return;
+	}
+	
+	my $secret_id = $self->get_vmhost_profile_secret_id();
+	if (!defined($secret_id)) {
+		notify($ERRORS{'DEBUG'}, 0, "vmprofile.password is set but vmprofile.secretid is NOT, assuming vmprofile.password is a pre-VCL 2.5 clear-text password: '$password'");
+		return $password;
+	}
+	
+	my $decrypted_password = $self->mn_os->decrypt_cryptsecret($secret_id, $password);
+	notify($ERRORS{'DEBUG'}, 0, "decrypted VM profile password: '$decrypted_password'");
+	return $decrypted_password;
 }
 
 #//////////////////////////////////////////////////////////////////////////////
