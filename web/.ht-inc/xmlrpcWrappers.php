@@ -3821,7 +3821,7 @@ function XMLRPCcheckCryptSecrets($reservationid) {
 	$subquery = "SELECT $secret1 AS id";
 	if(count($secretids) == 1)
 		$subquery .= " UNION SELECT {$secretids[0]}";
-	else
+	elseif(count($secretids) > 1)
 		$subquery .= " UNION SELECT " . implode(' UNION SELECT ', $secretids);
 	$query = "SELECT ck.id as cryptkeyid, "
 	       .        "ck.pubkey as cryptkey, "
