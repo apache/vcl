@@ -163,7 +163,7 @@ class ADdomain extends Resource {
 		if($add) {
 			if(! $data['rscid'] = $this->addResource($data)) {
 				sendJSON(array('status' => 'adderror',
-				               'errormsg' => wordwrap(i('Error encountered while trying to create new AD domain. Please contact an admin for assistance.'), 75, '<br>')));
+				               'errormsg' => wordwrap(i('Error encountered while trying to create new AD domain. Please contact an admin for assistance.'), 75, "\n")));
 				return;
 			}
 		}
@@ -313,7 +313,7 @@ class ADdomain extends Resource {
 	///
 	/// \param $data - array of needed data for adding a new resource
 	///
-	/// \return id of new resource
+	/// \return id of new resource; NULL on failure
 	///
 	/// \brief handles all parts of adding a new resource to the database; should
 	/// be implemented by inheriting class, but not required since it is only
@@ -327,7 +327,11 @@ class ADdomain extends Resource {
 		$ownerid = getUserlistID($data['owner']);
 
 		$secretid = getSecretKeyID('addomain', 'secretid', 0);
+		if($secretid === NULL)
+			return NULL;
 		$encpass = encryptDBdata($data['password'], $secretid);
+		if($encpass === NULL)
+			return NULL;
 	
 		$query = "INSERT INTO addomain"
 				.	"(name, "
@@ -350,7 +354,7 @@ class ADdomain extends Resource {
 		if($rscid == 0) {
 			$query = "DELETE FROM cryptsecret WHERE secretid = $secretid";
 			doQuery($query);
-			return 0;
+			return NULL;
 		}
 
 		// add entry in resource table
