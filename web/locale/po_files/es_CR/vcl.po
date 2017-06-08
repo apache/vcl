@@ -17,7 +17,7 @@ msgstr ""
 "Project-Id-Version: Apache VCL 2.5\n"
 "Report-Msgid-Bugs-To: dev@vcl.apache.org\n"
 "POT-Creation-Date: 2016-07-14 22:19-0400\n"
-"PO-Revision-Date: 2017-01-02 11:26-0600\n"
+"PO-Revision-Date: 2017-06-07 13:36-0600\n"
 "Last-Translator: Luis Zárate <luis.zarate@solvosoft.com>\n"
 "Language-Team: \n"
 "Language: es_CR\n"
@@ -4569,7 +4569,7 @@ msgstr "Buscar Usuario"
 
 #: utils.php:12685
 msgid "Virtual Hosts"
-msgstr ""
+msgstr "Máquinas virtuales"
 
 #: utils.php:12832
 msgid "AD Domains"
@@ -4781,50 +4781,65 @@ msgstr "Contraseña del usuario administrativo o root que reside en el host VM."
 #: requests.php:3870
 msgid "Settings not related to start/end time were successfully updated."
 msgstr ""
+"Configuración no relacionada con tiempo de inicio y fin fue actualizada "
+"correctamente"
 
 #: image.php:157 image.php:462
 msgid "Use AD Authentication"
-msgstr ""
+msgstr "Utilizar autenticación AD"
 
 #: image.php:159 image.php:465
 msgid "AD Domain"
-msgstr ""
+msgstr "Dominio AD"
 
 #: image.php:161 image.php:469
 msgid "Base OU"
-msgstr ""
+msgstr "Base OU"
 
 #: image.php:352
-msgid "Name cannot contain single (') or double (&quot;) quotes, less than (&lt;), or greater than (&gt;) and can be from 2 to 60 characters long"
+msgid ""
+"Name cannot contain single (') or double (&quot;) quotes, less than (&lt;), "
+"or greater than (&gt;) and can be from 2 to 60 characters long"
 msgstr ""
+"El nombre no puede contener comillas simples (') o dobles (&quot;), menor "
+"que (&lt;), o mayor que (&gt;)  y tiene que tener de longitud 2 a 60 "
+"caracteres"
 
 #: image.php:468
 msgid "Invalid base OU; do not include DC components"
-msgstr ""
+msgstr "Base OU unválido, no puede incluir componentes DC"
 
 #: image.php:527
-msgid "OU where nodes deployed with this image will be registered. Do not enter the domain component (ex OU=Computers,OU=VCL)"
+msgid ""
+"OU where nodes deployed with this image will be registered. Do not enter the "
+"domain component (ex OU=Computers,OU=VCL)"
 msgstr ""
+"OU donde se registrarán los nodos implementados con esta imagen. No ingrese "
+"el componente de dominio (ex OU=Computers,OU=VCL)"
 
 #: image.php:1660
-msgid "Name must be from 2 to 60 characters and cannot contain any single (') or double (\") quotes."
+msgid ""
+"Name must be from 2 to 60 characters and cannot contain any single (') or "
+"double (\") quotes."
 msgstr ""
+"Nombre debe tener de 2 a 60 caracteres y no puede contener comillas simples "
+"(') o dobles (\")."
 
 #: image.php:1734
 msgid "Invalid AD Domain submitted"
-msgstr ""
+msgstr "Dominio AD inválido"
 
 #: image.php:1738
 msgid "Invalid Base OU submitted, must start with OU="
-msgstr ""
+msgstr "Base OU inválido, debe iniciar con OU="
 
 #: image.php:1742
 msgid "Base OU must not contain DC= components"
-msgstr ""
+msgstr "Base OU debe contener componentes DC"
 
 #: authentication.php:306
 msgid "Select a different authentication method"
-msgstr ""
+msgstr "Seleccione un método de autenticación diferente"
 
 msgid "Image Profiles"
 msgstr "Perfiles de imagen"
