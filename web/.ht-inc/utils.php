@@ -13642,22 +13642,6 @@ function getDojoHTML($refresh) {
 			                      'dojox.grid.DataGrid',
 			                      'dijit.form.Button');
 			break;
-		/*case 'serverProfiles':
-			$filename = 'vclServerProfiles.js';
-			$dojoRequires = array('dojo.parser',
-			                      'dijit.Dialog',
-			                      'dijit.form.Button',
-			                      'dijit.form.FilteringSelect',
-			                      'dijit.form.Select',
-			                      'dijit.form.TextBox',
-			                      'dijit.form.ValidationTextBox',
-			                      'dijit.form.CheckBox',
-			                      'dijit.form.Textarea',
-			                      'dijit.layout.ContentPane',
-			                      'dijit.layout.TabContainer',
-			                      'dojox.string.sprintf',
-			                      'dojo.data.ItemFileWriteStore');
-			break;*/
 		case 'editVMInfo':
 			$filename = 'vclVirtualHosts.js';
 			$dojoRequires = array('dojo.parser',
@@ -13741,6 +13725,22 @@ function getDojoHTML($refresh) {
 			                      'dijit.layout.TabContainer');
 			break;
 		# TODO clean up
+		/*case 'serverProfiles':
+			$filename = 'vclServerProfiles.js';
+			$dojoRequires = array('dojo.parser',
+			                      'dijit.Dialog',
+			                      'dijit.form.Button',
+			                      'dijit.form.FilteringSelect',
+			                      'dijit.form.Select',
+			                      'dijit.form.TextBox',
+			                      'dijit.form.ValidationTextBox',
+			                      'dijit.form.CheckBox',
+			                      'dijit.form.Textarea',
+			                      'dijit.layout.ContentPane',
+			                      'dijit.layout.TabContainer',
+			                      'dojox.string.sprintf',
+			                      'dojo.data.ItemFileWriteStore');
+			break;*/
 		/*case 'testDojoREST':
 			$filename = '';
 			$dojoRequires = array('dojo.parser',
