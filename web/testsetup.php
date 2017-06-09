@@ -1,4 +1,5 @@
 <?php
+date_default_timezone_set('America/New_York');
 /*
   Licensed to the Apache Software Foundation (ASF) under one or more
   contributor license agreements.  See the NOTICE file distributed with
@@ -96,9 +97,11 @@ $allowurlopen = ini_get('allow_url_fopen');
 if($includesecrets) {
 	$data = '';
 	if($fp = fopen("$myurl?includesecretstest=1", 'r')) {
-		$data = fread($fp, 100);
+		$data = fread($fp, 1000);
 		fclose($fp);
 	}
+	if(preg_match('/parse error/i', $data))
+		$data = '';
 	if($allowurlopen && (empty($data) || $data == 'unreadable')) {
 		print $header;
 		# php version
@@ -126,8 +129,11 @@ else {
 if($includeconf) {
 	$data = '';
 	if($fp = fopen("$myurl?includeconftest=1", 'r')) {
-		$data = fread($fp, 100);
+		$data = fread($fp, 1000);
 		fclose($fp);
+	}
+	if(preg_match('/parse error/i', $data)) {
+		$data = '';
 	}
 	$allowurlopen = ini_get('allow_url_fopen');
 	if($allowurlopen && (empty($data) || $data == 'unreadable')) {
@@ -139,7 +145,7 @@ if($includeconf) {
 		if($data == 'unreadable')
 			fail("unable to read .ht-inc/conf.php - check the permissions of the file");
 		else
-			fail("unable to include .ht-inc/conf.php - this is probably due to a syntax error in .ht-inc/conf.php");
+			fail("unable to include .ht-inc/conf.php - this is probably due to a syntax error in .ht-inc/conf.php (or a file it includes)");
 		fail("skipping tests for contents of .ht-inc/conf.php");
 		print "</ul>\n";
 		$includeconf = 0;
@@ -153,6 +159,7 @@ else {
 }
 
 # conf.php tests
+$createcryptkey = 0;
 if($includeconf && include('.ht-inc/conf.php')) {
 	$host = $_SERVER['HTTP_HOST'];
 	if(! defined('COOKIEDOMAIN')) {
@@ -231,21 +238,36 @@ if($includeconf && include('.ht-inc/conf.php')) {
 	}
 	print "</ul>\n";
 
+	# check various other constants
+	title("Checking that other required constants are defined");
+	print "<ul>\n";
+	$consts = array('ONLINEDEBUG', 'HELPURL', 'HELPEMAIL', 'ERROREMAIL', 'ENVELOPESENDER', 'DEFAULTLOCALE', 'BASEURL', 'SCRIPT', 'HOMEURL', 'COOKIEDOMAIN', 'DEFAULTGROUP', 'DEFAULT_AFFILID', 'DAYSAHEAD', 'DEFAULT_PRIVNODE', 'SCHEDULER_ALLOCATE_RANDOM_COMPUTER', 'PRIV_CACHE_TIMEOUT', 'MIN_BLOCK_MACHINES', 'MAX_BLOCK_MACHINES', 'DOCUMENTATIONURL', 'USEFILTERINGSELECT', 'FILTERINGSELECTTHRESHOLD', 'SEMTIMEOUT', 'DEFAULTTHEME', 'HELPFAQURL', 'ALLOWADDSHIBUSERS', 'MAXINITIALIMAGINGTIME', 'MAXSUBIMAGES', 'NOAUTH_HOMENAV', 'QUERYLOGGING', 'XMLRPCLOGGING');
+	$fails = array();
+	foreach($consts as $const) {
+		if(! defined("$const"))
+			$fails[] = $const;
+	}
+	if(empty($fails))
+		pass("All required constants are defined in .ht-inc/conf.php");
+	else
+		fail("The following constants need to be defined in .ht-inc/conf.php. Check conf-default.php for more information about each one.<br>" . implode("<br>\n", $fails));
+	print "</ul>\n";
+
 	# check for existance of maintenance directory
 	title("Checking that .ht-inc/maintenance directory exists");
 	print "<ul>\n";
 	$file = preg_replace('|/testsetup.php|', '', $_SERVER['SCRIPT_FILENAME']);
 	$file .= "/.ht-inc/maintenance";
 	if(! is_dir($file))
-		fail("/.ht-inc/maintenance directory does not exist. Please create it.");
+		fail(".ht-inc/maintenance directory does not exist. Please create it.");
 	else {
-		pass("/.ht-inc/maintenance directory exists");
+		pass(".ht-inc/maintenance directory exists");
 		print "</ul>\n";
 		# check that we can write files to maintenance directory
 		title("Checking that .ht-inc/maintenance directory is writable");
 		print "<ul>\n";
 		if(! is_writable("$file"))
-			fail("Maintenance directory is not writable");
+			fail("maintenance directory is not writable");
 		else {
 			if(! $fh = @fopen("$file/testfile", 'w'))
 				fail("Failed to open file in maintenance directory");
@@ -257,7 +279,42 @@ if($includeconf && include('.ht-inc/conf.php')) {
 					if(! unlink("$file/testfile"))
 						fail("Failed to remove file from maintenance directory");
 					else
-						pass("Maintenance directory is writable");
+						pass("maintenance directory is writable");
+				}
+			}
+		}
+	}
+	print "</ul>\n";
+
+	# check for existance of cryptkey directory
+	title("Checking that .ht-inc/cryptkey directory exists");
+	print "<ul>\n";
+	$file = preg_replace('|/testsetup.php|', '', $_SERVER['SCRIPT_FILENAME']);
+	$file .= "/.ht-inc/cryptkey";
+	if(! is_dir($file))
+		fail(".ht-inc/cryptkey directory does not exist. Please create it.");
+	else {
+		pass(".ht-inc/cryptkey directory exists");
+		print "</ul>\n";
+		# check that we can write files to cryptkey directory
+		title("Checking that .ht-inc/cryptkey directory is writable");
+		print "<ul>\n";
+		if(! is_writable("$file"))
+			fail("cryptkey directory is not writable");
+		else {
+			if(! $fh = @fopen("$file/testfile", 'w'))
+				fail("Failed to open file in cryptkey directory");
+			else {
+				if(! fwrite($fh, 'test') || ! fclose($fh))
+					fail("Failed to write to file in cryptkey directory");
+				else {
+					# check that we can remove files from cryptkey directory
+					if(! unlink("$file/testfile"))
+						fail("Failed to remove file from cryptkey directory");
+					else {
+						pass("cryptkey directory is writable");
+						$createcryptkey = 1;
+					}
 				}
 			}
 		}
@@ -265,12 +322,48 @@ if($includeconf && include('.ht-inc/conf.php')) {
 	print "</ul>\n";
 }
 
+if($createcryptkey) {
+	title("Checking asymmetric encryption key for this web server");
+	print "<ul>\n";
+	if(is_readable('.ht-inc/utils.php') && @(include '.ht-inc/utils.php') == TRUE) {
+		$file = preg_replace('|/testsetup.php|', '', $_SERVER['SCRIPT_FILENAME']);
+		$filebase = $file . "/.ht-inc/cryptkey";
+		$file1 = "$filebase/cryptkeyid";
+		$file2 = "$filebase/private.pem";
+		$exist = 0;
+		if(is_readable("$file1") && is_readable("$file2"))
+			$exist = 1;
+		else
+			print "<li>encryption key does not already exist - attempting to create</li>\n";
+		$tmp = $_SERVER['SCRIPT_FILENAME'];
+		$_SERVER['SCRIPT_FILENAME'] = str_replace('testsetup.php', 'index.php', $_SERVER['SCRIPT_FILENAME']);
+		$actions = array('pages' => array());
+		initGlobals();
+		dbConnect();
+		checkCryptkey();
+		dbDisconnect();
+		$_SERVER['SCRIPT_FILENAME'] = $tmp;
+		if(is_readable("$file1") && is_readable("$file2")) {
+			if($exist)
+				pass("Asymmetric key validated");
+			else
+				pass("Successfully created asymmetric encryption key");
+		}
+		else
+			fail("Failed to create asymmetric encryption key");
+	}
+	else {
+		fail("Failed to include .ht-inc/utils.php");
+	}
+	print "</ul>\n";
+}
+
 # required extentions
 title("Testing for required php extensions");
 if(version_compare(phpversion(), "5.2", "<"))
-	$requiredexts = array('gd', 'mysql', 'openssl', 'xml', 'xmlrpc', 'session', 'pcre', 'sockets', 'ldap', 'gettext');
+	$requiredexts = array('mysql', 'openssl', 'xml', 'xmlrpc', 'session', 'pcre', 'sockets', 'ldap');
 else
-	$requiredexts = array('gd', 'mysql', 'openssl', 'xml', 'xmlrpc', 'session', 'pcre', 'sockets', 'ldap', 'gettext', 'json');
+	$requiredexts = array('mysql', 'openssl', 'xml', 'xmlrpc', 'session', 'pcre', 'sockets', 'ldap', 'json');
 $exts = get_loaded_extensions();
 $diff = array_diff($requiredexts, $exts);
 print "<ul>\n";
@@ -315,6 +408,13 @@ if($includesecrets && include('.ht-inc/secrets.php')) {
 		fail("\$cryptkey in .ht-inc/secrets.php is not set");
 		$allok = 0;
 	}
+	elseif(function_exists('openssl_encrypt')) {
+		$rc = base64_decode($cryptkey, 1);
+		if($rc === FALSE) {
+			fail("\$cryptkey in .ht-inc/secrets.php is not base64 encoded. Generate new value with <strong>openssl rand 32 | base64</strong>");
+			$allok = 0;
+		}
+	}
 	if(empty($pemkey)) {
 		fail("\$pemkey in .ht-inc/secrets.php is not set");
 		$allok = 0;
@@ -343,35 +443,62 @@ if($includesecrets && include('.ht-inc/secrets.php')) {
 	}
 }
 
-# test mcrypt
-title("Testing phpseclib");
-require_once(".ht-inc/phpseclib/Crypt/AES.php");
-print "<ul>\n";
-if($includesecrets && ! empty($cryptkey)) {
-	$teststring = 'testing';
-	$aes = new Crypt_AES();
-	$aes->setKey($cryptkey);
-	if($cryptdata = $aes->encrypt($teststring)) {
-		pass("Successfully encrypted test string");
-		$decrypted = $aes->decrypt($cryptdata);
-		if(trim($decrypted) == $teststring)
-			pass("Successfully decrypted test string");
-		else
-			fail("Failed to decrypt test string");
+# test symmetric encryption
+title("Testing symmetric encryption");
+if(function_exists('openssl_encrypt')) {
+	print "<ul>\n";
+	if($includesecrets && ! empty($cryptkey)) {
+		$teststring = 'testing';
+		$iv = openssl_random_pseudo_bytes(16);
+		$mode = "AES-256-CBC";
+		if($cryptdata = openssl_encrypt($teststring, $mode, $cryptkey, 1, $iv)) {
+			pass("Successfully encrypted test string");
+			$decrypted = openssl_decrypt($cryptdata, $mode, $cryptkey, 1, $iv);
+			if(trim($decrypted) == $teststring)
+				pass("Successfully decrypted test string");
+			else
+				fail("Failed to decrypt test string");
+		}
+		else {
+			fail("Failed to encrypt data");
+		}
 	}
-	else {
-		fail("Failed to encrypt data with phpseclib");
-	}
+	else
+		fail("Cannot test encryption without \$cryptkey from .ht-inc/secrets.php");
+	print "</ul>\n";
 }
-else
-	fail("Cannot test encryption without \$cryptkey from .ht-inc/secrets.php");
-print "</ul>\n";
+else {
+	require_once(".ht-inc/phpseclib/Crypt/AES.php");
+	print "<ul>\n";
+	if($includesecrets && ! empty($cryptkey)) {
+		$teststring = 'testing';
+		$aes = new Crypt_AES(CRYPT_AES_MODE_CBC);
+		$aes->setKeyLength(256);
+		$iv = crypt_random_string(16);
+		$aes->setIV($iv);
+		$aes->setKey($cryptkey);
+		if($cryptdata = $aes->encrypt($teststring)) {
+			pass("Successfully encrypted test string");
+			$decrypted = $aes->decrypt($cryptdata);
+			if(trim($decrypted) == $teststring)
+				pass("Successfully decrypted test string");
+			else
+				fail("Failed to decrypt test string");
+		}
+		else {
+			fail("Failed to encrypt data");
+		}
+	}
+	else
+		fail("Cannot test encryption without \$cryptkey from .ht-inc/secrets.php");
+	print "</ul>\n";
+}
 
 # encryption keys
 $privkeyok = 0;
 $pubkeyok = 0;
 if(in_array('openssl', $exts)) {
-	title("checking openssl encryption keys");
+	title("Testing asymmetric encryption key files");
 	print "<ul>\n";
 	if($includesecrets && ! empty($pemkey)) {
 		if(is_readable(".ht-inc/keys.pem")) {
@@ -408,7 +535,7 @@ if(in_array('openssl', $exts)) {
 		fail("Could not read public key file (.ht-inc/pubkey.pem). Check permissions on the file.");
 	print "</ul>\n";
 
-	title("Testing openssl encryption");
+	title("Testing asymmetric encryption");
 	print "<ul>\n";
 	if(! $privkeyok)
 		fail("cannot test encryption without a valid private key");
@@ -446,7 +573,7 @@ if(is_dir('./dojo')) {
 		fail("dojo directory is not readable. Check permissions on this directory");
 }
 else
-	fail("dojo directory does not exist. Download and install Dojo Toolkit 1.6.2");
+	fail("dojo directory does not exist. Download and install Dojo Toolkit 1.6.5");
 print "</ul>\n";
 
 
@@ -476,6 +603,7 @@ print "</ul>\n";
 
 # check themes directories for dojo content having been copied in
 title("Checking themes for dojo css");
+print "<ul>\n";
 $themes = scandir('themes');
 foreach($themes as $theme) {
 	if($theme == '.' || $theme == '..' || $theme == 'copydojocss.sh')
@@ -485,6 +613,7 @@ foreach($themes as $theme) {
 	else
 		fail("themes/$theme is missing dojo css. Run themes/copydojocss.sh from the themes directory to correct this if you want to use this theme.");
 }
+print "</ul>\n";
 
 # php display errors
 title("Checking value of PHP display_errors");
