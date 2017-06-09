@@ -17,7 +17,6 @@
 */
 
 require_once(".ht-inc/secrets.php");
-@include_once("itecsauth/itecsauth.php");
 require_once(".ht-inc/authentication.php");
 require_once(".ht-inc/spyc-0.5.1/Spyc.php");
 if(file_exists(".ht-inc/vcldocs.php"))
@@ -2733,7 +2732,11 @@ function decryptData($data, $cryptkey, $algo, $option, $keylength) {
 		return false;
 	$cryptdata = base64_decode($data);
 	$iv = substr($cryptdata, 0, $ivsize);
+	if(strlen($iv) < $ivsize)
+		return false;
 	$cryptdata = substr($cryptdata, $ivsize);
+	if(strlen($cryptdata) == 0)
+		return false;
 	if(USE_PHPSECLIB) {
 		if($algo == 'AES') {
 			$mode = constant("CRYPT_AES_MODE_$option");
@@ -3030,6 +3033,54 @@ function encryptWebSecretKeys($secret, $secretid, $skipkeyid=0) {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
+/// \fn checkMissingWebSecretKeys()
+///
+/// \brief checks for any web servers missing secret key entries and creates
+/// them if possible
+///
+////////////////////////////////////////////////////////////////////////////////
+function checkMissingWebSecretKeys() {
+	global $mode;
+	$mycryptkeyid = getCryptKeyID();
+
+	$values = array();
+	$query = "SELECT ck.id as cryptkeyid, "
+	       .        "ck.pubkey as cryptkey, "
+	       .        "s.id as secretid, "
+	       .        "s.cryptsecret AS mycryptsecret "
+	       . "FROM cryptkey ck "
+	       . "JOIN (SELECT secretid as id, cryptsecret "
+	       .       "FROM cryptsecret "
+	       .       "WHERE cryptkeyid = $mycryptkeyid) AS s "
+	       . "LEFT JOIN cryptsecret cs ON (ck.id = cs.cryptkeyid AND cs.secretid = s.id) "
+	       . "WHERE ck.hosttype = 'web' AND "
+	       .       "cs.secretid IS NULL AND "
+	       .       "ck.id != $mycryptkeyid";
+	$qh = doQuery($query);
+	while($row = mysql_fetch_assoc($qh)) {
+		$secret = decryptSecretKey($row['mycryptsecret']);
+		$encsecret = encryptSecretKey($secret, $row['cryptkey']);
+		$values[] = "({$row['cryptkeyid']}, {$row['secretid']}, '$encsecret', '"
+		          . SYMALGO . "', '" . SYMOPT . "', " . SYMLEN . ")";
+	}
+	if(empty($values)) {
+		if($mode == 'checkMissingWebSecretKeys') {
+			print "<h2>Update Missing Web Server Secret Keys</h2>\n";
+			print "There are no missing secret keys this server has access to.";
+		}
+		return;
+	}
+
+	addCryptSecretKeyUpdates($values);
+
+	if($mode == 'checkMissingWebSecretKeys') {
+		print "<h2>Update Missing Web Server Secret Keys</h2>\n";
+		print "Successfully updated any missing secret keys this server has access to.";
+	}
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
 /// \fn checkCryptSecrets($requestid)
 ///
 /// \param $requestid - id from request table
@@ -3076,7 +3127,7 @@ function checkCryptSecrets($requestid) {
 	# find any missing secrets for management nodes
 	$values = getMNcryptkeyUpdates($secretids, $mycryptkeyid);
 	# add secrets
-	addMNcryptkeyUpdates($values);
+	addCryptSecretKeyUpdates($values);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -3130,7 +3181,7 @@ function getMNcryptkeyUpdates($secretidset, $cryptkeyid) {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
-/// \fn addMNcryptkeyUpdates($values)
+/// \fn addCryptSecretKeyUpdates($values)
 ///
 /// \param $values - array of cryptsecret values that can be joined by commas
 /// and used as the VALUES portion of an INSERT statement
@@ -3138,7 +3189,7 @@ function getMNcryptkeyUpdates($secretidset, $cryptkeyid) {
 /// \brief inserts values into cryptsecret table
 ///
 ////////////////////////////////////////////////////////////////////////////////
-function addMNcryptkeyUpdates($values) {
+function addCryptSecretKeyUpdates($values) {
 	if(empty($values))
 		return;
 	$allvalues = implode(',', $values);

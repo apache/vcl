@@ -898,7 +898,7 @@ function AJupdateVMprofileItem() {
 				while($row = mysql_fetch_assoc($qh))
 					$secretidset[$row['mnid']][$newsecretid] = 1;
 				$values = getMNcryptkeyUpdates($secretidset, $cryptkeyid);
-				addMNcryptkeyUpdates($values);
+				addCryptSecretKeyUpdates($values);
 				$secretid = $newsecretid;
 				# clean up old cryptsecret entries for management nodes
 				$query = "DELETE FROM cryptsecret WHERE secretid IN ($delids)";
@@ -912,7 +912,10 @@ function AJupdateVMprofileItem() {
 			$encpass = encryptDBdata($newvalue, $secretid);
 			$query = "UPDATE vmprofile "
 			       . "SET password = '$encpass', "
-			       .     "secretid = '$secretid' "
+			       .     "secretid = '$secretid', "
+			       .     "rsapub = NULL, "
+			       .     "rsakey = NULL, "
+			       .     "encryptedpasswd = NULL "
 			       . "WHERE id = $profileid";
 			doQuery($query);
 		}

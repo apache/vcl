@@ -218,7 +218,7 @@ class ADdomain extends Resource {
 					while($row = mysql_fetch_assoc($qh))
 						$secretidset[$row['mnid']][$newsecretid] = 1;
 					$values = getMNcryptkeyUpdates($secretidset, $cryptkeyid);
-					addMNcryptkeyUpdates($values);
+					addCryptSecretKeyUpdates($values);
 					$olddata['secretid'] = $newsecretid;
 					$updates[] = "secretid = $newsecretid";
 					# clean up old cryptsecret entries for management nodes

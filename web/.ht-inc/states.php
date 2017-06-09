@@ -64,6 +64,7 @@ $actions["entry"] = array('main',
                           'newOneClick',
                           'AJsetTZoffset',
                           'changeLocale',
+                          'checkMissingWebSecretKeys',
 );
 
 $noHTMLwrappers = array('sendRDPfile',
@@ -752,6 +753,7 @@ $actions['mode']['errorrpt'] = "errorrpt";
 $actions['mode']['AJvalidateUserid'] = "AJvalidateUserid";
 $actions['mode']['changeLocale'] = "changeLocale";
 $actions['mode']['AJsetTZoffset'] = "AJsetTZoffset";
+$actions['mode']['checkMissingWebSecretKeys'] = "checkMissingWebSecretKeys";
 $actions['pages']['continuationsError'] = "misc";
 $actions['pages']['clearCache'] = "misc";
 $actions['pages']['errorrpt'] = "misc";
@@ -760,6 +762,7 @@ $actions['pages']['shiblogout'] = "misc";
 $actions['pages']['AJvalidateUserid'] = "misc";
 $actions['pages']['changeLocale'] = "misc";
 $actions['pages']['AJsetTZoffset'] = "misc";
+$actions['pages']['checkMissingWebSecretKeys'] = "misc";
 
 # OneClicks (VCL go)
 $actions['mode']['newOneClick'] = "newOneClick";

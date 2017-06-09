@@ -16,6 +16,8 @@
   limitations under the License.
 */
 
+@include_once("itecsauth/itecsauth.php");
+
 /**
  * \file
  */

@@ -3844,14 +3844,13 @@ function XMLRPCcheckCryptSecrets($reservationid) {
 		}
 		$secret = decryptSecretKey($row['mycryptsecret']);
 		$encsecret = encryptSecretKey($secret, $row['cryptkey']);
-		$encsecret = mysql_real_escape_string($encsecret);
 		$values[] = "({$row['cryptkeyid']}, {$row['secretid']}, '$encsecret', '"
 		          . SYMALGO . "', '" . SYMOPT . "', " . SYMLEN . ")";
 	}
 	if(empty($values) && empty($fails))
 		return array('status' => 'noupdate');
 
-	addMNcryptkeyUpdates($values);
+	addCryptSecretKeyUpdates($values);
 
 	if(count($values) && count($fails))
 		return array('status' => 'partial');

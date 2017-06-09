@@ -575,6 +575,8 @@ function addLoginLog($login, $mech, $affiliationid, $passfail, $code='none') {
 	       .        "'{$_SERVER['REMOTE_ADDR']}', "
 	       .        "'$code')";
 	doQuery($query, 101);
+	if($passfail == 1)
+		checkMissingWebSecretKeys();
 }
 
 ////////////////////////////////////////////////////////////////////////////////
