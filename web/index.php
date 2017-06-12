@@ -16,8 +16,8 @@
   limitations under the License.
 */
 
-# ASF VCL v2.4.2
-$VCLversion = '2.4.2';
+# ASF VCL v2.5
+$VCLversion = '2.5';
 
 require_once(".ht-inc/conf.php");
 if(! isset($_SERVER['HTTPS']) || $_SERVER['HTTPS'] != "on") {
