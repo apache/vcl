@@ -2870,7 +2870,7 @@ sub get_vmhost_profile_password {
 		return;
 	}
 	
-	my $secret_id = $self->get_vmhost_profile_secret_id();
+	my $secret_id = $self->get_vmhost_profile_secret_id(0);
 	if (!defined($secret_id)) {
 		notify($ERRORS{'DEBUG'}, 0, "vmprofile.password is set but vmprofile.secretid is NOT, assuming vmprofile.password is a pre-VCL 2.5 clear-text password: '$password'");
 		return $password;
