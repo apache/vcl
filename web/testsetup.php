@@ -338,6 +338,7 @@ if($createcryptkey) {
 		$tmp = $_SERVER['SCRIPT_FILENAME'];
 		$_SERVER['SCRIPT_FILENAME'] = str_replace('testsetup.php', 'index.php', $_SERVER['SCRIPT_FILENAME']);
 		$actions = array('pages' => array());
+		unset($_COOKIE['VCLAUTH']);
 		initGlobals();
 		dbConnect();
 		checkCryptkey();

@@ -69,7 +69,7 @@ if [ $? -ne 0 ]; then help; fi
 eval set -- "$args"
 
 # ------------------------- variables -------------------------------
-VCL_VERSION=2.4.2
+VCL_VERSION=2.5
 DB_USERNAME=vcluser
 ADMIN_PASSWORD=
 
@@ -713,6 +713,11 @@ if [[ $DOWEB -eq 1 ]]; then
 	ln -s /var/www/html/vcl-$VCL_VERSION /var/www/html/vcl
 	if [ $? -ne 0 ]; then generic_error "Failed to install VCL web code"; exit 1; fi;
 	chown apache /var/www/html/vcl/.ht-inc/maintenance
+	chown apache /var/www/html/vcl/.ht-inc/cryptkey
+	if [[ -x /usr/sbin/getenforce ]] && /usr/sbin/getenforce | grep -q -i enforcing; then
+		chcon -t httpd_sys_rw_content_t /var/www/html/vcl/.ht-inc/maintenance
+		chcon -t httpd_sys_rw_content_t /var/www/html/vcl/.ht-inc/cryptkey
+	fi
 fi
 
 # ---------------------------- configure web code --------------------------
