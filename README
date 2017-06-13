@@ -40,10 +40,10 @@ VCL MANAGEMENT NODE
 -------------------
 
 VCL has been tested on the following operating systems:
-* CentOS 6.6
-* CentOS 7.0
-* Red Hat Enterprise 6.5
-* Red Hat Enterprise 7.0
+* CentOS release 6.9 (Final)
+* CentOS Linux release 7.3.1611 (Core)
+* Red Hat Enterprise Linux Server release 6.8 (Santiago)
+* Red Hat Enterprise Linux Server release 7.3 (Maipo)
 
 Required Linux Packages:
 
@@ -52,47 +52,44 @@ order to run. A script is provided to assist with installing them. Several of
 the packages are required to be able to build and install some of the required
 Perl modules.
 
-* expat-devel - Libraries and include files to develop XML applications with expat
-* gcc - Various compilers (C, C++, Objective-C, Java, ...)
-* krb5-devel - Development files needed to compile Kerberos 5 programs
-* krb5-libs - The shared libraries used by Kerberos 5
-* libxml2-devel - Libraries, includes, etc. to develop XML and HTML applications
-* make - GNU make utility to maintain groups of programs
-* mysql/mariadb - contains MySQL/MariaDB client programs
-* nmap - Network exploration tool and security scanner
-* openssh - The OpenSSH implementation of SSH protocol versions 1 and 2
-* openssl-devel - Files for development of applications which will use OpenSSL
-* perl - The Perl programming language
-* xmlsec1-openssl - OpenSSL crypto plugin for XML Security Library
+* expat-devel
+* gcc
+* krb5-devel
+* krb5-libs
+* libxml2-devel
+* make
+* mysql/mariadb
+* nmap
+* openssh
+* openssl-devel
+* perl
+* xmlsec1-openssl
 
 The VCL management node daemon (vcld) requires the following Perl modules in
 order to run. A script is provided to assist in installing them. The script
 will install as many as possible through package management. Any remaining
 modules will be installed from CPAN.
 
-* CPAN - provides a command interface (not a shell) to CPAN
-* DBI - Generic Database Interface
-* Digest::SHA1 - NIST SHA message digest algorithm
-* Frontier::Client - issue Frontier XML RPC requests to a server
-* LWP::Protocol::https - support for using https schemed URLs with LWP
-* JSON - JavaScript Object Notation
-* Mail::Mailer - Simple mail agent interface
-* Mo:builder - Adds the builder feature to Mo's has
-* Net::SSH::Expect - a wrapper to the ssh executable that is available in system's PATH
-* Object::InsideOut - Comprehensive inside-out object support
-* RPC::XML - Set of classes for core data, message, XML handling
-* Scalar::Util - A selection of general-utility scalar subroutines
-* Time::HiRes - provides high resolution time and timers
-* URI - Uniform Resource Identifiers (absolute and relative)
-* YAML - provides support for YAML (Ain't Markup Language) formatted data
-* perl-Archive-Tar - provides an object oriented mechanism for handling tar files
-* perl-Crypt-OpenSSL-RSA - provides the ability to RSA encrypt,decrypt strings
-* perl-DBD-MySQL - A MySQL interface for perl
-* perl-IO-String - provides the IO::File interface for in-core strings
-* perl-Net-Jabber - a tool to utilize the Jabber Instant Messaging protocol from within perl
-* perl-Net-Netmask - parses and understands IPv4 CIDR blocks
-* perl-Text-CSV_XS - provides the composition and decomposition of comma-separated values
-* perl-XML-Simple - provides a simple API layer on top of an underlying XML parsing module
+* Crypt::CBC
+* Crypt::OpenSSL::RSA
+* Crypt::Rijndael
+* DBI
+* Digest::SHA1
+* Exception::Class::Base
+* Frontier::Client
+* HTTP::Headers
+* IO::String
+* JSON
+* LWP::UserAgent
+* Mail::Mailer
+* Net::Jabber
+* Net::Netmask
+* Net::SSH::Expect
+* Object::InsideOut
+* RPC::XML::Client
+* Text::CSV_XS
+* XML::Simple
+* YAML
 
 The required Perl modules are distributed under one or more of the following
 licenses:
@@ -107,28 +104,28 @@ section of the online installation guide for how to use the provided script to
 install the required Linux packages and Perl modules. 
 
 Management node system requirements:
-- DHCP - VCL requires that a DHCP server, configured to listen on the private
+* DHCP - VCL requires that a DHCP server, configured to listen on the private
   network, be running on each management node.
 
 Management node conditional system requirements:
-- xCAT provisioning
+* xCAT provisioning
   In order to provision bare-metal or physical computers, xCAT must be installed
   and properly configured. This release supports xCAT 2.x. Imaging support using
   xCAT 2.x requires additional files. To enable imaging for xCAT 2.x, see the
   page describing how to add support for partimage and partimage-ng in the
   Apache VCL wiki. 
-- VMware vCenter provisioning
+* VMware vCenter provisioning
   In order to provision virtual machines on VMware vCenter you will need the
   vSphere SDK for Perl. This can be obtained from:
   http://www.vmware.com/support/developer/viperltoolkit/
   This is not required if provisioning virtual machines on standalone VMware ESX
   or ESXi hosts.
-- Windows XP & Windows Server 2003 bare-metal provisioning
+* Windows XP & Windows Server 2003 bare-metal provisioning
   The Sysprep utility is required to provision Windows XP and Windows Server
   2003 bare-metal images. The utility can be downloaded from Microsoft. It is
   included in newer versions of Windows. Sysprep is not required to provision
   virtual machine images.
-- Jabber notifications
+* Jabber notifications
   VCL has the ability to send instant message notifications using Jabber. This
   feature is optional and can be enabled or disabled by configuring the
   "jabber=[yes|no]" property in the vcld.conf file. If the Jabber notification
