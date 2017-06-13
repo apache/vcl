@@ -469,7 +469,6 @@ $SUBROUTINE_MAPPINGS{user_mapprinters} = '$self->request_data->{user}{mapprinter
 $SUBROUTINE_MAPPINGS{user_mapserial} = '$self->request_data->{user}{mapserial}';
 $SUBROUTINE_MAPPINGS{user_preferred_name} = '$self->request_data->{user}{preferredname}';
 $SUBROUTINE_MAPPINGS{user_showallgroups} = '$self->request_data->{user}{showallgroups}';
-$SUBROUTINE_MAPPINGS{user_standalone} = '$self->request_data->{user}{STANDALONE}';
 $SUBROUTINE_MAPPINGS{user_uid} = '$self->request_data->{user}{uid}';
 #$SUBROUTINE_MAPPINGS{user_unityid} = '$self->request_data->{user}{unityid}';
 $SUBROUTINE_MAPPINGS{user_login_id} = '$self->request_data->{user}{unityid}';
@@ -510,7 +509,6 @@ $SUBROUTINE_MAPPINGS{management_node_public_dns_server} = '$ENV{management_node_
 
 $SUBROUTINE_MAPPINGS{management_node_sysadmin_email}	= '$ENV{management_node_info}{SYSADMIN_EMAIL}';
 $SUBROUTINE_MAPPINGS{management_node_shared_email_box} = '$ENV{management_node_info}{SHARED_EMAIL_BOX}';
-$SUBROUTINE_MAPPINGS{management_node_not_standalone} = '$ENV{management_node_info}{NOT_STANDALONE}';
 
 $SUBROUTINE_MAPPINGS{management_node_predictive_module_name} = '$ENV{management_node_info}{predictive_name}';
 $SUBROUTINE_MAPPINGS{management_node_predictive_module_pretty_name} = '$ENV{management_node_info}{predictive_prettyname}';

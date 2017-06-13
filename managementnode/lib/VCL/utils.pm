@@ -2312,43 +2312,61 @@ sub notify_via_oascript {
 
 =head2 getpw
 
- Parameters  : length(optional) - if not defined sets to 6
- Returns     : randomized password
- Description : called for standalone accounts and used in randomizing
-               privileged account passwords
+ Parameters  : $password_length (optional), $include_special_characters (optional)
+ Returns     : string 
+ Description : Generates a random password.
 
 =cut
 
 sub getpw {
-
-	my $length = $_[0];
+	my ($password_length, $include_special_characters) = @_;
 	
-	if (!(defined($length))) {
-		$length = $ENV{management_node_info}{USER_PASSWORD_LENGTH};
+	if (!$password_length) {
+		$password_length = $ENV{management_node_info}{USER_PASSWORD_LENGTH} || 8;
 	}
-
-	#If for some reason the global USER_PASSWORD_LENGTH did not get set, then force it here
-	$length = 6 if (!(defined($length)));
-
+	if (!defined($include_special_characters)) {
+		$include_special_characters = $ENV{management_node_info}{INCLUDE_SPECIAL_CHARS};
+	}
+	
 	#Skip certain confusing chars like: iI1lL,0Oo Zz2
-	my @a = ("A" .. "H", "J" .. "N", "P" .. "Y", "a" .. "h", "j" .."n","p" .. "y", "3" .. "9");
-	my @spchars = ("-","_","\!","\%","\#","\$","\@","+","=","{","}","\?");
-
-	my $include_special_chars = $ENV{management_node_info}{INCLUDE_SPECIAL_CHARS};
-
-	my $b;
+	my @character_set = (
+		'A' .. 'H',
+		'J' .. 'N',
+		'P' .. 'Y',
+		'a' .. 'h',
+		'j' .. 'n',
+		'p' .. 'y',
+		'3' .. '9',
+	);
+	
+	if ($include_special_characters) {
+		my @special_characters = (
+			'-',
+			'_',
+			'!',
+			'%',
+			'#',
+			'$',
+			'@',
+			'+',
+			'=',
+			'{',
+			'}',
+			'?',
+		);
+		push @character_set, @special_characters;
+	}
+	my $character_set_size = (scalar(@character_set));
+	
+	my $password;
 	srand;
-	for (1 .. $length) {
-		$b .= $a[rand @a ];
+	for (1 .. $password_length) {
+		my $random_index = int(rand($character_set_size));
+		$password .= $character_set[$random_index];
 	}
 
-	if ($include_special_chars) {
-		$b .= $spchars[rand @spchars];
-	}
-
-	return $b;
-
-} ## end sub getpw
+	return $password;
+}
 
 #//////////////////////////////////////////////////////////////////////////////
 
@@ -2678,6 +2696,12 @@ sub database_execute {
 			return;
 		}
 	}
+	
+	#my $sql_warning_count = $statement_handle->{'mysql_warning_count'};
+	#if ($sql_warning_count) {
+	#	my $warnings = $dbh->selectall_arrayref('SHOW WARNINGS');
+	#	notify($ERRORS{'WARNING'}, 0, "warning generated from SQL statement:\n$sql_statement\nwarnings:\n" . format_data($warnings));
+	#}
 	
 	# Get the id of the last inserted record if this is an INSERT statement
 	if ($sql_statement =~ /^\s*insert/i) {
@@ -4722,9 +4746,6 @@ AND managementnode.id != $management_node_id
 	$management_node_info->{SYSADMIN_EMAIL} = $management_node_info->{sysadminEmailAddress};
 	$management_node_info->{SHARED_EMAIL_BOX} = $management_node_info->{sharedMailBox};
 	
-	# Add affiliations that are not to use the standalone passwords
-	$management_node_info->{NOT_STANDALONE} = $management_node_info->{NOT_STANDALONE} || '';
-	
 	# Store the info in $ENV{management_node_info}
 	# Add keys for all of the unique identifiers that may be passed as an argument to this subroutine
 	$ENV{management_node_info}{$management_node_identifier} = $management_node_info;
@@ -6623,6 +6644,7 @@ EOF
 	
 	my $user_id = $user_info->{id};
 	my $user_login_id = $user_info->{unityid};
+	my $user_affiliation_name = $user_info->{affiliation}{name};
 	
 	# Set the user's preferred name to the first name if it isn't defined
 	if (!defined($user_info->{preferredname}) || $user_info->{preferredname} eq '') {
@@ -6633,36 +6655,29 @@ EOF
 	if (!defined($user_info->{IMid})) {
 		$user_info->{IMid} = '';
 	}
-
 	
-	# Affiliation specific changes
-	# Check if the user's affiliation is listed in the management node's NOT_STANDALONE parameter
-	$user_info->{STANDALONE} = 1;
-	
-	# Set the user's UID to the VCL user ID if it's not configured in the database, set STANDALONE = 1
+	$user_info->{FEDERATED_LINUX_AUTHENTICATION} = 0;
 	if (!$user_info->{uid}) {
+		# Set the user's UID to 500 + user.id if it's not configured in the database
 		$user_info->{uid} = ($user_info->{id} + 500);
-		$user_info->{STANDALONE} = 1;
-		notify($ERRORS{'DEBUG'}, 0, "UID value is not configured for user '$user_login_id', setting UID: $user_info->{uid}, standalone: 1");
+		notify($ERRORS{'DEBUG'}, 0, "UID value is not configured for $user_login_id\@$user_affiliation_name, setting UID=$user_info->{uid}, setting FEDERATED_LINUX_AUTHENTICATION=$user_info->{FEDERATED_LINUX_AUTHENTICATION}");
 	}
-	
-	# Fix the unityid if the user's UID is >= 1,000,000
-	# Remove the domain section if the user's unityid contains @...
-	elsif ($user_info->{uid} >= 1000000) {
-		$user_info->{STANDALONE} = 1;
-		notify($ERRORS{'DEBUG'}, 0, "UID value for user $user_login_id is >= 1000000, standalone: 1");
-	}
-	
-	# Check if the user's affiliation is listed in the management node's NOT_STANDALONE list
 	else {
-		my $management_node_info = get_management_node_info();
-		if ($management_node_info) {
-			my $user_affiliation_name = $user_info->{affiliation}{name};
-			my $not_standalone_list = $management_node_info->{NOT_STANDALONE};
-			if (grep(/^$user_affiliation_name$/i, split(/[,;]/, $not_standalone_list))) {
-				notify($ERRORS{'DEBUG'}, 0, "non-standalone affiliation found for user $user_login_id:\nuser affiliation: $user_affiliation_name\nnot standalone list: $not_standalone_list");
-				$user_info->{STANDALONE} = 0;
+		# Check if the user's affiliation is listed in the management node's NOT_STANDALONE list
+		my $management_node_info = get_management_node_info() || return;
+		my $not_standalone_list = $management_node_info->{NOT_STANDALONE} || '';
+		my @standalone_affiliations = split(/[,;\s]+/, $not_standalone_list);
+		if (@standalone_affiliations) {
+			if (grep(/^\s*$user_affiliation_name\s*$/i, @standalone_affiliations)) {
+				$user_info->{FEDERATED_LINUX_AUTHENTICATION} = 1;
+				notify($ERRORS{'DEBUG'}, 0, "affiliation of $user_login_id\@$user_affiliation_name is in management node's 'Affiliations Using Federated Authentication for Linux Images' list: '$management_node_info->{NOT_STANDALONE}', setting FEDERATED_LINUX_AUTHENTICATION=$user_info->{FEDERATED_LINUX_AUTHENTICATION}");
 			}
+			else {
+				notify($ERRORS{'DEBUG'}, 0, "affiliation of $user_login_id\@$user_affiliation_name is NOT in management node's 'Affiliations Using Federated Authentication for Linux Images' list: '$management_node_info->{NOT_STANDALONE}', setting FEDERATED_LINUX_AUTHENTICATION=$user_info->{FEDERATED_LINUX_AUTHENTICATION}");
+			}
+		}
+		else {
+			notify($ERRORS{'DEBUG'}, 0, "management node's 'Affiliations Using Federated Authentication for Linux Images' list is empty, setting FEDERATED_LINUX_AUTHENTICATION=$user_info->{FEDERATED_LINUX_AUTHENTICATION}");
 		}
 	}
 	
@@ -6676,11 +6691,6 @@ EOF
 	# If usepublickeys =0 && sshpublickeys is defined, disable public keys by setting sshpublickeys=0
 	if (!$user_info->{usepublickeys} && defined($user_info->{sshpublickeys})) {
 		$user_info->{sshpublickeys} = 0;
-	}
-	
-	# For test account only
-	if ($user_login_id =~ /vcladmin/) {
-		$user_info->{STANDALONE} = 1;
 	}
 	
 	#notify($ERRORS{'DEBUG'}, 0, "retrieved info for user '$user_identifier', affiliation: '$affiliation_identifier':\n" . format_data($user_info));

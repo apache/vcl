@@ -5348,11 +5348,26 @@ sub enable_ip_forwarding {
 
 =head2 should_set_user_password
 
- Parameters  : $user_id
+ Parameters  : $user_id, $no_cache (optional)
  Returns     : boolean
- Description : Determines whether or not a user account's password should be set
-               on the computer being loaded. The "STANDALONE" flag is used to
-               determine this.
+ Description : Determines whether or not a random password should be generated
+					and used for the user account created on the computer being
+					loaded. A random password WILL be used if any of the following
+					are true:
+					* The user.uid value is NOT set in the database for the user
+					* The managementnode.NOT_STANDALONE value is empty
+					* The managementnode.NOT_STANDALONE value is populated but does
+					  NOT match the user's affiliation.name value
+					
+					A federated authentication method such as Kerberos WILL be used
+					and a random password will NOT be generated if:
+					* The user.uid value SI set in the database for the user
+					* The managementnode.NOT_STANDALONE value is populated and
+					  matches the user's affiliation.name value
+					
+					Note: managementnode.NOT_STANDALONE corresponds to the management
+					node's 'Affiliations Using Federated Authentication for Linux
+					Images' setting on the VCL website
 
 =cut
 
@@ -5363,27 +5378,42 @@ sub should_set_user_password {
 		return;
 	}
 	
-	my ($user_id) = shift;
+	my ($user_id, $no_cache) = @_;
 	if (!$user_id) {
 		notify($ERRORS{'WARNING'}, 0, "user ID argument was not supplied");
 		return;
 	}
-	
-	my $user_info = get_user_info($user_id);
-	if (!$user_info) {
-		notify($ERRORS{'WARNING'}, 0, "unable to determine if user password should be set, user info could not be retrieved for user ID $user_id");
+	elsif ($user_id !~ /^\d+$/) {
+		notify($ERRORS{'WARNING'}, 0, "invalid user ID argument was supplied, it is not an integer: '$user_id'");
 		return;
 	}
 	
-	my $user_standalone = $user_info->{STANDALONE};
+	if (!$no_cache && defined($self->{set_user_password}) && defined($self->{set_user_password}{$user_id})) {
+		return $self->{set_user_password}{$user_id};
+	}
 	
-	# Generate a reservation password if "standalone" (not using Kerberos authentication)
-	if ($user_standalone) {
-		return 1;
+	
+	my $user_info = get_user_info($user_id, undef, $no_cache);
+	if ($user_info) {
+		my $user_login_id = $user_info->{unityid} || '<undefined>';
+		my $user_affiliation_name = $user_info->{affiliation}{name} || '<undefined>';
+		my $federated_linux_authentication = $user_info->{FEDERATED_LINUX_AUTHENTICATION};
+		
+		# Generate a reservation password if "standalone" (not using Kerberos authentication)
+		if ($federated_linux_authentication) {
+			notify($ERRORS{'DEBUG'}, 0, "random password should NOT be set for user ID $user_id ($user_login_id\@$user_affiliation_name), federated Linux authentication: $federated_linux_authentication");
+			$self->{set_user_password}{$user_id} = 0;
+		}
+		else {
+			notify($ERRORS{'DEBUG'}, 0, "random password SHOULD be set for user ID $user_id ($user_login_id\@$user_affiliation_name), federated Linux authentication: $federated_linux_authentication");
+			$self->{set_user_password}{$user_id} = 1;
+		}
 	}
 	else {
-		return 0;
+		notify($ERRORS{'WARNING'}, 0, "unable to definitively determine if random password should be set for user ID $user_id, user info could not be retrieved, assuming random password SHOULD be set, returning 1");
+		$self->{set_user_password}{$user_id} = 1;
 	}
+	return $self->{set_user_password}{$user_id};
 }
 
 #//////////////////////////////////////////////////////////////////////////////
