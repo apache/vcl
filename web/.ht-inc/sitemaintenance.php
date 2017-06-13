@@ -549,6 +549,8 @@ function writeMaintenanceFile($start, $end, $msg) {
 	if(! $fh = fopen($file, 'w')) {
 		return false;
 	}
+	$globaltheme = getAffiliationTheme(0);
+	fwrite($fh, "THEME=$globaltheme\n");
 	$numend = date('YmdHi', $end);
 	fwrite($fh, "END=$numend\n");
 	fwrite($fh, "$msg\n");

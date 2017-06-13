@@ -189,7 +189,7 @@ function initGlobals() {
 					$skin = 'example2';
 					break;
 				default:
-					$skin = DEFAULTTHEME;
+					$skin = getAffiliationTheme(0);
 					break;
 			}
 		}
@@ -200,7 +200,7 @@ function initGlobals() {
 			$skin = 'example1';
 		}*/
 		else
-			$skin = DEFAULTTHEME;
+			$skin = getAffiliationTheme(0);
 		if($mode != 'selectauth' && $mode != 'submitLogin')
 			require_once("themes/$skin/page.php");
 
@@ -747,6 +747,7 @@ function maintenanceCheck() {
 		return;
 	}  
 	$inmaintenance = 0;
+	$skin = '';
 	foreach($files as $file) {
 		if(! preg_match("|^$search([0-9]{4})([0-9]{2})([0-9]{2})([0-9]{2})([0-9]{2})$|", $file, $matches))
 			continue;
@@ -770,6 +771,9 @@ function maintenanceCheck() {
 					else
 						$inmaintenance = 1;
 				}
+				elseif(preg_match("/^THEME=([-A-Za-z0-9@#_:;,\.])+$/", $line, $matches)) {
+					$skin = $matches[1];
+				}
 				else
 					$msg .= $line;
 			}
@@ -784,6 +788,18 @@ function maintenanceCheck() {
 		$user = array();
 		if(array_key_exists('VCLSKIN', $_COOKIE))
 			$skin = strtolower($_COOKIE['VCLSKIN']);
+		if($skin != '') {
+			$allskins = array();
+			foreach(glob('themes/*') as $item) {
+				if(! is_dir($item))
+					continue;
+				$tmp = explode('/', $item);
+				$item = $tmp[1];
+				$allskins[$item] = 1;
+			}
+			if(! array_key_exists($skin, $allskins))
+				$skin = DEFAULTTHEME;
+		}
 		else
 			$skin = DEFAULTTHEME;
 		setVCLLocale();
@@ -3900,7 +3916,7 @@ function getAffiliationDataUpdateText($affilid=0) {
 ///
 /// \fn getAffiliationTheme($affilid)
 ///
-/// \param $affilid - id of an affiliation
+/// \param $affilid - id of an affiliation, or 0 to get theme for Global
 ///
 /// \return name of the affiliations's theme
 ///
@@ -3908,11 +3924,16 @@ function getAffiliationDataUpdateText($affilid=0) {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function getAffiliationTheme($affilid) {
-	$query = "SELECT COALESCE(a1.theme, a2.theme) AS theme "
-	       . "FROM affiliation a1, "
-  	       .      "affiliation a2 "
-	       . "WHERE a1.id = $affilid AND "
-  	       .       "a2.name = 'Global'";
+	if($affilid == 0) {
+		$query = "SELECT theme FROM affiliation WHERE name = 'Global'";
+	}
+	else {
+		$query = "SELECT COALESCE(a1.theme, a2.theme) AS theme "
+		       . "FROM affiliation a1, "
+	  	       .      "affiliation a2 "
+		       . "WHERE a1.id = $affilid AND "
+	  	       .       "a2.name = 'Global'";
+	}
 	$qh = doQuery($query);
 	if(($row = mysql_fetch_assoc($qh)) && ! empty($row['theme']))
 		return $row['theme'];

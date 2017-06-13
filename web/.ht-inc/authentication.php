@@ -486,7 +486,8 @@ function localLogin($userid, $passwd, $authtype) {
 		else
 			setcookie("VCLAUTH", "{$cookie['data']}", 0, "/", COOKIEDOMAIN);
 		//load main page
-		setcookie("VCLSKIN", DEFAULTTHEME, (time() + (SECINDAY * 31)), "/", COOKIEDOMAIN);
+		$theme = getAffiliationTheme($authMechs[$authtype]['affiliationid']);
+		setcookie("VCLSKIN", $theme, (time() + (SECINDAY * 31)), "/", COOKIEDOMAIN);
 		header("Location: " . BASEURL . SCRIPT);
 		dbDisconnect();
 		exit;
@@ -629,7 +630,7 @@ function checkExpiredDemoUser($userid, $groups=0) {
 				updateGroups(array($nodemoid), $userid);
 				checkUpdateServerRequestGroups($groupid);
 				if(empty($skin)) {
-					$skin = DEFAULTTHEME;
+					$skin = getAffiliationTheme(0);
 					require_once("themes/$skin/page.php");
 				}
 				$mode = 'expiredemouser';
