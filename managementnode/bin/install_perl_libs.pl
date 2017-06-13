@@ -363,7 +363,7 @@ sub configure_cpan {
 		"term_ornaments" => "1",
 		"trust_test_report_history" => "1",
 		"unzip" => `echo -n \`which unzip\`` || "",
-		#"urllist" => [q[http://www.perl.com/CPAN/]],
+		"urllist" => [q[http://cpan-rsync.perl.org/]],
 		"use_sqlite" => "0",
 		"wget" => `echo -n \`which wget\`` || "",
 		"yaml_load_code" => "0",
