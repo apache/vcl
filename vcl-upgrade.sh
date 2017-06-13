@@ -663,6 +663,12 @@ if [[ $DODB -eq 1 ]]; then
 		if [ $? -ne 0 ]; then generic_error "Failed to create backup of $DB_NAME database"; exit 1; fi;
 		gzip $WORKPATH/vcl-${OLD_VERSION}-backup.sql
 	fi
+
+	if [[ $OLD_VERSION = '2.2' || $OLD_VERSION = '2.2.1' ||$OLD_VERSION = '2.2.2' ]]; then
+		for dbuser in $(mysql -NBe "SELECT User FROM db WHERE Db = '$DB_NAME' AND User != '' AND Host = '$DB_HOST'" mysql); do
+			mysql -e "GRANT CREATE TEMPORARY TABLES ON vcl.* TO '$dbuser'@'$DB_HOST';"
+		done
+	fi
 fi
 
 # -------------------------- backup web code -------------------------
@@ -752,15 +758,15 @@ if [[ $DOMN -eq 1 ]]; then
 	print_break
 	echo "Installing management node components..."
 	if [[ ! -d ${MN_PATH}-$OLD_VERSION ]]; then
-		/bin/cp -ar ${MN_PATH} ${MN_PATH}-$VCL_VERSION
+		/bin/mv ${MN_PATH} ${MN_PATH}-$OLD_VERSION
 		if [ $? -ne 0 ]; then generic_error "Failed to install new VCL management node code (1)"; exit 1; fi;
-		chown -R root:root ${MN_PATH}-$VCL_VERSION/
-		if [ $? -ne 0 ]; then generic_error "Failed to set ownership of VCL management node code to root"; exit 1; fi;
 	fi
 	/bin/cp -ar ${MN_PATH}-$OLD_VERSION ${MN_PATH}-$VCL_VERSION
 	if [ $? -ne 0 ]; then generic_error "Failed to install new VCL management node code (2)"; exit 1; fi;
 	/bin/cp -ar $WORKPATH/apache-VCL-$VCL_VERSION/managementnode/* ${MN_PATH}-$VCL_VERSION
 	if [ $? -ne 0 ]; then generic_error "Failed to install new VCL management node code (3)"; exit 1; fi;
+	chown -R root:root ${MN_PATH}-$VCL_VERSION/
+	if [ $? -ne 0 ]; then generic_error "Failed to set ownership of VCL management node code to root"; exit 1; fi;
 fi
 
 # -------------------- configure management node code ------------------
