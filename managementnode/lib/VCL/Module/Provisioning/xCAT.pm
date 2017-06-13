@@ -908,7 +908,7 @@ sub get_nodetype_image_os_name {
 	}
 	
 	my $management_node_hostname = $self->data->get_management_node_hostname();
-	my $management_node_install_path = $self->data->get_management_node_install_path();
+	my $management_node_install_path = $self->data->get_management_node_install_path() || return;
 	
 	# Create a DataStructure object containing info about the image
 	my $image_data = $self->create_datastructure_object({image_identifier => $image_name}) || return;
@@ -1095,7 +1095,7 @@ sub get_image_repository_directory_path {
 		return $self->{xcat_image_repository_directory_path}{$image_name}{$management_node_hostname};
 	}
 	
-	my $management_node_install_path = $self->data->get_management_node_install_path($management_node_identifier);
+	my $management_node_install_path = $self->data->get_management_node_install_path($management_node_identifier) || return;
 	
 	# Create a DataStructure object containing info about the image
 	my $image_data = $self->create_datastructure_object({image_identifier => $image_name}) || return;
@@ -1156,7 +1156,7 @@ sub get_image_repository_search_paths {
 	}
 	
 	my $management_node_identifier = shift || $self->data->get_management_node_hostname();
-	my $management_node_install_path = $self->data->get_management_node_install_path($management_node_identifier);
+	my $management_node_install_path = $self->data->get_management_node_install_path($management_node_identifier) || return;
 	my $image_name = $self->data->get_image_name();
 	my $image_architecture = $self->data->get_image_architecture();
 	
@@ -2086,7 +2086,6 @@ sub _get_tmpl_directory_path {
 	if ($management_node_identifier) {
 		notify($ERRORS{'DEBUG'}, 0, "management node identifier argument was specified: $management_node_identifier");
 	}
-	my $management_node_install_path = $self->data->get_management_node_install_path($management_node_identifier);
 	
 	# Create a DataStructure object containing info about the image
 	my $image_data = $self->create_datastructure_object({image_identifier => $image_name}) || return;
