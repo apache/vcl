@@ -62,7 +62,7 @@ if [ $? -ne 0 ]; then help; fi
 eval set -- "$args"
 
 # ------------------------- variables -------------------------------
-VCL_VERSION=2.4.2
+VCL_VERSION=2.5
 OLD_VERSION=""
 DB_NAME=vcl
 WEB_PATH=/var/www/html/vcl
@@ -438,6 +438,23 @@ function confUpgradeFrom22() {
 
 	sed -i '/ENABLE_ITECSAUTH/G' $WEB_PATH-$VCL_VERSION/.ht-inc/conf.php
 	if [ $? -ne 0 ]; then echo "Error: Failed to update conf.php"; exit 1; fi
+
+	if grep -q MAXVMLIMIT $WEB_PATH-$VCL_VERSION/.ht-inc/conf.php; then
+		sed -i '/MAXVMLIMIT/d' $WEB_PATH-$VCL_VERSION/.ht-inc/conf.php
+		if [ $? -ne 0 ]; then echo "Error: Failed to update conf.php"; exit 1; fi
+	fi
+
+	phpver=$(echo '<?php echo PHP_VERSION; ?>' | php | cut -c1-3 | sed 's/\.//')
+	if (( $phpver >= 53 )); then
+		random=$(openssl rand 32 | base64)
+		sed -i "/mcryptkey/a \$cryptkey='$random';" $WEB_PATH-$VCL_VERSION/.ht-inc/secrets.php
+		if [ $? -ne 0 ]; then echo "Error: Failed to update secrets.php"; exit 1; fi
+		sed -i '/mcryptkey/d' $WEB_PATH-$VCL_VERSION/.ht-inc/secrets.php
+		if [ $? -ne 0 ]; then echo "Error: Failed to update secrets.php"; exit 1; fi
+	else
+		sed -i "s/mcryptkey/cryptkey/" $WEB_PATH-$VCL_VERSIONS/.ht-inc/secrets.php
+		if [ $? -ne 0 ]; then echo "Error: Failed to update secrets.php"; exit 1; fi
+	fi
 }
 
 function confUpgradeFrom221() {
@@ -527,6 +544,18 @@ function confUpgradeFrom23() {
 
 	sed -i '/ENABLE_ITECSAUTH/G' $WEB_PATH-$VCL_VERSION/.ht-inc/conf.php
 	if [ $? -ne 0 ]; then echo "Error: Failed to update conf.php"; exit 1; fi
+
+	if grep -q MAXVMLIMIT $WEB_PATH-$VCL_VERSION/.ht-inc/conf.php; then
+		sed -i '/MAXVMLIMIT/d' $WEB_PATH-$VCL_VERSION/.ht-inc/conf.php
+		if [ $? -ne 0 ]; then echo "Error: Failed to update conf.php"; exit 1; fi
+	fi
+
+	phpver=$(echo '<?php echo PHP_VERSION; ?>' | php | cut -c1-3 | sed 's/\.//')
+	if (( $phpver >= 53 )); then
+		random=$(openssl rand 32 | base64)
+		sed -i "s%\$cryptkey.*$%\$cryptkey = '$random';%" $WEB_PATH-$VCL_VERSION/.ht-inc/secrets.php
+		if [ $? -ne 0 ]; then echo "Error: Failed to update secrets.php"; exit 1; fi
+	fi
 }
 
 function confUpgradeFrom231() {
@@ -537,7 +566,21 @@ function confUpgradeFrom232() {
 	confUpgradeFrom23
 }
 
-# ------------------- download/validate arvhice ---------------------
+function confUpgradeFrom242() {
+	if grep -q MAXVMLIMIT $WEB_PATH-$VCL_VERSION/.ht-inc/conf.php; then
+		sed -i '/MAXVMLIMIT/d' $WEB_PATH-$VCL_VERSION/.ht-inc/conf.php
+		if [ $? -ne 0 ]; then echo "Error: Failed to update conf.php"; exit 1; fi
+	fi
+
+	phpver=$(echo '<?php echo PHP_VERSION; ?>' | php | cut -c1-3 | sed 's/\.//')
+	if (( $phpver >= 53 )); then
+		random=$(openssl rand 32 | base64)
+		sed -i "s%\$cryptkey.*$%\$cryptkey = '$random';%" $WEB_PATH-$VCL_VERSION/.ht-inc/secrets.php
+		if [ $? -ne 0 ]; then echo "Error: Failed to update secrets.php"; exit 1; fi
+	fi
+}
+
+# ------------------- download/validate archive ---------------------
 print_break
 cd $WORKPATH
 if [[ ! -f $ARCHIVE ]]; then
@@ -630,7 +673,7 @@ if [[ $DOWEB -eq 1 ]]; then
 	if [ $? -ne 0 ]; then generic_error "Failed to create backup of web code at $WEB_PATH"; exit 1; fi;
 fi
 
-# -------------------------- backup web code -------------------------
+# -------------------------- backup mn code -------------------------
 if [[ $DOMN -eq 1 ]]; then
 	echo "Backing up management node code..."
 	tar czf $WORKPATH/managmentnode-${OLD_VERSION}-backup.tar.gz $MN_PATH
@@ -642,7 +685,7 @@ if [[ $DOWEB -eq 1 ]]; then
 	print_break
 	echo "Ensuring required php components are installed..."
 	missing=
-	for pkg in php php-gd php-mysql php-xml php-xmlrpc php-ldap php-mbstring; do
+	for pkg in php php-mysql php-xml php-xmlrpc php-ldap php-mbstring; do
 		alt=$(echo $pkg | sed 's/php/php53/')
 		if ! (rpm --quiet -q $pkg || rpm --quiet -q $alt); then
 			missing="$missing $pkg"
@@ -650,31 +693,44 @@ if [[ $DOWEB -eq 1 ]]; then
 		if rpm -qa | grep -q php53; then
 			missing=$(echo $missing | sed 's/php/php53/g')
 		fi
-		if [[ $missing != "" ]]; then
-			echo "yum -q -y install $missing"
-			yum -q -y install $missing
-			if [ $? -ne 0 ]; then generic_error "Failed to install php components"; exit 1;
-			else echo "php components successfully installed"; fi
-		fi
 	done
+	if [[ $missing != "" ]]; then
+		echo "yum -q -y install $missing"
+		yum -q -y install $missing
+		if [ $? -ne 0 ]; then generic_error "Failed to install php components"; exit 1;
+		else echo "php components successfully installed"; fi
+	fi
 fi
 
 # ------------------------- copy web code in place -------------------------
 if [[ $DOWEB -eq 1 ]]; then
 	print_break
 	echo "Installing new VCL web code..."
-	/bin/cp -r $WORKPATH/apache-VCL-$VCL_VERSION/web/ ${WEB_PATH}-$VCL_VERSION
+	/bin/cp -ar $WORKPATH/apache-VCL-$VCL_VERSION/web/ ${WEB_PATH}-$VCL_VERSION
 	if [ $? -ne 0 ]; then generic_error "Failed to install new VCL web code"; exit 1; fi;
+	chown -R root:root ${WEB_PATH}-$VCL_VERSION/
+	if [ $? -ne 0 ]; then generic_error "Failed to set ownership of VCL web code to root"; exit 1; fi;
+	chown apache ${WEB_PATH}-$VCL_VERSION/.ht-inc/cryptkey
+	if [ $? -ne 0 ]; then generic_error "Failed to set ownership of VCL web code cryptkey directory to apache"; exit 1; fi;
 	chown apache ${WEB_PATH}-$VCL_VERSION/.ht-inc/maintenance
+	if [ $? -ne 0 ]; then generic_error "Failed to set ownership of VCL web code maintenance directory to apache"; exit 1; fi;
+	if [[ -x /usr/sbin/getenforce ]] && /usr/sbin/getenforce | grep -q -i enforcing; then
+		chcon -R -t httpd_sys_content_t ${WEB_PATH}-$VCL_VERSION
+		if [ $? -ne 0 ]; then generic_error "Failed to set SELinux context of web directory"; exit 1; fi;
+		chcon -t httpd_sys_rw_content_t ${WEB_PATH}-$VCL_VERSION/.ht-inc/cryptkey
+		if [ $? -ne 0 ]; then generic_error "Failed to set SELinux context of web cryptkey directory"; exit 1; fi;
+		chcon -t httpd_sys_rw_content_t ${WEB_PATH}-$VCL_VERSION/.ht-inc/maintenance
+		if [ $? -ne 0 ]; then generic_error "Failed to set SELinux context of web maintenance directory"; exit 1; fi;
+	fi
 fi
 
 # ---------------------------- configure web code --------------------------
 if [[ $DOWEB -eq 1 ]]; then
 	print_break
 	echo "Copying in web configuration files from previous version"
-	/bin/cp -f ${WEB_PATH}/.ht-inc/secrets.php ${WEB_PATH}-$VCL_VERSION/.ht-inc/
+	/bin/cp -af ${WEB_PATH}/.ht-inc/secrets.php ${WEB_PATH}-$VCL_VERSION/.ht-inc/
 	if [ $? -ne 0 ]; then echo "Error: Failed to copy secrets.php"; exit 1; fi;
-	/bin/cp -f ${WEB_PATH}/.ht-inc/conf.php ${WEB_PATH}-$VCL_VERSION/.ht-inc/
+	/bin/cp -af ${WEB_PATH}/.ht-inc/conf.php ${WEB_PATH}-$VCL_VERSION/.ht-inc/
 	if [ $? -ne 0 ]; then echo "Error: Failed to copy conf.php"; exit 1; fi;
 
 	if [[ $OLD_VERSION = '2.2' ]]; then confUpgradeFrom22; fi
@@ -683,10 +739,11 @@ if [[ $DOWEB -eq 1 ]]; then
 	if [[ $OLD_VERSION = '2.3' ]]; then confUpgradeFrom23; fi
 	if [[ $OLD_VERSION = '2.3.1' ]]; then confUpgradeFrom231; fi
 	if [[ $OLD_VERSION = '2.3.2' ]]; then confUpgradeFrom232; fi
+	if [[ $OLD_VERSION = '2.4.2' ]]; then confUpgradeFrom242; fi
 
-	/bin/cp -f ${WEB_PATH}/.ht-inc/pubkey.pem ${WEB_PATH}-$VCL_VERSION/.ht-inc/
+	/bin/cp -af ${WEB_PATH}/.ht-inc/pubkey.pem ${WEB_PATH}-$VCL_VERSION/.ht-inc/
 	if [ $? -ne 0 ]; then echo "Error: Failed to copy pubkey.pem"; exit 1; fi;
-	/bin/cp -f ${WEB_PATH}/.ht-inc/keys.pem ${WEB_PATH}-$VCL_VERSION/.ht-inc/
+	/bin/cp -af ${WEB_PATH}/.ht-inc/keys.pem ${WEB_PATH}-$VCL_VERSION/.ht-inc/
 	if [ $? -ne 0 ]; then echo "Error: Failed to copy keys.pem"; exit 1; fi;
 fi
 
@@ -695,12 +752,15 @@ if [[ $DOMN -eq 1 ]]; then
 	print_break
 	echo "Installing management node components..."
 	if [[ ! -d ${MN_PATH}-$OLD_VERSION ]]; then
-		/bin/cp -r ${MN_PATH} ${MN_PATH}-$VCL_VERSION
+		/bin/cp -ar ${MN_PATH} ${MN_PATH}-$VCL_VERSION
 		if [ $? -ne 0 ]; then generic_error "Failed to install new VCL management node code (1)"; exit 1; fi;
+		chown -R root:root ${MN_PATH}-$VCL_VERSION/
+		if [ $? -ne 0 ]; then generic_error "Failed to set ownership of VCL management node code to root"; exit 1; fi;
 	fi
-	/bin/cp -r ${MN_PATH}-$OLD_VERSION ${MN_PATH}-$VCL_VERSION
-	/bin/cp -r $WORKPATH/apache-VCL-$VCL_VERSION/managementnode/* ${MN_PATH}-$VCL_VERSION
+	/bin/cp -ar ${MN_PATH}-$OLD_VERSION ${MN_PATH}-$VCL_VERSION
 	if [ $? -ne 0 ]; then generic_error "Failed to install new VCL management node code (2)"; exit 1; fi;
+	/bin/cp -ar $WORKPATH/apache-VCL-$VCL_VERSION/managementnode/* ${MN_PATH}-$VCL_VERSION
+	if [ $? -ne 0 ]; then generic_error "Failed to install new VCL management node code (3)"; exit 1; fi;
 fi
 
 # -------------------- configure management node code ------------------
@@ -766,7 +826,7 @@ if [[ $DOWEB -eq 1 ]]; then
 	if [[ -f ${WEB_PATH}-$OLD_VERSION/.htaccess ]]; then
 		mv -f ${WEB_PATH}-$OLD_VERSION/.htaccess ${WEB_PATH}-$OLD_VERSION/.htaccess.preupgrade
 	fi
-	echo "Deny from all" > ${WEB_PATH}-$OLD_VERSION/.htaccess
+	echo "Require all denied" > ${WEB_PATH}-$OLD_VERSION/.htaccess
 	if [ $? -ne 0 ]; then echo "Error: Failed to create new ${WEB_PATH}-$OLD_VERSION/.htaccess file"; exit 1; fi
 fi
 
