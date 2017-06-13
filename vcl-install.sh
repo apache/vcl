@@ -56,7 +56,7 @@ function help() {
 	echo ""
 	echo -e "\t-t|--timezone - timezone for web components"
 	echo ""
-	echo "If no arguments supplied, all components will be install and you"
+	echo "If no arguments supplied, all components will be installed and you"
 	echo "will be prompted for any required additional information."
 	echo ""
 	exit 2
