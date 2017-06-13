@@ -70,7 +70,7 @@ CREATE TABLE IF NOT EXISTS `affiliation` (
   `sitewwwaddress` varchar(128) default NULL,
   `helpaddress` varchar(32) default NULL,
   `shibonly` tinyint(1) unsigned NOT NULL default '0',
-  `theme` varchar(50) NOT NULL default 'default',
+  `theme` varchar(50) default NULL,
   PRIMARY KEY  (`id`),
   UNIQUE KEY `name` (`name`)
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1;

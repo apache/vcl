@@ -762,9 +762,11 @@ END $$
 --  Table structure for table `affiliation`
 --
 
-ALTER TABLE `affiliation` CHANGE `sitewwwaddress` `sitewwwaddress` varchar(128) DEFAULT NULL;
+ALTER TABLE `affiliation` CHANGE `sitewwwaddress` `sitewwwaddress` varchar(128) default NULL;
 CALL AddUniqueIndex('affiliation', 'name');
-CALL AddColumnIfNotExists('affiliation', 'theme', "varchar(50) NOT NULL default 'default'");
+CALL AddColumnIfNotExists('affiliation', 'theme', "varchar(50) default NULL");
+ALTER TABLE `affiliation` CHANGE `theme` `theme` varchar(50) default NULL;
+UPDATE affiliation SET theme = NULL where theme = '';
 
 -- --------------------------------------------------------
 
