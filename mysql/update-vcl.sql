@@ -702,7 +702,7 @@ BEGIN
       AND TABLE_NAME='connectmethod'
     )
     THEN
-      INSERT INTO connectmethodport (connectmethodid, port, protocol) SELECT id, port, IFNULL(NULLIF(protocol,''),'TCP') FROM connectmethod;
+      INSERT INTO connectmethodport (connectmethodid, port, protocol) SELECT id, port, IFNULL(NULLIF(protocol,''),'TCP') FROM connectmethod WHERE port != 0;
       CALL DropColumnIfExists('connectmethod', 'port');
       CALL DropColumnIfExists('connectmethod', 'protocol');
     END IF;
