@@ -818,6 +818,21 @@ END
 	}
 	else {
 		open(STDOUT, ">>$log");
+		
+		# ARK - for testing competing reservations
+		if ($ENV{reservation_id}) {
+			if ($ENV{reservation_id} == 3115) {
+				print colored($log_message, "YELLOW");
+			}
+			elsif ($ENV{reservation_id} == 3116) {
+				print colored($log_message, "CYAN");
+			}
+			else {
+				print colored($log_message, "MAGENTA");
+			}
+			print "\n";
+			return 1;
+		}
 		print STDOUT "$log_message\n";
 	}
 } ## end sub notify
@@ -1710,9 +1725,9 @@ sub is_request_deleted {
 		return;
 	}
 	
-	my ($state_name, $laststate_name) = get_request_current_state_name($request_id);
+	my ($state_name, $laststate_name) = get_request_current_state_name($request_id, 1);
 	if (!$state_name || !$laststate_name) {
-		notify($ERRORS{'WARNING'}, 0, "request $request_id state data could not be retrieved, assuming request is deleted and was removed from the database, returning true");
+		notify($ERRORS{'OK'}, 0, "request $request_id state data could not be retrieved, assuming request is deleted and was removed from the database, returning true");
 		return 1;
 	}
 	
@@ -5282,7 +5297,7 @@ EOF
 
 =head2 get_request_current_state_name
 
- Parameters  : $request_id
+ Parameters  : $request_id, $suppress_warnings (optional)
  Returns     : String containing state name for a request
  Description :
 
@@ -5290,7 +5305,7 @@ EOF
 
 
 sub get_request_current_state_name {
-	my ($request_id) = @_;
+	my ($request_id, $suppress_warnings) = @_;
 
 	# Check the passed parameter
 	if (!(defined($request_id))) {
@@ -5315,10 +5330,11 @@ EOF
 
 	# Call the database select subroutine
 	my @selected_rows = database_select($select_statement);
-
+	
+	my $notify_type = ($suppress_warnings ? $ERRORS{'OK'} : $ERRORS{'WARNING'});
 	# Check to make sure 1 row was returned
 	if (!@selected_rows) {
-		notify($ERRORS{'WARNING'}, 0, "unable to determine current state of request $request_id, zero rows were returned from database select");
+		notify($notify_type, 0, "unable to determine current state of request $request_id, zero rows were returned from database select");
 		return;
 	}
 	
