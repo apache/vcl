@@ -790,19 +790,21 @@ messages.prototype.updateInvalidContent = function() {
 		var item = this.invalids[key];
 		if(parts.length == 2) {
 			msg += 'Message: ' + parts[0] + ' -&gt; ' + parts[1] + '<br>';
-			for(var i = 0; i < item.length; i++) {
-				msg += item[i] + '<br>';
-			}
-			msg += '<br>';
 		}
 		else {
 			msg += 'Affiliation: ' + parts[2] + '<br>';
 			msg += 'Message: ' + parts[0] + ' -&gt; ' + parts[1] + '<br>';
-			for(var i = 0; i < item.length; i++) {
-				msg += item[i] + '<br>';
-			}
-			msg += '<br>';
 		}
+
+		for(key in item) {
+			if(item === undefined)
+				continue;
+			msg += key + ":<br>";
+			for(var i = 0; i < item[key].length; i++) {
+				msg += '&nbsp;&nbsp;' + item[key][i] + '<br>';
+			}
+		}
+		msg += '<br>';
 	}
 	dojo.byId('invalidmsgfieldcontent').innerHTML = msg;
 	if(dijit.byId('invalidmsgfieldspane').domNode.style.visibility != 'visible')

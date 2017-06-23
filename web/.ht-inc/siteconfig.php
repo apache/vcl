@@ -3170,6 +3170,30 @@ class Messages {
 			$h .= "</div>\n";
 		}
 
+		$h .= "<div dojoType=dojox.layout.FloatingPane\n";
+		$h .= "      id=\"invalidmsgfieldspane\"\n";
+		$h .= "      resizable=\"true\"\n";
+		$h .= "      closable=\"true\"\n";
+		$h .= "      title=\"" . i("Invalid Message Fields") . "\"\n";
+		$h .= "      style=\"width: 400px; ";
+		$h .=               "height: 200px; ";
+		$h .=               "visibility: hidden; ";
+		$h .=               "text-align: left; ";
+		$h .=               "border: solid 2px red;\"\n";
+		$h .= ">\n";
+		$h .= "<script type=\"dojo/method\" event=\"minimize\">\n";
+		$h .= "  this.hide();\n";
+		$h .= "</script>\n";
+		$h .= "<script type=\"dojo/method\" event=\"close\">\n";
+		$h .= "  this.hide();\n";
+		$h .= "  return false;\n";
+		$h .= "</script>\n";
+		$h .= "<div style=\"padding: 4px;\">\n";
+		$h .= _("The following messages have invalid items included for substitution. Please correct the message contents and save them again for the backend to validate.") . "<br><br>\n";
+		$h .= "   <div id=\"invalidmsgfieldcontent\"></div>\n";
+		$h .= "</div>\n";
+		$h .= "</div>\n";
+
 		$h .= "<br>\n";
 		$h .= "<div id=\"defaultmessagesdiv\" class=\"hidden highlightnotice\"><br><strong>";
 		$h .= i('There is no message set specifically for this affiliation. The default message is being used and is displayed below.');
@@ -3211,30 +3235,6 @@ class Messages {
 		$h .= "     </script>\n";
 		$h .= "   </button>\n";
 		$h .= "   </div>\n";
-		$h .= "</div>\n";
-
-		$h .= "<div dojoType=dojox.layout.FloatingPane\n";
-		$h .= "      id=\"invalidmsgfieldspane\"\n";
-		$h .= "      resizable=\"true\"\n";
-		$h .= "      closable=\"true\"\n";
-		$h .= "      title=\"" . i("Invalid Message Fields") . "\"\n";
-		$h .= "      style=\"width: 400px; ";
-		$h .=               "height: 200px; ";
-		$h .=               "visibility: hidden; ";
-		$h .=               "text-align: left; ";
-		$h .=               "border: solid 2px red;\"\n";
-		$h .= ">\n";
-		$h .= "<script type=\"dojo/method\" event=\"minimize\">\n";
-		$h .= "  this.hide();\n";
-		$h .= "</script>\n";
-		$h .= "<script type=\"dojo/method\" event=\"close\">\n";
-		$h .= "  this.hide();\n";
-		$h .= "  return false;\n";
-		$h .= "</script>\n";
-		$h .= "<div style=\"padding: 4px;\">\n";
-		$h .= _("The following messages have invalid items included for substitution. Please correct the message contents and save them again for the backend to validate.") . "<br><br>\n";
-		$h .= "   <div id=\"invalidmsgfieldcontent\"></div>\n";
-		$h .= "</div>\n";
 		$h .= "</div>\n";
 
 		$cdata = $this->basecdata;
@@ -3371,14 +3371,12 @@ class Messages {
 	///
 	////////////////////////////////////////////////////////////////////////////////
 	function AJvalidateMessagesPoll() {
-		$query = "SELECT v1.name, "
-		       .        "v1.value "
-		       . "FROM variable v1, "
-		       .      "variable v2 "
-		       . "WHERE v1.setby != 'webcode' AND "
-		       .       "v1.setby IS NOT NULL AND "
-		       .       "v2.name = 'usermessage_needs_validating' AND "
-		       .       "v1.timestamp > DATE_SUB(v2.timestamp, INTERVAL 5 MINUTE)";
+		$query = "SELECT name, "
+		       .        "value "
+		       . "FROM variable "
+		       . "WHERE setby != 'webcode' AND "
+		       .       "setby IS NOT NULL AND "
+		       .       "value LIKE '%invalidfields%'";
 		$qh = doQuery($query);
 		$invalids = array();
 		while($row = mysql_fetch_assoc($qh)) {
