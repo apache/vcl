@@ -1567,7 +1567,8 @@ sub get_network_configuration {
 	}
 	
 	# Check if a 'public' or 'private' network type argument was specified
-	my $network_type = lc(shift());
+	my $network_type = shift;
+	$network_type = lc($network_type) if $network_type;
 	if ($network_type && $network_type !~ /(public|private)/i) {
 		notify($ERRORS{'WARNING'}, 0, "network type argument can only be 'public' or 'private'");
 		return;

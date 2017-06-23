@@ -134,6 +134,12 @@ sub pre_capture {
 	# Run custom pre_capture scripts
 	$self->run_stage_scripts('pre_capture');
 	
+	# Delete reservation_info.json
+	my $reservation_info_json_file_path = $self->get_reservation_info_json_file_path();
+	if ($reservation_info_json_file_path) {
+		$self->delete_file($reservation_info_json_file_path);
+	}
+	
 	notify($ERRORS{'OK'}, 0, "completed common image capture preparation tasks");
 	return 1;
 }
@@ -2306,7 +2312,8 @@ sub get_mac_address {
 	
 	# Check if a 'public' or 'private' network type argument was specified
 	# Assume 'public' if not specified
-	my $network_type = lc(shift()) || 'public';
+	my $network_type = shift || 'public';
+	$network_type = lc($network_type) if $network_type;
 	if ($network_type && $network_type !~ /(public|private)/i) {
 		notify($ERRORS{'WARNING'}, 0, "network type argument can only be 'public' or 'private'");
 		return;
@@ -2393,7 +2400,8 @@ sub get_ip_address {
 	
 	# Check if a 'public' or 'private' network type argument was specified
 	# Assume 'public' if not specified
-	my $network_type = lc(shift()) || 'public';
+	my $network_type = shift || 'public';
+	$network_type = lc($network_type) if $network_type;
 	if ($network_type && $network_type !~ /(public|private)/i) {
 		notify($ERRORS{'WARNING'}, 0, "network type argument can only be 'public' or 'private'");
 		return;
@@ -2638,7 +2646,8 @@ sub get_default_gateway {
 	
 	# Check if a 'public' or 'private' network type argument was specified
 	# Assume 'public' if not specified
-	my $network_type = lc(shift()) || 'public';
+	my $network_type = shift || 'public';
+	$network_type = lc($network_type) if $network_type;
 	if ($network_type && $network_type !~ /(public|private)/i) {
 		notify($ERRORS{'WARNING'}, 0, "network type argument can only be 'public' or 'private'");
 		return;
@@ -2725,7 +2734,8 @@ sub get_dns_servers {
 	
 	# Check if a 'public' or 'private' network type argument was specified
 	# Assume 'public' if not specified
-	my $network_type = lc(shift()) || 'public';
+	my $network_type = shift || 'public';
+	$network_type = lc($network_type) if $network_type;
 	if ($network_type && $network_type !~ /(public|private)/i) {
 		notify($ERRORS{'WARNING'}, 0, "network type argument can only be 'public' or 'private'");
 		return;
