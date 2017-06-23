@@ -14275,7 +14275,8 @@ sub ad_search {
 	my $domain_dns_name;
 	my $domain_username;
 	my $domain_password;
-	if (defined($arguments->{domain_dns_name}) && $arguments->{domain_dns_name} ne $self->data->get_image_domain_dns_name()) {
+	my $image_domain_dns_name = $self->data->get_image_domain_dns_name(0) || '';
+	if (defined($arguments->{domain_dns_name}) && $arguments->{domain_dns_name} ne $image_domain_dns_name) {
 		$domain_dns_name = $arguments->{domain_dns_name};
 		($domain_username, $domain_password) = $self->data->get_domain_credentials($domain_dns_name);
 		if (!defined($domain_username) || !defined($domain_password)) {
