@@ -1838,9 +1838,10 @@ sub logoff_users {
 
 =head2 user_exists
 
- Parameters  : 
- Returns     : 
- Description : 
+ Parameters  : $username (optional)
+ Returns     : boolean
+ Description : Executes 'net user <username>' to determine whether or not a
+               local user exists on the Windows computer.
 
 =cut
 
@@ -1864,25 +1865,45 @@ sub user_exists {
 	#notify($ERRORS{'DEBUG'}, 0, "checking if user $username exists on $computer_node_name");
 
 	# Attempt to query the user account
-	my $query_user_command = "$system32_path/net.exe user \"$username\"";
-	my ($query_user_exit_status, $query_user_output) = $self->execute($query_user_command, 0);
-	if (defined($query_user_exit_status) && $query_user_exit_status == 0) {
-		notify($ERRORS{'DEBUG'}, 0, "user $username exists on $computer_node_name");
-		return 1;
-	}
-	elsif (defined($query_user_exit_status) && $query_user_exit_status == 2) {
-		notify($ERRORS{'DEBUG'}, 0, "user does not exist on $computer_node_name: $username");
-		return 0;
-	}
-	elsif (defined($query_user_exit_status)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to determine if user exists on $computer_node_name: $username, exit status: $query_user_exit_status, output:\n@{$query_user_output}");
-		return;
-	}
-	else {
+	my $command = "$system32_path/net.exe user \"$username\"";
+	my ($exit_status, $output) = $self->execute($command, 0);
+	if (!defined($output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to execute command to determine if user exists on $computer_node_name: $username");
 		return;
 	}
-} ## end sub user_exists
+
+	# Expected output if user exists:
+	# $ net user administrator
+	# User name                    Administrator
+	# Full Name
+	# Comment                      Built-in account for administering the computer/domain
+	# ...
+	# The command completed successfully.
+
+	# Expected output if user does NOT exist:
+	# $ net user foo
+	# The user name could not be found.
+	#
+	# More help is available by typing NET HELPMSG 2221.
+	
+	# Note: exit status may not be reliable, see VCL-1054
+	if ($exit_status == 2 || grep(/not.*found/i, @$output)) {
+		notify($ERRORS{'DEBUG'}, 0, "user '$username' does NOT exist on $computer_node_name, exit status: $exit_status, output:\n" . join("\n", @$output));
+		return 0;
+	}
+	elsif (my ($username_line) = grep(/User name[\s\t]+$username[\s\t]*$/i, @$output)) {
+		notify($ERRORS{'DEBUG'}, 0, "user '$username' exists on $computer_node_name, found matching line in '$command' output:\n$username_line");
+		return 1;
+	}
+	elsif ($exit_status == 0) {
+		notify($ERRORS{'WARNING'}, 0, "returning 1 but unable to reliable determine if user '$username' exists on $computer_node_name, exit status is $exit_status but output does not contain a 'User name <space...> $username' line:\n" . join("\n", @$output));
+		return 1;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to determine if user '$username' exists on $computer_node_name, exit status: $exit_status, output:\n" . join("\n", @$output));
+		return;
+	}
+}
 
 #//////////////////////////////////////////////////////////////////////////////
 
