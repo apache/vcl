@@ -3535,7 +3535,7 @@ sub set_scheduled_task_credentials {
 		if ($task_name =~ /{/) {
 			# Ignore task such as: \User_Feed_Synchronization-{88DE35B9-C115-4DE3-AB5E-B9D2C4A2DB66}
 			# This one always fails and is not important
-			notify($ERRORS{'DEGUG'}, 0, "unable to change password for scheduled task '$task_name' due to Windows bug\ncommand: '$command'\noutput:\n" . join("\n", @$output));
+			notify($ERRORS{'DEBUG'}, 0, "unable to change password for scheduled task '$task_name' due to Windows bug\ncommand: '$command'\noutput:\n" . join("\n", @$output));
 		}
 		else {
 			notify($ERRORS{'WARNING'}, 0, "unable to change password for scheduled task '$task_name' due to Windows bug\ncommand: '$command'\noutput:\n" . join("\n", @$output));
