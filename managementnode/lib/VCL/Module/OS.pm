@@ -1610,6 +1610,7 @@ sub get_correct_default_gateway {
 		my $current_default_gateway = $self->get_public_default_gateway();
 		if ($current_default_gateway) {
 			notify($ERRORS{'DEBUG'}, 0, "management node public IP mode is set to $management_node_ip_configuration, default gateway currently configured on $computer_name should be used: $current_default_gateway");
+			return $current_default_gateway;
 		}
 		else {
 			notify($ERRORS{'WARNING'}, 0, "unable to determine correct default gateway to use on $computer_name, management node public IP mode is set to $management_node_ip_configuration but default gateway currently configured on $computer_name could not be determined");
