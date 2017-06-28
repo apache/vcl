@@ -8807,7 +8807,7 @@ sub set_static_default_gateway {
 		return;
 	}
 	elsif ($route_add_exit_status ne '0' || grep(/failed/i, @$route_add_output)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to add persistent route to public default gateway: $default_gateway, exit status: $route_add_exit_status, output:\n" . join("\n", @$route_add_output));
+		notify($ERRORS{'WARNING'}, 0, "failed to add persistent route to public default gateway: $default_gateway, exit status: $route_add_exit_status, command: '$route_add_command', output:\n" . join("\n", @$route_add_output));
 		return;
 	}
 	else {
