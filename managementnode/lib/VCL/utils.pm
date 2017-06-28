@@ -820,19 +820,19 @@ END
 		open(STDOUT, ">>$log");
 		
 		# ARK - for testing competing reservations
-		if ($ENV{reservation_id}) {
-			if ($ENV{reservation_id} == 3115) {
-				print colored($log_message, "YELLOW");
-			}
-			elsif ($ENV{reservation_id} == 3116) {
-				print colored($log_message, "CYAN");
-			}
-			else {
-				print colored($log_message, "MAGENTA");
-			}
-			print "\n";
-			return 1;
-		}
+		#if ($ENV{reservation_id}) {
+		#	if ($ENV{reservation_id} == 3115) {
+		#		print colored($log_message, "YELLOW");
+		#	}
+		#	elsif ($ENV{reservation_id} == 3116) {
+		#		print colored($log_message, "CYAN");
+		#	}
+		#	else {
+		#		print colored($log_message, "MAGENTA");
+		#	}
+		#	print "\n";
+		#	return 1;
+		#}
 		print STDOUT "$log_message\n";
 	}
 } ## end sub notify
