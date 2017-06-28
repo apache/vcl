@@ -668,8 +668,7 @@ sub computer_not_being_used {
 			return 0;
 		}
 		
-		# Warn if computer state isn't available or reload - except for reinstall requests
-		notify($ERRORS{'WARNING'}, 0, "$computer_short_name state is $computer_state_name, checking if any competing reservations are active");
+		notify($ERRORS{'DEBUG'}, 0, "$computer_short_name state is $computer_state_name, checking if any competing reservations are active");
 		
 		# Check if there is another request using this machine
 		# Get a hash containing all of the reservations for the computer
