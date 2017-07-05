@@ -2023,7 +2023,6 @@ INSERT IGNORE INTO `resourcepriv` (`id`, `resourcegroupid`, `privnodeid`, `type`
 (4, 2, 4, 'available'),
 (5, 2, 4, 'administer'),
 (6, 2, 4, 'manageGroup'),
-(7, 3, 4, 'available'),
 (8, 3, 4, 'administer'),
 (9, 3, 4, 'manageGroup'),
 (10, 4, 4, 'available'),
