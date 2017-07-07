@@ -2830,10 +2830,11 @@ sub get_domain_credentials {
 	my ($username, $secret_id, $encrypted_password) = get_management_node_ad_domain_credentials($management_node_id, $domain_identifier);
 	return unless $username && $secret_id && $encrypted_password;
 	
-	my $domain_password = $self->mn_os->decrypt_cryptsecret($secret_id, $encrypted_password) || return;
-	
-	notify($ERRORS{'DEBUG'}, 0, "retrieved credentials for Active Directory domain:\nusername: '$username'\npassword: '$domain_password'");
-	return ($username, $domain_password);
+	my $decrypted_password = $self->mn_os->decrypt_cryptsecret($secret_id, $encrypted_password) || return;
+	my $decrypted_password_length = length($decrypted_password);
+	my $decrypted_password_hidden = '*' x $decrypted_password_length;
+	notify($ERRORS{'DEBUG'}, 0, "retrieved credentials for Active Directory domain: '$decrypted_password_hidden' ($decrypted_password_length characters)");
+	return $decrypted_password;
 }
 
 #//////////////////////////////////////////////////////////////////////////////
@@ -2874,8 +2875,10 @@ sub get_vmhost_profile_password {
 		return $password;
 	}
 	
-	my $decrypted_password = $self->mn_os->decrypt_cryptsecret($secret_id, $password);
-	notify($ERRORS{'DEBUG'}, 0, "decrypted VM profile password: '$decrypted_password'");
+	my $decrypted_password = $self->mn_os->decrypt_cryptsecret($secret_id, $password) || return;
+	my $decrypted_password_length = length($decrypted_password);
+	my $decrypted_password_hidden = '*' x $decrypted_password_length;
+	notify($ERRORS{'DEBUG'}, 0, "decrypted VM host profile password: '$decrypted_password_hidden' ($decrypted_password_length characters)");
 	return $decrypted_password;
 }
 
