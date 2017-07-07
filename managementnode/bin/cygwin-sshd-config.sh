@@ -195,12 +195,12 @@ print_hr
 
 # Recreate Cygwin's group and passwd files so they match current computer accounts
 echo Recreating /etc/group
-mkgroup -l > /etc/group
+mkgroup -l localhost > /etc/group
 if [ $? -ne 0 ]; then die "failed to recreate /etc/group"; fi;
 print_hr
 
 echo Recreating /etc/passwd
-mkpasswd -l > /etc/passwd
+mkpasswd -l localhost > /etc/passwd
 if [ $? -ne 0 ]; then die "failed to recreate /etc/passwd"; fi;
 print_hr
 
@@ -364,6 +364,7 @@ taskkill.exe /F /FI "IMAGENAME eq cyg*" 2>NUL
 taskkill.exe /F /FI "IMAGENAME eq bash*" 2>NUL
 taskkill.exe /F /FI "IMAGENAME eq ssh*" 2>NUL
 taskkill.exe /F /FI "IMAGENAME eq mintty*" 2>NUL
+taskkill.exe /F /FI "IMAGENAME eq sh.exe" 2>NUL
 echo.
 
 echo Waiting 3 seconds for processes to die
