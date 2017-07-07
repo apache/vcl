@@ -400,6 +400,15 @@ sub add_user_accounts {
 		if (defined($reservation_accounts->{$user_id}) && ($request_state_name =~ /servermodified/)) {
 			# Entry already exists in useraccounts table and is servermodified, assume everything is correct skip to next user
 			notify($ERRORS{'DEBUG'}, 0, "entry already exists in useraccounts table for $username (ID: $user_id) and request_state_name = $request_state_name");
+			
+			# Make sure user's root access is correct - may have been moved from admin to access group, and vice versa
+			if ($root_access) {
+				$self->grant_administrative_access($username) if ($self->can('grant_administrative_access'));
+			}
+			else {
+				$self->revoke_administrative_access($username) if ($self->can('revoke_administrative_access'));
+			}
+			
 			next RESERVATION_USER;
 		}
 		else {
@@ -512,54 +521,39 @@ sub delete_user_accounts {
 	
 	my $reservation_id = $self->data->get_reservation_id();
 	my $computer_node_name = $self->data->get_computer_node_name();
+	
+	my %username_hash;
+	
 	my $reservation_users = $self->data->get_reservation_users();
+	foreach my $user_id (sort keys %$reservation_users) {
+		my $username = $reservation_users->{$user_id}{unityid};
+		$username_hash{$username} = $user_id;
+	}
 
 	# Collect users in reservationaccounts table
 	my $reservation_accounts = get_reservation_accounts($reservation_id);
+	foreach my $user_id (sort keys %$reservation_accounts) {
+		my $username = $reservation_accounts->{$user_id}{username};
+		$username_hash{$username} = $user_id;
+	}
 	
-	my $errors = 0;
+	my $error_encountered = 0;
 	
 	# Delete users
-	foreach my $user_id (sort keys %$reservation_users) {
-		my $username = $reservation_users->{$user_id}{unityid};
-		
-		# Delete the key from reservation accounts, these will be processed next
-		delete $reservation_accounts->{$user_id};
+	foreach my $username (sort keys %username_hash) {
+		my $user_id = $username_hash{$username};
 		
 		# Delete user on the OS
 		if (!$self->delete_user($username)) {
-			$errors = 1;
+			$error_encountered = 1;
 			notify($ERRORS{'WARNING'}, 0, "failed to delete user on $computer_node_name");
-			
-			# Delete entry to the useraccounts table
-			if (!delete_reservation_account($reservation_id, $user_id)) {
-				notify($ERRORS{'CRITICAL'}, 0, "failed to delete entry from reservationaccounts table for $username (ID: $user_id)");
-			}
-		}
-	}
-	
-	foreach my $user_id (sort keys %$reservation_accounts) {
-		my $username = $reservation_accounts->{$user_id}{username};
-		
-		# Delete the user from OS
-		if (!$self->delete_user($username)) {
-			$errors = 1;
-			notify($ERRORS{'WARNING'}, 0, "failed to delete user $username (ID: $user_id) from $computer_node_name");
-			next;
 		}
 		
-		# Delete entry from reservationaccounts
-		if (!delete_reservation_account($reservation_id, $user_id)) {
-			notify($ERRORS{'WARNING'}, 0, "failed to delete entry from reservationaccounts table for user $username (ID: $user_id)");
-		}
+		# Delete entry to the useraccounts table
+		delete_reservation_account($reservation_id, $user_id);
 	}
 	
-	if ($errors) {
-		return 0;
-	}
-	else {
-		return 1;
-	}
+	return !$error_encountered;
 }
 
 #//////////////////////////////////////////////////////////////////////////////
@@ -3104,9 +3098,11 @@ sub get_file_contents {
 =head2 remove_lines_from_file
 
  Parameters  : $file_path, $pattern
- Returns     : boolean
+ Returns     : integer or undefined
  Description : Removes all lines containing the pattern from the file. The
-               pattern must be a regular expression.
+               pattern must be a regular expression. Returns the number of lines
+               removed from the file which may be 0. Returns undefined if an
+               error occurred.
 
 =cut
 
@@ -3130,7 +3126,7 @@ sub remove_lines_from_file {
 	
 	if (!$self->file_exists($file_path)) {
 		notify($ERRORS{'DEBUG'}, 0, "lines containing '$pattern' not removed because file does NOT exist: $file_path");
-		return 1;
+		return 0;
 	}
 	
 	my @lines = $self->get_file_contents($file_path);
@@ -3152,7 +3148,7 @@ sub remove_lines_from_file {
 	else {
 		notify($ERRORS{'DEBUG'}, 0, "$file_path does NOT contain any lines matching pattern: '$pattern'");
 	}
-	return 1;
+	return scalar(@lines_removed);
 }
 
 #//////////////////////////////////////////////////////////////////////////////

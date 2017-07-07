@@ -400,9 +400,9 @@ sub pre_capture {
 		notify($ERRORS{'WARNING'}, 0, "unable to log user off $computer_node_name");
 	}
 	
-	# Remove user and clean external ssh file
-	if ($self->delete_user()) {
-		notify($ERRORS{'OK'}, 0, "deleted user from $computer_node_name");
+	# Remove user accounts
+	if ($self->delete_user_accounts()) {
+		notify($ERRORS{'OK'}, 0, "deleted user accounts added by VCL from $computer_node_name");
 	}
 	
 	# Attempt to set the root password to a known value
@@ -2998,18 +2998,23 @@ sub create_user {
 	}
 	
 	# Add user to sudoers if necessary
-	if ($root_access && !$self->grant_root_access($username)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to process grant_root_access for $username");
-		return;
+	if ($root_access) {
+		if (!$self->grant_administrative_access($username)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to process grant_administrative_access for $username");
+			return;
+		}
+	}
+	else {
+		# Make sure user does not have root access
+		$self->revoke_administrative_access($username);
 	}
 	
 	return 1;
 } ## end sub create_user
 
-
 #//////////////////////////////////////////////////////////////////////////////
 
-=head2 grant_root_access
+=head2 grant_administrative_access
 
  Parameters  : $username
  Returns     : boolean
@@ -3017,7 +3022,57 @@ sub create_user {
 
 =cut
 
-sub grant_root_access {
+sub grant_administrative_access {
+	my $self = shift;
+	if (ref($self) !~ /linux/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $username = shift;
+	if (!defined($username)) {
+		notify($ERRORS{'WARNING'}, 0, "username argument was not supplied");
+		return;
+	}
+	
+	my $timestamp = makedatestring();
+	
+	my $sudoers_file_path = '/etc/sudoers';
+	
+	my @existing_lines = $self->get_file_contents($sudoers_file_path);
+	my @matching_lines;
+	for my $line (@existing_lines) {
+		if ($line =~ /^\s*$username\s/) {
+			push @matching_lines, $line;
+		}
+	}
+	if (@matching_lines) {
+		notify($ERRORS{'DEBUG'}, 0, "$username was previously added to $sudoers_file_path:\n" . join("\n", @matching_lines));
+		return 1;
+	}
+	
+	my $sudoers_line = "$username ALL= NOPASSWD: ALL\t# Added by VCL, ($timestamp)";
+	if ($self->append_text_file($sudoers_file_path, $sudoers_line)) {
+		notify($ERRORS{'DEBUG'}, 0, "appended line to $sudoers_file_path: '$sudoers_line'");
+		return 1;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to append line to $sudoers_file_path: '$sudoers_line'");
+		return 0;
+	}
+}
+
+#//////////////////////////////////////////////////////////////////////////////
+
+=head2 revoke_administrative_access
+
+ Parameters  : $username
+ Returns     : boolean
+ Description : Removes all entries from the sudoers file for the user.
+
+=cut
+
+sub revoke_administrative_access {
 	my $self = shift;
 	if (ref($self) !~ /linux/i) {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
@@ -3031,14 +3086,13 @@ sub grant_root_access {
 	}
 	
 	my $sudoers_file_path = '/etc/sudoers';
-	my $sudoers_line = "$username ALL= NOPASSWD: ALL";
-	if ($self->append_text_file($sudoers_file_path, $sudoers_line)) {
-		notify($ERRORS{'DEBUG'}, 0, "appended line to $sudoers_file_path: '$sudoers_line'");
+
+	# Remove lines from sudoers
+	if (defined($self->remove_lines_from_file($sudoers_file_path, "^[\\s#]*$username\\s"))) {
 		return 1;
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to append line to $sudoers_file_path: '$sudoers_line'");
-		return 0;
+		return;
 	}
 }
 
@@ -3072,6 +3126,10 @@ sub delete_user {
 	# Make sure the user exists
 	if (!$self->user_exists($username)) {
 		notify($ERRORS{'DEBUG'}, 0, "user NOT deleted from $computer_node_name because it does not exist: $username");
+		
+		# Make sure user does not exist in sudoers
+		$self->revoke_administrative_access($username);
+		
 		return 1;
 	}
 	
@@ -3164,7 +3222,7 @@ sub delete_user {
 	}
 	
 	# Remove lines from sudoers
-	$self->remove_lines_from_file('/etc/sudoers', "^\\s*$username\\s+") || return;
+	$self->revoke_administrative_access($username);
 	
 	return 1;
 } ## end sub delete_user

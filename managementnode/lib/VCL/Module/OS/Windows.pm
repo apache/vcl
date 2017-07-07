@@ -411,9 +411,9 @@ sub pre_capture {
 
 =cut
 
-	my $deleted_user = $self->delete_user();
-	if (!$deleted_user) {
-		notify($ERRORS{'DEBUG'}, 0, "unable to delete user, will try again after reboot");
+	my $deleted_user_accounts = $self->delete_user_accounts();
+	if (!$deleted_user_accounts) {
+		notify($ERRORS{'DEBUG'}, 0, "unable to delete user accounts, will try again after reboot");
 	}
 
 =item *
@@ -616,8 +616,8 @@ sub pre_capture {
 
 =cut
 
-	if (!$deleted_user && !$self->delete_user()) {
-		notify($ERRORS{'WARNING'}, 0, "unable to delete user after reboot");
+	if (!$deleted_user_accounts && !$self->delete_user_accounts()) {
+		notify($ERRORS{'WARNING'}, 0, "unable to delete user accounts after reboot");
 		return 0;
 	}
 
@@ -14654,6 +14654,58 @@ sub ad_user_exists {
 		notify($ERRORS{'DEBUG'}, 0, "user does NOT exist in Active Directory domain: $user_samaccountname");
 	}
 	return $self->{ad_user_exists}{$user_samaccountname};
+}
+
+#//////////////////////////////////////////////////////////////////////////////
+
+=head2 grant_administrative_access
+
+ Parameters  : $username
+ Returns     : boolean
+ Description : Adds the user to the local Administrators group.
+
+=cut
+
+sub grant_administrative_access {
+	my $self = shift;
+	if (ref($self) !~ /Windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $username = shift;
+	if (!defined($username)) {
+		notify($ERRORS{'WARNING'}, 0, "username argument was not supplied");
+		return;
+	}
+	
+	return $self->add_user_to_group($username, "Administrators");
+}
+
+#//////////////////////////////////////////////////////////////////////////////
+
+=head2 revoke_administrative_access
+
+ Parameters  : $username
+ Returns     : boolean
+ Description : Removes the user to the local Administrators group.
+
+=cut
+
+sub revoke_administrative_access {
+	my $self = shift;
+	if (ref($self) !~ /Windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $username = shift;
+	if (!defined($username)) {
+		notify($ERRORS{'WARNING'}, 0, "username argument was not supplied");
+		return;
+	}
+	
+	return $self->remove_user_from_group($username, 'Administrators');
 }
 
 #//////////////////////////////////////////////////////////////////////////////
