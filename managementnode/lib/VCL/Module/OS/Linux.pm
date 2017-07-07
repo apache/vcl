@@ -1284,11 +1284,12 @@ sub reserve {
 	# Do this before OS.pm::reserve calls add_user_accounts
 	$self->add_vcl_usergroup();
 	
-	$self->SUPER::reserve() || return;
-	
 	# Configure sshd to only listen on the private interface and add ext_sshd service listening on the public interface
 	# This needs to be done after update_public_ip_address is called from OS.pm::reserve
 	$self->configure_ext_sshd() || return;
+	
+	# Call OS.pm's reserve subroutine
+	$self->SUPER::reserve() || return;
 	
 	# Attempt to mount NFS shares configured for the management node (Site Configuration > NFS Mounts)
 	$self->mount_nfs_shares();
