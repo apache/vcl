@@ -15234,9 +15234,9 @@ sub call_check_crypt_secrets {
 	}
 	else {
 		notify($ERRORS{'WARNING'}, 0, "failed to update cryptsecret table, $xmlrpc_function returned:\n" .
-			"status        : $response->value->{status}\n" .
-			"error code    : $response->value->{errorcode}\n" .
-			"error message : $response->value->{errormsg}"
+			"status        : " . format_data($response->value->{status}) . "\n" .
+			"error code    : " . format_data($response->value->{errorcode}) . "\n" .
+			"error message : " . format_data($response->value->{errormsg})
 		);
 		return;
 	}
