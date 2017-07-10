@@ -502,6 +502,13 @@ sub run_stage_scripts_on_management_node {
 	
 	# Execute the scripts
 	for my $script_file_path (@script_file_paths) {
+		# Ignore certain intermediate directory paths
+		if ($script_file_path =~ /\/(\.svn|\.git)\//i) {
+			my $matching_section = $1;
+			notify($ERRORS{'DEBUG'}, 0, "ignoring file on management node because it resides under intermediate directory '$matching_section': $script_file_path");
+			next;
+		}
+		
 		my $command = "chmod +x $script_file_path && $script_file_path $mn_json_file_path";
 		my ($exit_status, $output) = $self->execute($command);
 		if (!defined($output)) {
@@ -676,6 +683,9 @@ sub _get_private_key_object_from_file {
 		return;
 	}
 	
+	# Override the die handler 
+	local $SIG{__DIE__} = sub{};
+	
 	# Create an RSA object based on the existing private key contained in the file
 	my $rsa_private;
 	eval {
@@ -713,6 +723,9 @@ sub extract_public_key_from_private_key_file {
 	
 	my $management_node_short_name = $self->data->get_management_node_short_name();
 	my $private_key_file_path = $self->get_private_key_file_path();
+	
+	# Override the die handler 
+	local $SIG{__DIE__} = sub{};
 	
 	# Retrieve the public key string from the RSA object
 	my $public_key_string;
@@ -791,6 +804,9 @@ sub generate_private_key_file {
 	# Delete all existing cryptsecret entries for the management node
 	# The website's API won't delete any that may have been created with an earlier key
 	delete_management_node_cryptsecret($management_node_id);
+	
+	# Override the die handler 
+	local $SIG{__DIE__} = sub{};
 	
 	# Create a new RSA object containing a private/public key pair
 	# Create an RSA object based on the existing private key contained in the file
@@ -874,6 +890,8 @@ sub decrypt_cryptsecret {
 	my $management_node_id = $self->data->get_management_node_id() || return;
 	my $management_node_short_name = $self->data->get_management_node_short_name() || return;
 	
+	my $private_key_file_path = $self->get_private_key_file_path();
+	
 	if ($recreate_key) {
 		notify($ERRORS{'DEBUG'}, 0, "previous attempt to decrypt cryptsecret failed, attempting to regenerate private key and cryptsecret entries");
 		if (!$self->generate_private_key_file({force => 1})) {
@@ -900,6 +918,9 @@ sub decrypt_cryptsecret {
 		$recreate_key ? return : return $self->decrypt_cryptsecret($secret_id, $encrypted_string, 1);
 	}
 	
+	# Override the die handler 
+	local $SIG{__DIE__} = sub{};
+
 	my $key;
 	eval {
 		$key = $rsa_private->decrypt($cryptsecret_decoded);
@@ -907,7 +928,7 @@ sub decrypt_cryptsecret {
 	if ($EVAL_ERROR || !$key) {
 		# Wrong key error:
 		# RSA.xs:202: OpenSSL error: oaep decoding error
-		notify($ERRORS{'WARNING'}, 0, "unable to decrypt secret ID $secret_id, failed to decrypt cryptsecret using RSA object based on management node's private key" . ($EVAL_ERROR ? ", error:\n" . $EVAL_ERROR : ''));
+		notify($ERRORS{'WARNING'}, 0, "unable to decrypt secret ID $secret_id, failed to decrypt cryptsecret using RSA object based on management node's private key file: $private_key_file_path" . ($EVAL_ERROR ? ", error:\n" . $EVAL_ERROR : ''));
 		$recreate_key ? return : return $self->decrypt_cryptsecret($secret_id, $encrypted_string, 1);
 	}
 	
