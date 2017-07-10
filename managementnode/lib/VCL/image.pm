@@ -154,6 +154,10 @@ sub process {
 		$self->reservation_failed();
 	}
 	
+	# Make sure post_reservation scripts get executed before capturing computer
+	# This is normally done by reclaim.pm, but this won't be called in the following capture/reload sequence
+	$self->os->post_reservation();
+	
 	# Call the provisioning modules's capture() subroutine
 	# The provisioning module should do everything necessary to capture the image
 	notify($ERRORS{'OK'}, 0, "calling provisioning module's capture() subroutine");
