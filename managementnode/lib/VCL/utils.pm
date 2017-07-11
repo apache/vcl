@@ -4183,7 +4183,7 @@ sub run_ssh_command {
 	$ssh_command .= "-o StrictHostKeyChecking=no ";
 	$ssh_command .= "-o UserKnownHostsFile=/dev/null ";
 	$ssh_command .= "-o ConnectionAttempts=1 ";
-	$ssh_command .= "-o ConnectTimeout=3 ";
+	$ssh_command .= "-o ConnectTimeout=30 ";
 	$ssh_command .= "-o BatchMode=no ";
 	$ssh_command .= "-o PasswordAuthentication=no ";
 	$ssh_command .= "-l $user ";
