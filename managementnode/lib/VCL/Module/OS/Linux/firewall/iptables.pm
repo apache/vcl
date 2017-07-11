@@ -89,22 +89,6 @@ sub initialize {
 		return 0;
 	}
 	
-	# Make sure 'iptables -L' works, it won't if the management node does not have root access
-	# This is likely for computers provisioned by Lab.pm
-	# The iptables command may exist but generates this error:
-	#    iptables v1.4.7: can't initialize iptables table `filter': Permission denied (you must be root)
-	#    Perhaps iptables or your kernel needs to be upgraded.
-	my $command = "iptables -L";
-	my ($exit_status, $output) = $self->os->execute($command);
-	if (!defined($output)) {
-		notify($ERRORS{'WARNING'}, 0, ref($self) . " object not initialized to control $computer_name, failed to execute command to test if management node has access to configure iptables on the computer");
-		return;
-	}
-	elsif (grep(/(can't initialize|Permission denied|you must be root)/i, @$output)) {
-		notify($ERRORS{'DEBUG'}, 0, ref($self) . " object not initialized to control $computer_name, iptables command exists but cannot be controlled by the management node user:\n" . join("\n", @$output));
-		return 0;
-	}
-	
 	notify($ERRORS{'DEBUG'}, 0, ref($self) . " object initialized to control $computer_name");
 	return 1;
 }
@@ -773,7 +757,7 @@ sub _insert_rule {
 	my $computer_name = $self->data->get_computer_hostname();
 	
 	my $command = "/sbin/iptables --insert $chain_name --table $table_name $argument_string";
-	my ($exit_status, $output) = $self->os->execute($command, 0);
+	my ($exit_status, $output) = $self->_execute_iptables($command);
 	if (!defined($output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to execute command on $computer_name: $command");
 		return;
@@ -1121,7 +1105,7 @@ sub _delete_rule {
 	my $computer_name = $self->data->get_computer_hostname();
 	
 	my $command = "/sbin/iptables --delete $chain_name -t $table_name $rule_specification_string";
-	my ($exit_status, $output) = $self->os->execute($command, 0);
+	my ($exit_status, $output) = $self->_execute_iptables($command);
 	if (!defined($output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to execute command on $computer_name: $command");
 		return;
@@ -1208,7 +1192,7 @@ sub create_chain {
 	my $semaphore = $self->get_iptables_semaphore();
 	
 	my $command = "/sbin/iptables --new-chain $chain_name --table $table_name";
-	my ($exit_status, $output) = $self->os->execute($command, 0);
+	my ($exit_status, $output) = $self->_execute_iptables($command);
 	if (!defined($output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to execute command $computer_name: $command");
 		return;
@@ -1280,7 +1264,7 @@ sub delete_chain {
 		my $command = "/sbin/iptables --delete-chain $chain_name --table $table_name";
 		
 		my $semaphore = $self->get_iptables_semaphore();
-		my ($exit_status, $output) = $self->os->execute($command, 0);
+		my ($exit_status, $output) = $self->_execute_iptables($command);
 		if (!defined($output)) {
 			notify($ERRORS{'WARNING'}, 0, "failed to execute command $computer_name: $command");
 			return;
@@ -1484,7 +1468,7 @@ sub flush_chain {
 	my $command = "/sbin/iptables --flush $chain_name --table $table_name";
 	
 	my $semaphore = $self->get_iptables_semaphore();
-	my ($exit_status, $output) = $self->os->execute($command, 0);
+	my ($exit_status, $output) = $self->_execute_iptables($command);
 	if (!defined($output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to execute command $computer_name: $command");
 		return;
@@ -1569,7 +1553,7 @@ sub get_table_info {
 	my @lines;
 	
 	my $command = "/sbin/iptables --list-rules --table $table_name";
-	my ($exit_status, $output) = $self->os->execute($command, 0);
+	my ($exit_status, $output) = $self->_execute_iptables($command);
 	if (!defined($output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to execute command $computer_name: $command");
 		return;
@@ -2396,7 +2380,7 @@ sub save_configuration {
 	# IMPORTANT: don't simply redirect the output to the file
 	# If iptables is stopped or else the previously saved configuration will be overwritten
 	my $command = '/sbin/iptables-save';
-	my ($exit_status, $output) = $self->os->execute($command, 0);
+	my ($exit_status, $output) = $self->_execute_iptables($command);
 	if (!defined($output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to execute command to save iptables configuration on $computer_name");
 		return;
@@ -2625,6 +2609,55 @@ sub nat_delete_orphaned_reservation_chains {
 		"chains deleted (" . scalar(@chains_deleted) . "): " . join(', ', @chains_deleted)
 	);
 	return 1;
+}
+
+#//////////////////////////////////////////////////////////////////////////////
+
+=head2 _execute_iptables
+
+ Parameters  : $iptables_command, $display_output (optional)
+ Returns     : ($exit_status, $output)
+ Description : Wrapper subroutine to execute iptables commands. This executes an
+               iptables command and checks the output for the following error:
+               "Another app is currently holding the xtables lock."
+               
+               If ancountered, up to 6 attempts is made to execute the iptables
+               command. A progressive delay occurs between each attempt. The
+               delay is 5 seconds longer for each attempt.
+
+=cut
+
+sub _execute_iptables {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return 0;
+	}
+	
+	my ($iptables_command, $display_output) = @_;
+	if (!defined($iptables_command)) {
+		notify($ERRORS{'WARNING'}, 0, "iptables command argument was not supplied");
+		return;
+	}
+	
+	$display_output = 0 unless defined($display_output);
+	
+	my $computer_name = $self->data->get_computer_hostname();
+	
+	my $attempt_limit = 6;
+	for (my $attempt = 1; $attempt <= $attempt_limit; $attempt++) {
+		my ($exit_status, $output) = $self->os->execute($iptables_command, $display_output);
+		if (defined($output) && $attempt < $attempt_limit) {
+			# Another app is currently holding the xtables lock. Perhaps you want to use the -w option?
+			if ($exit_status ne 0 && grep(/xtables lock/, @$output)) {
+				my $sleep_seconds = ($attempt * 5);
+				notify($ERRORS{'DEBUG'}, 0, "attempt $attempt/$attempt_limit: unable to execute iptables command on $computer_name becuase another process is holding an xtables lock, waiting for $sleep_seconds seconds before attempting command again, command: '$iptables_command', output:" . (scalar(@$output) > 1 ? "\n" . join("\n", @$output) : " '" . join("\n", @$output) . "'"));
+				sleep_uninterrupted($sleep_seconds);
+				next;
+			}
+		}
+		return ($exit_status, $output);
+	}
 }
 
 #//////////////////////////////////////////////////////////////////////////////
