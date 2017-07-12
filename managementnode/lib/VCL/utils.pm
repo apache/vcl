@@ -4108,7 +4108,7 @@ sub run_ssh_command {
 	# Locate the path to the ssh binary
 	my $ssh_path;
 	if (-f '/usr/bin/ssh') {
-		$ssh_path = '/usr/bin/ssh -n -f';
+		$ssh_path = '/usr/bin/ssh';
 	}
 	elsif (-f 'C:/cygwin/bin/ssh.exe') {
 		$ssh_path = 'C:/cygwin/bin/ssh.exe';
