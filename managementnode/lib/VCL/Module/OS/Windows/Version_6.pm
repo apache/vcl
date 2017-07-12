@@ -332,7 +332,7 @@ sub activate_kms {
 	# Get the KMS server info from the winKMS table
 	my $kms_server_info = $self->get_kms_servers();
 	if (!$kms_server_info) {
-		notify($ERRORS{'WARNING'}, 0, "KMS server information could not be retrieved");
+		notify($ERRORS{'OK'}, 0, "unable to activate because the database does not contain the necessary KMS server information");
 		return;
 	}
 	

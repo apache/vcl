@@ -2001,8 +2001,7 @@ sub get_management_node_identity_key_paths {
 	
 	my $keys_string = $management_node_info->{keys};
 	if (!$keys_string) {
-		notify($ERRORS{'WARNING'}, 0, "no identity key paths are configured for the management node");
-		return ();
+		return ('/etc/vcl/vcl.key');
 	}
 	
 	return split(/\s*[,;]\s*/, $keys_string);

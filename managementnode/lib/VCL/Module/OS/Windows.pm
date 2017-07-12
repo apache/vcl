@@ -9527,7 +9527,7 @@ EOF
 
 	# Check to make sure rows were returned
 	if (!@combined_rows) {
-		notify($ERRORS{'WARNING'}, 0, "0 rows were retrieved from winProductKey table for affiliation=$affiliation_identifier, product=$product_name");
+		notify($ERRORS{'OK'}, 0, "winProductKey table does not contain information for affiliation: $affiliation_identifier, product: '$product_name'");
 		return;
 	}
 	notify($ERRORS{'DEBUG'}, 0, "retrieved rows from winProductKey table for affiliation=$affiliation_identifier, product=$product_name:\n" . format_data(\@combined_rows));
@@ -9926,7 +9926,7 @@ EOF
 
 	# Check to make sure rows were returned
 	if (!@combined_rows) {
-		notify($ERRORS{'WARNING'}, 0, "0 rows were retrieved from winKMS table for affiliation=$affiliation_identifier");
+		notify($ERRORS{'OK'}, 0, "entry does not exist in winKMS table for affiliation=$affiliation_identifier");
 		return;
 	}
 	
