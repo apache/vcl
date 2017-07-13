@@ -13497,12 +13497,6 @@ sub ad_join_prepare {
 	# Set specific DNS servers for private and public interfaces if DNS servers are configured
 	$self->set_static_dns_servers();
 	
-	# Need to make sure computer object with same name doesn't already exist
-	# If object exists in different OU, the following error will occur when attempting to join the domain:
-	#    This command cannot be executed on target computer('<name>') due to following error: The account already exists.
-	# Don't bother moving existing objects
-	$self->ad_delete_computer();
-	
 	return 1;
 }
 
@@ -13745,6 +13739,11 @@ sub ad_join_ps {
 	#	}
 	#}
 	
+	# Need to make sure computer object with same name doesn't already exist
+	# If object exists in different OU, the following error will occur when attempting to join the domain:
+	#    This command cannot be executed on target computer('<name>') due to following error: The account already exists.
+	# Don't bother moving existing objects
+	$self->ad_delete_computer();
 	
 	# Assemble the PowerShell script
 	my $ad_powershell_script = <<EOF;
@@ -13916,6 +13915,8 @@ sub ad_join_wmic {
 		}
 		$rename_computer_reboot_duration = (time - $rename_computer_reboot_start);
 	}
+	
+	$self->ad_delete_computer();
 	
 	my $error_messages = {
 		5    => 'Access is denied',
@@ -14412,7 +14413,7 @@ ForEach($result in $results) {
    }
 }
 EOF
-	
+
 	my ($exit_status, $output);
 	for (my $attempt=1; $attempt<=$attempt_limit; $attempt++) {
 		($exit_status, $output) = $self->run_powershell_as_script($powershell_script_contents, 0, 0);
