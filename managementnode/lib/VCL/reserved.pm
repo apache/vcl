@@ -419,7 +419,7 @@ sub notify_user_ready {
 	my $request_state_name = $self->data->get_request_id();
 	my $user_email = $self->data->get_user_email();
 	my $user_emailnotices = $self->data->get_user_emailnotices();
-	my $user_imtype_name = $self->data->get_user_imtype_name();
+	my $user_imtype_name = $self->data->get_user_imtype_name() || 'none';;
 	my $user_im_id = $self->data->get_user_im_id();
 	my $affiliation_helpaddress = $self->data->get_user_affiliation_helpaddress();
 	my $is_parent_reservation = $self->data->is_parent_reservation();
@@ -468,7 +468,7 @@ sub notify_user_timeout_no_initial_connection {
 	
 	my $user_email                 = $self->data->get_user_email();
 	my $user_emailnotices          = $self->data->get_user_emailnotices();
-	my $user_im_name               = $self->data->get_user_imtype_name();
+	my $user_im_name               = $self->data->get_user_imtype_name() || 'none';;
 	my $user_im_id                 = $self->data->get_user_im_id();
 	my $affiliation_helpaddress    = $self->data->get_user_affiliation_helpaddress();
 	my $is_parent_reservation      = $self->data->is_parent_reservation();
@@ -506,7 +506,7 @@ sub notify_user_timeout_no_acknowledgement {
 	
 	my $user_email                 = $self->data->get_user_email();
 	my $user_emailnotices          = $self->data->get_user_emailnotices();
-	my $user_im_name               = $self->data->get_user_imtype_name();
+	my $user_im_name               = $self->data->get_user_imtype_name() || 'none';;
 	my $user_im_id                 = $self->data->get_user_im_id();
 	my $affiliation_helpaddress    = $self->data->get_user_affiliation_helpaddress();
 	my $is_parent_reservation      = $self->data->is_parent_reservation();

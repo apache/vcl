@@ -371,7 +371,7 @@ sub notify_user_future_endtime {
 	my $user_login_id                = $self->data->get_user_login_id();
 	my $user_email                   = $self->data->get_user_email();
 	my $user_emailnotices            = $self->data->get_user_emailnotices();
-	my $user_imtype_name             = $self->data->get_user_imtype_name();
+	my $user_imtype_name             = $self->data->get_user_imtype_name() || 'none';;
 	my $user_im_id                   = $self->data->get_user_im_id();
 	
 	my $user_message_key = 'future_endtime';
@@ -437,7 +437,7 @@ sub notify_user_endtime_imminent {
 	my $user_login_id                = $self->data->get_user_login_id();
 	my $user_email                   = $self->data->get_user_email();
 	my $user_emailnotices            = $self->data->get_user_emailnotices();
-	my $user_imtype_name             = $self->data->get_user_imtype_name();
+	my $user_imtype_name             = $self->data->get_user_imtype_name() || 'none';;
 	my $user_im_id                   = $self->data->get_user_im_id();
 	my $is_parent_reservation        = $self->data->is_parent_reservation();
 	my $request_forimaging           = $self->data->get_request_forimaging();
@@ -498,7 +498,7 @@ sub notify_user_timeout_inactivity {
 	my $user_affiliation_helpaddress = $self->data->get_user_affiliation_helpaddress();
 	my $user_email                   = $self->data->get_user_email();
 	my $user_emailnotices            = $self->data->get_user_emailnotices();
-	my $user_imtype_name             = $self->data->get_user_imtype_name();
+	my $user_imtype_name             = $self->data->get_user_imtype_name() || 'none';;
 	my $user_im_id                   = $self->data->get_user_im_id();
 	my $is_parent_reservation        = $self->data->is_parent_reservation();
 	
@@ -538,7 +538,7 @@ sub notify_user_endtime_reached {
 	my $user_affiliation_helpaddress = $self->data->get_user_affiliation_helpaddress();
 	my $user_email                   = $self->data->get_user_email();
 	my $user_emailnotices            = $self->data->get_user_emailnotices();
-	my $user_imtype_name             = $self->data->get_user_imtype_name();
+	my $user_imtype_name             = $self->data->get_user_imtype_name() || 'none';;
 	my $user_im_id                   = $self->data->get_user_im_id();
 	my $is_parent_reservation        = $self->data->is_parent_reservation();
 	
