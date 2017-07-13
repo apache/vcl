@@ -1613,8 +1613,8 @@ INSERT IGNORE INTO `adminlevel` (`id`, `name`) VALUES
 -- 
 
 INSERT IGNORE INTO `affiliation` (`id`, `name`, `dataUpdateText`, `theme`) VALUES 
-(1, 'Local', '', 'default'),
-(2, 'Global', '', 'default');
+(1, 'Local', '', NULL),
+(2, 'Global', '', 'dropdownmenus');
 
 
 -- 
