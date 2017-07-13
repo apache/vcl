@@ -471,6 +471,8 @@ sub add_user_accounts {
 				if (!delete_reservation_account($reservation_id, $user_id)) {
 					notify($ERRORS{'CRITICAL'}, 0, "failed to delete entry from reservationaccounts table for $username (ID: $user_id)");
 				}
+				
+				return;
 			}
 		}
 	}
