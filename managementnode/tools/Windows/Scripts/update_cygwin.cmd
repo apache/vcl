@@ -64,13 +64,13 @@ echo ERRORLEVEL: %ERRORLEVEL%
 echo.
 
 echo %TIME%: Creating new "group" file...
-C:\Cygwin\bin\mkgroup.exe -l localhost > C:\Cygwin\etc\group
+C:\Cygwin\bin\mkgroup.exe -l localhost || C:\Cygwin\bin\mkgroup.exe -l > C:\Cygwin\etc\group
 echo ERRORLEVEL: %ERRORLEVEL%
 set /A STATUS+=%ERRORLEVEL%
 echo.
 
 echo %TIME%: Creating new "passwd" file and changing root's primary group from 'None' to 'None'
-C:\Cygwin\bin\mkpasswd.exe -l localhost | C:\Cygwin\bin\sed.exe -e 's/\(^root.*:\)513\(:.*\)/\1544\2/' > C:\Cygwin\etc\passwd
+C:\Cygwin\bin\mkpasswd.exe -l localhost || C:\Cygwin\bin\mkpasswd.exe -l | C:\Cygwin\bin\sed.exe -e 's/\(^root.*:\)513\(:.*\)/\1544\2/' > C:\Cygwin\etc\passwd
 echo ERRORLEVEL: %ERRORLEVEL%
 set /A STATUS+=%ERRORLEVEL%
 echo.
