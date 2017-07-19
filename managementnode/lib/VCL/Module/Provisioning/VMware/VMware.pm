@@ -6762,6 +6762,22 @@ sub check_multiextent {
 	
 	my $vmhost_hostname = $self->data->get_vmhost_hostname();
 	
+	# Check if ESXi 6.5 or later is used
+	# Should be something like: VMware ESXi 6.5.0 build-5310538
+	my $product_version = $self->api->get_vmware_product_version();
+	if ($product_version) {
+		my ($major_version, $minor_version) = $product_version =~ /^(\d+)\.(\d+)/g;
+		if (defined($major_version) && defined($minor_version) && (($major_version == 6 && $minor_version >= 5) || ($major_version > 6))) {	
+			notify($ERRORS{'DEBUG'}, 0, "VMware version is at least 6.5: $product_version, skipping multiextent check");
+			return 1;
+		}
+	}
+	
+	if (!$self->vmhost_os->can("execute")) {
+		notify($ERRORS{'WARNING'}, 0, "unable to determine if multiextent kernel module needs to be loaded, VM host OS object does not implement an 'execute' method: " . ref($self->vmhost_os));
+		return;
+	}
+	
 	my $list_command = 'vmkload_mod -l | grep multiextent';
 	my ($list_exit_status, $list_output) = $self->vmhost_os->execute($list_command);
 	if (!defined($list_output)) {
@@ -6787,6 +6803,12 @@ sub check_multiextent {
 	}
 	elsif (grep(/already loaded/, @$load_output)) {
 		notify($ERRORS{'DEBUG'}, 0, "multiextent kernel module already loaded on $vmhost_hostname");
+		return 1;
+	}
+	elsif (grep(/not found/i, @$load_output)) {
+		# VMKMod_ComputeModPath(multiextent) failed: Not found
+		# vmkload_mod: Can not load module multiextent: not found
+		notify($ERRORS{'WARNING'}, 0, "multiextent kernel module is not present on $vmhost_hostname\n" . join("\n", @$load_output));
 		return 1;
 	}
 	else {

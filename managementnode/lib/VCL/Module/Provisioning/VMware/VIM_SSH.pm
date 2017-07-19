@@ -3976,6 +3976,222 @@ sub is_firewall_port_allowed {
 
 #//////////////////////////////////////////////////////////////////////////////
 
+=head2 _get_host_summary
+
+ Parameters  : none
+ Returns     : hash reference
+ Description : Runs "vim-cmd hostsvc/hostsummary" to retrive various information
+               about the VMware host.
+
+=cut
+
+sub _get_host_summary {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	return $self->{host_summary} if $self->{host_summary};
+	
+	my $vim_cmd_arguments = "hostsvc/hostsummary";
+	my ($exit_status, $output) = $self->_run_vim_cmd($vim_cmd_arguments);
+	return if !$output;
+	
+	# The output should look like this:
+	#(vim.host.Summary) {
+	#   host = 'vim.HostSystem:ha-host',
+	#   hardware = (vim.host.Summary.HardwareSummary) {
+	#      vendor = "IBM",
+	#      model = "BladeCenter HS22 -[7870AC1]-",
+	# ...
+	
+	# The hash keys are:
+	# {
+	#    config = {
+	#       agentVmDatastore = '',
+	#       agentVmNetwork = '',
+	#       faultToleranceEnabled = '',
+	#       featureVersion = '',
+	#       name = '',
+	#       port = '',
+	#       product = {
+	#          apiType = '',
+	#          apiVersion = '',
+	#          build = '',
+	#          fullName = '',
+	#          instanceUuid = '',
+	#          licenseProductName = '',
+	#          licenseProductVersion = '',
+	#          localeBuild = '',
+	#          localeVersion = '',
+	#          name = '',
+	#          osType = '',
+	#          productLineId = '',
+	#          vendor = '',
+	#          version = '',
+	#       },
+	#       sslThumbprint = '',
+	#       vmotionEnabled = '',
+	#    },
+	#    currentEVCModeKey = '',
+	#    customValue = '',
+	#    gateway = '',
+	#    hardware = {
+	#       cpuMhz = '',
+	#       cpuModel = '',
+	#       memorySize = '',
+	#       model = '',
+	#       numCpuCores = '',
+	#       numCpuPkgs = '',
+	#       numCpuThreads = '',
+	#       numHBAs = '',
+	#       numNics = '',
+	#       otherIdentifyingInfo = '',
+	#       uuid = '',
+	#       vendor = '',
+	#    },
+	#    host = '',
+	#    managementServerIp = '',
+	#    maxEVCModeKey = '',
+	#    overallStatus = '',
+	#    quickStats = {
+	#       distributedCpuFairness = '',
+	#       distributedMemoryFairness = '',
+	#       overallCpuUsage = '',
+	#       overallMemoryUsage = '',
+	#       uptime = '',
+	#    },
+	#    rebootRequired = '',
+	#    runtime = {
+	#       bootTime = '',
+	#       connectionState = '',
+	#       cpuCapacityForVm = '',
+	#       cryptoKeyId = '',
+	#       cryptoState = '',
+	#       dasHostState = '',
+	#       healthSystemRuntime = {
+	#          hardwareStatusInfo = {
+	#             cpuStatusInfo => [],
+	#             memoryStatusInfo => [],
+	#             storageStatusInfo = '',
+	#          },
+	#          systemHealthInfo = {
+	#             numericSensorInfo => [],
+	#          },
+	#       },
+	#       hostMaxVirtualDiskCapacity = '',
+	#       inMaintenanceMode = '',
+	#       inQuarantineMode = '',
+	#       memoryCapacityForVm = '',
+	#       networkRuntimeInfo = {
+	#          netStackInstanceRuntimeInfo => [],
+	#          networkResourceRuntime = '',
+	#       },
+	#       powerState = '',
+	#       standbyMode = '',
+	#       tpmPcrValues = '',
+	#       vFlashResourceRuntimeInfo = '',
+	#       vsanRuntimeInfo = {
+	#          accessGenNo = '',
+	#          diskIssues = '',
+	#          membershipList = '',
+	#       },
+	#    },
+	# }
+
+	
+	if (!grep(/vim\.host\.Summary/i, @$output)) {
+		notify($ERRORS{'WARNING'}, 0, "unable to retrieve host summary, unexpected output returned, VIM command arguments: '$vim_cmd_arguments', output:\n" . join("\n", @$output));
+		return;
+	}
+	
+	my $host_summary_info = $self->_parse_vim_cmd_output($output);
+	if (defined($host_summary_info->{'vim.host.Summary'})) {
+		$self->{host_summary} = $host_summary_info->{'vim.host.Summary'};
+		return $self->{host_summary};
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve host summary, parsed output does not contain a 'vim.host.Summary' key:\n" . format_data($host_summary_info));
+		return;
+	}
+}
+
+#//////////////////////////////////////////////////////////////////////////////
+
+=head2 get_vmware_product_name
+
+ Parameters  : none
+ Returns     : string
+ Description : Returns the full VMware product name installed on the VM host.
+               Examples:
+               VMware Server 2.0.2 build-203138
+               VMware ESXi 4.0.0 build-208167
+
+=cut
+
+sub get_vmware_product_name {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	return $self->{product_name} if $self->{product_name};
+	
+	my $vmhost_hostname = $self->data->get_vmhost_hostname();
+	
+	my $host_summary = $self->_get_host_summary() || return;
+	my $product_name = $host_summary->{config}{product}{fullName};
+	if ($product_name) {
+		notify($ERRORS{'DEBUG'}, 0, "VMware product being used on VM host $vmhost_hostname: '$product_name'");
+		$self->{product_name} = $product_name;
+		return $self->{product_name};
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "unable to retrieve VMware product name being used on VM host $vmhost_hostname");
+		return;
+	}
+}
+
+#//////////////////////////////////////////////////////////////////////////////
+
+=head2 get_vmware_product_version
+
+ Parameters  : none
+ Returns     : string
+ Description : Returns the VMware product version installed on the VM host.
+               Example:
+               6.5.0
+
+=cut
+
+sub get_vmware_product_version {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	return $self->{product_version} if $self->{product_version};
+	
+	my $vmhost_hostname = $self->data->get_vmhost_hostname();
+	
+	my $host_summary = $self->_get_host_summary() || return;
+	my $product_version = $host_summary->{config}{product}{version};
+	if ($product_version) {
+		notify($ERRORS{'DEBUG'}, 0, "retrieved product version for VM host $vmhost_hostname: $product_version");
+		$self->{product_version} = $product_version;
+		return $self->{product_version};
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "unable to retrieve product version for VM host $vmhost_hostname");
+		return;
+	}
+}
+
+#//////////////////////////////////////////////////////////////////////////////
+
 =head2 DESTROY
 
  Parameters  : none

@@ -1455,9 +1455,8 @@ sub get_vmware_product_version {
 	
 	my $vmhost_hostname = $self->data->get_vmhost_hostname();
 	
-	my $datacenter_view = $self->_get_datacenter_view();
-	my $product_version = $datacenter_view->config->product->version;
-	
+	my $service_content = $self->_get_service_content();
+	my $product_version = $service_content->{about}->{version};
 	if ($product_version) {
 		notify($ERRORS{'DEBUG'}, 0, "retrieved product version for VM host $vmhost_hostname: $product_version");
 		$self->{product_version} = $product_version;
