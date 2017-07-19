@@ -75,15 +75,26 @@ function inlineEditResourceCB(data, ioArgs) {
 		dijit.byId('connectmethodttd').set('href', data.items.data.connectmethodurl);
 		if(data.items.data.ostype == 'windows') {
 			dojo.removeClass('imageadauthbox', 'hidden');
-			if(data.items.data.adauthenabled) {
+			var advalcnt = Object.keys(data.items.data.addomainvals).length;
+			if(data.items.data.addomainid != null) {
 				dijit.byId('adauthenable').set('checked', true);
+				if('extraaddomainid' in data.items.data) {
+					var option = {value: data.items.data.extraaddomainid, label: data.items.data.addomain};
+					dijit.byId('addomainid').addOption([option]);
+					dijit.byId('addomainid').extraaddomainid = data.items.data.extraaddomainid;
+					dijit.byId('addomainid').extraaddomainou = data.items.data.extraaddomainou;
+				}
 				dijit.byId('addomainid').set('value', data.items.data.addomainid);
 				dijit.byId('baseou').set('value', data.items.data.baseOU);
+				if(advalcnt == 1 && ('extraaddomainid' in data.items.data))
+					dijit.byId('baseou').set('disabled', true);
 			}
 			else {
 				dijit.byId('adauthenable').set('checked', false);
 				dijit.byId('addomainid').reset();
 				dijit.byId('baseou').reset();
+				if(advalcnt == 0)
+					dijit.byId('adauthenable').set('disabled', true);
 			}
 		}
 		else {
@@ -359,6 +370,11 @@ function saveResourceCB(data, ioArgs) {
 			dijit.byId('reload').reset();
 		dijit.byId('addeditdlg').hide();
 		dojo.byId('addeditdlgerrmsg').innerHTML = '';
+		if('extraaddomainid' in dijit.byId('addomainid')) {
+			dijit.byId('addomainid').removeOption({value: dijit.byId('addomainid').extraaddomainid});
+			delete dijit.byId('addomainid').extraaddomainid;
+			delete dijit.byId('addomainid').extraaddomainou;
+		}
 		dijit.registry.filter(function(widget, index){return widget.id.match(/^comments/);}).forEach(function(widget) {widget.destroy();});
 		setTimeout(function() {dijit.byId('addeditbtn').set('disabled', false);}, 250);
 	}
@@ -824,5 +840,17 @@ function toggleADauth() {
 	else {
 		dijit.byId('addomainid').set('disabled', true);
 		dijit.byId('baseou').set('disabled', true);
+	}
+	selectADauth();
+}
+
+function selectADauth() {
+	var obj = dijit.byId('addomainid');
+	if('extraaddomainid' in obj && obj.get('value') == obj.extraaddomainid) {
+		dijit.byId('baseou').set('value', obj.extraaddomainou);
+		dijit.byId('baseou').set('disabled', true);
+	}
+	else if(dijit.byId('adauthenable').checked) {
+		dijit.byId('baseou').set('disabled', false);
 	}
 }

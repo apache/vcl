@@ -454,19 +454,16 @@ class Image extends Resource {
 		# AD authentication
 		$h .= "<div class=\"boxedoptions hidden\" id=\"imageadauthbox\">\n";
 		# enable toggle
-		$vals = getUserResources(array('addomainAdmin'), array("manageGroup"));
-		$extra = array();
-		if(count($vals['addomain']) == 0)
-			$extra['disabled'] = 'true';
-		$extra['onChange'] = 'toggleADauth();';
+		$extra = array('onChange' => 'toggleADauth();');
 		$h .= labeledFormItem('adauthenable', i('Use AD Authentication'), 'check', '', '', '', '', '', $extra);
 		# AD domain
-		$disabled = array('disabled' => 'true');
-		$h .= labeledFormItem('addomainid', i('AD Domain'), 'select', $vals['addomain'], '', '', '', '', $disabled);
+		$vals = getUserResources(array('addomainAdmin'), array("manageGroup"));
+		$extra = array('onChange' => 'selectADauth();');
+		$h .= labeledFormItem('addomainid', i('AD Domain'), 'select', $vals['addomain'], '', '', '', '', $extra);
 		# base OU
 		$reg = '^([Oo][Uu])=[^,]+(,([Oo][Uu])=[^,]+)*$';
 		$errmsg = i("Invalid base OU; do not include DC components");
-		$h .= labeledFormItem('baseou', i('Base OU'), 'text', $reg, 0, '', $errmsg, '', $disabled, '230px', helpIcon('baseouhelp')); 
+		$h .= labeledFormItem('baseou', i('Base OU'), 'text', $reg, 0, '', $errmsg, '', '', '230px', helpIcon('baseouhelp')); 
 		$h .= "</div>\n"; # boxedoptions
 
 		# subimages
@@ -678,6 +675,7 @@ class Image extends Resource {
 	///
 	/////////////////////////////////////////////////////////////////////////////
 	function AJeditResource() {
+		global $user;
 		$imageid = processInputVar('rscid', ARG_NUMERIC);
 		$images = getUserResources(array("imageAdmin"), array('administer'), 0, 1);
 		if(! array_key_exists($imageid, $images['image'])) {
@@ -696,6 +694,28 @@ class Image extends Resource {
 		$cdata['olddata'] = $data;
 		if($data['minram'] < 512)
 			$data['minram'] = 512;
+
+		# addomain
+		$cdata['addomainvals'] = array();
+		if(in_array("addomainAdmin", $user["privileges"])) {
+			$vals = getUserResources(array('addomainAdmin'), array("manageGroup"));
+			$data['addomainvals'] = $vals['addomain'];
+			$cdata['addomainvals'] = $data['addomainvals'];
+			if(! is_null($data['addomain']) &&
+				! in_array($data['addomain'], $data['addomainvals'])) {
+				$data['addomainvals'][$data['addomainid']] = $data['addomain'];
+				$data['extraaddomainid'] = $data['addomainid'];
+				$data['extraaddomainou'] = $data['baseOU'];
+				$cdata['extraaddomainid'] = $data['addomainid'];
+				$cdata['extraaddomainou'] = $data['baseOU'];
+			}
+		}
+		elseif(! is_null($data['addomain'])) {
+				$data['addomainvals'][$data['addomainid']] = $data['addomain'];
+				$data['extraaddomainid'] = $data['addomainid'];
+				$data['extraaddomainou'] = $data['baseOU'];
+				$cdata['extraaddomainid'] = $data['addomainid'];
+		}
 
 		# revisions
 		$data['revisionHTML'] = $this->getRevisionHTML($imageid);
@@ -1728,12 +1748,20 @@ class Image extends Resource {
 		if($return['adauthenabled'] != 0 && $return['adauthenabled'] != 1)
 			$return['adauthenabled'] = 0;
 		if($return['adauthenabled'] == 1) {
-			$vals = getUserResources(array('addomainAdmin'), array("manageGroup"));
-			if(! array_key_exists($return['addomainid'], $vals['addomain'])) {
+			$vals = getContinuationVar('addomainvals');
+			$extraaddomainid = getContinuationVar('extraaddomainid', 0);
+			$extraaddomainou = getContinuationVar('extraaddomainou', '');
+			if(! array_key_exists($return['addomainid'], $vals) &&
+			   $return['addomainid'] != $extraaddomainid) {
 				$return['error'] = 1;
 				$errormsg[] = i("Invalid AD Domain submitted");
 			}
-			if(! preg_match('/^([Oo][Uu])=[^,]+(,([Oo][Uu])=[^,]+)*$/', $return['baseou'])) {
+			if($extraaddomainid && $return['addomainid'] == $extraaddomainid &&
+				$return['baseou'] != $extraaddomainou) {
+				$return['error'] = 1;
+				$errormsg[] = i("Base OU cannot be changed for the selected AD Domain");
+			}
+			elseif(! preg_match('/^([Oo][Uu])=[^,]+(,([Oo][Uu])=[^,]+)*$/', $return['baseou'])) {
 				$return['error'] = 1;
 				$errormsg[] = i("Invalid Base OU submitted, must start with OU=");
 			}

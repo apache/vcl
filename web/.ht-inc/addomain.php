@@ -140,6 +140,12 @@ class ADdomain extends Resource {
 	function submitToggleDeleteResourceExtra($rscid, $deleted=0) {
 		$data = $this->getData(array('rscid' => $rscid));
 		deleteSecretKeys($data[$rscid]['secretid']);
+
+		# clear user resource cache for this type
+		$key = getKey(array(array($this->restype . "Admin"), array("manageGroup"), 0, 1, 0, 0));
+		unset($_SESSION['userresources'][$key]);
+		$key = getKey(array(array($this->restype . "Admin"), array("manageGroup"), 0, 0, 0, 0));
+		unset($_SESSION['userresources'][$key]);
 	}
 
 	/////////////////////////////////////////////////////////////////////////////
