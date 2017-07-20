@@ -536,34 +536,20 @@ sub reserve {
 		return 0;
 	}
 	
-	my $request_forimaging   = $self->data->get_request_forimaging();
 	my $reservation_password = $self->data->get_reservation_password();
 	my $username             = $self->data->get_user_login_id();
 	my $computer_node_name   = $self->data->get_computer_node_name();
 	
 	notify($ERRORS{'OK'}, 0, "beginning OSX RESERVE() on $computer_node_name");
 	
-	# if imaging, reset 'administrator' password to reservation password
-	if ($request_forimaging) {
-		# Imaging request, don't create account, set the Administrator password
-		if ($self->set_password('administrator', $reservation_password)) {
-			notify($ERRORS{'OK'}, 0, "Successfully set administrator password on $computer_node_name");
-		}
-		else {
-			notify($ERRORS{'CRITICAL'}, 0, "Failed to set administrator password on $computer_node_name");
-			return 0;
-		}
+	# Add the users to the computer
+	# The add_users() subroutine will add the reservation user
+	if ($self->add_user()) {
+		notify($ERRORS{'OK'}, 0, "Successfully added useracct: $username on $computer_node_name");
 	}
 	else {
-		# Add the users to the computer
-		# The add_users() subroutine will add the reservation user
-		if ($self->add_user()) {
-			notify($ERRORS{'OK'}, 0, "Successfully added useracct: $username on $computer_node_name");
-		}
-		else {
-			notify($ERRORS{'CRITICAL'}, 0, "Failed to add useracct: $username on $computer_node_name");
-			return 0;
-		}
+		notify($ERRORS{'CRITICAL'}, 0, "Failed to add useracct: $username on $computer_node_name");
+		return 0;
 	}
 
 	notify($ERRORS{'OK'}, 0, "returning 1");
