@@ -1026,43 +1026,6 @@ sub post_load {
 
 #//////////////////////////////////////////////////////////////////////////////
 
-=head2 reserve
-
- Parameters  : none
- Returns     : boolean
- Description : Performs the steps necessary to reserve a computer for a user.
-
-=cut
-
-sub reserve {
-	my $self = shift;
-	if (ref($self) !~ /windows/i) {
-		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
-		return;
-	}
-	
-	# Call OS.pm's reserve subroutine
-	$self->SUPER::reserve() || return;
-	
-	notify($ERRORS{'OK'}, 0, "beginning Windows reserve tasks");
-	
-	# Check if this is an imaging request or not
-	if ($self->data->get_request_forimaging()) {
-		my $reservation_password = $self->data->get_reservation_password();
-		
-		# Imaging request, set the Administrator password
-		if (!$self->set_password('Administrator', $reservation_password)) {
-			notify($ERRORS{'WARNING'}, 0, "unable to set password for Administrator account");
-			return;
-		}
-	}
-	
-	notify($ERRORS{'OK'}, 0, "Windows reserve tasks complete");
-	return 1;
-} ## end sub reserve
-
-#//////////////////////////////////////////////////////////////////////////////
-
 =head2 post_reserve
 
  Parameters  : none
@@ -1214,7 +1177,6 @@ sub grant_access {
 
 	my $computer_node_name   = $self->data->get_computer_node_name();
 	my $system32_path        = $self->get_system32_path();
-	my $request_forimaging   = $self->data->get_request_forimaging();
 	
 	if ($self->process_connect_methods("", 1)) {
 		notify($ERRORS{'OK'}, 0, "processed connection methods on $computer_node_name");
@@ -1222,18 +1184,6 @@ sub grant_access {
 	else {
 		notify($ERRORS{'WARNING'}, 0, "failed to process connection methods on $computer_node_name");
 		return;
-	}
-
-	# If this is an imaging request, make sure the Administrator account is enabled
-	if ($request_forimaging) {
-		notify($ERRORS{'DEBUG'}, 0, "imaging request, making sure Administrator account is enabled");
-		if ($self->enable_user('Administrator')) {
-			notify($ERRORS{'OK'}, 0, "Administrator account is enabled for imaging request");
-		}
-		else {
-			notify($ERRORS{'WARNING'}, 0, "failed to enable Administrator account for imaging request");
-			return 0;
-		}
 	}
 
 	notify($ERRORS{'OK'}, 0, "access has been granted for reservation on $computer_node_name");
@@ -1980,7 +1930,7 @@ sub create_user {
 				notify($ERRORS{'OK'}, 0, "created user on $computer_node_name: $username, password: $password");
 			}
 			else {
-				notify($ERRORS{'WARNING'}, 0, "failed to create user on $computer_node_name: $username, exit status: $add_user_exit_status, output:\n" . join("\n", @$add_user_output));
+				notify($ERRORS{'WARNING'}, 0, "failed to create user on $computer_node_name: $username, exit status: $add_user_exit_status, command: '$add_user_command', output:\n" . join("\n", @$add_user_output));
 				return 0;
 			}
 		}
@@ -9243,17 +9193,7 @@ sub user_logged_in {
 	
 	# Attempt to get the username from the arguments
 	# If no argument was supplied, use the user specified in the DataStructure
-	my $username = shift;
-	
-	# Check if username argument was passed
-	if (!$username) {
-		if ($self->data->get_request_forimaging()) {
-			$username = 'Administrator';
-		}
-		else {
-			$username = $self->data->get_user_login_id();
-		}
-	}
+	my $username = shift || $self->data->get_user_login_id();
 	
 	my @logged_in_users = $self->get_logged_in_users();
 	if (grep { $username eq $_ } @logged_in_users) {
@@ -12305,15 +12245,8 @@ sub notify_user_console {
 		notify($ERRORS{'WARNING'}, 0, "message argument was not supplied");
 		return;
 	}
-
-	my $username = shift;
-	if (!$username) {
-		$username = $self->data->get_user_login_id();
-	}
-	my $request_forimaging = $self->data->get_request_forimaging();
-	if ($request_forimaging) {
-		$username = "Administrator";
-	}
+	
+	my $username = shift || $self->data->get_user_login_id();
 
 	my $computer_node_name = $self->data->get_computer_node_name();
 	my $system32_path        = $self->get_system32_path();
