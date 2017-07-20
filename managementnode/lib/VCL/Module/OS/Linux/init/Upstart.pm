@@ -185,6 +185,11 @@ sub _get_service_info {
 		notify($ERRORS{'WARNING'}, 0, "failed to execute command to list Upstart services on $computer_node_name");
 		return;
 	}
+	elsif (grep(/Connection refused/i, @$initctl_output)) {
+		# Ubuntu 16 and later display the following:
+		#    initctl: Unable to connect to Upstart: Failed to connect to socket /com/ubuntu/upstart: Connection refused
+		notify($ERRORS{'DEBUG'}, 0, "initctl command cannot be used to retrieve list of all services on $computer_node_name, command: '$initctl_command', output:\n" . join("\n", @$initctl_output));
+	}
 	elsif ($initctl_exit_status ne '0') {
 		notify($ERRORS{'WARNING'}, 0, "failed to retrieve list of all services on $computer_node_name using the initctl command, exit status: $initctl_exit_status, command:\n$initctl_command\noutput:\n" . join("\n", @$initctl_output));
 		return;
