@@ -4328,9 +4328,7 @@ function AJconnectRequest() {
 				$first = 0;
 			else
 				$h .= "<hr>\n";
-			if($requestData['forimaging'] && $res['OStype'] == 'windows')
-				$conuser = 'Administrator';
-			elseif(preg_match('/(.*)@(.*)/', $user['unityid'], $matches))
+			if(preg_match('/(.*)@(.*)/', $user['unityid'], $matches))
 				$conuser = $matches[1];
 			else
 				$conuser = $user['unityid'];

@@ -833,13 +833,10 @@ function XMLRPCgetRequestConnectData($requestid, $remoteIP) {
 		$connectMethods = getImageConnectMethodTexts(
 		                     $requestData["reservations"][0]["imageid"],
 		                     $requestData["reservations"][0]["imagerevisionid"]);
-		if($requestData["forimaging"] && $requestData['reservations'][0]['OStype'] == 'windows')
-			$thisuser = 'Administrator';
+		if(preg_match('/(.*)@(.*)/', $user['unityid'], $matches))
+			$thisuser = $matches[1];
 		else
-			if(preg_match('/(.*)@(.*)/', $user['unityid'], $matches))
-				$thisuser = $matches[1];
-			else
-				$thisuser = $user['unityid'];
+			$thisuser = $user['unityid'];
 		$natports = getNATports($requestData['reservations'][0]['reservationid']);
 		$portdata = array();
 		foreach($connectMethods as $key => $cm) {

@@ -10549,17 +10549,13 @@ function sendRDPfile() {
 	print "redirectsmartcards:i:1\r\n";
 	print "displayconnectionbar:i:1\r\n";
 	print "autoreconnection enabled:i:1\r\n";
-	if($request["forimaging"] && $res['OStype'] == 'windows')
-		print "username:s:Administrator\r\n";
-	else {
-		if(preg_match('/(.*)@(.*)/', $user['unityid'], $matches))
-			$userid =  $matches[1];
-		else
-			$userid = $user["unityid"];
-		if($request['reservations'][0]['domainDNSName'] != '' && ! strlen($passwd))
-			$userid .= "@" . $request['reservations'][0]['domainDNSName'];
-		print "username:s:$userid\r\n";
-	}
+	if(preg_match('/(.*)@(.*)/', $user['unityid'], $matches))
+		$userid =  $matches[1];
+	else
+		$userid = $user["unityid"];
+	if($request['reservations'][0]['domainDNSName'] != '' && ! strlen($passwd))
+		$userid .= "@" . $request['reservations'][0]['domainDNSName'];
+	print "username:s:$userid\r\n";
 	print "clear password:s:$passwd\r\n";
 	print "domain:s:\r\n";
 	print "alternate shell:s:\r\n";
