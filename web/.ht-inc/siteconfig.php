@@ -1139,8 +1139,8 @@ class AffilTextVariable {
 			$id = "{$this->domidbase}_$affilid";
 			$newval = processInputVar($id, ARG_STRING);
 			if($newval !== NULL ||
-	   		! $this->allowempty ||
-				($affilid == $this->globalid && ! $this->allowglobalempty)) {
+			   ! $this->allowempty ||
+			   ($affilid == $this->globalid && ! $this->allowglobalempty)) {
 				if(! $this->validateValue($newval)) {
 					$affil = getAffiliationName($affilid);
 					$arr = array('status' => 'failed',
