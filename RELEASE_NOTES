@@ -25,19 +25,23 @@ The following are some notable changes from previous releases.
 
 Added:
 
-* Windows 10 and Server 2016 images
+* Support for Windows 10 and Windows Server 2016 images
 * Responsive theme (dropdownmenus) to web site
-* Support for joining Windows image to an Active Directory domain
+* Support for automatically joining Windows images to an Active Directory domain
 * Basic automatic mounting of NFS shares for all users
-* Customization of email messages
-* Support for ufw and firewalld firewalls
-* Hook script support for various stages of deploy on management nodes
-* Display reservation times in user's own timezone
+* Customization of email messages sent to users on a per-affiliation basis
+* Support for the automatic configuration of ufw and firewalld-based firewalls
+  within Linux images
+* Support for NAT hosts which use ufw os firewalld-based firewalls including
+  Ubuntu and RedHat/CentOS 7 and later
+* Support for the execution of custom scripts on a management node at various
+  stages of the reservation
+* Display of reservation times in the user's own timezone
 
 Removed:
 
 * Server Profiles
-* Use of Administrator account for imaging reservations
+* Use of the Windows Administrator user account for imaging reservations
 
 =================================
 
