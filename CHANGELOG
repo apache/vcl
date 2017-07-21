@@ -11,21 +11,6 @@ VCL Management Node:
 Added required Perl modules:
 * Crypt::CBC
 * Crypt::Rijndael
-* Exception::Class::Base
-* HTTP::Headers
-* LWP::UserAgent
-* RPC::XML::Client
-
-Removed required Perl modules:
-* CPAN
-* LWP::Protocol::https
-* Mo:builder
-* RPC::XML
-* Scalar::Util
-* Time::HiRes
-* URI
-* perl-Archive-Tar
-* perl-DBD-MySQL
 
 Release Notes - VCL - Version 2.5
 
