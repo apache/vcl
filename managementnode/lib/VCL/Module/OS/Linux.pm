@@ -1085,7 +1085,7 @@ sub restart_network_interface {
 		return;
 	}
 	else {
-		notify($ERRORS{'DEBUG'}, 0, "restarted $interface_name interface on $computer_name");
+		notify($ERRORS{'DEBUG'}, 0, "restarted $interface_name interface on $computer_name, output:\n" . join("\n", @$output));
 	}
 	
 	return 1;
@@ -1156,7 +1156,7 @@ sub set_static_default_gateway {
 	}
 	
 	my $current_default_gateway = $self->get_public_default_gateway();
-	if ($current_default_gateway eq $default_gateway) {
+	if ($current_default_gateway && $current_default_gateway eq $default_gateway) {
 		notify($ERRORS{'OK'}, 0, "default gateway on $computer_name is already set to $current_default_gateway");
 		return 1;
 	}
