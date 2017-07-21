@@ -3226,7 +3226,7 @@ sub _parse_vim_cmd_output {
 		
 		# Remove class names at beginning of a line surrounded by parenthesis
 		# '(vim.vm.device.VirtualPointingDevice) {' --> 'vim.vm.device.VirtualPointingDevice => {'
-		$line =~ s/^\(([^\)]+)\)\s*{/'$1' => {/gx;
+		$line =~ s/^\(([^\)]+)\)\s*{/$1 => {/gx;
 		
 		# Remove class names 
 		# '(vim.vm.ConfigOptionDescriptor) ['
@@ -3244,9 +3244,13 @@ sub _parse_vim_cmd_output {
 		# 'value = xxx' --> 'value = xxx,'
 		$line =~ s/(=\s+[^,]+[\w>])$/$1,/g;
 		
-		# Surround values after equals sign in quotes
-		# 'value = xxx,' --> 'value = "xxx",'
-		$line =~ s/(=\s+)([^"].+),/$1"$2",/g;
+		# Surround values after equals sign in single quotes
+		# value = xxx,   --> value = 'xxx',
+		# value = "xxx", --> value = 'xxx',
+		$line =~ s/(=\s+)["']?([^"']+)["']?,/$1'$2',/g;
+		
+		# Surround values before equals sign in single quotes
+		$line =~ s/^(\s*)["']?([^\s"']+)["']?(\s*=)/$1'$2'$3/g;
 		
 		# Change 'null' to undef and add =>
 		# 'busSlotOption null,' --> 'busSlotOption => undef,'
@@ -3260,7 +3264,9 @@ sub _parse_vim_cmd_output {
 		$line =~ s/(\w\s+)([\[{])/$1=>$2/g;
 		
 		$statement .= "$line\n";
-		$numbered_statement .= "$line_number: '$original_line' --> '$line'\n";
+		$numbered_statement .= "$line_number:\n";
+		$numbered_statement .= "$original_line\n";
+		$numbered_statement .= "$line\n";
 	}
 
 	# Enclose the entire statement in curly brackets
