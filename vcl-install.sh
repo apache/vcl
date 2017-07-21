@@ -586,7 +586,7 @@ fi
 if [[ $DOWEB -eq 1 ]]; then
 	print_break
 	echo "Installing httpd and php components..."
-	yum -q -y install httpd php mod_ssl php php-gd php-mysql php-xml php-xmlrpc php-ldap sendmail php-mbstring
+	yum -q -y install httpd php mod_ssl php php-gettext php-mysql php-xml php-xmlrpc php-ldap sendmail php-mbstring
 	if [ $? -ne 0 ]; then generic_error "Failed to install httpd"; exit 1; fi;
 	echo "setting httpd to start on boot"
 	/sbin/chkconfig httpd on

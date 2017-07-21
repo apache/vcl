@@ -362,9 +362,9 @@ if($createcryptkey) {
 # required extentions
 title("Testing for required php extensions");
 if(version_compare(phpversion(), "5.2", "<"))
-	$requiredexts = array('mysql', 'openssl', 'xml', 'xmlrpc', 'session', 'pcre', 'sockets', 'ldap');
+	$requiredexts = array('mysql', 'openssl', 'xml', 'xmlrpc', 'session', 'pcre', 'sockets', 'ldap', 'gettext');
 else
-	$requiredexts = array('mysql', 'openssl', 'xml', 'xmlrpc', 'session', 'pcre', 'sockets', 'ldap', 'json');
+	$requiredexts = array('mysql', 'openssl', 'xml', 'xmlrpc', 'session', 'pcre', 'sockets', 'ldap', 'json', 'gettext');
 $exts = get_loaded_extensions();
 $diff = array_diff($requiredexts, $exts);
 print "<ul>\n";

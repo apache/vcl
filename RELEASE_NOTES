@@ -23,26 +23,22 @@ II. Notable Changes
 
 The following are some notable changes from previous releases.
 
->>>>>> need to update Added/Removed for 2.5 <<<<<<<<<<
-=================================
-
->>>>>> below are the Added/Removed points for 2.4.2 <<<<<<<<<
-
 Added:
 
-* Scripted installation and upgrade
-* Ability to run multiple web servers
-* NAT support for connecting to reservations
-* Provisioning to OpenStack
-* Provisioning to OpenNebula
-* Provisioning to ESXi 5.5
-* Windows 8.x and Server 2012 images
-* Use of 64 bit cygwin
-* Improved interface for resource management
+* Windows 10 and Server 2016 images
+* Responsive theme (dropdownmenus) to web site
+* Support for joining Windows image to an Active Directory domain
+* Basic automatic mounting of NFS shares for all users
+* Customization of email messages
+* Support for ufw and firewalld firewalls
+* Hook script support for various stages of deploy on management nodes
+* Display reservation times in user's own timezone
 
-Removed: 
+Removed:
 
-* xCAT 1.x no longer supported
+* Server Profiles
+* Use of Administrator account for imaging reservations
+
 =================================
 
 III. Getting Involved in the ASF VCL Community
