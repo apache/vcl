@@ -98,7 +98,7 @@ licenses:
 
 Some of the required Perl modules are included in your Perl distribution.
 Modules not included in your Perl distribution are available from CPAN
-(www.cpan.org).See the "Install the Required Linux Packages & Perl Modules"
+(www.cpan.org). See the "Install the Required Linux Packages & Perl Modules"
 section of the online installation guide for how to use the provided script to
 install the required Linux packages and Perl modules. 
 
@@ -161,14 +161,21 @@ License Exception ENC Technology Software Unrestricted (TSU) exception (see the
 BIS Export Administration Regulations, Section 740.13) for both object code and
 source code.
 
-The following provides more details on the included cryptographic software:
+The following provides additional details on the cryptographic functionality
+utilized within the Apache VCL software:
 
-The web and backend portions of the code utilize php and perl functions to
-encrypt password information stored in the database. The web code utilizes php
-functions to encrypt cookie information passed to and stored in users' browsers.
-The backend code uses openssh to connect to and control deployed nodes. openssh
-heavily uses encryption.
+The frontend website portion of the code utilizes cryptographic functions
+included in PHP 5.3.0 and later as well as functions provided by third-party PHP
+libraries to encrypt and decrypt password information stored in the database and
+to encrypt cookie information passed to and stored in users' browsers.
 
-Addionally, the web portion of the code includes portions of the phpseclib
-library. This library is only used for PHP versions not supporting the function
-"openssl_encrypt" (supported since PHP 5.3.0).
+Portions of the third-party phpseclib library are included in the frontend
+website portion of the code. This library is only used for PHP versions prior to
+5.3.0 which do not support PHP's "openssl_encrypt" function.
+
+The backend management node portion of the code utilizes functions provided by
+third-party Perl modules to decrypt password information stored in the database.
+The backend management node code also uses the SSH protocol and public key
+authentication to connect to and control compute nodes provisioned by a VCL
+management node server as well as other hosts that comprise a VCL system such as
+hypervisors.
