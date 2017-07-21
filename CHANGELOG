@@ -29,7 +29,178 @@ Removed required Perl modules:
 
 Release Notes - VCL - Version 2.5
 
->>>>>>>>>>>>>>>>>>>>>>>> NEED TO FILL THIS IN <<<<<<<<<<<<<<<<<<<
+** New Feature
+    * [VCL-253] - Allow users to specify RDP port
+    * [VCL-277] - Add support for images to join Active Directory domains
+    * [VCL-867] - Active Directory Authentication for Windows VM's
+    * [VCL-889] - Add vcl_post_load script support for Windows images
+    * [VCL-893] - Add support for Windows 10 images
+    * [VCL-915] - Add ability to automatically mount NFS share when user logs in
+    * [VCL-919] - Allow customization of notification messages sent to users
+    * [VCL-971] - Add support for Ubuntu's ufw firewall
+    * [VCL-972] - Add support for firewalld
+    * [VCL-1000] - Run custom scripts at various stages on the management node
+    * [VCL-1010] - Support for Windows 10 and Windows Server 2016 images
+
+** Improvement
+    * [VCL-796] - Prohibit tomainteance reservations from being created at end of indefinite server reservations
+    * [VCL-807] - indicate timezone on schedules / reservations
+    * [VCL-808] - vcld allows user values that contain HTML which is not cleaned on web interface
+    * [VCL-833] - Improve consistency and grammar of website
+    * [VCL-843] - Remove "VM limit"
+    * [VCL-851] - Prevent warning in vcld.log if vSphere SDK is not installed
+    * [VCL-853] - Reservations fail if vSphere SDK is used, host contains a resource pool and resource path is not configured in VM profile
+    * [VCL-860] - Linux.pm's create_user silently fails if vcl group does not exist
+    * [VCL-862] - Tag loaded image when request is reserved, inuse, or modified in any way other than a normal reload
+    * [VCL-865] - Remove all calls to defined(@array)
+    * [VCL-879] - Add semaphore to iptables commands
+    * [VCL-882] - Add Portuguese translation to web UI
+    * [VCL-887] - Clean up backend code
+    * [VCL-890] - Add button to reload table contents on Edit Computer Profile page
+    * [VCL-894] - Add reservation history and current reservation information to Computer Profiles page
+    * [VCL-896] - Improve method to set Linux hostname
+    * [VCL-897] - Simplify arguments accepted by grant_root_access subroutines
+    * [VCL-899] - Add request ID and management node to reservation history on User Lookup page
+    * [VCL-905] - VMware code should ignore files under .snapshot directories
+    * [VCL-906] - VMware code fails to delete dedicated virtual disk directory for server reservations
+    * [VCL-907] - reload reservations page content soonish after Connect is clicked when reservation is in reserved state
+    * [VCL-910] - Improvements to vcld -setup's VMware datastore cleanup functions
+    * [VCL-911] - Ensure qcow2 images are saved in backwards compatible format
+    * [VCL-920] - Increase timeout in KVM.pm's copy_virtual_disk subroutine
+    * [VCL-923] - Rework monitor_vcld.pl script to allow it to work with newer init daemons
+    * [VCL-930] - Update phpmyadmin.sql to use double-underscores in pma__table_info table
+    * [VCL-934] - Warnings generated in vcld.log for server requests because frontend isn't inserting 'initialconnecttimeout' computerloadlog entry
+    * [VCL-935] - modify layout of edit image dialog to distinguish what items are immediately changed
+    * [VCL-937] - Increase max length of duration limited images from 45 days to 20 weeks
+    * [VCL-938] - Add a count of computers listed in the table on the Edit Computer Profiles page
+    * [VCL-946] - add image revision to manage computers page
+    * [VCL-947] - for block allocation accept/reject emails change sender address from ENVELOPESENDER to HELPEMAIL
+    * [VCL-948] - add admingroup and logingroup to reservation data displayed when looking up reservations on computers
+    * [VCL-949] - userlookup page - add vmhost to reservation history; add list of reservations user has access to but doesn't own
+    * [VCL-950] - use web notifications to alert when a reservation is ready
+    * [VCL-952] - API modifications to allow interaction via "VCL go" iOS app
+    * [VCL-956] - display reservation times in user's own timezone
+    * [VCL-957] - Update Linux pre-capture tasks
+    * [VCL-958] - Windows.pm sets currentimage.txt post_load status too early
+    * [VCL-961] - VCL may clobber custom network configurations on Linux images
+    * [VCL-963] - ManagementNode.pm::execute should be update to accept same hash reference argument as OS.pm::execute
+    * [VCL-964] - Allow default "from" email address to be set if affiliation.helpaddress is NULL
+    * [VCL-965] - util.pm::kill_child_processes is using outdated pgrep arguments
+    * [VCL-966] - Ubuntu not detecting SysV-controlled services if chkconfig is not installed
+    * [VCL-967] - Libvirt provisioning does not allow virtual network name to be specified in the VM host profile
+    * [VCL-969] - Disable firstboot service for Linux images
+    * [VCL-976] - user_password_length and user_password_spchar not in default schema
+    * [VCL-977] - VMware may fail to register VM if existing invalid VM is registered
+    * [VCL-979] - install script - prompt for timezine during installation
+    * [VCL-980] - add KMS server configuration to Site Configuration page
+    * [VCL-981] - Create a New Theme That Is More Responsive for Mobile Devices
+    * [VCL-987] - Extend xCAT.pm to attempt to locate a suitable alternate Kickstart image repository directory
+    * [VCL-999] - Rework UnixLab.pm
+    * [VCL-1005] - allow dashes in image names
+    * [VCL-1006] - Performance Improvements for 2.5
+    * [VCL-1008] - Extend libvirt/KVM modules to use device settings from captured VM
+    * [VCL-1009] - addition of es_CR translation
+    * [VCL-1013] - Modernize parts of Windows code
+    * [VCL-1021] - restrict deleting newimages and newvmimages computer groups
+    * [VCL-1025] - Update naming convention for VMware VMs
+    * [VCL-1026] - Improve VMware code's ability to select the proper guest OS
+    * [VCL-1027] - External SSH service under systemd fails to restart if several restarts are rapidly attempted
+    * [VCL-1029] - add a section for managing affiliations to Site Configuration
+    * [VCL-1030] - use sitewwwaddress from Global affiliation in user email messages if specific affiliation has a NULL value
+    * [VCL-1031] - Update iptables.pm to be used for all iptables configuration
+    * [VCL-1032] - VIM_SSH.pm::get_config_option_info very slow when using run_ssh_command
+    * [VCL-1033] - Add corrective attempts if Windows fails to respond or does not obtain a public IP address
+    * [VCL-1036] - Improve vcld.log output when transferring an image from another management node
+    * [VCL-1042] - add max reservation times to user lookup information
+    * [VCL-1045] - Method of encrypting sensitive database entries
+    * [VCL-1052] - Prevent captures from failing if VM disk mode is 'dedicated' and the repository is not configured
+    * [VCL-1056] - Add checks/workarounds in iptables.pm if command fails because another process holds an xtables lock
+    * [VCL-1060] - VMware.pm generates warnings and critical message when checking for multiextent support under ESXi 6.5
+    * [VCL-1061] - Unnecessary warnings in vcld.log for Ubuntu 16 images when checking services
+    * [VCL-1062] - stop using Administrator account for Windows imaging reservations
+
+** Task
+    * [VCL-968] - Localization updates for 2.5
+    * [VCL-1024] - comment out Server Profile code
+
+** Sub-task
+    * [VCL-898] - Update schema to allow NULL request.logid
+
+** Bug
+    * [VCL-809] - Information disclosure when accessing page you don't have access to
+    * [VCL-846] - Improve flow of handling nodes for deleted reservations assigned to new reservations
+    * [VCL-861] - Web timetable endless loop
+    * [VCL-864] - selecting the first image id from the user's set of images can give an error when the user has no access to images
+    * [VCL-866] - makeproduction state isn't handled correctly if inuse process is running
+    * [VCL-868] - OS.pm::wait_for_no_ping uses computer's hostname, change to use IP address
+    * [VCL-870] - Synchronize foreign keys and other items between vcl.sql and update-vcl.sql
+    * [VCL-871] - OS.pm::create_text_file fails if content is too long
+    * [VCL-872] - Computer notes not saved when changing state from vmhostinuse to maintenance
+    * [VCL-873] - Allow web UI "User Preferences" to handle multiple SSH identity keys
+    * [VCL-874] - change reloading state sooner in load process
+    * [VCL-875] - Management node loses SSH access if iptables multiport rule exists
+    * [VCL-877] - libvirt provisioning module fails to process checkpoint state correctly
+    * [VCL-878] - Delayed checkpoint attempts are not displayed on web UI Dashboard page
+    * [VCL-880] - Issues with clean_iptables in Linux.pm
+    * [VCL-881] - Schedules cannot be deleted from web UI
+    * [VCL-883] - KVM provisioning module fails to capture Windows 8.x images
+    * [VCL-884] - Windows.pm fails to set computer hostname
+    * [VCL-885] - Windows.pm::sanitize_files doesn't remove password if default changed since capture
+    * [VCL-886] - xCAT.pm generates "defined(@array) is deprecated" warnings
+    * [VCL-888] - Web UI fails to handle translations containing single quotes
+    * [VCL-892] - $authtype gets undefined when clearselection submitted to selectAuth
+    * [VCL-900] - Empty error box displayed on computer page with private DHCP and invalid server IP
+    * [VCL-901] - Cannot enter preferred name under user preferences if have reservation and custom RDP port set
+    * [VCL-908] - Image owner string is not validated when creating a new image
+    * [VCL-909] - get_random_mac_address in utils.pm may generate the same mac for VMs
+    * [VCL-913] - VCL KVM Libvirt provisioning module does not check length of the image's name when create an new image
+    * [VCL-914] - VCL web utils.pm may block NCCU access
+    * [VCL-916] - Linux.pm get_total_space and get_available_space may generate undefined array reference warnings
+    * [VCL-918] - Site Config page uses wrong variable key for nat port range
+    * [VCL-921] - changing owner of an image can cause a duplicate key error on resourcegroupmembers
+    * [VCL-922] - Windows.pm logoff_users may generate undefined array reference errors
+    * [VCL-924] - Commands may hang on management node if it has an unavailable NFS share
+    * [VCL-928] - Reference vmx file not saved during image capture if vmprofile.vmdisk = dedicated and repository is mounted on host
+    * [VCL-929] - VMware.pm does not parse hardware version from .vmdk file correctly
+    * [VCL-932] - delete reservation from View Time Table does not work
+    * [VCL-936] - cannot update management node sysadmin or shadow email addresses
+    * [VCL-939] - VMware VM may be unassigned from a host if it is still running
+    * [VCL-940] - timing issue getting public IP
+    * [VCL-941] - Reservation may fail and be reloaded if reboot fails
+    * [VCL-943] - Deep recursion on subroutine VCL::utils::get_vmhost_info
+    * [VCL-944] - typo in getUserResources prevents access to management nodes and groups
+    * [VCL-951] - suggested times not displayed for parent image of clusters when making imaging reservation
+    * [VCL-953] - Ubuntu.pm clobbers /etc/network/interfaces even if listed in vcl_exclude_list
+    * [VCL-962] - Scheduled task password fails to get set for Windows 10
+    * [VCL-970] - Linux images lose default gateway when rebooted if static public IP address is used
+    * [VCL-974] - VMware VMs may fail to power on if host does not support nested VMs
+    * [VCL-975] - End user notification intervals being ignored in inuse.pm
+    * [VCL-982] - VIM_SSH.pm:_get_vm_virtual_disk_file_layout fails to parse output
+    * [VCL-983] - Manage computers does not update "Computers in table" count after "Refresh Computer Data" is clicked
+    * [VCL-985] - login page and change locale form use continuations when user is logged out
+    * [VCL-988] - KVM libvirt provisioning module colon char in domain name Error starting domain: Invalid machine name
+    * [VCL-989] - Adding ext_sshd service fails Ubuntu 16 images
+    * [VCL-992] - ext_sshd service occasionally fails to restart under systemd
+    * [VCL-993] - web code should handle user.IMtypeid being NULL
+    * [VCL-995] - Unable to change server reservation name if schedule no longer available
+    * [VCL-996] - Linux firewall subroutines do not sort rule numbers correctly
+    * [VCL-1001] - changing a future reservation to a now reservation doesn't properly update the reserved computer
+    * [VCL-1004] - Illegal division by zero VMware.pm::copy_vmdk
+    * [VCL-1022] - API function XMLRPCgetRequestConnectData shows Administrator account for all imaging reservations
+    * [VCL-1023] - Cluster reservations may fail to copy an image if assigned to multiple VM hosts sharing a datastore
+    * [VCL-1034] - Lab.pm does not handle preload reservations correctly
+    * [VCL-1035] - selecting Manage Images->Create/Update an Image doesn't work
+    * [VCL-1038] - Wrong OS module used if NAT host image is noimage
+    * [VCL-1043] - utils.pm::kill_child_processes generates warnings if ps line begins with a space
+    * [VCL-1044] - getVariable returns wrong value if $incparams == 1 and variable has been set in $_SESSION['variables']
+    * [VCL-1048] - NAT rules not always deleted when a reservation ends
+    * [VCL-1050] - Adding a new user group doesn't include the affiliation of the default owner
+    * [VCL-1051] - Backend is not checking for 'checkpoint' state everywhere it checks for 'image state
+    * [VCL-1054] - Windows.pm user_exists may return true when user doesn't exist
+    * [VCL-1055] - 'Use of uninitialized value in lc' warning may be generated from a few subroutines
+    * [VCL-1057] - allManagementNodes is assigned available at the initial admin node
+    * [VCL-1058] - User accounts not deleted on computer when removed from a server request admin or access group
+    * [VCL-1059] - AllowUsers lines getting removed due to sequencing issue
 
 ================================================================================
 
