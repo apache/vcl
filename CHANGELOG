@@ -186,6 +186,7 @@ Release Notes - VCL - Version 2.5
     * [VCL-1057] - allManagementNodes is assigned available at the initial admin node
     * [VCL-1058] - User accounts not deleted on computer when removed from a server request admin or access group
     * [VCL-1059] - AllowUsers lines getting removed due to sequencing issue
+    * [VCL-1063] - editing a future reservation to have a start time that is in the past should not be allowed
 
 ================================================================================
 
