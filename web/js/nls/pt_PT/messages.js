@@ -23,6 +23,7 @@ nlsmessages = {
 'The end time must be at least 30 minutes in the future.':'O tempo de fim tem que ser pelo menos 30 minutos no futuro.',
 'The end time must be after the start time.':'O tempo de fim tem que ser a seguir o tempo de inicio.',
 'The end time is too close to the start time.':'O tempo de fim é muito próximo do tempo de inicio.',
+'The submitted start time is in the past.':'A data de arranque submetida é no passado.',
 'Times cannot be suggested for cluster reservations':'Os tempos não podem ser sugeridos pela reserva de cluster',
 'Cancel':'Cancelar',
 'Okay':'OK',

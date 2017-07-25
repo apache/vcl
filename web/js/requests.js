@@ -1558,6 +1558,11 @@ function submitEditReservation() {
 		                                      t.getMinutes());
 		var tmp = dijit.byId('day').value.match(/([0-9]{4})([0-9]{2})([0-9]{2})/);
 		var teststart = new Date(tmp[1], tmp[2] - 1, tmp[3], t.getHours(), t.getMinutes(), 0, 0);
+		var now = new Date();
+		if(teststart < now) {
+			dojo.byId('editResDlgErrMsg').innerHTML = _("The submitted start time is in the past.");
+			return;
+		}
 	}
 	if(dijit.byId('newnousercheck') && dijit.byId('newnousercheck').get('value') == 1)
 		data.newnousercheck = 1;

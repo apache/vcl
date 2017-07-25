@@ -3601,6 +3601,14 @@ function AJsubmitEditRequest() {
 		preg_match('/^([0-9]{4})([0-9]{2})([0-9]{2})$/', $day, $tmp);
 		$startdt = "{$tmp[1]}-{$tmp[2]}-{$tmp[3]} {$matches[1]}:{$matches[4]}:00";
 		$startts = datetimeToUnix($startdt) - ($_SESSION['persistdata']['tzoffset'] * 60);
+		if($startts < time()) {
+			$cdata = getContinuationVar();
+			$cont = addContinuationsEntry('AJsubmitEditRequest', $cdata, SECINDAY, 1, 0);
+			sendJSON(array('status' => 'error',
+			               'errmsg' => i('The submitted start time is in the past.'),
+			               'cont' => $cont));
+			return;
+		}
 	}
 	else {
 		$startdt = $request['start'];
