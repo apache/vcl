@@ -75,7 +75,10 @@ function inlineEditResourceCB(data, ioArgs) {
 		dijit.byId('connectmethodttd').set('href', data.items.data.connectmethodurl);
 		if(data.items.data.ostype == 'windows') {
 			dojo.removeClass('imageadauthbox', 'hidden');
-			var advalcnt = Object.keys(data.items.data.addomainvals).length;
+			if('addomainvals' in data.items.data)
+				var advalcnt = Object.keys(data.items.data.addomainvals).length;
+			else
+				var advalcnt = 0;
 			if(data.items.data.addomainid != null) {
 				dijit.byId('adauthenable').set('checked', true);
 				if('extraaddomainid' in data.items.data) {
