@@ -3318,6 +3318,14 @@ class Messages {
 			sendJSON($arr);
 			return;
 		}
+		if(preg_match('/^\s*$/', $body)) {
+			$arr = array('status' => 'failed',
+			             'msgid' => "messagesmsg",
+			             'btn' => "messagessavebtn",
+			             'errmsg' => _("Message cannot be empty"));
+			sendJSON($arr);
+			return;
+		}
 		$affil = $this->affils[$affilid];
 		$savekey = $key;
 		if($keyparts[0] == 'usermessage')
