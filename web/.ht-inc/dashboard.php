@@ -731,6 +731,7 @@ function getFailedImagingData() {
 	$affilid = getDashboardAffilID();
 	$query = "SELECT c.hostname AS computer, "
 	       .        "i.prettyname AS image, "
+	       .        "ir.comments AS revisioncomments, "
 	       .        "rq.id, "
 	       .        "rq.start, "
 	       .        "o.installtype, "
@@ -741,6 +742,7 @@ function getFailedImagingData() {
 	       . "LEFT JOIN reservation rs ON (rs.requestid = rq.id) "
 	       . "LEFT JOIN computer c ON (c.id = rs.computerid) "
 	       . "LEFT JOIN image i ON (i.id = rs.imageid) "
+	       . "LEFT JOIN imagerevision ir ON (ir.id = rs.imagerevisionid) "
 	       . "LEFT JOIN OS o ON (o.id = i.OSid) "
 	       . "LEFT JOIN managementnode m ON (m.id = rs.managementnodeid) "
 	       . "LEFT JOIN vmhost vh ON (c.vmhostid = vh.id) "
@@ -757,6 +759,8 @@ function getFailedImagingData() {
 	$qh = doQuery($query, 101);
 	$data = array();
 	while($row = mysql_fetch_assoc($qh)) {
+		if(is_null($row['revisioncomments']))
+			$row['revisioncomments'] = '(none)';
 		$tmp = explode('.', $row['computer']);
 		$row['computer'] = $tmp[0];
 		$tmp = explode('.', $row['vmhost']);

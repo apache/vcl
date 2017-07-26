@@ -247,6 +247,7 @@ function updateFailedImaging(data) {
 	    +  '<th>Image</th>'
 	    +  '<th>Owner</th>'
 	    +  '<th>Management Node</th>'
+	    +  '<th>Comments</th>'
 	    +  '</tr>';
 	for(var i = 0; i < data.length; i++) {
 		if(i % 2)
@@ -271,6 +272,8 @@ function updateFailedImaging(data) {
 		    + data[i].owner
 		    + '</td><td style=\"padding: 1px; border-right: 1px solid;\">'
 		    + data[i].managementnode
+		    + '</td><td style=\"padding: 1px; border-right: 1px solid;\">'
+		    + data[i].revisioncomments
 		    + '</td></tr>';
 	}
 	txt += '</table>';
