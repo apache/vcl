@@ -42,6 +42,12 @@ body {
 	text-decoration: none;
 }
 
+.rescapture {
+	border: 1px solid black;
+	background-color: #eee;
+	padding: 5px;
+}
+
 #expauthul li {
 	list-style-type: disc;
 }

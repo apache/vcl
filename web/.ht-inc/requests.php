@@ -124,9 +124,9 @@ function viewRequests() {
 		$nodes = getManagementNodes();
 	if($count = count($requests)) {
 		$now = time();
-		for($i = 0, $failed = 0, $timedout = 0, $text = '', $showcreateimage = 0, $cluster = 0;
+		for($i = 0, $noedit = 0, $text = '', $showcreateimage = 0, $cluster = 0, $col3 = 0;
 		   $i < $count;
-		   $i++, $failed = 0, $timedout = 0, $text = '', $cluster = 0) {
+		   $i++, $noedit = 0, $text = '', $cluster = 0, $col3 = 0) {
 			if($requests[$i]['forcheckout'] == 0 &&
 			   $requests[$i]['forimaging'] == 0)
 				continue;
@@ -167,24 +167,44 @@ function viewRequests() {
 				}
 				else
 					$text .= "    <TD></TD>\n";
+				$noedit = 1;
 				$failed = 1;
 			}
 			elseif(datetimeToUnix($requests[$i]["start"]) < $now) {
 				# other cases where the reservation start time has been reached
-				if(($requests[$i]["currstateid"] == 12 &&
-				   $requests[$i]['laststateid'] == 11) ||
-					$requests[$i]["currstateid"] == 11 ||
-					($requests[$i]["currstateid"] == 14 &&
-					$requests[$i]["laststateid"] == 11)) {
+				if(($requests[$i]["currstate"] == 'complete' &&
+				   $requests[$i]['laststate'] == 'timeout') ||
+					$requests[$i]["currstate"] == 'timeout' ||
+					($requests[$i]["currstate"] == 'pending' &&
+					$requests[$i]["laststate"] == 'timeout')) {
 					# request has timed out
 					$text .= getViewRequestHTMLitem('timeoutblock');
-					$timedout = 1;
+					$noedit = 1;
 					if($requests[$i]['serveradmin']) {
 						$cont = addContinuationsEntry('AJconfirmRemoveRequest', $cdata, SECINDAY);
 						$text .= getViewRequestHTMLitem('removebtn', $cont);
 					}
 					else
 						$text .= "    <TD></TD>\n";
+				}
+				elseif($requests[$i]['currstate'] == 'maintenance' ||
+				       ($requests[$i]['currstate'] == 'pending' &&
+						 $requests[$i]['laststate'] == 'maintenance')) {
+					# request is in maintenance
+					$text .= getViewRequestHTMLitem('maintenanceblock');
+					$noedit = 1;
+					$col3 = 1;
+				}
+				elseif($requests[$i]['currstate'] == 'image' ||
+				       $requests[$i]['currstate'] == 'checkpoint' ||
+				       ($requests[$i]['currstate'] == 'pending' &&
+						 ($requests[$i]['laststate'] == 'image' ||
+						 $requests[$i]['laststate'] == 'checkpoint'))) {
+					# request is in image
+					$text .= getViewRequestHTMLitem('imageblock');
+					$noedit = 1;
+					$col3 = 1;
+					$refresh = 1;
 				}
 				else {
 					# computer is loading, print Pending... and Delete button
@@ -248,7 +268,7 @@ function viewRequests() {
 				else
 					$text .= "    <TD></TD>\n";
 			}
-			if(! $failed && ! $timedout) {
+			if(! $noedit) {
 				# print edit button
 				$editcont = addContinuationsEntry('AJeditRequest', $cdata, SECINDAY);
 				$imgcont = addContinuationsEntry('AJstartImage', $cdata, SECINDAY);
@@ -308,7 +328,7 @@ function viewRequests() {
 					$text .= "</TD>\n";
 				}
 			}
-			else
+			elseif($col3 == 0)
 				$text .= "    <TD></TD>\n";
 
 			# print name of server request
@@ -1041,6 +1061,18 @@ function getViewRequestHTMLitem($item, $var1='', $data=array()) {
 	if($item == 'timeoutblock') {
 		$r .= "    <TD>\n";
 		$r .= "      <span class=compstatelink>" . i("Reservation has timed out") . "</span>\n";
+		$r .= "    </TD>\n";
+		return $r;
+	}
+	if($item == 'maintenanceblock') {
+		$r .= "    <TD colspan=\"3\">\n";
+		$r .= "      <span class=compstatelink>" . i("Reservation is in maintenance - Contact admin for help") . "</span>\n";
+		$r .= "    </TD>\n";
+		return $r;
+	}
+	if($item == 'imageblock') {
+		$r .= "    <TD colspan=\"3\">\n";
+		$r .= "      <span class=rescapture>" . i("Reservation is being captured") . "</span>\n";
 		$r .= "    </TD>\n";
 		return $r;
 	}

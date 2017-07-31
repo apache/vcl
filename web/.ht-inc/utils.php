@@ -794,7 +794,7 @@ function maintenanceCheck() {
 				if(! is_dir($item))
 					continue;
 				$tmp = explode('/', $item);
-				$item = $tmp[1];
+				$item = array_pop($tmp);
 				$allskins[$item] = 1;
 			}
 			if(! array_key_exists($skin, $allskins))
@@ -6716,7 +6716,9 @@ function updateExistingToState($compid, $start, $stateid) {
 /// \b end - end time of request\n
 /// \b daterequested - date request was made\n
 /// \b currstateid - current stateid of request\n
+/// \b currstate - current state of request\n
 /// \b laststateid - last stateid of request\n
+/// \b laststate - last state of request\n
 /// \b forimaging - 0 if an normal request, 1 if imaging request\n
 /// \b forcheckout - 1 if image is available for reservations, 0 if not\n
 /// \b test - test flag - 0 or 1\n
@@ -6785,7 +6787,9 @@ function getUserRequests($type, $id=0) {
 	       .        "o.type AS ostype, "
 	       .        "o.installtype AS OSinstalltype, "
 	       .        "rq.stateid AS currstateid, "
+	       .        "s.name AS currstate, "
 	       .        "rq.laststateid, "
+	       .        "ls.name AS laststate, "
 	       .        "rs.computerid, "
 	       .        "rs.id AS resid, "
 	       .        "c.currentimageid AS compimageid, "
@@ -6813,6 +6817,8 @@ function getUserRequests($type, $id=0) {
 	       . "FROM image i, "
 	       .      "OS o, "
 	       .      "computer c, "
+	       .      "state s, "
+	       .      "state ls, "
 	       .      "request rq "
 	       . "LEFT JOIN serverrequest sp ON (sp.requestid = rq.id) "
 	       . "LEFT JOIN usergroup uga ON (uga.id = sp.admingroupid) "
@@ -6826,8 +6832,12 @@ function getUserRequests($type, $id=0) {
 	       .       "rq.end > NOW() AND "
 	       .       "i.OSid = o.id AND "
 	       .       "c.id = rs.computerid AND "
-	       .       "rq.stateid NOT IN (1, 10, 16, 17) AND "      # deleted, maintenance, complete, image, makeproduction
-	       .       "rq.laststateid NOT IN (1, 10, 16, 17) ";  # deleted, maintenance, complete, image, makeproduction
+	       #.       "rq.stateid NOT IN (1, 10, 16, 17) AND "      # deleted, maintenance, complete, image, makeproduction
+	       #.       "rq.laststateid NOT IN (1, 10, 16, 17) ";  # deleted, maintenance, complete, image, makeproduction
+	       .       "rq.stateid = s.id AND "
+	       .       "s.name NOT IN ('deleted', 'makeproduction') AND "
+	       .       "rq.laststateid = ls.id AND "
+	       .       "ls.name NOT IN ('deleted', 'makeproduction') ";
 	if($type == "normal")
 		$query .=   "AND rq.forimaging = 0 "
 		       .    "AND i.forcheckout = 1 "
