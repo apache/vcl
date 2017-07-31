@@ -103,6 +103,7 @@ Release Notes - VCL - Version 2.5
     * [VCL-1060] - VMware.pm generates warnings and critical message when checking for multiextent support under ESXi 6.5
     * [VCL-1061] - Unnecessary warnings in vcld.log for Ubuntu 16 images when checking services
     * [VCL-1062] - stop using Administrator account for Windows imaging reservations
+    * [VCL-1064] - Show reservations being captured or in maintenance on Reservations page
 
 ** Task
     * [VCL-968] - Localization updates for 2.5
