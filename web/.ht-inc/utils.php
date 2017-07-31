@@ -5680,6 +5680,10 @@ function checkOverlap($start, $end, $max, $requestid=0) {
 		   $requests[$id]["currstateid"] == 14) &&
 		   $requests[$id]["laststateid"] == 11) &&
 		   $requests[$id]["currstateid"] != 5 &&
+		   $requests[$id]["currstateid"] != 10 &&
+		   $requests[$id]["currstateid"] != 16 &&
+		   ! ($requests[$id]["currstateid"] == 14 &&
+		   $requests[$id]["laststateid"] == 16) &&
 		   $requests[$id]["id"] != $requestid &&
 		   ($start < datetimeToUnix($requests[$id]["end"]) &&
 		   $end > datetimeToUnix($requests[$id]["start"])) &&
@@ -6832,8 +6836,6 @@ function getUserRequests($type, $id=0) {
 	       .       "rq.end > NOW() AND "
 	       .       "i.OSid = o.id AND "
 	       .       "c.id = rs.computerid AND "
-	       #.       "rq.stateid NOT IN (1, 10, 16, 17) AND "      # deleted, maintenance, complete, image, makeproduction
-	       #.       "rq.laststateid NOT IN (1, 10, 16, 17) ";  # deleted, maintenance, complete, image, makeproduction
 	       .       "rq.stateid = s.id AND "
 	       .       "s.name NOT IN ('deleted', 'makeproduction') AND "
 	       .       "rq.laststateid = ls.id AND "
@@ -13245,6 +13247,12 @@ function printHTMLHeader() {
 				   ($requests[$i]["currstateid"] == 13 ||
 				   ($requests[$i]["currstateid"] == 14 &&
 				   $requests[$i]["laststateid"] == 13) ||
+				   $requests[$i]["currstateid"] == 16 ||
+				   ($requests[$i]["currstateid"] == 14 &&
+				   $requests[$i]["laststateid"] == 16) ||
+				   $requests[$i]["currstateid"] == 24 ||
+				   ($requests[$i]["currstateid"] == 14 &&
+				   $requests[$i]["laststateid"] == 24) ||
 				   $requests[$i]["currstateid"] == 3 ||
 				   ($requests[$i]["currstateid"] == 8 &&
 				   ! $requests[$i]["useraccountready"]))) {

@@ -646,9 +646,9 @@ function processUserPrefsInput($checks=1) {
 		$requests = getUserRequests('all');
 		$nochange = 0;
 		foreach($requests as $req) {
-			if(preg_match('/^(3|8|24|25|26|27|28|29)$/', $req['currstateid']) ||
+			if(preg_match('/^(3|8|10|24|25|26|27|28|29)$/', $req['currstateid']) ||
 			   ($req['currstateid'] == 14 &&
-				preg_match('/^(3|8|24|25|26|27|28|29)$/', $req['laststateid']))) {
+				preg_match('/^(3|8|10|24|25|26|27|28|29)$/', $req['laststateid']))) {
 				$nochange = 1;
 				break;
 			}

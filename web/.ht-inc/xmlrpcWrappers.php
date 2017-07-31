@@ -730,6 +730,16 @@ function XMLRPCgetRequestStatus($requestid) {
 	# request failed
 	elseif($request["currstateid"] == 5)
 		return array('status' => 'failed');
+	# request maintenance
+	elseif($request["currstateid"] == 10)
+		return array('status' => 'maintenance');
+	# request image
+	elseif($request["currstateid"] == 16 ||
+	       $request["currstateid"] == 24 ||
+	       ($request["currstateid"] == 14 &&
+	       ($request["laststateid"] == 16 ||
+	       $request["laststateid"] == 24)))
+		return array('status' => 'image');
 	# other cases where the reservation start time has been reached
 	elseif(datetimeToUnix($request["start"]) < $now) {
 		# request has timed out
@@ -933,6 +943,26 @@ function XMLRPCextendRequest($requestid, $extendtime) {
 	if($newendts % (15 * 60))
 		$newendts= unixFloor15($newendts) + (15 * 60);
 
+	// check for maintenance state
+	if($request['stateid'] == 10 ||
+	   ($request['stateid'] == 14 &&
+	   $request['laststateid'] == 10)) {
+		return array('status' => 'error',
+		             'errorcode' => 103,
+		             'errormsg' => 'reservation in maintenance state');
+	}
+
+	// check for image state
+	if($request['stateid'] == 16 ||
+	   $request['stateid'] == 24 ||
+	   ($request['stateid'] == 14 &&
+	   ($request['laststateid'] == 16 ||
+	   $request['laststateid'] == 24))) {
+		return array('status' => 'error',
+		             'errorcode' => 104,
+		             'errormsg' => 'reservation being captured');
+	}
+
 	// check that reservation has started
 	if($startts > time()) {
 		return array('status' => 'error',
@@ -1107,6 +1137,26 @@ function XMLRPCsetRequestEnding($requestid, $end) {
 		return array('status' => 'error',
 		             'errorcode' => 36,
 		             'errormsg' => "received invalid input for end");
+	}
+
+	// check for maintenance state
+	if($request['stateid'] == 10 ||
+	   ($request['stateid'] == 14 &&
+	   $request['laststateid'] == 10)) {
+		return array('status' => 'error',
+		             'errorcode' => 103,
+		             'errormsg' => 'reservation in maintenance state');
+	}
+
+	// check for image state
+	if($request['stateid'] == 16 ||
+	   $request['stateid'] == 24 ||
+	   ($request['stateid'] == 14 &&
+	   ($request['laststateid'] == 16 ||
+	   $request['laststateid'] == 24))) {
+		return array('status' => 'error',
+		             'errorcode' => 104,
+		             'errormsg' => 'reservation being captured');
 	}
 
 	$startts = datetimeToUnix($request['start']);
