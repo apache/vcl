@@ -1012,6 +1012,15 @@ sub post_load {
 
 =item *
 
+ Delete the VCL Post Load' scheduled task if it exists
+
+=cut
+
+	# Make sure the 'VCL Post Load' task is removed up if it exists to avoid conflicts
+	$self->delete_scheduled_task('VCL Post Load');
+
+=item *
+
  Call OS.pm::post_load
 
 =cut
@@ -3599,7 +3608,7 @@ sub create_startup_scheduled_task {
 	# Run schtasks.exe to add the task
 	# Occasionally see this error even though it schtasks.exe returns exit status 0:
 	# WARNING: The Scheduled task "System Startup Script" has been created, but may not run because the account information could not be set.
-	my $command = "$system32_path/schtasks.exe /Create /RU \"$task_user\" /RP \"$task_password\" /SC ONSTART /TN \"$task_name\" /TR \"$task_command\"";
+	my $command = "$system32_path/schtasks.exe /Create /RU \"$task_user\" /RP \"$task_password\" /RL HIGHEST /SC ONSTART /TN \"$task_name\" /TR \"$task_command\"";
 	my ($exit_status, $output) = $self->execute($command);
 	if (!defined($output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to execute ssh command created scheduled task '$task_name' on $computer_node_name");
@@ -3640,6 +3649,7 @@ sub create_update_cygwin_startup_scheduled_task {
 	}
 	
 	my $request_state = $self->data->get_request_state_name();
+	my $node_configuration_directory = $self->get_node_configuration_directory();
 	
 	my $root_password;
 	if ($request_state =~ /(image|checkpoint)/) {
@@ -3660,8 +3670,13 @@ sub create_update_cygwin_startup_scheduled_task {
 		return;
 	}
 	
+	# Make sure the 'VCL Post Load' task doesn't exist or they will conflict
+	$self->delete_scheduled_task('VCL Post Load');
+	
+	# Copy the current version of update_cygwin.cmd to the computer
+	$self->copy_file_to("$SOURCE_CONFIGURATION_DIRECTORY/Scripts/update_cygwin.cmd", "$node_configuration_directory/Scripts/update_cygwin.cmd");
+
 	# Create a scheduled task to run post_load.cmd when the image boots
-	my $node_configuration_directory = $self->get_node_configuration_directory();
 	my $task_command = "$node_configuration_directory/Scripts/update_cygwin.cmd >> $node_configuration_directory/Logs/update_cygwin.log";
 	if ($self->create_startup_scheduled_task('VCL Update Cygwin', $task_command, 'root', $root_password)) {
 		$self->{created_update_cygwin_startup_scheduled_task} = 1;

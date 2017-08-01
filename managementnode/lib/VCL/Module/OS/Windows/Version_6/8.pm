@@ -121,13 +121,15 @@ sub pre_capture {
 		return;
 	}
 	
+	# Make sure the 'VCL Update Cygwin' task doesn't exist or they will conflict
+	$self->delete_scheduled_task('VCL Update Cygwin');
+	
 	# Create a scheduled task to run post_load.cmd when the image boots
-	my $task_name     = 'VCL Post Load';
 	my $task_command  = "$node_configuration_directory/Scripts/post_load.cmd > $node_configuration_directory/Logs/post_load.log";
 	my $task_user     = 'root';
 	my $task_password = $WINDOWS_ROOT_PASSWORD;
-	if (!$self->create_startup_scheduled_task($task_name, $task_command, $task_user, $task_password)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to create '$task_name' scheduled task");
+	if (!$self->create_startup_scheduled_task('VCL Post Load', $task_command, $task_user, $task_password)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to create 'VCL Post Load' scheduled task");
 		return;
 	}
 	

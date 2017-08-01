@@ -64,16 +64,23 @@ echo ERRORLEVEL: %ERRORLEVEL%
 echo.
 
 echo %TIME%: Creating new "group" file...
-C:\Cygwin\bin\mkgroup.exe -l localhost || C:\Cygwin\bin\mkgroup.exe -l > C:\Cygwin\etc\group
+C:\Cygwin\bin\mkgroup.exe -l > C:\Cygwin\etc\group
 echo ERRORLEVEL: %ERRORLEVEL%
 set /A STATUS+=%ERRORLEVEL%
 echo.
 
-echo %TIME%: Creating new "passwd" file and changing root's primary group from 'None' to 'None'
-C:\Cygwin\bin\mkpasswd.exe -l localhost || C:\Cygwin\bin\mkpasswd.exe -l | C:\Cygwin\bin\sed.exe -e 's/\(^root.*:\)513\(:.*\)/\1544\2/' > C:\Cygwin\etc\passwd
+echo %TIME%: Creating new "passwd" file
+C:\Cygwin\bin\mkpasswd.exe -l > C:\Cygwin\etc\passwd
 echo ERRORLEVEL: %ERRORLEVEL%
 set /A STATUS+=%ERRORLEVEL%
 echo.
+
+rem Remove leading computer name: VCLV98-249+root: --> root:
+C:\Cygwin\bin\sed.exe -i -e "s/^[^:]\++//" /etc/group
+C:\Cygwin\bin\sed.exe -i -e "s/^[^:]\++//" /etc/passwd
+
+rem Change root's primary group from 'None' to 'Administrators'
+C:\Cygwin\bin\sed.exe -i -e "s/\(^root:.*:\)\(513\|197121\)\(:.*\)/\1544\3/" /etc/passwd
 
 echo ----------------------------------------------------------------------
 
@@ -115,7 +122,7 @@ echo ERRORLEVEL: %ERRORLEVEL%
 echo.
 
 echo %TIME%: Regenerating /etc/ssh_host_key...
-C:\Cygwin\bin\bash.exe -c 'C:/Cygwin/bin/ssh-keygen.exe -t rsa1 -f /etc/ssh_host_key -N ""' 2>&1
+C:\Cygwin\bin\bash.exe -c 'C:/Cygwin/bin/ssh-keygen.exe -f /etc/ssh_host_key -N ""' 2>&1
 echo ERRORLEVEL: %ERRORLEVEL%
 set /A STATUS+=%ERRORLEVEL%
 echo.
@@ -134,6 +141,29 @@ echo.
 
 echo ----------------------------------------------------------------------
 
+echo %TIME%: Killing any cyg* processes...
+"%SystemRoot%\System32\taskkill.exe" /F /FI "IMAGENAME eq cyg*" 2>NUL
+echo ERRORLEVEL: %ERRORLEVEL%
+echo.
+
+echo %TIME%: Killing any ssh* processes...
+"%SystemRoot%\System32\taskkill.exe" /F /FI "IMAGENAME eq ssh*" 2>NUL
+echo ERRORLEVEL: %ERRORLEVEL%
+echo.
+
+echo %TIME%: Killing any bash* processes...
+"%SystemRoot%\System32\taskkill.exe" /F /FI "IMAGENAME eq bash*" 2>NUL
+echo ERRORLEVEL: %ERRORLEVEL%
+echo.
+
+echo %TIME%: Killing any ash* processes...
+"%SystemRoot%\System32\taskkill.exe" /F /FI "IMAGENAME eq ash*" 2>NUL
+echo ERRORLEVEL: %ERRORLEVEL%
+echo.
+
+echo %TIME%: Tasks running before attempting to executing rebaseall:
+"%SystemRoot%\System32\tasklist.exe" /V
+
 echo %TIME%: Running /usr/bin/rebaseall in the ash.exe shell
 C:\cygwin\bin\ash.exe -c '/usr/bin/rebaseall' 2>&1
 echo ERRORLEVEL: %ERRORLEVEL%
@@ -150,6 +180,14 @@ echo.
 
 echo %TIME%: Starting the sshd service...
 "%SystemRoot%\System32\net.exe" start sshd 2>&1
+echo ERRORLEVEL: %ERRORLEVEL%
+set /A STATUS+=%ERRORLEVEL%
+echo.
+
+echo ----------------------------------------------------------------------
+
+echo %TIME%: Deleting 'VCL Update Cygwin' scheduled task...
+"%SystemRoot%\system32\schtasks.exe" /Delete /F /TN "VCL Update Cygwin"
 echo ERRORLEVEL: %ERRORLEVEL%
 set /A STATUS+=%ERRORLEVEL%
 echo.
