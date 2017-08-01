@@ -22,7 +22,7 @@ Description=VCL management node daemon
 After=network-online.target
 
 [Service]
-Type=simple
+Type=forking
 EnvironmentFile=/etc/sysconfig/vcld
 PIDFile=/var/run/vcld.pid
 ExecStart=/usr/local/vcl/bin/vcld $OPTIONS
@@ -30,6 +30,7 @@ ExecStop=/bin/kill ${MAINPID}
 KillMode=process
 Restart=always
 RestartSec=10s
+StartLimitInterval=0
 
 [Install]
 WantedBy=multi-user.target

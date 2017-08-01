@@ -782,8 +782,8 @@ sub REAPER {
 
 =head2 daemonize
 
- Parameters  : 
- Returns     : 
+ Parameters  : none
+ Returns     : true or exits
  Description :
 
 =cut
@@ -793,35 +793,56 @@ sub daemonize {
 	my $subsys_lock = "/var/lock/subsys/$PROCESSNAME";
 	sysopen(LOCKFILE, $subsys_lock, O_RDONLY | O_CREAT ) or die "unable to open lock file: $PIDFILE \n";   
 	unless(flock(LOCKFILE, LOCK_EX|LOCK_NB)) {
-		notify($ERRORS{'WARNING'}, $LOGFILE, " An process instance of $PROCESSNAME is already running ");
-		print STDOUT "\nFailed to start.\n\nAn instance of $PROCESSNAME is already running\n\n";
-		print STDERR "\nFailed to start.\n\nAn instance of $PROCESSNAME is already running\n\n";
+		notify($ERRORS{'WARNING'}, $LOGFILE, " an process instance of $PROCESSNAME is already running, failed to lock file: $subsys_lock");
+		print STDOUT "\nFailed to start. An instance of $PROCESSNAME is already running\n\n";
+		print STDERR "\nFailed to start. An instance of $PROCESSNAME is already running\n\n";
 		exit(1); 
 	}
-
-
-	chdir '/' or die "Can't chdir to /: $!";
-	defined(my $pid = fork) or die "Can't fork $!";
-	exit if $pid;
-
-
-	umask 0;
-	setsid or die "Can't start a new session: $!";
-
-	# write pid to pidfile
-	open(PIDFILE, ">" . $PIDFILE) or notify($ERRORS{'WARNING'}, $LOGFILE, "unable to open PID file: $PIDFILE, $!");   
-	print PIDFILE $$ ;
-	close(PIDFILE);
 	
-	preplogfile();
 	
-	#Redirect STDIN,STDOUT,STDERR 
-	open STDIN,  '/dev/null'  or die "Can't read /dev/null $!";
-	open STDOUT, ">>$LOGFILE" or die "Can't write $LOGFILE $!";
-	open STDERR, ">>$LOGFILE" or die "Can't write $LOGFILE $!";
-
-	print "Created VCL daemon process: $$\n";
-	
+	my $child_pid = fork();
+	if (!defined($child_pid)) {
+		die "Can't fork $!";
+	}
+	elsif ($child_pid) {
+		# If here, this is the process that called fork()
+		# This service starting process is only used to start the actual forked vcld daemon process, it must exit
+		
+		# Before exiting, the parent must create the pidfile
+		# This must be done before this parent exits can cannot be done by the forked child
+		# Otherwise, timing issues will occur with systemd
+		# As soon as this parent exits, systemd expects the pidfile to exist and checks it
+		# If the pidfile is missing or incorrect, systemd will try over and over again to start vcld
+		notify($ERRORS{'DEBUG'}, 0, "this is parent service startup process: $PID, forked child process which will be the main vcld daemon process: $child_pid, writing child PID to file: $PIDFILE");
+		open(PIDFILE, ">" . $PIDFILE) or notify($ERRORS{'WARNING'}, $LOGFILE, "unable to open PID file: $PIDFILE, $!");
+		print PIDFILE $child_pid ;
+		close(PIDFILE);
+		notify($ERRORS{'DEBUG'}, 0, "parent service startup process exiting: $PID");
+		exit;
+	}
+	else {
+		# If here, this is the child process created by the fork and will be the main vcld process
+		
+		# Detatch from controlling terminal
+		setsid;
+		
+		# Process umask is inherited to child from fork
+		umask 0;
+		
+		# Current working directory is inherited to child from fork
+		# The daemon will run from that directory and may prevent modification 
+		chdir '/';
+		
+		preplogfile();
+		
+		# Redirect STDIN,STDOUT,STDERR 
+		open STDIN,  '/dev/null'  or die "Can't read /dev/null $!";
+		open STDOUT, ">>$LOGFILE" or die "Can't write $LOGFILE $!";
+		open STDERR, ">>$LOGFILE" or die "Can't write $LOGFILE $!";
+		
+		print "Created VCL daemon process: $$\n";
+		return 1;
+	}
 } ## end sub daemonize
 
 #/////////////////////////////////////////////////////////////////////////////
