@@ -945,7 +945,8 @@ sub state_exit {
 		
 		if ($request_state_name_new) {
 			# Never set request state to failed if previous state is image
-			if ($request_state_name_old =~ /(image|checkpoint)/ && $request_state_name_new !~ /(complete|maintenance)/) {
+			# Allow pending/checkpoint --> reserved/checkpoint
+			if ($request_state_name_old =~ /(image|checkpoint)/ && $request_state_name_new !~ /(reserved|complete|maintenance)/) {
 				notify($ERRORS{'CRITICAL'}, 0, "previous request state is $request_state_name_old, not setting request state to $request_state_name_new, setting request and computer state to maintenance");
 				$request_state_name_new = 'maintenance';
 				$computer_state_name_new = 'maintenance';
