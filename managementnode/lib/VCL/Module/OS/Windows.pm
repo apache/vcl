@@ -2250,6 +2250,16 @@ sub set_password {
 		return;
 	}
 	
+	# IMPORTANT: be sure to test passwords containing the following:
+	# $!
+	# \ (single backslash)
+	# '
+	# "
+	# ~
+	# `
+	# Special bash/Linux variables: = $0, $1, $#, $*, $@, $-, $!, $_, $?, $$
+	# my $test_password = '$0, $1 $# $* $@ $- $! $_ $? $$\ !@#$%^&*()_+-={}[]":;<>?/.,`~' . "'";
+	
 	my $computer_node_name   = $self->data->get_computer_node_name();
 	my $system32_path        = $self->get_system32_path() || return;
 	
@@ -2273,20 +2283,21 @@ sub set_password {
 	}
 
 	# Attempt to set the password
-	notify($ERRORS{'DEBUG'}, 0, "setting password of $username to $password on $computer_node_name");
-	my ($set_password_exit_status, $set_password_output) = $self->execute("$system32_path/net.exe user $username '$password'");
+	my $password_escaped = _escape_password($password);
+	my $set_password_command = "$system32_path/net.exe user $username \"$password_escaped\"";
+	notify($ERRORS{'DEBUG'}, 0, "setting password of $username to '$password' on $computer_node_name, command:\n$set_password_command");
+	my ($set_password_exit_status, $set_password_output) = $self->execute($set_password_command);
 	if ($set_password_exit_status == 0) {
-		notify($ERRORS{'OK'}, 0, "password changed to '$password' for user '$username' on $computer_node_name");
+		notify($ERRORS{'OK'}, 0, "password changed to '$password' for user '$username' on $computer_node_name, command: '$set_password_command', output:\n" . join("\n", @$set_password_output));
 	}
 	elsif (defined $set_password_exit_status) {
-		notify($ERRORS{'WARNING'}, 0, "failed to change password to '$password' for user '$username' on $computer_node_name, exit status: $set_password_exit_status, output:\n" . join("\n", @$set_password_output));
+		notify($ERRORS{'WARNING'}, 0, "failed to change password to '$password' (escaped: '$password_escaped') for user '$username' on $computer_node_name, exit status: $set_password_exit_status, command: '$set_password_command', output:\n" . join("\n", @$set_password_output));
 		return 0;
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to change password to '$password' for user '$username' on $computer_node_name");
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to change password to '$password' for user '$username' on $computer_node_name");
 		return 0;
 	}
-	
 	return 1 if $user_password_only;
 	
 	# Get the list of services
@@ -3480,10 +3491,11 @@ sub set_scheduled_task_credentials {
 	
 	my $system32_path = $self->get_system32_path() || return;
 	
-	my $command = "$system32_path/schtasks.exe /Change /RU \"$username\" /RP \"$password\" /TN \"$task_name\"";
+	my $password_escaped = _escape_password($password);
+	my $command = "$system32_path/schtasks.exe /Change /RU \"$username\" /RP \"$password_escaped\" /TN \"$task_name\"";
 	my ($exit_status, $output) = $self->execute($command);
 	if (!defined($output)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to change password for scheduled task: $task_name");
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to change password for scheduled task: $task_name");
 		return;
 	}
 	elsif (grep (/^SUCCESS:/, @$output)) {
@@ -3608,11 +3620,23 @@ sub create_startup_scheduled_task {
 	# Run schtasks.exe to add the task
 	# Occasionally see this error even though it schtasks.exe returns exit status 0:
 	# WARNING: The Scheduled task "System Startup Script" has been created, but may not run because the account information could not be set.
-	my $command = "$system32_path/schtasks.exe /Create /RU \"$task_user\" /RP \"$task_password\" /RL HIGHEST /SC ONSTART /TN \"$task_name\" /TR \"$task_command\"";
+	my $password_escaped = _escape_password($task_password);
+	my $command = "$system32_path/schtasks.exe /Create /RU \"$task_user\" /RP \"$password_escaped\" /RL HIGHEST /SC ONSTART /TN \"$task_name\" /TR \"$task_command\"";
 	my ($exit_status, $output) = $self->execute($command);
 	if (!defined($output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to execute ssh command created scheduled task '$task_name' on $computer_node_name");
 		return;
+	}
+	elsif (grep(/password is incorrect/, @$output)) {
+		# ERROR: The user name or password is incorrect.
+		notify($ERRORS{'WARNING'}, 0, "failed to create scheduled task '$task_name' on $computer_node_name\n" .
+			"username         : '$task_user'\n" .
+			"password         : '$task_password'\n" .
+			"escaped password : '$password_escaped'\n" .
+			"command:\n$command\n" .
+			"output:\n" . join("\n", @$output)
+		);
+		return 0;
 	}
 	elsif ($exit_status != 0) {
 		notify($ERRORS{'WARNING'}, 0, "failed to create scheduled task '$task_name' on $computer_node_name, exit status: $exit_status, command: '$command', output:\n@$output");
@@ -4265,7 +4289,8 @@ sub set_service_credentials {
 	}
 
 	# Attempt to set the service logon user name and password
-	my $service_logon_command = $system32_path . '/sc.exe config ' . $service_name . ' obj= ".\\' . $username . '" password= "' . $password . '"';
+	my $password_escaped = _escape_password($password);
+	my $service_logon_command = "$system32_path/sc.exe config $service_name obj= \".\\$username\" password= \"$password_escaped\"";
 	my ($service_logon_exit_status, $service_logon_output) = $self->execute($service_logon_command);
 	if (defined($service_logon_exit_status) && $service_logon_exit_status == 0) {
 		notify($ERRORS{'OK'}, 0, "changed logon credentials for '$service_name' service to $username ($password) on $computer_node_name");
@@ -4278,7 +4303,7 @@ sub set_service_credentials {
 		notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to change $service_name service logon credentials to $username ($password) on $computer_node_name");
 		return;
 	}
-
+	
 	return 1;
 } ## end sub set_service_credentials
 
@@ -14752,6 +14777,33 @@ sub revoke_administrative_access {
 	}
 	
 	return $self->remove_user_from_group($username, 'Administrators');
+}
+
+#//////////////////////////////////////////////////////////////////////////////
+
+=head2 _escape_password
+
+ Parameters  : $password
+ Returns     : string
+ Description : Adds a backslash before all of the following characters in a
+               password:
+                  * " (double quote)
+                  * $ (dollar sign)
+                  * \ (backslash)
+                  * ` (backtick)
+
+=cut
+
+sub _escape_password {
+	my $password_argument = shift;
+	my $password_escaped = $password_argument;
+	$password_escaped =~ s/(["\$\\`])/\\$1/gx;
+	
+	#notify($ERRORS{'DEBUG'}, 0, "escaped password:\n" .
+	#	"original : '$password_argument'\n" .
+	#	"escaped  : '$password_escaped'"
+	#);
+	return $password_escaped;
 }
 
 #//////////////////////////////////////////////////////////////////////////////
