@@ -79,6 +79,7 @@ Release Notes - VCL - Version 2.5
     * [VCL-979] - install script - prompt for timezine during installation
     * [VCL-980] - add KMS server configuration to Site Configuration page
     * [VCL-981] - Create a New Theme That Is More Responsive for Mobile Devices
+    * [VCL-984] - Add support for vcld daemon controlled by systemd
     * [VCL-987] - Extend xCAT.pm to attempt to locate a suitable alternate Kickstart image repository directory
     * [VCL-999] - Rework UnixLab.pm
     * [VCL-1005] - allow dashes in image names
@@ -111,6 +112,7 @@ Release Notes - VCL - Version 2.5
 
 ** Sub-task
     * [VCL-898] - Update schema to allow NULL request.logid
+    * [VCL-1065] - update_cygwin.cmd script does not work correctly if computer is joined to Active Directory
 
 ** Bug
     * [VCL-809] - Information disclosure when accessing page you don't have access to
@@ -188,6 +190,7 @@ Release Notes - VCL - Version 2.5
     * [VCL-1058] - User accounts not deleted on computer when removed from a server request admin or access group
     * [VCL-1059] - AllowUsers lines getting removed due to sequencing issue
     * [VCL-1063] - editing a future reservation to have a start time that is in the past should not be allowed
+    * [VCL-1066] - Checkpoint image capture fails to set request state back to reserved
 
 ================================================================================
 
