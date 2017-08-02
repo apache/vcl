@@ -255,6 +255,10 @@ sub activate {
 		return 1;
 	}
 	else {
+		# Display the computer's current time in vcld.log to help diagnose the problem
+		# Activation fails if the client's time is incorrect
+		$self->get_current_computer_time();
+		
 		notify($ERRORS{'CRITICAL'}, 0, "failed to activate Windows using MAK or KMS methods");
 		return;
 	}

@@ -3061,7 +3061,7 @@ sub reg_add {
 		return;
 	}
 	elsif ($add_registry_exit_status == 0) {
-		notify($ERRORS{'DEBUG'}, 0, "added registry key: $registry_key, output:\n" . join("\n", @$add_registry_output));
+		notify($ERRORS{'DEBUG'}, 0, "added registry key, command: $add_registry_command, output:\n" . join("\n", @$add_registry_output));
 		return 1;
 	}
 	else {
@@ -8833,8 +8833,7 @@ sub get_volume_list {
 =head2 configure_time_synchronization
 
  Parameters  : None
- Returns     : If successful: true
-               If failed: false
+ Returns     : boolean
  Description : Configures the Windows Time service and synchronizes the time.
 
 =cut
@@ -8846,64 +8845,109 @@ sub configure_time_synchronization {
 		return;
 	}
 	
-	my $system32_path = $self->get_system32_path() || return;
+	my $start_time = time;
 	
-	my $time_source;
+	my $system32_path = $self->get_system32_path() || return;
+	my $computer_name = $self->data->get_computer_node_name();
+	
+	my $time_source_variable;
 	my $variable_name = "timesource|" . $self->data->get_management_node_hostname();
 	my $variable_name_global = "timesource|global";
 	if (is_variable_set($variable_name)) {
-		$time_source = get_variable($variable_name);
-		notify($ERRORS{'DEBUG'}, 0, "time_source is $time_source  set for $variable_name");
+		$time_source_variable = get_variable($variable_name);
 	}
 	elsif (is_variable_set($variable_name_global)) {
-		$time_source = get_variable($variable_name_global);
-		notify($ERRORS{'DEBUG'}, 0, "time_source is $time_source  set for $variable_name");
+		$time_source_variable = get_variable($variable_name_global);
 	}
 	else {
-		$time_source = "time.nist.gov time-a.nist.gov time-b.nist.gov time.windows.com";
-		notify($ERRORS{'DEBUG'}, 0, "time_source is not set for $variable_name using hardcoded values of $time_source");
+		$time_source_variable = 'pool.ntp.org';
 	}
 	
-	# Replace commas with single whitespace 
-	$time_source =~ s/,/ /g;
-	my @time_array = split(/ /, $time_source);
+	$self->get_current_computer_time();
+	
+	my $key = 'HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\DateTime\Servers';
+	
+	# Delete existing key
+	$self->reg_delete($key);
 	
 	# Update the registry
-	my $key = 'HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\DateTime\Servers';
-	for my $i (0 .. $#time_array) {
-		my $value = $i+1;
-		$self->reg_add($key,$value, "REG_SZ", $time_array[$i]);
+	my $index = 1;
+	my @time_sources = split(/[,;\s]/, $time_source_variable);
+	my $manual_peer_list;
+	for my $time_source (@time_sources) {
+		# Remove leading and trailing spaces
+		$time_source =~ s/(^\s+|\s+$)//g;
+		
+		# Make sure it isn't blank
+		next unless $time_source =~ /\S/;
+		
+		$self->reg_add($key, $index, "REG_SZ", $time_source);
+		$index++;
+		
+		$manual_peer_list .= ' ' if $manual_peer_list;
+		$manual_peer_list .= $time_source;
 	}
 	
-	# Assemble the time command
-	my $time_command;
+	#my $debug_command = "$system32_path/w32tm.exe /debug /enable /file:C:/w32tm.log /size:1024000000 /entries:0-300";
+	#my ($debug_exit_status, $debug_output) = $self->execute({command => $debug_command, timeout_seconds => 20, max_attempts => 1, display_output => 0});
+	#if (!defined($debug_output)) {
+	#	notify($ERRORS{'WARNING'}, 0, "failed to execute command to enable W32Time debugging on $computer_name: $debug_command");
+	#	return;
+	#}
+	#elsif ($debug_exit_status ne '0') {
+	#	notify($ERRORS{'WARNING'}, 0, "failed to enable W32Time debugging on $computer_name, exit status: $debug_exit_status, command:\n$debug_command\noutput:\n" . join("\n", @$debug_output));
+	#}
+	#else {
+	#	notify($ERRORS{'OK'}, 0, "enabled W32Time debugging on $computer_name, output:\n" . join("\n", @$debug_output));
+	#}
 	
-	# Kill d4.exe if it's running, this will prevent Windows built-in time synchronization from working
-	$time_command .= "$system32_path/taskkill.exe /IM d4.exe /F 2>/dev/null ; ";
-	
-	# Register the w32time service
-	$time_command .= "$system32_path/w32tm.exe /register ; ";
-	
-	# Start the service and configure it
-	$time_command .= "$system32_path/net.exe start w32time 2>/dev/null ; ";
-	$time_command .= "$system32_path/w32tm.exe /config /manualpeerlist:\"$time_source\" /syncfromflags:manual /update ; ";
-	$time_command .= "$system32_path/net.exe stop w32time && $system32_path/net.exe start w32time ; ";
-	
-	# Synchronize the time
-	$time_command .= "$system32_path/w32tm.exe /resync /nowait";
-	
-	# Run the assembled command
-	my ($time_exit_status, $time_output) = $self->execute($time_command);
-	if (defined($time_output)  && @$time_output[-1] =~ /The command completed successfully/i) {
-		notify($ERRORS{'DEBUG'}, 0, "configured and synchronized Windows time");
-	}
-	elsif (defined($time_exit_status)) {
-		notify($ERRORS{'WARNING'}, 0, "failed to configure configure and synchronize Windows time, exit status: $time_exit_status, output:\n@{$time_output}");
+	my $register_command = "$system32_path/w32tm.exe /register";
+	my ($register_exit_status, $register_output) = $self->execute({command => $register_command, timeout_seconds => 20, max_attempts => 1, display_output => 0});
+	if (!defined($register_output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to register W32Time on $computer_name: $register_command");
 		return;
+	}
+	elsif ($register_exit_status ne '0') {
+		notify($ERRORS{'WARNING'}, 0, "failed to register W32Time on $computer_name, exit status: $register_exit_status, command:\n$register_command\noutput:\n" . join("\n", @$register_output));
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to run ssh command to configure and synchronize Windows time");
+		notify($ERRORS{'OK'}, 0, "registered W32Time on $computer_name");
+	}
+	
+	# By default, Windows time service will only allow the time to be changes by 15 hours (54,000 seconds) or less
+	# Set the following keys to allow any time adjustment
+	# This must be done after w32tm.exe /register because that command will reset the values to the defaults
+	$self->reg_add('HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\W32Time\Config', 'MaxPosPhaseCorrection', 'REG_DWORD', '0xFFFFFFFF');
+	$self->reg_add('HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\W32Time\Config', 'MaxNegPhaseCorrection', 'REG_DWORD', '0xFFFFFFFF');
+	
+	$self->start_service('w32time') || return;
+	
+	my $config_command = "$system32_path/w32tm.exe /config /manualpeerlist:\"$manual_peer_list\" /syncfromflags:manual /update";
+	my ($config_exit_status, $config_output) = $self->execute({command => $config_command, timeout_seconds => 20, max_attempts => 1, display_output => 0});
+	if (!defined($config_output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to configure W32Time on $computer_name: $config_command");
 		return;
+	}
+	elsif ($config_exit_status ne '0') {
+		notify($ERRORS{'WARNING'}, 0, "failed to configure W32Time on $computer_name to use time source(s): $manual_peer_list, exit status: $config_exit_status, command:\n$config_command\noutput:\n" . join("\n", @$config_output));
+	}
+	else {
+		notify($ERRORS{'OK'}, 0, "configured W32Time on $computer_name to use time source(s): $manual_peer_list");
+	}
+	
+	#$self->restart_service('w32time') || return;
+	
+	my $resync_command = "$system32_path/w32tm.exe /resync /nowait";
+	my ($resync_exit_status, $resync_output) = $self->execute({command => $resync_command, timeout_seconds => 20, max_attempts => 1, display_output => 0});
+	if (!defined($resync_output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to resync W32Time on $computer_name: $resync_command");
+		return;
+	}
+	elsif ($resync_exit_status ne '0') {
+		notify($ERRORS{'WARNING'}, 0, "failed to resync W32Time on $computer_name, exit status: $resync_exit_status, command:\n$resync_command\noutput:\n" . join("\n", @$resync_output));
+	}
+	else {
+		notify($ERRORS{'OK'}, 0, "resync'd W32Time on $computer_name, output:\n" . join("\n", @$resync_output));
 	}
 	
 	# Set the w32time service startup mode to auto
@@ -8915,7 +8959,60 @@ sub configure_time_synchronization {
 		return;
 	}
 	
+	# Set the maximum time change parameters back to the defaults for security
+	$self->reg_add('HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\W32Time\Config', 'MaxPosPhaseCorrection', 'REG_DWORD', 50000000);
+	$self->reg_add('HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\W32Time\Config', 'MaxNegPhaseCorrection', 'REG_DWORD', 50000000);
+	
+	$self->get_current_computer_time();
+	
+	my $duration = (time - $start_time);
+	notify($ERRORS{'DEBUG'}, 0, "configure time synchronization duration: $duration seconds");
 	return 1;
+}
+
+#//////////////////////////////////////////////////////////////////////////////
+
+=head2 get_current_computer_time
+
+ Parameters  : none
+ Returns     : string
+ Description : Used for debugging and troubleshooting purposes. Simply displays
+               the current date, time, and timezone offset according to the
+               computer. Example:
+               2017-08-02 11:35:32 PDT -07:00
+
+=cut
+
+sub get_current_computer_time {
+	my $self = shift;
+	unless (ref($self) && $self->isa('VCL::Module')) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine can only be called as a VCL::Module module object method");
+		return;
+	}
+	
+	my $computer_name = $self->data->get_computer_node_name();
+	
+	#my $command = 'cmd.exe /c "echo %date% %time%"';
+	my $command = 'date +"%Y-%m-%d %H:%M:%S %Z %:z"';
+	my ($exit_status, $output) = $self->execute({command => $command, max_attempts => 1, display_output => 0});
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to retrieve current time on $computer_name: $command");
+		return;
+	}
+	elsif ($exit_status ne '0') {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve current time on $computer_name, exit status: $exit_status, command:\n$command\noutput:\n" . join("\n", @$output));
+		return 0;
+	}
+	
+	my ($current_time) = grep(/\d:/, @$output);
+	if ($current_time) {
+		notify($ERRORS{'OK'}, 0, "retrieved current time on $computer_name: $current_time");
+		return $current_time;
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to parse output in order to retrieve current time on $computer_name, exit status: $exit_status, command:\n$command\noutput:\n" . join("\n", @$output));
+		return;
+	}
 }
 
 #//////////////////////////////////////////////////////////////////////////////
