@@ -8960,9 +8960,9 @@ sub configure_time_synchronization {
 		notify($ERRORS{'OK'}, 0, "configured W32Time on $computer_name to use time source(s): $manual_peer_list");
 	}
 	
-	#$self->restart_service('w32time') || return;
+	$self->restart_service('w32time') || return;
 	
-	my $resync_command = "$system32_path/w32tm.exe /resync /nowait";
+	my $resync_command = "$system32_path/w32tm.exe /resync";
 	my ($resync_exit_status, $resync_output) = $self->execute({command => $resync_command, timeout_seconds => 20, max_attempts => 1, display_output => 0});
 	if (!defined($resync_output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to execute command to resync W32Time on $computer_name: $resync_command");
@@ -8985,8 +8985,8 @@ sub configure_time_synchronization {
 	}
 	
 	# Set the maximum time change parameters back to the defaults for security
-	$self->reg_add('HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\W32Time\Config', 'MaxPosPhaseCorrection', 'REG_DWORD', 50000000);
-	$self->reg_add('HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\W32Time\Config', 'MaxNegPhaseCorrection', 'REG_DWORD', 50000000);
+	#$self->reg_add('HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\W32Time\Config', 'MaxPosPhaseCorrection', 'REG_DWORD', 50000000);
+	#$self->reg_add('HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\W32Time\Config', 'MaxNegPhaseCorrection', 'REG_DWORD', 50000000);
 	
 	$self->get_current_computer_time();
 	
