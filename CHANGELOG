@@ -105,6 +105,7 @@ Release Notes - VCL - Version 2.5
     * [VCL-1061] - Unnecessary warnings in vcld.log for Ubuntu 16 images when checking services
     * [VCL-1062] - stop using Administrator account for Windows imaging reservations
     * [VCL-1064] - Show reservations being captured or in maintenance on Reservations page
+    * [VCL-1069] - Allow Windows to update time regardless of skew
 
 ** Task
     * [VCL-968] - Localization updates for 2.5
@@ -191,6 +192,7 @@ Release Notes - VCL - Version 2.5
     * [VCL-1059] - AllowUsers lines getting removed due to sequencing issue
     * [VCL-1063] - editing a future reservation to have a start time that is in the past should not be allowed
     * [VCL-1066] - Checkpoint image capture fails to set request state back to reserved
+    * [VCL-1068] - Windows fails to update scheduled task password if password contains some special characters
 
 ================================================================================
 
