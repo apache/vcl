@@ -8870,7 +8870,7 @@ sub configure_time_synchronization {
 		return;
 	}
 	
-	my $start_time = time;
+	my $time_string_before = $self->get_current_computer_time('before configure_time_synchronization');
 	
 	my $system32_path = $self->get_system32_path() || return;
 	my $computer_name = $self->data->get_computer_node_name();
@@ -8888,13 +8888,11 @@ sub configure_time_synchronization {
 		$time_source_variable = 'pool.ntp.org';
 	}
 	
-	$self->get_current_computer_time();
-	
 	my $key = 'HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\DateTime\Servers';
 	
 	# Delete existing key
 	$self->reg_delete($key);
-	
+
 	# Update the registry
 	my $index = 1;
 	my @time_sources = split(/[,;\s]/, $time_source_variable);
@@ -8913,19 +8911,29 @@ sub configure_time_synchronization {
 		$manual_peer_list .= $time_source;
 	}
 	
-	#my $debug_command = "$system32_path/w32tm.exe /debug /enable /file:C:/w32tm.log /size:1024000000 /entries:0-300";
-	#my ($debug_exit_status, $debug_output) = $self->execute({command => $debug_command, timeout_seconds => 20, max_attempts => 1, display_output => 0});
-	#if (!defined($debug_output)) {
-	#	notify($ERRORS{'WARNING'}, 0, "failed to execute command to enable W32Time debugging on $computer_name: $debug_command");
-	#	return;
-	#}
-	#elsif ($debug_exit_status ne '0') {
-	#	notify($ERRORS{'WARNING'}, 0, "failed to enable W32Time debugging on $computer_name, exit status: $debug_exit_status, command:\n$debug_command\noutput:\n" . join("\n", @$debug_output));
-	#}
-	#else {
-	#	notify($ERRORS{'OK'}, 0, "enabled W32Time debugging on $computer_name, output:\n" . join("\n", @$debug_output));
-	#}
+	# Make sure the service is stopped before calling /unregister or it will fail
+	$self->stop_service('w32time');
+
+	# Call /unregister the time service first - calling only /register doesn't seem to reset everything
+	# Unexpected results may occur if this isn't done
+	$self->get_current_computer_time('before unregister');
+	my $unregister_command = "$system32_path/w32tm.exe /unregister";
+	my ($unregister_exit_status, $unregister_output) = $self->execute({command => $unregister_command, timeout_seconds => 20, max_attempts => 1, display_output => 0});
+	if (!defined($unregister_output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command to unregister W32Time on $computer_name: $unregister_command");
+		return;
+	}
+	elsif ($unregister_exit_status ne '0') {
+		notify($ERRORS{'WARNING'}, 0, "failed to unregister W32Time on $computer_name, exit status: $unregister_exit_status, command:\n$unregister_command\noutput:\n" . join("\n", @$unregister_output));
+	}
+	else {
+		notify($ERRORS{'OK'}, 0, "unregistered W32Time on $computer_name");
+	}
 	
+	# Make sure no remnants are leftover
+	$self->reg_delete('HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\W32Time');
+	
+	# Call /register - registers w32time service and sets default configuration to the registry
 	my $register_command = "$system32_path/w32tm.exe /register";
 	my ($register_exit_status, $register_output) = $self->execute({command => $register_command, timeout_seconds => 20, max_attempts => 1, display_output => 0});
 	if (!defined($register_output)) {
@@ -8939,15 +8947,35 @@ sub configure_time_synchronization {
 		notify($ERRORS{'OK'}, 0, "registered W32Time on $computer_name");
 	}
 	
+	# Uncomment the next few lines for for debugging
+	#my $debug_command = "$system32_path/w32tm.exe /debug /enable /file:C:/Windows/Debug/w32tm.log /size:1024000000 /entries:0-300";
+	#my ($debug_exit_status, $debug_output) = $self->execute({command => $debug_command, timeout_seconds => 20, max_attempts => 1, display_output => 0});
+	#if (!defined($debug_output)) {
+	#	notify($ERRORS{'WARNING'}, 0, "failed to execute command to enable W32Time debugging on $computer_name: $debug_command");
+	#	return;
+	#}
+	#elsif ($debug_exit_status ne '0') {
+	#	notify($ERRORS{'WARNING'}, 0, "failed to enable W32Time debugging on $computer_name, exit status: $debug_exit_status, command:\n$debug_command\noutput:\n" . join("\n", @$debug_output));
+	#}
+	#else {
+	#	notify($ERRORS{'OK'}, 0, "enabled W32Time debugging on $computer_name, output:\n" . join("\n", @$debug_output));
+	#}
+
+	# Only care about w32tm.exe config and sync duration
+	my $start_time = time;
+	
 	# By default, Windows time service will only allow the time to be changes by 15 hours (54,000 seconds) or less
 	# Set the following keys to allow any time adjustment
 	# This must be done after w32tm.exe /register because that command will reset the values to the defaults
 	$self->reg_add('HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\W32Time\Config', 'MaxPosPhaseCorrection', 'REG_DWORD', '0xFFFFFFFF');
 	$self->reg_add('HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\W32Time\Config', 'MaxNegPhaseCorrection', 'REG_DWORD', '0xFFFFFFFF');
 	
+	# Start the service before calling /config or else /config will fail
 	$self->start_service('w32time') || return;
-	
-	my $config_command = "$system32_path/w32tm.exe /config /manualpeerlist:\"$manual_peer_list\" /syncfromflags:manual /update";
+
+	my $config_command = "$system32_path/w32tm.exe /config /manualpeerlist:\"$manual_peer_list\" /syncfromflags:manual";
+	# The following argument shouldn't be necessary if the service is later restarted:
+	$config_command .= " /update";
 	my ($config_exit_status, $config_output) = $self->execute({command => $config_command, timeout_seconds => 20, max_attempts => 1, display_output => 0});
 	if (!defined($config_output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to execute command to configure W32Time on $computer_name: $config_command");
@@ -8957,23 +8985,29 @@ sub configure_time_synchronization {
 		notify($ERRORS{'WARNING'}, 0, "failed to configure W32Time on $computer_name to use time source(s): $manual_peer_list, exit status: $config_exit_status, command:\n$config_command\noutput:\n" . join("\n", @$config_output));
 	}
 	else {
-		notify($ERRORS{'OK'}, 0, "configured W32Time on $computer_name to use time source(s): $manual_peer_list");
+		notify($ERRORS{'DEBUG'}, 0, "configured W32Time on $computer_name to use time source(s): $manual_peer_list");
 	}
 	
-	$self->restart_service('w32time') || return;
+	# Restart the service
+	# This shouldn't be necessary if the /config command above includes /update
+	#$self->restart_service('w32time') || return;
 	
+	# Call /resync
 	my $resync_command = "$system32_path/w32tm.exe /resync";
+	$resync_command .= " /force";
 	my ($resync_exit_status, $resync_output) = $self->execute({command => $resync_command, timeout_seconds => 20, max_attempts => 1, display_output => 0});
 	if (!defined($resync_output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to execute command to resync W32Time on $computer_name: $resync_command");
 		return;
 	}
-	elsif ($resync_exit_status ne '0') {
-		notify($ERRORS{'WARNING'}, 0, "failed to resync W32Time on $computer_name, exit status: $resync_exit_status, command:\n$resync_command\noutput:\n" . join("\n", @$resync_output));
+	elsif (grep(/success/, @$resync_output)) {
+		notify($ERRORS{'DEBUG'}, 0, "resynchronized W32Time on $computer_name, output:\n" . join("\n", @$resync_output));
 	}
 	else {
-		notify($ERRORS{'OK'}, 0, "resync'd W32Time on $computer_name, output:\n" . join("\n", @$resync_output));
+		notify($ERRORS{'DEBUG'}, 0, "W32Time resynchronization may have failed on $computer_name:\n" . join("\n", @$resync_output));
 	}
+	
+	my $duration = (time - $start_time);
 	
 	# Set the w32time service startup mode to auto
 	if ($self->set_service_startup_mode('w32time', 'auto')) {
@@ -8984,14 +9018,19 @@ sub configure_time_synchronization {
 		return;
 	}
 	
+	# For debugging:
+	#$self->get_time_service_events() if $self->can('get_time_service_events');
+	
 	# Set the maximum time change parameters back to the defaults for security
-	#$self->reg_add('HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\W32Time\Config', 'MaxPosPhaseCorrection', 'REG_DWORD', 50000000);
-	#$self->reg_add('HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\W32Time\Config', 'MaxNegPhaseCorrection', 'REG_DWORD', 50000000);
+	$self->reg_add('HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\W32Time\Config', 'MaxPosPhaseCorrection', 'REG_DWORD', 50000000);
+	$self->reg_add('HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\W32Time\Config', 'MaxNegPhaseCorrection', 'REG_DWORD', 50000000);
 	
-	$self->get_current_computer_time();
+	my $time_string_after = $self->get_current_computer_time('after configure_time_synchronization');
 	
-	my $duration = (time - $start_time);
-	notify($ERRORS{'DEBUG'}, 0, "configure time synchronization duration: $duration seconds");
+	notify($ERRORS{'DEBUG'}, 0, "configured time synchronization duration: $duration seconds\n" .
+		"time before configuration : $time_string_before\n" .
+		"time after configuration  : $time_string_after"
+	);
 	return 1;
 }
 
@@ -8999,7 +9038,7 @@ sub configure_time_synchronization {
 
 =head2 get_current_computer_time
 
- Parameters  : none
+ Parameters  : $message (optional)
  Returns     : string
  Description : Used for debugging and troubleshooting purposes. Simply displays
                the current date, time, and timezone offset according to the
@@ -9014,6 +9053,8 @@ sub get_current_computer_time {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine can only be called as a VCL::Module module object method");
 		return;
 	}
+	
+	my $message = shift;
 	
 	my $computer_name = $self->data->get_computer_node_name();
 	
@@ -9031,7 +9072,7 @@ sub get_current_computer_time {
 	
 	my ($current_time) = grep(/\d:/, @$output);
 	if ($current_time) {
-		notify($ERRORS{'OK'}, 0, "retrieved current time on $computer_name: $current_time");
+		notify($ERRORS{'OK'}, 0, "retrieved current time on $computer_name: $current_time ($message)");
 		return $current_time;
 	}
 	else {
