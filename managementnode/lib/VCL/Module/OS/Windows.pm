@@ -9072,7 +9072,7 @@ sub get_current_computer_time {
 	
 	my ($current_time) = grep(/\d:/, @$output);
 	if ($current_time) {
-		notify($ERRORS{'OK'}, 0, "retrieved current time on $computer_name: $current_time ($message)");
+		notify($ERRORS{'OK'}, 0, "retrieved current time on $computer_name: $current_time" . (defined($message) ? " ($message)" : ''));
 		return $current_time;
 	}
 	else {
