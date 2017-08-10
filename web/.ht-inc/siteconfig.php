@@ -958,6 +958,10 @@ class AffilTextVariable {
 		$affils = $this->affils;
 		$saveids = array();
 
+		$nooptions = 0;
+		if(count($affils) == 0)
+			$nooptions = 1;
+
 		$required = 0;
 
 		if($globalopts) {
@@ -1032,11 +1036,15 @@ class AffilTextVariable {
 		$h .= "<div id=\"{$this->domidbase}msg\"></div>\n";
 		$saveids = implode(',', $saveids);
 		$h .= "<input type=\"hidden\" id=\"{$this->domidbase}savekeys\" value=\"$saveids\">\n";
-		$h .= dijitButton("{$this->domidbase}btn", i('Submit Changes'), "{$this->jsname}.saveSettings();", 1);
-		$cdata = $this->basecdata;
-		$cdata['origvals'] = $this->values;
-		$cont = addContinuationsEntry('AJupdateAllSettings', $cdata);
-		$h .= "<input type=\"hidden\" id=\"{$this->domidbase}cont\" value=\"$cont\">\n";
+		if($nooptions)
+			$h .= "(There are currently no options that can be set in this section.)<br><br>";
+		else {
+			$h .= dijitButton("{$this->domidbase}btn", i('Submit Changes'), "{$this->jsname}.saveSettings();", 1);
+			$cdata = $this->basecdata;
+			$cdata['origvals'] = $this->values;
+			$cont = addContinuationsEntry('AJupdateAllSettings', $cdata);
+			$h .= "<input type=\"hidden\" id=\"{$this->domidbase}cont\" value=\"$cont\">\n";
+		}
 		$h .= "</div>\n";
 		return $h;
 	}
