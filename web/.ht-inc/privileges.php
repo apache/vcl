@@ -3412,12 +3412,16 @@ function AJsubmitAddResourcePriv() {
 	$privtypes = getResourcePrivs();
 	$newgroupprivs = array();
 	foreach($privtypes as $type) {
+		if(($newtype == 'addomain' && ($type == 'available' || $type == 'manageMapping')) ||
+		   ($newtype == 'schedule' && ($type == 'available' || $type == 'manageMapping')) ||
+		   ($newtype == 'managementnode' && $type == 'available'))
+			continue;
 		if(in_array($type, $perms))
 			array_push($newgroupprivs, $type);
 	}
 	if(empty($newgroupprivs) || (count($newgroupprivs) == 1 && 
 	   in_array("cascade", $newgroupprivs))) {
-		$text = "<font color=red>No resource group privileges were specified</font>";
+		$text = "<font color=red>No resource group privileges were specified or privileges do not<br>apply to the specified type</font>";
 		print setAttribute('addResourceGroupPrivStatus', 'innerHTML', $text);
 		return;
 	}
