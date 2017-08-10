@@ -1207,7 +1207,7 @@ sub vm_power_on {
 	}
 	
 	# Get the vmx file path argument
-	my $vmx_file_path = shift;
+	my ($vmx_file_path, $is_retry_attempt) = @_;
 	if (!$vmx_file_path) {
 		notify($ERRORS{'WARNING'}, 0, "vmx file path argument was not supplied");
 		return;
@@ -1221,13 +1221,15 @@ sub vm_power_on {
 	}
 	
 	my $vim_cmd_arguments = "vmsvc/power.on $vm_id";
-	my ($exit_status, $output) = $self->_run_vim_cmd($vim_cmd_arguments, 360);
+	my ($exit_status, $output) = $self->_run_vim_cmd($vim_cmd_arguments, 360, 1);
 	return if !$output;
 	
 	# Expected output if the VM was not previously powered on:
 	# Powering on VM:
 	
 	# Expected output if the VM was previously powered on:
+	
+	# Old versions of ESXi? (unsure about when the output changed)
 	# Powering on VM:
 	# (vim.fault.InvalidPowerState) {
 	#   dynamicType = <unset>,
@@ -1237,6 +1239,10 @@ sub vm_power_on {
 	#   msg = "The attempted operation cannot be performed in the current state (Powered On).",
 	# }
 	
+	# ESXi 6.0, 6.5:
+	# Powering on VM:
+	# Power on failed
+	
 	if (grep(/existingState = "poweredOn"/i, @$output)) {
 		notify($ERRORS{'OK'}, 0, "VM is already powered on: $vmx_file_path");
 		return 1;
@@ -1244,6 +1250,19 @@ sub vm_power_on {
 	elsif (!grep(/Powering on VM/i, @$output)) {
 		notify($ERRORS{'WARNING'}, 0, "unexpected output returned while attempting to power on VM $vmx_file_path, VIM command arguments: '$vim_cmd_arguments', output:\n" . join("\n", @$output));
 		return;
+	}
+	elsif (grep(/failed/i, @$output)) {
+		# Power on failed but no indication that VM is already powered on from the output, check the power state
+		# Command will occasionally incorrectly report that it failed but the VM is actually powered on
+		my $power_state = $self->get_vm_power_state($vmx_file_path);
+		if ($power_state && $power_state =~ /on/i) {
+			notify($ERRORS{'OK'}, 0, "power on failed because VM is already powered on: $vmx_file_path");
+			return 1;
+		}
+		elsif (!$is_retry_attempt) {
+			# Make one more attempt, pass it the $is_retry_attempt argument to avoid an endless loop
+			return $self->vm_power_on($vmx_file_path, 1);
+		}
 	}
 	
 	# Get the task ID
@@ -1318,6 +1337,10 @@ sub vm_power_off {
 	#   existingState = "poweredOff",
 	#   msg = "The attempted operation cannot be performed in the current state (Powered Off).",
 	# }
+	
+	# ESXi 6.0, 6.5:
+	# Powering off VM:
+	# Power off failed
 	
 	if (grep(/existingState = "poweredOff"/i, @$output)) {
 		notify($ERRORS{'DEBUG'}, 0, "VM is already powered off: $vmx_file_path");
