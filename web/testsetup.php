@@ -326,6 +326,8 @@ if($createcryptkey) {
 	title("Checking asymmetric encryption key for this web server");
 	print "<ul>\n";
 	if(is_readable('.ht-inc/utils.php') && @(include '.ht-inc/utils.php') == TRUE) {
+		global $aboarting;
+		$aborting = 1; # set this so if abort function in utils.php is called, it just returns
 		$file = preg_replace('|/testsetup.php|', '', $_SERVER['SCRIPT_FILENAME']);
 		$filebase = $file . "/.ht-inc/cryptkey";
 		$file1 = "$filebase/cryptkeyid";
@@ -339,8 +341,8 @@ if($createcryptkey) {
 		$_SERVER['SCRIPT_FILENAME'] = str_replace('testsetup.php', 'index.php', $_SERVER['SCRIPT_FILENAME']);
 		$actions = array('pages' => array());
 		unset($_COOKIE['VCLAUTH']);
-		initGlobals();
 		dbConnect();
+		initGlobals();
 		checkCryptkey();
 		dbDisconnect();
 		$_SERVER['SCRIPT_FILENAME'] = $tmp;
