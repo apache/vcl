@@ -549,8 +549,12 @@ class ManagementNode extends Resource {
 			if($data['imagelibenable'] != $olddata['imagelibenable'])
 				$updates[] = "imagelibenable = '{$data['imagelibenable']}'";
 			# imagelibgroupid
-			if($data['imagelibgroupid'] != $olddata['imagelibgroupid'])
-				$updates[] = "imagelibgroupid = '{$data['imagelibgroupid']}'";
+			if($data['imagelibgroupid'] != $olddata['imagelibgroupid']) {
+				if(is_null($data['imagelibgroupid']))
+					$updates[] = "imagelibgroupid = NULL";
+				else
+					$updates[] = "imagelibgroupid = '{$data['imagelibgroupid']}'";
+			}
 			# imagelibuser
 			if($data['imagelibuser'] != $olddata['imagelibuser'])
 				$updates[] = "imagelibuser = '{$data['imagelibuser']}'";
@@ -837,7 +841,7 @@ class ManagementNode extends Resource {
 		else {
 			$return['imagelibenable'] = 0;
 			if($return['mode'] == 'edit') {
-				$return['imagelibgroupid'] = $olddata['imagelibgroupid'];
+				$return['imagelibgroupid'] = NULL;
 				$return['imagelibuser'] = $olddata['imagelibuser'];
 				$return['imagelibkey'] = $olddata['imagelibkey'];
 			}
