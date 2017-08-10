@@ -105,7 +105,8 @@ our $CAPTURE_DELETE_FILE_PATHS = [
 	'/etc/sysconfig/iptables_pre*',
 	'/etc/udev/rules.d/70-persistent-net.rules',
 	'/tmp/*',
-	'/var/log/*.0',
+	'/var/log/*.0*',
+	'/var/log/*.1*',
 	'/var/log/*-20*',
 	'/var/log/*.gz',
 	'/var/log/*.old',
@@ -121,13 +122,16 @@ our $CAPTURE_DELETE_FILE_PATHS = [
 our $CAPTURE_CLEAR_FILE_PATHS = [
 	'/etc/hostname',
 	'/var/log/audit/audit.log',
-	'/var/log/auth.log*',
-	'/var/log/boot.log*',
+	'/var/log/auth.log',
+	'/var/log/boot.log',
+	'/var/log/kern.log',
 	'/var/log/lastlog',
 	'/var/log/maillog',
 	'/var/log/messages',
 	'/var/log/secure',
+	'/var/log/syslog',
 	'/var/log/udev',
+	'/var/log/ufw.log',
 	'/var/log/wtmp',
 ];
 
@@ -500,6 +504,9 @@ sub post_load {
 		return;
 	}
 	
+	# Attempt to generate ifcfg-eth* files and start any interfaces which the file does not exist
+	$self->activate_interfaces();
+	
 	# Configure the firewall to allow SSH traffic only from the management node
 	if ($self->can('firewall') && $self->firewall->can('process_post_load')) {
 		$self->firewall->process_post_load() || return;
@@ -543,9 +550,6 @@ sub post_load {
 	if (!$self->clear_private_keys()) {
 		notify($ERRORS{'WARNING'}, 0, "failed to clear known identity keys");
 	}
-	
-	# Attempt to generate ifcfg-eth* files and ifup any interfaces which the file does not exist
-	$self->activate_interfaces();
 	
 	# Update computer hostname if imagemeta.sethostname is not set to 0
 	my $set_hostname = $self->data->get_imagemeta_sethostname(0);
@@ -979,21 +983,20 @@ sub start_network_interface {
 	notify($ERRORS{'DEBUG'}, 0, "attempting to start network interface $interface_name on $computer_name");
 	
 	my $command = "/sbin/ifup $interface_name";
-	my ($exit_status, $output) = $self->execute($command);
+	my ($exit_status, $output) = $self->execute($command, 0);
 	if (!defined($output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to execute command to start $interface_name interface on $computer_name");
 		return;
 	}
 	elsif (grep(/already configured/i, @$output)) {
 		notify($ERRORS{'DEBUG'}, 0, "$interface_name interface on $computer_name is already started, output:\n" . join("\n", @$output));
-		return 1;
 	}
-	elsif ($exit_status) {
-		notify($ERRORS{'WARNING'}, 0, "failed to start $interface_name interface on $computer_name, exit status: $exit_status, command: '$command', output:\n" . join("\n", @$output));
-		return;
+	elsif ($exit_status == 0 || grep(/done/i, @$output)) {
+		notify($ERRORS{'DEBUG'}, 0, "started $interface_name interface on $computer_name, " . (@$output ? "output:\n" . join("\n", @$output) : 'no output'));
 	}
 	else {
-		notify($ERRORS{'DEBUG'}, 0, "started $interface_name interface on $computer_name, output:\n" . join("\n", @$output));
+		notify($ERRORS{'WARNING'}, 0, "failed to start $interface_name interface on $computer_name, exit status: $exit_status, command: '$command', output:\n" . join("\n", @$output));
+		return;
 	}
 	
 	return 1;
@@ -2423,8 +2426,8 @@ sub set_file_owner {
  Description : Finds all networking interfaces with an active link. Checks if an
                ifcfg-eth* file exists for the interface. An ifcfg-eth* file is
                generated if it does not exist using DHCP and the interface is
-               brought up via ifup. This is useful if additional interfaces are
-               added by the provisioning module when an image is loaded. 
+               brought up. This is useful if additional interfaces are added by
+               the provisioning module when an image is loaded.
 
 =cut
 
@@ -2479,20 +2482,7 @@ EOF
 			return;
 		}
 		
-		# Call ifup on the interface
-		my $command = "ifup $interface_name";
-		my ($exit_status, $output) = $self->execute($command, 1);
-		if (!defined($output)) {
-			notify($ERRORS{'WARNING'}, 0, "failed to execute command to activate $interface_name interface: $command");
-			return;
-		}
-		elsif ($exit_status eq '0' || grep(/done\./, @$output)) {
-			notify($ERRORS{'OK'}, 0, "activated $interface_name interface, output:\n" . join("\n", @$output));
-		}
-		else {
-			notify($ERRORS{'WARNING'}, 0, "failed to activate $interface_name interface, exit status: $exit_status, output:\n" . join("\n", @$output));
-			return;
-		}
+		$self->start_network_interface($interface_name);
 	}
 	
 	return 1;
@@ -2673,9 +2663,13 @@ sub get_network_configuration {
 
 =head2 reboot
 
- Parameters  : $wait_for_reboot
- Returns     : 
- Description : 
+ Parameters  : none
+ Returns     : boolean
+ Description : Attempts to gracefully reboot the computer by executing
+               'shutdown -r now' command. Attempts to detect reboot began and
+               completed. If this fails or if the computer is not responding to
+               SSH, the provisioning module will attempt to forcefully perform a
+               hard reset of the computer.
 
 =cut
 
@@ -2688,90 +2682,59 @@ sub reboot {
 	
 	my $computer_node_name = $self->data->get_computer_node_name();
 	
-	# Check if an argument was supplied
-	my $wait_for_reboot = shift || 1;
-	if ($wait_for_reboot) {
-		notify($ERRORS{'DEBUG'}, 0, "rebooting $computer_node_name and waiting for SSH to become active");
-	}
-	else {
-		notify($ERRORS{'DEBUG'}, 0, "rebooting $computer_node_name and NOT waiting");
-	}
+	notify($ERRORS{'DEBUG'}, 0, "rebooting $computer_node_name and waiting for SSH to become active");
 	
 	my $reboot_start_time = time();
 	
 	# Check if computer responds to ssh before preparing for reboot
 	if ($self->wait_for_ssh(0)) {
-		# Check if shutdown exists on the computer
-		my $reboot_command;
-		if ($self->file_exists("/sbin/shutdown")) {
-			$reboot_command = "/sbin/shutdown -r now";
-		}
-		else {
-			notify($ERRORS{'WARNING'}, 0, "reboot not attempted, /sbin/shutdown did not exists on $computer_node_name");
-			return;
-		}
+		my $reboot_command = '/sbin/shutdown -r now &';
+		notify($ERRORS{'DEBUG'}, 0, "attempting to gracefully reboot $computer_node_name by executing '$reboot_command'");
+		my ($reboot_exit_status, $reboot_output) = $self->execute(
+			{
+				command => $reboot_command,
+				timeout => 30,
+				max_attempts => 1,
+				display_output => 0,
+			}
+		);
 		
-		my ($reboot_exit_status, $reboot_output) = $self->execute($reboot_command);
-		if (!defined($reboot_output)) {
-			notify($ERRORS{'WARNING'}, 0, "failed to execute command to reboot $computer_node_name");
-			return;
-		}
-		elsif ($reboot_exit_status == 0) {
-			notify($ERRORS{'OK'}, 0, "executed reboot command on $computer_node_name");
+		if ($self->wait_for_reboot()) {
+			my $reboot_duration = (time() - $reboot_start_time);
+			notify($ERRORS{'OK'}, 0, "gracefully rebooted $computer_node_name, took $reboot_duration seconds");
+			return 1;
 		}
 		else {
-			notify($ERRORS{'WARNING'}, 0, "failed to reboot $computer_node_name, attempting power reset, output:\n" . join("\n", @$reboot_output));
-			
-			# Call provisioning module's power_reset() subroutine
-			if ($self->provisioner->power_reset()) {
-				notify($ERRORS{'OK'}, 0, "initiated power reset on $computer_node_name");
-			}
-			else {
-				notify($ERRORS{'WARNING'}, 0, "reboot failed, failed to initiate power reset on $computer_node_name");
-				return;
-			}
+			notify($ERRORS{'DEBUG'}, 0, "did not detect $computer_node_name rebooting after executing '$reboot_command', attempting hard reset using the provisioning module");
 		}
 	}
 	else {
-		# Computer did not respond to SSH
-		notify($ERRORS{'WARNING'}, 0, "$computer_node_name is not responding to SSH, graceful reboot cannot be performed, attempting hard reset");
-		
-		# Call provisioning module's power_reset() subroutine
-		if ($self->provisioner->power_reset()) {
-			notify($ERRORS{'OK'}, 0, "initiated power reset on $computer_node_name");
-		}
-		else {
-			notify($ERRORS{'WARNING'}, 0, "reboot failed, failed to initiate power reset on $computer_node_name");
-			return;
-		}
+		notify($ERRORS{'DEBUG'}, 0, "$computer_node_name is not responding to SSH, graceful reboot cannot be performed, attempting hard reset using the provisioning module");
 	}
 	
-	# Check if wait for reboot is set
-	if (!$wait_for_reboot) {
-		return 1;
-	}
-	
+	$self->provisioner->power_reset() || return;
 	if ($self->wait_for_reboot()) {
-		# Reboot was successful, calculate how long reboot took
-		my $reboot_end_time = time();
-		my $reboot_duration = ($reboot_end_time - $reboot_start_time);
-		notify($ERRORS{'OK'}, 0, "reboot complete on $computer_node_name, took $reboot_duration seconds");
+		my $reboot_duration = (time() - $reboot_start_time);
+		notify($ERRORS{'OK'}, 0, "hard reset of $computer_node_name complete, took $reboot_duration seconds");
 		return 1;
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "reboot failed on $computer_node_name, made default wait_attempt_limit attempts");
-		return 0;
+		notify($ERRORS{'WARNING'}, 0, "$computer_node_name may not have rebooted, did not detect reboot after attempting hard reset using the provisioning module");
+		return;
 	}
-
 }
 
 #//////////////////////////////////////////////////////////////////////////////
 
 =head2 shutdown
 
- Parameters  : 
- Returns     : 
- Description : 
+ Parameters  : none
+ Returns     : boolean
+ Description : Attempts to gracefully shut down the computer by executing the
+               shutdown command. Waits for provisioning module to report that
+               the computer is off. If this fails or if the computer is not
+               responding to SSH, the provisioning module will attempt to
+               forcefully power off the computer.
 
 =cut
 
@@ -2784,52 +2747,38 @@ sub shutdown {
 	
 	my $computer_node_name = $self->data->get_computer_node_name();
 	
-	# Check if an argument was supplied
-	my $wait_for_power_off = shift || 1;
-	if ($wait_for_power_off) {
-		notify($ERRORS{'DEBUG'}, 0, "shutting down $computer_node_name and waiting for power off");
-	}
-	else {
-		notify($ERRORS{'DEBUG'}, 0, "shutting down $computer_node_name and NOT waiting for power off");
-	}
-	
 	# Check if computer responds to ssh before preparing for shut down
 	if ($self->wait_for_ssh(0)) {
-		my $command = '/sbin/shutdown -h now';
-		
-		my ($exit_status, $output) = $self->execute({command => $command, timeout => 90, ignore_error => 1});
-		
-		# Wait maximum of 5 minutes for computer to power off
-		my $power_off = $self->provisioner->wait_for_power_off(300);
-		if (!defined($power_off)) {
-			# wait_for_power_off result will be undefined if the provisioning module doesn't implement a power_status subroutine
-			notify($ERRORS{'OK'}, 0, "unable to determine power status of $computer_node_name from provisioning module, sleeping 1 minute to allow computer time to shutdown");
-			sleep 60;
-		}
-		elsif (!$power_off) {
-			notify($ERRORS{'WARNING'}, 0, "$computer_node_name never powered off");
-			# Call provisioning module's power_off() subroutine
-			if (!$self->provisioner->power_off()) {
-				notify($ERRORS{'WARNING'}, 0, "failed to shut down $computer_node_name, failed to initiate power off");
-				return;
+		my $shutdown_command = '/sbin/shutdown -h now &';
+		notify($ERRORS{'DEBUG'}, 0, "attempting to gracefully shut down $computer_node_name by executing '$shutdown_command'");
+		my ($exit_status, $output) = $self->execute(
+			{
+				command => $shutdown_command,
+				timeout => 30,
+				max_attempts => 1,
+				display_output => 0,
 			}
+		);
+		
+		if ($self->provisioner->wait_for_power_off(300, 10)) {
+			notify($ERRORS{'OK'}, 0, "gracefully shut down $computer_node_name by executing the OS's shutdown command");
+			return 1;
+		}
+		else {
+			notify($ERRORS{'DEBUG'}, 0, "$computer_node_name is still on after executing shutdown command, attempting to power off the computer using the provisioning module");
 		}
 	}
 	else {
-		notify($ERRORS{'DEBUG'}, 0, "$computer_node_name is not responding to SSH, attempting power off");
-		
-		# Call provisioning module's power_off() subroutine
-		if (!$self->provisioner->power_off()) {
-			notify($ERRORS{'WARNING'}, 0, "failed to shut down $computer_node_name, failed to initiate power off");
-			return;
-		}
+		notify($ERRORS{'DEBUG'}, 0, "$computer_node_name is NOT responding to SSH, attempting to power off the computer using the provisioning module");
 	}
 	
-	if (!$wait_for_power_off || $self->provisioner->wait_for_power_off(300, 10)) {
+	$self->provisioner->power_off() || return;
+	if ($self->provisioner->wait_for_power_off(300, 10)) {
+		notify($ERRORS{'OK'}, 0, "forcefully powered off $computer_node_name using the provisioning module");
 		return 1;
 	}
 	else {
-		notify($ERRORS{'WARNING'}, 0, "failed to shut down $computer_node_name, computer never powered off");
+		notify($ERRORS{'WARNING'}, 0, "failed to shut down $computer_node_name, computer is still on after attempting to power off the computer using the provisioning module");
 		return;
 	}
 }
