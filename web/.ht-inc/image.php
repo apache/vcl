@@ -686,6 +686,7 @@ class Image extends Resource {
 		$tmp = $this->getData(array('includedeleted' => 0, 'rscid' => $imageid));
 		$data = $tmp[$imageid];
 		$extra = getImageNotes($imageid);
+		$extra['description'] = preg_replace('/<br>/', "\n", $extra['description']);
 		$extra['description'] = htmlspecialchars_decode($extra['description']);
 		$extra['usage'] = htmlspecialchars_decode($extra['usage']);
 		$data = array_merge($data, $extra);
