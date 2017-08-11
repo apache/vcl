@@ -106,6 +106,7 @@ Release Notes - VCL - Version 2.5
     * [VCL-1062] - stop using Administrator account for Windows imaging reservations
     * [VCL-1064] - Show reservations being captured or in maintenance on Reservations page
     * [VCL-1069] - Allow Windows to update time regardless of skew
+    * [VCL-1072] - VMware may incorrectly indicate power on failed
 
 ** Task
     * [VCL-968] - Localization updates for 2.5
@@ -193,6 +194,10 @@ Release Notes - VCL - Version 2.5
     * [VCL-1063] - editing a future reservation to have a start time that is in the past should not be allowed
     * [VCL-1066] - Checkpoint image capture fails to set request state back to reserved
     * [VCL-1068] - Windows fails to update scheduled task password if password contains some special characters
+    * [VCL-1073] - Linux.pm::reboot may fail because it doesn't detect broken SSH connection during first attempt
+    * [VCL-1075] - Newlines in image description not handled properly under Manage Images
+    * [VCL-1076] - Unsetting Enable Image Library for a management node does not set the image library group to NULL
+    * [VCL-1077] - Adding an AD Domain to the privilege tree with available or manageMapping set causes it to be added with no way to remove it
 
 ================================================================================
 
