@@ -40,6 +40,13 @@
     <category rdf:resource="http://projects.apache.org/category/cloud" />
     <release>
       <Version>
+        <name>Apache VCL 2.5</name>
+        <created>2017-07-27</created>
+        <revision>2.5</revision>
+      </Version>
+    </release>
+    <release>
+      <Version>
         <name>Apache VCL 2.4.2</name>
         <created>2015-04-16</created>
         <revision>2.4.2</revision>
