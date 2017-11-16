@@ -404,6 +404,10 @@ sub pre_capture {
 		notify($ERRORS{'WARNING'}, 0, "unable to log user off $computer_node_name");
 	}
 	
+	# Attempt to unmount NFS shares configured for the management node (Site Configuration > NFS Mounts)
+	$self->unmount_nfs_shares() || return;
+	$self->remove_matching_fstab_lines('Added by VCL');
+	
 	# Remove user accounts
 	if ($self->delete_user_accounts()) {
 		notify($ERRORS{'OK'}, 0, "deleted user accounts added by VCL from $computer_node_name");
@@ -425,10 +429,6 @@ sub pre_capture {
 	if (!$self->configure_rc_local()) {
 		return;
 	}
-	
-	# Attempt to unmount NFS shares configured for the management node (Site Configuration > NFS Mounts)
-	$self->unmount_nfs_shares() || return;
-	$self->remove_matching_fstab_lines('Added by VCL');
 	
 	if ($self->can('firewall') && $self->firewall->can('process_pre_capture')) {
 		$self->firewall->process_pre_capture() || return;
@@ -1496,17 +1496,16 @@ sub sanitize {
 	
 	# Call process_connect_methods with the overwrite flag to remove firewall exceptions
 	$self->process_connect_methods() || return;
+	
+	# Attempt to unmount NFS shares configured for the management node (Site Configuration > NFS Mounts)
+	$self->unmount_nfs_shares() || return;
+	$self->remove_matching_fstab_lines('Added by VCL');
 
 	# Delete all user associated with the reservation
 	$self->delete_user_accounts() || return;
 	
 	# Make sure ext_sshd is stopped
 	$self->stop_external_sshd() || return;
-	
-	# Attempt to unmount NFS shares configured for the management node (Site Configuration > NFS Mounts)
-	$self->unmount_nfs_shares() || return;
-	
-	$self->remove_matching_fstab_lines('Added by VCL');
 	
 	notify($ERRORS{'OK'}, 0, "$computer_node_name has been sanitized");
 	return 1;
@@ -3098,15 +3097,62 @@ sub delete_user {
 	# Assemble the userdel command
 	my $userdel_command = "/usr/sbin/userdel";
 	
+	my $delete_home_directory = 1;
+	
 	if ($home_directory_on_local_disk) {
 		# Fetch exclude_list
-
 		my @exclude_list = $self->get_exclude_list();
-
-		if (!(grep(/\/home\/$username/, @exclude_list))) {
+		if ((grep(/\/home\/$username/, @exclude_list))) {
+			notify($ERRORS{'DEBUG'}, 0, "home directory will NOT be deleted: $home_directory_path");
+			$delete_home_directory = 0;
+		}
+		else {
+			# Make sure no NFS shares are mounted under home directory
+			my @nfs_mount_strings = $self->get_nfs_mount_strings();
+			for my $nfs_mount_string (@nfs_mount_strings) {
+				my ($nfs_remote_host, $nfs_remote_path, $nfs_local_path) = $nfs_mount_string =~
+					/
+						^
+						([^:]+)		# Remote hostname or IP address
+						:
+						(\/.+)		# Remote path
+						\s+
+						(\/.+)		# Local path
+						\s+
+						nfs\d*		# ' nfs ' or ' nfs4 '
+						\s+
+					/gx;
+				
+				if ($nfs_local_path) {
+					if ($nfs_local_path =~ /^$home_directory_path/) {
+						notify($ERRORS{'WARNING'}, 0, "home directory will NOT be deleted, NFS share is mounted under it\n" .
+							"NFS mount string    : $nfs_mount_string\n" .
+							"home directory path : $home_directory_path\n" .
+							"local mount path    : $nfs_local_path"
+						);
+						$delete_home_directory = 0;
+						last;
+					}
+					else {
+						notify($ERRORS{'DEBUG'}, 0, "NFS share is NOT mounted under home directory\n" .
+							"NFS mount string    : $nfs_mount_string\n" .
+							"home directory path : $home_directory_path\n" .
+							"local mount path    : $nfs_local_path"
+						);
+					}
+				}
+				else {
+					notify($ERRORS{'WARNING'}, 0, "home directory will NOT be deleted: $home_directory_path, failed to parse NFS mount string: $nfs_mount_string");
+					$delete_home_directory = 0;
+					last;
+				}
+			}
+		}
+	}
+	
+	if ($delete_home_directory) {
 		notify($ERRORS{'DEBUG'}, 0, "home directory will be deleted: $home_directory_path");
 		$userdel_command .= ' -r';
-	}
 	}
 	$userdel_command .= " $username";
 	
@@ -6420,6 +6466,47 @@ sub is_nfs_share_mounted {
 		notify($ERRORS{'DEBUG'}, 0, "NFS share is NOT mounted on $computer_name: $remote_nfs_share --> $local_mount_directory");
 		return 0;
 	}
+}
+
+#//////////////////////////////////////////////////////////////////////////////
+
+=head2 get_nfs_mount_strings
+
+ Parameters  : none
+ Returns     : array
+ Description : Retrieves the contents of /proc/mounts and extracts all strings
+               that contain 'nfs' or 'nfs4'. An array containing the raw
+               /proc/mounts strings is returned.
+
+=cut
+
+sub get_nfs_mount_strings {
+	my $self = shift;
+	if (ref($self) !~ /linux/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $computer_name = $self->data->get_computer_node_name();
+	
+	my $command = "cat /proc/mounts";
+	my ($exit_status, $output) = $self->execute($command);
+	if (!defined($exit_status)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to execute command on $computer_name: $command");
+		return;
+	}
+	
+	my @mount_strings;
+	for my $line (@$output) {
+		if ($line !~ /\snfs\d*\s/) {
+			next;
+		}
+		
+		push @mount_strings, $line;
+	}
+	
+	notify($ERRORS{'DEBUG'}, 0, "retrieved NFS mount strings from $computer_name:\n" . join("\n", @mount_strings));
+	return @mount_strings;
 }
 
 #//////////////////////////////////////////////////////////////////////////////
