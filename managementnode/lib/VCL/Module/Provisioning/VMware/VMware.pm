@@ -5839,6 +5839,13 @@ sub delete_vm {
 		# The VM needs to be registered for get_vm_virtual_disk_file_paths to work
 		@virtual_disks = $self->api->get_vm_virtual_disk_file_paths($vmx_file_path);
 		
+		# Make sure VM is powered off before trying to unregister it
+		if (!$self->api->vm_power_off($vmx_file_path)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to power off VM: $vmx_file_path, VM not deleted");
+			return;
+		}
+		
+		# Unregister the VM
 		if (!$self->api->vm_unregister($vmx_file_path)) {
 			notify($ERRORS{'WARNING'}, 0, "failed to unregister VM: $vmx_file_path, VM not deleted");
 			return;
