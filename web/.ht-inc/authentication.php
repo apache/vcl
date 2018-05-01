@@ -149,6 +149,11 @@ function selectAuth() {
 			printLoginPageWithSkin($authtype);
 			return;
 		}
+		elseif($authMechs[$authtype]['type'] == 'cas') {
+		    validateCASUser($authtype);
+		    dbDisconnect();
+		    return;
+		}
 	}
 	require_once("themes/$skin/page.php");
 	$HTMLheader = getHeader(0);
