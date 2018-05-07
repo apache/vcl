@@ -6,9 +6,9 @@
  The ASF licenses this file to You under the Apache License, Version 2.0
  (the "License"); you may not use this file except in compliance with
  the License.  You may obtain a copy of the License at
- 
+
  http://www.apache.org/licenses/LICENSE-2.0
- 
+
  Unless required by applicable law or agreed to in writing, software
  distributed under the License is distributed on an "AS IS" BASIS,
  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -39,25 +39,25 @@ phpCAS::setVerbose(FALSE);
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function validateCASUser($type) {
-    global $authMechs;
-    $auth = $authMechs[$type];
-    $callbackURL = BASEURL . "/casauth/index.php?authtype=" . $type;
-    $casversion = ($auth['version'] == 2 ? CAS_VERSION_2_0 : CAS_VERSION_3_0);
-    
-    if ($auth['cacertpath'] != null)
-        if (file_exists($auth['cacertpath']))
-            phpCAS::setCasServerCACert($auth['cacertpath']);
+	global $authMechs;
+	$auth = $authMechs[$type];
+	$callbackURL = BASEURL . "/casauth/index.php?authtype=" . $type;
+	$casversion = ($auth['version'] == 2 ? CAS_VERSION_2_0 : CAS_VERSION_3_0);
 
-    phpCAS::client($casversion, $auth['host'], $auth['port'], $auth['context']);
-    
-    // Set the service URL to use custom casauth directly within the VCL website
-    phpCAS::setFixedServiceURL($callbackURL);
-    if ( $auth['validatecassslcerts'] != true )
-        phpCAS::setNoCasServerValidation();
-    
-    phpCAS::forceAuthentication();
-    
-    # TODO - Check if server is available. 
+	if($auth['cacertpath'] != null)
+		if(file_exists($auth['cacertpath']))
+			phpCAS::setCasServerCACert($auth['cacertpath']);
+
+	phpCAS::client($casversion, $auth['host'], $auth['port'], $auth['context']);
+
+	// Set the service URL to use custom casauth directly within the VCL website
+	phpCAS::setFixedServiceURL($callbackURL);
+	if($auth['validatecassslcerts'] != true)
+		phpCAS::setNoCasServerValidation();
+
+	phpCAS::forceAuthentication();
+
+	# TODO - Check if server is available. 
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -73,17 +73,18 @@ function validateCASUser($type) {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function checkCASUserInDatabase($type, $userid) {
-    global $authMechs, $mysql_link_vcl;
-    $loweruserid = strtolower($userid);
-    $loweruserid = mysql_real_escape_string($loweruserid);
-    $query = "SELECT id "
-           . "FROM user "
-           . "WHERE unityid = '$userid' AND affiliationid = {$authMechs[$type]['affiliationid']}";
-    $qh = doQuery($query, 101);
-    if ($row = mysql_fetch_assoc($qh)) {
-        return TRUE;
-    }
-    return FALSE;
+	global $authMechs, $mysql_link_vcl;
+	$loweruserid = strtolower($userid);
+	$loweruserid = mysql_real_escape_string($loweruserid);
+	$query = "SELECT id "
+	       . "FROM user "
+	       . "WHERE unityid = '$userid' AND "
+	       .       "affiliationid = {$authMechs[$type]['affiliationid']}";
+	$qh = doQuery($query, 101);
+	if($row = mysql_fetch_assoc($qh)) {
+		return TRUE;
+	}
+	return FALSE;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -99,46 +100,46 @@ function checkCASUserInDatabase($type, $userid) {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function addCASUser($userinfo) {
-    global $authMechs, $mysql_link_vcl;
-    $now = unixToDatetime(time());
-    
-    $query = "INSERT INTO user (unityid, affiliationid";
-    if(array_key_exists('firstname', $userinfo))
-        $query .= ", firstname";
-    if(array_key_exists('lastname', $userinfo))
-        $query .= ", lastname";
-    if(array_key_exists('preferredname', $userinfo))
-        $query .= ", preferredname";
-    if(array_key_exists('email', $userinfo))
-        $query .= ", email";
-    $query .= ", lastupdated) VALUES ( '{$userinfo['unityid']}', {$userinfo['affiliationid']}";
-    if(array_key_exists('firstname', $userinfo))
-        $query .= ",'{$userinfo['firstname']}'";
-    if(array_key_exists('lastname', $userinfo))
-        $query .= ",'{$userinfo['lastname']}'";
-    if(array_key_exists('preferredname', $userinfo))
-        $query .= ",'{$userinfo['preferredname']}'";
-    if(array_key_exists('email', $userinfo))
-        $query .= ",'{$userinfo['email']}'";
-        $query .= ",'{$now}')";
-    
-    doQuery($query, 101, 'vcl', 1);
-    if(mysql_affected_rows($mysql_link_vcl)) {
-        $qh = doQuery("SELECT LAST_INSERT_ID() FROM user", 101);
-        if(! $row = mysql_fetch_row($qh)) {
-            abort(101);
-        }
-        
-        // Add to default group
-        if ($userinfo['defaultgroup'] != null) {
-            $usergroups = array();
-            array_push($usergroups, getUserGroupID($userinfo['defaultgroup'], $userinfo['affiliationid']));
-            updateGroups($usergroups, $row[0]);
-        }
-            
-        return $row[0];
-    }
-    return NULL;
+	global $authMechs, $mysql_link_vcl;
+	$now = unixToDatetime(time());
+
+	$query = "INSERT INTO user (unityid, affiliationid";
+	if(array_key_exists('firstname', $userinfo))
+		$query .= ", firstname";
+	if(array_key_exists('lastname', $userinfo))
+		$query .= ", lastname";
+	if(array_key_exists('preferredname', $userinfo))
+		$query .= ", preferredname";
+	if(array_key_exists('email', $userinfo))
+		$query .= ", email";
+	$query .= ", lastupdated) VALUES ( '{$userinfo['unityid']}', {$userinfo['affiliationid']}";
+	if(array_key_exists('firstname', $userinfo))
+		$query .= ",'{$userinfo['firstname']}'";
+	if(array_key_exists('lastname', $userinfo))
+		$query .= ",'{$userinfo['lastname']}'";
+	if(array_key_exists('preferredname', $userinfo))
+		$query .= ",'{$userinfo['preferredname']}'";
+	if(array_key_exists('email', $userinfo))
+		$query .= ",'{$userinfo['email']}'";
+		$query .= ",'{$now}')";
+
+	doQuery($query, 101, 'vcl', 1);
+	if(mysql_affected_rows($mysql_link_vcl)) {
+		$qh = doQuery("SELECT LAST_INSERT_ID() FROM user", 101);
+		if(! $row = mysql_fetch_row($qh)) {
+			abort(101);
+		}
+
+		// Add to default group
+		if($userinfo['defaultgroup'] != null) {
+			$usergroups = array();
+			array_push($usergroups, getUserGroupID($userinfo['defaultgroup'], $userinfo['affiliationid']));
+			updateGroups($usergroups, $row[0]);
+		}
+
+		return $row[0];
+	}
+	return NULL;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -154,41 +155,41 @@ function addCASUser($userinfo) {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function updateCASUser($userinfo) {
-    global $mysql_link_vcl;
-    $now = unixToDatetime(time());
-    $esc_userid = mysql_real_escape_string($userinfo['unityid']);
-    $query = "UPDATE user SET unityid = '{$userinfo['unityid']}', lastupdated = '{$now}'";
-    if(array_key_exists('firstname', $userinfo))
-        $query .= ", firstname = '{$userinfo['firstname']}' ";
-    if(array_key_exists('lastname', $userinfo))
-        $query .= ", lastname = '{$userinfo['lastname']}' ";
-    if(array_key_exists('preferredname', $userinfo))
-        $query .= ", preferredname = '{$userinfo['preferredname']}' ";
-    if(array_key_exists('email', $userinfo))
-        $query .= ", email = '{$userinfo['email']}' ";
-    $query .= "WHERE unityid = '{$esc_userid}' AND affiliationid = {$userinfo['affiliationid']}";
-    doQuery($query, 256, 'vcl', 1);
-    if (mysql_affected_rows($mysql_link_vcl) == -1) {
-        error_log(mysql_error($mysql_link_vcl));
-        error_log($query);
-        return FALSE;
-    }
-    
-    // get id of current user
-    $query = "SELECT id FROM user WHERE unityid = '{$esc_userid}' AND affiliationid = {$userinfo['affiliationid']}";
-    $qh = doQuery($query, 255);
-    if ($user = mysql_fetch_assoc($qh)) {
-        // Add to default group
-        if ($userinfo['defaultgroup'] != null) {
-            $usergroups = array();
-            $newgroupid = getUserGroupID($userinfo['defaultgroup'], $userinfo['affiliationid']);
-            array_push($usergroups, $newgroupid);
-            $usergroups = array_unique($usergroups);
-            if (! empty($usergroups))
-                updateGroups($usergroups, $user["id"]);
-        }
-    }
-        
-    return TRUE;    
+	global $mysql_link_vcl;
+	$now = unixToDatetime(time());
+	$esc_userid = mysql_real_escape_string($userinfo['unityid']);
+	$query = "UPDATE user SET unityid = '{$userinfo['unityid']}', lastupdated = '{$now}'";
+	if(array_key_exists('firstname', $userinfo))
+		$query .= ", firstname = '{$userinfo['firstname']}' ";
+	if(array_key_exists('lastname', $userinfo))
+		$query .= ", lastname = '{$userinfo['lastname']}' ";
+	if(array_key_exists('preferredname', $userinfo))
+		$query .= ", preferredname = '{$userinfo['preferredname']}' ";
+	if(array_key_exists('email', $userinfo))
+		$query .= ", email = '{$userinfo['email']}' ";
+	$query .= "WHERE unityid = '{$esc_userid}' AND affiliationid = {$userinfo['affiliationid']}";
+	doQuery($query, 256, 'vcl', 1);
+	if(mysql_affected_rows($mysql_link_vcl) == -1) {
+		error_log(mysql_error($mysql_link_vcl));
+		error_log($query);
+		return FALSE;
+	}
+
+	// get id of current user
+	$query = "SELECT id FROM user WHERE unityid = '{$esc_userid}' AND affiliationid = {$userinfo['affiliationid']}";
+	$qh = doQuery($query, 255);
+	if($user = mysql_fetch_assoc($qh)) {
+		// Add to default group
+		if($userinfo['defaultgroup'] != null) {
+			$usergroups = array();
+			$newgroupid = getUserGroupID($userinfo['defaultgroup'], $userinfo['affiliationid']);
+			array_push($usergroups, $newgroupid);
+			$usergroups = array_unique($usergroups);
+			if(! empty($usergroups))
+				updateGroups($usergroups, $user["id"]);
+		}
+	}
+
+	return TRUE;
 }
 ?>

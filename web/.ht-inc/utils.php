@@ -352,13 +352,19 @@ function initGlobals() {
 ////////////////////////////////////////////////////////////////////////////////
 function __autoload($class) {
 	global $actions;
-	$class = strtolower($class);
-	if(array_key_exists($class, $actions['classmapping'])) {
-		require_once(".ht-inc/{$actions['classmapping'][$class]}.php");
-		return;
+	$_class = strtolower($class);
+	if(array_key_exists($_class, $actions['classmapping'])) {
+		require_once(".ht-inc/{$actions['classmapping'][$_class]}.php");
 	}
-	require_once(".ht-inc/resource.php");
-	require_once(".ht-inc/$class.php");
+	elseif(file_exists(".ht-inc/{$_class}.php")) {
+		require_once(".ht-inc/{$_class}.php");
+		if(get_parent_class($class) == 'Resource')
+			require_once(".ht-inc/resource.php");
+	}
+}
+// register autoload function in case CAS or something else has used spl_autoload_register
+if(function_exists('spl_autoload_register')) {
+	spl_autoload_register('__autoload');
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1483,7 +1489,7 @@ function getImages($includedeleted=0, $imageid=0) {
 	       .       "u.affiliationid = a.id ";
 	if(! $includedeleted)
 		$query .= "AND i.deleted = 0 ";
-   $query .= "ORDER BY i.prettyname";
+	$query .= "ORDER BY i.prettyname";
 	$qh = doQuery($query, 120);
 	while($row = mysql_fetch_assoc($qh)) {
 		if(is_null($row['maxconcurrent']))
@@ -1509,8 +1515,8 @@ function getImages($includedeleted=0, $imageid=0) {
 				$imagelist[$includedeleted][$row["id"]]["subimages"] = array();
 				if($allmetadata[$metaid]["subimages"]) {
 					$query2 = "SELECT imageid "
-				        . "FROM subimages "
-				        . "WHERE imagemetaid = $metaid";
+					        . "FROM subimages "
+					        . "WHERE imagemetaid = $metaid";
 					$qh2 = doQuery($query2, 101);
 					while($row2 = mysql_fetch_assoc($qh2))
 						$imagelist[$includedeleted][$row["id"]]["subimages"][] =  $row2["imageid"];
@@ -2968,12 +2974,10 @@ function deleteSecretKeys($secretid) {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function getCryptKeyID() {
-	$reg = "|" . SCRIPT . "$|";
-	$casauthreg = "|/casauth$|";
-	$filebase = preg_replace($reg, '', $_SERVER['SCRIPT_FILENAME']);
-	$filebase = preg_replace($casauthreg, '', $filebase);
-	$filebase .= "/.ht-inc/cryptkey";
-	$idfile = "$filebase/cryptkeyid";
+	$me = new ReflectionFunction('getCryptKeyID');
+	$myfile = $me->getFileName();
+	$path = dirname($myfile);
+	$idfile = "$path/cryptkey/cryptkeyid";
 
 	static $create = 1; # set flag so that recursion only goes one level deep
 
@@ -3967,12 +3971,12 @@ function processInputVar($vartag, $type, $defaultvalue=NULL, $stripwhitespace=0)
 	   ! is_array($_POST[$vartag]) &&
 	   strncmp("{$_POST[$vartag]}", "0", 1) == 0 &&
 	   $type == ARG_NUMERIC &&
-		strncmp("{$_POST[$vartag]}", "0x0", 3) != 0) ||
+	   strncmp("{$_POST[$vartag]}", "0x0", 3) != 0) ||
 	   (array_key_exists($vartag, $_GET) &&
 	   ! is_array($_GET[$vartag]) &&
 	   strncmp("{$_GET[$vartag]}", "0", 1) == 0 &&
 	   $type == ARG_NUMERIC &&
-		strncmp("{$_GET[$vartag]}", "0x0", 3) != 0)) {
+	   strncmp("{$_GET[$vartag]}", "0x0", 3) != 0)) {
 		$_POST[$vartag] = "zero";
 	}
 	if(!empty($_POST[$vartag])) {
@@ -4116,7 +4120,7 @@ function getContinuationVar($name=NULL, $defaultval=NULL) {
 function processInputData($data, $type, $addslashes=0, $defaultvalue=NULL) {
 	if(strncmp("$data", "0", 1) == 0 &&
 	   $type == ARG_NUMERIC &&
-		strncmp("$data", "0x0", 3) != 0) {
+	   strncmp("$data", "0x0", 3) != 0) {
 		$data = "zero";
 	}
 	if(!empty($data))
@@ -6383,7 +6387,7 @@ function moveReservationsOffComputer($compid=0, $count=0) {
 	$checkstart = unixToDatetime(time() + 180);
 	if($compid == 0) {
 		$resources = getUserResources(array("imageAdmin", "imageCheckOut"),
-			                           array("available"), 0, 0);
+		                              array("available"), 0, 0);
 		$computers = implode("','", array_keys($resources["computer"]));
 		$computers = "'$computers'";
 		$query = "SELECT DISTINCT COUNT(rs.id) AS reservations, "
@@ -7511,7 +7515,7 @@ function getManagementNodes($alive="neither", $includedeleted=0, $id=0) {
 	}
 
 	# Get items from variable table for specific management node id
-	foreach ($return as $mn_id => $value ) {
+	foreach($return as $mn_id => $value) {
 		if(array_key_exists("hostname", $value)) {
 			$mn_hostname = $value['hostname'];
 			$timeservers = getVariable('timesource|'.$mn_hostname);
@@ -8051,9 +8055,9 @@ function showTimeTable($links) {
 			# or aren't mapped in resourcemap
 			if($computer_platformids[$id] != $platformid ||
 			   ($computerData[$id]["stateid"] != 2 &&
-				$computerData[$id]["stateid"] != 3 &&
-				$computerData[$id]["stateid"] != 6 &&
-				$computerData[$id]["stateid"] != 8) ||
+			   $computerData[$id]["stateid"] != 3 &&
+			   $computerData[$id]["stateid"] != 6 &&
+			   $computerData[$id]["stateid"] != 8) ||
 			   $computerData[$id]["ram"] < $imageData[$imageid]["minram"] ||
 			   $computerData[$id]["procnumber"] < $imageData[$imageid]["minprocnumber"] ||
 			   $computerData[$id]["procspeed"] < $imageData[$imageid]["minprocspeed"] ||
@@ -8166,7 +8170,7 @@ function showTimeTable($links) {
 				continue;
 			}
 			if($links && ($computer_platformids[$id] != $platformid ||
-				$computerData[$id]["stateid"] == 10 ||
+			   $computerData[$id]["stateid"] == 10 ||
 			   $computerData[$id]["stateid"] == 5)) {
 				continue;
 			}
@@ -8189,7 +8193,7 @@ function showTimeTable($links) {
 			elseif($timeslots[$id][$stamp]['blockAllocation'] &&
 			   ($timeslots[$id][$stamp]['blockInfo']['imageid'] != $imageid ||  # this line threw an error at one point, but we couldn't recreate it later
 			   (! in_array($timeslots[$id][$stamp]['blockInfo']['groupid'], array_keys($user['groups'])))) &&
-				$timeslots[$id][$stamp]['available']) {
+			   $timeslots[$id][$stamp]['available']) {
 				if($links) {
 					print "          <TD bgcolor=\"#ff0000\"><img src=images/red.jpg ";
 					print "alt=blockallocation border=0></TD>\n";
@@ -10818,7 +10822,7 @@ function addSublogEntry($logid, $imageid, $imagerevisionid, $computerid,
 	       .        "imagerevisionid, "
 	       .        "computerid, "
 	       .        "managementnodeid, "
-			 .        "predictivemoduleid, ";
+	       .        "predictivemoduleid, ";
 	if($fromblock) {
 		$query .=    "blockRequestid, "
 		       .     "blockStart, "
@@ -11359,7 +11363,7 @@ function getMappedSubConfigs($mode, $arg1, $arg2, $rec=0) {
 	       .       "cm.affiliationid = a.id AND "
 	       .       "(cm.affiliationid = {$user['affiliationid']} OR "
 	       .        "a.name = 'Global') AND "
-			 .       "cm.configstageid = cs.id AND ";
+	       .       "cm.configstageid = cs.id AND ";
 	if($mode) {
 	$query .=      "cmt.name = 'config' AND "
 	       .       " cm.subid IN ($inlist)";
@@ -11563,7 +11567,7 @@ function getConfigClustersRec($subimageid, $flat, $rec=0) {
 	       .      "configmaptype cmt, "
 	       .      "configsubimage csi, "
 	       .      "image i, "
-	       .      "OS o,  "
+	       .      "OS o, "
 	       .      "OStype ot, "
 	       .      "affiliation a "
 	       . "WHERE ct.name = 'cluster' AND "
@@ -12585,7 +12589,7 @@ function validateIPv4addr($ip) {
 ///
 /// \fn validateHostname($name)
 ///
-/// \param $name  the hostname to validate
+/// \param $name - the hostname to validate
 ///
 /// \return 1 if valid hostname else 0
 ///
@@ -13021,12 +13025,12 @@ function json_encode($a=false) {
 	if($a === true)
 		return 'true';
 	if(is_scalar($a)) {
-		if (is_float($a)) {
+		if(is_float($a)) {
 			 // Always use "." for floats.
 			 return floatval(str_replace(",", ".", strval($a)));
 		}
 
-		if (is_string($a)) {
+		if(is_string($a)) {
 			 static $jsonReplaces = array(array("\\", "/", "\n", "\t", "\r", "\b", "\f", '"'), array('\\\\', '\\/', '\\n', '\\t', '\\r', '\\b', '\\f', '\"'));
 			return '"' . str_replace($jsonReplaces[0], $jsonReplaces[1], $a) . '"';
 		}
@@ -13034,15 +13038,15 @@ function json_encode($a=false) {
 			return $a;
 	}
 	$isList = true;
-	for ($i = 0, reset($a); $i < count($a); $i++, next($a)) {
-		if (key($a) !== $i) {
+	for($i = 0, reset($a); $i < count($a); $i++, next($a)) {
+		if(key($a) !== $i) {
 			$isList = false;
 			break;
 		}
 	}
 	$result = array();
-	if ($isList) {
-		foreach ($a as $v) $result[] = json_encode($v);
+	if($isList) {
+		foreach($a as $v) $result[] = json_encode($v);
 		return '[' . join(',', $result) . ']';
 	}
 	else {
@@ -13209,8 +13213,8 @@ function sendHeaders() {
 			if(! array_key_exists('ownergroup', $data))
 				$data['ownergroup'] = processInputVar('ownergroup', ARG_NUMERIC, 0);
 			$ownergroupids = explode(',', $data['ownergroupids']);
-		   if(in_array($data['ownergroup'], $ownergroupids) &&
-		      array_key_exists($data['ownergroup'], $user['groups'])) {
+			if(in_array($data['ownergroup'], $ownergroupids) &&
+			   array_key_exists($data['ownergroup'], $user['groups'])) {
 				$expire = time() + 31536000; //expire in 1 year
 				setcookie("VCLOWNERGROUPID", $data['ownergroup'], $expire, "/", COOKIEDOMAIN);
 			}
@@ -13269,7 +13273,7 @@ function printHTMLHeader() {
 		$HTMLheader .= getHeader($refresh);
 
 	if(! in_array($mode, $noHTMLwrappers) &&
-		(! is_array($contdata) ||
+	   (! is_array($contdata) ||
 	    ! array_key_exists('noHTMLwrappers', $contdata) ||
 	    $contdata['noHTMLwrappers'] == 0)) {
 		print $HTMLheader;
@@ -13542,7 +13546,7 @@ function getUsingVCL() {
 	global $NOAUTH_HOMENAV;
 	$rt = '';
 	foreach($NOAUTH_HOMENAV as $name => $url)
-		$rt .= "<li><a href=\"$url\">" .  i($name) . "</a></li>\n";
+		$rt .= "<li><a href=\"$url\">" . i($name) . "</a></li>\n";
 	return $rt;
 }
 
@@ -14371,9 +14375,9 @@ function setVCLLocale() {
 	# use UTF8 encoding for any locales other than English (we may just be able
 	#   to always use UTF8)
 	if(preg_match('/^en/', $locale))
-		setlocale(LC_ALL,  $locale);
+		setlocale(LC_ALL, $locale);
 	else
-		setlocale(LC_ALL,  $locale . '.UTF8');
+		setlocale(LC_ALL, $locale . '.UTF8');
 	bindtextdomain('vcl', './locale');
 	textdomain('vcl');
 	bind_textdomain_codeset('vcl', 'UTF-8');
@@ -14403,7 +14407,7 @@ function getSelectLanguagePulldown() {
 	if(! is_array($user))
 		$user['id'] = 0;
 
-	$rt  = "<form name=\"localeform\" class=\"localeform\" action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
+	$rt = "<form name=\"localeform\" class=\"localeform\" action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
 	if($authed) {
 		$rt .= "<select name=\"continuation\" onChange=\"this.form.submit();\" autocomplete=\"off\">\n";
 		$cdata = array('IP' => $remoteIP, 'oldmode' => $mode);
@@ -14511,99 +14515,46 @@ function getFSlocales() {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function curlDoSSLWebRequest($url, $validatecert = TRUE) {
-    if (! function_exists ( 'curl_init' ) ) {
-        $message = "php cURL library is not configured.";
-        if(ONLINEDEBUG && checkUserHasPerm('View Debug Information')) {
-            print "<font color=red>" . $message . "</font><br>\n";
-        }
-        error_log('php cURL library is not configured.');
-        return;
-    }
-    
-    $ch = curl_init();
-    
-    curl_setopt($ch, CURLOPT_HEADER, false);
-    curl_setopt($ch, CURLOPT_URL, $url) ;
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, 0);
-    curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
-    
-    if ($validatecert == TRUE) {
-        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, 1);
-    }
-    curl_setopt( $ch, CURLOPT_VERBOSE, true );
-    
-    $response = curl_exec( $ch );
-    
-    if( curl_errno( $ch ) )	{
-        $info = curl_getinfo( $ch );
-        if(ONLINEDEBUG && checkUserHasPerm('View Debug Information')) {
-            print "<font color=red>" . curl_error( $ch ) . print_r( $info, TRUE ) . "</font><br>\n";
-        }
-        print "ERROR(curl_errno( $ch )): " . $ERRORS[$info] . "<BR>\n";
-        error_log("===========================================================================");
-        error_log("ERROR(curl_errno( $ch )): " . $ERRORS[$info]);
-        $backtrace = getBacktraceString(FALSE);
-        print "<pre>\n";
-        print $backtrace;
-        print "</pre>\n";
-        error_log($backtrace);
-    }
-    curl_close( $ch );
-    return $response;
-}
+	if(! function_exists('curl_init')) {
+		$message = "php cURL library is not configured.";
+		if(ONLINEDEBUG && checkUserHasPerm('View Debug Information')) {
+			print "<font color=red>" . $message . "</font><br>\n";
+		}
+		error_log('php cURL library is not configured.');
+		return;
+	}
 
-////////////////////////////////////////////////////////////////////////////////
-///
-/// \fn vclAutoLoader()
-///
-/// \brief autoload function for VCL classes
-///
-////////////////////////////////////////////////////////////////////////////////
-function vclAutoLoader($class) {
-    $siteconfigclasses = array(
-        'TimeVariable' => '',
-        'connectedUserCheck' => '',
-        'acknowledge' => '',
-        'initialconnecttimeout' => '',
-        'reconnecttimeout' => '',
-        'generalInuse' => '',
-        'serverInuse' => '',
-        'clusterInuse' => '',
-        'generalEndNotice1' => '',
-        'generalEndNotice2' => '',
-        'AffilTextVariable' => '',
-        'AffilHelpAddress' => '',
-        'AffilWebAddress' => '',
-        'AffilKMSserver' => '',
-        'AffilTheme' => '',
-        'AffilShibOnly' => '',
-        'AffilShibName' => '',
-        'GlobalSingleVariable' => '',
-        'userPasswordLength' => '',
-        'userPasswordSpecialChar' => '',
-        'NATportRange' => '',
-        'GlobalMultiVariable' => '',
-        'NFSmounts' => '',
-        'Affiliations' => '',
-        'Messages' => ''
-    );
-    if (file_exists('.ht-inc/'.strtolower($class).'.php')) {
-        require('.ht-inc/'.strtolower($class).'.php');
-    }
-    elseif (array_key_exists($class, $siteconfigclasses)) {
-        require('.ht-inc/siteconfig.php');
-    }
-    else {
-        throw new Exception("Unable to load $class.");
-    }
-}
+	$ch = curl_init();
 
-/**
- * \autoload function
- */
-if (function_exists('spl_autoload_register')) {
-    spl_autoload_register('vclAutoLoader');
+	curl_setopt($ch, CURLOPT_HEADER, false);
+	curl_setopt($ch, CURLOPT_URL, $url) ;
+	curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+	curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, 0);
+	curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
+
+	if($validatecert == TRUE) {
+		curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
+		curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, 1);
+	}
+	curl_setopt($ch, CURLOPT_VERBOSE, true);
+
+	$response = curl_exec($ch);
+
+	if(curl_errno($ch)) {
+		$info = curl_getinfo($ch);
+		if(ONLINEDEBUG && checkUserHasPerm('View Debug Information')) {
+			print "<font color=red>" . curl_error($ch) . print_r($info, TRUE) . "</font><br>\n";
+		}
+		print "ERROR(curl_errno($ch)): " . $ERRORS[$info] . "<BR>\n";
+		error_log("===========================================================================");
+		error_log("ERROR(curl_errno($ch)): " . $ERRORS[$info]);
+		$backtrace = getBacktraceString(FALSE);
+		print "<pre>\n";
+		print $backtrace;
+		print "</pre>\n";
+		error_log($backtrace);
+	}
+	curl_close($ch);
+	return $response;
 }
 ?>
