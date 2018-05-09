@@ -10468,13 +10468,16 @@ function unset_by_val($needle, &$haystack) {
 ////////////////////////////////////////////////////////////////////////////////
 function sendRDPfile() {
 	global $user;
-	# for more info on this file, see 
+	# for more info on this file, see
 	# http://dev.remotenetworktechnology.com/ts/rdpfile.htm
 	$requestid = getContinuationVar("requestid");
 	$resid = getContinuationVar("resid");
+
+	$cmid = getContinuationVar('cmid');
+
 	$request = getRequestInfo("$requestid");
 	if($request['stateid'] == 11 || $request['stateid'] == 12 ||
-	   ($request['stateid'] == 14 && 
+	   ($request['stateid'] == 14 &&
 	   ($request['laststateid'] == 11 || $request['laststateid'] == 12))) {
 		$cont = addContinuationsEntry('viewRequests');
 		header("Location: " . BASEURL . SCRIPT . "?continuation=$cont");
@@ -10494,20 +10497,19 @@ function sendRDPfile() {
 	                                          $res['imagerevisionid']);
 	$natports = getNATports($resid);
 	$port = '';
-	foreach($connectData as $cmid => $method) {
-		if(preg_match('/remote desktop/i', $method['description']) ||
-		   preg_match('/RDP/i', $method['description'])) {
-			# assume index 0 of ports for nat
-			if(! empty($natports) && array_key_exists($method['ports'][0]['key'], $natports[$cmid]))
-				$port = ':' . $natports[$cmid][$method['ports'][0]['key']]['publicport'];
-			else {
-				if($method['ports'][0]['key'] == '#Port-TCP-3389#' &&
-				   $user['rdpport'] != 3389)
-					$port = ':' . $user['rdpport'];
-				else
-					$port = ':' . $method['ports'][0]['port'];
-			}
-			break;
+
+	$method = $connectData[$cmid];
+	if(preg_match('/remote desktop/i', $method['description']) ||
+	   preg_match('/RDP/i', $method['description'])) {
+		# assume index 0 of ports for nat
+		if(! empty($natports) && array_key_exists($method['ports'][0]['key'], $natports[$cmid]))
+			$port = ':' . $natports[$cmid][$method['ports'][0]['key']]['publicport'];
+		else {
+			if($method['ports'][0]['key'] == '#Port-TCP-3389#' &&
+			   $user['rdpport'] != 3389)
+				$port = ':' . $user['rdpport'];
+			else
+				$port = ':' . $method['ports'][0]['port'];
 		}
 	}
 

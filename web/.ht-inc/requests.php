@@ -4421,7 +4421,8 @@ function AJconnectRequest() {
 				#$h .= "<div id=\"connectdiv\">\n";
 				$h .= "<FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
 				$cdata = array('requestid' => $requestid,
-				               'resid' => $res['reservationid']);
+				               'resid' => $res['reservationid'],
+				               'cmid' => $cmid);
 				$expire = datetimeToUnix($requestData['end']) - $now + 1800; # remaining reservation time plus 30 min
 				$cont = addContinuationsEntry('sendRDPfile', $cdata, $expire);
 				$h .= "<INPUT type=hidden name=continuation value=\"$cont\">\n";
