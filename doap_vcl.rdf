@@ -33,7 +33,7 @@
     <mailing-list rdf:resource="http://vcl.apache.org/comm/index.html#mail-list" />
     <download-page rdf:resource="http://vcl.apache.org/downloads/download.cgi" />
     <programming-language>BASH</programming-language>
-    <programming-language>Javascript</programming-language>
+    <programming-language>JavaScript</programming-language>
     <programming-language>Perl</programming-language>
     <programming-language>PHP</programming-language>
     <programming-language>SQL</programming-language>
