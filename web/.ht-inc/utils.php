@@ -10479,6 +10479,8 @@ function sendRDPfile() {
 	$requestid = getContinuationVar("requestid");
 	$resid = getContinuationVar("resid");
 
+	$cmid = getContinuationVar('cmid');
+
 	$request = getRequestInfo("$requestid");
 	if($request['stateid'] == 11 || $request['stateid'] == 12 ||
 	   ($request['stateid'] == 14 &&
@@ -10501,20 +10503,19 @@ function sendRDPfile() {
 	                                          $res['imagerevisionid']);
 	$natports = getNATports($resid);
 	$port = '';
-	foreach($connectData as $cmid => $method) {
-		if(preg_match('/remote desktop/i', $method['description']) ||
-		   preg_match('/RDP/i', $method['description'])) {
-			# assume index 0 of ports for nat
-			if(! empty($natports) && array_key_exists($method['ports'][0]['key'], $natports[$cmid]))
-				$port = ':' . $natports[$cmid][$method['ports'][0]['key']]['publicport'];
-			else {
-				if($method['ports'][0]['key'] == '#Port-TCP-3389#' &&
-				   $user['rdpport'] != 3389)
-					$port = ':' . $user['rdpport'];
-				else
-					$port = ':' . $method['ports'][0]['port'];
-			}
-			break;
+
+	$method = $connectData[$cmid];
+	if(preg_match('/remote desktop/i', $method['description']) ||
+	   preg_match('/RDP/i', $method['description'])) {
+		# assume index 0 of ports for nat
+		if(! empty($natports) && array_key_exists($method['ports'][0]['key'], $natports[$cmid]))
+			$port = ':' . $natports[$cmid][$method['ports'][0]['key']]['publicport'];
+		else {
+			if($method['ports'][0]['key'] == '#Port-TCP-3389#' &&
+			   $user['rdpport'] != 3389)
+				$port = ':' . $user['rdpport'];
+			else
+				$port = ':' . $method['ports'][0]['port'];
 		}
 	}
 
@@ -10574,6 +10575,8 @@ function sendRDPfile() {
 		$userid = $user["unityid"];
 	if($request['reservations'][0]['domainDNSName'] != '' && ! strlen($passwd))
 		$userid .= "@" . $request['reservations'][0]['domainDNSName'];
+	elseif($request['reservations'][0]['OStype'] == 'windows')
+		$userid = ".\\$userid";
 	print "username:s:$userid\r\n";
 	print "clear password:s:$passwd\r\n";
 	print "domain:s:\r\n";
@@ -13026,12 +13029,12 @@ function json_encode($a=false) {
 		return 'true';
 	if(is_scalar($a)) {
 		if(is_float($a)) {
-			 // Always use "." for floats.
-			 return floatval(str_replace(",", ".", strval($a)));
+			// Always use "." for floats.
+			return floatval(str_replace(",", ".", strval($a)));
 		}
 
 		if(is_string($a)) {
-			 static $jsonReplaces = array(array("\\", "/", "\n", "\t", "\r", "\b", "\f", '"'), array('\\\\', '\\/', '\\n', '\\t', '\\r', '\\b', '\\f', '\"'));
+			static $jsonReplaces = array(array("\\", "/", "\n", "\t", "\r", "\b", "\f", '"'), array('\\\\', '\\/', '\\n', '\\t', '\\r', '\\b', '\\f', '\"'));
 			return '"' . str_replace($jsonReplaces[0], $jsonReplaces[1], $a) . '"';
 		}
 		else

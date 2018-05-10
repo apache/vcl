@@ -380,7 +380,7 @@ function viewRequests() {
 			if(checkUserHasPerm('View Debug Information')) {
 				if(! is_null($requests[$i]['vmhostid'])) {
 					$query = "SELECT c.hostname "
-					       . "FROM computer c, " 
+					       . "FROM computer c, "
 					       .      "vmhost v "
 					       . "WHERE v.id = {$requests[$i]['vmhostid']} AND "
 					       .       "v.computerid = c.id";
@@ -1329,7 +1329,7 @@ function newReservationHTML() {
 						$subowner = 1;
 				}
 			}
-			if($subowner || 
+			if($subowner ||
 			   (array_key_exists($id, $imagedata) &&
 			   count($imagedata[$id]['imagerevision']) > 1 &&
 			   ($imagedata[$id]['ownerid'] == $user['id'] ||
@@ -1339,7 +1339,7 @@ function newReservationHTML() {
 			}
 		}
 	}
-	if(in_array('serverCheckOut', $user['privileges']) && 
+	if(in_array('serverCheckOut', $user['privileges']) &&
 	   count($checkout['image'])) {
 		$serveraccess = 1;
 		/*$extraimages = getServerProfileImages($user['id']);
@@ -1369,7 +1369,7 @@ function newReservationHTML() {
 							$subowner = 1;
 					}
 				}
-				if($subowner || 
+				if($subowner ||
 				   (array_key_exists($id, $imagedata) &&
 				   count($imagedata[$id]['imagerevision']) > 1 &&
 				   ($imagedata[$id]['ownerid'] == $user['id'] ||
@@ -1884,7 +1884,7 @@ function AJupdateWaitTime() {
 			$start = unixFloor15($now);
 		if($type == 'basic' || $type == 'imaging') {
 			# compute maxstart based on 11:45 pm on start day
-			$tmp = $now + DAYSAHEAD * SECINDAY; 
+			$tmp = $now + DAYSAHEAD * SECINDAY;
 			$maxstart = mktime(23, 45, 0, date('n', $tmp), date('j', $tmp), date('Y', $tmp));
 			if($start > $maxstart)
 				return;
@@ -1986,7 +1986,7 @@ function AJupdateWaitTime() {
 	$rc = isAvailable($images, $imageid, $imagerevisionid, $start, $end, 0, 0, 0, 0, $imaging, $fixedIP);
 	if($rc < 1) {
 		$cdata = array('now' => 0,
-		               'start' => $start, 
+		               'start' => $start,
 		               'end' => $end,
 		               'server' => 0,
 		               'imageid' => $imageid);
@@ -2488,7 +2488,7 @@ function saveRequestConfigs($reqid, $imageid, $configs, $vars) {
 		}
 	}
 	$qbase = "INSERT INTO configinstance "
-	       .        "(reservationid, " 
+	       .        "(reservationid, "
 	       .        "configid, "
 	       .        "configmapid, "
 	       .        "configinstancestatusid) "
@@ -2706,8 +2706,8 @@ function detailStatusHTML($reqid) {
 
 	if($request['currstateid'] == 11 ||
 	   ($request['currstateid'] == 12 && $request['laststateid'] == 11))
-		return "<br><span class=\"rederrormsg\">" . 
-		       i("The selected reservation has timed out and is no longer available.") . 
+		return "<br><span class=\"rederrormsg\">" .
+		       i("The selected reservation has timed out and is no longer available.") .
 		       "</span>";
 
 	if($request['imageid'] == $request['compimageid'])
@@ -2954,7 +2954,7 @@ function viewRequestInfo() {
 	print "  </TR>\n";
 	print "  <TR>\n";
 	print "    <TH align=right>Start&nbsp;Time:</TH>\n";
-	if(datetimeToUnix($request["start"]) < 
+	if(datetimeToUnix($request["start"]) <
 	   datetimeToUnix($request["daterequested"])) {
 		print "    <TD>" . prettyDatetime($request["daterequested"]) . "</TD>\n";
 	}
@@ -3092,7 +3092,7 @@ function AJeditRequest() {
 	$request = getRequestInfo($requestid, 1);
 	# check to see if reservation exists
 	if(is_null($request) || $request['stateid'] == 11 || $request['stateid'] == 12 ||
-	   ($request['stateid'] == 14 && 
+	   ($request['stateid'] == 14 &&
 	   ($request['laststateid'] == 11 || $request['laststateid'] == 12))) {
 		sendJSON(array('status' => 'resgone'));
 		return;
@@ -3208,14 +3208,14 @@ function AJeditRequest() {
 	if($unixstart > $now) {
 		$tzunixstart = $unixstart + ($_SESSION['persistdata']['tzoffset'] * 60);
 		$cdata['modifystart'] = 1;
-		$txt  = i("Modify reservation for") . " <b>{$request['reservations'][0]['prettyimage']}</b> "; 
+		$txt  = i("Modify reservation for") . " <b>{$request['reservations'][0]['prettyimage']}</b> ";
 		$txt .= i("starting") . " " . prettyDatetime($request["start"]) . ": <br>";
 		$h .= preg_replace("/(.{1,60}([ \n]|$))/", '\1<br>', $txt);
 		$days = array();
 		$startday = date('l', $tzunixstart);
 		$cur = time() + ($_SESSION['persistdata']['tzoffset'] * 60);
-		for($end = $cur + DAYSAHEAD * SECINDAY; 
-		    $cur < $end; 
+		for($end = $cur + DAYSAHEAD * SECINDAY;
+		    $cur < $end;
 		    $cur += SECINDAY) {
 			$index = date('Ymd', $cur);
 			$days[$index] = date('l', $cur);
@@ -3367,13 +3367,13 @@ function AJeditRequest() {
 	// if started, only allow end to be modified
 	# check for following reservations
 	$timeToNext = timeToNextReservation($request);
-	# check for 30 minutes because need 15 minute buffer and min can 
+	# check for 30 minutes because need 15 minute buffer and min can
 	# extend by is 15 min
 	if($timeToNext < 30) {
 		$movedall = 1;
 		$lockedall = 1;
 		if(count($request['reservations']) > 1) {
-			# get semaphore on each existing node in cluster so that nothing 
+			# get semaphore on each existing node in cluster so that nothing
 			# can get moved to the nodes during this process
 
 			$semimageid = getImageId('noimage');
@@ -3826,9 +3826,9 @@ function AJsubmitEditRequest() {
 	$rc = isAvailable($images, $imageid, $revisions, $startts,
 	                  $endts, 1, $requestid, 0, 0, 0, $ip, $mac);
 	$data = array();
-	if($rc < 1) { 
+	if($rc < 1) {
 		$cdata = array('now' => 0,
-		               'start' => $startts, 
+		               'start' => $startts,
 		               'end' => $endts,
 		               'server' => $allowindefiniteend,
 		               'imageid' => $imageid,
@@ -3936,7 +3936,7 @@ function AJconfirmDeleteRequest() {
 		return;
 	}
 	if($request['stateid'] == 11 || $request['stateid'] == 12 ||
-	   ($request['stateid'] == 14 && 
+	   ($request['stateid'] == 14 &&
 	   ($request['laststateid'] == 11 || $request['laststateid'] == 12))) {
 		$data = array('error' => 1,
 		              'refresh' => 1,
@@ -4160,7 +4160,7 @@ function AJrebootRequest() {
 	$requestid = getContinuationVar('requestid');
 	$reqdata = getRequestInfo($requestid, 1);
 	if(is_null($reqdata) || $reqdata['stateid'] == 11 || $reqdata['stateid'] == 12 ||
-	   ($reqdata['stateid'] == 14 && 
+	   ($reqdata['stateid'] == 14 &&
 	   ($reqdata['laststateid'] == 11 || $reqdata['laststateid'] == 12))) {
 		print "resGone('reboot'); ";
 		print "dijit.byId('editResDlg').show();";
@@ -4192,7 +4192,7 @@ function AJshowReinstallRequest() {
 	$requestid = getContinuationVar('requestid');
 	$reqdata = getRequestInfo($requestid, 1);
 	if(is_null($reqdata) || $reqdata['stateid'] == 11 || $reqdata['stateid'] == 12 ||
-	   ($reqdata['stateid'] == 14 && 
+	   ($reqdata['stateid'] == 14 &&
 	   ($reqdata['laststateid'] == 11 || $reqdata['laststateid'] == 12))) {
 		sendJSON(array('status' => 'resgone'));
 		return;
@@ -4301,7 +4301,7 @@ function AJconnectRequest() {
 		return;
 	}
 	if($requestData['stateid'] == 11 || $requestData['stateid'] == 12 ||
-	   ($requestData['stateid'] == 14 && 
+	   ($requestData['stateid'] == 14 &&
 	   ($requestData['laststateid'] == 11 || $requestData['laststateid'] == 12))) {
 		$h = i("This reservation has timed out due to lack of user activity and is no longer available.");
 		sendJSON(array('html' => $h, 'refresh' => 1));
@@ -4374,6 +4374,8 @@ function AJconnectRequest() {
 				$conuser = $user['unityid'];
 			if($requestData['reservations'][0]['domainDNSName'] != '' && ! strlen($passwd))
 				$conuser .= "@" . $requestData['reservations'][0]['domainDNSName'];
+			elseif($requestData['reservations'][0]['OStype'] == 'windows')
+				$conuser = ".\\$conuser";
 			if(! strlen($passwd))
 				$passwd = i('(use your campus password)');
 			if($cluster)
@@ -4400,17 +4402,17 @@ function AJconnectRequest() {
 			$tos = array($conuser,
 			             $passwd,
 			             $res['connectIP']);
-			$msg = preg_replace($froms, $tos, $method['connecttext']); 
+			$msg = preg_replace($froms, $tos, $method['connecttext']);
 			foreach($method['ports'] as $port) {
 				if($usenat && array_key_exists($port['key'], $natports[$cmid]))
-					$msg = preg_replace("/{$port['key']}/", $natports[$cmid][$port['key']]['publicport'], $msg); 
+					$msg = preg_replace("/{$port['key']}/", $natports[$cmid][$port['key']]['publicport'], $msg);
 				else {
 					if((preg_match('/remote desktop/i', $method['description']) ||
-					   preg_match('/RDP/i', $method['description'])) && 
+					   preg_match('/RDP/i', $method['description'])) &&
 					   $port['key'] == '#Port-TCP-3389#')
-						$msg = preg_replace("/{$port['key']}/", $user['rdpport'], $msg); 
+						$msg = preg_replace("/{$port['key']}/", $user['rdpport'], $msg);
 					else
-						$msg = preg_replace("/{$port['key']}/", $port['port'], $msg); 
+						$msg = preg_replace("/{$port['key']}/", $port['port'], $msg);
 				}
 			}
 			#$h .= preg_replace("/(.{1,120}([ ]|$))/", '\1<br>', $msg);
@@ -4421,7 +4423,8 @@ function AJconnectRequest() {
 				#$h .= "<div id=\"connectdiv\">\n";
 				$h .= "<FORM action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
 				$cdata = array('requestid' => $requestid,
-				               'resid' => $res['reservationid']);
+				               'resid' => $res['reservationid'],
+				               'cmid' => $cmid);
 				$expire = datetimeToUnix($requestData['end']) - $now + 1800; # remaining reservation time plus 30 min
 				$cont = addContinuationsEntry('sendRDPfile', $cdata, $expire);
 				$h .= "<INPUT type=hidden name=continuation value=\"$cont\">\n";
@@ -4619,7 +4622,7 @@ function processRequestInput() {
 	$images = removeNoCheckout($resources["image"]);
 	#$extraimages = getServerProfileImages($user['id']);
 	if((! array_key_exists($return['imageid'], $images) &&
-	   /*($return['type'] != 'server' || 
+	   /*($return['type'] != 'server' ||
 		! array_key_exists($return['imageid'], $extraimages)) &&*/
 	   ($return['type'] != 'imaging' ||
 	   ! array_key_exists($return['imageid'], $withnocheckout))) ||
@@ -4660,7 +4663,7 @@ function processRequestInput() {
 		$return['revisionids'][$return['imageid']][] = $revids[0];
 	else
 		$return['revisionids'][$return['imageid']][] = getProductionRevisionid($return['imageid']);
-	
+
 	# duration
 	if($return['ending'] == 'duration') {
 		$return['duration'] = processInputVar('duration', ARG_NUMERIC, 0);
@@ -4757,7 +4760,7 @@ function processRequestInput() {
 				$return['dnsArr'][] = $dnsaddr;
 				$cnt++;
 			}
-	
+
 			# check that a management node can handle the network
 			$mappedmns = getMnsFromImage($return['imageid']);
 			$mnnets = checkAvailableNetworks($return['ipaddr']);
@@ -5008,8 +5011,8 @@ function getReserveDayData() {
 	$cur = time();
 	if(array_key_exists('tzoffset', $_SESSION['persistdata']))
 		$cur += $_SESSION['persistdata']['tzoffset'] * 60;
-	for($end = $cur + DAYSAHEAD * SECINDAY; 
-	    $cur < $end; 
+	for($end = $cur + DAYSAHEAD * SECINDAY;
+	    $cur < $end;
 	    $cur += SECINDAY) {
 		$tmp = getdate($cur);
 		$index = $cur;
