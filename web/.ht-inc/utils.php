@@ -10569,6 +10569,8 @@ function sendRDPfile() {
 		$userid = $user["unityid"];
 	if($request['reservations'][0]['domainDNSName'] != '' && ! strlen($passwd))
 		$userid .= "@" . $request['reservations'][0]['domainDNSName'];
+	elseif($request['reservations'][0]['OStype'] == 'windows')
+		$userid = ".\\$userid";
 	print "username:s:$userid\r\n";
 	print "clear password:s:$passwd\r\n";
 	print "domain:s:\r\n";

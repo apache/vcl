@@ -4374,6 +4374,8 @@ function AJconnectRequest() {
 				$conuser = $user['unityid'];
 			if($requestData['reservations'][0]['domainDNSName'] != '' && ! strlen($passwd))
 				$conuser .= "@" . $requestData['reservations'][0]['domainDNSName'];
+			elseif($requestData['reservations'][0]['OStype'] == 'windows')
+				$conuser = ".\\$conuser";
 			if(! strlen($passwd))
 				$passwd = i('(use your campus password)');
 			if($cluster)
