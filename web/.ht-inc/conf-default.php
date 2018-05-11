@@ -56,11 +56,15 @@ regarding specific terms and conditions, please contact
 
 
 #######################   end required modifications ###########################
+$host = $_SERVER['HTTP_HOST'];
+if (strpos($host, ':')) {
+	$host = substr($host, 0, strpos($host, ':'));
+}
 
 define("BASEURL", "https://{$_SERVER['HTTP_HOST']}/vcl");   // no trailing slash - all of the URL except /index.php
 define("SCRIPT", "/index.php");                 // this should only be "/index.php" unless you rename index.php to something else
 define("HOMEURL", "https://{$_SERVER['HTTP_HOST']}/vcl/"); // url to go to when someone clicks HOME or Logout
-define("COOKIEDOMAIN", "{$_SERVER['HTTP_HOST']}");       // domain in which cookies are set
+define("COOKIEDOMAIN", "$host");       // domain in which cookies are set
 
 define("DEFAULTGROUP", "adminUsers"); // if a user is in no groups, use reservation
 										  //   length attriubtes from this group

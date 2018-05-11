@@ -125,7 +125,12 @@ function initGlobals() {
 	$days = array(i('Sunday'), i('Monday'), i('Tuesday'), i('Wednesday'), i('Thursday'), i('Friday'), i('Saturday'));
 	$phpVerArr = explode('.', phpversion());
 	$phpVer = $phpVerArr[0];
-	$uniqid = uniqid($_SERVER['HTTP_HOST'] . "-" . getmypid() . "-");
+	
+	$host = $_SERVER['HTTP_HOST'];
+	if(strpos($host, ':')) {
+		$host = substr($host, 0, strpos($host, ':'));
+	}
+	$uniqid = uniqid($host . "-" . getmypid() . "-");
 
 	$passwdArray = array('A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K',
 	                     'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V',
