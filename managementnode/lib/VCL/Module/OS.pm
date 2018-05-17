@@ -4355,6 +4355,10 @@ sub get_tools_file_paths {
 				notify($ERRORS{'DEBUG'}, 0, "ignoring Subversion file: $mn_file_path");
 				next MN_FILE;
 			}
+			elsif ($mn_file_path =~ /\.gitignore/i) {
+				notify($ERRORS{'DEBUG'}, 0, "ignoring .gitignore file: $mn_file_path");
+				next MN_FILE;
+			}
 			elsif ($mn_file_path =~ /\/$other_architecture\//) {
 				notify($ERRORS{'DEBUG'}, 0, "ignoring file intended for different computer architecture: $mn_file_path");
 				next MN_FILE;

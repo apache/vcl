@@ -7027,7 +7027,12 @@ sub copy_capture_configuration_files {
 	if (!$self->delete_files_by_pattern($NODE_CONFIGURATION_DIRECTORY, '.*\.svn.*')) {
 		notify($ERRORS{'WARNING'}, 0, "unable to delete Subversion files under: $NODE_CONFIGURATION_DIRECTORY");
 	}
-	
+
+	# Delete any GitIgnore files which may have been copied
+	if (!$self->delete_files_by_pattern($NODE_CONFIGURATION_DIRECTORY, '.*\.gitignore.*')) {
+		notify($ERRORS{'WARNING'}, 0, "unable to delete GitIgnore files under: $NODE_CONFIGURATION_DIRECTORY");
+	}
+
 	$self->set_file_owner($NODE_CONFIGURATION_DIRECTORY, 'root');
 	
 	# Find any files containing a 'WINDOWS_ROOT_PASSWORD' string and replace it with the root password
