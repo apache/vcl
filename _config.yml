@@ -1,0 +1,10 @@
+# Site settings
+title: VCL Documentation
+email: jfthomps@ncsu.edu
+description: > # this means to ignore newlines until "baseurl:"
+  Documentation for the Apache VCL (Virtual Computing Lab) project
+baseurl: "" # the subpath of your site, e.g. /blog/
+url: "http://vcl.apache.org" # the base hostname & protocol for your site
+
+# Build settings
+markdown: kramdown
