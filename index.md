@@ -20,3 +20,5 @@ Behind the scenes, the scheduling components built into the web portal determine
 <img src="images/remote-connection.png" width="600" border="0">
 
 VCL became an Apache Software Foundation top level project on June 20, 2012.
+
+This is a test line.
