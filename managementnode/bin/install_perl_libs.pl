@@ -85,6 +85,7 @@ my @PERL_MODULES = (
 	'LWP::Protocol::https',
 	'Mail::Mailer',
 	'Mo::builder',
+	'Net::Ping::External',
 	'Net::SSH::Expect',
 	'Object::InsideOut',
 	'RPC::XML',

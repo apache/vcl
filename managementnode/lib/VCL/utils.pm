@@ -58,7 +58,7 @@ use Time::Local;
 use DBI;
 use DBI::Const::GetInfoType;
 use diagnostics;
-use Net::Ping;
+use Net::Ping::External qw(ping);
 use Fcntl qw(:DEFAULT :flock);
 use FindBin;
 use Getopt::Long;
@@ -2131,8 +2131,8 @@ sub nmap_port {
 
  Parameters  : $node
  Returns     : boolean
- Description : Uses Net::Ping to check if a node is responding to ICMP echo
-               ping.
+ Description : Uses Net::Ping::External to check if a node is responding to ICMP
+               echo ping.
 
 =cut
 
@@ -2156,9 +2156,7 @@ sub _pingnode {
 		}
 	}
 	
-	my $p = Net::Ping->new("icmp");
-	my $result = $p->ping($remote_connection_target, 1);
-	$p->close();
+	my $result = ping(host => $remote_connection_target, timeout => 1);
 
 	if ($result) {
 		#notify($ERRORS{'DEBUG'}, 0, "$node_string is responding to ping");
