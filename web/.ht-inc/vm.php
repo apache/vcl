@@ -47,7 +47,7 @@ function editVMInfo() {
 	print "</div>\n";
 
 	$newmsg = "To create a new Virtual Host, change the state of a computer to<br>\n"
-	        . "'vmhostinuse' under Manage Computers-&gt;Computer Utilities.<br><br>\n";
+	        . "'vmhostinuse' under Manage Computers-&gt;Edit Computer Profiles.<br><br>\n";
 	$vmhosts = getVMHostData();
 	$resources = getUserResources(array("computerAdmin"), array("administer"));
 	foreach($vmhosts as $key => $value) {
