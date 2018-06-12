@@ -3870,14 +3870,13 @@ function AJviewBlockAllocationUsage() {
 	$firststart = '';
 	$laststart = '';
 	while($row = mysql_fetch_assoc($qh)) {
-		if($first && ! is_null($row['blockStart'])) {
+		if(is_null($row['blockStart']))
+			continue;
+		if($first) {
 			$firststart = datetimeToUnix($row['blockStart']);
 			$first = 0;
 		}
-		elseif(! is_null($row['blockStart']))
-			$laststart = datetimeToUnix($row['blockStart']);
-		if(is_null($row['blockStart']))
-			continue;
+		$laststart = datetimeToUnix($row['blockStart']);
 		$percent = (int)($row['used'] / $row['allocated'] * 100);
 		$startts = datetimeToUnix($row['blockStart']);
 		$usage[$startts] = array('percent' => $percent,
