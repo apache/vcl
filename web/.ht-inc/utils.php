@@ -352,13 +352,19 @@ function initGlobals() {
 ////////////////////////////////////////////////////////////////////////////////
 function __autoload($class) {
 	global $actions;
-	$class = strtolower($class);
-	if(array_key_exists($class, $actions['classmapping'])) {
-		require_once(".ht-inc/{$actions['classmapping'][$class]}.php");
-		return;
+	$_class = strtolower($class);
+	if(array_key_exists($_class, $actions['classmapping'])) {
+		require_once(".ht-inc/{$actions['classmapping'][$_class]}.php");
 	}
-	require_once(".ht-inc/resource.php");
-	require_once(".ht-inc/$class.php");
+	elseif(file_exists(".ht-inc/{$_class}.php")) {
+		require_once(".ht-inc/{$_class}.php");
+		if(get_parent_class($class) == 'Resource')
+			require_once(".ht-inc/resource.php");
+	}
+}
+// register autoload function in case CAS or something else has used spl_autoload_register
+if(function_exists('spl_autoload_register')) {
+	spl_autoload_register('__autoload');
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -448,7 +454,7 @@ function checkAccess() {
 						exit;
 					}
 					$search = ldap_search($ds,
-					                      $auth['binddn'], 
+					                      $auth['binddn'],
 					                      "{$auth['lookupuserfield']}={$user['unityid']}",
 					                      array('dn'), 0, 3, 15);
 					if($search) {
@@ -498,7 +504,7 @@ function checkAccess() {
 			elseif($authMechs[$authtype]['type'] == 'redirect') {
 				$affilid = $authMechs[$authtype]['affiliationid'];
 				if(!(isset($apiValidateFunc) && is_array($apiValidateFunc) &&
-				   array_key_exists($affilid, $apiValidateFunc) && 
+				   array_key_exists($affilid, $apiValidateFunc) &&
 				   $apiValidateFunc[$affilid]($xmluser, $xmlpass))) {
 					printXMLRPCerror(3);    # access denied
 					dbDisconnect();
@@ -636,7 +642,7 @@ function checkCryptkey() {
 		$id = fread($fh, 50);
 		fclose($fh);
 		$_id = mysql_real_escape_string($id);
-	
+
 		$query = "SELECT id "
 		       . "FROM cryptkey  "
 		       . "WHERE id = '$_id'";
@@ -745,7 +751,7 @@ function maintenanceCheck() {
 		doQuery($query, 101, 'vcl', 1);
 		dbDisconnect();
 		return;
-	}  
+	}
 	$inmaintenance = 0;
 	$skin = '';
 	foreach($files as $file) {
@@ -1104,7 +1110,7 @@ function validateUserid($loginid) {
 	global $affilValFuncArgs, $affilValFunc;
 	if(empty($loginid))
 		return 0;
-	
+
 	$rc = getAffilidAndLogin($loginid, $affilid);
 	if($rc == -1)
 		return 0;
@@ -1122,15 +1128,15 @@ function validateUserid($loginid) {
 		return 1;
 
 	if($rc == 0 &&
-	   ALLOWADDSHIBUSERS == 1 && 
+	   ALLOWADDSHIBUSERS == 1 &&
 	   strpos($loginid, '@')) {
 		$query = "SELECT shibonly "
 		       . "FROM affiliation "
 		       . "WHERE id = " . DEFAULT_AFFILID;
-		$qh = doQuery($query); 
+		$qh = doQuery($query);
 		$row = mysql_fetch_assoc($qh);
 		if($row['shibonly'] == 1)
-			return 0;           
+			return 0;
 	}
 
 	$valfunc = $affilValFunc[$affilid];
@@ -1270,7 +1276,7 @@ function dbDisconnect() {
 function doQuery($query, $errcode=101, $db="vcl", $nolog=0) {
 	global $mysql_link_vcl, $mysql_link_acct, $user, $mode, $ENABLE_ITECSAUTH;
 	if($db == "vcl") {
-		if(QUERYLOGGING != 0 && (! $nolog) && 
+		if(QUERYLOGGING != 0 && (! $nolog) &&
 		   preg_match('/^(UPDATE|INSERT|DELETE)/', $query) &&
 		   strpos($query, 'UPDATE continuations SET expiretime = ') === FALSE) {
 			$logquery = str_replace("'", "\'", $query);
@@ -1373,7 +1379,7 @@ function getOSList() {
 ///                  checked out\n
 /// \b maxinitialtime - maximum time (in minutes) to be shown when requesting
 ///                     a reservation that the image can reserved for\n
-/// \b imagemetaid - NULL or corresponding id from imagemeta table and the 
+/// \b imagemetaid - NULL or corresponding id from imagemeta table and the
 /// following additional information:\n
 /// \b checkuser - whether or not vcld should check for a logged in user\n
 /// \b sysprep - whether or not to use sysprep on creation of the image\n
@@ -1483,7 +1489,7 @@ function getImages($includedeleted=0, $imageid=0) {
 	       .       "u.affiliationid = a.id ";
 	if(! $includedeleted)
 		$query .= "AND i.deleted = 0 ";
-   $query .= "ORDER BY i.prettyname";
+	$query .= "ORDER BY i.prettyname";
 	$qh = doQuery($query, 120);
 	while($row = mysql_fetch_assoc($qh)) {
 		if(is_null($row['maxconcurrent']))
@@ -1509,8 +1515,8 @@ function getImages($includedeleted=0, $imageid=0) {
 				$imagelist[$includedeleted][$row["id"]]["subimages"] = array();
 				if($allmetadata[$metaid]["subimages"]) {
 					$query2 = "SELECT imageid "
-				        . "FROM subimages "
-				        . "WHERE imagemetaid = $metaid";
+					        . "FROM subimages "
+					        . "WHERE imagemetaid = $metaid";
 					$qh2 = doQuery($query2, 101);
 					while($row2 = mysql_fetch_assoc($qh2))
 						$imagelist[$includedeleted][$row["id"]]["subimages"][] =  $row2["imageid"];
@@ -1990,7 +1996,7 @@ function getProductionRevisionid($imageid, $nostatic=0) {
 			return '';
 	$query = "SELECT id, "
 	       .        "imageid "
-	       . "FROM imagerevision  " 
+	       . "FROM imagerevision  "
 	       . "WHERE production = 1";
 	$qh = doQuery($query, 101);
 	while($row = mysql_fetch_assoc($qh))
@@ -2190,7 +2196,7 @@ function getUserResources($userprivs, $resourceprivs=array("available"),
 
 	$resources = array();
 	foreach(array_keys($resourcegroups) as $type) {
-		$resources[$type] = 
+		$resources[$type] =
 		   getResourcesFromGroups($resourcegroups[$type], $type, $includedeleted);
 	}
 	if(! $bygroup)
@@ -2220,7 +2226,7 @@ function getUserResources($userprivs, $resourceprivs=array("available"),
 /// \brief adds resource privileges to $nodeprivs for the parents of $nodeid
 ///
 ////////////////////////////////////////////////////////////////////////////////
-function getUserResourcesUp(&$nodeprivs, $nodeid, $userid, 
+function getUserResourcesUp(&$nodeprivs, $nodeid, $userid,
                             $resourceprivs, $privdataset) {
 	# build list of parent nodes
 	# starting at top, get images available at that node and user privs there and
@@ -2257,7 +2263,7 @@ function getUserResourcesUp(&$nodeprivs, $nodeid, $userid,
 /// of $nodeid
 ///
 ////////////////////////////////////////////////////////////////////////////////
-function getUserResourcesDown(&$nodeprivs, $nodeid, $userid, 
+function getUserResourcesDown(&$nodeprivs, $nodeid, $userid,
                               $resourceprivs, $privdataset) {
 	# FIXME can we check for cascading and if not there, don't descend?
 	$children = getChildNodes($nodeid);
@@ -2283,11 +2289,11 @@ function getUserResourcesDown(&$nodeprivs, $nodeid, $userid,
 ///
 /// \return modifies $nodeprivs, but doesn't return anything
 ///
-/// \brief for $id, gets privileges and cascaded privileges the user and any 
+/// \brief for $id, gets privileges and cascaded privileges the user and any
 /// groups the user is and adds them to $nodeprivs
 ///
 ////////////////////////////////////////////////////////////////////////////////
-function addNodeUserResourcePrivs(&$nodeprivs, $id, $lastid, $userid, 
+function addNodeUserResourcePrivs(&$nodeprivs, $id, $lastid, $userid,
                                   $resourceprivs, $privdataset) {
 	$nodeprivs[$id]["user"] = array("cascade" => 0);
 	foreach($resourceprivs as $priv) {
@@ -2358,9 +2364,9 @@ function addNodeUserResourcePrivs(&$nodeprivs, $id, $lastid, $userid,
 			if($noprivs)
 				$nodeprivs[$id][$groupid]["cascade"] = 0;
 		}
-		// if group not blocking at this node, and group had cascade at previous 
+		// if group not blocking at this node, and group had cascade at previous
 		# node
-		if($lastid && ! $nodeprivs[$id][$groupid]["block"] && 
+		if($lastid && ! $nodeprivs[$id][$groupid]["block"] &&
 		   isset($nodeprivs[$lastid][$groupid]) &&
 		   $nodeprivs[$lastid][$groupid]["cascade"]) {
 			# set cascade = 1
@@ -2725,7 +2731,7 @@ function encryptData($data, $cryptkey, $algo, $option, $keylength) {
 	$cryptdata = $iv . $cryptdata;
 	return trim(base64_encode($cryptdata));
 }
- 
+
 ////////////////////////////////////////////////////////////////////////////////
 ///
 /// \fn decryptData($data, $cryptkey, $algo, $option, $keylength)
@@ -2968,10 +2974,10 @@ function deleteSecretKeys($secretid) {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function getCryptKeyID() {
-	$reg = "|" . SCRIPT . "$|";
-	$filebase = preg_replace($reg, '', $_SERVER['SCRIPT_FILENAME']);
-	$filebase .= "/.ht-inc/cryptkey";
-	$idfile = "$filebase/cryptkeyid";
+	$me = new ReflectionFunction('getCryptKeyID');
+	$myfile = $me->getFileName();
+	$path = dirname($myfile);
+	$idfile = "$path/cryptkey/cryptkeyid";
 
 	static $create = 1; # set flag so that recursion only goes one level deep
 
@@ -3392,7 +3398,7 @@ function getUserEditGroups($id) {
 		       . "FROM `usergroup` u, "
 		       .      "`usergroupmembers` m "
 		       . "WHERE u.editusergroupid = m.usergroupid AND "
-		       .       "(u.ownerid = $id OR m.userid = $id) AND " 
+		       .       "(u.ownerid = $id OR m.userid = $id) AND "
 		       .       "u.affiliationid = {$user['affiliationid']} "
 		       . "ORDER BY name";
 	}
@@ -3714,7 +3720,7 @@ function addUserGroupMember($loginid, $groupid) {
 		return;
 
 	$query = "INSERT INTO usergroupmembers "
-	       .        "(userid, " 
+	       .        "(userid, "
 	       .        "usergroupid) "
 	       . "VALUES "
 	       .        "($userid, "
@@ -3965,12 +3971,12 @@ function processInputVar($vartag, $type, $defaultvalue=NULL, $stripwhitespace=0)
 	   ! is_array($_POST[$vartag]) &&
 	   strncmp("{$_POST[$vartag]}", "0", 1) == 0 &&
 	   $type == ARG_NUMERIC &&
-		strncmp("{$_POST[$vartag]}", "0x0", 3) != 0) ||
-	   (array_key_exists($vartag, $_GET) && 
+	   strncmp("{$_POST[$vartag]}", "0x0", 3) != 0) ||
+	   (array_key_exists($vartag, $_GET) &&
 	   ! is_array($_GET[$vartag]) &&
 	   strncmp("{$_GET[$vartag]}", "0", 1) == 0 &&
 	   $type == ARG_NUMERIC &&
-		strncmp("{$_GET[$vartag]}", "0x0", 3) != 0)) {
+	   strncmp("{$_GET[$vartag]}", "0x0", 3) != 0)) {
 		$_POST[$vartag] = "zero";
 	}
 	if(!empty($_POST[$vartag])) {
@@ -4114,7 +4120,7 @@ function getContinuationVar($name=NULL, $defaultval=NULL) {
 function processInputData($data, $type, $addslashes=0, $defaultvalue=NULL) {
 	if(strncmp("$data", "0", 1) == 0 &&
 	   $type == ARG_NUMERIC &&
-		strncmp("$data", "0x0", 3) != 0) {
+	   strncmp("$data", "0x0", 3) != 0) {
 		$data = "zero";
 	}
 	if(!empty($data))
@@ -4556,7 +4562,7 @@ function updateUserPrefs($userid, $preferredname, $width, $height, $bpp, $audio,
 ///
 /// \param $userid - an id from the user table
 ///
-/// \return an array of privileges types that the user has somewhere in the 
+/// \return an array of privileges types that the user has somewhere in the
 /// privilege tree
 ///
 /// \brief get the privilege types that the user has somewhere in the
@@ -4761,7 +4767,7 @@ function isAvailable($images, $imageid, $imagerevisionid, $start, $end,
 
 	foreach($requestInfo["images"] as $key => $imageid) {
 		# check for max concurrent usage of image
-		if(! $skipconcurrentcheck && 
+		if(! $skipconcurrentcheck &&
 		   $images[$imageid]['maxconcurrent'] != NULL) {
 			if($userid == 0)
 				$usersgroups = $user['groups'];
@@ -5576,7 +5582,7 @@ function getPossibleRecentFailures($userid, $imageid) {
 ///
 /// \return an array of resource ids of type $resourcetype2
 ///
-/// \brief gets a list of resources of type $resourcetype2 that $resourcesubid 
+/// \brief gets a list of resources of type $resourcetype2 that $resourcesubid
 /// of type $resourcetype1 maps to based on the resourcemap table
 ///
 ////////////////////////////////////////////////////////////////////////////////
@@ -5894,7 +5900,7 @@ function addRequest($forimaging=0, $revisionid=array(), $checkuser=1) {
 	       .        "computerid, "
 	       .        "imageid, "
 	       .        "imagerevisionid, "
-	       .        "managementnodeid " 
+	       .        "managementnodeid "
 	       . "FROM semaphore "
 	       . "WHERE expires > NOW() AND "
 	       .       "procid = '$uniqid'";
@@ -6117,7 +6123,7 @@ function getRequestInfo($id, $returnNULL=0) {
 		if($returnNULL)
 			return NULL;
 		# FIXME handle XMLRPC cases
-		if(! $printedHTMLheader) 
+		if(! $printedHTMLheader)
 			print $HTMLheader;
 		print "<h1>" . i("OOPS! - Reservation Has Expired") . "</h1>\n";
 		$h = i("The selected reservation is no longer available. Go to <a>Reservations</a> to request a new reservation or select another one that is available.");
@@ -6204,7 +6210,7 @@ function getRequestInfo($id, $returnNULL=0) {
 /// \fn updateRequest($requestid, $nowfuture)
 ///
 /// \param $requestid - the id of the request to be updated
-/// \param $nowfuture (optional) - "now" or "future"; whether the 
+/// \param $nowfuture (optional) - "now" or "future"; whether the
 ///
 /// \brief updates an entry to the request and reservation tables
 ///
@@ -6256,7 +6262,7 @@ function updateRequest($requestid, $nowfuture="now") {
 		                    # could be updated, which would end up setting both
 		                    # rows to the same computer
 		doQuery($query, 147);
-		addChangeLogEntry($logid, NULL, $endstamp, $startstamp, $computerid, NULL, 
+		addChangeLogEntry($logid, NULL, $endstamp, $startstamp, $computerid, NULL,
 		                  1);
 		$query = "UPDATE sublog "
 		       . "SET computerid = $computerid "
@@ -6381,7 +6387,7 @@ function moveReservationsOffComputer($compid=0, $count=0) {
 	$checkstart = unixToDatetime(time() + 180);
 	if($compid == 0) {
 		$resources = getUserResources(array("imageAdmin", "imageCheckOut"),
-			                           array("available"), 0, 0);
+		                              array("available"), 0, 0);
 		$computers = implode("','", array_keys($resources["computer"]));
 		$computers = "'$computers'";
 		$query = "SELECT DISTINCT COUNT(rs.id) AS reservations, "
@@ -6430,7 +6436,7 @@ function moveReservationsOffComputer($compid=0, $count=0) {
 	# a reservation is reassigned to meets the same restrictions
 	foreach($resInfo as $res) {
 		// pass forimaging = 1 so that isAvailable only looks at one computer
-		$rc = isAvailable($images, $res["imageid"], $res['imagerevisionid'], 
+		$rc = isAvailable($images, $res["imageid"], $res['imagerevisionid'],
 		      datetimeToUnix($res["start"]), datetimeToUnix($res["end"]), 0,
 		      0, $res["userid"], 0, 1);
 		if($rc < 1) {
@@ -6442,7 +6448,7 @@ function moveReservationsOffComputer($compid=0, $count=0) {
 		return 0;
 	foreach($resInfo as $res) {
 		$rc = isAvailable($images, $res["imageid"], $res['imagerevisionid'],
-		      datetimeToUnix($res["start"]), datetimeToUnix($res["end"]), 1, 
+		      datetimeToUnix($res["start"]), datetimeToUnix($res["end"]), 1,
 		      0, $res["userid"], 0, 1);
 		if($rc > 0) {
 			$newcompid = array_shift($requestInfo["computers"]);
@@ -6894,7 +6900,7 @@ function getUserRequests($type, $id=0) {
 			}
 			else {
 				$data[$count]['serverowner'] = 0;
-				if(! empty($row['serveradmingroupid']) && 
+				if(! empty($row['serveradmingroupid']) &&
 				   array_key_exists($row['serveradmingroupid'], $user['groups']))
 					$data[$count]['serveradmin'] = 1;
 				else
@@ -7182,7 +7188,7 @@ function getDepartmentName($id) {
 ///
 /// \fn getImageId($image)
 ///
-/// \param $image - name of an image (must match name (not prettyname) in the 
+/// \param $image - name of an image (must match name (not prettyname) in the
 /// image table)
 ///
 /// \return the id of matching $image in the image table or 0 if lookup fails
@@ -7509,7 +7515,7 @@ function getManagementNodes($alive="neither", $includedeleted=0, $id=0) {
 	}
 
 	# Get items from variable table for specific management node id
-	foreach ($return as $mn_id => $value ) {
+	foreach($return as $mn_id => $value) {
 		if(array_key_exists("hostname", $value)) {
 			$mn_hostname = $value['hostname'];
 			$timeservers = getVariable('timesource|'.$mn_hostname);
@@ -7519,7 +7525,7 @@ function getManagementNodes($alive="neither", $includedeleted=0, $id=0) {
 			$return[$mn_id]['timeservers'] = $timeservers;
 		}
 	}
-	
+
 	return $return;
 }
 
@@ -7660,7 +7666,7 @@ function getPredictiveModules() {
 /// \return array of free/used timeslotes
 ///
 /// \brief generates an array of availability for computers where index is a
-/// computerid with a value that is an array whose indexes are unix timestamps 
+/// computerid with a value that is an array whose indexes are unix timestamps
 /// that increment by 15 minutes with a value that is an array with 2 indexes:
 /// 'scheduleclosed' and 'available' that tell if the computer's schedule is
 /// closed at that moment and if the computer is available at that moment\n
@@ -7855,7 +7861,7 @@ function getTimeSlots($compids, $end=0, $start=0) {
 				continue;
 			}
 			//if between a start and end time
-			if($current >= $times[$id][$count]["start"] && 
+			if($current >= $times[$id][$count]["start"] &&
 			   $current <  $times[$id][$count]["end"]) {
 				if($first) {
 					# set the previous 15 minute block to show as busy to allow for load time
@@ -7874,7 +7880,7 @@ function getTimeSlots($compids, $end=0, $start=0) {
 				continue;
 			}
 			//if after previous end but before this start
-			if($current >= $times[$id][$count - 1]["end"] && 
+			if($current >= $times[$id][$count - 1]["end"] &&
 			   $current <  $times[$id][$count]["start"]) {
 				$reserveInfo[$id][$current]["available"] = 1;
 				continue;
@@ -8049,9 +8055,9 @@ function showTimeTable($links) {
 			# or aren't mapped in resourcemap
 			if($computer_platformids[$id] != $platformid ||
 			   ($computerData[$id]["stateid"] != 2 &&
-				$computerData[$id]["stateid"] != 3 &&
-				$computerData[$id]["stateid"] != 6 &&
-				$computerData[$id]["stateid"] != 8) ||
+			   $computerData[$id]["stateid"] != 3 &&
+			   $computerData[$id]["stateid"] != 6 &&
+			   $computerData[$id]["stateid"] != 8) ||
 			   $computerData[$id]["ram"] < $imageData[$imageid]["minram"] ||
 			   $computerData[$id]["procnumber"] < $imageData[$imageid]["minprocnumber"] ||
 			   $computerData[$id]["procspeed"] < $imageData[$imageid]["minprocspeed"] ||
@@ -8164,7 +8170,7 @@ function showTimeTable($links) {
 				continue;
 			}
 			if($links && ($computer_platformids[$id] != $platformid ||
-				$computerData[$id]["stateid"] == 10 ||
+			   $computerData[$id]["stateid"] == 10 ||
 			   $computerData[$id]["stateid"] == 5)) {
 				continue;
 			}
@@ -8187,7 +8193,7 @@ function showTimeTable($links) {
 			elseif($timeslots[$id][$stamp]['blockAllocation'] &&
 			   ($timeslots[$id][$stamp]['blockInfo']['imageid'] != $imageid ||  # this line threw an error at one point, but we couldn't recreate it later
 			   (! in_array($timeslots[$id][$stamp]['blockInfo']['groupid'], array_keys($user['groups'])))) &&
-				$timeslots[$id][$stamp]['available']) {
+			   $timeslots[$id][$stamp]['available']) {
 				if($links) {
 					print "          <TD bgcolor=\"#ff0000\"><img src=images/red.jpg ";
 					print "alt=blockallocation border=0></TD>\n";
@@ -8304,7 +8310,7 @@ function showTimeTable($links) {
 /// \param $ip - (optional, default='') desired IP address
 /// \param $mac - (optional, default='') desired MAC address
 ///
-/// \return an array where each key is a unix timestamp for the start time of 
+/// \return an array where each key is a unix timestamp for the start time of
 /// the available slot and each element is an array with these items:\n
 /// \b start - start of slot in datetime format\n
 /// \b startts - start of slot in unix timestamp format\n
@@ -8993,7 +8999,7 @@ function getUserComputerMetaData() {
 	if(isset($_SESSION['usersessiondata'][$key]))
 		return $_SESSION['usersessiondata'][$key];
 	$computers = getComputers();
-	$resources = getUserResources(array("computerAdmin"), 
+	$resources = getUserResources(array("computerAdmin"),
 	                              array("administer", "manageGroup"), 0, 1);
 	$return = array("platforms" => array(),
 	                "schedules" => array());
@@ -9026,7 +9032,7 @@ function getUserComputerMetaData() {
 /// they occur\n
 /// \b nextstates - array where each key is a computerloadstate id and its value
 /// is that state's following state; the last state has a NULL value\n
-/// \b totaltime - estimated time (in seconds) it takes for all states to 
+/// \b totaltime - estimated time (in seconds) it takes for all states to
 /// complete\n
 /// \b data - array where each key is is a computerloadstate id and each value
 /// is an array with these elements:\n
@@ -9440,8 +9446,8 @@ function getNAThosts($id=0, $sort=0) {
 function getNATports($resid) {
 	$ports = array();
 	$query = "SELECT n.publicport, "
-	       .        "n.connectmethodportid, " 
-	       .        "c.port AS privateport, " 
+	       .        "n.connectmethodportid, "
+	       .        "c.port AS privateport, "
 	       .        "c.protocol, "
 	       .        "c.connectmethodid "
 	       . "FROM natport n, "
@@ -9648,7 +9654,7 @@ function isImageBlockTimeActive($imageid) {
 /// \param $extra - (optional) any extra attributes that need to be set
 ///
 /// \brief prints out a select input part of a form\n
-/// it is assumed that if $selectedid is left off, we assume $dataArr has no 
+/// it is assumed that if $selectedid is left off, we assume $dataArr has no
 /// index '-1'\n
 /// each OPTION's value is the index of that element of the array
 ///
@@ -9707,7 +9713,7 @@ function selectInputAutoDijitHTML($name, $dataArr, $domid='', $extra='',
 /// multiple tag set
 ///
 /// \brief generates HTML for select input
-/// it is assumed that if $selectedid is left off, we assume $dataArr has no 
+/// it is assumed that if $selectedid is left off, we assume $dataArr has no
 /// index '-1'\n
 /// each OPTION's value is the index of that element of the array
 ///
@@ -9941,12 +9947,12 @@ function dijitButton($id, $label, $onclick='', $wraprightdiv=0) {
 ///
 /// \fn requestIsReady($request)
 ///
-/// \param $request - a request element from the array returned by 
+/// \param $request - a request element from the array returned by
 /// getUserRequests
 ///
 /// \return 1 if request is ready for a user to connect, 0 if not
 ///
-/// \brief checks to see if a request is 
+/// \brief checks to see if a request is
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function requestIsReady($request) {
@@ -9954,7 +9960,7 @@ function requestIsReady($request) {
 		if($res["computerstateid"] != 3 && $res["computerstateid"] != 8)
 			return 0;
 	}
-	if(($request["currstateid"] == 14 &&      // request current state pending 
+	if(($request["currstateid"] == 14 &&      // request current state pending
 	   $request["laststateid"] == 3 &&        //   and last state reserved and
 	   $request["computerstateid"] == 3) ||   //   computer reserved
 	   ($request["currstateid"] == 8 &&       // request current state inuse
@@ -10171,7 +10177,7 @@ function addLoadTime($imageid, $start, $loadtime) {
 ///
 /// \return 1 if schedule is closed at $timestamp, 0 if it is open
 ///
-/// \brief checks to see if the computer's schedule is open or closed at 
+/// \brief checks to see if the computer's schedule is open or closed at
 /// $timestamp
 ///
 ////////////////////////////////////////////////////////////////////////////////
@@ -10303,7 +10309,7 @@ function getUserGroupID($name, $affilid=DEFAULT_AFFILID, $noadd=0) {
 /// \fn getUserGroupName($id, $incAffil)
 ///
 /// \param $id - id of a user group
-/// \param $incAffil - 0 or 1 (optional, defaults to 0); include @ and 
+/// \param $incAffil - 0 or 1 (optional, defaults to 0); include @ and
 /// affiliation at the end
 ///
 /// \return name for $id from usergroup table or 0 if name not found
@@ -10454,7 +10460,7 @@ function getMaintItemsForTimeTable($start, $end) {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function unset_by_val($needle, &$haystack) {
-	while(($gotcha = array_search($needle,$haystack)) > -1) { 
+	while(($gotcha = array_search($needle,$haystack)) > -1) {
 		unset($haystack[$gotcha]);
 	}
 }
@@ -10468,13 +10474,16 @@ function unset_by_val($needle, &$haystack) {
 ////////////////////////////////////////////////////////////////////////////////
 function sendRDPfile() {
 	global $user;
-	# for more info on this file, see 
+	# for more info on this file, see
 	# http://dev.remotenetworktechnology.com/ts/rdpfile.htm
 	$requestid = getContinuationVar("requestid");
 	$resid = getContinuationVar("resid");
+
+	$cmid = getContinuationVar('cmid');
+
 	$request = getRequestInfo("$requestid");
 	if($request['stateid'] == 11 || $request['stateid'] == 12 ||
-	   ($request['stateid'] == 14 && 
+	   ($request['stateid'] == 14 &&
 	   ($request['laststateid'] == 11 || $request['laststateid'] == 12))) {
 		$cont = addContinuationsEntry('viewRequests');
 		header("Location: " . BASEURL . SCRIPT . "?continuation=$cont");
@@ -10494,20 +10503,19 @@ function sendRDPfile() {
 	                                          $res['imagerevisionid']);
 	$natports = getNATports($resid);
 	$port = '';
-	foreach($connectData as $cmid => $method) {
-		if(preg_match('/remote desktop/i', $method['description']) ||
-		   preg_match('/RDP/i', $method['description'])) {
-			# assume index 0 of ports for nat
-			if(! empty($natports) && array_key_exists($method['ports'][0]['key'], $natports[$cmid]))
-				$port = ':' . $natports[$cmid][$method['ports'][0]['key']]['publicport'];
-			else {
-				if($method['ports'][0]['key'] == '#Port-TCP-3389#' &&
-				   $user['rdpport'] != 3389)
-					$port = ':' . $user['rdpport'];
-				else
-					$port = ':' . $method['ports'][0]['port'];
-			}
-			break;
+
+	$method = $connectData[$cmid];
+	if(preg_match('/remote desktop/i', $method['description']) ||
+	   preg_match('/RDP/i', $method['description'])) {
+		# assume index 0 of ports for nat
+		if(! empty($natports) && array_key_exists($method['ports'][0]['key'], $natports[$cmid]))
+			$port = ':' . $natports[$cmid][$method['ports'][0]['key']]['publicport'];
+		else {
+			if($method['ports'][0]['key'] == '#Port-TCP-3389#' &&
+			   $user['rdpport'] != 3389)
+				$port = ':' . $user['rdpport'];
+			else
+				$port = ':' . $method['ports'][0]['port'];
 		}
 	}
 
@@ -10542,15 +10550,15 @@ function sendRDPfile() {
 	print "desktopwidth:i:$width\r\n";
 	print "desktopheight:i:$height\r\n";
 	print "session bpp:i:$bpp\r\n";
-	
+
 	print "winposstr:s:0,1,0,0,5000,4000\r\n";
-	# 0: 
+	# 0:
 	# 1:    use coordinates for the window position, as opposed to 3 - maximized
 	# 0:    left position in client coordinates
 	# 0:    top position in client coordinates
 	# 5000: width in pixels - set large to avoid scrollbars
 	# 4000: height in pixels - set large to avoid scrollbars
-	
+
 	print "full address:s:$ipaddress$port\r\n";
 	print "compression:i:1\r\n";
 	print "keyboardhook:i:2\r\n";
@@ -10567,6 +10575,8 @@ function sendRDPfile() {
 		$userid = $user["unityid"];
 	if($request['reservations'][0]['domainDNSName'] != '' && ! strlen($passwd))
 		$userid .= "@" . $request['reservations'][0]['domainDNSName'];
+	elseif($request['reservations'][0]['OStype'] == 'windows')
+		$userid = ".\\$userid";
 	print "username:s:$userid\r\n";
 	print "clear password:s:$passwd\r\n";
 	print "domain:s:\r\n";
@@ -10634,16 +10644,16 @@ function addLogEntry($nowfuture, $start, $end, $wasavailable, $imageid) {
 /// available; \b NOTE: pass -1 instead of NULL if you don't want this field
 /// to be updated
 ///
-/// \brief adds an entry to the changelog table and updates information in 
+/// \brief adds an entry to the changelog table and updates information in
 /// the log table
 ///
 ////////////////////////////////////////////////////////////////////////////////
-function addChangeLogEntry($logid, $remoteIP, $end=NULL, $start=NULL, 
+function addChangeLogEntry($logid, $remoteIP, $end=NULL, $start=NULL,
                            $computerid=NULL, $ending=NULL, $wasavailable=-1) {
 	if($logid == 0) {
 		return;
 	}
-	$query = "SELECT computerid, " 
+	$query = "SELECT computerid, "
 	       .        "start, "
 	       .        "initialend, "
 	       .        "remoteIP, "
@@ -10815,7 +10825,7 @@ function addSublogEntry($logid, $imageid, $imagerevisionid, $computerid,
 	       .        "imagerevisionid, "
 	       .        "computerid, "
 	       .        "managementnodeid, "
-			 .        "predictivemoduleid, ";
+	       .        "predictivemoduleid, ";
 	if($fromblock) {
 		$query .=    "blockRequestid, "
 		       .     "blockStart, "
@@ -10934,8 +10944,8 @@ function getUserMaxTimes($uid=0) {
 ///
 /// \param $max - max allowed length in minutes
 ///
-/// \return array of lengths up to $max starting with 30 minutes, 1 hour, 
-/// 2 hours, then increasing by 2 hours up to 47 hours, then 2 days, then 
+/// \return array of lengths up to $max starting with 30 minutes, 1 hour,
+/// 2 hours, then increasing by 2 hours up to 47 hours, then 2 days, then
 /// increasing by 1 day; indexes are the duration in minutes
 ///
 /// \brief generates an array of reservation lengths
@@ -11240,7 +11250,7 @@ function getMappedConfigs($imageid) {
 	       .      "user u, "
 	       .      "affiliation ua, "
 	       .      "configtype ct, "
-	       .      "configmaptype cmt, " 
+	       .      "configmaptype cmt, "
 	       .      "affiliation a, "
 	       .      "configstage cs "
 	       . "WHERE cm.configid = c.id AND "
@@ -11345,7 +11355,7 @@ function getMappedSubConfigs($mode, $arg1, $arg2, $rec=0) {
 	       .      "user u, "
 	       .      "affiliation ua, "
 	       .      "configtype ct, "
-	       .      "configmaptype cmt, " 
+	       .      "configmaptype cmt, "
 	       .      "affiliation a, "
 	       .      "configstage cs "
 	       . "WHERE cm.configid = c.id AND "
@@ -11356,7 +11366,7 @@ function getMappedSubConfigs($mode, $arg1, $arg2, $rec=0) {
 	       .       "cm.affiliationid = a.id AND "
 	       .       "(cm.affiliationid = {$user['affiliationid']} OR "
 	       .        "a.name = 'Global') AND "
-			 .       "cm.configstageid = cs.id AND ";
+	       .       "cm.configstageid = cs.id AND ";
 	if($mode) {
 	$query .=      "cmt.name = 'config' AND "
 	       .       " cm.subid IN ($inlist)";
@@ -11560,7 +11570,7 @@ function getConfigClustersRec($subimageid, $flat, $rec=0) {
 	       .      "configmaptype cmt, "
 	       .      "configsubimage csi, "
 	       .      "image i, "
-	       .      "OS o,  "
+	       .      "OS o, "
 	       .      "OStype ot, "
 	       .      "affiliation a "
 	       . "WHERE ct.name = 'cluster' AND "
@@ -11749,7 +11759,7 @@ function sortKeepIndex($a, $b) {
 ///
 /// \return -1, 0, 1 if numerical parts of $a <, =, or > $b
 ///
-/// \brief compares $a and $b to determine which one should be ordered first; 
+/// \brief compares $a and $b to determine which one should be ordered first;
 /// has some understand of numerical order in strings
 ///
 ////////////////////////////////////////////////////////////////////////////////
@@ -11809,8 +11819,8 @@ function compareDashedNumbers($a, $b) {
 /// \param $resource2inlist - (optional) comma delimited list of resource groups
 /// to limit query to
 ///
-/// \return an array of $resourcetype1 group to $resourcetype2 group mappings 
-/// where each index is a group id from $resourcetype1 and each value is an 
+/// \return an array of $resourcetype1 group to $resourcetype2 group mappings
+/// where each index is a group id from $resourcetype1 and each value is an
 /// array of $resourcetype2 group ids
 ///
 /// \brief builds an array of $resourcetype2 group ids for each $resourcetype1
@@ -12024,7 +12034,7 @@ function generateString($length=8) {
 /// \param $id (optional) - a profile id; if specified, only data about this
 /// profile will be returned
 ///
-/// \return an array of profiles where each key is the profile id and each 
+/// \return an array of profiles where each key is the profile id and each
 /// element is an array with these keys:\n
 /// \b profilename - name of profile\n
 /// \b name - name of profile (so array can be passed to printSelectInput)\n
@@ -12117,7 +12127,7 @@ function getENUMvalues($table, $field) {
 /// \fn addContinuationsEntry($nextmode, $data, $duration, $deleteFromSelf,
 ///                           $multicall, $repeatProtect)
 ///
-/// \param $nextmode - next mode to go in to 
+/// \param $nextmode - next mode to go in to
 /// \param $data (optional, default=array())- array of data to make available
 /// in $nextmode
 /// \param $duration (optional, default=SECINWEEK)- how long this continuation
@@ -12451,7 +12461,7 @@ function getVariable($key, $default=NULL, $incparams=0) {
 ///
 /// \return array of values from variable table
 ///
-/// \brief gets data from the variable table for $pattern matches 'name' from 
+/// \brief gets data from the variable table for $pattern matches 'name' from
 /// table
 ///
 ////////////////////////////////////////////////////////////////////////////////
@@ -12521,7 +12531,7 @@ function setVariable($key, $data, $serialization='') {
 	}
 	if($update)
 		$query = "UPDATE variable "
-		       . "SET value = '$qdata', " 
+		       . "SET value = '$qdata', "
 		       .     "serialization = '$serialization', "
 		       .     "setby = 'webcode', "
 		       .     "timestamp = NOW() "
@@ -12582,7 +12592,7 @@ function validateIPv4addr($ip) {
 ///
 /// \fn validateHostname($name)
 ///
-/// \param $name  the hostname to validate
+/// \param $name - the hostname to validate
 ///
 /// \return 1 if valid hostname else 0
 ///
@@ -12729,13 +12739,13 @@ function xmlRPChandler($function, $args, $blah) {
 		if(! defined('XMLRPCLOGGING') || XMLRPCLOGGING != 0) {
 			$saveargs = mysql_real_escape_string(serialize($args));
 			$query = "INSERT INTO xmlrpcLog "
-			       .        "(xmlrpcKeyid, " 
+			       .        "(xmlrpcKeyid, "
 			       .        "timestamp, "
 			       .        "IPaddress, "
 			       .        "method, "
 			       .        "apiversion, "
 			       .        "comments) "
-			       . "VALUES " 
+			       . "VALUES "
 			       .        "($keyid, "
 			       .        "NOW(), "
 			       .        "'$remoteIP', "
@@ -13018,28 +13028,28 @@ function json_encode($a=false) {
 	if($a === true)
 		return 'true';
 	if(is_scalar($a)) {
-		if (is_float($a)) {
-			 // Always use "." for floats.
-			 return floatval(str_replace(",", ".", strval($a)));
+		if(is_float($a)) {
+			// Always use "." for floats.
+			return floatval(str_replace(",", ".", strval($a)));
 		}
- 
-		if (is_string($a)) {
-			 static $jsonReplaces = array(array("\\", "/", "\n", "\t", "\r", "\b", "\f", '"'), array('\\\\', '\\/', '\\n', '\\t', '\\r', '\\b', '\\f', '\"'));
+
+		if(is_string($a)) {
+			static $jsonReplaces = array(array("\\", "/", "\n", "\t", "\r", "\b", "\f", '"'), array('\\\\', '\\/', '\\n', '\\t', '\\r', '\\b', '\\f', '\"'));
 			return '"' . str_replace($jsonReplaces[0], $jsonReplaces[1], $a) . '"';
 		}
 		else
 			return $a;
 	}
 	$isList = true;
-	for ($i = 0, reset($a); $i < count($a); $i++, next($a)) {
-		if (key($a) !== $i) {
+	for($i = 0, reset($a); $i < count($a); $i++, next($a)) {
+		if(key($a) !== $i) {
 			$isList = false;
 			break;
 		}
 	}
 	$result = array();
-	if ($isList) {
-		foreach ($a as $v) $result[] = json_encode($v);
+	if($isList) {
+		foreach($a as $v) $result[] = json_encode($v);
 		return '[' . join(',', $result) . ']';
 	}
 	else {
@@ -13206,8 +13216,8 @@ function sendHeaders() {
 			if(! array_key_exists('ownergroup', $data))
 				$data['ownergroup'] = processInputVar('ownergroup', ARG_NUMERIC, 0);
 			$ownergroupids = explode(',', $data['ownergroupids']);
-		   if(in_array($data['ownergroup'], $ownergroupids) &&
-		      array_key_exists($data['ownergroup'], $user['groups'])) {
+			if(in_array($data['ownergroup'], $ownergroupids) &&
+			   array_key_exists($data['ownergroup'], $user['groups'])) {
 				$expire = time() + 31536000; //expire in 1 year
 				setcookie("VCLOWNERGROUPID", $data['ownergroup'], $expire, "/", COOKIEDOMAIN);
 			}
@@ -13266,7 +13276,7 @@ function printHTMLHeader() {
 		$HTMLheader .= getHeader($refresh);
 
 	if(! in_array($mode, $noHTMLwrappers) &&
-		(! is_array($contdata) ||
+	   (! is_array($contdata) ||
 	    ! array_key_exists('noHTMLwrappers', $contdata) ||
 	    $contdata['noHTMLwrappers'] == 0)) {
 		print $HTMLheader;
@@ -13539,7 +13549,7 @@ function getUsingVCL() {
 	global $NOAUTH_HOMENAV;
 	$rt = '';
 	foreach($NOAUTH_HOMENAV as $name => $url)
-		$rt .= "<li><a href=\"$url\">" .  i($name) . "</a></li>\n";
+		$rt .= "<li><a href=\"$url\">" . i($name) . "</a></li>\n";
 	return $rt;
 }
 
@@ -14363,14 +14373,14 @@ function setVCLLocale() {
 		setcookie("VCLLOCALE", $_COOKIE['VCLLOCALE'], (time() + (86400 * 31)), "/", COOKIEDOMAIN);
 		$locale = $_COOKIE['VCLLOCALE'];
 	}
-	
+
 	#putenv('LC_ALL=' . $locale);
 	# use UTF8 encoding for any locales other than English (we may just be able
 	#   to always use UTF8)
 	if(preg_match('/^en/', $locale))
-		setlocale(LC_ALL,  $locale);
+		setlocale(LC_ALL, $locale);
 	else
-		setlocale(LC_ALL,  $locale . '.UTF8');
+		setlocale(LC_ALL, $locale . '.UTF8');
 	bindtextdomain('vcl', './locale');
 	textdomain('vcl');
 	bind_textdomain_codeset('vcl', 'UTF-8');
@@ -14400,7 +14410,7 @@ function getSelectLanguagePulldown() {
 	if(! is_array($user))
 		$user['id'] = 0;
 
-	$rt  = "<form name=\"localeform\" class=\"localeform\" action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
+	$rt = "<form name=\"localeform\" class=\"localeform\" action=\"" . BASEURL . SCRIPT . "\" method=post>\n";
 	if($authed) {
 		$rt .= "<select name=\"continuation\" onChange=\"this.form.submit();\" autocomplete=\"off\">\n";
 		$cdata = array('IP' => $remoteIP, 'oldmode' => $mode);
@@ -14493,5 +14503,61 @@ function getFSlocales() {
 	}
 	$_SESSION['locales'] = $locales;
 	return $locales;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn curlDoSSLWebRequest()
+/// \param $url - the URL to fetch
+/// \param $validatecert - boolean value indicating if server certificates
+///                        should be validated
+///
+/// \return response - string returned by web request
+///
+/// \brief performs an HTTPS web request for given URL
+///
+////////////////////////////////////////////////////////////////////////////////
+function curlDoSSLWebRequest($url, $validatecert = TRUE) {
+	if(! function_exists('curl_init')) {
+		$message = "php cURL library is not configured.";
+		if(ONLINEDEBUG && checkUserHasPerm('View Debug Information')) {
+			print "<font color=red>" . $message . "</font><br>\n";
+		}
+		error_log('php cURL library is not configured.');
+		return;
+	}
+
+	$ch = curl_init();
+
+	curl_setopt($ch, CURLOPT_HEADER, false);
+	curl_setopt($ch, CURLOPT_URL, $url) ;
+	curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+	curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, 0);
+	curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
+
+	if($validatecert == TRUE) {
+		curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
+		curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, 1);
+	}
+	curl_setopt($ch, CURLOPT_VERBOSE, true);
+
+	$response = curl_exec($ch);
+
+	if(curl_errno($ch)) {
+		$info = curl_getinfo($ch);
+		if(ONLINEDEBUG && checkUserHasPerm('View Debug Information')) {
+			print "<font color=red>" . curl_error($ch) . print_r($info, TRUE) . "</font><br>\n";
+		}
+		print "ERROR(curl_errno($ch)): " . $ERRORS[$info] . "<BR>\n";
+		error_log("===========================================================================");
+		error_log("ERROR(curl_errno($ch)): " . $ERRORS[$info]);
+		$backtrace = getBacktraceString(FALSE);
+		print "<pre>\n";
+		print $backtrace;
+		print "</pre>\n";
+		error_log($backtrace);
+	}
+	curl_close($ch);
+	return $response;
 }
 ?>

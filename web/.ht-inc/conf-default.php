@@ -158,6 +158,17 @@ $authMechs = array(
 	                                                             #   for the user.  Typically either 'cn', 'uid', or 'samaccountname'
 	                           "help" => "Use EXAMPLE1 LDAP if you are using an EXAMPLE1 account"), # message to be displayed on login page about when
 	                                                                                                #   to use this login mechanism*/
+	/*"CAS (Central Authentication Service)" => array("type" => "cas",
+	                                                  "affiliationid" => 3,                      # id from affiliation id this login method is associated with
+	                                                  "version" => 3,                            # this denotes the CAS protocol version used. currently supported values is 3. this value is maintained to track furture updates to the protocol
+	                                                  "host" => "cas.example.edu",               # the CAS server DNS name
+	                                                  "port" => "8443",                          # the CAS Server port
+	                                                  "context" => "/cas",                       # the CAS context
+	                                                  "validatecassslcerts" => true,             # validates the SSL certificates used by CAS server. strictly set to true for production (like) environments
+	                                                  "cacertpath" => "/etc/cas/cachain.pem",    # if using self signed certificates on the CAS server set this to the path where the CA chain is stored. Set to '' if using publicly trusted certificates
+	                                                  "attributemap" => array("sn" => "lastname", "givenName" => "firstname", "cn" => "preferredname", "mail" => "email"), # a list of CAS user attributes mapped to VCL user attributes
+	                                                  "defaultgroup" => "global",   # the default group name (excluding the affiliation name) that each CAS user should be added. make sure this group is pre-created
+	                                                  "help" => "Use CAS authentication to use your university CAS environment"),  # message to be displayed on login page about when to use this login mechanism*/
 );
 
 $affilValFunc = array();
@@ -187,4 +198,5 @@ $findAffilFuncs = array("testGeneralAffiliation");
 #require_once(".ht-inc/authmethods/itecsauth.php");
 #require_once(".ht-inc/authmethods/ldapauth.php");
 #require_once(".ht-inc/authmethods/shibauth.php");
+#require_once(".ht-inc/authmethods/casauth.php");
 ?>

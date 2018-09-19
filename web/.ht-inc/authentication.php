@@ -75,19 +75,19 @@ function readAuthCookie() {
 	else
 		$cookie = $_COOKIE["VCLAUTH"];
 	$cookie = base64_decode($cookie);
-   if(! openssl_public_decrypt($cookie, $tmp, $keys['public'])) {
-      $AUTHERROR["code"] = 3;
-      $AUTHERROR["message"] = "Failed to decrypt auth cookie";
-      return NULL;
-   }
+	if(! openssl_public_decrypt($cookie, $tmp, $keys['public'])) {
+		$AUTHERROR["code"] = 3;
+		$AUTHERROR["message"] = "Failed to decrypt auth cookie";
+		return NULL;
+	}
 
-   $tmparr = explode('|', $tmp);
+	$tmparr = explode('|', $tmp);
 	$loginid = $tmparr[0];
 	$remoteIP = $tmparr[1];
 	$ts = $tmparr[2];
 	if(count($tmparr) > 3) {
 		$shibauthed = $tmparr[3];
-	
+
 		# check to see if shibauth entry still exists for $shibauthed
 		$query = "SELECT ts FROM shibauth WHERE id = $shibauthed";
 		$qh = doQuery($query, 101);
@@ -105,19 +105,19 @@ function readAuthCookie() {
 		}
 	}
 
-   if($ts < time()) {
-      $AUTHERROR["code"] = 4;
-      $AUTHERROR["message"] = "Auth cookie has expired";
-      return NULL;
-   }
-   if($_SERVER["REMOTE_ADDR"] != $remoteIP) {
-      //setcookie("ITECSAUTH", "", time() - 10, "/", COOKIEDOMAIN);
-      $AUTHERROR["code"] = 4;
-      $AUTHERROR["message"] = "remote IP in auth cookie doesn't match user's remote IP";
-      return NULL;
-   }
+	if($ts < time()) {
+		$AUTHERROR["code"] = 4;
+		$AUTHERROR["message"] = "Auth cookie has expired";
+		return NULL;
+	}
+	if($_SERVER["REMOTE_ADDR"] != $remoteIP) {
+		//setcookie("ITECSAUTH", "", time() - 10, "/", COOKIEDOMAIN);
+		$AUTHERROR["code"] = 4;
+		$AUTHERROR["message"] = "remote IP in auth cookie doesn't match user's remote IP";
+		return NULL;
+	}
 
-   return $loginid;
+	return $loginid;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -148,6 +148,11 @@ function selectAuth() {
 		       $authMechs[$authtype]['type'] == 'local') {
 			printLoginPageWithSkin($authtype);
 			return;
+		}
+		elseif($authMechs[$authtype]['type'] == 'cas') {
+		    validateCASUser($authtype);
+		    dbDisconnect();
+		    return;
 		}
 	}
 	require_once("themes/$skin/page.php");
