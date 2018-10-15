@@ -95,10 +95,10 @@
       </Version>
     </release>
     <repository>
-      <SVNRepository>
-        <location rdf:resource="https://svn.apache.org/repos/asf/vcl"/>
-        <browse rdf:resource="http://svn.apache.org/viewvc/vcl/"/>
-      </SVNRepository>
+      <GitRepository>
+        <location rdf:resource="https://git-wip-us.apache.org/repos/asf/vcl"/>
+        <browse rdf:resource="https://git-wip-us.apache.org/repos/asf/vcl"/>
+      </GitRepository>
     </repository>
   </Project>
 </rdf:RDF>
