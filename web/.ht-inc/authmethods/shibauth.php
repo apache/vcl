@@ -39,7 +39,7 @@
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function updateShibUser($userid) {
-	global $mysql_link_vcl;
+	global $mysqli_link_vcl;
 	$rc = getAffilidAndLogin($userid, $affilid);
 	if($rc == -1)
 		return NULL;
@@ -83,7 +83,7 @@ function updateShibUser($userid) {
 	       . "WHERE unityid = '$userid' AND "
 	       .       "affiliationid = $affilid";
 	$qh = doQuery($query, 101);
-	if(! $row = mysql_fetch_assoc($qh)) {
+	if(! $row = mysqli_fetch_assoc($qh)) {
 		# add user to our db
 		$user['id'] = addShibUser($user);
 		return $user;
@@ -91,13 +91,13 @@ function updateShibUser($userid) {
 
 	# update user's data in db
 	$user['id'] = $row['id'];
-	$first = mysql_real_escape_string($user['firstname']);
-	$last = mysql_real_escape_string($user['lastname']);
+	$first = vcl_mysql_escape_string($user['firstname']);
+	$last = vcl_mysql_escape_string($user['lastname']);
 	$query = "UPDATE user "
 	       . "SET firstname = '$first', "
 	       .     "lastname = '$last', ";
 	if(array_key_exists('email', $user)) {
-		$email = mysql_real_escape_string($user['email']);
+		$email = vcl_mysql_escape_string($user['email']);
 		$query .= "email = '$email', ";
 	}
     $query .=    "lastupdated = NOW(), "
@@ -124,10 +124,10 @@ function updateShibUser($userid) {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function addShibUser($user) {
-	global $mysql_link_vcl;
-	$unityid = mysql_real_escape_string($user['unityid']);
-	$first = mysql_real_escape_string($user['firstname']);
-	$last = mysql_real_escape_string($user['lastname']);
+	global $mysqli_link_vcl;
+	$unityid = vcl_mysql_escape_string($user['unityid']);
+	$first = vcl_mysql_escape_string($user['firstname']);
+	$last = vcl_mysql_escape_string($user['lastname']);
 	$query = "INSERT INTO user "
 	       .        "(unityid, "
 	       .        "affiliationid, "
@@ -143,14 +143,14 @@ function addShibUser($user) {
 	       .        "'$first', "
 	       .        "'$last', ";
 	if(array_key_exists('email', $user)) {
-		$email = mysql_real_escape_string($user['email']);
+		$email = vcl_mysql_escape_string($user['email']);
 		$query .=    "'$email', ";
 	}
 	$query .=       "0, "
 	       .        "NOW())";
 	doQuery($query, 101, 'vcl', 1);
-	if(mysql_affected_rows($mysql_link_vcl)) {
-		$user['id'] = mysql_insert_id($mysql_link_vcl);
+	if(mysqli_affected_rows($mysqli_link_vcl)) {
+		$user['id'] = mysqli_insert_id($mysqli_link_vcl);
 		return $user['id'];
 	}
 	else
@@ -188,18 +188,18 @@ function updateShibGroups($usernid, $groups) {
 		# get id for the group's affiliation
 		$query = "SELECT id FROM affiliation WHERE shibname = '$shibaffil'";
 		$qh = doQuery($query, 101);
-		$row = mysql_fetch_assoc($qh);
+		$row = mysqli_fetch_assoc($qh);
 		$affilid = $row['id'];
 		# prepend shib- and escape it for mysql
-		$grp = mysql_real_escape_string("shib-" . $name);
+		$grp = vcl_mysql_escape_string("shib-" . $name);
 		array_push($newusergroups, getUserGroupID($grp, $affilid));
 	}
 
 	$query = "SELECT id, name FROM affiliation WHERE shibname = '$shibaffil'";
 	$qh = doQuery($query, 101);
-	$row = mysql_fetch_assoc($qh);
+	$row = mysqli_fetch_assoc($qh);
 	$affilid = $row['id'];
-	$grp = mysql_real_escape_string("All {$row['name']} Users");
+	$grp = vcl_mysql_escape_string("All {$row['name']} Users");
 	array_push($newusergroups, getUserGroupID($grp, $affilid));
 
 	$newusergroups = array_unique($newusergroups);
@@ -224,7 +224,7 @@ function updateShibGroups($usernid, $groups) {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function addShibUserStub($affilid, $userid) {
-	global $mysql_link_vcl;
+	global $mysqli_link_vcl;
 	$query = "INSERT INTO user "
 	       .        "(unityid, "
 	       .        "affiliationid, "
@@ -238,7 +238,7 @@ function addShibUserStub($affilid, $userid) {
 	       .        "0, "
 	       .        "0)";
 	doQuery($query);
-	if(mysql_affected_rows($mysql_link_vcl))
+	if(mysqli_affected_rows($mysqli_link_vcl))
 		return dbLastInsertID();
 	else
 		return NULL;

@@ -490,7 +490,7 @@ function submitUserPrefs() {
 		       . "WHERE u.id = '{$user['id']}' AND "
 		       .       "l.userid = u.id";
 		$qh = doQuery($query, 101);
-		if(! ($row = mysql_fetch_assoc($qh)))
+		if(! ($row = mysqli_fetch_assoc($qh)))
 			abort();
 		$passhash = sha1("{$data['newpassword']}{$row['salt']}");
 		$query = "UPDATE localauth "
@@ -564,7 +564,7 @@ function submitGeneralPreferences() {
 	if($pubkeyauth == 2 && preg_match('|^[-a-zA-Z0-9\+/ @=\.\n\r]*$|', $pubkeys)) {
 		if(get_magic_quotes_gpc())
 			$pubkeys = stripslashes($pubkeys);
-		$_pubkeys = mysql_real_escape_string($pubkeys);
+		$_pubkeys = vcl_mysql_escape_string($pubkeys);
 		$query = "UPDATE user SET sshpublickeys = '$_pubkeys' WHERE id = {$user['id']}";
 		doQuery($query);
 		$_SESSION['user']['sshpublickeys'] = htmlspecialchars($pubkeys);

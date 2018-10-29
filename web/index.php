@@ -26,8 +26,8 @@ if(! isset($_SERVER['HTTPS']) || $_SERVER['HTTPS'] != "on") {
 }
 
 $user = '';
-$mysql_link_vcl = '';
-$mysql_link_acct = '';
+$mysqli_link_vcl = '';
+$mysqli_link_acct = '';
 $mode = '';
 $oldmode = '';
 $submitErr = '';

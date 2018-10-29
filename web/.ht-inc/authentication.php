@@ -91,7 +91,7 @@ function readAuthCookie() {
 		# check to see if shibauth entry still exists for $shibauthed
 		$query = "SELECT ts FROM shibauth WHERE id = $shibauthed";
 		$qh = doQuery($query, 101);
-		if($row = mysql_fetch_assoc($qh)) {
+		if($row = mysqli_fetch_assoc($qh)) {
 			$shibstart = $row['ts'];
 			# TODO if $shibstart is too old, expire the login session
 		}
@@ -363,7 +363,7 @@ function submitLogin() {
 ////////////////////////////////////////////////////////////////////////////////
 function ldapLogin($authtype, $userid, $passwd) {
 	global $HTMLheader, $printedHTMLheader, $authMechs, $phpVer;
-	$esc_userid = mysql_real_escape_string($userid);
+	$esc_userid = vcl_mysql_escape_string($userid);
 	if(! $fh = fsockopen($authMechs[$authtype]['server'], 636, $errno, $errstr, 5)) {
 		printLoginPageWithSkin($authtype, 1);
 		return;
@@ -435,7 +435,7 @@ function ldapLogin($authtype, $userid, $passwd) {
 		       . "WHERE unityid = '$esc_userid' AND "
 		       .       "affiliationid = {$authMechs[$authtype]['affiliationid']}";
 		$qh = doQuery($query, 101);
-		if(! mysql_num_rows($qh)) {
+		if(! mysqli_num_rows($qh)) {
 			// if not, add user
 			$newid = updateLDAPUser($authtype, $userid);
 			if(is_null($newid))
@@ -514,7 +514,7 @@ function localLogin($userid, $passwd, $authtype) {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function validateLocalAccount($user, $pass) {
-	$user = mysql_real_escape_string($user);
+	$user = vcl_mysql_escape_string($user);
 	$query = "SELECT l.salt "
 	       . "FROM localauth l, "
 	       .      "user u, "
@@ -524,8 +524,8 @@ function validateLocalAccount($user, $pass) {
 	       .       "a.name = 'Local' AND "
 	       .       "l.userid = u.id";
 	$qh = doQuery($query, 101);
-	if(mysql_num_rows($qh) != 1 ||
-	   (! ($row = mysql_fetch_assoc($qh))))
+	if(mysqli_num_rows($qh) != 1 ||
+	   (! ($row = mysqli_fetch_assoc($qh))))
 		return 0;
 
 	$passhash = sha1("$pass{$row['salt']}");
@@ -539,7 +539,7 @@ function validateLocalAccount($user, $pass) {
 	       .       "u.affiliationid = a.id AND "
 	       .       "a.name = 'Local'";
 	$qh = doQuery($query, 101);
-	if(mysql_num_rows($qh) == 1)
+	if(mysqli_num_rows($qh) == 1)
 		return 1;
 	else
 		return 0;
@@ -559,8 +559,8 @@ function validateLocalAccount($user, $pass) {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function addLoginLog($login, $mech, $affiliationid, $passfail, $code='none') {
-	$login = mysql_real_escape_string($login);
-	$mech = mysql_real_escape_string($mech);
+	$login = vcl_mysql_escape_string($login);
+	$mech = vcl_mysql_escape_string($mech);
 	$query = "INSERT INTO loginlog "
 	       .        "(user, "
 	       .        "authmech, "
@@ -613,8 +613,8 @@ function checkExpiredDemoUser($userid, $groups=0) {
 	       . "LIMIT 3";
 	$qh = doQuery($query, 101);
 	$expire = time() - (SECINDAY * 3);
-	$rows = mysql_num_rows($qh);
-	if($row = mysql_fetch_assoc($qh)) {
+	$rows = mysqli_num_rows($qh);
+	if($row = mysqli_fetch_assoc($qh)) {
 		if($rows >= 3 || datetimeToUnix($row['start']) < $expire) {
 			if(in_array($mode, $noHTMLwrappers))
 				# do a redirect and handle removal on next page load so user can

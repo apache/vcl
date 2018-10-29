@@ -279,8 +279,8 @@ function AJcreateSiteMaintenance() {
 		return;
 	}
 
-	$reason = mysql_real_escape_string($data['reason']);
-	$usermessage = mysql_real_escape_string($data['usermessage']);
+	$reason = vcl_mysql_escape_string($data['reason']);
+	$usermessage = vcl_mysql_escape_string($data['usermessage']);
 	$query = "INSERT INTO sitemaintenance "
 	       .        "(start, "
 	       .        "end, "
@@ -413,8 +413,8 @@ function AJeditSiteMaintenance() {
 		return;
 	}
 
-	$reason = mysql_real_escape_string($data['reason']);
-	$usermessage = mysql_real_escape_string($data['usermessage']);
+	$reason = vcl_mysql_escape_string($data['reason']);
+	$usermessage = vcl_mysql_escape_string($data['usermessage']);
 	$query = "UPDATE sitemaintenance "
 	       . "SET start = '{$data['startdt']}', "
 	       .     "end = '{$data['enddt']}', "

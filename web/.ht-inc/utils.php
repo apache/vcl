@@ -269,7 +269,7 @@ function initGlobals() {
 	# set up $affilValFunc, $addUserFunc, $updateUserFunc for any shibonly affiliations
 	$query = "SELECT id FROM affiliation WHERE shibonly = 1";
 	$qh = doQuery($query);
-	while($row = mysql_fetch_assoc($qh)) {
+	while($row = mysqli_fetch_assoc($qh)) {
 		$id = $row['id'];
 		if(! array_key_exists($id, $affilValFunc)) {
 			if(ALLOWADDSHIBUSERS)
@@ -640,13 +640,13 @@ function checkCryptkey() {
 		$fh = fopen($idfile, 'r');
 		$id = fread($fh, 50);
 		fclose($fh);
-		$_id = mysql_real_escape_string($id);
+		$_id = vcl_mysql_escape_string($id);
 
 		$query = "SELECT id "
 		       . "FROM cryptkey  "
 		       . "WHERE id = '$_id'";
 		$qh = doQuery($query);
-		if($row = mysql_fetch_assoc($qh))
+		if($row = mysqli_fetch_assoc($qh))
 			return;
 	}
 
@@ -737,7 +737,7 @@ function maintenanceCheck() {
 		       .       "end > NOW()";
 		$qh = doQuery($query);
 		$ids = array();
-		while($row = mysql_fetch_assoc($qh))
+		while($row = mysqli_fetch_assoc($qh))
 			$ids[] = $row['id'];
 		if(empty($ids)) {
 			dbDisconnect();
@@ -1007,7 +1007,7 @@ function main() {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function abort($errcode, $query="") {
-	global $mysql_link_vcl, $mysql_link_acct, $ERRORS, $user, $mode;
+	global $mysqli_link_vcl, $mysqli_link_acct, $ERRORS, $user, $mode;
 	global $ENABLE_ITECSAUTH, $requestInfo, $aborting;
 	if(! isset($aborting))
 		$aborting = 1;
@@ -1017,11 +1017,11 @@ function abort($errcode, $query="") {
 		xmlRPCabort($errcode, $query);
 	if(ONLINEDEBUG && checkUserHasPerm('View Debug Information')) {
 		if($errcode >= 100 && $errcode < 400) {
-			print "<font color=red>" . mysql_error($mysql_link_vcl) . "</font><br>\n";
-			error_log(mysql_error($mysql_link_vcl));
+			print "<font color=red>" . mysqli_error($mysqli_link_vcl) . "</font><br>\n";
+			error_log(mysqli_error($mysqli_link_vcl));
 			if($ENABLE_ITECSAUTH) {
-				print "<font color=red>" . mysql_error($mysql_link_acct) . "</font><br>\n";
-				error_log(mysql_error($mysql_link_acct));
+				print "<font color=red>" . mysqli_error($mysqli_link_acct) . "</font><br>\n";
+				error_log(mysqli_error($mysqli_link_acct));
 			}
 			print "$query<br>\n";
 			error_log($query);
@@ -1038,9 +1038,9 @@ function abort($errcode, $query="") {
 	else {
 		$message = "";
 		if($errcode >= 100 && $errcode < 400) {
-			$message .= mysql_error($mysql_link_vcl) . "\n";
+			$message .= mysqli_error($mysqli_link_vcl) . "\n";
 			if($ENABLE_ITECSAUTH)
-				$message .= mysql_error($mysql_link_acct) . "\n";
+				$message .= mysqli_error($mysqli_link_acct) . "\n";
 			$message .= $query . "\n";
 		}
 		$message .= "ERROR($errcode): " . $ERRORS["$errcode"] . "\n";
@@ -1117,13 +1117,13 @@ function validateUserid($loginid) {
 	if(empty($affilid))
 		return 0;
 
-	$escloginid = mysql_real_escape_string($loginid);
+	$escloginid = vcl_mysql_escape_string($loginid);
 	$query = "SELECT id "
 	       . "FROM user "
 	       . "WHERE unityid = '$escloginid' AND "
 	       .       "affiliationid = $affilid";
 	$qh = doQuery($query, 101);
-	if(mysql_num_rows($qh))
+	if(mysqli_num_rows($qh))
 		return 1;
 
 	if($rc == 0 &&
@@ -1133,7 +1133,7 @@ function validateUserid($loginid) {
 		       . "FROM affiliation "
 		       . "WHERE id = " . DEFAULT_AFFILID;
 		$qh = doQuery($query);
-		$row = mysql_fetch_assoc($qh);
+		$row = mysqli_fetch_assoc($qh);
 		if($row['shibonly'] == 1)
 			return 0;
 	}
@@ -1189,11 +1189,12 @@ function getAffilidAndLogin(&$login, &$affilid) {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
-/// \fn mysql_connect_plus($host, $user, $pwd)
+/// \fn mysql_connect_plus($host, $user, $pwd, $db)
 ///
 /// \param $host - mysql host
 /// \param $user - userid to use for connection
 /// \param $pwd - password to use for connection
+/// \param $db - database to use after connecting
 ///
 /// \return mysql resource identifier, 0 if failure to connect
 ///
@@ -1202,12 +1203,12 @@ function getAffilidAndLogin(&$login, &$affilid) {
 /// and returns the identifier
 ///
 ////////////////////////////////////////////////////////////////////////////////
-function mysql_connect_plus($host, $user, $pwd) {
+function mysql_connect_plus($host, $user, $pwd, $db) {
 	$timeout = 5;             /* timeout in seconds */
 
 	if($fp = @fsockopen($host, 3306, $errno, $errstr, $timeout)) {
 		fclose($fp);
-		return $link = mysql_connect($host, $user, $pwd);
+		return $link = mysqli_connect($host, $user, $pwd, $db);
 	} else {
 		#print "ERROR: socket timeout<BR>\n";
 		return 0;
@@ -1219,29 +1220,25 @@ function mysql_connect_plus($host, $user, $pwd) {
 /// \fn dbConnect()
 ///
 /// \brief opens connections to database, the resource identifiers are\n
-/// \b $mysql_link_vcl - for vcl database\n
-/// \b $mysql_link_acct - for accounts database\n
+/// \b $mysqli_link_vcl - for vcl database\n
+/// \b $mysqli_link_acct - for accounts database\n
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function dbConnect() {
-	global $vclhost, $vcldb, $vclusername, $vclpassword, $mysql_link_vcl;
-	global $accthost, $acctusername, $acctpassword, $mysql_link_acct;
+	global $vclhost, $vcldb, $vclusername, $vclpassword, $mysqli_link_vcl;
+	global $accthost, $acctusername, $acctpassword, $mysqli_link_acct;
 	global $ENABLE_ITECSAUTH;
 
 	if($ENABLE_ITECSAUTH) {
 		// open a connection to mysql server for accounts
-		if($mysql_link_acct = mysql_connect_plus($accthost, $acctusername, $acctpassword))
-			mysql_select_db("accounts", $mysql_link_acct);
-		else
+		if(! ($mysqli_link_acct = mysql_connect_plus($accthost, $acctusername, $acctpassword, 'accounts')))
 			$ENABLE_ITECSAUTH = 0;
 	}
 
 	// open a connection to mysql server for vcl
-	if(! $mysql_link_vcl = mysql_connect_plus($vclhost, $vclusername, $vclpassword)) {
+	if(! $mysqli_link_vcl = mysql_connect_plus($vclhost, $vclusername, $vclpassword, $vcldb)) {
 		die("Error connecting to $vclhost.<br>\n");
 	}
-	// select the vcl database
-	mysql_select_db($vcldb, $mysql_link_vcl) or abort(104);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1252,10 +1249,10 @@ function dbConnect() {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function dbDisconnect() {
-	global $mysql_link_vcl, $mysql_link_acct, $ENABLE_ITECSAUTH;
-	mysql_close($mysql_link_vcl);
+	global $mysqli_link_vcl, $mysqli_link_acct, $ENABLE_ITECSAUTH;
+	mysqli_close($mysqli_link_vcl);
 	if($ENABLE_ITECSAUTH)
-		mysql_close($mysql_link_acct);
+		mysqli_close($mysqli_link_acct);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1273,7 +1270,7 @@ function dbDisconnect() {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function doQuery($query, $errcode=101, $db="vcl", $nolog=0) {
-	global $mysql_link_vcl, $mysql_link_acct, $user, $mode, $ENABLE_ITECSAUTH;
+	global $mysqli_link_vcl, $mysqli_link_acct, $user, $mode, $ENABLE_ITECSAUTH;
 	if($db == "vcl") {
 		if(QUERYLOGGING != 0 && (! $nolog) &&
 		   preg_match('/^(UPDATE|INSERT|DELETE)/', $query) &&
@@ -1294,10 +1291,10 @@ function doQuery($query, $errcode=101, $db="vcl", $nolog=0) {
 			   .        "NOW(), "
 			   .        "'$mode', "
 			   .        "'$logquery')";
-			mysql_query($q, $mysql_link_vcl);
+			mysqli_query($mysqli_link_vcl, $q);
 		}
-		for($i = 0; ! ($qh = mysql_query($query, $mysql_link_vcl)) && $i < 3; $i++) {
-			if(mysql_errno() == '1213') # DEADLOCK, sleep and retry
+		for($i = 0; ! ($qh = mysqli_query($mysqli_link_vcl, $query)) && $i < 3; $i++) {
+			if(mysqli_errno() == '1213') # DEADLOCK, sleep and retry
 				usleep(50);
 			else
 				abort($errcode, $query);
@@ -1305,7 +1302,7 @@ function doQuery($query, $errcode=101, $db="vcl", $nolog=0) {
 	}
 	elseif($db == "accounts") {
 		if($ENABLE_ITECSAUTH)
-			$qh = mysql_query($query, $mysql_link_acct) or abort($errcode, $query);
+			$qh = mysqli_query($mysqli_link_acct, $query) or abort($errcode, $query);
 		else
 			$qh = NULL;
 	}
@@ -1316,14 +1313,31 @@ function doQuery($query, $errcode=101, $db="vcl", $nolog=0) {
 ///
 /// \fn dbLastInsertID()
 ///
-/// \return last insert id for $mysql_link_vcl
+/// \return last insert id for $mysqli_link_vcl
 ///
-/// \brief calls mysql_insert_id for $mysql_link_vcl
+/// \brief calls mysqli_insert_id for $mysqli_link_vcl
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function dbLastInsertID() {
-	global $mysql_link_vcl;
-	return mysql_insert_id($mysql_link_vcl);
+	global $mysqli_link_vcl;
+	return mysqli_insert_id($mysqli_link_vcl);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn vcl_mysql_escape_string($string) {
+///
+/// \param $string - string to be escaped
+///
+/// \return escaped string
+///
+/// \brief wrapper for mysqli_real_escape_string so that $mysqli_link_vcl global
+/// variable doesn't have to be included in every function needing to call it
+///
+////////////////////////////////////////////////////////////////////////////////
+function vcl_mysql_escape_string($string) {
+	global $mysqli_link_vcl;
+	return mysqli_real_escape_string($mysqli_link_vcl, $string);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1339,7 +1353,7 @@ function getOSList() {
 	$query = "SELECT id, name, prettyname, type, installtype FROM OS ORDER BY prettyname";
 	$qh = doQuery($query, "115");
 	$oslist = array();
-	while($row = mysql_fetch_assoc($qh))
+	while($row = mysqli_fetch_assoc($qh))
 		$oslist[$row['id']] = $row;
 	return $oslist;
 }
@@ -1411,7 +1425,7 @@ function getImages($includedeleted=0, $imageid=0) {
 	       .        "id "
 	       . "FROM imagemeta";
 	$qh = doQuery($query);
-	while($row = mysql_fetch_assoc($qh))
+	while($row = mysqli_fetch_assoc($qh))
 		$allmetadata[$row['id']] = $row;
 
 	# get all image revision data
@@ -1435,7 +1449,7 @@ function getImages($includedeleted=0, $imageid=0) {
 		$query .=   "i.deleted = 0 AND ";
 	$query .=      "u.affiliationid = a.id";
 	$qh = doQuery($query, 101);
-	while($row = mysql_fetch_assoc($qh)) {
+	while($row = mysqli_fetch_assoc($qh)) {
 		$id = $row['imageid'];
 		unset($row['imageid']);
 		$allrevisiondata[$id][$row['id']] = $row;
@@ -1490,7 +1504,7 @@ function getImages($includedeleted=0, $imageid=0) {
 		$query .= "AND i.deleted = 0 ";
    $query .= "ORDER BY i.prettyname";
 	$qh = doQuery($query, 120);
-	while($row = mysql_fetch_assoc($qh)) {
+	while($row = mysqli_fetch_assoc($qh)) {
 		if(is_null($row['maxconcurrent']))
 			$row['maxconcurrent'] = 0;
 		$imagelist[$includedeleted][$row["id"]] = $row;
@@ -1517,7 +1531,7 @@ function getImages($includedeleted=0, $imageid=0) {
 				        . "FROM subimages "
 				        . "WHERE imagemetaid = $metaid";
 					$qh2 = doQuery($query2, 101);
-					while($row2 = mysql_fetch_assoc($qh2))
+					while($row2 = mysqli_fetch_assoc($qh2))
 						$imagelist[$includedeleted][$row["id"]]["subimages"][] =  $row2["imageid"];
 				}
 			}
@@ -1567,7 +1581,7 @@ function getImages($includedeleted=0, $imageid=0) {
 	$fixeddata = array();
 	$query = "SELECT name, value FROM variable WHERE name LIKE 'fixedIPsp%'";
 	$qh = doQuery($query);
-	while($row = mysql_fetch_assoc($qh)) {
+	while($row = mysqli_fetch_assoc($qh)) {
 		$spid = str_replace('fixedIPsp', '', $row['name']);
 		$fixeddata[$spid] = Spyc::YAMLLoad($row['value']);
 	}
@@ -1603,7 +1617,7 @@ function getImages($includedeleted=0, $imageid=0) {
 		$query .= "ORDER BY name";
 	$qh = doQuery($query, 101);
 	$profiles = array();
-	while($row = mysql_fetch_assoc($qh)) {
+	while($row = mysqli_fetch_assoc($qh)) {
 		$profiles[$row['id']] = $row;
 		if(isset($fixeddata[$row['id']])) {
 			$profiles[$row['id']]['netmask'] = $fixeddata[$row['id']]['netmask'];
@@ -1652,7 +1666,7 @@ function getImages($includedeleted=0, $imageid=0) {
 	       .       "s.id IN ($inids)";
 	$qh = doQuery($query, 101);
 	$profiles = array();
-	while($row = mysql_fetch_assoc($qh))
+	while($row = mysqli_fetch_assoc($qh))
 		$profiles[$row['id']] = $row['image'];
 	$_SESSION['usersessiondata'][$key] = $profiles;
 	return $profiles;
@@ -1701,7 +1715,7 @@ function getImageRevisions($imageid, $incdeleted=0) {
 	$query .= " ORDER BY revision";
 	$qh = doQuery($query, 101);
 	$return = array();
-	while($row = mysql_fetch_assoc($qh))
+	while($row = mysqli_fetch_assoc($qh))
 		$return[$row['id']] = $row;
 	return $return;
 }
@@ -1728,7 +1742,7 @@ function getImageNotes($imageid) {
 	       . "FROM image "
 	       . "WHERE id = $imageid";
 	$qh = doQuery($query, 101);
-	if($row = mysql_fetch_assoc($qh))
+	if($row = mysqli_fetch_assoc($qh))
 		return $row;
 	else
 		return array('description' => '', 'usage' => '');
@@ -1812,7 +1826,7 @@ function getImageConnectMethods($imageid, $revisionid=0, $nostatic=0) {
 		       .          "disabled";
 
 		$qh = doQuery($query);
-		while($row = mysql_fetch_assoc($qh)) {
+		while($row = mysqli_fetch_assoc($qh)) {
 			if($row['disabled'] &&
 			   isset($allmethods[$row['imageid']][$row['imagerevisionid']][$row['connectmethodid']]))
 				unset($allmethods[$row['imageid']][$row['imagerevisionid']][$row['connectmethodid']]);
@@ -1849,7 +1863,7 @@ function getImageConnectMethodTexts($imageid, $revisionid=0) {
 	if(! preg_match('/^en/', $locale)) {
 		$query = "DESC connectmethod";
 		$qh = doQuery($query, 101);
-		while($row = mysql_fetch_assoc($qh)) {
+		while($row = mysqli_fetch_assoc($qh)) {
 			if($row['Field'] == "description_$locale")
 				$descfield = "description_$locale";
 			if($row['Field'] == "connecttext_$locale")
@@ -1863,7 +1877,7 @@ function getImageConnectMethodTexts($imageid, $revisionid=0) {
 	       .        "protocol "
 	       . "FROM connectmethodport";
 	$qh = doQuery($query);
-	while($row = mysql_fetch_assoc($qh)) {
+	while($row = mysqli_fetch_assoc($qh)) {
 		$row['key'] = "#Port-{$row['protocol']}-{$row['port']}#";
 		$cmports[$row['connectmethodid']][] = $row;
 	}
@@ -1888,7 +1902,7 @@ function getImageConnectMethodTexts($imageid, $revisionid=0) {
 	       .          "c.`$descfield`";
 	$methods = array();
 	$qh = doQuery($query, 101);
-	while($row = mysql_fetch_assoc($qh)) {
+	while($row = mysqli_fetch_assoc($qh)) {
 		if($row['disabled']) {
 		  if(isset($methods[$row['id']]))
 			unset($methods[$row['id']]);
@@ -1915,7 +1929,7 @@ function getImageTypes() {
 	$query = "SELECT id, name FROM imagetype ORDER BY name";
 	$qh = doQuery($query);
 	$data = array();
-	while($row = mysql_fetch_assoc($qh))
+	while($row = mysqli_fetch_assoc($qh))
 		$data[$row['id']] = $row['name'];
 	return $data;
 }
@@ -1940,14 +1954,14 @@ function checkClearImageMeta($imagemetaid, $imageid, $ignorefield='') {
 	$query = "DESC imagemeta";
 	$qh = doQuery($query, 101);
 	$defaults = array();
-	while($row = mysql_fetch_assoc($qh))
+	while($row = mysqli_fetch_assoc($qh))
 		$defaults[$row['Field']] = $row['Default'];
 	# get imagemeta data
 	$query = "SELECT * FROM imagemeta WHERE id = $imagemetaid";
 	$qh = doQuery($query, 101);
-	$row = mysql_fetch_assoc($qh);
+	$row = mysqli_fetch_assoc($qh);
 	$alldefaults = 1;
-	if(mysql_num_rows($qh) == 0)
+	if(mysqli_num_rows($qh) == 0)
 		# it is possible that the imagemeta record could have been deleted before
 		#   this was submitted
 		return 1;
@@ -1998,7 +2012,7 @@ function getProductionRevisionid($imageid, $nostatic=0) {
 	       . "FROM imagerevision  "
 	       . "WHERE production = 1";
 	$qh = doQuery($query, 101);
-	while($row = mysql_fetch_assoc($qh))
+	while($row = mysqli_fetch_assoc($qh))
 		$alldata[$row['imageid']] = $row['id'];
 	return $alldata[$imageid];
 }
@@ -2099,7 +2113,7 @@ function getUserResources($userprivs, $resourceprivs=array("available"),
 	else
 		$query .=   "u.usergroupid = $groupid";
 	$qh = doQuery($query, 101);
-	while($row = mysql_fetch_assoc($qh)) {
+	while($row = mysqli_fetch_assoc($qh)) {
 		array_push($startnodes, $row["privnodeid"]);
 	}
 	# build data array from userprivtype and userpriv tables to reduce queries
@@ -2114,7 +2128,7 @@ function getUserResources($userprivs, $resourceprivs=array("available"),
 	       .       "u.userid = $userid AND "
 	       .       "t.name IN ('block','cascade',$inlist)";
 	$qh = doQuery($query);
-	while($row = mysql_fetch_assoc($qh))
+	while($row = mysqli_fetch_assoc($qh))
 		$privdataset['user'][$row['privnodeid']][] = $row['name'];
 	$query = "SELECT t.name, "
 	       .        "u.usergroupid, "
@@ -2133,7 +2147,7 @@ function getUserResources($userprivs, $resourceprivs=array("available"),
 	       . "ORDER BY u.privnodeid, "
 	       .          "u.usergroupid";
 	$qh = doQuery($query, 101);
-	while($row = mysql_fetch_assoc($qh))
+	while($row = mysqli_fetch_assoc($qh))
 		$privdataset['usergroup'][$row['privnodeid']][] = array('name' => $row['name'], 'groupid' => $row['usergroupid']);
 
 	# travel up tree looking at privileges granted at parent nodes
@@ -2473,7 +2487,7 @@ function addOwnedResources(&$resources, $includedeleted, $userid) {
 		if(! $includedeleted && $type == 'managementnode')
 			$query .= " AND stateid != (SELECT id FROM state WHERE name = 'deleted') ";
 		$qh = doQuery($query, 101);
-		while($row = mysql_fetch_assoc($qh)) {
+		while($row = mysqli_fetch_assoc($qh)) {
 			if(! isset($resources[$type][$row["id"]]))
 				$resources[$type][$row["id"]] = $row[$field];
 		}
@@ -2507,7 +2521,7 @@ function addOwnedResourceGroups(&$resourcegroups, $userid) {
 	       . "WHERE g.resourcetypeid = t.id AND "
 	       .       "g.ownerusergroupid IN ($groupids)";
 	$qh = doQuery($query, 101);
-	while($row = mysql_fetch_assoc($qh)) {
+	while($row = mysqli_fetch_assoc($qh)) {
 		if(! isset($resourcegroups[$row["type"]][$row["id"]]))
 			$resourcegroups[$row["type"]][$row["id"]] = $row["name"];
 	}
@@ -2568,7 +2582,7 @@ function getResourcesFromGroups($groups, $type, $includedeleted) {
 		$query .= "AND test = 0 ";*/
 	$query .= "ORDER BY t.$field";
 	$qh = doQuery($query, 101);
-	while($row = mysql_fetch_assoc($qh)) {
+	while($row = mysqli_fetch_assoc($qh)) {
 		$return[$row["id"]] = $row["name"];
 	}
 	return $return;
@@ -2649,7 +2663,7 @@ function updateResourcePrivs($group, $node, $adds, $removes) {
 	else
 		$groupid = getResourceGroupID($group);
 	foreach($adds as $type) {
-		$type = mysql_real_escape_string($type);
+		$type = vcl_mysql_escape_string($type);
 		$query = "INSERT IGNORE INTO resourcepriv ("
 		       .        "resourcegroupid, "
 		       .        "privnodeid, "
@@ -2661,7 +2675,7 @@ function updateResourcePrivs($group, $node, $adds, $removes) {
 		doQuery($query, 377);
 	}
 	foreach($removes as $type) {
-		$type = mysql_real_escape_string($type);
+		$type = vcl_mysql_escape_string($type);
 		$query = "DELETE FROM resourcepriv "
 		       . "WHERE resourcegroupid = $groupid AND "
 		       .       "privnodeid = $node AND "
@@ -2804,7 +2818,7 @@ function encryptDBdata($data, $secretid) {
 	       . "WHERE cryptkeyid = $cryptkeyid AND "
 	       .       "secretid = $secretid";
 	$qh = doQuery($query);
-	if(! ($row = mysql_fetch_assoc($qh)))
+	if(! ($row = mysqli_fetch_assoc($qh)))
 		return NULL;
 	$secret = decryptSecretKey($row['cryptsecret']);
 	if($secret === NULL)
@@ -2833,7 +2847,7 @@ function encryptSecretKey($secret, $cryptkey) {
 		       . "FROM cryptkey "
 		       . "WHERE id = $cryptkey";
 		$qh = doQuery($query);
-		if(! ($row = mysql_fetch_assoc($qh)))
+		if(! ($row = mysqli_fetch_assoc($qh)))
 			return NULL;
 		$cryptkey = $row['pubkey'];
 		if($row['algorithmoption'] == 'OAEP' || 1) # OAEP only currently supported option
@@ -2901,7 +2915,7 @@ function decryptSecretKey($encsecret) {
 function getSecretKeyID($table, $field, $recordid) {
 	$query = "SELECT $field FROM $table WHERE id = $recordid";
 	$qh = doQuery($query);
-	if(($row = mysql_fetch_row($qh)) && $row[0] != 0)
+	if(($row = mysqli_fetch_row($qh)) && $row[0] != 0)
 		return $row[0];
 
 	# generate secret key
@@ -2940,7 +2954,7 @@ function getSecretKeyID($table, $field, $recordid) {
 		return NULL;
 	$query = "SELECT secretid FROM cryptsecret WHERE id = $id";
 	$qh = doQuery($query);
-	if(! ($row = mysql_fetch_assoc($qh)))
+	if(! ($row = mysqli_fetch_assoc($qh)))
 		return NULL;
 	# encrypt with all other public keys and write to cryptsecret
 	encryptWebSecretKeys($key, $row['secretid'], $cryptkeyid);
@@ -2993,13 +3007,13 @@ function getCryptKeyID() {
 	$fh = fopen($idfile, 'r');
 	$id = fread($fh, 50);
 	fclose($fh);
-	$_id = mysql_real_escape_string($id);
+	$_id = vcl_mysql_escape_string($id);
 
 	$query = "SELECT id "
 	       . "FROM cryptkey  "
 	       . "WHERE id = '$_id'";
 	$qh = doQuery($query);
-	if($row = mysql_fetch_assoc($qh))
+	if($row = mysqli_fetch_assoc($qh))
 		return $row['id'];
 
 	if($create) {
@@ -3031,7 +3045,7 @@ function encryptWebSecretKeys($secret, $secretid, $skipkeyid=0) {
 	       .       "hosttype = 'web'";
 	$qh = doQuery($query);
 	$values = array();
-	while($row = mysql_fetch_assoc($qh)) {
+	while($row = mysqli_fetch_assoc($qh)) {
 		$cryptsecret = encryptSecretKey($secret, $row['pubkey']);
 		if($cryptsecret === NULL)
 			continue;
@@ -3078,7 +3092,7 @@ function checkMissingWebSecretKeys() {
 	       .       "cs.secretid IS NULL AND "
 	       .       "ck.id != $mycryptkeyid";
 	$qh = doQuery($query);
-	while($row = mysql_fetch_assoc($qh)) {
+	while($row = mysqli_fetch_assoc($qh)) {
 		$secret = decryptSecretKey($row['mycryptsecret']);
 		$encsecret = encryptSecretKey($secret, $row['cryptkey']);
 		$values[] = "({$row['cryptkeyid']}, {$row['secretid']}, '$encsecret', '"
@@ -3121,7 +3135,7 @@ function checkCryptSecrets($requestid) {
 	       . "WHERE rs.requestid = $requestid AND "
 	       .       "ad.secretid IS NOT NULL";
 	$qh = doQuery($query);
-	while($row = mysql_fetch_assoc($qh))
+	while($row = mysqli_fetch_assoc($qh))
 		$secretids[$row['managementnodeid']][$row['secretid']] = 1;
 	# determine any secretids needed from vmprofile
 	$query = "SELECT vp.secretid, "
@@ -3133,7 +3147,7 @@ function checkCryptSecrets($requestid) {
 	       . "WHERE rs.requestid = $requestid AND "
 	       .       "vp.secretid IS NOT NULL";
 	$qh = doQuery($query);
-	while($row = mysql_fetch_assoc($qh))
+	while($row = mysqli_fetch_assoc($qh))
 		$secretids[$row['managementnodeid']][$row['secretid']] = 1;
 
 	$mycryptkeyid = getCryptKeyID();
@@ -3190,7 +3204,7 @@ function getMNcryptkeyUpdates($secretidset, $cryptkeyid) {
 		       .       "s.id in ($allsecretids) AND "
 		       .       "cs.secretid IS NULL";
 		$qh = doQuery($query);
-		while($row = mysql_fetch_assoc($qh)) {
+		while($row = mysqli_fetch_assoc($qh)) {
 			$secret = decryptSecretKey($row['mycryptsecret']);
 			$encsecret = encryptSecretKey($secret, $row['cryptkey']);
 			$values[] = "({$row['cryptkeyid']}, {$row['secretid']}, '$encsecret', '"
@@ -3354,7 +3368,7 @@ function getUserGroups($groupType=0, $affiliationid=0) {
 		$query .= "AND ug.affiliationid = $affiliationid ";
 	$query .= "ORDER BY name";
 	$qh = doQuery($query, 280);
-	while($row = mysql_fetch_assoc($qh)) {
+	while($row = mysqli_fetch_assoc($qh)) {
 		if(! empty($row["owner"]) && ! empty($row['affiliation']))
 			$row['owner'] = "{$row['owner']}@{$row['affiliation']}";
 		if($user['showallgroups'] || $affiliationid == 0)
@@ -3403,7 +3417,7 @@ function getUserEditGroups($id) {
 	}
 	$qh = doQuery($query, 101);
 	$groups = array();
-	while($row = mysql_fetch_assoc($qh)) {
+	while($row = mysqli_fetch_assoc($qh)) {
 		$groups[$row['id']] = $row['name'];
 	}
 	return $groups;
@@ -3443,7 +3457,7 @@ function getUserGroupPrivs($groupid='') {
 	$query .= "ORDER BY ug.name, "
 	       .           "ugpt.name";
 	$qh = doQuery($query, 101);
-	while($row = mysql_fetch_assoc($qh))
+	while($row = mysqli_fetch_assoc($qh))
 		$data[] = $row;
 	return $data;
 }
@@ -3465,7 +3479,7 @@ function getUserGroupPrivTypes() {
 	$data = array();
 	$query = "SELECT id, name, help FROM usergroupprivtype ORDER BY name";
 	$qh = doQuery($query, 101);
-	while($row = mysql_fetch_assoc($qh))
+	while($row = mysqli_fetch_assoc($qh))
 		$data[$row['id']] = $row;
 	return $data;
 }
@@ -3510,7 +3524,7 @@ function getResourceGroups($type='', $id='') {
 
 	$query .= "ORDER BY t.name, g.name";
 	$qh = doQuery($query, 281);
-	while($row = mysql_fetch_assoc($qh)) {
+	while($row = mysqli_fetch_assoc($qh)) {
 		if(empty($type))
 			$return[$row["id"]]["name"] = $row["type"] . "/" . $row["name"];
 		else
@@ -3554,7 +3568,7 @@ function getResourceGroupMemberships($type="all") {
 		       .       "gm.resourceid = r.id AND "
 		       .       "r.resourcetypeid = t.id";
 		$qh = doQuery($query, 282);
-		while($row = mysql_fetch_assoc($qh))
+		while($row = mysqli_fetch_assoc($qh))
 			$return[$type][$row["id"]][] = $row["groupid"];
 	}
 	return $return;
@@ -3658,7 +3672,7 @@ function getResourceGroupMembers($type="all") {
 	       .          "rgm.resourcegroupid, "
 	       .          $orders;
 	$qh = doQuery($query, 282);
-	while($row = mysql_fetch_assoc($qh)) {
+	while($row = mysqli_fetch_assoc($qh)) {
 		if(isset($row['deleted']) && $row['deleted'] == 1)
 			continue;
 		if(isset($row['deleted2']) && $row['deleted2'] == 1)
@@ -3695,7 +3709,7 @@ function getUserGroupMembers($groupid) {
 	       .       "u.affiliationid = a.id "
 	       . "ORDER BY u.unityid";
 	$qh = doQuery($query, 101);
-	while($row = mysql_fetch_assoc($qh)) {
+	while($row = mysqli_fetch_assoc($qh)) {
 		$return[$row["id"]] = $row['user'];
 	}
 	return $return;
@@ -3772,8 +3786,8 @@ function getUserlistID($loginid, $noadd=0) {
 	       . "WHERE unityid = '$loginid' AND "
 	       .       "affiliationid = $affilid";
 	$qh = doQuery($query, 140);
-	if(mysql_num_rows($qh)) {
-		$row = mysql_fetch_row($qh);
+	if(mysqli_num_rows($qh)) {
+		$row = mysqli_fetch_row($qh);
 		return $row[0];
 	}
 	if($noadd)
@@ -3800,7 +3814,7 @@ function getUsersLastImage($userid) {
 	       . "ORDER BY id DESC "
 	       . "LIMIT 1";
 	$qh = doQuery($query, 101);
-	if($row = mysql_fetch_assoc($qh))
+	if($row = mysqli_fetch_assoc($qh))
 		return $row['imageid'];
 	return NULL;
 }
@@ -3819,7 +3833,7 @@ function getAffiliations() {
 	$query = "SELECT id, name FROM affiliation ORDER BY name";
 	$qh = doQuery($query, 101);
 	$return = array();
-	while($row = mysql_fetch_assoc($qh))
+	while($row = mysqli_fetch_assoc($qh))
 		$return[$row['id']] = $row['name'];
 	return $return;
 }
@@ -3843,8 +3857,8 @@ function getUserUnityID($userid) {
 		return $cache['unityids'][$userid];
 	$query = "SELECT unityid FROM user WHERE id = $userid";
 	$qh = doQuery($query, 101);
-	if(mysql_num_rows($qh)) {
-		$row = mysql_fetch_row($qh);
+	if(mysqli_num_rows($qh)) {
+		$row = mysqli_fetch_row($qh);
 		$cache['unityids'][$userid] = $row[0];
 		return $row[0];
 	}
@@ -3863,11 +3877,11 @@ function getUserUnityID($userid) {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function getAffiliationID($affil) {
-	$affil = mysql_real_escape_string($affil);
+	$affil = vcl_mysql_escape_string($affil);
 	$query = "SELECT id FROM affiliation WHERE name = '$affil'";
 	$qh = doQuery($query, 101);
-	if(mysql_num_rows($qh)) {
-		$row = mysql_fetch_row($qh);
+	if(mysqli_num_rows($qh)) {
+		$row = mysqli_fetch_row($qh);
 		return $row[0];
 	}
 	return NULL;
@@ -3887,8 +3901,8 @@ function getAffiliationID($affil) {
 function getAffiliationName($affilid) {
 	$query = "SELECT name FROM affiliation WHERE id = $affilid";
 	$qh = doQuery($query, 101);
-	if(mysql_num_rows($qh)) {
-		$row = mysql_fetch_row($qh);
+	if(mysqli_num_rows($qh)) {
+		$row = mysqli_fetch_row($qh);
 		return $row[0];
 	}
 	return NULL;
@@ -3912,7 +3926,7 @@ function getAffiliationDataUpdateText($affilid=0) {
 	if($affilid)
 		$query .= " WHERE id = $affilid";
 	$qh = doQuery($query, 101);
-	while($row = mysql_fetch_assoc($qh))
+	while($row = mysqli_fetch_assoc($qh))
 		$return[$row['id']] = $row['dataUpdateText'];
 	return $return;
 }
@@ -3940,7 +3954,7 @@ function getAffiliationTheme($affilid) {
 	  	       .       "a2.name = 'Global'";
 	}
 	$qh = doQuery($query);
-	if(($row = mysql_fetch_assoc($qh)) && ! empty($row['theme']))
+	if(($row = mysqli_fetch_assoc($qh)) && ! empty($row['theme']))
 		return $row['theme'];
 	else
 		return DEFAULTTHEME;
@@ -4170,7 +4184,7 @@ function processInputData($data, $type, $addslashes=0, $defaultvalue=NULL) {
 			if(! is_string($value))
 				$return[$index] = $defaultvalue;
 			elseif($addslashes)
-				$return[$index] = mysql_real_escape_string($value);
+				$return[$index] = vcl_mysql_escape_string($value);
 		}
 		return $return;
 	}
@@ -4179,7 +4193,7 @@ function processInputData($data, $type, $addslashes=0, $defaultvalue=NULL) {
 		if(strlen($return) == 0)
 			$return = $defaultvalue;
 		elseif($addslashes)
-			$return = mysql_real_escape_string($return);
+			$return = vcl_mysql_escape_string($return);
 	}
 
 	return $return;
@@ -4272,7 +4286,7 @@ function getUserInfo($id, $noupdate=0, $numeric=0) {
 		$query .= "u.unityid = '$id' AND af.id = $affilid";
 
 	$qh = doQuery($query, "105");
-	if($user = mysql_fetch_assoc($qh)) {
+	if($user = mysqli_fetch_assoc($qh)) {
 		$user['sshpublickeys'] = htmlspecialchars($user['sshpublickeys']);
 		if((datetimeToUnix($user["lastupdated"]) > time() - SECINDAY) ||
 		   $user['unityid'] == 'vclreload' ||
@@ -4348,7 +4362,7 @@ function getUsersGroups($userid, $includeowned=0, $includeaffil=0) {
 	}
 	$qh = doQuery($query, "101");
 	$groups = array();
-	while($row = mysql_fetch_assoc($qh)) {
+	while($row = mysqli_fetch_assoc($qh)) {
 		$groups[$row["usergroupid"]] = $row["name"];
 	}
 	if($includeowned) {
@@ -4367,7 +4381,7 @@ function getUsersGroups($userid, $includeowned=0, $includeaffil=0) {
 			       . "WHERE ownerid = $userid";
 		}
 		$qh = doQuery($query, "101");
-		while($row = mysql_fetch_assoc($qh)) {
+		while($row = mysqli_fetch_assoc($qh)) {
 			$groups[$row["usergroupid"]] = $row["name"];
 		}
 	}
@@ -4403,7 +4417,7 @@ function getUsersGroupPerms($usergroupids) {
 	       . "ORDER BY t.name";
 	$perms = array();
 	$qh = doQuery($query, 101);
-	while($row = mysql_fetch_assoc($qh))
+	while($row = mysqli_fetch_assoc($qh))
 		$perms[$row['id']] = $row['name'];
 	return $perms;
 }
@@ -4473,7 +4487,7 @@ function updateUserData($id, $type="loginid", $affilid=DEFAULT_AFFILID) {
 		       . "FROM user "
 		       . "WHERE id = $id";
 		$qh = doQuery($query, 101);
-		if($row = mysql_fetch_assoc($qh)) {
+		if($row = mysqli_fetch_assoc($qh)) {
 			$id = $row['unityid'];
 			$type = 'loginid';
 			$affilid = $row['affiliationid'];
@@ -4535,9 +4549,9 @@ function addUser($loginid) {
 ////////////////////////////////////////////////////////////////////////////////
 function updateUserPrefs($userid, $preferredname, $width, $height, $bpp, $audio,
                          $mapdrives, $mapprinters, $mapserial, $rdpport) {
-	global $mysql_link_vcl;
-	$preferredname = mysql_real_escape_string($preferredname);
-	$audio = mysql_real_escape_string($audio);
+	global $mysqli_link_vcl;
+	$preferredname = vcl_mysql_escape_string($preferredname);
+	$audio = vcl_mysql_escape_string($audio);
 	if($rdpport == 3389)
 		$rdpport = 'NULL';
 	$query = "UPDATE user SET "
@@ -4552,7 +4566,7 @@ function updateUserPrefs($userid, $preferredname, $width, $height, $bpp, $audio,
 	       .        "rdpport = $rdpport "
 	       . "WHERE id = $userid";
 	doQuery($query, 270);
-	return mysql_affected_rows($mysql_link_vcl);
+	return mysqli_affected_rows($mysqli_link_vcl);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -4583,7 +4597,7 @@ function getOverallUserPrivs($userid) {
 	       .                         "WHERE ownerid = $userid))";
 	$qh = doQuery($query, 107);
 	$privileges = array();
-	while($row = mysql_fetch_row($qh))
+	while($row = mysqli_fetch_row($qh))
 		$privileges[] = $row[0];
 	if(in_array("mgmtNodeAdmin", $privileges))
 		$privileges[] = 'managementnodeAdmin';
@@ -4618,7 +4632,7 @@ function getBlockAllocationIDs($user) {
 	       .       "r.groupid IN ($inids)";
 	$ids = array();
 	$qh = doQuery($query, 101);
-	while($row = mysql_fetch_assoc($qh))
+	while($row = mysqli_fetch_assoc($qh))
 		$ids[] = $row['id'];
 	return $ids;
 }
@@ -4739,7 +4753,7 @@ function isAvailable($images, $imageid, $imagerevisionid, $start, $end,
 			$query .=   "AND rq.id != $requestid ";
 		$query .= "LIMIT 1";
 		$qh = doQuery($query, 101);
-		if(mysql_num_rows($qh)) {
+		if(mysqli_num_rows($qh)) {
 			return debugIsAvailable(-3, 2, $start, $end, $imagerevisionid);
 		}
 
@@ -4749,7 +4763,7 @@ function isAvailable($images, $imageid, $imagerevisionid, $start, $end,
 		       . "WHERE IPaddress = '$ip' AND "
 		       .       "stateid != 1";
 		$qh = doQuery($query, 101);
-		if(mysql_num_rows($qh)) {
+		if(mysqli_num_rows($qh)) {
 			return debugIsAvailable(-4, 16, $start, $end, $imagerevisionid);
 		}
 	}
@@ -4790,7 +4804,7 @@ function isAvailable($images, $imageid, $imagerevisionid, $start, $end,
 			       .       "rq.stateid NOT IN (1,5,11,12,16,17) AND "
 			       .       "rq.userid != $reloadid";
 			$qh = doQuery($query, 101);
-			while($row = mysql_fetch_assoc($qh)) {
+			while($row = mysqli_fetch_assoc($qh)) {
 				$compids[] = $row['computerid'];
 				if($row['reqid'] == $requestid)
 					$decforedit = 1;
@@ -4812,7 +4826,7 @@ function isAvailable($images, $imageid, $imagerevisionid, $start, $end,
 			       .       "bt.skip != 1 AND "
 			       .       "br.status != 'deleted'";
 			$qh = doQuery($query);
-			if(! $row = mysql_fetch_assoc($qh)) {
+			if(! $row = mysqli_fetch_assoc($qh)) {
 				cleanSemaphore();
 				return debugIsAvailable(0, 3, $start, $end, $imagerevisionid);
 			}
@@ -4882,7 +4896,7 @@ function isAvailable($images, $imageid, $imagerevisionid, $start, $end,
 			       . "FROM computer "
 			       . "WHERE id = $compid";
 			$qh = doQuery($query, 128);
-			$row = mysql_fetch_row($qh);
+			$row = mysqli_fetch_row($qh);
 			if(! in_array($row[0], $scheduleids)) {
 				cleanSemaphore();
 				return debugIsAvailable(0, 7, $start, $end, $imagerevisionid, $computerids, $currentids, $blockids);
@@ -4898,7 +4912,7 @@ function isAvailable($images, $imageid, $imagerevisionid, $start, $end,
 			       . "LEFT JOIN OS ON (i.OSid = OS.id) "
 			       . "WHERE i.id = $imageid";
 			$qh = doQuery($query, 101);
-			if(! ($row = mysql_fetch_assoc($qh))) {
+			if(! ($row = mysqli_fetch_assoc($qh))) {
 				cleanSemaphore();
 				return debugIsAvailable(0, 8, $start, $end, $imagerevisionid, $computerids, $currentids, $blockids);
 			}
@@ -4957,7 +4971,7 @@ function isAvailable($images, $imageid, $imagerevisionid, $start, $end,
 			       .          "network";
 
 			$qh = doQuery($query, 129);
-			while($row = mysql_fetch_assoc($qh)) {
+			while($row = mysqli_fetch_assoc($qh)) {
 				array_push($computerids, $row['id']);
 				if($row['currentimageid'] == $imageid &&
 				   $row['imagerevisionid'] == $requestInfo['imagerevisions'][$key]) {
@@ -4986,7 +5000,7 @@ function isAvailable($images, $imageid, $imagerevisionid, $start, $end,
 		       .       "rq.stateid NOT IN (5, 12, 19) AND " # failed, complete, reload
 		       .       "(rq.stateid != 14 OR rq.laststateid != 19)"; # pending/reload
 		$qh = doQuery($query, 130);
-		while($row = mysql_fetch_row($qh)) {
+		while($row = mysqli_fetch_row($qh)) {
 			array_push($usedComputerids, $row[0]);
 		}
 
@@ -5061,7 +5075,7 @@ function isAvailable($images, $imageid, $imagerevisionid, $start, $end,
 			       .          "c.network";
 			$qh = doQuery($query, 101);
 			$newcompids = array();
-			while($row = mysql_fetch_assoc($qh))
+			while($row = mysqli_fetch_assoc($qh))
 				$newcompids[] = $row['id'];
 			$computerids = $newcompids;
 		}
@@ -5083,7 +5097,7 @@ function isAvailable($images, $imageid, $imagerevisionid, $start, $end,
 			       .       "(type != 'virtualmachine' OR "
 			       .       "vmhostid IS NOT NULL)";
 			$qh = doQuery($query);
-			if(mysql_num_rows($qh)) {
+			if(mysqli_num_rows($qh)) {
 				if($now)
 					return debugIsAvailable(-4, 18, $start, $end, $imagerevisionid, $computerids, $currentids, $blockids, array(), $virtual);
 				$requestInfo['ipwarning'] = 1;
@@ -5095,14 +5109,14 @@ function isAvailable($images, $imageid, $imagerevisionid, $start, $end,
 			if($requestid)
 				$query .= " AND id != $compid"; # TODO test this
 			$qh = doQuery($query);
-			$cnt = mysql_num_rows($qh);
+			$cnt = mysqli_num_rows($qh);
 			if($cnt > 1) {
 				if($now)
 					return debugIsAvailable(-4, 22, $start, $end, $imagerevisionid, $computerids, $currentids, $blockids, array(), $virtual);
 				$requestInfo['ipwarning'] = 1;
 			}
 			elseif($cnt == 1) {
-				$row = mysql_fetch_assoc($qh);
+				$row = mysqli_fetch_assoc($qh);
 				$computerids = array($row['id']);
 				$blockids = array();
 			}
@@ -5307,7 +5321,7 @@ function getAvailableSchedules($start, $end) {
 
 	$scheduleids = array();
 	$qh = doQuery($query, 127);
-	while($row = mysql_fetch_row($qh)) {
+	while($row = mysqli_fetch_row($qh)) {
 		array_push($scheduleids, $row[0]);
 	}
 	return $scheduleids;
@@ -5327,7 +5341,7 @@ function getAvailableSchedules($start, $end) {
 function getImagePlatform($imageid) {
 	$query = "SELECT platformid FROM image WHERE id = $imageid";
 	$qh = doQuery($query, 125);
-	if(! $row = mysql_fetch_assoc($qh))
+	if(! $row = mysqli_fetch_assoc($qh))
 		return NULL;
 	return $row['platformid'];
 }
@@ -5355,7 +5369,7 @@ function schCheckMaintenance($start, $end) {
 	       .       "(('$startdt' > (start - INTERVAL 30 MINUTE)) AND ('$startdt' < end))) AND "
 	       .       "end > NOW()";
 	$qh = doQuery($query, 101);
-	if($row = mysql_fetch_row($qh))
+	if($row = mysqli_fetch_row($qh))
 		return true;
 	return false;
 }
@@ -5458,7 +5472,7 @@ function allocComputer($blockids, $currentids, $computerids, $start, $end,
 ////////////////////////////////////////////////////////////////////////////////
 function getSemaphore($imageid, $imagerevisionid, $mgmtnodeid, $compid, $start,
                       $end, $requestid=0) {
-	global $mysql_link_vcl, $uniqid;
+	global $mysqli_link_vcl, $uniqid;
 	$query = "INSERT INTO semaphore "
 	       . "SELECT c.id, "
 	       .        "$imageid, "
@@ -5472,7 +5486,7 @@ function getSemaphore($imageid, $imagerevisionid, $mgmtnodeid, $compid, $start,
 	       .       "(s.expires IS NULL OR s.expires < NOW()) "
 	       . "LIMIT 1";
 	doQuery($query);
-	$rc = mysql_affected_rows($mysql_link_vcl);
+	$rc = mysqli_affected_rows($mysqli_link_vcl);
 
 	# check to see if another process allocated this one
 	if($rc) {
@@ -5488,7 +5502,7 @@ function getSemaphore($imageid, $imagerevisionid, $mgmtnodeid, $compid, $start,
 		if($requestid)
 			$query .= " AND rq.id != $requestid";
 		$qh = doQuery($query);
-		$rc2 = mysql_num_rows($qh);
+		$rc2 = mysqli_num_rows($qh);
 		if($rc2) {
 			$query = "DELETE FROM semaphore "
 			       . "WHERE computerid = $compid AND "
@@ -5566,7 +5580,7 @@ function getPossibleRecentFailures($userid, $imageid) {
 	       .       "l.wasavailable = 1 AND "
 	       .       "l.ending != 'failed'";
 	$qh = doQuery($query, 101);
-	while($row = mysql_fetch_assoc($qh))
+	while($row = mysqli_fetch_assoc($qh))
 		$comps[] = $row['computerid'];
 	return $comps;
 }
@@ -5597,7 +5611,7 @@ function getMappedResources($resourcesubid, $resourcetype1, $resourcetype2) {
 	       . "WHERE subid = $resourcesubid AND "
 	       .       "resourcetypeid = $resourcetype1";
 	$qh = doQuery($query, 101);
-	$row = mysql_fetch_row($qh);
+	$row = mysqli_fetch_row($qh);
 	$resourceid = $row[0];
 
 	# get groups $resourceid is in
@@ -5606,7 +5620,7 @@ function getMappedResources($resourcesubid, $resourcetype1, $resourcetype2) {
 	       . "FROM resourcegroupmembers "
 	       . "WHERE resourceid = $resourceid";
 	$qh = doQuery($query, 101);
-	while($row = mysql_fetch_row($qh)) {
+	while($row = mysqli_fetch_row($qh)) {
 		array_push($resourcegroupids, $row[0]);
 	}
 
@@ -5624,7 +5638,7 @@ function getMappedResources($resourcesubid, $resourcetype1, $resourcetype2) {
 	       .       "resourcetypeid1 = $resourcetype1 AND "
 	       .       "resourcetypeid2 = $resourcetype2";
 	$qh = doQuery($query, 101);
-	while($row = mysql_fetch_row($qh)) {
+	while($row = mysqli_fetch_row($qh)) {
 		array_push($type2groupids, $row[0]);
 	}
 
@@ -5636,7 +5650,7 @@ function getMappedResources($resourcesubid, $resourcetype1, $resourcetype2) {
 	       .       "resourcetypeid2 = $resourcetype1 AND "
 	       .       "resourcetypeid1 = $resourcetype2";
 	$qh = doQuery($query, 101);
-	while($row = mysql_fetch_row($qh)) {
+	while($row = mysqli_fetch_row($qh)) {
 		array_push($type2groupids, $row[0]);
 	}
 
@@ -5651,7 +5665,7 @@ function getMappedResources($resourcesubid, $resourcetype1, $resourcetype2) {
 	       . "WHERE m.resourcegroupid IN ($inlist) AND "
 	       .       "m.resourceid = r.id";
 	$qh = doQuery($query, 101);
-	while($row = mysql_fetch_row($qh)) {
+	while($row = mysqli_fetch_row($qh)) {
 		array_push($mappedresources, $row[0]);
 	}
 	return $mappedresources;
@@ -5738,7 +5752,7 @@ function editRequestBlockCheck($compid, $imageid, $start, $end) {
 	       .       "r.imageid != $imageid) AND "
 	       .       "r.status = 'accepted'";
 	$qh = doQuery($query, 101);
-	return(mysql_num_rows($qh));
+	return(mysqli_num_rows($qh));
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -5789,7 +5803,7 @@ function getMaxOverlap($userid) {
 	       . "ORDER BY u.overlapResCount DESC "
 	       . "LIMIT 1";
 	$qh = doQuery($query, 101);
-	if($row = mysql_fetch_assoc($qh))
+	if($row = mysqli_fetch_assoc($qh))
 		return $row['overlapResCount'];
 	else
 		return 1;
@@ -5811,7 +5825,7 @@ function getMaxOverlap($userid) {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function addRequest($forimaging=0, $revisionid=array(), $checkuser=1) {
-	global $requestInfo, $user, $uniqid, $mysql_link_vcl;
+	global $requestInfo, $user, $uniqid, $mysqli_link_vcl;
 	$startstamp = unixToDatetime($requestInfo["start"]);
 	$endstamp = unixToDatetime($requestInfo["end"]);
 	$now = time();
@@ -5828,7 +5842,7 @@ function addRequest($forimaging=0, $revisionid=array(), $checkuser=1) {
 	addLogEntry($nowfuture, $start, $endstamp, 1, $requestInfo["imageid"]);
 
 	$qh = doQuery("SELECT LAST_INSERT_ID() FROM log", 131);
-	if(! $row = mysql_fetch_row($qh)) {
+	if(! $row = mysqli_fetch_row($qh)) {
 		abort(132);
 	}
 	$logid = $row[0];
@@ -5857,7 +5871,7 @@ function addRequest($forimaging=0, $revisionid=array(), $checkuser=1) {
 	$qh = doQuery($query, 136);
 
 	$qh = doQuery("SELECT LAST_INSERT_ID() FROM request", 134);
-	if(! $row = mysql_fetch_row($qh)) {
+	if(! $row = mysqli_fetch_row($qh)) {
 		abort(135);
 	}
 	$requestid = $row[0];
@@ -5904,7 +5918,7 @@ function addRequest($forimaging=0, $revisionid=array(), $checkuser=1) {
 	       . "WHERE expires > NOW() AND "
 	       .       "procid = '$uniqid'";
 	doQuery($query);
-	$cnt = mysql_affected_rows($mysql_link_vcl);
+	$cnt = mysqli_affected_rows($mysqli_link_vcl);
 	if($cnt == 0) {
 		# reached this point SEMTIMEOUT seconds after getting semaphore, clean up and abort
 		$query = "DELETE FROM request WHERE id = $requestid";
@@ -6041,7 +6055,7 @@ function findManagementNode($compid, $start, $nowfuture) {
 	       . "GROUP BY rs.managementnodeid "
 	       . "ORDER BY count";
 	$qh = doQuery($query, 101);
-	while($row = mysql_fetch_assoc($qh)) {
+	while($row = mysqli_fetch_assoc($qh)) {
 		$mgmtnodecnt[$row["mnid"]] = $row["count"];
 	}
 	uasort($mgmtnodecnt, "sortKeepIndex");
@@ -6118,7 +6132,7 @@ function getRequestInfo($id, $returnNULL=0) {
 	       . "FROM request "
 	       . "WHERE id = $id";
 	$qh = doQuery($query, 165);
-	if(! ($data = mysql_fetch_assoc($qh))) {
+	if(! ($data = mysqli_fetch_assoc($qh))) {
 		if($returnNULL)
 			return NULL;
 		# FIXME handle XMLRPC cases
@@ -6168,7 +6182,7 @@ function getRequestInfo($id, $returnNULL=0) {
 	$data["reservations"] = array();
 	$data['passwds'] = array();
 	$resids = array();
-	while($row = mysql_fetch_assoc($qh)) {
+	while($row = mysqli_fetch_assoc($qh)) {
 		array_push($data["reservations"], $row);
 		$resids[] = $row['reservationid'];
 		$data['passwds'][$row['reservationid']][$data['userid']] = $row['password'];
@@ -6182,7 +6196,7 @@ function getRequestInfo($id, $returnNULL=0) {
 	       . "FROM serverrequest "
 	       . "WHERE requestid = $id";
 	$qh = doQuery($query, 101);
-	if($row = mysql_fetch_assoc($qh)) {
+	if($row = mysqli_fetch_assoc($qh)) {
 		$data['serverrequest'] = 1;
 		$data['servername'] = $row['name'];
 		$data['admingroupid'] = $row['admingroupid'];
@@ -6196,7 +6210,7 @@ function getRequestInfo($id, $returnNULL=0) {
 		       . "FROM reservationaccounts "
 		       . "WHERE reservationid IN ($inids)";
 		$qh = doQuery($query);
-		while($row = mysql_fetch_assoc($qh))
+		while($row = mysqli_fetch_assoc($qh))
 			$data['passwds'][$row['reservationid']][$row['userid']] = $row['password'];
 	}
 	else
@@ -6221,7 +6235,7 @@ function updateRequest($requestid, $nowfuture="now") {
 
 	$query = "SELECT logid FROM request WHERE id = $requestid";
 	$qh = doQuery($query, 146);
-	if(! $row = mysql_fetch_row($qh)) {
+	if(! $row = mysqli_fetch_row($qh)) {
 		abort(148);
 	}
 	$logid = $row[0];
@@ -6348,7 +6362,7 @@ function deleteRequest($request) {
 	if($request['serverrequest']) {
 		$query = "SELECT id FROM serverrequest WHERE requestid = {$request['id']}";
 		$qh = doQuery($query);
-		if($row = mysql_fetch_assoc($qh)) {
+		if($row = mysqli_fetch_assoc($qh)) {
 			$query = "DELETE FROM serverrequest WHERE requestid = {$request['id']}";
 			doQuery($query, 152);
 			deleteVariable("fixedIPsr{$row['id']}");
@@ -6399,7 +6413,7 @@ function moveReservationsOffComputer($compid=0, $count=0) {
 		       . "ORDER BY reservations "
 		       . "LIMIT 1";
 		$qh = doQuery($query, 101);
-		if($row = mysql_fetch_assoc($qh))
+		if($row = mysqli_fetch_assoc($qh))
 			$compid = $row["computerid"];
 		else
 			return -1;
@@ -6423,7 +6437,7 @@ function moveReservationsOffComputer($compid=0, $count=0) {
 	if($count)
 		$query .= " LIMIT $count";
 	$qh = doQuery($query, 101);
-	while($row = mysql_fetch_assoc($qh)) {
+	while($row = mysqli_fetch_assoc($qh)) {
 		$resInfo[$row["id"]] = $row;
 	}
 	if(! count($resInfo))
@@ -6505,7 +6519,7 @@ function moveReservationsOffVMs($compid, $sem=0) {
 	       . "WHERE v.computerid = $compid AND "
 	       .       "vm.vmhostid = v.id";
 	$qh = doQuery($query);
-	while($row = mysql_fetch_assoc($qh)) {
+	while($row = mysqli_fetch_assoc($qh)) {
 		$rc = moveReservationsOffComputer($row['id']);
 		if($rc != 0)
 			# lock computer so that reservations on other VMs on this host do not get moved to it
@@ -6540,7 +6554,7 @@ function getCompFinalReservationTime($compid, $extraskipstate=0) {
 	       . "ORDER BY rq.end DESC "
 	       . "LIMIT 1";
 	$qh = doQuery($query, 101);
-	if($row = mysql_fetch_assoc($qh))
+	if($row = mysqli_fetch_assoc($qh))
 		$end = $row['end'];
 	$query = "SELECT UNIX_TIMESTAMP(t.end) as end "
 	       . "FROM blockComputers c, "
@@ -6551,7 +6565,7 @@ function getCompFinalReservationTime($compid, $extraskipstate=0) {
 	       . "ORDER BY t.end DESC "
 	       . "LIMIT 1";
 	$qh = doQuery($query, 101);
-	if($row = mysql_fetch_assoc($qh))
+	if($row = mysqli_fetch_assoc($qh))
 		if($row['end'] > $end)
 			$end = $row['end'];
 	return $end;
@@ -6577,7 +6591,7 @@ function getCompFinalReservationTime($compid, $extraskipstate=0) {
 ////////////////////////////////////////////////////////////////////////////////
 function getCompFinalVMReservationTime($hostid, $addsemaphores=0,
                                        $notomaintenance=0) {
-	global $uniqid, $mysql_link_vcl;
+	global $uniqid, $mysqli_link_vcl;
 	if($addsemaphores) {
 		$query = "SELECT vm.id "
 		       . "FROM computer vm, "
@@ -6586,7 +6600,7 @@ function getCompFinalVMReservationTime($hostid, $addsemaphores=0,
 		       .       "vm.vmhostid = v.id";
 		$qh = doQuery($query);
 		$compids = array();
-		while($row = mysql_fetch_assoc($qh))
+		while($row = mysqli_fetch_assoc($qh))
 			$compids[] = $row['id'];
 		if(empty($compids))
 			return 0;
@@ -6609,7 +6623,7 @@ function getCompFinalVMReservationTime($hostid, $addsemaphores=0,
 		       .       "(s.expires IS NULL OR s.expires < NOW()) "
 		       . "GROUP BY c.id";
 		doQuery($query);
-		$cnt = mysql_affected_rows($mysql_link_vcl);
+		$cnt = mysqli_affected_rows($mysqli_link_vcl);
 		if($cnt != count($compids))
 			return -1;
 	}
@@ -6631,7 +6645,7 @@ function getCompFinalVMReservationTime($hostid, $addsemaphores=0,
 	       . "ORDER BY rq.end DESC "
 	       . "LIMIT 1";
 	$qh = doQuery($query, 101);
-	if($row = mysql_fetch_assoc($qh))
+	if($row = mysqli_fetch_assoc($qh))
 		$end = $row['end'];
 	$query = "SELECT UNIX_TIMESTAMP(t.end) as end "
 	       . "FROM blockComputers c, "
@@ -6646,7 +6660,7 @@ function getCompFinalVMReservationTime($hostid, $addsemaphores=0,
 	       . "ORDER BY t.end DESC "
 	       . "LIMIT 1";
 	$qh = doQuery($query, 101);
-	if($row = mysql_fetch_assoc($qh))
+	if($row = mysqli_fetch_assoc($qh))
 		if($row['end'] > $end)
 			$end = $row['end'];
 	return $end;
@@ -6676,7 +6690,7 @@ function getExistingChangeStateStartTime($compid, $stateid) {
 	       . "ORDER BY rq.start "
 	       . "LIMIT 1";
 	$qh = doQuery($query);
-	if($row = mysql_fetch_assoc($qh))
+	if($row = mysqli_fetch_assoc($qh))
 		return datetimeToUnix($row['start']);
 	return 0;
 }
@@ -6861,7 +6875,7 @@ function getUserRequests($type, $id=0) {
 	$data = array();
 	$foundids = array();
 	$lastreqid = 0;
-	while($row = mysql_fetch_assoc($qh)) {
+	while($row = mysqli_fetch_assoc($qh)) {
 		if($row['id'] != $lastreqid) {
 			$lastreqid = $row['id'];
 			$count++;
@@ -6988,7 +7002,7 @@ function datetimeToUnix($datetime) {
 	$tmp = explode(' ', $datetime);
 	list($year, $month, $day) = explode('-', $tmp[0]);
 	list($hour, $min, $sec) = explode(':', $tmp[1]);
-	return mktime($hour, $min, $sec, $month, $day, $year, -1);
+	return mktime($hour, $min, $sec, $month, $day, $year);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -7175,7 +7189,7 @@ function hour24to12($hour) {
 function getDepartmentName($id) {
 	$query = "SELECT name FROM department WHERE id = '$id'";
 	$qh = doQuery($query, 101);
-	if($row = mysql_fetch_row($qh)) {
+	if($row = mysqli_fetch_row($qh)) {
 		return $row[0];
 	}
 	else {
@@ -7197,7 +7211,7 @@ function getDepartmentName($id) {
 ////////////////////////////////////////////////////////////////////////////////
 function getImageId($image) {
 	$qh = doQuery("SELECT id FROM image WHERE name = '$image'", 170);
-	if($row = mysql_fetch_row($qh)) {
+	if($row = mysqli_fetch_row($qh)) {
 		return $row[0];
 	}
 	return 0;
@@ -7216,7 +7230,7 @@ function getImageId($image) {
 ////////////////////////////////////////////////////////////////////////////////
 function getOSId($os) {
 	$qh = doQuery("SELECT id FROM OS WHERE name = '$os'", 175);
-	if($row = mysql_fetch_row($qh)) {
+	if($row = mysqli_fetch_row($qh)) {
 		return $row[0];
 	}
 	return 0;
@@ -7234,7 +7248,7 @@ function getOSId($os) {
 function getStates() {
 	$qh = doQuery("SELECT id, name FROM state", 176);
 	$states = array();
-	while($row = mysql_fetch_row($qh)) {
+	while($row = mysqli_fetch_row($qh)) {
 		$states[$row[0]] = $row[1];
 	}
 	return $states;
@@ -7252,7 +7266,7 @@ function getStates() {
 function getPlatforms() {
 	$qh = doQuery("SELECT id, name FROM platform", 178);
 	$platforms = array();
-	while($row = mysql_fetch_row($qh)) {
+	while($row = mysqli_fetch_row($qh)) {
 		$platforms[$row[0]] = $row[1];
 	}
 	return $platforms;
@@ -7280,7 +7294,7 @@ function getProvisioning() {
 	       . "ORDER BY p.prettyname";
 	$qh = doQuery($query, 101);
 	$provisioning = array();
-	while($row = mysql_fetch_assoc($qh))
+	while($row = mysqli_fetch_assoc($qh))
 		$provisioning[$row['id']] = $row;
 	return $provisioning;
 }
@@ -7304,7 +7318,7 @@ function getProvisioning() {
 function getProvisioningTypes() {
 	$query = "SELECT id, prettyname FROM provisioning WHERE name = 'none'";
 	$qh = doQuery($query);
-	$none = mysql_fetch_assoc($qh);
+	$none = mysqli_fetch_assoc($qh);
 	$query = "SELECT p.id, "
 	       .        "p.prettyname, "
 	       .        "o.name AS `type` "
@@ -7318,7 +7332,7 @@ function getProvisioningTypes() {
 	$types = array('blade' => array($none['id'] => $none['prettyname']),
 	               'lab' => array(),
 	               'virtualmachine' => array());
-	while($row = mysql_fetch_assoc($qh)) {
+	while($row = mysqli_fetch_assoc($qh)) {
 		if($row['type'] == 'kickstart' || $row['type'] == 'partimage')
 			$types['blade'][$row['id']] = $row['prettyname'];
 		elseif($row['type'] == 'none')
@@ -7363,7 +7377,7 @@ function getSchedules() {
 	       . "ORDER BY s.name";
 	$qh = doQuery($query, 179);
 	$schedules = array();
-	while($row = mysql_fetch_assoc($qh)) {
+	while($row = mysqli_fetch_assoc($qh)) {
 		$schedules[$row["id"]] = $row;
 		$schedules[$row["id"]]["times"] = array();
 	}
@@ -7374,7 +7388,7 @@ function getSchedules() {
 	       . "ORDER BY scheduleid, "
 	       .          "start";
 	$qh = doQuery($query, 101);
-	while($row = mysql_fetch_assoc($qh)) {
+	while($row = mysqli_fetch_assoc($qh)) {
 		array_push($schedules[$row["scheduleid"]]["times"],
 		           array("start" => $row["start"], "end" => $row["end"]));
 	}
@@ -7498,7 +7512,7 @@ function getManagementNodes($alive="neither", $includedeleted=0, $id=0) {
 	}
 	$qh = doQuery($query, 101);
 	$return = array();
-	while($row = mysql_fetch_assoc($qh)) {
+	while($row = mysqli_fetch_assoc($qh)) {
 		if(is_null($row['natpublicIPaddress'])) {
 			$row['nathostenabled'] = 0;
 			$row['natpublicIPaddress'] = '';
@@ -7556,7 +7570,7 @@ function getMnsFromImage($imageid) {
 	       .       "c.id in ($inlist)";
 	$qh = doQuery($query);
 	$compgroups = array();
-	while($row = mysql_fetch_assoc($qh))
+	while($row = mysqli_fetch_assoc($qh))
 		$compgroups[] = $row['resourcegroupid'];
 	$mngrps = array();
 	foreach($compgroups as $grpid) {
@@ -7649,7 +7663,7 @@ function getPredictiveModules() {
 	       . "WHERE perlpackage LIKE 'VCL::Module::Predictive::%'";
 	$qh = doQuery($query, 101);
 	$modules = array();
-	while($row = mysql_fetch_assoc($qh))
+	while($row = mysqli_fetch_assoc($qh))
 		$modules[$row['id']] = $row;
 	return $modules;
 }
@@ -7721,7 +7735,7 @@ function getTimeSlots($compids, $end=0, $start=0) {
 		       .  "AND platformid IN ($platinlist)";
 	}
 	$qh = doQuery($query, 155);
-	while($row = mysql_fetch_row($qh)) {
+	while($row = mysqli_fetch_row($qh)) {
 		array_push($computerids, $row[0]);
 		$times[$row[0]] = array();
 		$scheduleids[$row[0]] = $row[1];
@@ -7769,7 +7783,7 @@ function getTimeSlots($compids, $end=0, $start=0) {
 	$qh = doQuery($query, 156);
 
 	$id = "";
-	while($row = mysql_fetch_row($qh)) {
+	while($row = mysqli_fetch_row($qh)) {
 		if($row[3] == $requestid) {
 			continue;
 		}
@@ -7933,8 +7947,7 @@ function unixFloor15($timestamp=0) {
 	              0,
 	              $timeval["mon"],
 	              $timeval["mday"],
-	              $timeval["year"],
-	              -1);
+	              $timeval["year"]);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -8015,11 +8028,11 @@ function showTimeTable($links) {
 		$usercomputerids = array_keys($resources["computer"]);
 		# get list of computers' platformids
 		$qh = doQuery("SELECT platformid FROM image WHERE id = $imageid", 110);
-		$row = mysql_fetch_row($qh);
+		$row = mysqli_fetch_row($qh);
 		$platformid = $row[0];
 		$computer_platformids = array();
 		$qh = doQuery("SELECT id, platformid FROM computer", 111);
-		while($row = mysql_fetch_row($qh)) {
+		while($row = mysqli_fetch_row($qh)) {
 			$computer_platformids[$row[0]] = $row[1];
 		}
 		$mappedcomputers = getMappedResources($imageid, "image", "computer");
@@ -8404,7 +8417,7 @@ function findAvailableTimes($start, $end, $imageid, $userid, $usedaysahead,
 	       .          "(c.procspeed * c.procnumber), "
 	       .          "network";
 	$qh = doQuery($query, 101);
-	while($row = mysql_fetch_assoc($qh)) {
+	while($row = mysqli_fetch_assoc($qh)) {
 		$row['duration'] = $reqduration;
 		$row['startts'] = $start;
 		$row['start'] = $startdt;
@@ -8458,7 +8471,7 @@ function findAvailableTimes($start, $end, $imageid, $userid, $usedaysahead,
 		       . "GROUP BY rq1.id ";
 		$query .= "ORDER BY rs1.computerid, rq1.start, rq1.end";
 		$qh = doQuery($query, 101);
-		while($row = mysql_fetch_assoc($qh)) {
+		while($row = mysqli_fetch_assoc($qh)) {
 			$row['startts'] = datetimeToUnix($row['start']);
 			if($row['startts'] % 900) {
 				$row['startts'] = $row['startts'] - ($row['startts'] % 900) + 900;
@@ -8517,7 +8530,7 @@ function findAvailableTimes($start, $end, $imageid, $userid, $usedaysahead,
 	$query .=      "(c.type != 'virtualmachine' OR c.vmhostid IS NOT NULL) "
 	       . "GROUP BY rs.computerid";
 	$qh = doQuery($query, 101);
-	while($row = mysql_fetch_assoc($qh)) {
+	while($row = mysqli_fetch_assoc($qh)) {
 		if($row['endts'] % 900) {
 			$row['endts'] = $row['endts'] - ($row['endts'] % 900);
 			$row['duration'] -= 900;
@@ -8573,7 +8586,7 @@ function findAvailableTimes($start, $end, $imageid, $userid, $usedaysahead,
 	if($extendonly)
 		$query .= " HAVING start = '$startdt'";
 	$qh = doQuery($query, 101);
-	while($row = mysql_fetch_assoc($qh)) {
+	while($row = mysqli_fetch_assoc($qh)) {
 		if($usedaysahead && $row['startts'] > $daysahead)
 			continue;
 		if($row['startts'] % 900) {
@@ -8610,7 +8623,7 @@ function findAvailableTimes($start, $end, $imageid, $userid, $usedaysahead,
 		       .    "br.imageid != $imageid) AND ";
 	$query .=      "bc.computerid IN ($newincompids)";
 	$qh = doQuery($query);
-	while($row = mysql_fetch_assoc($qh)) {
+	while($row = mysqli_fetch_assoc($qh)) {
 		if(isset($slots[$row['compid']]))
 			fATremoveOverlaps($slots, $row['compid'], $row['start'], $row['end'], 0);
 	}
@@ -8639,7 +8652,7 @@ function findAvailableTimes($start, $end, $imageid, $userid, $usedaysahead,
 		elseif(! empty($mac))
 			$query .=   "s.fixedIP = '$mac'";
 		$qh = doQuery($query);
-		while($row = mysql_fetch_assoc($qh)) {
+		while($row = mysqli_fetch_assoc($qh)) {
 			if(isset($slots[$row['compid']]))
 				fATremoveOverlaps($slots, $row['compid'], $row['start'], $row['end'], 0);
 		}
@@ -8653,7 +8666,7 @@ function findAvailableTimes($start, $end, $imageid, $userid, $usedaysahead,
 	       . "WHERE start < '$maxenddt' AND "
 	       .       "end > '$minstartdt'";
 	$qh = doQuery($query);
-	while($row = mysql_fetch_assoc($qh)) {
+	while($row = mysqli_fetch_assoc($qh)) {
 		foreach(array_keys($slots) AS $compid)
 			fATremoveOverlaps($slots, $compid, $row['start'], $row['end'],
 			                  $row['allowreservations']);
@@ -8809,7 +8822,7 @@ function fATconcurrentOverlap($start, $length, $imageid, $maxoverlap,
 	if($extendonly)
 		$query .= " AND rq.id != $reqid";
 	$qh = doQuery($query);
-	if(mysql_num_rows($qh) >= $maxoverlap)
+	if(mysqli_num_rows($qh) >= $maxoverlap)
 		return 1;
 	return 0;
 }
@@ -8962,7 +8975,7 @@ function getComputers($sort=0, $includedeleted=0, $compid="") {
 		$query .= "AND c.id = $compid ";
 	$query .= "ORDER BY c.hostname";
 	$qh = doQuery($query, 180);
-	while($row = mysql_fetch_assoc($qh)) {
+	while($row = mysqli_fetch_assoc($qh)) {
 		if(is_null($row['nathostid'])) {
 			$row['natenabled'] = 0;
 			$row['nathost'] = '';
@@ -9053,13 +9066,13 @@ function getCompStateFlow($compid) {
 	#   need this information
 	$query = "SELECT id FROM computerloadstate WHERE loadstatename = 'repeat'";
 	$qh = doQuery($query, 101);
-	if(! $row = mysql_fetch_assoc($qh))
+	if(! $row = mysqli_fetch_assoc($qh))
 		return array();
 	$loadstates['repeatid'] = $row['id'];
 
 	$query = "SELECT `type` FROM computer WHERE id = $compid";
 	$qh = doQuery($query, 101);
-	if(! $row = mysql_fetch_assoc($qh))
+	if(! $row = mysqli_fetch_assoc($qh))
 		return array();
 
 	$type = $row['type'];
@@ -9078,7 +9091,7 @@ function getCompStateFlow($compid) {
 	        . "(SELECT nextstateid FROM computerloadflow WHERE `type` = '$type' "
 	        . "AND nextstateid IS NOT NULL)";
 	$qh = doQuery($query2, 101);
-	if(! $row = mysql_fetch_assoc($qh))
+	if(! $row = mysqli_fetch_assoc($qh))
 		return array();
 	$loadstates['data'][$row['stateid']] = $row;
 	$loadstates['stateids'] = array($row['stateid']);
@@ -9088,7 +9101,7 @@ function getCompStateFlow($compid) {
 		$query2 = $query . "AND cf.computerloadstateid = {$row['nextstateid']} "
 		        . "AND `type` = '$type'";
 		$qh = doQuery($query2, 101);
-		if(! $row = mysql_fetch_assoc($qh)) {
+		if(! $row = mysqli_fetch_assoc($qh)) {
 			$_SESSION['compstateflow'][$key] = $loadstates;
 			return $loadstates;
 		}
@@ -9133,7 +9146,7 @@ function getCompLoadLog($resid) {
 	       .       "rs.requestid = rq.id "
 	       . "LIMIT 1";
 	$qh = doQuery($query, 101);
-	if(! $row = mysql_fetch_assoc($qh))
+	if(! $row = mysqli_fetch_assoc($qh))
 		abort(113);
 	if($row['start'] < $row['reqtime']) {
 		# now
@@ -9156,7 +9169,7 @@ function getCompLoadLog($resid) {
 	$qh = doQuery($query, 101);
 	$last = array();
 	$data = array();
-	while($row = mysql_fetch_assoc($qh)) {
+	while($row = mysqli_fetch_assoc($qh)) {
 		$data[$row['id']] = $row;
 		if(empty($last)) {
 			if($future)
@@ -9196,7 +9209,7 @@ function getImageLoadEstimate($imageid) {
 	       .        "start > (NOW() - INTERVAL 12 MONTH) AND "
 	       .        "UNIX_TIMESTAMP(loaded) - UNIX_TIMESTAMP(start) < 1800";
 	$qh = doQuery($query, 101);
-	if($row = mysql_fetch_assoc($qh)) {
+	if($row = mysqli_fetch_assoc($qh)) {
 		if(! empty($row['avgloadtime']))
 			return (int)$row['avgloadtime'];
 		else
@@ -9222,7 +9235,7 @@ function getComputerCounts(&$computers) {
 		       . "FROM sublog "
 		       . "WHERE computerid = $compid";
 		$qh = doQuery($query, 101);
-		if($row = mysql_fetch_row($qh))
+		if($row = mysqli_fetch_row($qh))
 			$computers[$compid]["counts"] = $row[0];
 		else
 			$computers[$compid]["counts"] = 0;
@@ -9349,7 +9362,7 @@ function getAvailableBlockComputerids($imageid, $start, $end, $allocatedcompids)
 	       .       "c2.id NOT IN ($alloccompids) "
 	       . "ORDER BY s.name";
 	$qh = doQuery($query, 101);
-	while($row = mysql_fetch_assoc($qh)) {
+	while($row = mysqli_fetch_assoc($qh)) {
 		$data['compids'][] = $row['computerid'];
 		$data[$row['computerid']] = $row;
 	}
@@ -9380,7 +9393,7 @@ function getUsedBlockComputerids($start, $end) {
 	       .       "t.start < '$enddt' AND "
 	       .       "c.blockTimeid = t.id";
 	$qh = doQuery($query, 101);
-	while($row = mysql_fetch_assoc($qh)) {
+	while($row = mysqli_fetch_assoc($qh)) {
 		array_push($compids, $row['computerid']);
 	}
 	return $compids;
@@ -9416,7 +9429,7 @@ function getNAThosts($id=0, $sort=0) {
 	if($id)
 		$query .= " WHERE n.id = $id";
 	$qh = doQuery($query);
-	while($row = mysql_fetch_assoc($qh))
+	while($row = mysqli_fetch_assoc($qh))
 		$nathosts[$row['id']] = $row;
 	if($sort)
 		uasort($nathosts, "sortKeepIndex");
@@ -9454,7 +9467,7 @@ function getNATports($resid) {
 	       . "WHERE n.connectmethodportid = c.id AND "
 	       .       "n.reservationid = $resid";
 	$qh = doQuery($query);
-	while($row = mysql_fetch_assoc($qh))
+	while($row = mysqli_fetch_assoc($qh))
 		$ports[$row['connectmethodid']]["#Port-{$row['protocol']}-{$row['privateport']}#"] = $row;
 	return $ports;
 }
@@ -9504,7 +9517,7 @@ function getADdomains($addomainid=0) {
 
 	$qh = doQuery($query);
 	$addomainlist = array();
-	while($row = mysql_fetch_assoc($qh))
+	while($row = mysqli_fetch_assoc($qh))
 		$addomainlist[$row['id']] = $row;
 	return $addomainlist;
 }
@@ -9567,7 +9580,7 @@ function getBlockTimeData($start="", $end="") {
 		$query .= " AND t.end > '" . unixToDatetime($start) . "'";
 	$query .= " ORDER BY t.start, t.end";
 	$qh = doQuery($query, 101);
-	while($row = mysql_fetch_assoc($qh)) {
+	while($row = mysqli_fetch_assoc($qh)) {
 		$return[$row['timeid']] = $row;
 		$return[$row['timeid']]['unixstart'] = datetimeToUnix($row['start']);
 		$return[$row['timeid']]['unixend'] = datetimeToUnix($row['end']);
@@ -9576,7 +9589,7 @@ function getBlockTimeData($start="", $end="") {
 		        . "FROM blockComputers "
 		        . "WHERE blockTimeid = {$row['timeid']}";
 		$qh2 = doQuery($query2, 101);
-		while($row2 = mysql_fetch_assoc($qh2))
+		while($row2 = mysqli_fetch_assoc($qh2))
 			array_push($return[$row['timeid']]['computerids'], $row2['computerid']);
 	}
 	return $return;
@@ -9630,7 +9643,7 @@ function isImageBlockTimeActive($imageid) {
 	       .       "bt.end > '$nowdt' AND "
 	       .       "br.imageid = $imageid";
 	$qh = doQuery($query, 101);
-	if($row = mysql_fetch_assoc($qh))
+	if($row = mysqli_fetch_assoc($qh))
 		return 1;
 	return 0;
 }
@@ -10233,7 +10246,7 @@ function updateGroups($newusergroups, $userid) {
 	       .       "u.courseroll = 0";
 	$qh = doQuery($query, 305);
 	$oldusergroups = array();
-	while($row = mysql_fetch_row($qh)) {
+	while($row = mysqli_fetch_row($qh)) {
 		array_push($oldusergroups, $row[0]);
 	}
 	if(count(array_diff($oldusergroups, $newusergroups)) ||
@@ -10281,7 +10294,7 @@ function getUserGroupID($name, $affilid=DEFAULT_AFFILID, $noadd=0) {
 	       . "WHERE name = '$name' AND "
 	       .       "affiliationid = $affilid";
 	$qh = doQuery($query, 300);
-	if($row = mysql_fetch_row($qh))
+	if($row = mysqli_fetch_row($qh))
 		return $row[0];
 	elseif($noadd)
 		return NULL;
@@ -10297,7 +10310,7 @@ function getUserGroupID($name, $affilid=DEFAULT_AFFILID, $noadd=0) {
 	       .        "0)";
 	doQuery($query, 301);
 	$qh = doQuery("SELECT LAST_INSERT_ID() FROM usergroup", 302);
-	if(! $row = mysql_fetch_row($qh)) {
+	if(! $row = mysqli_fetch_row($qh)) {
 		abort(303);
 	}
 	return $row[0];
@@ -10330,7 +10343,7 @@ function getUserGroupName($id, $incAffil=0) {
 		       . "WHERE id = $id";
 	}
 	$qh = doQuery($query, 101);
-	if($row = mysql_fetch_row($qh))
+	if($row = mysqli_fetch_row($qh))
 		return $row[0];
 	return 0;
 }
@@ -10407,7 +10420,7 @@ function getMaintItems($id=0) {
 	$query .= "ORDER BY m.start";
 	$qh = doQuery($query, 101);
 	$data = array();
-	while($row = mysql_fetch_assoc($qh))
+	while($row = mysqli_fetch_assoc($qh))
 		$data[$row['id']] = $row;
 	$_SESSION['usersessiondata'][$key] = $data;
 	return $data;
@@ -10442,7 +10455,7 @@ function getMaintItemsForTimeTable($start, $end) {
 	       . "ORDER BY start";
 	$qh = doQuery($query, 101);
 	$data = array();
-	while($row = mysql_fetch_assoc($qh))
+	while($row = mysqli_fetch_assoc($qh))
 		$data[] = $row;
 	$_SESSION['usersessiondata'][$key] = $data;
 	return $data;
@@ -10661,13 +10674,13 @@ function addChangeLogEntry($logid, $remoteIP, $end=NULL, $start=NULL,
 	       . "FROM log "
 	       . "WHERE id = $logid";
 	$qh = doQuery($query, 265);
-	if(! $log = mysql_fetch_assoc($qh)) {
+	if(! $log = mysqli_fetch_assoc($qh)) {
 		abort(30);
 	}
 	$log["computerid"] = array();
 	$query = "SELECT computerid FROM sublog WHERE logid = $logid";
 	$qh = doQuery($query, 101);
-	while($row = mysql_fetch_assoc($qh)) {
+	while($row = mysqli_fetch_assoc($qh)) {
 		array_push($log["computerid"], $row["computerid"]);
 	}
 	$changed = 0;
@@ -10769,7 +10782,7 @@ function addChangeLogEntry($logid, $remoteIP, $end=NULL, $start=NULL,
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function addChangeLogEntryOther($logid, $data) {
-	$data = mysql_real_escape_string($data);
+	$data = vcl_mysql_escape_string($data);
 	$query = "INSERT INTO changelog "
 	       .        "(logid, "
 	       .        "timestamp, "
@@ -10805,7 +10818,7 @@ function addSublogEntry($logid, $imageid, $imagerevisionid, $computerid,
 	       . "FROM computer "
 	       . "WHERE id = $computerid";
 	$qh = doQuery($query, 101);
-	$row = mysql_fetch_assoc($qh);
+	$row = mysqli_fetch_assoc($qh);
 	$predictiveid = $row['predictivemoduleid'];
 	$query = "SELECT c.type, "
 	       .        "v.computerid AS hostid "
@@ -10813,7 +10826,7 @@ function addSublogEntry($logid, $imageid, $imagerevisionid, $computerid,
 	       . "LEFT JOIN vmhost v ON (c.vmhostid = v.id) "
 	       . "WHERE c.id = $computerid";
 	$qh = doQuery($query, 101);
-	$row = mysql_fetch_assoc($qh);
+	$row = mysqli_fetch_assoc($qh);
 	if($row['type'] == 'virtualmachine')
 		$hostcomputerid = $row['hostid'];
 	else
@@ -10865,7 +10878,7 @@ function getTypes($subtype="both") {
 	if($subtype == "users" || $subtype == "both") {
 		$query = "SELECT id, name FROM userprivtype WHERE name NOT IN ('configAdmin', 'serverProfileAdmin')";
 		$qh = doQuery($query, 365);
-		while($row = mysql_fetch_assoc($qh)) {
+		while($row = mysqli_fetch_assoc($qh)) {
 			if($row["name"] == "block" || $row["name"] == "cascade")
 				continue;
 			$types["users"][$row["id"]] = $row["name"];
@@ -10874,7 +10887,7 @@ function getTypes($subtype="both") {
 	if($subtype == "resources" || $subtype == "both") {
 		$query = "SELECT id, name FROM resourcetype";
 		$qh = doQuery($query, 366);
-		while($row = mysql_fetch_assoc($qh))
+		while($row = mysqli_fetch_assoc($qh))
 			$types["resources"][$row["id"]] = $row["name"];
 	}
 	return $types;
@@ -10894,7 +10907,7 @@ function getTypes($subtype="both") {
 function getUserPrivTypeID($type) {
 	$query = "SELECT id FROM userprivtype WHERE name = '$type'";
 	$qh = doQuery($query, 370);
-	if($row = mysql_fetch_row($qh))
+	if($row = mysqli_fetch_row($qh))
 		return $row[0];
 	else
 		return NULL;
@@ -11066,8 +11079,8 @@ function getReservationLengthCeiling($length) {
 ////////////////////////////////////////////////////////////////////////////////
 function getResourceGroupID($groupname) {
 	list($type, $name) = explode('/', $groupname);
-	$type = mysql_real_escape_string($type);
-	$name = mysql_real_escape_string($name);
+	$type = vcl_mysql_escape_string($type);
+	$name = vcl_mysql_escape_string($name);
 	$query = "SELECT g.id "
 	       . "FROM resourcegroup g, "
 	       .      "resourcetype t "
@@ -11075,7 +11088,7 @@ function getResourceGroupID($groupname) {
 	       .       "t.name = '$type' AND "
 	       .       "g.resourcetypeid = t.id";
 	$qh = doQuery($query, 371);
-	if($row = mysql_fetch_row($qh))
+	if($row = mysqli_fetch_row($qh))
 		return $row[0];
 	else
 		return NULL;
@@ -11098,7 +11111,7 @@ function getResourceGroupName($groupid) {
 	       . "FROM resourcegroup "
 	       . "WHERE id = $groupid";
 	$qh = doQuery($query);
-	if($row = mysql_fetch_assoc($qh))
+	if($row = mysqli_fetch_assoc($qh))
 		return $row['name'];
 	else
 		return NULL;
@@ -11116,12 +11129,12 @@ function getResourceGroupName($groupid) {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function getResourceTypeID($name) {
-	$name = mysql_real_escape_string($name);
+	$name = vcl_mysql_escape_string($name);
 	$query = "SELECT id "
 	       . "FROM resourcetype "
 	       . "WHERE name = '$name'";
 	$qh = doQuery($query, 101);
-	if($row = mysql_fetch_row($qh))
+	if($row = mysqli_fetch_row($qh))
 		return $row[0];
 	else
 		return NULL;
@@ -11140,7 +11153,7 @@ function getResourceTypeID($name) {
 function getResourcePrivs() {
 	$query = "show columns from resourcepriv where field = 'type'";
 	$qh = doQuery($query, 101);
-	$row = mysql_fetch_assoc($qh);
+	$row = mysqli_fetch_assoc($qh);
 	preg_match("/^enum\(([a-zA-Z0-9,']+)\)$/", $row['Type'], $matches);
 	$tmp = str_replace("'", '', $matches[1]);
 	return explode(',', $tmp);
@@ -11160,7 +11173,7 @@ function getConfigTypes() {
 	$query = "SELECT id, prettyname FROM configtype ORDER BY name";
 	$qh = doQuery($query);
 	$types = array();
-	while($row = mysql_fetch_assoc($qh))
+	while($row = mysqli_fetch_assoc($qh))
 		$types[$row['id']] = $row['prettyname'];
 	return $types;
 }
@@ -11179,7 +11192,7 @@ function getConfigDataTypes() {
 	$query = "SELECT id, name FROM datatype ORDER BY name";
 	$qh = doQuery($query);
 	$types = array();
-	while($row = mysql_fetch_assoc($qh))
+	while($row = mysqli_fetch_assoc($qh))
 		$types[$row['id']] = $row['name'];
 	return $types;
 }
@@ -11204,7 +11217,7 @@ function getConfigMapTypes($skipreservation=0) {
 	$query .= "ORDER BY prettyname";
 	$qh = doQuery($query);
 	$types = array();
-	while($row = mysql_fetch_assoc($qh))
+	while($row = mysqli_fetch_assoc($qh))
 		$types[$row['id']] = $row['prettyname'];
 	return $types;
 }
@@ -11270,7 +11283,7 @@ function getMappedConfigs($imageid) {
 	$qh = doQuery($query);
 	$configs = array();
 	$configids = array();
-	while($row = mysql_fetch_assoc($qh)) {
+	while($row = mysqli_fetch_assoc($qh)) {
 		$row['configmapid'] = $row['id'];
 		if(is_null($row['subimageid']))
 			$configids[] = $row['configid'];
@@ -11381,7 +11394,7 @@ function getMappedSubConfigs($mode, $arg1, $arg2, $rec=0) {
 	$qh = doQuery($query);
 	$configs = array();
 	$configids = array();
-	while($row = mysql_fetch_assoc($qh)) {
+	while($row = mysqli_fetch_assoc($qh)) {
 		$row['configmapid'] = $row['id'];
 		if(is_null($row['subimageid']))
 			$configids[] = $row['configid'];
@@ -11451,7 +11464,7 @@ function getImageConfigVariables($configs) {
 	       . "ORDER BY cv.configid";
 	$data = array();
 	$qh = doQuery($query);
-	while($row = mysql_fetch_assoc($qh)) {
+	while($row = mysqli_fetch_assoc($qh)) {
 		$row['required'] = (int)$row['required'];
 		$row['ask'] = (int)$row['ask'];
 		#$row['defaultvalue'] = htmlspecialchars($row['defaultvalue']);
@@ -11524,7 +11537,7 @@ function getConfigClusters($imageid, $flat=0) {
 	$qh = doQuery($query);
 	$clusters = array();
 	$subimageids = array();
-	while($row = mysql_fetch_assoc($qh)) {
+	while($row = mysqli_fetch_assoc($qh)) {
 		$children = getConfigClustersRec($row['configsubimageid'], $flat);
 		if(! empty($children)) {
 			if($flat)
@@ -11587,7 +11600,7 @@ function getConfigClustersRec($subimageid, $flat, $rec=0) {
 	       .        "a.name = 'Global')";
 	$qh = doQuery($query);
 	$clusters = array();
-	while($row = mysql_fetch_assoc($qh)) {
+	while($row = mysqli_fetch_assoc($qh)) {
 		if($rec < 20)
 			$children = getConfigClustersRec($row['configsubimageid'], $flat, ++$rec);
 		if($rec < 20 && ! empty($children)) {
@@ -11615,7 +11628,7 @@ function getOStypes() {
 	$query = "SELECT id, name FROM OStype ORDER BY name";
 	$qh = doQuery($query);
 	$types = array();
-	while($row = mysql_fetch_assoc($qh))
+	while($row = mysqli_fetch_assoc($qh))
 		$types[$row['id']] = $row['name'];
 	return $types;
 }
@@ -11648,7 +11661,7 @@ function getConfigSubimages($configs) {
 	       .       "c.id IN ($inlist)";
 	$configs = array();
 	$qh = doQuery($query);
-	while($row = mysql_fetch_assoc($qh))
+	while($row = mysqli_fetch_assoc($qh))
 		$configs[$row['id']] = $row['name'];
 	return $configs;
 }
@@ -11671,7 +11684,7 @@ function getNodeInfo($nodeid) {
 	if(isset($cache['nodes'][$nodeid]))
 		return $cache['nodes'][$nodeid];
 	$qh = doQuery("SELECT id, parent, name FROM privnode", 330);
-	while($row = mysql_fetch_assoc($qh))
+	while($row = mysqli_fetch_assoc($qh))
 		$cache['nodes'][$row['id']] = $row;
 	if(isset($cache['nodes'][$nodeid]))
 		return $cache['nodes'][$nodeid];
@@ -11848,7 +11861,7 @@ function getResourceMapping($resourcetype1, $resourcetype2,
 	if(! empty($resource2inlist))
 		$query .= "AND resourcegroupid2 IN ($resource2inlist) ";
 	$qh = doQuery($query, 101);
-	while($row = mysql_fetch_assoc($qh)) {
+	while($row = mysqli_fetch_assoc($qh)) {
 		if($resourcetype1 == $row['resourcetypeid1']) {
 			if(array_key_exists($row["resourcegroupid1"], $return))
 				array_push($return[$row["resourcegroupid1"]], $row["resourcegroupid2"]);
@@ -11900,7 +11913,7 @@ function getConnectMethods($imageid) {
 	       . "ORDER BY c.description";
 	$methods = array();
 	$qh = doQuery($query, 101);
-	while($row = mysql_fetch_assoc($qh))
+	while($row = mysqli_fetch_assoc($qh))
 		$methods[$row['id']] = $row;
 	$_SESSION['usersessiondata'][$key] = $methods;
 	return $methods;
@@ -11938,7 +11951,7 @@ function timeToNextReservation($request) {
 	       . "ORDER BY start "
 	       . "LIMIT 1";
 	$qh = doQuery($query, 101);
-	if($row = mysql_fetch_assoc($qh)) {
+	if($row = mysqli_fetch_assoc($qh)) {
 		$end = datetimeToUnix($request["end"]);
 		$start = datetimeToUnix($row["start"]);
 		return ($start - $end) / 60;
@@ -11983,8 +11996,8 @@ function weekOfYear($ts) {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function cleanSemaphore() {
-	global $mysql_link_vcl, $uniqid;
-	if(! is_resource($mysql_link_vcl) || ! get_resource_type($mysql_link_vcl) == 'mysql link')
+	global $mysqli_link_vcl, $uniqid;
+	if(! is_resource($mysqli_link_vcl) || ! get_resource_type($mysqli_link_vcl) == 'mysql link')
 		return;
 	$query = "DELETE FROM semaphore "
 	       . "WHERE procid = '$uniqid'";
@@ -12092,7 +12105,7 @@ function getVMProfiles($id="") {
 		$query .= " AND vp.id = $id";
 	$qh = doQuery($query, 101);
 	$ret = array();
-	while($row = mysql_fetch_assoc($qh))
+	while($row = mysqli_fetch_assoc($qh))
 		$ret[$row['id']] = $row;
 	return $ret;
 }
@@ -12112,7 +12125,7 @@ function getVMProfiles($id="") {
 function getENUMvalues($table, $field) {
 	$query = "DESC $table";
 	$qh = doQuery($query);
-	while($row = mysql_fetch_assoc($qh)) {
+	while($row = mysqli_fetch_assoc($qh)) {
 		if($row['Field'] == "$field") {
 			$data = preg_replace(array('/^enum\(/', "/'/", '/\)$/'), array('', '', ''), $row['Type']);
 			$types = explode(',', $data);
@@ -12161,7 +12174,7 @@ function addContinuationsEntry($nextmode, $data=array(), $duration=SECINWEEK,
 		$contid = md5($mode . $nextmode . $serdata . $user['id'] . $_SERVER['REMOTE_ADDR'] . $_SERVER['HTTP_USER_AGENT']);
 	else
 		$contid = md5($mode . $nextmode . $serdata . $user['id'] . $_SERVER['REMOTE_ADDR']);
-	$serdata = mysql_real_escape_string($serdata);
+	$serdata = vcl_mysql_escape_string($serdata);
 	$expiretime = unixToDatetime(time() + $duration);
 	$query = "SELECT id, "
 	       .        "parentid "
@@ -12169,7 +12182,7 @@ function addContinuationsEntry($nextmode, $data=array(), $duration=SECINWEEK,
 	       . "WHERE id = '$contid' AND "
 	       .       "userid = {$user['id']}";
 	$qh = doQuery($query, 101);
-	if($row = mysql_fetch_assoc($qh)) {
+	if($row = mysqli_fetch_assoc($qh)) {
 		# update expiretime
 		$query = "UPDATE continuations "
 		       . "SET expiretime = '$expiretime' "
@@ -12192,7 +12205,7 @@ function addContinuationsEntry($nextmode, $data=array(), $duration=SECINWEEK,
 			       . "WHERE id = '$continuationid' AND "
 			       .       "userid = {$user['id']}";
 			$qh = doQuery($query, 101);
-			if(! $row = mysql_fetch_assoc($qh))
+			if(! $row = mysqli_fetch_assoc($qh))
 				abort(108);
 			$deletefromid = $row['deletefromid'];
 		}
@@ -12276,7 +12289,7 @@ function getContinuationsData($data) {
 	$qh = doQuery($query, 101);
 
 	# return error if it is not there
-	if(! ($row = mysql_fetch_assoc($qh)))
+	if(! ($row = mysqli_fetch_assoc($qh)))
 		return array('error' => 'continuation does not exist');
 
 	# return error if it is expired
@@ -12382,7 +12395,7 @@ function getShibauthData($id) {
 	       . "FROM shibauth "
 	       . "WHERE id = $id";
 	$qh = doQuery($query, 101);
-	if($row = mysql_fetch_assoc($qh)) {
+	if($row = mysqli_fetch_assoc($qh)) {
 		$data = unserialize($row['data']);
 		unset($row['data']);
 		$data2 = array_merge($row, $data);
@@ -12421,7 +12434,7 @@ function getVariable($key, $default=NULL, $incparams=0) {
 	$query .= "FROM variable "
 	       .  "WHERE name = '$key'";
 	$qh = doQuery($query);
-	if($row = mysql_fetch_assoc($qh)) {
+	if($row = mysqli_fetch_assoc($qh)) {
 		if($incparams) {
 			switch($row['serialization']) {
 				case 'yaml':
@@ -12472,7 +12485,7 @@ function getVariablesRegex($pattern) {
 	       . "WHERE name REGEXP '$pattern'";
 	$qh = doQuery($query);
 	$ret = array();
-	while($row = mysql_fetch_assoc($qh)) {
+	while($row = mysqli_fetch_assoc($qh)) {
 		switch($row['serialization']) {
 			case 'none':
 				$ret[$row['name']] = $row['value'];
@@ -12508,7 +12521,7 @@ function setVariable($key, $data, $serialization='') {
 	$update = 0;
 	$query = "SELECT serialization FROM variable WHERE name = '$key'";
 	$qh = doQuery($query);
-	if($row = mysql_fetch_assoc($qh)) {
+	if($row = mysqli_fetch_assoc($qh)) {
 		if($serialization == '')
 			$serialization = $row['serialization'];
 		$update = 1;
@@ -12518,14 +12531,14 @@ function setVariable($key, $data, $serialization='') {
 	$_SESSION['variables'][$key] = $data;
 	switch($serialization) {
 		case 'none':
-			$qdata = mysql_real_escape_string($data);
+			$qdata = vcl_mysql_escape_string($data);
 			break;
 		case 'yaml':
 			$yaml = Spyc::YAMLDump($data);
-			$qdata = mysql_real_escape_string($yaml);
+			$qdata = vcl_mysql_escape_string($yaml);
 			break;
 		case 'phpserialize':
-			$qdata = mysql_real_escape_string(serialize($data));
+			$qdata = vcl_mysql_escape_string(serialize($data));
 			break;
 	}
 	if($update)
@@ -12736,7 +12749,7 @@ function xmlRPChandler($function, $args, $blah) {
 		$keyid = $user['id'];
 	if(function_exists($function)) {
 		if(! defined('XMLRPCLOGGING') || XMLRPCLOGGING != 0) {
-			$saveargs = mysql_real_escape_string(serialize($args));
+			$saveargs = vcl_mysql_escape_string(serialize($args));
 			$query = "INSERT INTO xmlrpcLog "
 			       .        "(xmlrpcKeyid, "
 			       .        "timestamp, "
@@ -12777,13 +12790,13 @@ function xmlRPChandler($function, $args, $blah) {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function xmlRPCabort($errcode, $query='') {
-	global $mysql_link_vcl, $mysql_link_acct, $ERRORS, $user, $mode;
+	global $mysqli_link_vcl, $mysqli_link_acct, $ERRORS, $user, $mode;
 	global $XMLRPCERRORS;
 	if(ONLINEDEBUG && checkUserHasPerm('View Debug Information')) {
 		$msg = '';
 		if($errcode >= 100 && $errcode < 400) {
-			$msg .= "ERROR (" . mysql_errno($mysql_link_vcl) . ") - ";
-			$msg .= mysql_error($mysql_link_vcl) . " $query ";
+			$msg .= "ERROR (" . mysqli_errno($mysqli_link_vcl) . ") - ";
+			$msg .= mysqli_error($mysqli_link_vcl) . " $query ";
 		}
 		$msg .= $ERRORS["$errcode"];
 		$XMLRPCERRORS[100] = $msg;
@@ -12792,8 +12805,8 @@ function xmlRPCabort($errcode, $query='') {
 	else {
 		$message = "";
 		if($errcode >= 100 && $errcode < 400) {
-			$message .= mysql_error($mysql_link_vcl) . "\n";
-			$message .= mysql_error($mysql_link_acct) . "\n";
+			$message .= mysqli_error($mysqli_link_vcl) . "\n";
+			$message .= mysqli_error($mysqli_link_acct) . "\n";
 			$message .= $query . "\n";
 		}
 		$message .= "ERROR($errcode): " . $ERRORS["$errcode"] . "\n";
@@ -12943,7 +12956,7 @@ function validateAPIgroupInput($items, $exists) {
 			             'errormsg' => 'existing user group with submitted name and affiliation');
 		}
 		elseif($exists && $doesexist) {
-			$esc_name = mysql_real_escape_string($items['name']);
+			$esc_name = vcl_mysql_escape_string($items['name']);
 			$items['id'] = getUserGroupID($esc_name, $affilid);
 		}
 	}

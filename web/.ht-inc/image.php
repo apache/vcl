@@ -187,7 +187,7 @@ class Image extends Resource {
 		       . "ORDER BY rq.end DESC "
 		       . "LIMIT 1";
 		$qh = doQuery($query);
-		if($row = mysql_fetch_assoc($qh))
+		if($row = mysqli_fetch_assoc($qh))
 			$msgs[] = sprintf(i("There is at least one <strong>reservation</strong> for this image. The latest end time is %s."), prettyDatetime($row['end'], 1));;
 
 		# check blockComputers
@@ -205,7 +205,7 @@ class Image extends Resource {
 		       . "ORDER BY bt.end DESC "
 		       . "LIMIT 1";
 		$qh = doQuery($query);
-		if($row = mysql_fetch_assoc($qh))
+		if($row = mysqli_fetch_assoc($qh))
 			$msgs[] = sprintf(i("There is at least one <strong>Block Allocation</strong> with computers currently allocated with this image. Block Allocation %s has the latest end time which is %s."), $row['name'], prettyDatetime($row['end'], 1));
 
 		# check blockRequest
@@ -221,7 +221,7 @@ class Image extends Resource {
 		       . "ORDER BY bt.end DESC "
 		       . "LIMIT 1";
 		$qh = doQuery($query);
-		if($row = mysql_fetch_assoc($qh))
+		if($row = mysqli_fetch_assoc($qh))
 			$msgs[] = sprintf(i("There is at least one <strong>Block Allocation</strong> configured to use this image. Block Allocation %s has the latest end time which is %s."), $row['name'], prettyDatetime($row['end'], 1));
 
 		# check serverprofile
@@ -230,7 +230,7 @@ class Image extends Resource {
 		       . "WHERE imageid = $rscid";
 		$qh = doQuery($query);
 		$profiles = array();
-		while($row = mysql_fetch_assoc($qh))
+		while($row = mysqli_fetch_assoc($qh))
 			$profiles[] = $row['name'];
 		if(count($profiles))
 			$msgs[] = i("The following <strong>Server Profiles</strong> are configured to use this image:") . "<br><br>\n" . implode("<br>\n", $profiles);
@@ -245,7 +245,7 @@ class Image extends Resource {
 		       .       "s.imagemetaid = im.id AND "
 		       .       "s.imageid = $rscid";
 		$images = array();
-		while($row = mysql_fetch_assoc($qh))
+		while($row = mysqli_fetch_assoc($qh))
 			$images[] = $row['prettyname'];
 		if(count($images))
 			$msgs[] = i("The following <strong>images</strong> have the selected image assigned as a <strong>subimage</strong>:") . "<br><br>\n" . implode("<br>\n", $images);
@@ -255,7 +255,7 @@ class Image extends Resource {
 		       . "FROM vmprofile "
 		       . "WHERE imageid = $rscid";
 		$profiles = array();
-		while($row = mysql_fetch_assoc($qh))
+		while($row = mysqli_fetch_assoc($qh))
 			$profiles[] = $row['profilename'];
 		if(count($profiles))
 			$msgs[] = i("The following <strong>VM Host Profiles</strong> have the this image selected:") . "<br><br>\n" . implode("<br>\n", $profiles);
@@ -801,12 +801,12 @@ class Image extends Resource {
 			$updates[] = "forcheckout = {$data['checkout']}";
 		# description
 		if($data['desc'] != $olddata['description']) {
-			$escdesc = mysql_real_escape_string($data['desc']);
+			$escdesc = vcl_mysql_escape_string($data['desc']);
 			$updates[] = "description = '$escdesc'";
 		}
 		# usage
 		if($data['usage'] != $olddata['usage']) {
-			$escusage = mysql_real_escape_string($data['usage']);
+			$escusage = vcl_mysql_escape_string($data['usage']);
 			$updates[] = "`usage` = '$escusage'";
 		}
 
@@ -821,7 +821,7 @@ class Image extends Resource {
 		if($olddata['ostype'] == 'windows') {
 			if($data['adauthenabled'] != $olddata['adauthenabled']) {
 				if($data['adauthenabled']) {
-					$esc_baseou = mysql_real_escape_string($data['baseou']);
+					$esc_baseou = vcl_mysql_escape_string($data['baseou']);
 					$query = "INSERT INTO imageaddomain "
 					       .        "(imageid, "
 					       .        "addomainid, "
@@ -841,7 +841,7 @@ class Image extends Resource {
 			elseif($data['adauthenabled'] &&
 			       ($data['addomainid'] != $olddata['addomainid'] ||
 			       $data['baseou'] != $olddata['baseOU'])) {
-				$esc_baseou = mysql_real_escape_string($data['baseou']);
+				$esc_baseou = vcl_mysql_escape_string($data['baseou']);
 				$query = "UPDATE imageaddomain "
 				       . "SET addomainid = {$data['addomainid']}, "
 				       .     "baseOU = '$esc_baseou' "
@@ -868,7 +868,7 @@ class Image extends Resource {
 					 .        "{$data['sethostname']})";
 			doQuery($query, 101);
 			$qh = doQuery("SELECT LAST_INSERT_ID() FROM imagemeta", 101);
-			if(! $row = mysql_fetch_row($qh))
+			if(! $row = mysqli_fetch_row($qh))
 				abort(101);
 			$imagemetaid = $row[0];
 			$query = "UPDATE image "
@@ -979,7 +979,7 @@ class Image extends Resource {
 		       .       "rq.id = rs.requestid";
 		doQuery($query, 101);
 
-		$agree = mysql_real_escape_string(getContinuationVar('agree'));
+		$agree = vcl_mysql_escape_string(getContinuationVar('agree'));
 		$query = "INSERT INTO clickThroughs "
 		       .        "(userid, "
 		       .        "imageid, "
@@ -1095,10 +1095,10 @@ class Image extends Resource {
 		       . "ORDER BY revision DESC "
 		       . "LIMIT 1";
 		$qh = doQuery($query, 101);
-		$row = mysql_fetch_assoc($qh);
+		$row = mysqli_fetch_assoc($qh);
 		$newrevision = $row['revision'] + 1;
 		$newname = preg_replace("/{$row['revision']}$/", $newrevision, $row['imagename']);
-		$comments = mysql_real_escape_string($comments);
+		$comments = vcl_mysql_escape_string($comments);
 		$query = "INSERT INTO imagerevision "
 		       .        "(imageid, "
 		       .        "revision, "
@@ -1155,7 +1155,7 @@ class Image extends Resource {
 		if($autocaptured)
 			return 1;
 	
-		$agree = mysql_real_escape_string(getContinuationVar('agree'));
+		$agree = vcl_mysql_escape_string(getContinuationVar('agree'));
 		$query = "INSERT INTO clickThroughs "
 		       .        "(userid, "
 		       .        "imageid, "
@@ -1188,9 +1188,9 @@ class Image extends Resource {
 	/////////////////////////////////////////////////////////////////////////////
 	function addResource($data) {
 		global $user;
-		$data['desc'] = mysql_real_escape_string($data['desc']);
-		$data['usage'] = mysql_real_escape_string($data['usage']);
-		$data['comments'] = mysql_real_escape_string($data['comments']);
+		$data['desc'] = vcl_mysql_escape_string($data['desc']);
+		$data['usage'] = vcl_mysql_escape_string($data['usage']);
+		$data['comments'] = vcl_mysql_escape_string($data['comments']);
 	
 		# get architecture of base image
 		$query = "SELECT i.architecture "
@@ -1199,7 +1199,7 @@ class Image extends Resource {
 		       . "WHERE ir.imageid = i.id AND "
 		       .       "ir.id = {$data['basedoffrevisionid']}";
 		$qh = doQuery($query);
-		$row = mysql_fetch_assoc($qh);
+		$row = mysqli_fetch_assoc($qh);
 		$arch = $row['architecture'];
 	
 		$ownerdata = getUserInfo($data['owner'], 1);
@@ -1244,7 +1244,7 @@ class Image extends Resource {
 
 		# ad authentication
 		if($data['adauthenabled']) {
-			$esc_baseou = mysql_real_escape_string($data['baseou']);
+			$esc_baseou = vcl_mysql_escape_string($data['baseou']);
 			$query = "INSERT INTO imageaddomain "
 			       .        "(imageid, "
 			       .        "addomainid, "
@@ -1554,7 +1554,7 @@ class Image extends Resource {
 				 . "FROM subimages "
 				 . "WHERE imagemetaid = $imagemetaid";
 		$qh = doQuery($query, 101);
-		$row = mysql_fetch_row($qh);
+		$row = mysqli_fetch_row($qh);
 		if($row[0] == 0) {
 			$rc = checkClearImageMeta($imagemetaid, $imageid, 'subimages');
 			if($rc)
@@ -1570,7 +1570,7 @@ class Image extends Resource {
 			$query = "SELECT imageid FROM subimages WHERE imagemetaid = $imagemetaid";
 			$qh = doQuery($query, 101);
 			$subimages = array();
-			while($row = mysql_fetch_assoc($qh))
+			while($row = mysqli_fetch_assoc($qh))
 				$subimages[] = $row['imageid'];
 		}
 	
@@ -1827,7 +1827,7 @@ class Image extends Resource {
 		if(! empty($id))
 			$query .= " AND id != $id";
 		$qh = doQuery($query, 101);
-		if(mysql_num_rows($qh))
+		if(mysqli_num_rows($qh))
 			return 1;
 		return 0;
 	}
@@ -1857,7 +1857,7 @@ class Image extends Resource {
 		        . "WHERE name = '$nodename' AND "
 		        .       "parent = 3";
 		$qh = doQuery($query, 101);
-		if(! $row = mysql_fetch_assoc($qh)) {
+		if(! $row = mysqli_fetch_assoc($qh)) {
 			$query2 = "INSERT INTO privnode "
 			        .        "(parent, "
 			        .        "name) "
@@ -1866,7 +1866,7 @@ class Image extends Resource {
 			        .        "'$nodename')";
 			doQuery($query2, 101);
 			$qh = doQuery($query, 101);
-			$row = mysql_fetch_assoc($qh);
+			$row = mysqli_fetch_assoc($qh);
 		}
 		$parent = $row['id'];
 		$query = "SELECT id "
@@ -1874,7 +1874,7 @@ class Image extends Resource {
 		        . "WHERE name = '{$ownerdata['login']}-$ownerid' AND "
 		        .       "parent = $parent";
 		$qh = doQuery($query, 101);
-		if($row = mysql_fetch_assoc($qh))
+		if($row = mysqli_fetch_assoc($qh))
 			$newnode = $row['id'];
 		else {
 			$query = "INSERT INTO privnode "
@@ -1882,7 +1882,7 @@ class Image extends Resource {
 			       . "VALUES ($parent, '{$ownerdata['login']}-$ownerid')";
 			doQuery($query, 101);
 			$qh = doQuery("SELECT LAST_INSERT_ID() FROM privnode", 101);
-			$row = mysql_fetch_row($qh);
+			$row = mysqli_fetch_row($qh);
 			$newnode = $row[0];
 		}
 	
@@ -1895,7 +1895,7 @@ class Image extends Resource {
 		        . "FROM usergroup "
 		        . "WHERE name = 'manageNewImages'";
 		$qh = doQuery($query, 101);
-		$row = mysql_fetch_assoc($qh);
+		$row = mysqli_fetch_assoc($qh);
 		$ownergroupid = $row['id'];
 		if($virtual)
 			$prefix = 'newvmimages';
@@ -1907,7 +1907,7 @@ class Image extends Resource {
 		       .       "ownerusergroupid = $ownergroupid AND "
 		       .       "resourcetypeid = 13";
 		$qh = doQuery($query, 101);
-		if($row = mysql_fetch_assoc($qh))
+		if($row = mysqli_fetch_assoc($qh))
 			$resourcegroupid = $row['id'];
 		else {
 			$query = "INSERT INTO resourcegroup "
@@ -1919,7 +1919,7 @@ class Image extends Resource {
 			       .         "13)";
 			doQuery($query, 305);
 			$qh = doQuery("SELECT LAST_INSERT_ID() FROM resourcegroup", 101);
-			$row = mysql_fetch_row($qh);
+			$row = mysqli_fetch_row($qh);
 			$resourcegroupid = $row[0];
 	
 			// map group to newimages/newvmimages comp group
@@ -1932,7 +1932,7 @@ class Image extends Resource {
 			       . "WHERE name = '$rgroupname' AND "
 			       .       "resourcetypeid = 12";
 			$qh = doQuery($query, 101);
-			$row = mysql_fetch_assoc($qh);
+			$row = mysqli_fetch_assoc($qh);
 			$compResGrpid = $row['id'];
 			$query = "INSERT INTO resourcemap "
 			       .        "(resourcegroupid1, "
@@ -1980,7 +1980,7 @@ class Image extends Resource {
 		       . "WHERE resourcetypeid = 13 AND "
 		       .       "subid = $imageid";
 		$qh = doQuery($query);
-		if(! ($row = mysql_fetch_assoc($qh)))
+		if(! ($row = mysqli_fetch_assoc($qh)))
 			return;
 		$resid = $row['id'];
 		$olduserdata = getUserInfo($oldownerid, 1, 1);
@@ -1994,7 +1994,7 @@ class Image extends Resource {
 		       .       "rgm.resourcegroupid = rg.id AND "
 		       .       "rg.name IN ($oldgroups)";
 		$qh = doQuery($query);
-		if(! ($row = mysql_fetch_assoc($qh)))
+		if(! ($row = mysqli_fetch_assoc($qh)))
 			return;
 		$oldgroup = $row['name'];
 		$oldgroupid = $row['id'];
@@ -2108,7 +2108,7 @@ class Image extends Resource {
 			       .       "(cm.OStypeid = ot.id OR "
 			       .        "cm.OSid = o.id)";
 			$qh = doQuery($query, 101);
-			if(! (mysql_num_rows($qh))) {
+			if(! (mysqli_num_rows($qh))) {
 				# not enabled, add entry for method and image revision
 				$query = "INSERT INTO connectmethodmap "
 				       .        "(connectmethodid, "
@@ -2157,7 +2157,7 @@ class Image extends Resource {
 		$methods = getContinuationVar('methods');
 		$revids = getContinuationVar('revids');
 		$curmethods = getImageConnectMethods($imageid);
-		$remidlist = mysql_real_escape_string(processInputVar('ids', ARG_STRING));
+		$remidlist = vcl_mysql_escape_string(processInputVar('ids', ARG_STRING));
 		$remids = explode(',', $remidlist);
 		$revid = processInputVar('revid', ARG_NUMERIC);
 		$newimage = getContinuationVar('newimage');
@@ -2199,7 +2199,7 @@ class Image extends Resource {
 				       .       "(cm.OStypeid = ot.id OR "
 				       .        "cm.OSid = o.id)";
 				$qh = doQuery($query, 101);
-				if(mysql_num_rows($qh))
+				if(mysqli_num_rows($qh))
 					# if so, add disabled entry for image revision and method
 					$insvals[] = "($id, $revid, 1)";
 			}
@@ -2246,7 +2246,7 @@ class Image extends Resource {
 		$comments = htmlspecialchars($comments);
 		if(get_magic_quotes_gpc())
 			$comments = stripslashes($comments);
-		$comments = mysql_real_escape_string($comments);
+		$comments = vcl_mysql_escape_string($comments);
 		$query = "UPDATE imagerevision "
 		       . "SET comments = '$comments' "
 		       . "WHERE id = $revisionid";
@@ -2306,9 +2306,9 @@ class Image extends Resource {
 		       .       "rs.imagerevisionid IN ($checkedids) AND "
 		       .       "rq.stateid NOT IN (1, 5, 11, 12)";
 		$qh = doQuery($query);
-		if(mysql_num_rows($qh)) {
+		if(mysqli_num_rows($qh)) {
 			$inuseids = array();
-			while($row = mysql_fetch_assoc($qh))
+			while($row = mysqli_fetch_assoc($qh))
 				$inuseids[] = $row['revision'];
 			$inuseids = implode(',', $inuseids);
 			$rc = array('status' => 'error',

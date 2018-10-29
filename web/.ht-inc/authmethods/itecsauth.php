@@ -35,10 +35,10 @@
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function addITECSUser($loginid) {
-	global $mysql_link_vcl, $ENABLE_ITECSAUTH;
+	global $mysqli_link_vcl, $ENABLE_ITECSAUTH;
 	if(! $ENABLE_ITECSAUTH)
 		return NULL;
-	$esc_loginid = mysql_real_escape_string($loginid);
+	$esc_loginid = vcl_mysql_escape_string($loginid);
 	$query = "SELECT id AS uid, "
 	       .        "first, " 
 	       .        "last, "
@@ -49,13 +49,13 @@ function addITECSUser($loginid) {
 	       . "FROM user "
 	       . "WHERE email = '$esc_loginid'";
 	$qh = doQuery($query, 101, "accounts");
-	if($row = mysql_fetch_assoc($qh)) {
+	if($row = mysqli_fetch_assoc($qh)) {
 		// FIXME test replacing ''s
 		// FIXME do we care if the account is active?
-		$first = mysql_real_escape_string($row['first']);
-		$last = mysql_real_escape_string($row['last']);
-		$loweruser = mysql_real_escape_string(strtolower($row['email']));
-		$email = mysql_real_escape_string($row['email']);
+		$first = vcl_mysql_escape_string($row['first']);
+		$last = vcl_mysql_escape_string($row['last']);
+		$loweruser = vcl_mysql_escape_string(strtolower($row['email']));
+		$email = vcl_mysql_escape_string($row['email']);
 		$query = "INSERT INTO user ("
 		       .        "uid, "
 		       .        "unityid, "
@@ -79,9 +79,9 @@ function addITECSUser($loginid) {
 		// FIXME might want this logged
 		doQuery($query, 101, 'vcl', 1);
 	}
-	if(mysql_affected_rows($mysql_link_vcl)) {
+	if(mysqli_affected_rows($mysqli_link_vcl)) {
 		$qh = doQuery("SELECT LAST_INSERT_ID() FROM user", 101);
-		if(! $row = mysql_fetch_row($qh)) {
+		if(! $row = mysqli_fetch_row($qh)) {
 			abort(101);
 		}
 		return $row[0];
@@ -104,14 +104,14 @@ function validateITECSUser($loginid) {
 	global $ENABLE_ITECSAUTH;
 	if(! $ENABLE_ITECSAUTH)
 		return 0;
-	$loginid = mysql_real_escape_string($loginid);
+	$loginid = vcl_mysql_escape_string($loginid);
 	$query = "SELECT email "
 	       . "FROM user "
 	       . "WHERE email = '$loginid' AND "
 	       .       "(active = 1 OR "
 	       .       "activated = 0)";
 	$qh = doQuery($query, 101, "accounts");
-	if(mysql_num_rows($qh))
+	if(mysqli_num_rows($qh))
 		return 1;
 	return 0;
 }
@@ -160,7 +160,7 @@ function updateITECSUser($userid) {
 	       . "FROM user "
 	       . "WHERE email = '$userid'";
 	$qh = doQuery($query, 101, "accounts");
-	if(! ($userData = mysql_fetch_assoc($qh)))
+	if(! ($userData = mysqli_fetch_assoc($qh)))
 		return NULL;
 
 	$now = unixToDatetime(time());
@@ -191,11 +191,11 @@ function updateITECSUser($userid) {
 	// if get a row
 	//    update db
 	//    update results from select
-	$esc_userid = mysql_real_escape_string($userid);
-	$first = mysql_real_escape_string($userData['first']);
-	$last = mysql_real_escape_string($userData['last']);
-	$email = mysql_real_escape_string($userData['email']);
-	if($user = mysql_fetch_assoc($qh)) {
+	$esc_userid = vcl_mysql_escape_string($userid);
+	$first = vcl_mysql_escape_string($userData['first']);
+	$last = vcl_mysql_escape_string($userData['last']);
+	$email = vcl_mysql_escape_string($userData['email']);
+	if($user = mysqli_fetch_assoc($qh)) {
 		$user["unityid"] = $userid;
 		$user["firstname"] = $userData['first'];
 		$user["lastname"] = $userData["last"];
@@ -240,7 +240,7 @@ function updateITECSUser($userid) {
 		       . "WHERE u.affiliationid = af.id AND "
 		       .       "u.id = $id";
 		$qh = doQuery($query, 101);
-		$user = mysql_fetch_assoc($qh);
+		$user = mysqli_fetch_assoc($qh);
 
 		# add account to demo group
 		#$demoid = getUserGroupID('demo', getAffiliationID('ITECS'));

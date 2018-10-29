@@ -203,7 +203,7 @@ class ManagementNode extends Resource {
 		       . "ORDER BY rq.end DESC "
 		       . "LIMIT 1";
 		$qh = doQuery($query);
-		if($row = mysql_fetch_assoc($qh))
+		if($row = mysqli_fetch_assoc($qh))
 			$msgs[] = "There is at least one <strong>reservation</strong> being processed by this management node. The latest end time is " . prettyDatetime($row['end'], 1) . '.';
 
 		# check blockRequest
@@ -219,7 +219,7 @@ class ManagementNode extends Resource {
 		       . "ORDER BY bt.end DESC "
 		       . "LIMIT 1";
 		$qh = doQuery($query);
-		if($row = mysql_fetch_assoc($qh))
+		if($row = mysqli_fetch_assoc($qh))
 			$msgs[] = "There is at least one <strong>Block Allocation</strong> being handled by this management node. Block Allocation \"{$row['name']}\" has the latest end time which is " . prettyDatetime($row['end'], 1) . '.';
 
 
@@ -246,7 +246,7 @@ class ManagementNode extends Resource {
 	function toggleDeleteResource($rscid) {
 		$query = "SELECT stateid FROM managementnode WHERE id = $rscid";
 		$qh = doQuery($query);
-		if($row = mysql_fetch_assoc($qh)) {
+		if($row = mysqli_fetch_assoc($qh)) {
 			if($row['stateid'] == 1)
 				$query = "UPDATE managementnode SET stateid = 10 WHERE id = $rscid";
 			else
@@ -514,8 +514,8 @@ class ManagementNode extends Resource {
 			}
 		}
 		else {
-			$esc = array('sysadminemail' => mysql_real_escape_string($data['sysadminemail']),
-			             'sharedmailbox' => mysql_real_escape_string($data['sharedmailbox']));
+			$esc = array('sysadminemail' => vcl_mysql_escape_string($data['sysadminemail']),
+			             'sharedmailbox' => vcl_mysql_escape_string($data['sharedmailbox']));
 
 			$olddata = getContinuationVar('olddata');
 			$updates = array();
@@ -992,7 +992,7 @@ class ManagementNode extends Resource {
 				       .       "rq.laststateid NOT IN (1,5,11,12) AND "
 				       .       "rq.userid != $vclreloadid";
 				$qh = doQuery($query);
-				if(mysql_num_rows($qh)) {
+				if(mysqli_num_rows($qh)) {
 					$return['error'] = 1;
 					$errormsg[] = "This management node is the NAT host for computers that have active reservations. NAT host<br>settings cannot be changed while providing NAT for active reservations.";
 				}
@@ -1020,8 +1020,8 @@ class ManagementNode extends Resource {
 	function addResource($data) {
 		global $user;
 		$ownerid = getUserlistID($data['owner']);
-		$esc = array('sysadminemail' => mysql_real_escape_string($data['sysadminemail']),
-		             'sharedmailbox' => mysql_real_escape_string($data['sharedmailbox']));
+		$esc = array('sysadminemail' => vcl_mysql_escape_string($data['sysadminemail']),
+		             'sharedmailbox' => vcl_mysql_escape_string($data['sharedmailbox']));
 		$keys = array('IPaddress',            'hostname',
 		              'ownerid',              'stateid',
 		              'checkininterval',      'installpath',
@@ -1116,7 +1116,7 @@ class ManagementNode extends Resource {
 		if($id != 0)
 			$query .= " AND id != $id";
 		$qh = doQuery($query);
-		return mysql_num_rows($qh);
+		return mysqli_num_rows($qh);
 	}
 }
 ?>
