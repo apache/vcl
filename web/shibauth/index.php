@@ -43,7 +43,7 @@ header("Expires: Sat, 1 Jan 2000 00:00:00 GMT");
 				 .       "a.shibname = '{$tmp[1]}' AND "
 				 .       "u.affiliationid = a.id";
 		$qh = doQuery($query, 101);
-		if($row = mysql_fetch_assoc($qh)) {
+		if($row = mysqli_fetch_assoc($qh)) {
 			$_SERVER['sn'] = $row['lastname'];
 			$_SERVER['givenName'] = $row['firstname'];
 		}
@@ -103,11 +103,11 @@ if(! $keys['public'])
 $tmp = explode(';', $_SERVER['eppn']);
 $tmp = explode('@', $tmp[0]);
 $username = strtolower($tmp[0]);
-$tmp1 = mysql_escape_string(strtolower($tmp[1]));
+$tmp1 = vcl_mysql_escape_string(strtolower($tmp[1]));
 $query = "SELECT name, shibonly FROM affiliation WHERE shibname = '$tmp1'";
 $qh = doQuery($query, 101);
 # if shib affiliation not already in VCL, create affiliation
-if(! ($row = mysql_fetch_assoc($qh))) {
+if(! ($row = mysqli_fetch_assoc($qh))) {
 	$affil = strtolower($tmp[1]);
 	$tmp = explode('.', $affil);
 	array_pop($tmp);
@@ -120,7 +120,7 @@ if(! ($row = mysql_fetch_assoc($qh))) {
 	       . "ORDER BY name DESC "
 	       . "LIMIT 1";
 	$qh = doQuery($query, 101);
-	if($row = mysql_fetch_assoc($qh)) {
+	if($row = mysqli_fetch_assoc($qh)) {
 		if(preg_match("/$affilname([0-9]+)/", $row['name'], $matches)) {
 			$cnt = $matches[1];
 			$cnt++;
@@ -160,7 +160,7 @@ if(! ($row = mysql_fetch_assoc($qh))) {
 	       .        "shibonly) "
 	       . "VALUES "
 	       .        "('$newaffilname', "
-	       .        "'" . mysql_escape_string($affil) . "', "
+	       .        "'" . vcl_mysql_escape_string($affil) . "', "
 	       .        "1)";
 	doQuery($query, 101, 'vcl', 1);
 	unset($row);
@@ -210,12 +210,12 @@ $shibdata = array('Shib-Application-ID' => $_SERVER['Shib-Application-ID'],
                   'unscoped-affiliation' => $_SERVER['unscoped-affiliation'],
                   'affiliation' => $_SERVER['affiliation'],
 );
-$serdata = mysql_escape_string(serialize($shibdata));
+$serdata = vcl_mysql_escape_string(serialize($shibdata));
 $query = "SELECT id "
        . "FROM shibauth "
        . "WHERE sessid = '{$_SERVER['Shib-Session-ID']}'";
 $qh = doQuery($query, 101);
-if($row = mysql_fetch_assoc($qh)) {
+if($row = mysqli_fetch_assoc($qh)) {
 	$shibauthid = $row['id'];
 }
 else {
@@ -233,7 +233,7 @@ else {
 	       .        "'$serdata')";
 	doQuery($query, 101);
 	$qh = doQuery("SELECT LAST_INSERT_ID() FROM shibauth", 101);
-	if(! $row = mysql_fetch_row($qh)) {
+	if(! $row = mysqli_fetch_row($qh)) {
 		# todo
 	}
 	$shibauthid = $row[0];

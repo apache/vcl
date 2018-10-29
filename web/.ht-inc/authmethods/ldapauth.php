@@ -34,13 +34,13 @@
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function addLDAPUser($authtype, $userid) {
-	global $authMechs, $mysql_link_vcl;
+	global $authMechs, $mysqli_link_vcl;
 	$data = getLDAPUserData($authtype, $userid);
 	if(is_null($data))
 		return NULL;
 
 	$loweruserid = strtolower($userid);
-	$loweruserid = mysql_real_escape_string($loweruserid);
+	$loweruserid = vcl_mysql_escape_string($loweruserid);
 
 	# check for existance of an expired user if a numericid exists
 	if(array_key_exists('numericid', $data)) {
@@ -53,7 +53,7 @@ function addLDAPUser($authtype, $userid) {
 		       .       "unityid != '$loweruserid'";
 		       #.       "affiliationid = {$authMechs[$authtype]['affiliationid']}";
 		$qh = doQuery($query, 101);
-		if($row = mysql_fetch_assoc($qh)) {
+		if($row = mysqli_fetch_assoc($qh)) {
 			# find the authtype for this user
 			foreach($authMechs as $index => $auth) {
 				if($auth['affiliationid'] == $row['affiliationid'] &&
@@ -95,9 +95,9 @@ function addLDAPUser($authtype, $userid) {
 	       .        "'{$data['emailnotices']}', "
 	       .        "NOW())";
 	doQuery($query, 101, 'vcl', 1);
-	if(mysql_affected_rows($mysql_link_vcl)) {
+	if(mysqli_affected_rows($mysqli_link_vcl)) {
 		$qh = doQuery("SELECT LAST_INSERT_ID() FROM user", 101);
-		if(! $row = mysql_fetch_row($qh)) {
+		if(! $row = mysqli_fetch_row($qh)) {
 			abort(101);
 		}
 		return $row[0];
@@ -171,7 +171,7 @@ function validateLDAPUser($type, $loginid) {
 ////////////////////////////////////////////////////////////////////////////////
 function updateLDAPUser($authtype, $userid) {
 	global $authMechs;
-	$esc_userid = mysql_real_escape_string($userid);
+	$esc_userid = vcl_mysql_escape_string($userid);
 	$userData = getLDAPUserData($authtype, $userid);
 	if(is_null($userData))
 		return NULL;
@@ -213,7 +213,7 @@ function updateLDAPUser($authtype, $userid) {
 	# check to see if there is a matching entry where uid is NULL but unityid and affiliationid match
 	if(array_key_exists('numericid', $userData) &&
 	   is_numeric($userData['numericid']) &&
-	   ! mysql_num_rows($qh)) {
+	   ! mysqli_num_rows($qh)) {
 		$updateuid = 1;
 		$query = $qbase . "u.unityid = '$esc_userid' AND "
 		       .          "u.affiliationid = $affilid";
@@ -222,7 +222,7 @@ function updateLDAPUser($authtype, $userid) {
 	// if get a row
 	//    update db
 	//    update results from select
-	if($user = mysql_fetch_assoc($qh)) {
+	if($user = mysqli_fetch_assoc($qh)) {
 		$user["unityid"] = $userid;
 		$user["firstname"] = $userData['first'];
 		$user["lastname"] = $userData["last"];
@@ -277,7 +277,7 @@ function updateLDAPUser($authtype, $userid) {
 		       . "WHERE u.affiliationid = af.id AND "
 		       .       "u.id = $id";
 		$qh = doQuery($query, 101);
-		if(! $user = mysql_fetch_assoc($qh))
+		if(! $user = mysqli_fetch_assoc($qh))
 			return NULL;
 		$user['sshpublickeys'] = htmlspecialchars($user['sshpublickeys']);
 	}
@@ -305,9 +305,9 @@ function updateLDAPUser($authtype, $userid) {
 /// \param $userid - a userid without the affiliation part
 ///
 /// \return an array of user information with the following keys:\n
-/// \b first - first name of user (escaped with mysql_real_escape_string)\n
-/// \b last - last name of user (escaped with mysql_real_escape_string)\n
-/// \b email - email address of user (escaped with mysql_real_escape_string)\n
+/// \b first - first name of user (escaped with vcl_mysql_escape_string)\n
+/// \b last - last name of user (escaped with vcl_mysql_escape_string)\n
+/// \b email - email address of user (escaped with vcl_mysql_escape_string)\n
 /// \b emailnotices - 0 or 1, whether or not emails should be sent to user\n
 /// \b numericid - numeric id of user if $authtype is configured to include it
 ///
@@ -315,7 +315,7 @@ function updateLDAPUser($authtype, $userid) {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function getLDAPUserData($authtype, $userid) {
-	global $authMechs, $mysql_link_vcl;
+	global $authMechs, $mysqli_link_vcl;
 	$auth = $authMechs[$authtype];
 	$donumericid = 0;
 	if(array_key_exists('numericid', $auth))
@@ -392,16 +392,16 @@ function getLDAPUserData($authtype, $userid) {
 		}
 
 		if(array_key_exists(strtolower($auth['firstname']), $data))
-			$return['first'] = mysql_real_escape_string($data[strtolower($auth['firstname'])]);
+			$return['first'] = vcl_mysql_escape_string($data[strtolower($auth['firstname'])]);
 		else
 			$return['first'] = '';
 		if(array_key_exists(strtolower($auth['lastname']), $data))
-			$return['last'] = mysql_real_escape_string($data[strtolower($auth['lastname'])]);
+			$return['last'] = vcl_mysql_escape_string($data[strtolower($auth['lastname'])]);
 		else
 			$return['last'] = '';
 		if($donumericid && is_numeric($data[strtolower($auth['numericid'])]))
 			$return['numericid'] = $data[strtolower($auth['numericid'])];
-		$return['email'] = mysql_real_escape_string($data[strtolower($auth['email'])]);
+		$return['email'] = vcl_mysql_escape_string($data[strtolower($auth['email'])]);
 
 		return $return;
 	}

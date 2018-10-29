@@ -57,7 +57,7 @@ function newOneClick() {
 	       .       "o.userid = {$user['id']}";
 	$oneclicks = array();
 	$qh = doQuery($query, 101);
-	while($row = mysql_fetch_assoc($qh))
+	while($row = mysqli_fetch_assoc($qh))
 		$oneclicks[$row['id']] = $row;
 
 	print "<H2>" . i("VCL go Configurator") . "</H2>\n";
@@ -322,7 +322,7 @@ function editOneClick() {
 	$qh = doQuery($query, 101);
 	print "<form action=\"" . BASEURL . SCRIPT . "\" method=\"post\" style=\"display: inline;\" onsubmit=\"return validateForm(this);\">\n";
 
-	if(! ($row = mysql_fetch_assoc($qh))) {
+	if(! ($row = mysqli_fetch_assoc($qh))) {
 		print i("VCL go not found") . "\n";
 		return NULL;
 	}
