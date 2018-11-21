@@ -80,6 +80,7 @@ use Crypt::OpenSSL::RSA;
 use B qw(svref_2object);
 use Socket;
 use Net::Netmask;
+use Log::Log4perl qw( get_logger );
 
 BEGIN {
 	$ENV{PERL_RL} = 'Perl';
@@ -616,6 +617,26 @@ EOF
 =cut
 
 sub notify {
+	my $error = shift;
+	my $log = shift;
+	my $string = shift;
+	my @data = @_;
+
+	notify_old($error, $log, $string, @data);
+	notify_log_4_perl($error, $log, $string, @data);
+}
+
+
+=head2 notify_old
+
+ Parameters  : $error, $LOG, $string, $data
+ Returns     : true
+ Description : based on error value write string and/or data to
+               provide or default log file
+
+=cut
+
+sub notify_old {
 	my $error  = shift;
 	my $log    = shift;
 	my $string = shift;
@@ -835,9 +856,101 @@ END
 		#}
 		print STDOUT "$log_message\n";
 	}
-} ## end sub notify
+} ## end sub notify_old
 
-#//////////////////////////////////////////////////////////////////////////////
+#///////////////////////////////////////////////////////////////////////////////
+sub notify_log_4_perl {
+	my $error = shift;
+	my $log = shift;
+	my $string = shift;
+	my @data = @_;
+
+	my $currenttime = makedatestring();
+
+	# Get info about the subroutine which called this subroutine
+	my ($package, $filename, $line, $sub) = caller(0);
+
+	# Assemble the caller information
+	my $caller_info;
+	if (caller(1)) {
+		$sub = (caller(1))[3];
+	}
+
+	# Remove leading path from filename
+	$filename =~ s/.*\///;
+
+	# Remove the leading package path from the sub name (VC::...)
+	$sub =~ s/.*:://;
+
+	$caller_info = "$filename:$sub($line)";
+
+	# Format the message string
+	# Remove Windows carriage returns from the message string for consistency
+	$string =~ s/\r//gs;
+
+
+	# Remove any spaces from the beginning or end of the string
+	$string =~ s/(^\s+)|(\s+$)//gs;
+
+	# Remove any spaces from the beginning or end of the each line
+	#$string =~ s/\s*\n\s*/\n/gs;
+
+	# Remove blank lines
+	$string =~ s/\n{2,}/\n/gs;
+
+	# Replace consecutive spaces with a single space to keep log file concise as long as string doesn't contain a quote
+	if ($string !~ /[\'\"]/gs && $string !~ /\s:\s/gs) {
+		$string =~ s/[ \t]+/ /gs;
+	}
+
+	# Assemble the process identifier string
+	my $process_identifier;
+	$process_identifier .= "|$PID|";
+	$process_identifier .= $ENV{request_id} if defined $ENV{request_id};
+	$process_identifier .= "|";
+	$process_identifier .= $ENV{reservation_id} if defined $ENV{reservation_id};
+	$process_identifier .= "|";
+	$process_identifier .= $ENV{state} || 'vcld';
+	$process_identifier .= "|$filename:$sub|$line";
+
+	# Assemble the log message
+	my $log_message = "";
+	$log_message = "$currenttime$process_identifier|$string";
+
+	# Format the data if WARNING or CRITICAL, and @data was passed
+	#my $formatted_data;
+	#if (@data && ($error == 1 || $error == 2)) {
+	#       # Add the data to the message body if it was passed
+	#       $formatted_data = "DATA:\n" . format_data(\@data, 'DATA');
+	#       chomp $formatted_data;
+	#}
+
+
+	if ($error == 0) {
+		get_logger((caller(2))[3])->info($log_message);
+	}
+	if ($error == 1) {
+		get_logger((caller(2))[3])->warn($log_message);
+	}
+	if ($error == 2) {
+		get_logger((caller(2))[3])->error($log_message);
+	}
+	if ($error == 3) {
+		get_logger((caller(2))[3])->debug($log_message);
+	}
+	if ($error == 4) {
+		get_logger((caller(2))[3])->debug($log_message);
+	}
+	if ($error == 5) {
+		get_logger((caller(2))[3])->debug($log_message);
+	}
+	if ($error == 6) {
+		get_logger((caller(2))[3])->debug($log_message);
+	}
+}
+
+
+	#//////////////////////////////////////////////////////////////////////////////
 
 =head2  makedatestring
 
