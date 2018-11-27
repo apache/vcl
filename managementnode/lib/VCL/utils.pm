@@ -4623,6 +4623,7 @@ sub get_management_node_info {
 	my $select_statement = "
 SELECT
 managementnode.*,
+UNIX_TIMESTAMP(managementnode.lastcheckin) as lastcheckin_epoch,
 resource.id AS resource_id,
 state.name AS statename
 FROM
@@ -4962,22 +4963,46 @@ sub update_lastcheckin {
 	}
 
 	# Get current timestamp
-	my $timestamp = makedatestring();
+	my $timestamp;
 
 	# Construct the update statement
 	my $update_statement = "
       UPDATE
 		managementnode
 		SET
-		lastcheckin = \'$timestamp\'
+		lastcheckin = NOW()
 		WHERE
 		id = $management_node_id
    ";
 
+	my $get_unix_timestamp = "
+	  SELECT
+	    UNIX_TIMESTAMP() as EPOC_TIMESTAMP
+    ";
+
 	# Call the database execute subroutine
 	if (database_execute($update_statement)) {
 		# Update successful, return timestamp
-		return $timestamp;
+		my @selected_rows = database_select($get_unix_timestamp);
+
+		# Check to make sure 1 row was returned
+		if (scalar @selected_rows == 0) {
+			notify($ERRORS{'WARNING'}, 0, "zero rows were returned from database select");
+			return 0;
+		}
+		elsif (scalar @selected_rows > 1) {
+			notify($ERRORS{'WARNING'}, 0, "" . scalar @selected_rows . " rows were returned from database select");
+			return 0;
+		}
+
+		# Make sure we return undef if the column wasn't found
+		if (defined $selected_rows[0]{EPOC_TIMESTAMP}) {
+			$timestamp = $selected_rows[0]{EPOC_TIMESTAMP};
+			return $timestamp;
+		} else {
+			notify($ERRORS{'CRITICAL'}, 0, "unable to get EPOC_TIMESTAMP from database");
+			return 0;
+		}
 	}
 	else {
 		notify($ERRORS{'CRITICAL'}, 0, "unable to update database, management node id $management_node_id");
