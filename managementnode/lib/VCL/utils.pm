@@ -341,6 +341,7 @@ our %ERRORS = (
 );
 
 our $PROCESSNAME;
+our $LOG4PERL;
 our $LOGFILE;
 our $PIDFILE;
 our $FQDN;
@@ -410,7 +411,8 @@ INIT {
 	);
 	
 	my %parameters = (
-		'log'							=> \$LOGFILE,
+		'log'						=> \$LOGFILE,
+		'log4perl'					=> \$LOG4PERL,
 		'pidfile'					=> \$PIDFILE,
 		'fqdn'						=> \$FQDN,
 		'database'					=> \$DATABASE,
@@ -492,6 +494,10 @@ INIT {
 	if (!$FQDN) {
 		print STDERR "FATAL: FQDN parameter must be configured in $CONF_FILE_PATH\n";
 		exit;
+	}
+
+	if (!$LOG4PERL) {
+		$LOG4PERL=0;
 	}
 	
 	$PROCESSNAME = 'vcld' if !$PROCESSNAME;
@@ -623,7 +629,9 @@ sub notify {
 	my @data = @_;
 
 	notify_old($error, $log, $string, @data);
-	notify_log_4_perl($error, $log, $string, @data);
+	if ($LOG4PERL) {
+		notify_log_4_perl($error, $log, $string, @data);
+	}
 }
 
 
