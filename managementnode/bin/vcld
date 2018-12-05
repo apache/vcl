@@ -59,6 +59,9 @@ use English qw( -no_match_vars );
 use Fcntl qw(:DEFAULT :flock);
 use List::Util qw(min);
 
+use Log::Log4perl;
+Log::Log4perl->init("log.conf");
+
 use VCL::utils;
 use VCL::DataStructure;
 
