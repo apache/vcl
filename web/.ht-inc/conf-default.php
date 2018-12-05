@@ -186,7 +186,7 @@ foreach($authMechs as $key => $item) {
 		$updateUserFunc[$item['affiliationid']] = 'updateLDAPUser';
 		$updateUserFuncArgs[$item['affiliationid']] = $key;
 	}
-	elseif($item['type'] == 'local') {
+	elseif($item['type'] == 'local' || $item['type'] == 'cas') {
 		$affilValFunc[$item['affiliationid']] = create_function('', 'return 0;');
 		$addUserFunc[$item['affiliationid']] = create_function('', 'return NULL;');
 		$updateUserFunc[$item['affiliationid']] = create_function('', 'return NULL;');

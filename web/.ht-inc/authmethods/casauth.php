@@ -102,7 +102,12 @@ function checkCASUserInDatabase($type, $userid) {
 function addCASUser($userinfo) {
 	global $authMechs, $mysql_link_vcl;
 	$now = unixToDatetime(time());
-
+	if(array_key_exists('firstname', $userinfo))
+		$esc_firstname = mysql_real_escape_string($userinfo['firstname']);
+	if(array_key_exists('lastname', $userinfo))
+		$esc_lastname = mysql_real_escape_string($userinfo['lastname']);
+	if(array_key_exists('preferredname', $userinfo))
+		$esc_preferredname = mysql_real_escape_string($userinfo['preferredname']);
 	$query = "INSERT INTO user (unityid, affiliationid";
 	if(array_key_exists('firstname', $userinfo))
 		$query .= ", firstname";
@@ -114,11 +119,11 @@ function addCASUser($userinfo) {
 		$query .= ", email";
 	$query .= ", lastupdated) VALUES ( '{$userinfo['unityid']}', {$userinfo['affiliationid']}";
 	if(array_key_exists('firstname', $userinfo))
-		$query .= ",'{$userinfo['firstname']}'";
+		$query .= ",'{$esc_firstname}'";
 	if(array_key_exists('lastname', $userinfo))
-		$query .= ",'{$userinfo['lastname']}'";
+		$query .= ",'{$esc_lastname}'";
 	if(array_key_exists('preferredname', $userinfo))
-		$query .= ",'{$userinfo['preferredname']}'";
+		$query .= ",'{$esc_preferredname}'";
 	if(array_key_exists('email', $userinfo))
 		$query .= ",'{$userinfo['email']}'";
 		$query .= ",'{$now}')";
@@ -158,13 +163,19 @@ function updateCASUser($userinfo) {
 	global $mysql_link_vcl;
 	$now = unixToDatetime(time());
 	$esc_userid = mysql_real_escape_string($userinfo['unityid']);
+	if(array_key_exists('firstname', $userinfo))
+		$esc_firstname = mysql_real_escape_string($userinfo['firstname']);
+	if(array_key_exists('lastname', $userinfo))
+		$esc_lastname = mysql_real_escape_string($userinfo['lastname']);
+	if(array_key_exists('preferredname', $userinfo))
+		$esc_preferredname = mysql_real_escape_string($userinfo['preferredname']);
 	$query = "UPDATE user SET unityid = '{$userinfo['unityid']}', lastupdated = '{$now}'";
 	if(array_key_exists('firstname', $userinfo))
-		$query .= ", firstname = '{$userinfo['firstname']}' ";
+		$query .= ", firstname = '{$esc_firstname}' ";
 	if(array_key_exists('lastname', $userinfo))
-		$query .= ", lastname = '{$userinfo['lastname']}' ";
+		$query .= ", lastname = '{$esc_lastname}' ";
 	if(array_key_exists('preferredname', $userinfo))
-		$query .= ", preferredname = '{$userinfo['preferredname']}' ";
+		$query .= ", preferredname = '{$esc_preferredname}' ";
 	if(array_key_exists('email', $userinfo))
 		$query .= ", email = '{$userinfo['email']}' ";
 	$query .= "WHERE unityid = '{$esc_userid}' AND affiliationid = {$userinfo['affiliationid']}";
