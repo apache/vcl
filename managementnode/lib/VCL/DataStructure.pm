@@ -2804,7 +2804,7 @@ sub get_image_domain_password {
 
 =head2 get_domain_credentials
 
- Parameters  : $domain_identifier
+ Parameters  : $imagedomain_id (optional)
  Returns     : array ($username, $domain_password)
  Description : Attempts to determine and decrypt the username and password for
                the domain specified by the argument. 
@@ -2817,23 +2817,25 @@ sub get_domain_credentials {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return 0;
 	}
-	
-	my $domain_identifier = shift;
-	if (!defined($domain_identifier)) {
-		notify($ERRORS{'WARNING'}, 0, "domain identifier argument was not supplied");
-		return;
-	}
-	
+
+	my $reservation_id = $self->reservation_id();
 	my $management_node_id = $self->get_management_node_id();
-	
-	my ($username, $secret_id, $encrypted_password) = get_management_node_ad_domain_credentials($management_node_id, $domain_identifier);
-	return unless $username && $secret_id && $encrypted_password;
-	
+
+	my $imagedomain_id = shift || $self->request_data->{reservation}{$reservation_id}{computer}{currentimage}{imagedomain}{id};
+
+	my ($domain_dns_name, $username, $secret_id, $encrypted_password) = get_management_node_ad_domain_credentials($management_node_id, $imagedomain_id);
+	return unless $domain_dns_name && $username && $secret_id && $encrypted_password;
+
 	my $decrypted_password = $self->mn_os->decrypt_cryptsecret($secret_id, $encrypted_password) || return;
 	my $decrypted_password_length = length($decrypted_password);
 	my $decrypted_password_hidden = '*' x $decrypted_password_length;
-	notify($ERRORS{'DEBUG'}, 0, "retrieved credentials for Active Directory domain: '$decrypted_password_hidden' ($decrypted_password_length characters)");
-	return $decrypted_password;
+	notify($ERRORS{'DEBUG'}, 0, "retrieved credentials for Active Directory domain:\n" .
+               "domain ID: $imagedomain_id:\n" .
+               "domain DNS name: $domain_dns_name:\n" .
+               "domain username: $username:\n" .
+               "domain password: $decrypted_password_hidden ($decrypted_password_length characters)"
+        );
+	return ($domain_dns_name, $username, $decrypted_password);
 }
 
 #//////////////////////////////////////////////////////////////////////////////
