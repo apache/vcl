@@ -879,9 +879,12 @@ CREATE TABLE IF NOT EXISTS `addomain` (
   `password` varchar(256) NOT NULL default '',
   `secretid` smallint(5) unsigned NOT NULL,
   PRIMARY KEY (`id`),
-  UNIQUE KEY `domainDNSName` (`domainDNSName`),
+  KEY `domainDNSName` (`domainDNSName`),
   KEY `secretid` (`secretid`)
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+
+CALL DropExistingIndices('addomain', 'domainDNSName');
+CALL AddIndexIfNotExists('addomain', 'domainDNSName');
 
 -- --------------------------------------------------------
 

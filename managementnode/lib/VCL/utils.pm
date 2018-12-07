@@ -1270,7 +1270,7 @@ sub mail {
 	my ($package, $filename, $line,       $sub)  = caller(0);
 
 	# Mail::Mailer relies on sendmail as written, this causes a "die" on Windows
-	# TODO: Reqork this subroutine to not rely on sendmail
+	# TODO: Rework this subroutine to not rely on sendmail
 	my $osname = lc($^O);
 	if ($osname =~ /win/i) {
 		notify($ERRORS{'OK'}, 0, "sending mail from Windows not yet supported\n-----\nTo: $to\nSubject: $subject\nFrom: $from\n$mailstring\n-----");
@@ -15083,8 +15083,8 @@ EOF
 
 =head2 get_management_node_ad_domain_credentials
 
- Parameters  : $management_node_id, $domain_dns_name, $no_cache (optional)
- Returns     : ($username, $secret_id, $encrypted_password)
+ Parameters  : $management_node_id, $domain_id, $no_cache (optional)
+ Returns     : ($domain_dns_name, $username, $secret_id, $encrypted_password)
  Description : Attempts to retrieve the username, encrypted password, and secret
                ID for the domain from the addomain table. This is used if a
                computer needs to be removed from a domain but the reservation
@@ -15094,63 +15094,58 @@ EOF
 =cut
 
 sub get_management_node_ad_domain_credentials {
-	my ($management_node_id, $domain_identifier, $no_cache) = @_;
+	my ($management_node_id, $domain_id, $no_cache) = @_;
 	if (!defined($management_node_id)) {
 		notify($ERRORS{'WARNING'}, 0, "management node ID argument was not supplied");
 		return;
 	}
-	elsif (!$domain_identifier) {
+	elsif (!$domain_id) {
 		notify($ERRORS{'WARNING'}, 0, "domain identifier name argument was not specified");
 		return;
 	}
 	
-	if (!$no_cache && defined($ENV{management_node_ad_domain_credentials}{$domain_identifier})) {
-		notify($ERRORS{'DEBUG'}, 0, "returning cached Active Directory credentials for domain: $domain_identifier");
-		return @{$ENV{management_node_ad_domain_credentials}{$domain_identifier}};
+	if (!$no_cache && defined($ENV{management_node_ad_domain_credentials}{$domain_id})) {
+		notify($ERRORS{'DEBUG'}, 0, "returning cached Active Directory credentials for domain: $domain_id");
+		return @{$ENV{management_node_ad_domain_credentials}{$domain_id}};
 	}
 	
 	# Construct the select statement
 	my $select_statement = <<EOF;
 SELECT DISTINCT
+domainDNSName,
 username,
 password,
 secretid
 FROM
 addomain
 WHERE
+addomain.id = $domain_id
 EOF
-	
-	if ($domain_identifier =~ /^\d+$/) {
-		$select_statement .= "addomain.id = $domain_identifier";
-	}
-	else {
-		$select_statement .= "addomain.domainDNSName LIKE '$domain_identifier%'";
-	}
 	
 	# Call the database select subroutine
 	my @selected_rows = database_select($select_statement);
 
 	# Check to make sure 1 row was returned
 	if (scalar @selected_rows == 0) {
-		notify($ERRORS{'DEBUG'}, 0, "Active Directory domain does not exist in the database: $domain_identifier");
+		notify($ERRORS{'DEBUG'}, 0, "Active Directory domain does not exist in the database: $domain_id");
 		return ();
 	}
 
 	# Get the single row returned from the select statement
 	my $row = $selected_rows[0];
+	my $domain_dns_name = $row->{domainDNSName};
 	my $username = $row->{username};
 	my $secret_id = $row->{secretid};
 	my $encrypted_password = $row->{password};
 	
-	
-	
-	notify($ERRORS{'DEBUG'}, 0, "retrieved credentials for domain: $domain_identifier\n" .
+	notify($ERRORS{'DEBUG'}, 0, "retrieved credentials for domain: $domain_id\n" .
+		"domain DNS name    : '$domain_dns_name'\n" .
 		"username           : '$username'\n" .
 		"secret ID          : '$secret_id'\n" .
 		"encrypted password : '$encrypted_password'"
 	);
-	$ENV{management_node_ad_domain_credentials}{$domain_identifier} = [$username, $secret_id, $encrypted_password];
-	return @{$ENV{management_node_ad_domain_credentials}{$domain_identifier}};
+	$ENV{management_node_ad_domain_credentials}{$domain_id} = [$domain_dns_name, $username, $secret_id, $encrypted_password];
+	return @{$ENV{management_node_ad_domain_credentials}{$domain_id}};
 }
 
 #//////////////////////////////////////////////////////////////////////////////

@@ -385,6 +385,25 @@ sub pre_capture {
 
 =item *
 
+ If computer is part of Active Directory Domain, unjoin it
+
+=cut
+
+	if ($self->ad_get_current_domain()) {
+		if (!$self->ad_unjoin()) {
+			notify($ERRORS{'WARNING'}, 0, "failed to remove computer from Active Directory domain");
+			return 0;
+		}
+		notify($ERRORS{'DEBUG'}, 0, "computer successfully unjoined from domain, rebooting for change to take effect");
+		# reboot if unjoin successful
+		if (!$self->reboot()) {
+			notify($ERRORS{'WARNING'}, 0, "failed to reboot after unjoining from domain");
+		}
+	}
+
+
+=item *
+
  Set Administrator account password to known value
 
 =cut
@@ -415,20 +434,6 @@ sub pre_capture {
 	if (!$deleted_user_accounts) {
 		notify($ERRORS{'DEBUG'}, 0, "unable to delete user accounts, will try again after reboot");
 	}
-
-=item *
-
- If computer is part of Active Directory Domain, unjoin it
-
-=cut
-
-	if ($self->ad_get_current_domain()) {
-		if (!$self->ad_unjoin()) {
-			notify($ERRORS{'WARNING'}, 0, "failed to remove computer from Active Directory domain");
-			return 0;
-		}
-	}
-
 =item *
 
  Set root as the owner of /home/root
@@ -1087,6 +1092,8 @@ sub post_reservation {
 		return 0;
 	}
 	
+	my $computer_name = $self->data->get_computer_short_name();
+	
 	# Check if custom post_reservation script exists in image
 	my $script_path = '$SYSTEMROOT/vcl_post_reservation.cmd';
 	if ($self->file_exists($script_path)) {
@@ -1097,7 +1104,15 @@ sub post_reservation {
 		notify($ERRORS{'DEBUG'}, 0, "custom post_reservation script does NOT exist in image: $script_path");
 	}
 	
-	return $self->SUPER::post_reservation();
+	$self->SUPER::post_reservation();
+	
+	# Check if the computer is joined to any AD domain
+	my $computer_current_domain_name = $self->ad_get_current_domain();
+	if ($computer_current_domain_name) {
+		$self->ad_delete_computer();
+	}
+	
+	return 1;
 }
 
 #//////////////////////////////////////////////////////////////////////////////
@@ -1123,7 +1138,7 @@ sub pre_reload {
 	# Check if the computer is joined to any AD domain
 	my $computer_current_domain_name = $self->ad_get_current_domain();
 	if ($computer_current_domain_name) {
-		$self->ad_delete_computer($computer_name, $computer_current_domain_name);
+		$self->ad_delete_computer();
 	}
 	
 	return $self->SUPER::pre_reload();
@@ -13785,6 +13800,7 @@ sub ad_join_ps {
 	my $computer_name	= $self->data->get_computer_short_name();
 	my $image_name	= $self->data->get_image_name();
 	
+	my $image_domain_id = $self->data->get_image_domain_id();
 	my $domain_dns_name = $self->data->get_image_domain_dns_name();
 	my $domain_username = $self->data->get_image_domain_username();
 	my $domain_password = $self->data->get_image_domain_password();
@@ -13817,7 +13833,7 @@ sub ad_join_ps {
 	notify($ERRORS{'DEBUG'}, 0, "attempting to join $computer_name to AD\n" .
 		"domain DNS name    : $domain_dns_name\n" .
 		"domain user string : $domain_user_string\n" .
-		"domain password    : $domain_password (escaped: $domain_password_escaped)\n" .
+		#"domain password    : $domain_password (escaped: $domain_password_escaped)\n" .
 		"domain computer OU : " . ($computer_ou_dn ? $computer_ou_dn : '<not configured>')
 	);
 	
@@ -13868,12 +13884,17 @@ Clear-Host
 \$username = '$domain_user_string'
 \$password = '$domain_password_escaped'
 Write-Host "username (between >*<): `n>\$username<`n"
-Write-Host "password (between >*<): `n>\$password<`n"
 \$ps_credential = New-Object System.Management.Automation.PsCredential(\$username, (ConvertTo-SecureString \$password -AsPlainText -Force))
 Add-Computer -DomainName '$domain_dns_name' -Credential \$ps_credential $domain_computer_command_section -Verbose -ErrorAction Stop
 EOF
+
+# move and uncomment below line to above EOF to include decrypted password in output for debugging
+#Write-Host "password (between >*<): `n>\$password<`n"
+
+	(my $sanitized_password = $domain_password_escaped) =~ s/./*/g;
+	(my $sanitized_script = $ad_powershell_script) =~ s/password = '.*'\n/password = '$sanitized_password'\n/;
 	
-	notify($ERRORS{'DEBUG'}, 0, "attempting to join $computer_name to $domain_dns_name domain using PowerShell script:\n$ad_powershell_script");
+	notify($ERRORS{'DEBUG'}, 0, "attempting to join $computer_name to $domain_dns_name domain using PowerShell script:\n$sanitized_script");
 	my ($exit_status, $output) = $self->run_powershell_as_script($ad_powershell_script, 0, 0); # (path, show output, retain file)
 	if (!defined($output)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to execute PowerShell script to join $computer_name to Active Directory domain");
@@ -13949,6 +13970,8 @@ EOF
 		return;
 	}
 	else {
+		$self->set_current_image_tag('addomain_id', $image_domain_id);
+		
 		notify($ERRORS{'DEBUG'}, 0, "successfully joined $computer_name to Active Directory domain: $domain_dns_name, time statistics:\n" .
 			"computer rename reboot : $rename_computer_reboot_duration seconds\n" .
 			"AD join reboot         : $ad_join_reboot_duration seconds\n" .
@@ -14275,7 +14298,7 @@ sub ad_unjoin {
 	#	
 	#	notify($ERRORS{'OK'}, 0, "removed $computer_name from Active Directory domain, output:\n" . join("\n", @$output));
 	
-	$self->ad_delete_computer($computer_name, $computer_current_domain);
+	$self->ad_delete_computer();
 	return 1;
 }
 
@@ -14393,11 +14416,13 @@ sub ad_search {
 	my $domain_username;
 	my $domain_password;
 	my $image_domain_dns_name = $self->data->get_image_domain_dns_name(0) || '';
-	if (defined($arguments->{domain_dns_name}) && $arguments->{domain_dns_name} ne $image_domain_dns_name) {
+	if (defined($arguments->{domain_dns_name})) {
 		$domain_dns_name = $arguments->{domain_dns_name};
-		($domain_username, $domain_password) = $self->data->get_domain_credentials($domain_dns_name);
+		$domain_username = $arguments->{domain_username};
+		$domain_password = $arguments->{domain_password};
+		
 		if (!defined($domain_username) || !defined($domain_password)) {
-			notify($ERRORS{'WARNING'}, 0, "unable to search domain: $domain_dns_name, domain DNS name argument was specified but credentials could not be determined from existing 'addomain' table entries");
+			notify($ERRORS{'WARNING'}, 0, "unable to search domain: $domain_dns_name, domain DNS name argument was specified but credentials could not be determined");
 			return;
 		}
 	}
@@ -14463,9 +14488,11 @@ Clear-Host
 
 Write-Host "domain: $domain_dns_name"
 Write-Host "domain username (between >*<): >\$domain_username<"
-Write-Host "domain password (between >*<): >\$domain_password<"
-
 EOF
+
+# move and uncomment below line to above EOF to include decrypted password in output for debugging
+#Write-Host "domain password (between >*<): >\$domain_password<"
+
 
 	$powershell_script_contents .= <<'EOF';
 $type = [System.DirectoryServices.ActiveDirectory.DirectoryContextType]"Domain"
@@ -14480,7 +14507,7 @@ catch {
    else {
       $exception_message = $_.Exception.Message
    }
-   Write-Host "ERROR: failed to connect to $domain_dns_name domain, username: $domain_username, password: $domain_password, error: $exception_message"
+   Write-Host "ERROR: failed to connect to $domain_dns_name domain, username: $domain_username, error: $exception_message"
    exit
 }
 
@@ -14582,16 +14609,11 @@ EOF
 
 =head2 ad_delete_computer
 
- Parameters  : $computer_samaccountname (optional), $domain_dns_name (optional)
+ Parameters  : none
  Returns     : boolean
  Description : Deletes a computer object from the active directory domain with a
-               sAMAccountName attribute matching the argument. If no argument is
-               provided, the short name of the reservation computer is used.
-               
-               The sAMAccountName attribute for computers in Active Directory
-               always end with a dollar sign. The trailing dollar sign does not
-               need to be included in the argumenat. One will be added to the
-               LDAP filter used to search for the object to delete.
+					sAMAccountName attribute matching the short name of the
+					reservation computer that is used.
 
 =cut
 
@@ -14601,28 +14623,64 @@ sub ad_delete_computer {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return;
 	}
+
+	# static variable to track if function being call recursively
+	CORE::state $recursion = 0;
+
+	my $computer_samaccountname = $self->data->get_computer_short_name();
+
+	my ($domain_dns_name, $username, $decrypted_password);
+	my $return;
+
+	if($recursion == 0) {
+		($domain_dns_name, $username, $decrypted_password) = $self->data->get_domain_credentials();
+	}
+	else {
+		my $addomain_id = $self->get_current_image_tag('addomain_id');
+		$addomain_id =~ s/ \(.*$//;
+		if (!defined($addomain_id)) {
+			return 0;
+		}
+		($domain_dns_name, $username, $decrypted_password) = $self->data->get_domain_credentials($addomain_id);
+	}
+	if (!defined($domain_dns_name) || !defined($username) || !defined($decrypted_password)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to get domain credentials for $computer_samaccountname");
+		if ($recursion == 0) {
+			$recursion = 1;
+			$return = $self->ad_delete_computer();
+			$recursion = 0;
+			return $return;
+		}
+		return;
+	}
 	
-	my ($computer_samaccountname, $domain_dns_name) = @_;
-	
-	$computer_samaccountname = $self->data->get_computer_short_name() unless $computer_samaccountname;
-	
-	# Make sure computer samAccountName does not contain a trailing dollar sign
-	# A dollar sign will be present if retrieved directly from AD
 	$computer_samaccountname =~ s/\$*$/\$/g;
-	
 	my $ad_search_arguments = {
 		'ldap_filter' => {
 			'objectClass' => 'computer',
 			'sAMAccountName' => $computer_samaccountname,
-		}
+		},
+		'domain_dns_name' => $domain_dns_name,
+		'domain_username' => $username,
+		'domain_password' => $decrypted_password,
 	};
 	
-	# If a specific domain was specified, retrieve the username and password for that domain
-	if ($domain_dns_name) {
-		$ad_search_arguments->{domain_dns_name} = $domain_dns_name;
-	}
+	#notify($ERRORS{'DEBUG'}, 0, "attempting to delete Active Directory computer object, arguments:\n" . format_data($ad_search_arguments));
 	
-	return $self->ad_search($ad_search_arguments);
+	$return = $self->ad_search($ad_search_arguments);
+	if ($return == 1) {
+		return 1;
+	}
+	elsif ($recursion == 1) {
+		return 0;
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "Failed to delete computer from AD using AD domain info from image; trying again with info from currentimage.txt");
+		$recursion = 1;
+		$return = $self->ad_delete_computer();
+		$recursion = 0;
+		return $return;
+	}
 }
 
 #//////////////////////////////////////////////////////////////////////////////
