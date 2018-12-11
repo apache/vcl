@@ -1114,7 +1114,7 @@ CALL AddIndexIfNotExists('loginlog', 'code');
 -- Table structure change for table `managementnode`
 -- 
 
-ALTER TABLE `managementnode` CHANGE `lastcheckin` `lastcheckin` timestamp default NULL;
+ALTER TABLE `managementnode` CHANGE `lastcheckin` `lastcheckin` timestamp default 0;
 CALL AddColumnIfNotExists('managementnode', 'publicIPconfiguration', "enum('dynamicDHCP','manualDHCP','static') NOT NULL default 'dynamicDHCP'");
 CALL AddColumnIfNotExists('managementnode', 'publicSubnetMask', "varchar(56) default NULL");
 CALL AddColumnIfNotExists('managementnode', 'publicDefaultGateway', "varchar(56) default NULL");

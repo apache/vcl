@@ -682,7 +682,7 @@ CREATE TABLE IF NOT EXISTS `managementnode` (
   `hostname` varchar(50) NOT NULL default '',
   `ownerid` mediumint(8) unsigned NOT NULL default '1',
   `stateid` tinyint(3) unsigned NOT NULL default '0',
-  `lastcheckin` timestamp default NULL,
+  `lastcheckin` timestamp default 0,
   `checkininterval` tinyint(3) unsigned NOT NULL default '12',
   `installpath` varchar(100) NOT NULL default '/install',
   `imagelibenable` tinyint(1) unsigned NOT NULL default '0',
