@@ -2989,6 +2989,7 @@ function deleteSecretKeys($secretid) {
 function getCryptKeyID() {
 	$reg = "|" . SCRIPT . "$|";
 	$filebase = preg_replace($reg, '', $_SERVER['SCRIPT_FILENAME']);
+	$filebase = preg_replace('|/shibauth|', '', $filebase);
 	$filebase .= "/.ht-inc/cryptkey";
 	$idfile = "$filebase/cryptkeyid";
 
