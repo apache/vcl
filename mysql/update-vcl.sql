@@ -1547,11 +1547,13 @@ CREATE TABLE IF NOT EXISTS `variable` (
 CREATE TABLE IF NOT EXISTS `vcldsemaphore` (
   `identifier` varchar(256) NOT NULL,
   `reservationid` mediumint(9) unsigned NOT NULL,
-  `pid` smallint(5) unsigned NOT NULL,
+  `pid` mediumint(8) unsigned NOT NULL,
   `expires` datetime NOT NULL,
   PRIMARY KEY (`identifier`),
   KEY `reservationid` (`reservationid`)
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+
+ALTER TABLE `vcldsemaphore` CHANGE `pid` `pid` mediumint(8) unsigned NOT NULL;
 
 -- --------------------------------------------------------
 
