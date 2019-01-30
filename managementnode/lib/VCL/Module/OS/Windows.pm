@@ -677,14 +677,27 @@ sub pre_capture {
 		notify($ERRORS{'WARNING'}, 0, "unable to set sshd service startup mode to manual");
 		return 0;
 	}
-	
+
+=item *
+
+ Unmount any NFS shares
+
+=cut
+
+	if (!$self->unmount_nfs_shares()) {
+		notify($ERRORS{'WARNING'}, 0, "unable to unmount NFS shares");
+		return;
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "Call to unmount_nfs_shares returned successfully");
+	}
+
 =back
 
 =cut
 
 	notify($ERRORS{'OK'}, 0, "returning 1");
 	return 1;
-
 } ## end sub pre_capture
 
 #//////////////////////////////////////////////////////////////////////////////
@@ -1178,6 +1191,14 @@ sub sanitize {
 		return 0;
 	}
 	
+	if (!$self->unmount_nfs_shares()) {
+		notify($ERRORS{'WARNING'}, 0, "failed to unmount nfs shares");
+		return 0;
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "successfully unmounted any NFS shares");
+	}
+
 	notify($ERRORS{'OK'}, 0, "$computer_node_name has been sanitized");
 	return 1;
 } ## end sub sanitize
@@ -14908,6 +14929,277 @@ sub _escape_password {
 	#	"escaped  : '$password_escaped'"
 	#);
 	return $password_escaped;
+}
+
+#//////////////////////////////////////////////////////////////////////////////
+
+=head2 reserve
+
+ Parameters  : none
+ Returns     : boolean
+ Description : Calls parent OS.pm::reserve then mounts NFS shares.
+
+=cut
+
+sub reserve {
+	my $self = shift;
+	if (ref($self) !~ /Windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return 0;
+	}
+	
+	# Call OS.pm's reserve subroutine
+	$self->SUPER::reserve() || return;
+	
+	notify($ERRORS{'OK'}, 0, "beginning Windows reserve tasks");
+	
+	# Attempt to mount NFS shares configured for the management node (Site Configuration > NFS Mounts)
+	$self->mount_nfs_shares();
+	
+	notify($ERRORS{'OK'}, 0, "Windows reserve tasks complete");
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 nfs_mount_share
+
+ Parameters  : $remote_target
+ Returns     : boolean
+ Description : Prepares a Windows image to automatically mount a user's NFS
+               shares when the user logs in.
+               
+               The Windows image is checked to determine if the required Windows
+               features are installed in the image. If not installed, an attempt
+               is made to install them. If any features are installed, a reboot
+               is performed.
+
+=cut
+
+sub nfs_mount_share {
+	my $self = shift;
+	if (ref($self) !~ /Windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my ($remote_target) = @_;
+	if (!$remote_target) {
+		notify($ERRORS{'WARNING'}, 0, "remote NFS target argument was not supplied");
+		return;
+	}
+	
+	# This subroutine may be called multiple times to allow multiple shares to be mounted
+	# If this is not the first call, append to the batch file instead of recreating it
+	my $previously_called = $self->{nfs_mount_share_called};
+	if ($previously_called && !$self->{nfs_mount_share_preparation_complete}) {
+		notify($ERRORS{'DEBUG'}, 0, "skipping subsequent NFS mount attempt, this subroutine was previously called but the preparation tasks failed to complete");
+		return;
+	}
+	
+	$self->{nfs_mount_share_called} = 1;
+	
+	my $username = $self->data->get_user_login_id();
+	my $uid = $self->data->get_user_uid();
+	my $reservation_id = $self->data->get_reservation_id();
+	my $computer_name = $self->data->get_computer_node_name();
+	my $management_node_id = $self->data->get_management_node_id;
+	
+	my $nfs_mount_batch_file_path = 'C:/mount_nfs.cmd';
+	
+	# Only perform the prep tasks the first time this subroutine is called
+	if ($previously_called) {
+		notify($ERRORS{'DEBUG'}, 0, "Windows NFS preparation tasks not necessary, this subroutine was previously executed");
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "beginning Windows NFS preparation tasks");
+		
+		$self->delete_file($nfs_mount_batch_file_path);
+		
+		my $windows_product_name = $self->get_product_name();
+		if ($windows_product_name =~ /(Windows.*Professional)/) {
+			notify($ERRORS{'WARNING'}, 0, "Windows NFS share not mounted, Client for NFS is not available on this edition: $windows_product_name");
+			return 0;
+		}
+		
+		# Check if required Windows features are installed in the image
+		# Attempt to install them if missing
+		# A reboot is required if any features are installed
+		my @required_windows_feature_names = (
+			'ServicesForNFS-ClientOnly',
+			'ClientForNFS-Infrastructure',
+		);
+		
+		my $installed_feature_count = 0;
+		for my $required_windows_feature_name (@required_windows_feature_names) {
+			#notify($ERRORS{'DEBUG'}, 0, "sleeping 10 seconds before installing next Windows feature");
+			#sleep_uninterrupted(10) if $installed_feature_count > 0;
+			
+			if (!$self->is_windows_feature_enabled($required_windows_feature_name)) {
+				if ($self->enable_windows_feature($required_windows_feature_name)) {
+					$self->{windows_nfs_reboot_required} = 1;
+				}
+				else {
+					notify($ERRORS{'WARNING'}, 0, "failed to prepare Windows NFS, '$required_windows_feature_name' Windows feature could not be enabled");
+					return;
+				}
+			}
+			$installed_feature_count++;
+		}
+		
+		# Stop and disable the "TCP/IP NetBIOS Helper" service - it causes delays using NFS shares
+		$self->stop_service('lmhosts');
+		$self->set_service_startup_mode('lmhosts', 'disabled');
+		
+		# Set the anonymous UID
+		$self->set_windows_nfs_client_uid($uid) || return;
+		
+		#if ($self->{windows_nfs_reboot_required}) {
+		#	notify($ERRORS{'DEBUG'}, 0, "attempting to reboot $computer_name to complete the configuration of the NFS Client");
+		#	if (!$self->reboot()) {
+		#		notify($ERRORS{'WARNING'}, 0, "failed to prepare Windows NFS, failed to reboot $computer_name after configuring NFS client");
+		#		return;
+		#	}
+		#}
+		
+		# Attempt to start the NFS client or make sure it's already started
+		$self->start_service('NfsClnt') || return;
+		
+		#if (!$self->start_service('NfsClnt')) {
+		#	if ($self->{windows_nfs_reboot_required}) {
+		#		notify($ERRORS{'WARNING'}, 0, "failed to prepare Windows NFS, failed to start the NFS client, $computer_name was already rebooted");
+		#		return;
+		#	}
+		#	else {
+		#		if (!$self->reboot()) {
+		#			notify($ERRORS{'WARNING'}, 0, "failed to prepare Windows NFS, failed to reboot $computer_name after attempting to start the NFS client");
+		#			return;
+		#		}
+		#		
+		#		if (!$self->start_service('NfsClnt')) {
+		#			notify($ERRORS{'WARNING'}, 0, "failed to prepare Windows NFS, failed to start the NFS client on $computer_name after it was rebooted");
+		#			return;
+		#		}
+		#	}
+		#}
+		#notify($ERRORS{'DEBUG'}, 0, "Windows NFS preparation tasks complete");
+		
+		$self->{nfs_mount_share_preparation_complete} = 1;
+	}
+	
+	my $mount_script_contents;
+	if (!$previously_called) {
+		$mount_script_contents = "nfsadmin.exe client start\r\n";
+	}
+	$mount_script_contents .= "C:\\Windows\\system32\\mount.exe -o mtype=hard $remote_target *";
+	
+	if ($previously_called) {
+		notify($ERRORS{'DEBUG'}, 0, "appending line to $nfs_mount_batch_file_path: $mount_script_contents");
+		if (!$self->append_text_file($nfs_mount_batch_file_path, $mount_script_contents)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to append batch file to mount NFS shares: $nfs_mount_batch_file_path");
+			return;
+		}
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "creating Windows NFS mount batch file: $nfs_mount_batch_file_path, contents:\n$mount_script_contents");
+		if (!$self->create_text_file($nfs_mount_batch_file_path, $mount_script_contents)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to create Windows NFS mount batch file: $nfs_mount_batch_file_path");
+			return;
+		}
+		$self->add_hklm_run_registry_key('VCL Mount NFS', $nfs_mount_batch_file_path) || return;
+		$self->execute("chmod 777 $nfs_mount_batch_file_path");
+	}
+	
+	notify($ERRORS{'DEBUG'}, 0, "finished Windows NFS mount tasks");
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 nfs_unmount_share
+
+ Parameters  : none
+ Returns     : boolean
+ Description : This doesn't actually unmount any shares but deletes the registry
+               key and batch file created to mount NFS shares when a user logs
+               in.
+
+=cut
+
+sub nfs_unmount_share {
+	my $self = shift;
+	if (ref($self) !~ /Windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	$self->delete_file('C:/mount_nfs.cmd');
+	$self->delete_hklm_run_registry_key('VCL Mount NFS');
+	return 1;
+}
+
+#/////////////////////////////////////////////////////////////////////////////
+
+=head2 set_windows_nfs_client_uid
+
+ Parameters  : $uid_number
+ Returns     : boolean
+ Description : Sets registry values used by the Windows NFS Client to determine
+               which user UID number to use when accessing NFS shares.
+
+=cut
+
+sub set_windows_nfs_client_uid {
+	my $self = shift;
+	if (ref($self) !~ /Windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $uid = shift || $self->data->get_user_uid();
+	my $computer_name = $self->data->get_computer_node_name();
+	
+	notify($ERRORS{'DEBUG'}, 0, "attempting to configure the Windows NFS Client to use anonymous UID $uid");
+	
+	my $nfs_client_service_name = 'NfsClnt';
+	my $base_key = 'HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\ClientForNFS\CurrentVersion\Default';
+	my $uid_key = 'AnonymousUid';
+	
+	# Check if UID already set correctly
+	my $existing_uid = $self->reg_query($base_key, $uid_key, 1) || '';
+	if ($existing_uid eq $uid) {
+		notify($ERRORS{'DEBUG'}, 0, "anonymous UID ($existing_uid) value are already set correctly in the registry on $computer_name");
+	}
+	else {
+		# Set the registry keys
+		if (!$self->reg_add($base_key, $uid_key, 'REG_DWORD', $uid)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to set Windows NFS Client anonymous UID in the registry");
+			return;
+		}
+	}
+	
+	# Stop the NFS service, this may fail if something is already mounted
+	if (!$self->{windows_nfs_reboot_required}) {
+		if ($self->stop_service($nfs_client_service_name)) {
+			## Service won't restart immediately after stopping it
+			#sleep_uninterrupted(10);
+			
+			if ($self->start_service($nfs_client_service_name)) {
+				notify($ERRORS{'DEBUG'}, 0, "set Windows NFS Client anonymous UID value in registry and restarted $nfs_client_service_name service");
+			}
+			else {
+				notify($ERRORS{'WARNING'}, 0, "failed to restart Windows NFS Client service, it may be in use, $computer_name will be rebooted");
+				$self->{windows_nfs_reboot_required} = 1;
+			}
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "failed to stop Windows NFS Client service, it may be in use, $computer_name will be rebooted");
+			$self->{windows_nfs_reboot_required} = 1;
+		}
+	}
+	
+	notify($ERRORS{'DEBUG'}, 0, "set Windows NFS Client anonymous UID values in registry");
+	return 1;
 }
 
 #//////////////////////////////////////////////////////////////////////////////
