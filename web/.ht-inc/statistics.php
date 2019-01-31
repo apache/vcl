@@ -678,6 +678,9 @@ function getStatGraphDayData($start, $end, $affilid, $mode, $provid) {
 	$addcache = array();
 	$reloadid = getUserlistID('vclreload@Local');
 	$cnt = 0;
+	$prov = "provisioningid = $provid";
+	if($provid == 0)
+		$prov = "(provisioningid IS NULL OR provisioningid = 0)";
 	$query = "SELECT statdate, "
 	       .        "value "
 	       . "FROM statgraphcache "
@@ -685,7 +688,7 @@ function getStatGraphDayData($start, $end, $affilid, $mode, $provid) {
 			 .       "affiliationid = $affilid AND "
 	       .       "statdate >= '$start' AND "
 	       .       "statdate <= '$end' AND "
-	       .       "provisioningid = $provid";
+	       .       "$prov";
 	$qh = doQuery($query, 101);
 	while($row = mysqli_fetch_assoc($qh))
 		$cachepts[$row['statdate']] = $row['value'];
@@ -947,6 +950,9 @@ function getStatGraphDayConUsersData($start, $end, $affilid, $mode, $provid) {
 
 	$reloadid = getUserlistID('vclreload@Local');
 	$cnt = 0;
+	$prov = "provisioningid = $provid";
+	if($provid == 0)
+		$prov = "(provisioningid IS NULL OR provisioningid = 0)";
 	$query = "SELECT statdate, "
 	       .        "value "
 	       . "FROM statgraphcache "
@@ -954,7 +960,7 @@ function getStatGraphDayConUsersData($start, $end, $affilid, $mode, $provid) {
 			 .       "affiliationid = $affilid AND "
 	       .       "statdate >= '$start' AND "
 	       .       "statdate <= '$end' AND "
-	       .       "provisioningid = $provid";
+	       .       "$prov";
 	$qh = doQuery($query, 101);
 	while($row = mysqli_fetch_assoc($qh))
 		$cachepts[$row['statdate']] = $row['value'];
@@ -1095,6 +1101,9 @@ function getStatGraphConBladeUserData($start, $end, $affilid, $mode, $provid) {
 
 	$reloadid = getUserlistID('vclreload@Local');
 	$cnt = 0;
+	$prov = "provisioningid = $provid";
+	if($provid == 0)
+		$prov = "(provisioningid IS NULL OR provisioningid = 0)";
 	$query = "SELECT statdate, "
 	       .        "value "
 	       . "FROM statgraphcache "
@@ -1102,7 +1111,7 @@ function getStatGraphConBladeUserData($start, $end, $affilid, $mode, $provid) {
 			 .       "affiliationid = $affilid AND "
 	       .       "statdate >= '$start' AND "
 	       .       "statdate <= '$end' AND "
-	       .       "provisioningid = $provid";
+	       .       "$prov";
 	$qh = doQuery($query, 101);
 	while($row = mysqli_fetch_assoc($qh))
 		$cachepts[$row['statdate']] = $row['value'];
@@ -1277,6 +1286,9 @@ function getStatGraphConVMUserData($start, $end, $affilid, $mode, $provid) {
 
 	$reloadid = getUserlistID('vclreload@Local');
 	$cnt = 0;
+	$prov = "provisioningid = $provid";
+	if($provid == 0)
+		$prov = "(provisioningid IS NULL OR provisioningid = 0)";
 	$query = "SELECT statdate, "
 	       .        "value "
 	       . "FROM statgraphcache "
@@ -1284,7 +1296,7 @@ function getStatGraphConVMUserData($start, $end, $affilid, $mode, $provid) {
 			 .       "affiliationid = $affilid AND "
 	       .       "statdate >= '$start' AND "
 	       .       "statdate <= '$end' AND "
-	       .       "provisioningid = $provid";
+	       .       "$prov";
 	$qh = doQuery($query, 101);
 	while($row = mysqli_fetch_assoc($qh))
 		$cachepts[$row['statdate']] = $row['value'];
