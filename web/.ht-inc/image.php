@@ -96,6 +96,7 @@ class Image extends Resource {
 				$w = 12;
 				break;
 			case 'adauthenabled':
+			case 'maxinitialtime':
 				$w = 9;
 				break;
 			default:
@@ -146,7 +147,7 @@ class Image extends Resource {
 			case 'forcheckout':
 				return i("Available for Checkout");
 			case 'maxinitialtime':
-				return i("Max Initial Time");
+				return i("Max Reservation Duration");
 			case 'checkuser':
 				return i("Check Logged in User");
 			case 'rootaccess':
@@ -431,6 +432,10 @@ class Image extends Resource {
 		$h .= "<div id=\"sethostnamediv\">\n";
 		$h .= labeledFormItem('sethostname', i('Set Computer Hostname'), 'select', $yesno);
 		$h .= "</div>\n";
+		# Max reservation time
+		$tmp = array('0' => 'Default for User');
+		$lengths = $tmp + getReservationLengths(201600);
+		$h .= labeledFormItem('maxinitialtime', i('Max Reservation Duration'), 'select', $lengths);
 		# sysprep
 		if($add) {
 			$h .= "<div id=\"sysprepdiv\">\n";
@@ -799,6 +804,9 @@ class Image extends Resource {
 		# forcheckout
 		if($data['checkout'] != $olddata['forcheckout'])
 			$updates[] = "forcheckout = {$data['checkout']}";
+		# maxinitialtime
+		if($data['maxinitialtime'] != $olddata['maxinitialtime'])
+			$updates[] = "maxinitialtime = {$data['maxinitialtime']}";
 		# description
 		if($data['desc'] != $olddata['description']) {
 			$escdesc = vcl_mysql_escape_string($data['desc']);
@@ -1604,6 +1612,7 @@ class Image extends Resource {
 	/// \b checkuser - reservations should be checked for a logged in user\n
 	/// \b rootaccess\n
 	/// \b sysprep - use sysprep when capturing revisions of this image\n
+	/// \b maxinitialtime - max time in minutes reservation can be used\n
 	/// \b connectmethodids - ids of assigned connect methods\n
 	/// \b requestid - requestid associated with image capture\n
 	/// \b imageid - id of base image\n
@@ -1635,6 +1644,7 @@ class Image extends Resource {
 		$return["checkuser"] = processInputVar("checkuser", ARG_NUMERIC);
 		$return["rootaccess"] = processInputVar("rootaccess", ARG_NUMERIC);
 		$return["sethostname"] = processInputVar("sethostname", ARG_NUMERIC);
+		$return["maxinitialtime"] = processInputVar("maxinitialtime", ARG_NUMERIC);
 		$return["sysprep"] = processInputVar("sysprep", ARG_NUMERIC); # only in add
 		$return["connectmethodids"] = processInputVar("connectmethodids", ARG_STRING); # only in add
 		$return["adauthenabled"] = processInputVar("adauthenabled", ARG_NUMERIC);
@@ -1740,6 +1750,10 @@ class Image extends Resource {
 		if($return['sethostname'] != 0 && $return['sethostname'] != 1) {
 			$return['error'] = 1;
 			$errormsg[] = i("Set Computer Hostname must be Yes or No");
+		}
+		if($return['maxinitialtime'] < 0 || $return['maxinitialtime'] > 201600) {
+			$return['error'] = 1;
+			$errormsg[] = i("Invalid Max Reservation Duration selected");
 		}
 		if($return['mode'] == 'add' && $return['sysprep'] != 0 &&
 		   $return['sysprep'] != 1) {

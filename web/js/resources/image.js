@@ -36,10 +36,29 @@ Image.prototype.colformatter = function(value, rowIndex, obj) {
 		if(value == "1")
 			return '<span class="ready">' + _('true') + '</span>';
 	}
-	if((obj.field == 'maxinitialtime' && value == 0) ||
-	   (obj.field == 'addomain' && value == null) ||
+	if((obj.field == 'addomain' && value == null) ||
 	   (obj.field == 'baseOU' && value == null))
 		return '(' + _('unset') + ')';
+	if(obj.field == 'maxinitialtime') {
+		if(value == 0) {
+			return _('Default for User');
+		}
+		else if(value < 60) {
+			return value + ' ' + _('minutes');
+		}
+		else if(value == 60) {
+			return _('1 hour');
+		}
+		else if(value < 2880) {
+			return parseInt(value / 60) + ' ' + _('hours');
+		}
+		else if(value <= 64800) {
+			return parseInt(value / 1440) + ' ' + _('days');
+		}
+		else {
+			return parseInt(value / 10080) + ' ' + _('weeks');
+		}
+	}
 	return value;
 }
 
@@ -67,6 +86,7 @@ function inlineEditResourceCB(data, ioArgs) {
 		dijit.byId('checkuser').set('value', data.items.data.checkuser);
 		dijit.byId('rootaccess').set('value', data.items.data.rootaccess);
 		dijit.byId('sethostname').set('value', data.items.data.sethostname);
+		dijit.byId('maxinitialtime').set('value', data.items.data.maxinitialtime);
 		if(data.items.data.ostype == 'windows' || data.items.data.ostype == 'linux')
 			dojo.removeClass('sethostnamediv', 'hidden');
 		else
@@ -257,6 +277,11 @@ function saveResource() {
 			return;
 		}
 	}
+	data['maxinitialtime'] = parseInt(dijit.byId('maxinitialtime').get('value'));
+	if(data['maxinitialtime'] < 0 || data['maxinitialtime'] > 201600) {
+		errobj.innerHTML = _('Invalid Max Reservation Duration selected');
+		return;
+	}
 	if(dijit.byId('sysprep')) {
 		data['sysprep'] = parseInt(dijit.byId('sysprep').get('value'));
 		if(data['sysprep'] != 0 && data['sysprep'] != 1) {
@@ -341,6 +366,7 @@ function saveResourceCB(data, ioArgs) {
 					resourcegrid.store.setValue(item, 'checkuser', data.items.data.checkuser);
 					resourcegrid.store.setValue(item, 'rootaccess', parseInt(data.items.data.rootaccess));
 					resourcegrid.store.setValue(item, 'sethostname', parseInt(data.items.data.sethostname));
+					resourcegrid.store.setValue(item, 'maxinitialtime', parseInt(data.items.data.maxinitialtime));
 					resourcegrid.store.setValue(item, 'reloadtime', data.items.data.reloadtime);
 					resourcegrid.store.setValue(item, 'adauthenabled', data.items.data.adauthenabled);
 					resourcegrid.store.setValue(item, 'addomainid', data.items.data.addomainid);

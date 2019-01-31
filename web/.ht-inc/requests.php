@@ -3353,8 +3353,12 @@ function AJeditRequest() {
 		return;
 	}
 	# check for max time being reached
+	$imgdata = getImages(1, $request['reservations'][0]['imageid']);
+	$maximglen = $imgdata[$request['reservations'][0]['imageid']]['maxinitialtime'];
 	if($request['forimaging'] && $maxtimes['total'] < 720)
 		$maxcheck = 720;
+	elseif(! $request['forimaging'] && $maximglen)
+		$maxcheck = $maximglen;
 	else
 		$maxcheck = $maxtimes['total'];
 	if(! $openend && ($reslen >= $maxcheck)) {
@@ -3410,6 +3414,11 @@ function AJeditRequest() {
 	$lengths = array();
 	if($request['forimaging'] && $maxtimes['total'] < 720) # make sure at least 12 hours available for imaging reservations
 		$maxtimes['total'] = 720;
+	elseif(! $request['forimaging'] && $maximglen) {
+		$maxtimes['total'] = $maximglen;
+		$currduration = (datetimeToUnix($request['end']) - datetimeToUnix($request['start'])) / 60;
+		$maxtimes['extend'] = $maximglen - $currduration;
+	}
 	if($timeToNext == -1) {
 		if($nousercheck)
 			$lengths["0"] = "No change";
