@@ -2103,7 +2103,7 @@ INSERT IGNORE INTO `state` (`id`, `name`) VALUES
 -- 
 
 INSERT IGNORE INTO `user` (`id`, `uid`, `unityid`, `affiliationid`, `firstname`, `lastname`, `preferredname`, `email`, `emailnotices`, `IMtypeid`, `IMid`, `adminlevelid`, `width`, `height`, `bpp`, `audiomode`, `mapdrives`, `mapprinters`, `mapserial`, `showallgroups`, `lastupdated`) VALUES 
-(1, 101, 'admin', 1, 'vcl', 'admin', '', 'root@localhost', 0, NULL, NULL, 3, 1024, 768, 16, 'local', 1, 1, 1, 1, '2007-05-17 09:58:39'),
+(1, NULL, 'admin', 1, 'vcl', 'admin', '', 'root@localhost', 0, NULL, NULL, 3, 1024, 768, 16, 'local', 1, 1, 1, 1, '2007-05-17 09:58:39'),
 (2, NULL, 'vclreload', 1, 'vcl', 'reload', NULL, '', 0, NULL, NULL, 1, 1024, 768, 16, 'local', 1, 1, 0, 0, '0000-00-00 00:00:00'),
 (3, NULL, 'vclsystem', 1, 'vcl', 'system', NULL, '', 0, NULL, NULL, 1, 1024, 768, 16, 'local', 1, 1, 0, 0, '0000-00-00 00:00:00');
 
