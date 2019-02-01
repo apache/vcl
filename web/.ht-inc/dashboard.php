@@ -193,22 +193,22 @@ function getStatusData() {
 				 .       "rq.end > NOW()";
 	}
 	$qh = doQuery($query, 101);
-	if($row = mysql_fetch_row($qh))
+	if($row = mysqli_fetch_row($qh))
 		$data[0]['val'] = $row[0];
 
 	$query = "SELECT COUNT(id) FROM computer WHERE stateid IN (2, 3, 6, 8, 11)";
 	$qh = doQuery($query, 101);
-	if($row = mysql_fetch_row($qh))
+	if($row = mysqli_fetch_row($qh))
 		$data[1]['val'] = $row[0];
 
 	$query = "SELECT COUNT(id) FROM computer WHERE stateid = 8";
 	$qh = doQuery($query, 101);
-	if($row = mysql_fetch_row($qh))
+	if($row = mysqli_fetch_row($qh))
 		$data[2]['val'] = $row[0];
 
 	$query = "SELECT COUNT(id) FROM computer WHERE stateid = 5";
 	$qh = doQuery($query, 101);
-	if($row = mysql_fetch_row($qh))
+	if($row = mysqli_fetch_row($qh))
 		$data[3]['val'] = $row[0];
 	return $data;
 }
@@ -259,7 +259,7 @@ function getTopImageData() {
 	}
 	$data = array();
 	$qh = doQuery($query, 101);
-	while($row = mysql_fetch_assoc($qh))
+	while($row = mysqli_fetch_assoc($qh))
 		$data[] = $row;
 	return $data;
 }
@@ -310,7 +310,7 @@ function getTopLongImageData() {
 	}
 	$data = array();
 	$qh = doQuery($query, 101);
-	while($row = mysql_fetch_assoc($qh))
+	while($row = mysqli_fetch_assoc($qh))
 		$data[] = $row;
 	return $data;
 }
@@ -360,7 +360,7 @@ function getTopPastImageData() {
 	}
 	$data = array();
 	$qh = doQuery($query, 101);
-	while($row = mysql_fetch_assoc($qh))
+	while($row = mysqli_fetch_assoc($qh))
 		$data[] = $row;
 	return $data;
 }
@@ -407,7 +407,7 @@ function getTopFailedData() {
 	}
 	$data = array();
 	$qh = doQuery($query, 101);
-	while($row = mysql_fetch_assoc($qh))
+	while($row = mysqli_fetch_assoc($qh))
 		$data[] = $row;
 	return $data;
 }
@@ -458,7 +458,7 @@ function getTopFailedComputersData() {
 	}
 	$data = array();
 	$qh = doQuery($query, 101);
-	while($row = mysql_fetch_assoc($qh))
+	while($row = mysqli_fetch_assoc($qh))
 		$data[] = $row;
 	return $data;
 }
@@ -522,7 +522,7 @@ function getActiveResChartData() {
 		       .       "l.userid != $reloadid";
 	}
 	$qh = doQuery($query, 101);
-	while($row = mysql_fetch_assoc($qh)) {
+	while($row = mysqli_fetch_assoc($qh)) {
 		if($row['stateid'] == 14)
 			$row['stateid'] = $row['laststateid'];
 		if($row['end'] > time() &&
@@ -583,7 +583,7 @@ function getBlockAllocationData() {
 				 .       "bt.end > NOW()";
 	}
 	$qh = doQuery($query, 101);
-	$row = mysql_fetch_row($qh);
+	$row = mysqli_fetch_row($qh);
 	$blockcount = $row[0];
 	# computers in blockComputers for active allocations
 	if($affilid == 0) {
@@ -612,7 +612,7 @@ function getBlockAllocationData() {
 	$qh = doQuery($query, 101);
 	$total = 0;
 	$used = 0;
-	while($row = mysql_fetch_assoc($qh)) {
+	while($row = mysqli_fetch_assoc($qh)) {
 		$total++;
 		if($row['stateid'] == 3 || $row['stateid'] == 8)
 			$used++;
@@ -642,7 +642,7 @@ function getBlockAllocationData() {
 	}
 	$alloc = 0;
 	$qh = doQuery($query, 101);
-	while($row = mysql_fetch_assoc($qh))
+	while($row = mysqli_fetch_assoc($qh))
 		$alloc += $row['numMachines'];
 	if($alloc)
 		$failed = sprintf('%d / %d (%0.2f %%)', ($alloc - $total), $alloc, (($alloc - $total) / $alloc * 100));
@@ -700,7 +700,7 @@ function getNewReservationData() {
 	$query .= "ORDER BY rq.start";
 	$qh = doQuery($query, 101);
 	$data = array();
-	while($row = mysql_fetch_assoc($qh)) {
+	while($row = mysqli_fetch_assoc($qh)) {
 		$tmp = explode('.', $row['computer']);
 		$row['computer'] = $tmp[0];
 		$row['start'] = date('D h:i', $row['start']);
@@ -758,7 +758,7 @@ function getFailedImagingData() {
 	$query .= "ORDER BY rq.start";
 	$qh = doQuery($query, 101);
 	$data = array();
-	while($row = mysql_fetch_assoc($qh)) {
+	while($row = mysqli_fetch_assoc($qh)) {
 		if(is_null($row['revisioncomments']))
 			$row['revisioncomments'] = '(none)';
 		$tmp = explode('.', $row['computer']);
@@ -816,7 +816,7 @@ function getManagementNodeData() {
 	$current = array();
 	$old = array();
 	$never = array();
-	while($row = mysql_fetch_assoc($qh)) {
+	while($row = mysqli_fetch_assoc($qh)) {
 		$tmp = explode('.', $row['hostname']);
 		$row['hostname'] = $tmp[0];
 		if($row['checkin'] < 0)

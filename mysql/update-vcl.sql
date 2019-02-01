@@ -879,9 +879,12 @@ CREATE TABLE IF NOT EXISTS `addomain` (
   `password` varchar(256) NOT NULL default '',
   `secretid` smallint(5) unsigned NOT NULL,
   PRIMARY KEY (`id`),
-  UNIQUE KEY `domainDNSName` (`domainDNSName`),
+  KEY `domainDNSName` (`domainDNSName`),
   KEY `secretid` (`secretid`)
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+
+CALL DropExistingIndices('addomain', 'domainDNSName');
+CALL AddIndexIfNotExists('addomain', 'domainDNSName');
 
 -- --------------------------------------------------------
 
@@ -1111,6 +1114,7 @@ CALL AddIndexIfNotExists('loginlog', 'code');
 -- Table structure change for table `managementnode`
 -- 
 
+ALTER TABLE `managementnode` CHANGE `lastcheckin` `lastcheckin` timestamp default 0;
 CALL AddColumnIfNotExists('managementnode', 'publicIPconfiguration', "enum('dynamicDHCP','manualDHCP','static') NOT NULL default 'dynamicDHCP'");
 CALL AddColumnIfNotExists('managementnode', 'publicSubnetMask', "varchar(56) default NULL");
 CALL AddColumnIfNotExists('managementnode', 'publicDefaultGateway', "varchar(56) default NULL");
@@ -1544,11 +1548,13 @@ CREATE TABLE IF NOT EXISTS `variable` (
 CREATE TABLE IF NOT EXISTS `vcldsemaphore` (
   `identifier` varchar(256) NOT NULL,
   `reservationid` mediumint(9) unsigned NOT NULL,
-  `pid` smallint(5) unsigned NOT NULL,
+  `pid` mediumint(8) unsigned NOT NULL,
   `expires` datetime NOT NULL,
   PRIMARY KEY (`identifier`),
   KEY `reservationid` (`reservationid`)
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+
+ALTER TABLE `vcldsemaphore` CHANGE `pid` `pid` mediumint(8) unsigned NOT NULL;
 
 -- --------------------------------------------------------
 

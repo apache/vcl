@@ -39,7 +39,7 @@ CREATE TABLE IF NOT EXISTS `addomain` (
   `password` varchar(256) NOT NULL default '',
   `secretid` smallint(5) unsigned NOT NULL,
   PRIMARY KEY (`id`),
-  UNIQUE KEY `domainDNSName` (`domainDNSName`),
+  KEY `domainDNSName` (`domainDNSName`),
   KEY `secretid` (`secretid`)
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
@@ -682,7 +682,7 @@ CREATE TABLE IF NOT EXISTS `managementnode` (
   `hostname` varchar(50) NOT NULL default '',
   `ownerid` mediumint(8) unsigned NOT NULL default '1',
   `stateid` tinyint(3) unsigned NOT NULL default '0',
-  `lastcheckin` datetime default NULL,
+  `lastcheckin` timestamp default 0,
   `checkininterval` tinyint(3) unsigned NOT NULL default '12',
   `installpath` varchar(100) NOT NULL default '/install',
   `imagelibenable` tinyint(1) unsigned NOT NULL default '0',
@@ -1481,7 +1481,7 @@ CREATE TABLE IF NOT EXISTS `variable` (
 CREATE TABLE IF NOT EXISTS `vcldsemaphore` (
   `identifier` varchar(256) NOT NULL,
   `reservationid` mediumint(9) unsigned NOT NULL,
-  `pid` smallint(5) unsigned NOT NULL,
+  `pid` mediumint(8) unsigned NOT NULL,
   `expires` datetime NOT NULL,
   PRIMARY KEY (`identifier`),
   KEY `reservationid` (`reservationid`)
@@ -2103,7 +2103,7 @@ INSERT IGNORE INTO `state` (`id`, `name`) VALUES
 -- 
 
 INSERT IGNORE INTO `user` (`id`, `uid`, `unityid`, `affiliationid`, `firstname`, `lastname`, `preferredname`, `email`, `emailnotices`, `IMtypeid`, `IMid`, `adminlevelid`, `width`, `height`, `bpp`, `audiomode`, `mapdrives`, `mapprinters`, `mapserial`, `showallgroups`, `lastupdated`) VALUES 
-(1, 101, 'admin', 1, 'vcl', 'admin', '', 'root@localhost', 0, NULL, NULL, 3, 1024, 768, 16, 'local', 1, 1, 1, 1, '2007-05-17 09:58:39'),
+(1, NULL, 'admin', 1, 'vcl', 'admin', '', 'root@localhost', 0, NULL, NULL, 3, 1024, 768, 16, 'local', 1, 1, 1, 1, '2007-05-17 09:58:39'),
 (2, NULL, 'vclreload', 1, 'vcl', 'reload', NULL, '', 0, NULL, NULL, 1, 1024, 768, 16, 'local', 1, 1, 0, 0, '0000-00-00 00:00:00'),
 (3, NULL, 'vclsystem', 1, 'vcl', 'system', NULL, '', 0, NULL, NULL, 1, 1024, 768, 16, 'local', 1, 1, 0, 0, '0000-00-00 00:00:00');
 

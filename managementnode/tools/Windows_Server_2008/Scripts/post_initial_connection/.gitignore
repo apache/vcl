@@ -1,0 +1,11 @@
+#
+# The purpose of this file is to keep this directory from being empty so the
+# directory will be retained in the git repository. The directory is used by
+# the backend code for some scripts used during provisioning, and so needs to
+# be retained.
+#
+
+# Ignore everything in this directory
+*
+# Except this file
+!.gitignore

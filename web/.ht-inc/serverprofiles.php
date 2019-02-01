@@ -523,10 +523,10 @@ function AJsaveServerProfile() {
 		sendJSON($data);
 		return;
 	}
-	$name = mysql_real_escape_string($data['name']);
-	$desc = mysql_real_escape_string($data['desc']);
-	$fixedIP = mysql_real_escape_string($data['fixedIP']);
-	$fixedMAC = mysql_real_escape_string($data['fixedMAC']);
+	$name = vcl_mysql_escape_string($data['name']);
+	$desc = vcl_mysql_escape_string($data['desc']);
+	$fixedIP = vcl_mysql_escape_string($data['fixedIP']);
+	$fixedMAC = vcl_mysql_escape_string($data['fixedMAC']);
 	$ret = array();
 	if($data['profileid'] == 70000) {
 		$query = "INSERT INTO serverprofile "
@@ -626,7 +626,7 @@ function AJdelServerProfile() {
 	}
 	$query = "DELETE FROM serverprofile WHERE id = $profileid";
 	doQuery($query, 101);
-	$rows = mysql_affected_rows();
+	$rows = mysqli_affected_rows();
 	if($rows == 0) {
 		$data = array('error' => 1,
 		              'msg' => 'Failed to delete selected server profile');
@@ -864,7 +864,7 @@ function getServerProfileGroups($userid, $type) {
 	}
 	$qh = doQuery($query, 101);
 	$groups = array();
-	while($row = mysql_fetch_assoc($qh))
+	while($row = mysqli_fetch_assoc($qh))
 		$groups[$row['id']] = $row['name'];
 	$_SESSION['usersessiondata'][$key] = $groups;
 	return $groups;

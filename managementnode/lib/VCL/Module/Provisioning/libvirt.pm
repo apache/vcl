@@ -1799,6 +1799,13 @@ EOF
 	#    Windows, however, expects it to be in so called 'localtime'."
 	my $clock_offset = ($image_os_type =~ /windows/) ? 'localtime' : 'utc';
 	
+	my $cpusockets = $cpu_count;
+	my $cpucores = 1;
+	if($cpu_count > 2) {
+		$cpusockets = 2;
+		$cpucores = ($cpu_count - ($cpu_count % 2)) / 2;
+	}
+
 	my $xml_hashref = {
 		'type' => $domain_type,
 		'description' => [$description],
@@ -1828,14 +1835,11 @@ EOF
 				model => {
 					'fallback' => 'allow',
 				},
-				#'topology' => [
-				#	{
-				#		'sockets' => $cpu_count,
-				#		'cores' => '2',
-				#		'threads' => '2',
-				#	}
-				#],
-				
+				topology => {
+					'sockets' => $cpusockets,
+					'cores' => $cpucores,
+					'threads' => 1,
+				},
 			}
 		],
 		'clock' => [

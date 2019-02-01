@@ -75,7 +75,7 @@ function blockAllocations() {
 	       . "WHERE id in ($inids) AND "
 	       .       "status = 'accepted'";
 	$qh = doQuery($query, 101);
-	while($row = mysql_fetch_assoc($qh))
+	while($row = mysqli_fetch_assoc($qh))
 		$blocks[$row['id']] = $row['name'];
 	print "<hr>\n";
 	print "<h2>" . i("Your Active Block Allocations") . "</h2>\n";
@@ -606,7 +606,7 @@ function AJblockAllocationSubmit() {
 			return;
 		}
 		$mnid = array_rand($managementnodes);
-		$escname = mysql_real_escape_string($data['name']);
+		$escname = vcl_mysql_escape_string($data['name']);
 		$query = "INSERT INTO blockRequest "
 		       .        "(name, "
 		       .        "imageid, "
@@ -644,7 +644,7 @@ function AJblockAllocationSubmit() {
 		       .       "end > NOW() AND "
 		       .       "blockRequestid = $blockreqid";
 		$qh = doQuery($query, 101);
-		if($row = mysql_fetch_assoc($qh)) {
+		if($row = mysqli_fetch_assoc($qh)) {
 			$checkCurBlockTime = 1;
 			$curBlockTime = $row;
 		}
@@ -660,7 +660,7 @@ function AJblockAllocationSubmit() {
 		$query = "DELETE FROM blockWebTime WHERE blockRequestid = $blockreqid";
 		doQuery($query, 101);
 
-		$escname = mysql_real_escape_string($data['name']);
+		$escname = vcl_mysql_escape_string($data['name']);
 		$query = "UPDATE blockRequest "
 		       . "SET name = '$escname', " 
 		       .     "imageid = {$data['imageid']}, "
@@ -673,7 +673,7 @@ function AJblockAllocationSubmit() {
 		doQuery($query, 101);
 	}
 	elseif($method == 'request') {
-		$esccomments = mysql_real_escape_string($data['comments']);
+		$esccomments = vcl_mysql_escape_string($data['comments']);
 		$query = "INSERT INTO blockRequest "
 		       .        "(name, "
 		       .        "imageid, "
@@ -811,7 +811,7 @@ function AJblockAllocationSubmit() {
 		       .       "blockRequestid = $blockreqid AND "
 		       .       "id != {$curBlockTime['id']}";
 		$qh = doQuery($query, 101);
-		if($row = mysql_fetch_assoc($qh)) {
+		if($row = mysqli_fetch_assoc($qh)) {
 			if($curBlockTime['end'] != $row['end']) {
 				# update old end time
 				$query = "UPDATE blockTimes "
@@ -1093,7 +1093,7 @@ function getBlockNotifyUsers($affiliationid) {
 	       .       "u.email != ''";
 	$qh = doQuery($query);
 	$addrs = array();
-	while($row = mysql_fetch_assoc($qh))
+	while($row = mysqli_fetch_assoc($qh))
 		$addrs[] = $row['email'];
 	return implode(',', $addrs);
 }
@@ -1119,7 +1119,7 @@ function deleteBlockSkipDuplicates($blockid) {
 	$qh = doQuery($query, 101);
 	$skips = array();
 	$noskips = array();
-	while($row = mysql_fetch_assoc($qh)) {
+	while($row = mysqli_fetch_assoc($qh)) {
 		$key = "{$row['start']}:{$row['end']}";
 		if($row['skip'])
 			$skips[$key] = $row['id'];
@@ -1181,11 +1181,11 @@ function getCurrentBlockHTML($listonly=0) {
 	       . "ORDER BY b.name";
 	$allblockids = array();
 	$qh = doQuery($query, 101);
-	while($row = mysql_fetch_assoc($qh)) {
+	while($row = mysqli_fetch_assoc($qh)) {
 		if($row['group'] == '') {
 			$query3 = "SELECT name FROM usergroup WHERE id = {$row['usergroupid']}";
 			$qh3 = doQuery($query3, 101);
-			if($row3 = mysql_fetch_assoc($qh3))
+			if($row3 = mysqli_fetch_assoc($qh3))
 				$row['group'] = $row3['name'];
 		}
 		$allblockids[] = $row['id'];
@@ -1200,7 +1200,7 @@ function getCurrentBlockHTML($listonly=0) {
 		        . "ORDER BY start "
 		        . "LIMIT 1";
 		$qh2 = doQuery($query2, 101);
-		if($row2 = mysql_fetch_assoc($qh2)) {
+		if($row2 = mysqli_fetch_assoc($qh2)) {
 			if(array_key_exists('tzoffset', $_SESSION['persistdata'])) {
 				$tmp = date('n/j/y+g:i=A=T', $row2['unixstart']);
 				$blocks[$row['id']]['nextstart'] = str_replace(array('+', '='), array('<br>', '&nbsp;'), $tmp);
@@ -1229,7 +1229,7 @@ function getCurrentBlockHTML($listonly=0) {
 			       . "FROM blockWebDate "
 			       . "WHERE blockRequestid = $id";
 			$qh = doQuery($query, 101);
-			if(! $row = mysql_fetch_assoc($qh))
+			if(! $row = mysqli_fetch_assoc($qh))
 				abort(101);
 			$blocks[$id] = array_merge($request, $row);
 			$wdays = array();
@@ -1250,7 +1250,7 @@ function getCurrentBlockHTML($listonly=0) {
 			       . "WHERE blockRequestid = {$request['id']} "
 			       . "ORDER BY startmeridian, starthour, startminute";
 			$qh = doQuery($query, 101);
-			while($row = mysql_fetch_assoc($qh)) {
+			while($row = mysqli_fetch_assoc($qh)) {
 				$blocks[$id]['swhour'][$row['order']] = $row['starthour'];
 				$blocks[$id]['swminute'][$row['order']] = $row['startminute'];
 				$blocks[$id]['swmeridian'][$row['order']] = $row['startmeridian'];
@@ -1267,7 +1267,7 @@ function getCurrentBlockHTML($listonly=0) {
 			       . "FROM blockWebDate "
 			       . "WHERE blockRequestid = $id";
 			$qh = doQuery($query, 101);
-			if(! $row = mysql_fetch_assoc($qh))
+			if(! $row = mysqli_fetch_assoc($qh))
 				abort(101);
 			$blocks[$id] = array_merge($request, $row);
 			$query = "SELECT starthour, "
@@ -1281,7 +1281,7 @@ function getCurrentBlockHTML($listonly=0) {
 			       . "WHERE blockRequestid = {$request['id']} "
 			       . "ORDER BY startmeridian, starthour, startminute";
 			$qh = doQuery($query, 101);
-			while($row = mysql_fetch_assoc($qh)) {
+			while($row = mysqli_fetch_assoc($qh)) {
 				$blocks[$id]['smhour'][$row['order']] = $row['starthour'];
 				$blocks[$id]['smminute'][$row['order']] = $row['startminute'];
 				$blocks[$id]['smmeridian'][$row['order']] = $row['startmeridian'];
@@ -1297,7 +1297,7 @@ function getCurrentBlockHTML($listonly=0) {
 			       . "WHERE blockRequestid = $id "
 			       . "ORDER BY start";
 			$qh = doQuery($query, 101);
-			while($row = mysql_fetch_assoc($qh)) {
+			while($row = mysqli_fetch_assoc($qh)) {
 				if($row['date'] == '00/00/00')
 					$blocks[$id]['date'][$row['order']] = '';
 				else
@@ -1313,7 +1313,7 @@ function getCurrentBlockHTML($listonly=0) {
 			       . "FROM blockWebTime "
 			       . "WHERE blockRequestid = {$request['id']}";
 			$qh = doQuery($query, 101);
-			while($row = mysql_fetch_assoc($qh)) {
+			while($row = mysqli_fetch_assoc($qh)) {
 				$blocks[$id]['slhour'][$row['order']] = $row['starthour'];
 				$blocks[$id]['slminute'][$row['order']] = $row['startminute'];
 				$blocks[$id]['slmeridian'][$row['order']] = $row['startmeridian'];
@@ -1528,7 +1528,7 @@ function getUserCurrentBlockHTML($listonly=0) {
 	       . "ORDER BY b.name";
 	$qh = doQuery($query, 101);
 	$blocks = array();
-	while($row = mysql_fetch_assoc($qh))
+	while($row = mysqli_fetch_assoc($qh))
 		$blocks[$row['id']] = $row;
 	if(empty($blocks))
 		return;
@@ -1543,7 +1543,7 @@ function getUserCurrentBlockHTML($listonly=0) {
 			       . "FROM blockWebDate "
 			       . "WHERE blockRequestid = $id";
 			$qh = doQuery($query, 101);
-			if(! $row = mysql_fetch_assoc($qh))
+			if(! $row = mysqli_fetch_assoc($qh))
 				abort(101);
 			$blocks[$id] = array_merge($request, $row);
 			$wdays = array();
@@ -1564,7 +1564,7 @@ function getUserCurrentBlockHTML($listonly=0) {
 			       . "WHERE blockRequestid = {$request['id']} "
 			       . "ORDER BY startmeridian, starthour, startminute";
 			$qh = doQuery($query, 101);
-			while($row = mysql_fetch_assoc($qh)) {
+			while($row = mysqli_fetch_assoc($qh)) {
 				$blocks[$id]['swhour'][$row['order']] = $row['starthour'];
 				$blocks[$id]['swminute'][$row['order']] = $row['startminute'];
 				$blocks[$id]['swmeridian'][$row['order']] = $row['startmeridian'];
@@ -1581,7 +1581,7 @@ function getUserCurrentBlockHTML($listonly=0) {
 			       . "FROM blockWebDate "
 			       . "WHERE blockRequestid = $id";
 			$qh = doQuery($query, 101);
-			if(! $row = mysql_fetch_assoc($qh))
+			if(! $row = mysqli_fetch_assoc($qh))
 				abort(101);
 			$blocks[$id] = array_merge($request, $row);
 			$query = "SELECT starthour, "
@@ -1595,7 +1595,7 @@ function getUserCurrentBlockHTML($listonly=0) {
 			       . "WHERE blockRequestid = {$request['id']} "
 			       . "ORDER BY startmeridian, starthour, startminute";
 			$qh = doQuery($query, 101);
-			while($row = mysql_fetch_assoc($qh)) {
+			while($row = mysqli_fetch_assoc($qh)) {
 				$blocks[$id]['smhour'][$row['order']] = $row['starthour'];
 				$blocks[$id]['smminute'][$row['order']] = $row['startminute'];
 				$blocks[$id]['smmeridian'][$row['order']] = $row['startmeridian'];
@@ -1611,7 +1611,7 @@ function getUserCurrentBlockHTML($listonly=0) {
 			       . "WHERE blockRequestid = $id "
 			       . "ORDER BY start";
 			$qh = doQuery($query, 101);
-			while($row = mysql_fetch_assoc($qh)) {
+			while($row = mysqli_fetch_assoc($qh)) {
 				if($row['date'] == '00/00/00')
 					$blocks[$id]['date'][$row['order']] = '';
 				else
@@ -1627,7 +1627,7 @@ function getUserCurrentBlockHTML($listonly=0) {
 			       . "FROM blockWebTime "
 			       . "WHERE blockRequestid = {$request['id']}";
 			$qh = doQuery($query, 101);
-			while($row = mysql_fetch_assoc($qh)) {
+			while($row = mysqli_fetch_assoc($qh)) {
 				$blocks[$id]['slhour'][$row['order']] = $row['starthour'];
 				$blocks[$id]['slminute'][$row['order']] = $row['startminute'];
 				$blocks[$id]['slmeridian'][$row['order']] = $row['startmeridian'];
@@ -1823,7 +1823,7 @@ function getPendingBlockHTML($listonly=0) {
 	$h .= "  </tr>\n";
 	$d = '';
 	$groups = getUserGroups(0, $user['affiliationid']);
-	while($row = mysql_fetch_assoc($qh)) {
+	while($row = mysqli_fetch_assoc($qh)) {
 		if($row['repeating'] == 'weekly') {
 			$query2 = "SELECT DATE_FORMAT(start, '%m/%d/%y') AS swdate, "
 			        .        "DATE_FORMAT(end, '%m/%d/%y')AS ewdate, " 
@@ -1833,7 +1833,7 @@ function getPendingBlockHTML($listonly=0) {
 			        . "FROM blockWebDate "
 			        . "WHERE blockRequestid = {$row['id']}";
 			$qh2 = doQuery($query2, 101);
-			if(! $row2 = mysql_fetch_assoc($qh2))
+			if(! $row2 = mysqli_fetch_assoc($qh2))
 				abort(101);
 			$row = array_merge($row, $row2);
 			$wdays = array();
@@ -1854,7 +1854,7 @@ function getPendingBlockHTML($listonly=0) {
 			        . "ORDER BY startmeridian, starthour, startminute";
 			$qh2 = doQuery($query2, 101);
 			$row['times'] = array();
-			while($row2 = mysql_fetch_assoc($qh2)) {
+			while($row2 = mysqli_fetch_assoc($qh2)) {
 				$row['swhour'][$row2['order']] = $row2['starthour'];
 				$row['swminute'][$row2['order']] = $row2['startminute'];
 				$row['swmeridian'][$row2['order']] = $row2['startmeridian'];
@@ -1878,7 +1878,7 @@ function getPendingBlockHTML($listonly=0) {
 			        . "FROM blockWebDate "
 			        . "WHERE blockRequestid = {$row['id']}";
 			$qh2 = doQuery($query2, 101);
-			if(! $row2 = mysql_fetch_assoc($qh2))
+			if(! $row2 = mysqli_fetch_assoc($qh2))
 				abort(101);
 			$row = array_merge($row, $row2);
 			$query2 = "SELECT starthour, "
@@ -1893,7 +1893,7 @@ function getPendingBlockHTML($listonly=0) {
 			        . "ORDER BY startmeridian, starthour, startminute";
 			$qh2 = doQuery($query2, 101);
 			$row['times'] = array();
-			while($row2 = mysql_fetch_assoc($qh2)) {
+			while($row2 = mysqli_fetch_assoc($qh2)) {
 				$row['smhour'][$row2['order']] = $row2['starthour'];
 				$row['smminute'][$row2['order']] = $row2['startminute'];
 				$row['smmeridian'][$row2['order']] = $row2['startmeridian'];
@@ -1916,7 +1916,7 @@ function getPendingBlockHTML($listonly=0) {
 			        . "WHERE blockRequestid = {$row['id']} "
 			        . "ORDER BY start";
 			$qh2 = doQuery($query2, 101);
-			while($row2 = mysql_fetch_assoc($qh2)) {
+			while($row2 = mysqli_fetch_assoc($qh2)) {
 				if($row2['date'] == '00/00/00')
 					$row['date'][$row2['order']] = '';
 				else
@@ -1934,7 +1934,7 @@ function getPendingBlockHTML($listonly=0) {
 			        . "WHERE blockRequestid = {$row['id']}";
 			$qh2 = doQuery($query2, 101);
 			$row['slots'] = array(); # yyyy-mm-dd|hh:mm|hh:mm
-			while($row2 = mysql_fetch_assoc($qh2)) {
+			while($row2 = mysqli_fetch_assoc($qh2)) {
 				$row['slhour'][$row2['order']] = $row2['starthour'];
 				$row['slminute'][$row2['order']] = $row2['startminute'];
 				$row['slmeridian'][$row2['order']] = $row2['startmeridian'];
@@ -2467,7 +2467,7 @@ function AJacceptBlockAllocationConfirm() {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function AJacceptBlockAllocationSubmit() {
-	global $mysql_link_vcl, $user;
+	global $mysqli_link_vcl, $user;
 	$blockid = getContinuationVar('blockid');
 	$comments = getContinuationVar('comments');
 	$validemail = getContinuationVar('validemail');
@@ -2523,9 +2523,9 @@ function AJacceptBlockAllocationSubmit() {
 	if(! $err) {
 		# update values for block allocation
 		if($validemail)
-			$esccomments = mysql_real_escape_string("COMMENTS: $comments|EMAIL: $emailtext");
+			$esccomments = vcl_mysql_escape_string("COMMENTS: $comments|EMAIL: $emailtext");
 		else
-			$esccomments = mysql_real_escape_string("COMMENTS: $comments|USER NOT EMAILED");
+			$esccomments = vcl_mysql_escape_string("COMMENTS: $comments|USER NOT EMAILED");
 		$query = "UPDATE blockRequest "
 				 . "SET name = '$name', ";
 		if($setusergroup)
@@ -2535,7 +2535,7 @@ function AJacceptBlockAllocationSubmit() {
 			    .     "managementnodeid = '$mnid' "
 		       . "WHERE id = $blockid";
 		doQuery($query, 101);
-		if(! mysql_affected_rows($mysql_link_vcl)) {
+		if(! mysqli_affected_rows($mysqli_link_vcl)) {
 			$errmsg = i("Error encountered while updating status of block allocation.");
 			$err = 1;
 		}
@@ -2694,7 +2694,7 @@ function AJrejectBlockAllocationConfirm() {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function AJrejectBlockAllocationSubmit() {
-	global $mysql_link_vcl;
+	global $mysqli_link_vcl;
 	$blockid = getContinuationVar('blockid');
 	$comments = getContinuationVar('comments');
 	$validemail = getContinuationVar('validemail');
@@ -2727,16 +2727,16 @@ function AJrejectBlockAllocationSubmit() {
 	if(! $err) {
 		# update values for block allocation
 		if($validemail)
-			$esccomments = mysql_real_escape_string("COMMENTS: $comments|EMAIL: $emailtext");
+			$esccomments = vcl_mysql_escape_string("COMMENTS: $comments|EMAIL: $emailtext");
 		else
-			$esccomments = mysql_real_escape_string("COMMENTS: $comments|REJECTREASON: $emailtext");
+			$esccomments = vcl_mysql_escape_string("COMMENTS: $comments|REJECTREASON: $emailtext");
 		$query = "UPDATE blockRequest "
 				 . "SET name = 'rejected', "
 				 .     "status = 'rejected', "
 				 .     "comments = '$esccomments' "
 				 . "WHERE id = $blockid";
 		doQuery($query, 101);
-		if(! mysql_affected_rows($mysql_link_vcl)) {
+		if(! mysqli_affected_rows($mysqli_link_vcl)) {
 			$errmsg = i("Error encountered while updating status of block allocation.");
 			$err = 1;
 		}
@@ -2785,7 +2785,7 @@ function AJviewBlockAllocationTimes() {
 	$qh = doQuery($query, 101);
 	$data = array();
 	$items = array();
-	while($row = mysql_fetch_assoc($qh))
+	while($row = mysqli_fetch_assoc($qh))
 		$items[] = $row;
 	$cont = addContinuationsEntry('AJtoggleBlockTime', array('blockid' => $blockid));
 	$data['cont'] = $cont;
@@ -2809,7 +2809,7 @@ function AJtoggleBlockTime() {
 	       . "FROM blockTimes "
 	       . "WHERE id = $timeid";
 	$qh = doQuery($query, 101);
-	if(! ($row = mysql_fetch_assoc($qh)) || $row['blockRequestid'] != $blockid) {
+	if(! ($row = mysqli_fetch_assoc($qh)) || $row['blockRequestid'] != $blockid) {
 		$data['error'] = i("Invalid block time submitted");
 		sendJSON($data);
 		return;
@@ -3347,7 +3347,7 @@ function getBlockAllocationStatus($id) {
 	       . "ORDER BY t.start "
 	       . "LIMIT 1";
 	$qh = doQuery($query, 101);
-	if($data = mysql_fetch_assoc($qh)) {
+	if($data = mysqli_fetch_assoc($qh)) {
 		if(! is_numeric($data['subimages']))
 			$data['subimages'] = 0;
 		$query = "SELECT c.id, "
@@ -3370,7 +3370,7 @@ function getBlockAllocationStatus($id) {
 		       .       "c.stateid = s.id";
 		$qh = doQuery($query, 101);
 		$data['comps'] = array();
-		while($row = mysql_fetch_assoc($qh))
+		while($row = mysqli_fetch_assoc($qh))
 			$data['comps'][$row['id']] = $row;
 		return $data;
 	}
@@ -3454,7 +3454,7 @@ function getBlockAllocationData($blockid) {
 	       . "WHERE b.id = d.blockRequestid AND "
 	       .       "b.id = $blockid";
 	$qh = doQuery($query, 101);
-	$row = mysql_fetch_assoc($qh);
+	$row = mysqli_fetch_assoc($qh);
 	if(empty($row))
 		return $rt;
 	$row['wdayschecked'] = $rt['wdayschecked'];
@@ -3505,7 +3505,7 @@ function AJpopulateBlockStore() {
 	$blockid = getContinuationVar('blockid');
 	$query = "SELECT repeating FROM blockRequest WHERE id = $blockid";
 	$qh = doQuery($query, 101);
-	if(! ($row = mysql_fetch_assoc($qh))) {
+	if(! ($row = mysqli_fetch_assoc($qh))) {
 		sendJSON(array('error' => i("Error: Failed to fetch start/end times for block allocation.")));
 		return;
 	}
@@ -3524,7 +3524,7 @@ function AJpopulateBlockStore() {
 		$startms = array();
 		$endhs = array();
 		$endms = array();
-		while($row = mysql_fetch_assoc($qh)) {
+		while($row = mysqli_fetch_assoc($qh)) {
 			$starth = hour12to24($row['starthour'], $row['startmeridian']);
 			$endh = hour12to24($row['endhour'], $row['endmeridian']);
 			$starths[] = $starth;
@@ -3550,7 +3550,7 @@ function AJpopulateBlockStore() {
 		       . "WHERE blockRequestid = $blockid";
 		$qh = doQuery($query, 101);
 		$data = array();
-		while($row = mysql_fetch_assoc($qh))
+		while($row = mysqli_fetch_assoc($qh))
 			$data[$row['order']] = $row;
 		$query = "SELECT MONTH(start) AS month, "
 		       .        "DAY(start) AS day, "
@@ -3566,7 +3566,7 @@ function AJpopulateBlockStore() {
 		$startms = array();
 		$endhs = array();
 		$endms = array();
-		while($row = mysql_fetch_assoc($qh)) {
+		while($row = mysqli_fetch_assoc($qh)) {
 			$id = $row['days'];
 			$months[] = $row['month'];
 			$days[] = $row['day'];
@@ -3696,7 +3696,7 @@ function AJgetBlockAllocatedMachineData() {
 		       . "WHERE stateid IN (2, 3, 6, 8, 11) AND "
 		       .       "type = 'blade'";
 		$qh = doQuery($query, 101);
-		if($row = mysql_fetch_row($qh))
+		if($row = mysqli_fetch_row($qh))
 			$data['total'] = $row[0];
 	}
 	else
@@ -3743,7 +3743,7 @@ function AJgetBlockAllocatedMachineData() {
 		       .       "u.affiliationid = {$user['affiliationid']}";
 	}
 	$qh = doQuery($query, 101);
-	while($row = mysql_fetch_assoc($qh)) {
+	while($row = mysqli_fetch_assoc($qh)) {
 		for($binstart = $start, $binend = $start + 900, $binindex = 0; 
 		   $binend <= $end;
 		   $binstart += 900, $binend += 900, $binindex++) {
@@ -3770,7 +3770,7 @@ function AJgetBlockAllocatedMachineData() {
 		       . "WHERE stateid IN (2, 3, 6, 8, 11) AND "
 		       .       "type = 'virtualmachine'";
 		$qh = doQuery($query, 101);
-		if($row = mysql_fetch_row($qh))
+		if($row = mysqli_fetch_row($qh))
 			$data['total'] = $row[0];
 	}
 	else
@@ -3817,7 +3817,7 @@ function AJgetBlockAllocatedMachineData() {
 		       .       "u.affiliationid = {$user['affiliationid']}";
 	}
 	$qh = doQuery($query, 101);
-	while($row = mysql_fetch_assoc($qh)) {
+	while($row = mysqli_fetch_assoc($qh)) {
 		for($binstart = $start, $binend = $start + 900, $binindex = 0; 
 		   $binend <= $end;
 		   $binstart += 900, $binend += 900, $binindex++) {
@@ -3869,15 +3869,14 @@ function AJviewBlockAllocationUsage() {
 	$first = 1;
 	$firststart = '';
 	$laststart = '';
-	while($row = mysql_fetch_assoc($qh)) {
-		if($first && ! is_null($row['blockStart'])) {
+	while($row = mysqli_fetch_assoc($qh)) {
+		if(is_null($row['blockStart']))
+			continue;
+		if($first) {
 			$firststart = datetimeToUnix($row['blockStart']);
 			$first = 0;
 		}
-		elseif(! is_null($row['blockStart']))
-			$laststart = datetimeToUnix($row['blockStart']);
-		if(is_null($row['blockStart']))
-			continue;
+		$laststart = datetimeToUnix($row['blockStart']);
 		$percent = (int)($row['used'] / $row['allocated'] * 100);
 		$startts = datetimeToUnix($row['blockStart']);
 		$usage[$startts] = array('percent' => $percent,

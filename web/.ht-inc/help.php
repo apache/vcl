@@ -168,7 +168,7 @@ function submitHelpForm() {
 	       . "ORDER BY l.finalend DESC "
 	       . "LIMIT 5";
 	$qh = doQuery($query, 290);
-	while($row = mysql_fetch_assoc($qh)) {
+	while($row = mysqli_fetch_assoc($qh)) {
 		# only include 1 computer from cluster reservations
 		if(array_key_exists($row['id'], $requests))
 			continue;

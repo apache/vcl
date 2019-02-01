@@ -1945,7 +1945,7 @@ sub prepare_vmx {
 	}
 	
 	# The vmx file should be set to executable
-	chmod("0755", "/tmp/$vmx_file_name");
+	chmod(0755, "/tmp/$vmx_file_name");
 	
 	# Copy the temporary vmx file the the VM host
 	$self->vmhost_os->copy_file_to($temp_vmx_file_path, $vmx_file_path) || return;

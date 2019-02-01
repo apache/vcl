@@ -204,7 +204,7 @@ class ADdomain extends Resource {
 				       . "WHERE cryptkeyid = $cryptkeyid AND "
 				       .       "secretid = $oldsecretid";
 				$qh = doQuery($query);
-				if(! ($row = mysql_fetch_assoc($qh))) {
+				if(! ($row = mysqli_fetch_assoc($qh))) {
 					# generate a new secret
 					$newsecretid = getSecretKeyID('addomain', 'secretid', 0);
 					$delids = array($oldsecretid);
@@ -221,7 +221,7 @@ class ADdomain extends Resource {
 					       . "WHERE cs.secretid = $oldsecretid AND "
 					       .       "ck.hosttype = 'managementnode'";
 					$qh = doQuery($query);
-					while($row = mysql_fetch_assoc($qh))
+					while($row = mysqli_fetch_assoc($qh))
 						$secretidset[$row['mnid']][$newsecretid] = 1;
 					$values = getMNcryptkeyUpdates($secretidset, $cryptkeyid);
 					addCryptSecretKeyUpdates($values);
@@ -586,7 +586,7 @@ class ADdomain extends Resource {
 		       .       "ia.imageid = i.id";
 		$qh = doQuery($query);
 		$images = array();
-		while($row = mysql_fetch_assoc($qh))
+		while($row = mysqli_fetch_assoc($qh))
 			$images[] = $row['prettyname'];
 		if(count($images))
 			$msg = "This AD Domain cannot be deleted because the following <strong>images</strong> are using it:<br><br>\n" . implode("<br>\n", $images);
