@@ -1586,7 +1586,7 @@ sub vm_unregister {
 			return 1;
 		}
 		
-		# Power of the VM if it is powered on or the unregister command will fail
+		# Power off the VM if it is powered on or the unregister command will fail
 		my $vm_power_state = $self->get_vm_power_state($vmx_file_path);
 		if ($vm_power_state && $vm_power_state !~ /off/i) {
 			if (!$self->vm_power_off($vmx_file_path)) {
