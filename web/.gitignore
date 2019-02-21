@@ -7,3 +7,7 @@
 .ht-inc/spyc-0.5.1/
 dojo/
 themes/**/css/dojo
+# netbeans project files
+.settings/
+.buildpath
+.project
