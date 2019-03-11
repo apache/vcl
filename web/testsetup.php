@@ -222,6 +222,8 @@ if($includeconf && include('.ht-inc/conf.php')) {
 	else {
 		if(substr_compare(BASEURL, 'https:', 0, 6, true) == 0)
 			pass("BASEURL correctly set to use https");
+		elseif(SSLOFFLOAD == 1)
+		        pass("BASEURL set to use http as SSL is offloaded to load balancer");
 		else
 			fail("BASEURL is not set to use https. https is required.");
 	}
