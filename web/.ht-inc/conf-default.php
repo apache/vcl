@@ -61,6 +61,9 @@ if (strpos($host, ':')) {
 	$host = substr($host, 0, strpos($host, ':'));
 }
 
+define("SSLOFFLOAD", 0); // set this to 1 to use external load balancer to manage SSL termination
+                         // set the BASEURL and HOMEURL paths to also be plain HTTP
+                         // The VCL application will not force HTTPS urls as HTTPS is enforced at the load balancer
 define("BASEURL", "https://{$_SERVER['HTTP_HOST']}/vcl");   // no trailing slash - all of the URL except /index.php
 define("SCRIPT", "/index.php");                 // this should only be "/index.php" unless you rename index.php to something else
 define("HOMEURL", "https://{$_SERVER['HTTP_HOST']}/vcl/"); // url to go to when someone clicks HOME or Logout
