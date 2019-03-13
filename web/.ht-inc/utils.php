@@ -9488,7 +9488,8 @@ function getNATports($resid) {
 /// \b domaindnsname\n
 /// \b username\n
 /// \b dnsservers\n
-/// \b secretid
+/// \b secretid\n
+/// \b useDatabaseHostnamesForComputerObjects\n
 ///
 /// \brief builds an array of AD domains
 ///
@@ -9502,7 +9503,8 @@ function getADdomains($addomainid=0) {
 	       .        "ad.domainDNSName AS domaindnsname, "
 	       .        "ad.username, "
 	       .        "ad.dnsServers AS dnsservers, "
-	       .        "ad.secretid "
+	       .        "ad.secretid, "
+	       .        "ad.useDatabaseHostnamesForComputerObjects AS useDatabaseHostnamesForComputerObjects "
 	       . "FROM addomain ad, "
 	       .      "affiliation a, "
 	       .      "user u, "

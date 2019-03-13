@@ -41,11 +41,12 @@ function inlineEditResourceCB(data, ioArgs) {
 		dojo.byId('editresid').value = data.items.rscid;
 		dijit.byId('name').set('value', data.items.data.name);
 		dijit.byId('owner').set('value', data.items.data.owner);
-
 		dijit.byId('domaindnsname').set('value', data.items.data.domaindnsname);
 		dijit.byId('username').set('value', data.items.data.username);
 		dijit.byId('dnsservers').set('value', data.items.data.dnsservers);
-
+		if (data.items.data.useDatabaseHostnamesForComputerObjects == 1) {
+			dijit.byId('usedbhostnames').set('checked', data.items.data.useDatabaseHostnamesForComputerObjects)
+		}
 		dijit.byId('password').set('value', '********');
 		dijit.byId('password2').set('value', 'xxxxxxxx');
 
@@ -58,7 +59,7 @@ function inlineEditResourceCB(data, ioArgs) {
 }
 
 function resetEditResource() {
-	var fields = ['name', 'owner', 'domaindnsname', 'username', 'password', 'password2', 'dnsservers'];
+	var fields = ['name', 'owner', 'domaindnsname', 'username', 'password', 'password2', 'usedbhostnames', 'dnsservers'];
 	for(var i = 0; i < fields.length; i++) {
 		dijit.byId(fields[i]).reset();
 	}
@@ -89,7 +90,13 @@ function saveResource() {
 		dojo.byId('addeditdlgerrmsg').innerHTML = _('Passwords do not match');
 		return;
 	}
-
+	// update useDatabaseHostnamesForComputerObjects
+	if(dijit.byId('usedbhostnames').get('checked')) {
+		data['useDatabaseHostnamesForComputerObjects'] = 1;
+	}
+	else {
+		data['useDatabaseHostnamesForComputerObjects'] = 0;
+	}
 	dijit.byId('addeditbtn').set('disabled', true);
 	RPCwrapper(data, saveResourceCB, 1);
 }
