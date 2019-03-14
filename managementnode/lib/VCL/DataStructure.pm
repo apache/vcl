@@ -2641,6 +2641,8 @@ sub substitute_string_variables {
 			next;
 		}
 		#notify($ERRORS{'DEBUG'}, 0, "extracted subroutine mapping key from section of input string: '$input_substitute_section' --> '$subroutine_mapping_key'");
+		# skip keys derived from [if ...] and [endif] to prevent creation of mappings from HTML comment conditionals
+		next if ($subroutine_mapping_key =~ /^if / || $subroutine_mapping_key eq "endif");
 		
 		# Attempt to retrieve the substitution value from the DataStructure data
 		# Check if DataStructure.pm implements a matching 'get_' function

@@ -3134,6 +3134,15 @@ class Messages {
 
 			if($keyparts[0] == 'adminmessage')
 				$keyparts[2] = 'Global';
+			foreach(array('message', 'subject', 'short_message') as $type) {
+				if(! isset($item[$type]))
+					continue;
+				$test = strip_tags($item[$type]);
+				if($test != $item[$type]) {
+					$item['DBmanagedHTML'] = 1;
+					$item[$type] = '';
+				}
+			}
 			$this->units[$k][$keyparts[2]] = $item;
 		}
 		uasort($this->basekeys, "sortKeepIndex");
