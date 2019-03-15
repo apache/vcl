@@ -218,6 +218,15 @@ image.lastupdate = '$timestamp',
 image.deleted = '0',
 image.size = '$image_size_new',
 image.name = '$image_name',
+EOF
+
+	if ($self->data->get_image_uefi() == 1) {
+		$update_image_statement .= <<EOF
+image.uefi = '1',
+EOF
+	}
+
+	$update_image_statement .= <<EOF;
 imagerevision.deleted = '0',
 imagerevision.datecreated = '$timestamp'
 WHERE

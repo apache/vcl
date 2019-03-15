@@ -925,6 +925,13 @@ sub capture {
 	my $os_product_name = $self->os->get_product_name() if $self->os->can("get_product_name");
 	my $os_is_64_bit = $self->os->is_64_bit() if $self->os->can("is_64_bit");
 	
+	# Attempt to get firmware
+	my $vm_firmware = exists $vmx_info->{firmware} ? $vmx_info->{firmware} : 'bios';
+	if ($vm_firmware eq "efi") {
+		notify($ERRORS{'DEBUG'}, 0, "setting uefi firmware for image");
+		$self->data->set_image_uefi(1);
+	}
+
 	# Call the OS module's pre_capture() subroutine if implemented
 	if ($self->os->can("pre_capture") && !$self->os->pre_capture({end_state => 'off'})) {
 		notify($ERRORS{'WARNING'}, 0, "failed to complete OS module's pre_capture tasks");
@@ -1711,7 +1718,8 @@ sub prepare_vmx {
 	my $guest_os                  = $self->get_vm_guest_os() || return;
 	my $vmware_product_name       = $self->get_vmhost_product_name();
 	my $image_os_type            = $self->data->get_image_os_type();
-	
+	my $image_uefi                = $self->data->get_image_uefi();
+
 	(my ($vm_cpu_count, $vm_cores_per_socket) = $self->get_vm_cpu_configuration()) || return;
 	
 	# Create the .vmx directory on the host
@@ -1926,6 +1934,14 @@ sub prepare_vmx {
 		}
 	}
 	
+	# enable UEFI firmware if image has uefi flag set
+	notify($ERRORS{'DEBUG'}, 0, "image uefi firmware value retrieved is $image_uefi");
+	if ($image_uefi) {
+			notify($ERRORS{'DEBUG'}, 0, "enabling uefi firmware");
+			%vmx_parameters = (%vmx_parameters, (
+					"firmware" => "efi",
+			));
+	}
 	notify($ERRORS{'DEBUG'}, 0, "vmx parameters:\n" . format_data(\%vmx_parameters));
 	
 	# Create a string from the hash
@@ -8177,7 +8193,7 @@ sub configure_vmhost_dedicated_ssh_key {
 	}
 	
 	# Parse the file contents, add ' --- vcl.tgz' to the end of the 'modules=' line if it hasn't already been added
-	# modules=k.z — s.z — c.z — oem.tgz — license.tgz — m.z — state.tgz — vcl.tgz
+	# modules=k.z ï¿½ s.z ï¿½ c.z ï¿½ oem.tgz ï¿½ license.tgz ï¿½ m.z ï¿½ state.tgz ï¿½ vcl.tgz
 	my $updated_bootbank_cfg_contents;
 	my $bootbank_cfg_changed = 0;
 	for my $line (@bootbank_cfg_contents) {

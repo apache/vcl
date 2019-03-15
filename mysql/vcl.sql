@@ -498,6 +498,7 @@ CREATE TABLE IF NOT EXISTS `image` (
   `description` text,
   `usage` text,
   `basedoffrevisionid` mediumint(8) unsigned default NULL,
+  `uefi` tinyint(1) unsigned NOT NULL default '0',
   PRIMARY KEY  (`id`),
   UNIQUE KEY `name` (`name`),
   UNIQUE KEY `prettyname` (`prettyname`),

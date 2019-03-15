@@ -387,6 +387,7 @@ $SUBROUTINE_MAPPINGS{image_settestflag} = '$self->request_data->{reservation}{RE
 $SUBROUTINE_MAPPINGS{image_size} = '$self->request_data->{reservation}{RESERVATION_ID}{image}{size}';
 $SUBROUTINE_MAPPINGS{image_test} = '$self->request_data->{reservation}{RESERVATION_ID}{image}{test}';
 $SUBROUTINE_MAPPINGS{image_updateimagename} = '$self->request_data->{reservation}{RESERVATION_ID}{image}{UPDATEIMAGENAME}';
+$SUBROUTINE_MAPPINGS{image_uefi} = '$self->request_data->{reservation}{RESERVATION_ID}{image}{uefi}';
 
 $SUBROUTINE_MAPPINGS{imagemeta_checkuser} = '$self->request_data->{reservation}{RESERVATION_ID}{image}{imagemeta}{checkuser}';
 $SUBROUTINE_MAPPINGS{imagemeta_id} = '$self->request_data->{reservation}{RESERVATION_ID}{image}{imagemeta}{id}';
