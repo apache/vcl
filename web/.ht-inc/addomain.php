@@ -519,10 +519,6 @@ class ADdomain extends Resource {
 			$return['error'] = 1;
 			$errormsg[] = i("An AD domain already exists with this name.");
 		}
-		elseif($this->checkExistingField('domainDNSName', $return['domaindnsname'], $return['rscid'])) {
-			$return['error'] = 1;
-			$errormsg[] = i("An AD domain already exists with this Domain DNS Name.");
-		}
 		if(! validateUserid($return['owner'])) {
 			$return['error'] = 1;
 			$errormsg[] = i("Submitted owner is not valid");
