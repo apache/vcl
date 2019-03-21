@@ -9504,7 +9504,7 @@ function getADdomains($addomainid=0) {
 	       .        "ad.username, "
 	       .        "ad.dnsServers AS dnsservers, "
 	       .        "ad.secretid, "
-	       .        "ad.useDatabaseHostnamesForComputerObjects AS useDatabaseHostnamesForComputerObjects "
+	       .        "ad.usedbhostname AS useDatabaseHostnamesForComputerObjects "
 	       . "FROM addomain ad, "
 	       .      "affiliation a, "
 	       .      "user u, "

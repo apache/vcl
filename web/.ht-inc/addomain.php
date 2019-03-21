@@ -244,7 +244,7 @@ class ADdomain extends Resource {
 				$updates[] = "dnsServers = '{$data['dnsservers']}'";
 			# useDatabaseHostnamesForComputerObjects
 			if($data['useDatabaseHostnamesForComputerObjects'] != $olddata['useDatabaseHostnamesForComputerObjects'])
-			    $updates[] = "useDatabaseHostnamesForComputerObjects = {$data['useDatabaseHostnamesForComputerObjects']}";
+			    $updates[] = "usedbhostname = {$data['useDatabaseHostnamesForComputerObjects']}";
 			if(count($updates)) {
 				$query = "UPDATE addomain SET "
 				       . implode(', ', $updates)
@@ -350,7 +350,7 @@ class ADdomain extends Resource {
 				.	"password, "
 				.	"secretid, "
 				.	"dnsServers, "
-				.	"useDatabaseHostnamesForComputerObjects) "
+				.	"usedbhostname) "
 				.	"VALUES ('{$data['name']}', "
 				.	"$ownerid, "
 				.	"'{$data['domaindnsname']}', "

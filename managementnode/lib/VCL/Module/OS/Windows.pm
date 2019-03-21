@@ -3929,8 +3929,8 @@ sub reboot {
 			}
 			
 			# Set sshd service startup mode to auto
-			if (!$self->set_service_startup_mode('sshd', 'auto')) {
-				notify($ERRORS{'WARNING'}, 0, "reboot not attempted, unable to set sshd service startup mode to auto");
+			if (!$self->set_service_startup_mode('sshd', 'manual')) {
+				notify($ERRORS{'WARNING'}, 0, "reboot not attempted, unable to set sshd service startup mode to manual");
 				return 0;
 			}
 			
@@ -12731,7 +12731,7 @@ sub set_computer_hostname {
 		return;
 	}
 	
-	my $use_database_hostnames = $self->data->image_domain_usedatabasehostnamesforcomputerobjects();
+	my $use_database_hostnames = $self->data->get_image_domain_usedbhostname();
 	my $database_computer_hostname = $self->data->get_computer_hostname();
 	my $system32_path = $self->get_system32_path() || return;
 	
