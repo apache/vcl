@@ -6699,20 +6699,30 @@ sub update_resolv_conf {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return;
 	}
-	
+
 	my $computer_name = $self->data->get_computer_short_name();
 	my $public_ip_configuration = $self->data->get_management_node_public_ip_configuration();
-	my @public_dns_servers = shift || $self->data->get_management_node_public_dns_servers();
-	
-	if ($public_ip_configuration !~ /static/i) {	
-		notify($ERRORS{'WARNING'}, 0, "unable to update resolv.conf on $computer_name, management node's IP configuration is set to $public_ip_configuration");
+	my @mn_dns_servers = shift || $self->data->get_management_node_public_dns_servers();
+
+	my @server_request_dns_servers = $self->data->get_server_request_dns_servers();
+
+	my @dns_servers;
+	if (@server_request_dns_servers) {
+		@dns_servers = @server_request_dns_servers;
+		notify($ERRORS{'DEBUG'}, 0, "server request specific DNS servers will be statically set on $computer_name: " . join(", ", @dns_servers));
+	}
+	elsif ($public_ip_configuration =~ /static/i && @mn_dns_servers) {
+		@dns_servers = @mn_dns_servers;
+		notify($ERRORS{'DEBUG'}, 0, "management node IP configuration set to $public_ip_configuration, management node DNS servers will be statically set on $computer_name: " . join(", ", @dns_servers));
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "$computer_name not configured to use static DNS servers:\n" .
+			"management node IP configuration               : $public_ip_configuration\n" .
+			"management node DNS servers configured         : " . (@mn_dns_servers ? 'yes' : 'no')
+		);
 		return;
 	}
-	elsif (!@public_dns_servers) {
-		notify($ERRORS{'WARNING'}, 0, "unable to update resolv.conf on $computer_name, DNS server argument was not provided and management node's public DNS server is not configured");
-		return;
-	}
-	
+
 	my $resolv_conf_path = "/etc/resolv.conf";
 	
 	my @resolv_conf_lines_existing = $self->get_file_contents($resolv_conf_path);
@@ -6725,16 +6735,16 @@ sub update_resolv_conf {
 			push @resolv_conf_lines_new, $line;
 		}
 	}
-	
+
 	# Add a comment marking what was added by VCL
 	my $timestamp = POSIX::strftime("%m-%d-%Y %H:%M:%S", localtime);
 	push @resolv_conf_lines_new, "# $timestamp: The following was added by VCL";
 	
 	# Add a nameserver line for each configured DNS server
-	for my $public_dns_server (@public_dns_servers) {
+	for my $public_dns_server (@dns_servers) {
 		push @resolv_conf_lines_new, "nameserver $public_dns_server";
 	}
-	
+
 	my $resolv_conf_contents_new = join("\n", @resolv_conf_lines_new);
 	if ($self->create_text_file($resolv_conf_path, $resolv_conf_contents_new)) {
 		notify($ERRORS{'DEBUG'}, 0, "updated $resolv_conf_path on $computer_name:\n$resolv_conf_contents_new");
