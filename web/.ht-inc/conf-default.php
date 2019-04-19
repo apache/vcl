@@ -138,7 +138,7 @@ $authMechs = array(
 	                            "affiliationid" => 1,
 	                            "help" => "Only use Local Account if there are no other options"),
 	/*"Shibboleth (UNC Federation)" => array("type" => "redirect",
-	                     "URL" => "https://federation.northcarolina.edu/wayf/wayf_framed.php?fed=FED_SHIB_UNC_DEV&version=dropdown&entityID=https%3A%2F%2Fvcl.ncsu.edu%2Fsp%2Fshibboleth&return=http%3A%2F%2Fvcl.ncsu.edu%2FShibboleth.sso%2FDS%3FSAMLDS%3D1%26target%3Dhttp%3A%2F%2Fvcl.ncsu.edu%2Fscheduling%2Fshibauth%2F",
+	                     "URL" => "https://federation.northcarolina.edu/wayf/wayf_framed.php?fed=FED_SHIB_UNC_DEV&version=dropdown&entityID=https%3A%2F%2Fvcl.ncsu.edu%2Fsp%2Fshibboleth&return=http%3A%2F%2Fvcl.ncsu.edu%2FShibboleth.sso%2FDS%3FSAMLDS%3D1%26target%3Dhttp%3A%2F%2Fvcl.ncsu.edu%2Fscheduling%2F/",
 	                     "affiliationid" => 0, // this should always be 0 for Shibboleth authentication
 	                     "help" => "Use Shibboleth (UNC Federation) if you are from a University in the UNC system and do not see another method specifically for your university"),*/
 	/*"EXAMPLE1 LDAP" => array("type" => "ldap",

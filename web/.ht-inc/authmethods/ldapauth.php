@@ -20,6 +20,143 @@
  * \file
  */
 
+$authFuncs['ldap'] = array('test' => function() {return 0;},
+                           'auth' => function() {return NULL;},
+                           'unauth' => 'unauthLDAP');
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn unauthLDAP($mode)
+///
+/// \param $mode - headers or content
+///
+/// \brief for headers, simply returns; for content, prints information that
+/// user has been logged out; VCLAUTH cookie is cleared elsewhere
+///
+////////////////////////////////////////////////////////////////////////////////
+function unauthLDAP($mode) {
+	if($mode == 'headers')
+		return;
+	print "<h2>" . _('Logout') . "</h2>\n";
+	print _("You are now logged out of VCL.") . "<br><br>\n";
+	print "<a href=\"" . BASEURL . SCRIPT . "?mode=selectauth\">" . _("Return to Login");
+	print "</a><br><br><br>\n";
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn ldapLogin($authtype, $userid, $passwd)
+///
+/// \param $authtype - index from $authMechs array
+/// \param $userid - userid without affiliation
+/// \param $passwd - submitted password
+///
+/// \brief tries to authenticate user via ldap; calls printLoginPageWithSkin if
+/// authentication fails
+///
+////////////////////////////////////////////////////////////////////////////////
+function ldapLogin($authtype, $userid, $passwd) {
+	global $HTMLheader, $printedHTMLheader, $authMechs, $phpVer;
+	$esc_userid = vcl_mysql_escape_string($userid);
+	if(! $fh = fsockopen($authMechs[$authtype]['server'], 636, $errno, $errstr, 5)) {
+		printLoginPageWithSkin($authtype, 1);
+		return;
+	}
+	fclose($fh);
+	$ds = ldap_connect("ldaps://{$authMechs[$authtype]['server']}/");
+	if(! $ds) {
+		addLoginLog($userid, $authtype, $authMechs[$authtype]['affiliationid'], 0);
+		print $HTMLheader;
+		$printedHTMLheader = 1;
+		selectAuth();
+		return;
+	}
+	ldap_set_option($ds, LDAP_OPT_PROTOCOL_VERSION, 3);
+	ldap_set_option($ds, LDAP_OPT_REFERRALS, 0);
+	if(array_key_exists('lookupuserbeforeauth', $authMechs[$authtype]) &&
+	   $authMechs[$authtype]['lookupuserbeforeauth'] &&
+	   array_key_exists('lookupuserfield', $authMechs[$authtype])) {
+		# in this case, we have to look up what part of the tree the user is in
+		#   before we can actually look up the user
+		$auth = $authMechs[$authtype];
+		if(array_key_exists('masterlogin', $auth) && strlen($auth['masterlogin']))
+			$res = ldap_bind($ds, $auth['masterlogin'], $auth['masterpwd']);
+		else
+			$res = ldap_bind($ds);
+		if(! $res) {
+			addLoginLog($userid, $authtype, $auth['affiliationid'], 0);
+			printLoginPageWithSkin($authtype);
+			return;
+		}
+		$search = ldap_search($ds,
+		                      $auth['binddn'], 
+		                      "{$auth['lookupuserfield']}=$userid",
+		                      array('dn'), 0, 3, 15);
+		if($search) {
+			$tmpdata = ldap_get_entries($ds, $search);
+			if(! $tmpdata['count'] || ! array_key_exists('dn', $tmpdata[0])) {
+				addLoginLog($userid, $authtype, $auth['affiliationid'], 0);
+				printLoginPageWithSkin($authtype);
+				return;
+			}
+			$ldapuser = $tmpdata[0]['dn'];
+		}
+		else {
+			addLoginLog($userid, $authtype, $auth['affiliationid'], 0);
+			printLoginPageWithSkin($authtype);
+			return;
+		}
+	}
+	else
+		$ldapuser = sprintf($authMechs[$authtype]['userid'], $userid);
+	$res = ldap_bind($ds, $ldapuser, $passwd);
+	if(! $res) {
+		// login failed
+		$err = ldap_error($ds);
+		if($err == 'Invalid credentials')
+			addLoginLog($userid, $authtype, $authMechs[$authtype]['affiliationid'], 0, $err);
+		else
+			addLoginLog($userid, $authtype, $authMechs[$authtype]['affiliationid'], 0);
+		printLoginPageWithSkin($authtype);
+		return;
+	}
+	else {
+		addLoginLog($userid, $authtype, $authMechs[$authtype]['affiliationid'], 1);
+		# used to rely on later code to update user info if update timestamp was expired
+		// see if user in our db
+		/*$query = "SELECT id "
+		       . "FROM user "
+		       . "WHERE unityid = '$esc_userid' AND "
+		       .       "affiliationid = {$authMechs[$authtype]['affiliationid']}";
+		$qh = doQuery($query, 101);
+		if(! mysqli_num_rows($qh)) {
+			// if not, add user
+			$newid = updateLDAPUser($authtype, $userid);
+			if(is_null($newid))
+				abort(8);
+		}*/
+		# now, we always update the user info
+		$newid = updateLDAPUser($authtype, $userid);
+		if(is_null($newid))
+			abort(8);
+		// get cookie data
+		$cookie = getAuthCookieData("$userid@" . getAffiliationName($authMechs[$authtype]['affiliationid']), 'ldap');
+		// set cookie
+		if(version_compare(PHP_VERSION, "5.2", ">=") == true)
+			setcookie("VCLAUTH", "{$cookie['data']}", 0, "/", COOKIEDOMAIN, 0, 1);
+		else
+			setcookie("VCLAUTH", "{$cookie['data']}", 0, "/", COOKIEDOMAIN, 0);
+		# set skin cookie based on affiliation
+		$skin = getAffiliationTheme($authMechs[$authtype]['affiliationid']);
+		$ucskin = strtoupper($skin);
+		setcookie("VCLSKIN", "$ucskin", (time() + (SECINDAY * 31)), "/", COOKIEDOMAIN);
+		// redirect to main page
+		header("Location: " . BASEURL . SCRIPT);
+		dbDisconnect();
+		exit;
+	}
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 ///
 /// \fn addLDAPUser($authtype, $userid)
