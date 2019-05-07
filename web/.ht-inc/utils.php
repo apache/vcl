@@ -1300,7 +1300,7 @@ function doQuery($query, $errcode=101, $db="vcl", $nolog=0) {
 			mysqli_query($mysqli_link_vcl, $q);
 		}
 		for($i = 0; ! ($qh = mysqli_query($mysqli_link_vcl, $query)) && $i < 3; $i++) {
-			if(mysqli_errno() == '1213') # DEADLOCK, sleep and retry
+			if(mysqli_errno($mysqli_link_vcl) == '1213') # DEADLOCK, sleep and retry
 				usleep(50);
 			else
 				abort($errcode, $query);
