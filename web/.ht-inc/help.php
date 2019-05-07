@@ -285,7 +285,7 @@ function submitHelpForm() {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
-/// \fn getHelpEmail
+/// \fn getHelpEmail($affil)
 ///
 /// \param $affil - id or name of an affiliation
 ///
