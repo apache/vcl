@@ -366,34 +366,34 @@ class Image extends Resource {
 		$h .= "<legend>" . i("Image Description") . "</legend>\n";
 		$h .= i("Description of image (required - users will see this on the <strong>New Reservations</strong> page):");
 		$h .= "<br>\n";
-		$h .= "<textarea dojoType=\"dijit.form.Textarea\" id=\"description\" ";
-		$h .= "style=\"width: 400px; text-align: left;\"></textarea>\n";
+		$h .= "<textarea dojoType=\"dijit.form.Textarea\" id=\"description\">";
+		$h .= "</textarea>\n";
 		$h .= "</fieldset>\n";
 		# usage notes
 		$h .= "<fieldset>\n";
 		$h .= "<legend>" . i("Usage Notes") . "</legend>\n";
 		$msg = i("Optional notes to the user explaining how to use the image (users will see this on the <strong>Connect!</strong> page):");
 		$h .= preg_replace("/(.{1,100}([ \n]|$))/", '\1<br>', $msg);
-		$h .= "<textarea dojoType=\"dijit.form.Textarea\" id=\"usage\" ";
-		$h .= "style=\"width: 400px; text-align: left;\"></textarea>\n";
+		$h .= "<textarea dojoType=\"dijit.form.Textarea\" id=\"usage\">";
+		$h .= "</textarea>\n";
 		$h .= "</fieldset>\n";
 		if($add) {
 			$h .= "<fieldset>\n";
 			$h .= "<legend>" . i("Revision Comments") . "</legend>\n";
 			$msg = i("Notes for yourself and other admins about how the image was setup/installed. These are optional and are not visible to end users.");
 			$h .= preg_replace("/(.{1,80}([ \n]|$))/", '\1<br>', $msg);
-			$h .= "<textarea dojoType=\"dijit.form.Textarea\" id=\"imgcomments\" ";
-			$h .= "style=\"width: 400px; text-align: left;\"></textarea>";
+			$h .= "<textarea dojoType=\"dijit.form.Textarea\" id=\"imgcomments\">";
+			$h .= "</textarea>";
 			$h .= "</fieldset>\n";
 		}
 		# advanced options
 		$h .= "<div dojoType=\"dijit.TitlePane\" title=\"";
 		$h .= i("Advanced Options - leave default values unless you really know what you are doing (click to expand)");
-		$h .= "\" open=\"false\" style=\"width: 460px\" id=\"advancedoptions\" ";
+		$h .= "\" open=\"false\" id=\"advancedoptions\" ";
 		$h .= "onShow=\"delayedEditResize();\" onHide=\"delayedEditResize();\">\n";
 		# RAM
 		$extra = array('smallDelta' => 256, 'largeDelta' => 1024);
-		$h .= labeledFormItem('ram', i('Required RAM'), 'spinner', '{min:512, max:8388607}',
+		$h .= labeledFormItem('ram', i('Required RAM') . ' (MB)', 'spinner', '{min:512, max:8388607}',
 		                      1, 1024, '', '', $extra);
 		# cores
 		$extra = array('smallDelta' => 1, 'largeDelta' => 2);
@@ -1644,7 +1644,7 @@ class Image extends Resource {
 		$return["checkuser"] = processInputVar("checkuser", ARG_NUMERIC);
 		$return["rootaccess"] = processInputVar("rootaccess", ARG_NUMERIC);
 		$return["sethostname"] = processInputVar("sethostname", ARG_NUMERIC);
-		$return["maxinitialtime"] = processInputVar("maxinitialtime", ARG_NUMERIC);
+		$return["maxinitialtime"] = processInputVar("maxinitialtime", ARG_NUMERIC, 0);
 		$return["sysprep"] = processInputVar("sysprep", ARG_NUMERIC); # only in add
 		$return["connectmethodids"] = processInputVar("connectmethodids", ARG_STRING); # only in add
 		$return["adauthenabled"] = processInputVar("adauthenabled", ARG_NUMERIC);
@@ -1767,7 +1767,7 @@ class Image extends Resource {
 			$extraaddomainid = getContinuationVar('extraaddomainid', 0);
 			$extraaddomainou = getContinuationVar('extraaddomainou', '');
 			if(! array_key_exists($return['addomainid'], $vals) &&
-			   $return['addomainid'] != $extraaddomainid) {
+			   $return['addomainid'] !== $extraaddomainid) {
 				$return['error'] = 1;
 				$errormsg[] = i("Invalid AD Domain submitted");
 			}

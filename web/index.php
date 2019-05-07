@@ -28,9 +28,7 @@ if (SSLOFFLOAD == 0) {
     }
 }
 
-$user = '';
-$mysqli_link_vcl = '';
-$mysqli_link_acct = '';
+$user = array();
 $mode = '';
 $oldmode = '';
 $submitErr = '';

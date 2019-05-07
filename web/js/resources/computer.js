@@ -210,6 +210,32 @@ Computer.prototype.nocasesort = function(a, b) {
 	return 0;
 }
 
+Computer.prototype.ipsort = function(a, b) {
+	var aparts = a.split('.');
+	var bparts = b.split('.');
+	for(var i = 0; i < 4; i++) {
+		aparts[i] = parseInt(aparts[i]);
+		bparts[i] = parseInt(bparts[i]);
+	}
+	if(aparts[0] < bparts[0])
+		return -1;
+	if(aparts[0] > bparts[0])
+		return 1;
+	if(aparts[1] < bparts[1])
+		return -1;
+	if(aparts[1] > bparts[1])
+		return 1;
+	if(aparts[2] < bparts[2])
+		return -1;
+	if(aparts[2] > bparts[2])
+		return 1;
+	if(aparts[3] < bparts[3])
+		return -1;
+	if(aparts[3] > bparts[3])
+		return 1;
+	return 0;
+}
+
 Computer.prototype.comparehostnames = function(a, b) {
 	// get hostname
 	var tmp = a.split('.');
@@ -291,6 +317,8 @@ function initPage() {
 		resourcestore.comparatorMap['procnumber'] = resource.nocasesort;
 		resourcestore.comparatorMap['procspeed'] = resource.nocasesort;
 		resourcestore.comparatorMap['network'] = resource.nocasesort;
+		resourcestore.comparatorMap['IPaddress'] = resource.ipsort;
+		resourcestore.comparatorMap['privateIPaddress'] = resource.ipsort;
 
 		dojo.connect(resourcegrid, '_onFetchComplete', function() {dojo.byId('computercount').innerHTML = 'Computers in table: ' + resourcegrid.rowCount;});
 	}
@@ -1216,7 +1244,9 @@ function refreshcompdata(refreshcount) {
 	                               procnumber: resource.nocasesort,
 	                               procspeed: resource.nocasesort,
 	                               network: resource.nocasesort,
-	                               ram: resource.nocasesort};
+	                               ram: resource.nocasesort,
+	                               IPaddress: resource.ipsort,
+	                               privateIPaddress: resource.ipsort};
 	resourcestore.fetch();
 	savescroll = resourcegrid.scrollTop;
 	resourcegrid.setStore(resourcestore, resourcegrid.query);

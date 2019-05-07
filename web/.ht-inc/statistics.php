@@ -213,7 +213,8 @@ function viewStatistics() {
 		       .        "l.wasavailable, "
 		       .        "l.ending, "
 		       .        "i.prettyname, "
-		       .        "o.prettyname AS OS "
+		       .        "o.prettyname AS OS, "
+		       .        "o.type AS OStype "
 		       . "FROM log l, "
 		       .      "image i, "
 		       .      "user u, "
@@ -234,7 +235,8 @@ function viewStatistics() {
 		       .        "l.wasavailable, "
 		       .        "l.ending, "
 		       .        "i.prettyname, "
-		       .        "o.prettyname AS OS "
+		       .        "o.prettyname AS OS, "
+		       .        "o.type AS OStype "
 		       . "FROM image i, "
 		       .      "user u, "
 		       .      "OS o, "
@@ -282,6 +284,7 @@ function viewStatistics() {
 	$imageload6to8 = array();
 	$imageload8more = array();
 	$imagefails = array();
+	$imageostype = array();
 	$lengths = array("30min" => 0,
 	                 "1hour" => 0,
 	                 "2hours" => 0,
@@ -301,6 +304,8 @@ function viewStatistics() {
 			$imageload6to8[$row["prettyname"]] = 0;
 		if(! array_key_exists($row["prettyname"], $imageload8more))
 			$imageload8more[$row["prettyname"]] = 0;
+		if(! isset($imageostype[$row["prettyname"]]))
+			$imageostype[$row["prettyname"]] = ucfirst($row['OStype']);
 
 		# notavailable
 		if($row["wasavailable"] == 0) {
@@ -452,6 +457,7 @@ function viewStatistics() {
 	print "    <TH>" . i("6-8 min wait") . "</TH>\n";
 	print "    <TH>" . i("&gt;= 8 min wait") . "</TH>\n";
 	print "    <TH>" . i("Failures") . "</TH>\n";
+	print "    <TH>" . i("OS Type") . "</TH>\n";
 	print "  </TR>\n";
 	foreach($imagecount as $key => $value) {
 		print "  <TR>\n";
@@ -477,6 +483,7 @@ function viewStatistics() {
 		}
 		else
 			print "    <TD align=center>{$imagefails[$key]}</TD>\n";
+		print "    <TD align=center>{$imageostype[$key]}</TD>\n";
 		print "  </TR>\n";
 	}
 	print "</TABLE>\n";

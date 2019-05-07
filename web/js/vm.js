@@ -183,6 +183,8 @@ function vmToHostCB(data, ioArgs) {
 	if(data.items.failed) {
 		if(data.items.failed == 'nohostaccess')
 			alert('You do not have access to manage this VM host.');
+		if(data.items.failed == 'invaliddata')
+			alert('Invalid list of VMs submitted.');
 		document.body.style.cursor = 'default';
 		return;
 	}
@@ -300,15 +302,18 @@ function vmFromHost(cont) {
 		handleAs: "json",
 		error: errorHandler,
 		content: {continuation: cont,
-					 listids: listids.join(','),
-					 hostid: hostid},
+		          listids: listids.join(','),
+		          hostid: hostid},
 		timeout: 15000
 	});
 }
 
 function vmFromHostCB(data, ioArgs) {
 	if(data.items.failed) {
-		alert('You do not have access to manage this VM host.');
+		if(data.items.failed == 'nohostaccess')
+			alert('You do not have access to manage this VM host.');
+		if(data.items.failed == 'invaliddata')
+			alert('Invalid list of VMs submitted.');
 		document.body.style.cursor = 'default';
 		return;
 	}
@@ -412,7 +417,10 @@ function vmFromHostDelayed(cont) {
 
 function reloadVMhostCB(data, ioArgs) {
 	if(data.items.failed) {
-		alert('You do not have access to manage this VM host.');
+		if(data.items.failed == 'nohostaccess')
+			alert('You do not have access to manage this VM host.');
+		if(data.items.failed == 'invaliddata')
+			alert('Invalid list of VMs submitted.');
 		document.body.style.cursor = 'default';
 		return;
 	}

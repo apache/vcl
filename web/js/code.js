@@ -226,7 +226,7 @@ function showScriptOnly() {
 	if(document.styleSheets[0].cssRules)  // Standards Compliant
 		cssobj = document.styleSheets[0].cssRules;
 	else
-		cssobj = document.styleSheets[0].rules;  // IE 
+		cssobj = document.styleSheets[0].rules;  // IE
 	var stop = 0;
 	for(var i = 0; i < cssobj.length; i++) {
 		if(cssobj[i].selectorText) {

@@ -1731,6 +1731,11 @@ function AJstartImage() {
 	               'baserevisionid' => $revid,
 	               'checkpoint' => $checkpoint,
 	               'add' => 1);
+	$cdata['addomainvals'] = array();
+	if(in_array("addomainAdmin", $user["privileges"])) {
+		$vals = getUserResources(array('addomainAdmin'), array("manageGroup"));
+		$cdata['addomainvals'] = $vals['addomain'];
+	}
 	$cont = addContinuationsEntry('AJsaveResource', $cdata, SECINDAY, 0);
 	$arr = array('newcont' => $cont,
 	             'enableupdate' => 0,

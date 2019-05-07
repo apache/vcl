@@ -437,9 +437,7 @@ function vmhostdata() {
 	$currvms = array_merge($currvms);
 	$noaccess = array_merge($noaccess);
 	$freevms = array_merge($freevms);
-	$cont = addContinuationsEntry('AJchangeVMprofile', array(), 3600, 1, 0);
 	$arr = array('profile' => $data[$vmhostid]['vmprofiledata'],
-	             'continuation' => $cont,
 	             'allvms' => $allvms,
 	             'currvms' => $currvms,
 	             'noaccess' => $noaccess,
@@ -516,6 +514,10 @@ function AJvmToHost() {
 	$fails = array();
 
 	$vmlistids = processInputVar('listids', ARG_STRING);
+	if(! preg_match('/^(\d+)(,\d+)*$/', $vmlistids)) {
+		sendJSON(array('failed' => 'invaliddata'));
+		return;
+	}
 	$vmids = explode(',', $vmlistids);
 
 	# get data about submitted vms to add
@@ -583,6 +585,10 @@ function AJvmFromHost() {
 
 	$fails = array();
 	$vmlistids = processInputVar('listids', ARG_STRING);
+	if(! preg_match('/^(\d+)(,\d+)*$/', $vmlistids)) {
+		sendJSON(array('failed' => 'invaliddata'));
+		return;
+	}
 	$vmids = explode(',', $vmlistids);
 	$rems = array();
 	$checks = array();
@@ -718,6 +724,10 @@ function AJcancelVMmove() {
 
 	$fails = array();
 	$requestids = processInputVar('listids', ARG_STRING);
+	if(! preg_match('/^(\d+)(,\d+)*$/', $requestids)) {
+		sendJSON(array('failed' => 'invaliddata'));
+		return;
+	}
 	$now = time();
 	$msg = 'FAIL';
 	foreach(explode(',', $requestids) AS $reqid) {
@@ -944,10 +954,9 @@ function AJupdateVMprofileItem() {
 ////////////////////////////////////////////////////////////////////////////////
 function AJnewProfile() {
 	$newprofile = processInputVar('newname', ARG_STRING);
-	if(get_magic_quotes_gpc()) {
+	if(get_magic_quotes_gpc())
 		$newprofile = stripslashes($newprofile);
-		$newprofile = vcl_mysql_escape_string($newprofile);
-	}
+	$newprofile = vcl_mysql_escape_string($newprofile);
 	$query = "SELECT id FROM vmprofile WHERE profilename = '$newprofile'";
 	$qh = doQuery($query, 101);
 	if($row = mysqli_fetch_assoc($qh)) {

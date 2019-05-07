@@ -150,8 +150,8 @@ $noHTMLwrappers = array('sendRDPfile',
                         'AJremGroupFromProfile',
                         'AJaddProfileToGroup',
                         'AJremProfileFromGroup',
-                        'AJserverProfileStoreData',
-                        'AJfetchRouterDNS',*/
+                        'AJserverProfileStoreData',*/
+                        'AJfetchRouterDNS',
                         'AJconfirmDeleteRequest',
                         'AJsubmitDeleteRequest',
                         'AJconfirmRemoveRequest',
@@ -257,6 +257,7 @@ $actions['mode']['AJconnectRequest'] = "AJconnectRequest";
 $actions['mode']['sendRDPfile'] = "sendRDPfile";
 $actions['mode']['AJcheckConnectTimeout'] = "AJcheckConnectTimeout";
 $actions['mode']['AJpreviewClickThrough'] = "AJpreviewClickThrough";
+$actions['mode']['AJfetchRouterDNS'] = "AJfetchRouterDNS";
 #$actions['mode']['connectMindterm'] = "connectMindterm";
 #$actions['mode']['connectRDPapplet'] = "connectRDPapplet";
 $actions['pages']['AJnewRequest'] = "reservations";
@@ -281,6 +282,7 @@ $actions['pages']['AJconnectRequest'] = "reservations";
 $actions['pages']['sendRDPfile'] = "reservations";
 $actions['pages']['AJcheckConnectTimeout'] = "reservations";
 $actions['pages']['AJpreviewClickThrough'] = "reservations";
+$actions['pages']['AJfetchRouterDNS'] = "reservations";
 #$actions['pages']['connectMindterm'] = "currentReservations";
 #$actions['pages']['connectRDPapplet'] = "currentReservations";
 
@@ -386,7 +388,6 @@ $actions['mode']['AJremGroupFromProfile'] = "AJremGroupFromProfile";
 $actions['mode']['AJaddProfileToGroup'] = "AJaddProfileToGroup";
 $actions['mode']['AJremProfileFromGroup'] = "AJremProfileFromGroup";
 $actions['mode']['AJserverProfileStoreData'] = "AJserverProfileStoreData";
-$actions['mode']['AJfetchRouterDNS'] = "AJfetchRouterDNS";
 $actions['pages']['serverProfiles'] = "serverProfiles";
 $actions['pages']['AJsaveServerProfile'] = "serverProfiles";
 $actions['pages']['AJserverProfileData'] = "serverProfiles";
@@ -397,8 +398,7 @@ $actions['pages']['AJaddGroupToProfile'] = "serverProfiles";
 $actions['pages']['AJremGroupFromProfile'] = "serverProfiles";
 $actions['pages']['AJaddProfileToGroup'] = "serverProfiles";
 $actions['pages']['AJremProfileFromGroup'] = "serverProfiles";
-$actions['pages']['AJserverProfileStoreData'] = "serverProfiles";
-$actions['pages']['AJfetchRouterDNS'] = "serverProfiles";*/
+$actions['pages']['AJserverProfileStoreData'] = "serverProfiles";*/
 
 # time table
 # TODO a few of these belong to new reservation

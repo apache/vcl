@@ -1448,15 +1448,15 @@ function getCurrentBlockHTML($listonly=0) {
 	$rt .= "title=\"" . i("Block Allocation Times") . "\">\n";
 	$rt .= "<h2>" . i("Block Allocation Times") . "</h2>\n";
 	$rt .= "<table dojoType=\"dojox.grid.DataGrid\" jsId=\"blockTimesGrid\" sortInfo=1 ";
-	$rt .= "style=\"width: 278px; height: 200px;\">\n";
+	$rt .= "style=\"width: 328px; height: 200px;\">\n";
 	$rt .= "<script type=\"dojo/method\" event=\"onStyleRow\" args=\"row\">\n";
 	$rt .= "blockTimeRowStyle(row);\n";
 	$rt .= "</script>\n";
 	$rt .= "<thead>\n";
 	$rt .= "<tr>\n";
-	$rt .= "<th field=\"start\" width=\"65px\" formatter=\"blockTimesGridDate\">" . i("Date") . "</th>\n";
-	$rt .= "<th field=\"start\" width=\"54px\" formatter=\"blockTimesGridStart\">" . i("Start") . "</th>\n";
-	$rt .= "<th field=\"end\" width=\"54px\" formatter=\"blockTimesGridEnd\">" . i("End") . "</th>\n";
+	$rt .= "<th field=\"start\" width=\"70px\" formatter=\"blockTimesGridDate\">" . i("Date") . "</th>\n";
+	$rt .= "<th field=\"start\" width=\"85px\" formatter=\"blockTimesGridStart\">" . i("Start") . "</th>\n";
+	$rt .= "<th field=\"end\" width=\"85px\" formatter=\"blockTimesGridEnd\">" . i("End") . "</th>\n";
 	$rt .= "<th field=\"delbtn\" width=\"60px\">" . i("Skip") . "</th>\n";
 	$rt .= "</tr>\n";
 	$rt .= "</thead>\n";
@@ -1741,17 +1741,17 @@ function getUserCurrentBlockHTML($listonly=0) {
 	$rt .= i("Block Allocation Times") . "\">\n";
 	$rt .= "<h2>" . i("Block Allocation Times") . "</h2>\n";
 	$rt .= "<table dojoType=\"dojox.grid.DataGrid\" jsId=\"blockTimesGrid\" sortInfo=1 ";
-	$rt .= "style=\"width: 278px; height: 200px;\">\n";
+	$rt .= "style=\"width: 328px; height: 200px;\">\n";
 	$rt .= "<script type=\"dojo/method\" event=\"onStyleRow\" args=\"row\">\n";
 	$rt .= "blockTimeRowStyle(row);\n";
 	$rt .= "</script>\n";
 	$rt .= "<thead>\n";
 	$rt .= "<tr>\n";
-	$rt .= "<th field=\"start\" width=\"60px\" formatter=\"blockTimesGridDate\">";
+	$rt .= "<th field=\"start\" width=\"70px\" formatter=\"blockTimesGridDate\">";
 	$rt .= i("Date") . "</th>\n";
-	$rt .= "<th field=\"start\" width=\"54px\" formatter=\"blockTimesGridStart\">";
+	$rt .= "<th field=\"start\" width=\"85px\" formatter=\"blockTimesGridStart\">";
 	$rt .= i("Start") . "</th>\n";
-	$rt .= "<th field=\"end\" width=\"54px\" formatter=\"blockTimesGridEnd\">";
+	$rt .= "<th field=\"end\" width=\"85px\" formatter=\"blockTimesGridEnd\">";
 	$rt .= i("End") . "</th>\n";
 	$rt .= "<th field=\"delbtn\" width=\"60px\">" . i("Skip") . "</th>\n";
 	$rt .= "</tr>\n";
@@ -3133,34 +3133,40 @@ function processBlockAllocationInput() {
 	if(! $err) {
 		if($type == 'list') {
 			$slots = processInputVar('slots', ARG_STRING);
-			$return['slots'] = explode(',', $slots);
+			if(! preg_match('/^(\d{8}\|\d{2}:\d{2}\|\d{2}:\d{2})(,(\d{8}\|\d{2}:\d{2}\|\d{2}:\d{2}))*$/', $slots)) {
+				$errmsg = i("Invalid time slot submitted.");
+				$err = 1;
+			}
 			$return['times'] = array();
-			$lastdate = array('day' => '', 'ts' => 0);
-			foreach($return['slots'] as $slot) {
-				$tmp = explode('|', $slot);
-				if(count($tmp) != 3) {
-					$errmsg = i("Invalid date/time submitted.");
-					$err = 1;
-					break;
-				}
-				$date = $tmp[0];
-				if(! $err) {
-					$datets = strtotime($date);
-					if($method != 'edit' && $datets < (time() - SECINDAY)) {
-						$errmsg = i("The date must be today or later.");
+			if(! $err) {
+				$return['slots'] = explode(',', $slots);
+				$lastdate = array('day' => '', 'ts' => 0);
+				foreach($return['slots'] as $slot) {
+					$tmp = explode('|', $slot);
+					if(count($tmp) != 3) {
+						$errmsg = i("Invalid date/time submitted.");
 						$err = 1;
 						break;
 					}
+					$date = $tmp[0];
+					if(! $err) {
+						$datets = strtotime($date);
+						if($method != 'edit' && $datets < (time() - SECINDAY)) {
+							$errmsg = i("The date must be today or later.");
+							$err = 1;
+							break;
+						}
+					}
+					$return['times'][] = "{$tmp[1]}|{$tmp[2]}";
+					if($datets > $lastdate['ts']) {
+						$lastdate['ts'] = $datets;
+						$lastdate['day'] = $date;
+					}
 				}
-				$return['times'][] = "{$tmp[1]}|{$tmp[2]}";
-				if($datets > $lastdate['ts']) {
-					$lastdate['ts'] = $datets;
-					$lastdate['day'] = $date;
+				if(! $err) {
+					$expirets = strtotime("{$lastdate['day']} 23:59:59");
+					$return['expiretime'] = unixToDatetime($expirets);
 				}
-			}
-			if(! $err) {
-				$expirets = strtotime("{$lastdate['day']} 23:59:59");
-				$return['expiretime'] = unixToDatetime($expirets);
 			}
 		}
 		if($type == 'weekly' || $type == 'monthly') {
