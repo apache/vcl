@@ -1306,28 +1306,22 @@ sub mail {
 		$shared_mail_box = $management_node_info->{SHARED_EMAIL_BOX} if $management_node_info->{SHARED_EMAIL_BOX};
 	}
 
+	my $mail_args = {From => $from, To => $to, Subject => $subject};
 	if ($shared_mail_box) {
-		my $bcc = $shared_mail_box;
-		if ($mailer->open({From => $from, To => $to, Bcc => $bcc, Subject => $subject})) {
-			print $mailer $mailstring;
-			$mailer->close();
-			notify($ERRORS{'OK'}, 0, "SUCCESS -- Sending mail To: $to, $subject");
-		}
-		else {
-			notify($ERRORS{'WARNING'}, 0, "NOTICE --  Problem sending mail to: $to From");
-		}
-	} ## end if ($shared_mail_box)
+		$mail_args->{Bcc} = $shared_mail_box;
+	}
+	if($mailstring =~ /<html>/ || $mailstring =~ /<html .*>/) {
+		$mail_args->{'Content-Type'} = "text/html";
+		notify($ERRORS{'DEBUG'}, 0, "Encountered message containing <html> tag, adding Content-Type header");
+	}
+	if ($mailer->open($mail_args)) {
+		print $mailer $mailstring;
+		$mailer->close();
+		notify($ERRORS{'OK'}, 0, "SUCCESS -- Sending mail To: $to, $subject");
+	}
 	else {
-		if ($mailer->open({From => $from, To => $to, Subject => $subject,}))
-		{
-			print $mailer $mailstring;
-			$mailer->close();
-			notify($ERRORS{'OK'}, 0, "SUCCESS -- Sending mail To: $to, $subject");
-		}
-		else {
-			notify($ERRORS{'WARNING'}, 0, "NOTICE --  Problem sending mail to: $to From");
-		}
-	} ## end else [ if ($shared_mail_box)
+		notify($ERRORS{'WARNING'}, 0, "NOTICE --  Problem sending mail to: $to");
+	}
 } ## end sub mail
 
 #//////////////////////////////////////////////////////////////////////////////

@@ -1145,15 +1145,25 @@ sub pre_reload {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
 		return 0;
 	}
-	
+
 	my $computer_name = $self->data->get_computer_short_name();
-	
+
 	# Check if the computer is joined to any AD domain
 	my $computer_current_domain_name = $self->ad_get_current_domain();
 	if ($computer_current_domain_name) {
-		$self->ad_delete_computer();
+		# check that node is not a domain controller
+		my $check_dc = $self->ad_check_domain_controller();
+		if (!defined($check_dc) || $check_dc == 0) {
+			# if call to ad_check_domain_controller fails, still attempt to
+			# delete from domain; unusual for node to be a domain controller
+			notify($ERRORS{'DEBUG'}, 0, "attempting to delete computer from domain");
+			$self->ad_delete_computer();
+		}
+		elsif ($check_dc == 1) {
+			notify($ERRORS{'DEBUG'}, 0, "computer is a domain controller, not attempting to delete computer from its own domain");
+		}
 	}
-	
+
 	return $self->SUPER::pre_reload();
 }
 
@@ -14217,7 +14227,19 @@ sub ad_unjoin {
 		notify($ERRORS{'DEBUG'}, 0, "$computer_name does not need to be removed from AD because it is not currently joined to a domain");
 		return 1;
 	}
-	
+
+	# check that node is not a domain controller
+	my $check_dc = $self->ad_check_domain_controller();
+	if (!defined($check_dc) || $check_dc == 0) {
+		# if call to ad_check_domain_controller fails, still attempt to
+		# delete from domain; unusual for node to be a domain controller
+		notify($ERRORS{'DEBUG'}, 0, "attempting to delete computer from domain");
+	}
+	elsif ($check_dc == 1) {
+		notify($ERRORS{'DEBUG'}, 0, "computer is a domain controller, not attempting to delete computer from its own domain");
+		return 1;
+	}
+
 	# Expected output:
 	# Executing (\\<COMPUTERNAME>\ROOT\CIMV2:Win32_ComputerSystem.Name="<COMPUTERNAME>")->UnJoinDomainOrWorkgroup()
 	# Method execution successful.s
@@ -14858,6 +14880,50 @@ sub ad_user_exists {
 		notify($ERRORS{'DEBUG'}, 0, "user does NOT exist in Active Directory domain: $user_samaccountname");
 	}
 	return $self->{ad_user_exists}{$user_samaccountname};
+}
+
+#//////////////////////////////////////////////////////////////////////////////
+
+=head2 ad_check_domain_controller
+
+ Parameters  : none
+ Returns     : boolean
+ Description : Checks if computer is configured as a domain controller; returns
+               0 if not a domain controller, 1 if a domain controller, and
+               no value on error
+
+=cut
+
+sub ad_check_domain_controller {
+	my $self = shift;
+	if (ref($self) !~ /windows/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+
+	my $system32_path = $self->get_system32_path() || return;
+	my $check_dc_command = "echo | cmd.exe /c \"$system32_path/Wbem/wmic.exe /INTERACTIVE:OFF COMPUTERSYSTEM GET DomainRole\"";
+	my ($check_dc_exit_status, $check_dc_output) = $self->execute($check_dc_command);
+	if (!defined($check_dc_output)) {
+		notify($ERRORS{'DEBUG'}, 0, "failed to check for node being a domain controller");
+		return;
+	}
+	elsif (grep(/ERROR/i, @$check_dc_output)) {
+		notify($ERRORS{'DEBUG'}, 0, "failed to check for node being a domain controller, output:\n" . join("\n", @$check_dc_output));
+		return;
+	}
+	elsif (@{$check_dc_output}[1] =~ /^[0-3]$/) {
+		notify($ERRORS{'OK'}, 0, "node is a not a domain controller");
+		return 0;
+	}
+	elsif (@{$check_dc_output}[1] =~ /^[4-5]$/) {
+		notify($ERRORS{'OK'}, 0, "node is a domain controller");
+		return 1;
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "unexpected output checking for node being a domain controller, output:\n" . join("\n", @$check_dc_output));
+		return;
+	}
 }
 
 #//////////////////////////////////////////////////////////////////////////////

@@ -170,11 +170,17 @@ function initGlobals() {
 		if(! is_null($userid))
 			$authed = 1;
 	}
-	elseif(preg_match('/_shibsession/', join(',', array_keys($_COOKIE)))) {
-		# redirect to shibauth directory
-		header('Location: ' . BASEURL . "/shibauth/");
-		dbDisconnect();
-		exit;
+	else {
+		global $authFuncs;
+		foreach($authFuncs as $type) {
+			if($type['test']()) {
+				$userid = $type['auth']();
+				if(! is_null($userid)) {
+					$authed = 1;
+					break;
+				}
+			}
+		}
 	}
 	# end auth check
 
@@ -13108,7 +13114,7 @@ function sendJSON($arr, $identifier='', $REST=0) {
 ////////////////////////////////////////////////////////////////////////////////
 function sendHeaders() {
 	global $mode, $user, $authed, $oldmode, $actionFunction;
-	global $shibauthed;
+	global $shibauthed, $authFuncs;
 	if(! $authed && $mode == "auth") {
 		header("Location: " . BASEURL . SCRIPT . "?mode=selectauth");
 		dbDisconnect();
@@ -13116,78 +13122,22 @@ function sendHeaders() {
 	}
 	switch($mode) {
 		case 'logout':
-			if($shibauthed) {
-				$shibdata = getShibauthData($shibauthed);
-				// TODO make shib-logouturl comparison caseless
-				if(array_key_exists('Shib-logouturl', $shibdata) &&
-				   ! empty($shibdata['Shib-logouturl'])) {
-					dbDisconnect();
-					header("Location: {$shibdata['Shib-logouturl']}");
-					exit;
-				}
-			}
-		case 'shiblogout':
-			setcookie("ITECSAUTH", "", time() - 10, "/", COOKIEDOMAIN);
-			setcookie("VCLAUTH", "", time() - 10, "/", COOKIEDOMAIN);
-			if($shibauthed) {
-				$msg = '';
-				$shibdata = getShibauthData($shibauthed);
-				# find and clear shib cookies
-				/*foreach(array_keys($_COOKIE) as $key) {
-					if(preg_match('/^_shibsession[_0-9a-fA-F]+$/', $key))
-						setcookie($key, "", time() - 10, "/", $_SERVER['SERVER_NAME']);
-					elseif(preg_match('/^_shibstate_/', $key))
-						setcookie($key, "", time() - 10, "/", $_SERVER['SERVER_NAME']);
-				}*/
-				doQuery("DELETE FROM shibauth WHERE id = $shibauthed", 101);
+			$authtype = getAuthTypeFromAuthCookie();
+			if(is_null($authtype)) {
 				stopSession();
 				dbDisconnect();
-				if(array_key_exists('Shib-logouturl', $shibdata) &&
-				   ! empty($shibdata['Shib-logouturl'])) {
-					print "<html>\n";
-					print "   <head>\n";
-					print "      <style type=\"text/css\">\n";
-					print "         .red {\n";
-					print "            color: red;\n";
-					print "         }\n";
-					print "         body{\n";
-					print "            margin:0px; color: red;\n";
-					print "         }\n";
-					print "      </style>\n";
-					print "   </head>\n";
-					print "   <body>\n";
-					print "      <span class=red>Done.</span>&nbsp;&nbsp;&nbsp;<a target=\"_top\" href=\"" . BASEURL . "/\">Return to VCL</a>\n";
-					print "   </body>\n";
-					print "</html>\n";
-				}
-				else {
-					print "<html>\n";
-					print "<head>\n";
-					print "<META HTTP-EQUIV=REFRESH CONTENT=\"5;url=" . BASEURL . "\">\n";
-					print "<style type=\"text/css\">\n";
-					print "  .hidden {\n";
-					print "    display: none;\n";
-					print "  }\n";
-					print "</style>\n";
-					print "</head>\n";
-					print "<body>\n";
-					print "Logging out of VCL...";
-					print "<iframe src=\"https://{$_SERVER['SERVER_NAME']}/Shibboleth.sso/Logout\" class=hidden>\n";
-					print "</iframe>\n";
-					if(array_key_exists('Shib-Identity-Provider', $shibdata) &&
-					   ! empty($shibdata['Shib-Identity-Provider'])) {
-						$tmp = explode('/', $shibdata['Shib-Identity-Provider']);
-						$idp = "{$tmp[0]}//{$tmp[2]}";
-						print "<iframe src=\"$idp/idp/logout.jsp\" class=hidden>\n";
-						print "</iframe>\n";
-					}
-					print "</body>\n";
-					print "</html>\n";
-				}
+				header("Location: " . BASEURL . SCRIPT);
 				exit;
 			}
-			header("Location: " . HOMEURL);
+			$authFuncs[$authtype]['unauth']('headers');
+			setcookie("VCLAUTH", "", time() - 10, "/", COOKIEDOMAIN);
+			$authed = 0;
+			ob_start();
+			printHTMLHeader();
+			$authFuncs[$authtype]['unauth']('content');
+			printHTMLFooter();
 			stopSession();
+			ob_end_flush();
 			dbDisconnect();
 			exit;
 	}
