@@ -178,8 +178,8 @@ if [[ $dorc -eq 1 ]]; then
 	fi
 	VCL_VERSION=${VCL_VERSION}-RC$RC
 	ARCHIVE=apache-VCL-$VCL_VERSION.tar.bz2
-	ARCHIVEURLPATH="http://people.apache.org/~jfthomps/apache-VCL-${VCL_VERSION}/"
-	SIGPATH="http://people.apache.org/~jfthomps/apache-VCL-${VCL_VERSION}/"
+	ARCHIVEURLPATH="https://people.apache.org/~jfthomps/apache-VCL-${VCL_VERSION}/"
+	SIGPATH="https://people.apache.org/~jfthomps/apache-VCL-${VCL_VERSION}/"
 fi
 
 if [[ $DOALL -eq 1 ]]; then
