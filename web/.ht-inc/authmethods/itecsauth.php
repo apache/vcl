@@ -22,6 +22,79 @@
  * \file
  */
 
+$authFuncs['itecs'] = array('test' => 'testITECSAuth',
+                            'auth' => 'processITECSAuth',
+                            'unauth' => 'unauthITECS');
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn testITECSAuth()
+///
+/// \return 1 if ITECSAUTH cookie found, 0 if not
+///
+/// \brief tests for existance of authentication information for ITECS auth
+///
+////////////////////////////////////////////////////////////////////////////////
+function testITECSAuth() {
+	if(array_key_exists('ITECSAUTH', $_COOKIE))
+		return 1;
+	return 0;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn processITECSAuth()
+///
+/// \return userid in form of emailaddress@ITECS or NULL
+///
+/// \brief processes authentication information; returns userid or NULL if
+/// unsuccessful
+///
+////////////////////////////////////////////////////////////////////////////////
+function processITECSAuth() {
+	$authdata = authUser();
+	if(! ($error = getAuthError())) {
+		$userid = "{$authdata["email"]}@ITECS";
+		$affilid = getAffiliationID('ITECS');
+		addLoginLog($userid, 'ITECS', $affilid, 1);
+
+		# get cookie data
+		$cookie = getAuthCookieData($userid, 'itecs', 600);
+		# set cookie
+		if(version_compare(PHP_VERSION, "5.2", ">=") == true)
+			setcookie("VCLAUTH", "{$cookie['data']}", 0, "/", COOKIEDOMAIN, 0, 1);
+		else
+			setcookie("VCLAUTH", "{$cookie['data']}", 0, "/", COOKIEDOMAIN);
+
+		return $userid;
+	}
+	return NULL;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn unauthITECS($mode)
+///
+/// \param $mode - headers or content
+///
+/// \brief for headers mode, destroys authentication information; for content
+/// mode, prints information about having been logged out
+///
+////////////////////////////////////////////////////////////////////////////////
+function unauthITECS($mode) {
+	if($mode == 'headers') {
+		$time = time() - 10;
+		setcookie("ITECSAUTH_RETURN", "", $time, "/", COOKIEDOMAIN);
+		setcookie("ITECSAUTH_CSS", "", $time, "/", COOKIEDOMAIN);
+		setcookie("ITECSAUTH", "", $time, "/", COOKIEDOMAIN);
+	}
+	elseif($mode == 'content') {
+		print "<h2>Logout</h2>\n";
+		print "You are now logged out of VCL.<br><br>\n";
+		print "<a href=\"" . BASEURL . SCRIPT . "?mode=selectauth\">Return to Login</a><br><br><br>\n";
+	}
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 ///
 /// \fn addITECSUser($loginid)

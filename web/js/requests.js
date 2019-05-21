@@ -435,8 +435,7 @@ function getDeployData(waitonly) {
 		else {
 			var tmp = dojo.byId('deploystartday').value;
 			tmp = new Date(tmp * 1000);
-			var offset = tmp.getTimezoneOffset() * 60000;
-			var date = new Date(tmp.getTime() + offset);
+			var date = new Date(tmp.getTime());
 			var hour = parseInt(dojo.byId('deployhour').value);
 			var m = dojo.byId('deploymeridian').value;
 			if(m == 'pm' && hour < 12)
