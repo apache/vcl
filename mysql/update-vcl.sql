@@ -878,6 +878,7 @@ CREATE TABLE IF NOT EXISTS `addomain` (
   `username` varchar(64) NOT NULL default '',
   `password` varchar(256) NOT NULL default '',
   `secretid` smallint(5) unsigned NOT NULL,
+  `usedbhostnames` tinyint(1) unsigned NOT NULL default '0',
   PRIMARY KEY (`id`),
   KEY `domainDNSName` (`domainDNSName`),
   KEY `secretid` (`secretid`)

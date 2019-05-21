@@ -242,6 +242,9 @@ class ADdomain extends Resource {
 			# dnsservers
 			if($data['dnsservers'] != $olddata['dnsservers'])
 				$updates[] = "dnsServers = '{$data['dnsservers']}'";
+			# usedbhostnames
+			if($data['usedbhostnames'] != $olddata['usedbhostnames'])
+			    $updates[] = "usedbhostnames = {$data['usedbhostnames']}";
 			if(count($updates)) {
 				$query = "UPDATE addomain SET "
 				       . implode(', ', $updates)
@@ -346,14 +349,16 @@ class ADdomain extends Resource {
 				.	"username, "
 				.	"password, "
 				.	"secretid, "
-				.	"dnsServers) "
+				.	"dnsServers, "
+				.	"usedbhostnames) "
 				.	"VALUES ('{$data['name']}', "
 				.	"$ownerid, "
 				.	"'{$data['domaindnsname']}', "
 				.	"'{$data['username']}', "
 				.	"'$encpass', "
 				.	"$secretid, "
-				.	"'{$data['dnsservers']}')";
+				.	"'{$data['dnsservers']}', "
+				.	"'{$data['usedbhostnames']}')";
 		doQuery($query);
 
 		$rscid = dbLastInsertID();
@@ -423,14 +428,16 @@ class ADdomain extends Resource {
 		$errmsg = i("Password must be at least 4 characters long");
 		$h .= labeledFormItem('password', i('Password'), 'password', '^.{4,256}$', 1, '', $errmsg, '', '', '200px'); 
 		# confirm password
-		$h .= labeledFormItem('password2', i('Confirm Password'), 'password', '', 1, '', '', '', '', '200px'); 
+		$h .= labeledFormItem('password2', i('Confirm Password'), 'password', '', 1, '', '', '', '', '200px');
+		# use database hostname checkbox
+		$h .= labeledFormItem('usedbhostnames', i('Use Database Hostnames'), 'check', '', '', '', '', '', '', '', helpIcon('usedbhostnameshelp'));
 		$h .= "<br>\n";
 		# dns server list
 		$ipreg = '(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)';
 		$reg = "^($ipreg,)*($ipreg)$";
 		$errmsg = i("Invalid IP address specified - must be a valid IPV4 address");
 		$h .= labeledFormItem('dnsservers', i('DNS Server(s)'), 'text', $reg, 0, '', $errmsg,
-		                      '', '', '300px', helpIcon('dnsservershelp')); 
+		                      '', '', '300px', helpIcon('dnsservershelp'));
 
 		$h .= "</div>\n"; # center
 		$h .= "</div>\n"; # addomaindlgcontent
@@ -473,6 +480,7 @@ class ADdomain extends Resource {
 		$h .= helpTooltip('domaindnsnamehelp', i("domain name registered in DNS for Active Directory Domain (ex: ad.example.com)"));
 		$h .= helpTooltip('usernamehelp', i("These credentials will be used to register reserved computers with AD."));
 		$h .= helpTooltip('dnsservershelp', i("comma delimited list of IP addresses for DNS servers that handle Domain DNS"));
+		$h .= helpTooltip('usedbhostnameshelp', i("Check this option if you like to have the computer object names within AD to match VM hostname stored within the VCL database"));
 		$h .= "</div>\n"; # tooltips
 
 		return $h;
@@ -510,6 +518,7 @@ class ADdomain extends Resource {
 		$return["password"] = $_POST['password'];
 		$return["password2"] = $_POST['password2'];
 		$return["dnsservers"] = processInputVar("dnsservers", ARG_STRING);
+		$return["usedbhostnames"] = processInputVar('usedbhostnames', ARG_NUMERIC, 0);
 
 		if(! preg_match("/^([A-Za-z0-9-!@#$%^&\*\(\)_=\+\[\]{}\\\|:;,\.\/\?~` ]){2,30}$/", $return['name'])) {
 			$return['error'] = 1;
@@ -553,6 +562,9 @@ class ADdomain extends Resource {
 				break;
 			}
 		}
+
+		if($return['usedbhostnames'] != 0 && $return['usedbhostnames'] != 1)
+			$return['usedbhostnames'] = 0;
 
 		if($return['error'])
 			$return['errormsg'] = implode('<br>', $errormsg);

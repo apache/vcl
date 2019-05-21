@@ -404,6 +404,7 @@ $SUBROUTINE_MAPPINGS{image_domain_owner_id} = '$self->request_data->{reservation
 #$SUBROUTINE_MAPPINGS{image_domain_password} = '$self->request_data->{reservation}{RESERVATION_ID}{image}{imagedomain}{password}'; # Explicit subroutine
 $SUBROUTINE_MAPPINGS{image_domain_secret_id} = '$self->request_data->{reservation}{RESERVATION_ID}{image}{imagedomain}{secretid}';
 $SUBROUTINE_MAPPINGS{image_domain_username} = '$self->request_data->{reservation}{RESERVATION_ID}{image}{imagedomain}{username}';
+$SUBROUTINE_MAPPINGS{image_domain_usedbhostnames} = '$self->request_data->{reservation}{RESERVATION_ID}{image}{imagedomain}{usedbhostnames}';
 $SUBROUTINE_MAPPINGS{image_domain_base_ou} = '$self->request_data->{reservation}{RESERVATION_ID}{image}{imagedomain}{imageaddomain}{baseOU}';
 $SUBROUTINE_MAPPINGS{image_domain_cryptsecret} = '$self->request_data->{reservation}{RESERVATION_ID}{image}{imagedomain}{cryptsecret}{cryptsecret}';
 

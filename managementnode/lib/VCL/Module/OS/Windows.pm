@@ -3939,8 +3939,8 @@ sub reboot {
 			}
 			
 			# Set sshd service startup mode to auto
-			if (!$self->set_service_startup_mode('sshd', 'auto')) {
-				notify($ERRORS{'WARNING'}, 0, "reboot not attempted, unable to set sshd service startup mode to auto");
+			if (!$self->set_service_startup_mode('sshd', 'manual')) {
+				notify($ERRORS{'WARNING'}, 0, "reboot not attempted, unable to set sshd service startup mode to manual");
 				return 0;
 			}
 			
@@ -12741,6 +12741,7 @@ sub set_computer_hostname {
 		return;
 	}
 	
+	my $use_database_hostnames = $self->data->get_image_domain_usedbhostnames();
 	my $database_computer_hostname = $self->data->get_computer_hostname();
 	my $system32_path = $self->get_system32_path() || return;
 	
@@ -12777,8 +12778,20 @@ sub set_computer_hostname {
 		$dns_suffix = $2;
 	}
 	
-	# Disable 'Change primary DNS suffix when domain membership changes'
-	$self->reg_add('HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\services\Tcpip\Parameters', 'SyncDomainWithMembership', 'REG_DWORD', 0);
+	if ($use_database_hostnames == 1) {
+		$new_computer_name = $database_computer_hostname;
+		notify($ERRORS{'DEBUG'}, 0, "active directory forces using database configured hostname: $new_computer_name");
+		# Enable 'Change primary DNS suffix when domain membership changes'
+		$self->reg_add('HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\services\Tcpip\Parameters', 'SyncDomainWithMembership', 'REG_DWORD', 1);
+	}
+	else {
+		# Disable 'Change primary DNS suffix when domain membership changes'
+		$self->reg_add('HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\services\Tcpip\Parameters', 'SyncDomainWithMembership', 'REG_DWORD', 0);
+		# Set the DNS suffix registry key
+		if ($dns_suffix) {
+			$self->reg_add('HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\services\Tcpip\Parameters', 'NV Domain', 'REG_SZ', $dns_suffix);
+		}
+	}
 	
 	# Assemble the command
 	my $command = "echo | cmd.exe /c \"$system32_path/Wbem/wmic.exe COMPUTERSYSTEM WHERE Name=\\\"%COMPUTERNAME%\\\" Rename \\\"$new_computer_name\\\"\"";
@@ -12794,11 +12807,6 @@ sub set_computer_hostname {
 	else {
 		notify($ERRORS{'WARNING'}, 0, "failed to set computer name of $database_computer_hostname to $new_computer_name, exit status: $exit_status, command:\n$command\noutput:\n" . join("\n", @$output));
 		return 0;
-	}
-	
-	# Set the DNS suffix registry key
-	if ($dns_suffix) {
-		$self->reg_add('HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\services\Tcpip\Parameters', 'NV Domain', 'REG_SZ', $dns_suffix);
 	}
 	
 	return 1;
