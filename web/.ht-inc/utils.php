@@ -1459,7 +1459,8 @@ function getImages($includedeleted=0, $imageid=0) {
 	       . "WHERE i.userid = u.id AND ";
 	if(! $includedeleted)
 		$query .=   "i.deleted = 0 AND ";
-	$query .=      "u.affiliationid = a.id";
+	$query .=      "u.affiliationid = a.id "
+	       . "ORDER BY i.imageid, i.revision";
 	$qh = doQuery($query, 101);
 	while($row = mysqli_fetch_assoc($qh)) {
 		$id = $row['imageid'];
@@ -9428,7 +9429,7 @@ function getNAThosts($id=0, $sort=0) {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
-/// \fn getReservationNATports($resid)
+/// \fn getNATports($resid)
 ///
 /// \param $resid - id of a reservation
 ///
