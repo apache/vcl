@@ -44,8 +44,8 @@ function inlineEditResourceCB(data, ioArgs) {
 		dijit.byId('domaindnsname').set('value', data.items.data.domaindnsname);
 		dijit.byId('username').set('value', data.items.data.username);
 		dijit.byId('dnsservers').set('value', data.items.data.dnsservers);
-		if (data.items.data.useDatabaseHostnamesForComputerObjects == 1) {
-			dijit.byId('usedbhostnames').set('checked', data.items.data.useDatabaseHostnamesForComputerObjects)
+		if(data.items.data.usedbhostnames == 1) {
+			dijit.byId('usedbhostnames').set('checked', data.items.data.usedbhostnames)
 		}
 		dijit.byId('password').set('value', '********');
 		dijit.byId('password2').set('value', 'xxxxxxxx');
@@ -90,12 +90,12 @@ function saveResource() {
 		dojo.byId('addeditdlgerrmsg').innerHTML = _('Passwords do not match');
 		return;
 	}
-	// update useDatabaseHostnamesForComputerObjects
+	// update usedbhostnames
 	if(dijit.byId('usedbhostnames').get('checked')) {
-		data['useDatabaseHostnamesForComputerObjects'] = 1;
+		data['usedbhostnames'] = 1;
 	}
 	else {
-		data['useDatabaseHostnamesForComputerObjects'] = 0;
+		data['usedbhostnames'] = 0;
 	}
 	dijit.byId('addeditbtn').set('disabled', true);
 	RPCwrapper(data, saveResourceCB, 1);

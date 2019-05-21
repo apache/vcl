@@ -12741,7 +12741,7 @@ sub set_computer_hostname {
 		return;
 	}
 	
-	my $use_database_hostnames = $self->data->get_image_domain_usedbhostname();
+	my $use_database_hostnames = $self->data->get_image_domain_usedbhostnames();
 	my $database_computer_hostname = $self->data->get_computer_hostname();
 	my $system32_path = $self->get_system32_path() || return;
 	

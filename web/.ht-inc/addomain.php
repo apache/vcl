@@ -242,9 +242,9 @@ class ADdomain extends Resource {
 			# dnsservers
 			if($data['dnsservers'] != $olddata['dnsservers'])
 				$updates[] = "dnsServers = '{$data['dnsservers']}'";
-			# useDatabaseHostnamesForComputerObjects
-			if($data['useDatabaseHostnamesForComputerObjects'] != $olddata['useDatabaseHostnamesForComputerObjects'])
-			    $updates[] = "usedbhostname = {$data['useDatabaseHostnamesForComputerObjects']}";
+			# usedbhostnames
+			if($data['usedbhostnames'] != $olddata['usedbhostnames'])
+			    $updates[] = "usedbhostnames = {$data['usedbhostnames']}";
 			if(count($updates)) {
 				$query = "UPDATE addomain SET "
 				       . implode(', ', $updates)
@@ -350,7 +350,7 @@ class ADdomain extends Resource {
 				.	"password, "
 				.	"secretid, "
 				.	"dnsServers, "
-				.	"usedbhostname) "
+				.	"usedbhostnames) "
 				.	"VALUES ('{$data['name']}', "
 				.	"$ownerid, "
 				.	"'{$data['domaindnsname']}', "
@@ -358,7 +358,7 @@ class ADdomain extends Resource {
 				.	"'$encpass', "
 				.	"$secretid, "
 				.	"'{$data['dnsservers']}', "
-				.	"'{$data['useDatabaseHostnamesForComputerObjects']}')";
+				.	"'{$data['usedbhostnames']}')";
 		doQuery($query);
 
 		$rscid = dbLastInsertID();
@@ -518,7 +518,7 @@ class ADdomain extends Resource {
 		$return["password"] = $_POST['password'];
 		$return["password2"] = $_POST['password2'];
 		$return["dnsservers"] = processInputVar("dnsservers", ARG_STRING);
-		$return["useDatabaseHostnamesForComputerObjects"] = $_POST['useDatabaseHostnamesForComputerObjects'];
+		$return["usedbhostnames"] = processInputVar('usedbhostnames', ARG_NUMERIC, 0);
 
 		if(! preg_match("/^([A-Za-z0-9-!@#$%^&\*\(\)_=\+\[\]{}\\\|:;,\.\/\?~` ]){2,30}$/", $return['name'])) {
 			$return['error'] = 1;
@@ -562,6 +562,9 @@ class ADdomain extends Resource {
 				break;
 			}
 		}
+
+		if($return['usedbhostnames'] != 0 && $return['usedbhostnames'] != 1)
+			$return['usedbhostnames'] = 0;
 
 		if($return['error'])
 			$return['errormsg'] = implode('<br>', $errormsg);
