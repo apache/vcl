@@ -385,7 +385,7 @@ function viewRequests() {
 					       . "WHERE v.id = {$requests[$i]['vmhostid']} AND "
 					       .       "v.computerid = c.id";
 					$qh = doQuery($query, 101);
-					$row = mysql_fetch_assoc($qh);
+					$row = mysqli_fetch_assoc($qh);
 					$vmhost = $row['hostname'];
 				}
 				$text .= "    <TD align=center><a id=\"req{$requests[$i]['id']}\" ";
@@ -2410,7 +2410,7 @@ function AJnewRequest() {
 		}
 		else {
 			$fields[] = 'name';
-			$name = mysql_real_escape_string($data['name']);
+			$name = vcl_mysql_escape_string($data['name']);
 			$values[] = "'$name'";
 		}
 		if($data['ipaddr'] != '') {
@@ -2472,7 +2472,7 @@ function saveRequestConfigs($reqid, $imageid, $configs, $vars) {
 	       . "ORDER BY id";
 	$qh = doQuery($query);
 	$resids = array();
-	while($row = mysql_fetch_assoc($qh)) {
+	while($row = mysqli_fetch_assoc($qh)) {
 		if(! array_key_exists($row['imageid'], $resids))
 			$resids[$row['imageid']] = array();
 		$resids[$row['imageid']][] = $row['id'];
@@ -2528,7 +2528,7 @@ function saveRequestConfigs($reqid, $imageid, $configs, $vars) {
 			if(array_key_exists("$cfgsubimgid/$mapid", $vars)) {
 				$sets = array();
 				foreach($vars["$cfgsubimgid/$mapid"] as $varid => $varval) {
-					$_val = mysql_real_escape_string($varval['value']);
+					$_val = vcl_mysql_escape_string($varval['value']);
 					$sets[] = "($instid, $varid, '$_val')";
 				}
 				$query = $qbase2 . implode(',', $sets);
@@ -2781,7 +2781,7 @@ function detailStatusHTML($reqid) {
 			       .       "reservationid = {$request['resid']} AND "
 			       .       "timestamp = '" . unixToDatetime($data['ts']) . "'";
 			$qh = doQuery($query, 101);
-			if($row = mysql_fetch_assoc($qh)) {
+			if($row = mysqli_fetch_assoc($qh)) {
 				$reason = $row['additionalinfo'];
 				$text .= "<br>" . i("retrying at state") . " \"$reason\"";
 			}
@@ -2865,7 +2865,7 @@ function detailStatusHTML($reqid) {
 				       . "ORDER BY id "
 				       . "LIMIT 1";
 				$qh = doQuery($query, 101);
-				if($row = mysql_fetch_assoc($qh)) {
+				if($row = mysqli_fetch_assoc($qh)) {
 					$reason = $row['additionalInfo'];
 					if(! empty($data))
 						$currtime = $row['ts'] - $data['ts'];
@@ -3353,8 +3353,12 @@ function AJeditRequest() {
 		return;
 	}
 	# check for max time being reached
+	$imgdata = getImages(1, $request['reservations'][0]['imageid']);
+	$maximglen = $imgdata[$request['reservations'][0]['imageid']]['maxinitialtime'];
 	if($request['forimaging'] && $maxtimes['total'] < 720)
 		$maxcheck = 720;
+	elseif(! $request['forimaging'] && $maximglen)
+		$maxcheck = $maximglen;
 	else
 		$maxcheck = $maxtimes['total'];
 	if(! $openend && ($reslen >= $maxcheck)) {
@@ -3410,6 +3414,11 @@ function AJeditRequest() {
 	$lengths = array();
 	if($request['forimaging'] && $maxtimes['total'] < 720) # make sure at least 12 hours available for imaging reservations
 		$maxtimes['total'] = 720;
+	elseif(! $request['forimaging'] && $maximglen) {
+		$maxtimes['total'] = $maximglen;
+		$currduration = (datetimeToUnix($request['end']) - datetimeToUnix($request['start'])) / 60;
+		$maxtimes['extend'] = $maximglen - $currduration;
+	}
 	if($timeToNext == -1) {
 		if($nousercheck)
 			$lengths["0"] = "No change";
@@ -3732,7 +3741,7 @@ function AJsubmitEditRequest() {
 			return;
 		}
 		if($servername != $request['servername']) {
-			$servername = mysql_real_escape_string($servername);
+			$servername = vcl_mysql_escape_string($servername);
 			$updateservername = 1;
 		}
 	}
@@ -4132,7 +4141,7 @@ function AJsubmitRemoveRequest() {
 	if($request['serverrequest']) {
 		$query = "SELECT id FROM serverrequest WHERE requestid = $requestid";
 		$qh = doQuery($query);
-		if($row = mysql_fetch_assoc($qh)) {
+		if($row = mysqli_fetch_assoc($qh)) {
 			$query = "DELETE FROM serverrequest WHERE requestid = $requestid";
 			doQuery($query, 152);
 			deleteVariable("fixedIPsr{$row['id']}");
@@ -4955,7 +4964,7 @@ function getReservationNextTimeout($resid) {
 	       . "ORDER BY cll.timestamp DESC "
 	       . "LIMIT 1";
 	$qh = doQuery($query);
-	if($row = mysql_fetch_assoc($qh)) {
+	if($row = mysqli_fetch_assoc($qh)) {
 		if(! is_numeric($row['timestamp']))
 			return NULL;
 		if($row['loadstatename'] == 'acknowledgetimeout')

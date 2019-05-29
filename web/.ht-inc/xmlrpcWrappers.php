@@ -430,7 +430,7 @@ function XMLRPCdeployServer($imageid, $start, $end, $admingroup='',
 			$admingroup = stripslashes($admingroup);
 		if(preg_match('/@/', $admingroup)) {
 			$tmp = explode('@', $admingroup);
-			$escadmingroup = mysql_real_escape_string($tmp[0]);
+			$escadmingroup = vcl_mysql_escape_string($tmp[0]);
 			$affilid = getAffiliationID($tmp[1]);
 			if(is_null($affilid)) {
 				return array('status' => 'error',
@@ -439,7 +439,7 @@ function XMLRPCdeployServer($imageid, $start, $end, $admingroup='',
 			}
 		}
 		else {
-			$escadmingroup = mysql_real_escape_string($admingroup);
+			$escadmingroup = vcl_mysql_escape_string($admingroup);
 			$affilid = DEFAULT_AFFILID;
 		}
 		$admingroupid = getUserGroupID($escadmingroup, $affilid, 1);
@@ -457,7 +457,7 @@ function XMLRPCdeployServer($imageid, $start, $end, $admingroup='',
 			$logingroup = stripslashes($logingroup);
 		if(preg_match('/@/', $logingroup)) {
 			$tmp = explode('@', $logingroup);
-			$esclogingroup = mysql_real_escape_string($tmp[0]);
+			$esclogingroup = vcl_mysql_escape_string($tmp[0]);
 			$affilid = getAffiliationID($tmp[1]);
 			if(is_null($affilid)) {
 				return array('status' => 'error',
@@ -466,7 +466,7 @@ function XMLRPCdeployServer($imageid, $start, $end, $admingroup='',
 			}
 		}
 		else {
-			$esclogingroup = mysql_real_escape_string($logingroup);
+			$esclogingroup = vcl_mysql_escape_string($logingroup);
 			$affilid = DEFAULT_AFFILID;
 		}
 		$logingroupid = getUserGroupID($esclogingroup, $affilid, 1);
@@ -514,7 +514,7 @@ function XMLRPCdeployServer($imageid, $start, $end, $admingroup='',
 		                         . "spaces, dashes(-), underscores(_), and periods(.) "
 		                         . "and be up to 255 characters long");
 	}
-	$name = mysql_real_escape_string($name);
+	$name = vcl_mysql_escape_string($name);
 
 	# validate $start
 	if($start != 'now' && ! is_numeric($start)) {
@@ -574,7 +574,7 @@ function XMLRPCdeployServer($imageid, $start, $end, $admingroup='',
 	if($userdata != '') {
 		if(get_magic_quotes_gpc())
 			$userdata = stripslashes($userdata);
-		$esc_userdata = mysql_real_escape_string($userdata);
+		$esc_userdata = vcl_mysql_escape_string($userdata);
 		$query = "INSERT INTO variable "
 		       .        "(name, "
 		       .        "serialization, "
@@ -1334,7 +1334,7 @@ function XMLRPCautoCapture($requestid) {
 	}
 	$query = "SELECT id FROM request WHERE id = $requestid";
 	$qh = doQuery($query, 101);
-	if(! mysql_num_rows($qh)) {
+	if(! mysqli_num_rows($qh)) {
 		return array('status' => 'error',
 		             'errorcode' => 52,
 		             'errormsg' => 'specified request does not exist');
@@ -1772,13 +1772,13 @@ function XMLRPCnodeExists($nodeName, $parentNode) {
 		in_array("nodeAdmin", $user["privileges"])) {
 		if(get_magic_quotes_gpc())
 			$nodeName = stripslashes($nodeName);
-		$nodeName = mysql_real_escape_string($nodeName);
+		$nodeName = vcl_mysql_escape_string($nodeName);
 		// does a node with this name already exist?
 		$query = "SELECT id "
 		       . "FROM privnode "
 		       . "WHERE name = '$nodeName' AND parent = $parentNode";
 		$qh = doQuery($query, 335);
-		if(mysql_num_rows($qh))
+		if(mysqli_num_rows($qh))
 			return array('status' => 'success', 'exists' => TRUE);
 		else
 			return array('status' => 'success', 'exists' => FALSE);
@@ -1836,7 +1836,7 @@ function XMLRPCaddNode($nodeName, $parentNode) {
 			       . "FROM privnode "
 			       . "WHERE name = '$nodeName' AND parent = $parentNode";
 			$qh = doQuery($query);
-			if(mysql_num_rows($qh)) {
+			if(mysqli_num_rows($qh)) {
 				return array('status' => 'error',
 				             'errorcode' => 82,
 				             'errormsg' => 'A node of that name already exists under ' . $nodeInfo['name']);
@@ -1847,7 +1847,7 @@ function XMLRPCaddNode($nodeName, $parentNode) {
 			       .        "($parentNode, '$nodeName')";
 			doQuery($query);
 			$qh = doQuery("SELECT LAST_INSERT_ID() FROM privnode", 101);
-			if(! $row = mysql_fetch_row($qh)) {
+			if(! $row = mysqli_fetch_row($qh)) {
 				return array('status' => 'error',
 				             'errorcode' => 85,
 				             'errormsg' => 'Could not add node to database');
@@ -2470,7 +2470,7 @@ function XMLRPCgetUserGroupAttributes($name, $affiliation) {
 	       . "LEFT JOIN affiliation euga ON (eug.affiliationid = euga.id) "
 	       . "WHERE ug.id = {$rc['id']}";
 	$qh = doQuery($query, 101);
-	if(! $row = mysql_fetch_assoc($qh)) {
+	if(! $row = mysqli_fetch_assoc($qh)) {
 		return array('status' => 'error',
 		             'errorcode' => 18,
 		             'errormsg' => 'user group with submitted name and affiliation does not exist');
@@ -2607,7 +2607,7 @@ function XMLRPCeditUserGroup($name, $affiliation, $newName, $newAffiliation,
                              $newOwner='', $newManagingGroup='',
                              $newInitialMaxTime='', $newTotalMaxTime='',
                              $newMaxExtendTime='') {
-	global $user, $mysql_link_vcl;
+	global $user, $mysqli_link_vcl;
 	if(! in_array('groupAdmin', $user['privileges'])) {
 		return array('status' => 'error',
 		             'errorcode' => 16,
@@ -2650,7 +2650,7 @@ function XMLRPCeditUserGroup($name, $affiliation, $newName, $newAffiliation,
 	       . "FROM usergroup "
 	       . "WHERE id = {$rc['id']}";
 	$qh = doQuery($query, 101);
-	if(! $row = mysql_fetch_assoc($qh)) {
+	if(! $row = mysqli_fetch_assoc($qh)) {
 		return array('status' => 'error',
 		             'errorcode' => 18,
 		             'errormsg' => 'user group with submitted name and affiliation does not exist');
@@ -2675,7 +2675,7 @@ function XMLRPCeditUserGroup($name, $affiliation, $newName, $newAffiliation,
 			if(get_magic_quotes_gpc())
 				$newName = stripslashes($newName);
 			$validate['name'] = $newName;
-			$tmp = mysql_real_escape_string($newName);
+			$tmp = vcl_mysql_escape_string($newName);
 			$updates[] = "name = '$tmp'";
 		}
 		if(! empty($newAffiliation))
@@ -2694,7 +2694,7 @@ function XMLRPCeditUserGroup($name, $affiliation, $newName, $newAffiliation,
 
 	if($row['custom']) {
 		if(! empty($newOwner)) {
-			$newownerid = getUserlistID(mysql_real_escape_string($newOwner));
+			$newownerid = getUserlistID(vcl_mysql_escape_string($newOwner));
 			$updates[] = "ownerid = $newownerid";
 		}
 		if(! empty($newManagingGroup))
@@ -2732,7 +2732,7 @@ function XMLRPCeditUserGroup($name, $affiliation, $newName, $newAffiliation,
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function XMLRPCremoveUserGroup($name, $affiliation) {
-	global $user, $mysql_link_vcl;
+	global $user, $mysqli_link_vcl;
 	if(! in_array('groupAdmin', $user['privileges'])) {
 		return array('status' => 'error',
 		             'errorcode' => 16,
@@ -2750,7 +2750,7 @@ function XMLRPCremoveUserGroup($name, $affiliation) {
 	       . "FROM usergroup "
 	       . "WHERE id = {$rc['id']}";
 	$qh = doQuery($query, 101);
-	if(! $row = mysql_fetch_assoc($qh)) {
+	if(! $row = mysqli_fetch_assoc($qh)) {
 		return array('status' => 'error',
 		             'errorcode' => 18,
 		             'errormsg' => 'user group with submitted name and affiliation does not exist');
@@ -2775,7 +2775,7 @@ function XMLRPCremoveUserGroup($name, $affiliation) {
 	       . "WHERE id = {$rc['id']}";
 	doQuery($query, 101);
 	# validate something deleted
-	if(mysql_affected_rows($mysql_link_vcl) == 0) {
+	if(mysqli_affected_rows($mysqli_link_vcl) == 0) {
 		return array('status' => 'error',
 		             'errorcode' => 30,
 		             'errormsg' => 'failure while deleting group from database');
@@ -2849,7 +2849,7 @@ function XMLRPCgetUserGroupMembers($name, $affiliation) {
 	       . "FROM usergroup "
 	       . "WHERE id = {$rc['id']}";
 	$qh = doQuery($query, 101);
-	if(! $row = mysql_fetch_assoc($qh)) {
+	if(! $row = mysqli_fetch_assoc($qh)) {
 		return array('status' => 'error',
 		             'errorcode' => 18,
 		             'errormsg' => 'user group with submitted name and affiliation does not exist');
@@ -2875,7 +2875,7 @@ function XMLRPCgetUserGroupMembers($name, $affiliation) {
 	       .       "u.affiliationid = a.id";
 	$qh = doQuery($query, 101);
 	$members = array();
-	while($row = mysql_fetch_assoc($qh))
+	while($row = mysqli_fetch_assoc($qh))
 		$members[] = $row['member'];
 	return array('status' => 'success',
 	             'members' => $members);
@@ -2924,7 +2924,7 @@ function XMLRPCaddUsersToGroup($name, $affiliation, $users) {
 	       . "FROM usergroup "
 	       . "WHERE id = {$rc['id']}";
 	$qh = doQuery($query, 101);
-	if(! $row = mysql_fetch_assoc($qh)) {
+	if(! $row = mysqli_fetch_assoc($qh)) {
 		return array('status' => 'error',
 		             'errorcode' => 18,
 		             'errormsg' => 'user group with submitted name and affiliation does not exist');
@@ -2942,7 +2942,7 @@ function XMLRPCaddUsersToGroup($name, $affiliation, $users) {
 			continue;
 		if(get_magic_quotes_gpc())
 			$_user = stripslashes($_user);
-		$esc_user = mysql_real_escape_string($_user);
+		$esc_user = vcl_mysql_escape_string($_user);
 		if(validateUserid($_user) == 1)
 			addUserGroupMember($esc_user, $rc['id']);
 		else
@@ -3006,7 +3006,7 @@ function XMLRPCremoveUsersFromGroup($name, $affiliation, $users) {
 	       . "FROM usergroup "
 	       . "WHERE id = {$rc['id']}";
 	$qh = doQuery($query, 101);
-	if(! $row = mysql_fetch_assoc($qh)) {
+	if(! $row = mysqli_fetch_assoc($qh)) {
 		return array('status' => 'error',
 		             'errorcode' => 18,
 		             'errormsg' => 'user group with submitted name and affiliation does not exist');
@@ -3024,7 +3024,7 @@ function XMLRPCremoveUsersFromGroup($name, $affiliation, $users) {
 			continue;
 		if(get_magic_quotes_gpc())
 			$_user = stripslashes($_user);
-		$esc_user = mysql_real_escape_string($_user);
+		$esc_user = vcl_mysql_escape_string($_user);
 		# check that affiliation of user can be determined because getUserlistID
 		#   will abort if it cannot find it
 		$affilok = 0;
@@ -3135,7 +3135,7 @@ function XMLRPCaddResourceGroup($name, $managingGroup, $type) {
 			             'errorcode' => 87,
 			             'errormsg' => 'Name must be between 3 and 30 characters and can only contain letters, numbers, spaces, and these characters: - . _');
 		}
-		$name = mysql_real_escape_string($name);
+		$name = vcl_mysql_escape_string($name);
 		$data = array('type' => 'resource',
 		              'ownergroup' => $rc['managingGroupID'],
 		              'resourcetypeid' => $typeid,
@@ -3476,7 +3476,7 @@ function XMLRPCprocessBlockTime($blockTimesid, $ignoreprivileges=0) {
 	       . "WHERE bt.blockRequestid = br.id AND "
 	       .       "bt.id = $blockTimesid";
 	$qh = doQuery($query, 101);
-	if(! $rqdata = mysql_fetch_assoc($qh)) {
+	if(! $rqdata = mysqli_fetch_assoc($qh)) {
 		return array('status' => 'error',
 		             'errorcode' => 8,
 		             'errormsg' => 'unknown blockTimesid');
@@ -3526,8 +3526,8 @@ function XMLRPCprocessBlockTime($blockTimesid, $ignoreprivileges=0) {
 		$blockCompVals = array();
 		$checkstartbase = $unixstart - $imgLoadTime - 300;
 		$reloadstartbase = unixToDatetime($checkstartbase);
-		$rows = mysql_num_rows($qh);
-		while($row = mysql_fetch_assoc($qh)) {
+		$rows = mysqli_num_rows($qh);
+		while($row = mysqli_fetch_assoc($qh)) {
 			if(array_key_exists($row['reqid'], $donereqids))
 				continue;
 			$donereqids[$row['reqid']] = 1;
@@ -3594,7 +3594,7 @@ function XMLRPCprocessBlockTime($blockTimesid, $ignoreprivileges=0) {
 	       . "FROM blockComputers "
 	       . "WHERE blockTimeid = $blockTimesid";
 	$qh = doQuery($query, 101);
-	if(! $row = mysql_fetch_assoc($qh)) {
+	if(! $row = mysqli_fetch_assoc($qh)) {
 		return array('status' => 'error',
 		             'errorcode' => 15,
 		             'errormsg' => 'failure to communicate with database');
@@ -3772,7 +3772,7 @@ function XMLRPCfinishBaseImageCapture($ownerid, $resourceid, $virtual=1) {
 	       .       "r.subid = i.id AND "
 	       .       "r.resourcetypeid = 13";
 	$qh = doQuery($query);
-	if(mysql_num_rows($qh) != 1) {
+	if(mysqli_num_rows($qh) != 1) {
 		return array('status' => 'error',
 		             'errorcode' => 91,
 		             'errormsg' => 'Invalid resourceid submitted');
@@ -3823,7 +3823,7 @@ function XMLRPCcheckCryptSecrets($reservationid) {
 	# check for existance of $reservationid
 	$query = "SELECT id FROM reservation WHERE id = $reservationid";
 	$qh = doQuery($query);
-	if(! ($row = mysql_fetch_assoc($qh))) {
+	if(! ($row = mysqli_fetch_assoc($qh))) {
 		return array('status' => 'error',
 		             'errorcode' => 101,
 		             'errormsg' => 'Specified reservation does not exist');
@@ -3839,7 +3839,7 @@ function XMLRPCcheckCryptSecrets($reservationid) {
 	       . "WHERE rs.id = $reservationid AND "
 	       .       "ad.secretid IS NOT NULL";
 	$qh = doQuery($query);
-	while($row = mysql_fetch_assoc($qh)) {
+	while($row = mysqli_fetch_assoc($qh)) {
 		$secretids[] = $row['secretid'];
 		$mnid = $row['managementnodeid'];
 	}
@@ -3853,7 +3853,7 @@ function XMLRPCcheckCryptSecrets($reservationid) {
 	       . "WHERE rs.id = $reservationid AND "
 	       .       "vp.secretid IS NOT NULL";
 	$qh = doQuery($query);
-	while($row = mysql_fetch_assoc($qh)) {
+	while($row = mysqli_fetch_assoc($qh)) {
 		$secretids[] = $row['secretid'];
 		$mnid = $row['managementnodeid'];
 	}
@@ -3884,7 +3884,7 @@ function XMLRPCcheckCryptSecrets($reservationid) {
 	       .       "ck.hosttype = 'managementnode' AND "
 	       .       "cs.id IS NULL";
 	$qh = doQuery($query);
-	while($row = mysql_fetch_assoc($qh)) {
+	while($row = mysqli_fetch_assoc($qh)) {
 		if($row['mycryptsecret'] == NULL) {
 			$fails[] = $row['secretid'];
 			continue;
@@ -3952,7 +3952,7 @@ function XMLRPCgetOneClickParams($oneclickid) {
 	       .       "o.userid = {$user['id']}";
 	$qh = doQuery($query);
 	//if nothing returned, oneclick does not exist
-	if(! $row = mysql_fetch_assoc($qh)) {
+	if(! $row = mysqli_fetch_assoc($qh)) {
 		return array('status' => 'error',
 		             'errorcode' => 95,
 		             'errormsg' => "The OneClick with ID $oneclickid does not exist.");
@@ -4027,7 +4027,7 @@ function XMLRPCgetOneClicks() {
 	$result['status'] = 'success';
 	$result['oneclicks'] = array();
 	#$allstates = getStates();
-	while($row = mysql_fetch_assoc($qh)) {
+	while($row = mysqli_fetch_assoc($qh)) {
 		/*if($row['currstateid'] == 14)
 			$state = $allstates[$row['laststateid']];
 		elseif(! is_null($row['currstateid']))
@@ -4208,7 +4208,7 @@ function XMLRPCeditOneClick($oneclickid, $name, $imageid, $duration, $autologin)
 	       .       "userid = {$user['id']}";
 	$qh = doQuery($query, 101);
 	//if nothing returned, oneclick does not exist or belongs to another user
-	if(! $row = mysql_fetch_assoc($qh)) {
+	if(! $row = mysqli_fetch_assoc($qh)) {
 		return array('status' => 'error',
 		             'errorcode' => 95,
 		             'errormsg' => "The OneClick with ID $oneclickid does not exist.");
@@ -4262,7 +4262,7 @@ function XMLRPCdeleteOneClick($oneclickid) {
 	       .       "userid = {$user['id']}";
 	$qh = doQuery($query, 101);
 	//if nothing returned, oneclick does not exist or belongs to another user
-	if(! $row = mysql_fetch_assoc($qh)) {
+	if(! $row = mysqli_fetch_assoc($qh)) {
 		return array('status' => 'error',
 		             'errorcode' => 95,
 		             'errormsg' => "The OneClick with ID $oneclickid does not exist.");

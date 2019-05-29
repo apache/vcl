@@ -19,13 +19,21 @@
 /**
  * \file
  */
+
+$authFuncs['local'] = array('test' => function() {return 0;},
+                            'auth' => function() {return NULL;},
+                            'unauth' => 'unauthLocal');
+
 ////////////////////////////////////////////////////////////////////////////////
 ///
-/// \fn getAuthCookieData($loginid, $valid)
+/// \fn getAuthCookieData($loginid, $authtype, $valid, $shibauthid)
 ///
 /// \param $loginid - login id for user
+/// \param $authtype - type of authentication used; should be an index from the
+/// global $authFuncs array
 /// \param $valid - (optional, default=600) - time in minutes the cookie
 /// should be valid
+/// \param $shibauthid - (optional) id of shibboleth session
 ///
 /// \return on failure, an error message; on success, an array with 2 elements:\n
 /// data - encrypted payload for auth cookie\n
@@ -35,16 +43,16 @@
 /// a timestamp
 ///
 ////////////////////////////////////////////////////////////////////////////////
-function getAuthCookieData($loginid, $valid=600, $shibauthid=0) {
+function getAuthCookieData($loginid, $authtype, $valid=600, $shibauthid=0) {
 	global $keys;
 	$ts = time() + ($valid * 60);
 	$remoteIP = $_SERVER["REMOTE_ADDR"];
 	if(empty($remoteIP))
 		return "Failed to obtain remote IP address for fixed cookie type";
 	if($shibauthid)
-		$cdata = "$loginid|$remoteIP|$ts|$shibauthid";
+		$cdata = "$loginid|$remoteIP|$ts|$authtype|$shibauthid";
 	else
-		$cdata = "$loginid|$remoteIP|$ts";
+		$cdata = "$loginid|$remoteIP|$ts|$authtype";
 
 	# 245 characters can be encrypted; anything over that, and
 	#   openssl_private_encrypt will fail
@@ -76,22 +84,35 @@ function readAuthCookie() {
 		$cookie = $_COOKIE["VCLAUTH"];
 	$cookie = base64_decode($cookie);
 	if(! openssl_public_decrypt($cookie, $tmp, $keys['public'])) {
+		# cookie is invalid; clear it and return NULL so will get redirected to log in again
+		setcookie("VCLAUTH", "", time() - 10, "/", COOKIEDOMAIN);
 		$AUTHERROR["code"] = 3;
 		$AUTHERROR["message"] = "Failed to decrypt auth cookie";
 		return NULL;
 	}
 
+	# $loginid|$remoteIP|$ts|$authtype|$shibauthid (shibauthd optional)
 	$tmparr = explode('|', $tmp);
 	$loginid = $tmparr[0];
 	$remoteIP = $tmparr[1];
 	$ts = $tmparr[2];
-	if(count($tmparr) > 3) {
-		$shibauthed = $tmparr[3];
+
+	# check for old style auth cookie before $authtype was included
+	if(count($tmparr) < 4 || is_numeric($tmparr[3])) {
+		# log user out to get new style auth cookie
+		setcookie("VCLAUTH", "", time() - 10, "/", COOKIEDOMAIN);
+		stopSession();
+		dbDisconnect();
+		header("Location: " . BASEURL);
+		exit;
+	}
+	if(count($tmparr) > 4) {
+		$shibauthed = $tmparr[5];
 
 		# check to see if shibauth entry still exists for $shibauthed
 		$query = "SELECT ts FROM shibauth WHERE id = $shibauthed";
 		$qh = doQuery($query, 101);
-		if($row = mysql_fetch_assoc($qh)) {
+		if($row = mysqli_fetch_assoc($qh)) {
 			$shibstart = $row['ts'];
 			# TODO if $shibstart is too old, expire the login session
 		}
@@ -106,10 +127,52 @@ function readAuthCookie() {
 	}
 
 	if($ts < time()) {
+		# cookie is expired; clear it and return NULL so will get redirected to log in again
+		setcookie("VCLAUTH", "", time() - 10, "/", COOKIEDOMAIN);
 		$AUTHERROR["code"] = 4;
 		$AUTHERROR["message"] = "Auth cookie has expired";
 		return NULL;
 	}
+	if($_SERVER["REMOTE_ADDR"] != $remoteIP) {
+		# cookie has wrong IP; clear it and return NULL so will get redirected to log in again
+		setcookie("VCLAUTH", "", time() - 10, "/", COOKIEDOMAIN);
+		$AUTHERROR["code"] = 4;
+		$AUTHERROR["message"] = "remote IP in auth cookie doesn't match user's remote IP";
+		return NULL;
+	}
+
+	return $loginid;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn getAuthTypeFromAuthCookie()
+///
+/// \return on success, type of authentication used; NULL on failure
+///
+/// \brief parses the VCLAUTH cookie to get the authtype saved in it
+///
+////////////////////////////////////////////////////////////////////////////////
+function getAuthTypeFromAuthCookie() {
+	global $keys, $AUTHERROR;
+	if(! array_key_exists('VCLAUTH', $_COOKIE))
+		return NULL;
+	if(get_magic_quotes_gpc())
+		$cookie = stripslashes($_COOKIE["VCLAUTH"]);
+	else
+		$cookie = $_COOKIE["VCLAUTH"];
+	$cookie = base64_decode($cookie);
+	if(! openssl_public_decrypt($cookie, $tmp, $keys['public'])) {
+		$AUTHERROR["code"] = 3;
+		$AUTHERROR["message"] = "Failed to decrypt auth cookie";
+		return NULL;
+	}
+
+	# $loginid|$remoteIP|$ts|$authtype|$shibauthid (shibauthd optional)
+	$tmparr = explode('|', $tmp);
+	$remoteIP = $tmparr[1];
+	$authtype = $tmparr[3];
+
 	if($_SERVER["REMOTE_ADDR"] != $remoteIP) {
 		//setcookie("ITECSAUTH", "", time() - 10, "/", COOKIEDOMAIN);
 		$AUTHERROR["code"] = 4;
@@ -117,7 +180,7 @@ function readAuthCookie() {
 		return NULL;
 	}
 
-	return $loginid;
+	return $authtype;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -356,120 +419,6 @@ function submitLogin() {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
-/// \fn ldapLogin($authtype, $userid, $passwd)
-///
-/// \param $authtype - index from $authMechs array
-/// \param $userid - userid without affiliation
-/// \param $passwd - submitted password
-///
-/// \brief tries to authenticate user via ldap; calls printLoginPageWithSkin if
-/// authentication fails
-///
-////////////////////////////////////////////////////////////////////////////////
-function ldapLogin($authtype, $userid, $passwd) {
-	global $HTMLheader, $printedHTMLheader, $authMechs, $phpVer;
-	$esc_userid = mysql_real_escape_string($userid);
-	if(! $fh = fsockopen($authMechs[$authtype]['server'], 636, $errno, $errstr, 5)) {
-		printLoginPageWithSkin($authtype, 1);
-		return;
-	}
-	fclose($fh);
-	$ds = ldap_connect("ldaps://{$authMechs[$authtype]['server']}/");
-	if(! $ds) {
-		addLoginLog($userid, $authtype, $authMechs[$authtype]['affiliationid'], 0);
-		print $HTMLheader;
-		$printedHTMLheader = 1;
-		selectAuth();
-		return;
-	}
-	ldap_set_option($ds, LDAP_OPT_PROTOCOL_VERSION, 3);
-	ldap_set_option($ds, LDAP_OPT_REFERRALS, 0);
-	if(array_key_exists('lookupuserbeforeauth', $authMechs[$authtype]) &&
-	   $authMechs[$authtype]['lookupuserbeforeauth'] &&
-	   array_key_exists('lookupuserfield', $authMechs[$authtype])) {
-		# in this case, we have to look up what part of the tree the user is in
-		#   before we can actually look up the user
-		$auth = $authMechs[$authtype];
-		if(array_key_exists('masterlogin', $auth) && strlen($auth['masterlogin']))
-			$res = ldap_bind($ds, $auth['masterlogin'], $auth['masterpwd']);
-		else
-			$res = ldap_bind($ds);
-		if(! $res) {
-			addLoginLog($userid, $authtype, $auth['affiliationid'], 0);
-			printLoginPageWithSkin($authtype);
-			return;
-		}
-		$search = ldap_search($ds,
-		                      $auth['binddn'], 
-		                      "{$auth['lookupuserfield']}=$userid",
-		                      array('dn'), 0, 3, 15);
-		if($search) {
-			$tmpdata = ldap_get_entries($ds, $search);
-			if(! $tmpdata['count'] || ! array_key_exists('dn', $tmpdata[0])) {
-				addLoginLog($userid, $authtype, $auth['affiliationid'], 0);
-				printLoginPageWithSkin($authtype);
-				return;
-			}
-			$ldapuser = $tmpdata[0]['dn'];
-		}
-		else {
-			addLoginLog($userid, $authtype, $auth['affiliationid'], 0);
-			printLoginPageWithSkin($authtype);
-			return;
-		}
-	}
-	else
-		$ldapuser = sprintf($authMechs[$authtype]['userid'], $userid);
-	$res = ldap_bind($ds, $ldapuser, $passwd);
-	if(! $res) {
-		// login failed
-		$err = ldap_error($ds);
-		if($err == 'Invalid credentials')
-			addLoginLog($userid, $authtype, $authMechs[$authtype]['affiliationid'], 0, $err);
-		else
-			addLoginLog($userid, $authtype, $authMechs[$authtype]['affiliationid'], 0);
-		printLoginPageWithSkin($authtype);
-		return;
-	}
-	else {
-		addLoginLog($userid, $authtype, $authMechs[$authtype]['affiliationid'], 1);
-		# used to rely on later code to update user info if update timestamp was expired
-		// see if user in our db
-		/*$query = "SELECT id "
-		       . "FROM user "
-		       . "WHERE unityid = '$esc_userid' AND "
-		       .       "affiliationid = {$authMechs[$authtype]['affiliationid']}";
-		$qh = doQuery($query, 101);
-		if(! mysql_num_rows($qh)) {
-			// if not, add user
-			$newid = updateLDAPUser($authtype, $userid);
-			if(is_null($newid))
-				abort(8);
-		}*/
-		# now, we always update the user info
-		$newid = updateLDAPUser($authtype, $userid);
-		if(is_null($newid))
-			abort(8);
-		// get cookie data
-		$cookie = getAuthCookieData("$userid@" . getAffiliationName($authMechs[$authtype]['affiliationid']));
-		// set cookie
-		if(version_compare(PHP_VERSION, "5.2", ">=") == true)
-			setcookie("VCLAUTH", "{$cookie['data']}", 0, "/", COOKIEDOMAIN, 0, 1);
-		else
-			setcookie("VCLAUTH", "{$cookie['data']}", 0, "/", COOKIEDOMAIN, 0);
-		# set skin cookie based on affiliation
-		$skin = getAffiliationTheme($authMechs[$authtype]['affiliationid']);
-		$ucskin = strtoupper($skin);
-		setcookie("VCLSKIN", "$ucskin", (time() + (SECINDAY * 31)), "/", COOKIEDOMAIN);
-		// redirect to main page
-		header("Location: " . BASEURL . SCRIPT);
-		dbDisconnect();
-		exit;
-	}
-}
-
-////////////////////////////////////////////////////////////////////////////////
-///
 /// \fn localLogin($userid, $passwd, $authtype)
 ///
 /// \param $userid - userid without affiliation
@@ -485,7 +434,7 @@ function localLogin($userid, $passwd, $authtype) {
 	if(validateLocalAccount($userid, $passwd)) {
 		addLoginLog($userid, $authtype, $authMechs[$authtype]['affiliationid'], 1);
 		//set cookie
-		$cookie = getAuthCookieData("$userid@local");
+		$cookie = getAuthCookieData("$userid@local", 'local');
 		if(version_compare(PHP_VERSION, "5.2", ">=") == true)
 			setcookie("VCLAUTH", "{$cookie['data']}", 0, "/", COOKIEDOMAIN, 0, 1);
 		else
@@ -508,6 +457,24 @@ function localLogin($userid, $passwd, $authtype) {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
+/// \fn unauthLocal
+///
+/// \param $mode - headers or content
+///
+/// \brief for headers, simply returns; for content, prints information that
+/// user has been logged out; VCLAUTH cookie is cleared elsewhere
+///
+////////////////////////////////////////////////////////////////////////////////
+function unauthLocal($mode) {
+	if($mode == 'headers')
+		return;
+	print "<h2>Logout</h2>\n";
+	print "You are now logged out of VCL.<br><br>\n";
+	print "<a href=\"" . BASEURL . SCRIPT . "?mode=selectauth\">Return to Login</a><br><br><br>\n";
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
 /// \fn validateLocalAccount($user, $pass)
 ///
 /// \param $user - unityid from user table
@@ -519,7 +486,7 @@ function localLogin($userid, $passwd, $authtype) {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function validateLocalAccount($user, $pass) {
-	$user = mysql_real_escape_string($user);
+	$user = vcl_mysql_escape_string($user);
 	$query = "SELECT l.salt "
 	       . "FROM localauth l, "
 	       .      "user u, "
@@ -529,8 +496,8 @@ function validateLocalAccount($user, $pass) {
 	       .       "a.name = 'Local' AND "
 	       .       "l.userid = u.id";
 	$qh = doQuery($query, 101);
-	if(mysql_num_rows($qh) != 1 ||
-	   (! ($row = mysql_fetch_assoc($qh))))
+	if(mysqli_num_rows($qh) != 1 ||
+	   (! ($row = mysqli_fetch_assoc($qh))))
 		return 0;
 
 	$passhash = sha1("$pass{$row['salt']}");
@@ -544,7 +511,7 @@ function validateLocalAccount($user, $pass) {
 	       .       "u.affiliationid = a.id AND "
 	       .       "a.name = 'Local'";
 	$qh = doQuery($query, 101);
-	if(mysql_num_rows($qh) == 1)
+	if(mysqli_num_rows($qh) == 1)
 		return 1;
 	else
 		return 0;
@@ -564,8 +531,8 @@ function validateLocalAccount($user, $pass) {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function addLoginLog($login, $mech, $affiliationid, $passfail, $code='none') {
-	$login = mysql_real_escape_string($login);
-	$mech = mysql_real_escape_string($mech);
+	$login = vcl_mysql_escape_string($login);
+	$mech = vcl_mysql_escape_string($mech);
 	$query = "INSERT INTO loginlog "
 	       .        "(user, "
 	       .        "authmech, "
@@ -618,8 +585,8 @@ function checkExpiredDemoUser($userid, $groups=0) {
 	       . "LIMIT 3";
 	$qh = doQuery($query, 101);
 	$expire = time() - (SECINDAY * 3);
-	$rows = mysql_num_rows($qh);
-	if($row = mysql_fetch_assoc($qh)) {
+	$rows = mysqli_num_rows($qh);
+	if($row = mysqli_fetch_assoc($qh)) {
 		if($rows >= 3 || datetimeToUnix($row['start']) < $expire) {
 			if(in_array($mode, $noHTMLwrappers))
 				# do a redirect and handle removal on next page load so user can

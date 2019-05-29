@@ -79,14 +79,18 @@ $myurl .= $_SERVER['HTTP_HOST'] . $_SERVER['REQUEST_URI'];
 
 $includesecrets = 1;
 $includeconf = 1;
+$host = $_SERVER['HTTP_HOST'];
+if (strpos($host, ':')) {
+	$host = substr($host, 0, strpos($host, ':'));
+}
 
-if(! ip2long(getHostbyname($_SERVER['HTTP_HOST']))) {
+if(! ip2long(getHostbyname($host))) {
 	print $header;
 	# php version
 	print "PHP version: " . phpversion() . "<br><br>\n";
-	title("Trying to resolve my hostname ({$_SERVER['HTTP_HOST']})");
+	title("Trying to resolve my hostname ($host)");
 	print "<ul>\n";
-	fail("unable to resolve my hostname; ensure {$_SERVER['HTTP_HOST']} is in DNS or create an entry for it in /etc/hosts");
+	fail("unable to resolve my hostname; ensure $host is in DNS or create an entry for it in /etc/hosts");
 	print "</ul>\n";
 	$includesecrets = 0;
 	$includeconf = 0;
@@ -160,8 +164,7 @@ else {
 
 # conf.php tests
 $createcryptkey = 0;
-if($includeconf && include('.ht-inc/conf.php')) {
-	$host = $_SERVER['HTTP_HOST'];
+if($includeconf && include('.ht-inc/conf.php')) {	
 	if(! defined('COOKIEDOMAIN')) {
 		print $header;
 		# php version
@@ -219,8 +222,10 @@ if($includeconf && include('.ht-inc/conf.php')) {
 	else {
 		if(substr_compare(BASEURL, 'https:', 0, 6, true) == 0)
 			pass("BASEURL correctly set to use https");
+		elseif(SSLOFFLOAD == 1 && substr_compare(BASEURL, 'http:', 0, 5, true) == 0)
+		        pass("BASEURL set to use http as SSL is offloaded to load balancer");
 		else
-			fail("BASEURL is not set to use https. https is required.");
+			fail("BASEURL is not set to use https and SSL offloading is not enabled. https is required.");
 	}
 	print "</ul>\n";
 

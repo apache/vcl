@@ -4355,6 +4355,10 @@ sub get_tools_file_paths {
 				notify($ERRORS{'DEBUG'}, 0, "ignoring Subversion file: $mn_file_path");
 				next MN_FILE;
 			}
+			elsif ($mn_file_path =~ /\.gitignore/i) {
+				notify($ERRORS{'DEBUG'}, 0, "ignoring .gitignore file: $mn_file_path");
+				next MN_FILE;
+			}
 			elsif ($mn_file_path =~ /\/$other_architecture\//) {
 				notify($ERRORS{'DEBUG'}, 0, "ignoring file intended for different computer architecture: $mn_file_path");
 				next MN_FILE;
@@ -4440,12 +4444,14 @@ sub update_fixed_ip_info {
 		my $router = $server_variable_data->{router};
 		my $netmask = $server_variable_data->{netmask};
 		my @dns = @{$server_variable_data->{dns}};
+
+		my $return = 1;
 		
-		notify($ERRORS{'OK'}, 0, "updated data server request router info") if ($self->data->set_server_request_router($server_variable_data->{router}));
-		notify($ERRORS{'OK'}, 0, "updated data server request netmask info") if ($self->data->set_server_request_netmask($server_variable_data->{netmask}));
-		notify($ERRORS{'OK'}, 0, "updated data server request dns info") if ($self->data->set_server_request_dns_servers(@{$server_variable_data->{dns}}));
+		notify($ERRORS{'OK'}, 0, "updated data server request router info") or $return = 0 if ($self->data->set_server_request_router($server_variable_data->{router}));
+		notify($ERRORS{'OK'}, 0, "updated data server request netmask info") or $return = 0 if ($self->data->set_server_request_netmask($server_variable_data->{netmask}));
+		notify($ERRORS{'OK'}, 0, "updated data server request dns info") or $return = 0 if ($self->data->set_server_request_dns_servers(@{$server_variable_data->{dns}}));
 		notify($ERRORS{'DEBUG'}, 0, "router= $router, netmask= $netmask, dns= @dns");
-		
+		return $return;
 	}
 	else {
 		notify($ERRORS{'DEBUG'}, 0, "data is not set for $variable_name");

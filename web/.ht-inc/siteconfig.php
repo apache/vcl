@@ -1292,7 +1292,7 @@ class AffilHelpAddress extends AffilTextVariable {
 		$this->values = array();
 		$query = "SELECT id, helpaddress FROM affiliation ORDER BY name";
 		$qh = doQuery($query);
-		while($row = mysql_fetch_assoc($qh))
+		while($row = mysqli_fetch_assoc($qh))
 			$this->values[$row['id']] = $row['helpaddress'];
 	}
 
@@ -1310,18 +1310,18 @@ class AffilHelpAddress extends AffilTextVariable {
 	///
 	/////////////////////////////////////////////////////////////////////////////
 	function setValue($affilid, $value) {
-		global $mysql_link_vcl;
+		global $mysqli_link_vcl;
 		if($value === NULL)
 			$newval = 'NULL';
 		else {
-			$esc_value = mysql_real_escape_string($value);
+			$esc_value = vcl_mysql_escape_string($value);
 			$newval = "'$esc_value'";
 		}
 		$query = "UPDATE affiliation "
 		       . "SET helpaddress = $newval "
 		       . "WHERE id = $affilid";
 		doQuery($query);
-		$rc = mysql_affected_rows($mysql_link_vcl);
+		$rc = mysqli_affected_rows($mysqli_link_vcl);
 		if($rc == 1)
 			return 1;
 		return 0;
@@ -1339,12 +1339,12 @@ class AffilHelpAddress extends AffilTextVariable {
 	///
 	/////////////////////////////////////////////////////////////////////////////
 	function deleteValue($affilid) {
-		global $mysql_link_vcl;
+		global $mysqli_link_vcl;
 		$query = "UPDATE affiliation "
 		       . "SET helpaddress = NULL "
 		       . "WHERE id = $affilid";
 		doQuery($query);
-		$rc = mysql_affected_rows($mysql_link_vcl);
+		$rc = mysqli_affected_rows($mysqli_link_vcl);
 		if($rc == 1)
 			return 1;
 		return 0;
@@ -1391,7 +1391,7 @@ class AffilWebAddress extends AffilTextVariable {
 		$this->values = array();
 		$query = "SELECT id, sitewwwaddress FROM affiliation ORDER BY name";
 		$qh = doQuery($query);
-		while($row = mysql_fetch_assoc($qh))
+		while($row = mysqli_fetch_assoc($qh))
 			$this->values[$row['id']] = $row['sitewwwaddress'];
 	}
 
@@ -1409,18 +1409,18 @@ class AffilWebAddress extends AffilTextVariable {
 	///
 	/////////////////////////////////////////////////////////////////////////////
 	function setValue($affilid, $value) {
-		global $mysql_link_vcl;
+		global $mysqli_link_vcl;
 		if($value === NULL)
 			$newval = 'NULL';
 		else {
-			$esc_value = mysql_real_escape_string($value);
+			$esc_value = vcl_mysql_escape_string($value);
 			$newval = "'$esc_value'";
 		}
 		$query = "UPDATE affiliation "
 		       . "SET sitewwwaddress = $newval "
 		       . "WHERE id = $affilid";
 		doQuery($query);
-		$rc = mysql_affected_rows($mysql_link_vcl);
+		$rc = mysqli_affected_rows($mysqli_link_vcl);
 		if($rc == 1)
 			return 1;
 		return 0;
@@ -1438,12 +1438,12 @@ class AffilWebAddress extends AffilTextVariable {
 	///
 	/////////////////////////////////////////////////////////////////////////////
 	function deleteValue($affilid) {
-		global $mysql_link_vcl;
+		global $mysqli_link_vcl;
 		$query = "UPDATE affiliation "
 		       . "SET sitewwwaddress = NULL "
 		       . "WHERE id = $affilid";
 		doQuery($query);
-		$rc = mysql_affected_rows($mysql_link_vcl);
+		$rc = mysqli_affected_rows($mysqli_link_vcl);
 		if($rc == 1)
 			return 1;
 		return 0;
@@ -1498,7 +1498,7 @@ class AffilKMSserver extends AffilTextVariable {
 		       . "LEFT JOIN winKMS k ON (k.affiliationid = a.id) "
 		       . "ORDER BY a.id";
 		$qh = doQuery($query);
-		while($row = mysql_fetch_assoc($qh)) {
+		while($row = mysqli_fetch_assoc($qh)) {
 			if(is_null($row['address']) && is_null($row['port'])) {
 				$this->values[$row['id']] = NULL;
 				continue;
@@ -1529,7 +1529,7 @@ class AffilKMSserver extends AffilTextVariable {
 	///
 	/////////////////////////////////////////////////////////////////////////////
 	function setValue($affilid, $value) {
-		global $mysql_link_vcl;
+		global $mysqli_link_vcl;
 		$this->getValues();
 		$values = explode(',', $value);
 		# create datastructure of newly submitted hosts
@@ -1588,7 +1588,7 @@ class AffilKMSserver extends AffilTextVariable {
 		# insert new hosts
 		$values = array();
 		foreach($adds as $host => $port) {
-			$esc_host = mysql_real_escape_string($host);
+			$esc_host = vcl_mysql_escape_string($host);
 			$values[] = "($affilid, '$esc_host', $port)";
 		}
 		$rc1 = 1;
@@ -1597,25 +1597,25 @@ class AffilKMSserver extends AffilTextVariable {
 			       . "(affiliationid, address, port) "
 			       . "VALUES " . implode(',', $values);
 			doQuery($query);
-			$rc1 = mysql_affected_rows($mysql_link_vcl);
+			$rc1 = mysqli_affected_rows($mysqli_link_vcl);
 		}
 		# make changes
 		$rc2 = 1;
 		foreach($changes as $host => $port) {
-			$esc_host = mysql_real_escape_string($host);
+			$esc_host = vcl_mysql_escape_string($host);
 			$query = "UPDATE winKMS "
 			       . "SET port = $port "
 			       . "WHERE address = '$esc_host' AND "
 			       .       "affiliationid = $affilid";
 			doQuery($query);
-			$tmp = mysql_affected_rows($mysql_link_vcl);
+			$tmp = mysqli_affected_rows($mysqli_link_vcl);
 			if($rc2)
 				$rc2 = $tmp;
 		}
 		# delete old hosts
 		$values = array();
 		foreach($rems as $host => $port) {
-			$esc_host = mysql_real_escape_string($host);
+			$esc_host = vcl_mysql_escape_string($host);
 			$values[] = "(affiliationid = $affilid AND "
 			          . "address = '$esc_host' AND "
 			          . "port = $port)";
@@ -1625,7 +1625,7 @@ class AffilKMSserver extends AffilTextVariable {
 			$query = "DELETE FROM winKMS "
 			       . "WHERE " . implode(' OR ', $values);
 			doQuery($query);
-			$rc3 = mysql_affected_rows($mysql_link_vcl);
+			$rc3 = mysqli_affected_rows($mysqli_link_vcl);
 		}
 		if($rc1 == 0 || $rc2 == 0 || $rc3 == 0)
 			return 0;
@@ -1644,11 +1644,11 @@ class AffilKMSserver extends AffilTextVariable {
 	///
 	/////////////////////////////////////////////////////////////////////////////
 	function deleteValue($affilid) {
-		global $mysql_link_vcl;
+		global $mysqli_link_vcl;
 		$query = "DELETE FROM winKMS "
 		       . "WHERE affiliationid = $affilid";
 		doQuery($query);
-		$rc = mysql_affected_rows($mysql_link_vcl);
+		$rc = mysqli_affected_rows($mysqli_link_vcl);
 		if($rc == 1)
 			return 1;
 		return 0;
@@ -1715,7 +1715,7 @@ class AffilTheme extends AffilTextVariable {
 		$this->values = array();
 		$query = "SELECT id, theme FROM affiliation ORDER BY name";
 		$qh = doQuery($query);
-		while($row = mysql_fetch_assoc($qh))
+		while($row = mysqli_fetch_assoc($qh))
 			$this->values[$row['id']] = $row['theme'];
 	}
 
@@ -1733,13 +1733,13 @@ class AffilTheme extends AffilTextVariable {
 	///
 	/////////////////////////////////////////////////////////////////////////////
 	function setValue($affilid, $value) {
-		global $mysql_link_vcl;
-		$esc_value = mysql_real_escape_string($value);
+		global $mysqli_link_vcl;
+		$esc_value = vcl_mysql_escape_string($value);
 		$query = "UPDATE affiliation "
 		       . "SET theme = '$esc_value' "
 		       . "WHERE id = $affilid";
 		doQuery($query);
-		$rc = mysql_affected_rows($mysql_link_vcl);
+		$rc = mysqli_affected_rows($mysqli_link_vcl);
 		if($rc == 1)
 			return 1;
 		return 0;
@@ -1757,12 +1757,12 @@ class AffilTheme extends AffilTextVariable {
 	///
 	/////////////////////////////////////////////////////////////////////////////
 	function deleteValue($affilid) {
-		global $mysql_link_vcl;
+		global $mysqli_link_vcl;
 		$query = "UPDATE affiliation "
 		       . "SET theme = NULL "
 		       . "WHERE id = $affilid";
 		doQuery($query);
-		$rc = mysql_affected_rows($mysql_link_vcl);
+		$rc = mysqli_affected_rows($mysqli_link_vcl);
 		if($rc == 1)
 			return 1;
 		return 0;
@@ -1834,7 +1834,7 @@ class AffilShibOnly extends AffilTextVariable {
 		       . "WHERE name NOT IN ('Global', 'Local') "
 		       . "ORDER BY name";
 		$qh = doQuery($query);
-		while($row = mysql_fetch_assoc($qh))
+		while($row = mysqli_fetch_assoc($qh))
 			$this->values[$row['id']] = (int)(! $row['shibonly']);
 	}
 
@@ -1852,13 +1852,13 @@ class AffilShibOnly extends AffilTextVariable {
 	///
 	/////////////////////////////////////////////////////////////////////////////
 	function setValue($affilid, $value) {
-		global $mysql_link_vcl;
+		global $mysqli_link_vcl;
 		$value = (int)(! $value);
 		$query = "UPDATE affiliation "
 		       . "SET shibonly = $value "
 		       . "WHERE id = $affilid";
 		doQuery($query);
-		$rc = mysql_affected_rows($mysql_link_vcl);
+		$rc = mysqli_affected_rows($mysqli_link_vcl);
 		if($rc == 1)
 			return 1;
 		return 0;
@@ -1944,7 +1944,7 @@ class AffilShibName extends AffilTextVariable {
 		       . "WHERE name NOT IN ('Global', 'Local') "
 		       . "ORDER BY name";
 		$qh = doQuery($query);
-		while($row = mysql_fetch_assoc($qh))
+		while($row = mysqli_fetch_assoc($qh))
 			$this->values[$row['id']] = $row['shibname'];
 	}
 
@@ -1962,18 +1962,18 @@ class AffilShibName extends AffilTextVariable {
 	///
 	/////////////////////////////////////////////////////////////////////////////
 	function setValue($affilid, $value) {
-		global $mysql_link_vcl;
+		global $mysqli_link_vcl;
 		if($value === NULL)
 			$newval = 'NULL';
 		else {
-			$esc_value = mysql_real_escape_string($value);
+			$esc_value = vcl_mysql_escape_string($value);
 			$newval = "'$esc_value'";
 		}
 		$query = "UPDATE affiliation "
 		       . "SET shibname = $newval "
 		       . "WHERE id = $affilid";
 		doQuery($query);
-		$rc = mysql_affected_rows($mysql_link_vcl);
+		$rc = mysqli_affected_rows($mysqli_link_vcl);
 		if($rc == 1)
 			return 1;
 		return 0;
@@ -1991,12 +1991,12 @@ class AffilShibName extends AffilTextVariable {
 	///
 	/////////////////////////////////////////////////////////////////////////////
 	function deleteValue($affilid) {
-		global $mysql_link_vcl;
+		global $mysqli_link_vcl;
 		$query = "UPDATE affiliation "
 		       . "SET shibname = NULL "
 		       . "WHERE id = $affilid";
 		doQuery($query);
-		$rc = mysql_affected_rows($mysql_link_vcl);
+		$rc = mysqli_affected_rows($mysqli_link_vcl);
 		if($rc == 1)
 			return 1;
 		return 0;
@@ -2973,7 +2973,7 @@ class Affiliations extends GlobalMultiVariable {
 			sendJSON($arr);
 			return;
 		}
-		$_newval = mysql_real_escape_string($newval);
+		$_newval = vcl_mysql_escape_string($newval);
 		$query = "INSERT INTO affiliation (name) VALUES ('$_newval')";
 		doQuery($query);
 		$arr = array('status' => 'success',
@@ -2998,7 +2998,7 @@ class Affiliations extends GlobalMultiVariable {
 		foreach($tables as $table) {
 			$query = "SELECT affiliationid FROM $table WHERE affiliationid = $key LIMIT 1";
 			$qh = doQuery($query);
-			if(mysql_num_rows($qh)) {
+			if(mysqli_num_rows($qh)) {
 				$used = 1;
 				break;
 			}
@@ -3052,7 +3052,7 @@ class Affiliations extends GlobalMultiVariable {
 	function updateValue($key, $val) {
 		$tmp = explode('|', $key);
 		$key = $tmp[1];
-		$_val = mysql_real_escape_string($val);
+		$_val = vcl_mysql_escape_string($val);
 		$query = "UPDATE affiliation SET name = '$_val' WHERE id = $key";
 		doQuery($query);
 	}
@@ -3134,6 +3134,15 @@ class Messages {
 
 			if($keyparts[0] == 'adminmessage')
 				$keyparts[2] = 'Global';
+			foreach(array('message', 'subject', 'short_message') as $type) {
+				if(! isset($item[$type]))
+					continue;
+				$test = strip_tags($item[$type]);
+				if($test != $item[$type]) {
+					$item['DBmanagedHTML'] = 1;
+					$item[$type] = '';
+				}
+			}
 			$this->units[$k][$keyparts[2]] = $item;
 		}
 		uasort($this->basekeys, "sortKeepIndex");
@@ -3395,7 +3404,7 @@ class Messages {
 		       .       "value LIKE '%invalidfields%'";
 		$qh = doQuery($query);
 		$invalids = array();
-		while($row = mysql_fetch_assoc($qh)) {
+		while($row = mysqli_fetch_assoc($qh)) {
 			$data = Spyc::YAMLLoad($row['value']);
 			if(array_key_exists('invalidfields', $data)) {
 				$invalids[$row['name']] = $data['invalidfields'];

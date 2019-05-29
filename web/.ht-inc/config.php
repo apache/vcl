@@ -65,7 +65,7 @@ class Config extends Resource {
 		$query .= "ORDER BY cv.configid, cv.name";
 		$variables = array();
 		$qh = doQuery($query);
-		while($row = mysql_fetch_assoc($qh))
+		while($row = mysqli_fetch_assoc($qh))
 			$variables[$row['configid']][$row['id']] = $row;
 
 		# config subimages
@@ -85,7 +85,7 @@ class Config extends Resource {
 			$query .= "AND configid = $id ";
 		$query .= "ORDER BY s.configid, i.prettyname";
 		$qh = doQuery($query);
-		while($row = mysql_fetch_assoc($qh))
+		while($row = mysqli_fetch_assoc($qh))
 			$variables[$row['configid']][$row['id']] = $row;
 
 		# configs
@@ -121,7 +121,7 @@ class Config extends Resource {
 			$query .= " AND c.deleted = 0";
 		$qh = doQuery($query);
 		$configs = array();
-		while($row = mysql_fetch_assoc($qh)) {
+		while($row = mysqli_fetch_assoc($qh)) {
 			if(array_key_exists($row['id'], $variables))
 				$row['variables'] = $variables[$row['id']];
 			else
@@ -166,7 +166,7 @@ class Config extends Resource {
 		       .       "c.configtypeid = ct.id AND "
 		       .       "c.deleted = 0";
 		$qh = doQuery($query);
-		if($row = mysql_fetch_assoc($qh))
+		if($row = mysqli_fetch_assoc($qh))
 			return $row;
 		else
 			return NULL;
@@ -245,11 +245,11 @@ class Config extends Resource {
 		}
 		$sets = array();
 		if($curdata['name'] != $vars['name']) {
-			$name = mysql_real_escape_string($vars['name']);
+			$name = vcl_mysql_escape_string($vars['name']);
 			$sets[] = "name = '$name'";
 		}
 		if($curdata['data'] != $vars['data']) {
-			$data = mysql_real_escape_string($vars['data']);
+			$data = vcl_mysql_escape_string($vars['data']);
 			$sets[] = "data = '$data'";
 		}
 		if($curdata['ownerid'] != $vars['ownerid'])
@@ -319,11 +319,11 @@ class Config extends Resource {
 				}
 				$sets = array();
 				if($vardata['name'] != $newvars[$id]['name']) {
-					$name = mysql_real_escape_string($newvars[$id]['name']);
+					$name = vcl_mysql_escape_string($newvars[$id]['name']);
 					$sets[] = "name = '$name'";
 				}
 				if($vardata['identifier'] != $newvars[$id]['identifier']) {
-					$identifier = mysql_real_escape_string($newvars[$id]['identifier']);
+					$identifier = vcl_mysql_escape_string($newvars[$id]['identifier']);
 					$sets[] = "identifier = '$identifier'";
 				}
 				if($vardata['datatypeid'] != $newvars[$id]['datatypeid']) {
@@ -332,7 +332,7 @@ class Config extends Resource {
 					$sets[] = "datatypeid = '{$newvars[$id]['datatypeid']}'";
 				}
 				if($vardata['defaultvalue'] != $newvars[$id]['defaultvalue']) {
-					$defaultvalue = mysql_real_escape_string($newvars[$id]['defaultvalue']);
+					$defaultvalue = vcl_mysql_escape_string($newvars[$id]['defaultvalue']);
 					$sets[] = "defaultvalue = '$defaultvalue'";
 				}
 				if($vardata['required'] != $newvars[$id]['required']) {
@@ -377,9 +377,9 @@ class Config extends Resource {
 		$inserts = array();
 		$datatypes = getConfigDataTypes();
 		foreach($newvars as $var) {
-			$name = mysql_real_escape_string($var['name']);
-			$identifier = mysql_real_escape_string($var['identifier']);
-			$defaultvalue = mysql_real_escape_string($var['defaultvalue']);
+			$name = vcl_mysql_escape_string($var['name']);
+			$identifier = vcl_mysql_escape_string($var['identifier']);
+			$defaultvalue = vcl_mysql_escape_string($var['defaultvalue']);
 			if(! array_key_exists($var['datatypeid'], $datatypes))
 				$var['datatypeid'] = $this->findDataTypeID($var['defaultvalue'], $datatypes);
 			$inserts[] = "('$name', "
@@ -407,7 +407,7 @@ class Config extends Resource {
 	///
 	////////////////////////////////////////////////////////////////////////////////
 	function addResource($vars) {
-		$name = mysql_real_escape_string($vars['name']);
+		$name = vcl_mysql_escape_string($vars['name']);
 		if($vars['type'] == 'Cluster') {
 			$query = "INSERT INTO config "
 			       .        "(name, "
@@ -436,7 +436,7 @@ class Config extends Resource {
 			doQuery($query);
 		}
 		else {
-			$data = mysql_real_escape_string($vars['data']);
+			$data = vcl_mysql_escape_string($vars['data']);
 			$query = "INSERT INTO config "
 			       .        "(name, "
 			       .        "configtypeid, "
@@ -501,10 +501,10 @@ class Config extends Resource {
 			return 0;
 		}
 		# check for existance of name
-		$name = mysql_real_escape_string($return['name']);
+		$name = vcl_mysql_escape_string($return['name']);
 		$query = "SELECT id FROM config WHERE name = '$name' AND id != $configid";
 		$qh = doQuery($query);
-		if(mysql_num_rows($qh)) {
+		if(mysqli_num_rows($qh)) {
 			$this->errmsg = "Another config with this name already exists.";
 			return 0;
 		}
@@ -1152,7 +1152,7 @@ class Config extends Resource {
 		       .       "c.deleted = 0";
 		$configmaps = array();
 		$qh = doQuery($query);
-		while($row = mysql_fetch_assoc($qh)) {
+		while($row = mysqli_fetch_assoc($qh)) {
 			switch($row['configmaptype']) {
 				case "Image":
 					$row['mapto'] = $row['image'];
@@ -1478,7 +1478,7 @@ class Config extends Resource {
 		       .       "configstageid = {$return['stageid']} AND "
 		       .       "id != $configmapid";
 		$qh = doQuery($query);
-		if(mysql_num_rows($qh)) {
+		if(mysqli_num_rows($qh)) {
 			$this->errmsg = "The specified mapping already exists.";
 			return 0;
 		}
@@ -1526,7 +1526,7 @@ class Config extends Resource {
 		       .       "c.id in ($inlist)";
 		$configs = array();
 		$qh = doQuery($query);
-		while($row = mysql_fetch_assoc($qh))
+		while($row = mysqli_fetch_assoc($qh))
 			$configs[$row['id']] = $row['name'];
 		return $configs;
 	}
@@ -1542,7 +1542,7 @@ class Config extends Resource {
 		$query = "SELECT id, name FROM configstage ORDER BY name";
 		$stages = array();
 		$qh = doQuery($query);
-		while($row = mysql_fetch_assoc($qh))
+		while($row = mysqli_fetch_assoc($qh))
 			$stages[$row['id']] = $row['name'];
 		return $stages;
 	}
@@ -1597,7 +1597,7 @@ class Config extends Resource {
 			       .       "ct.prettyname = 'Config' AND "
 			       .       "cm.configid = c.id";
 			$qh = doQuery($query);
-			while($row = mysql_fetch_assoc($qh)) {
+			while($row = mysqli_fetch_assoc($qh)) {
 				if($row['subid'] == $configid)
 					return $row['config'];
 				if($reccnt < 20) {
@@ -1624,7 +1624,7 @@ class Config extends Resource {
 			       .       "ct.prettyname = 'Subimage' AND "
 			       .       "cm.configid = c.id";
 			$qh = doQuery($query);
-			while($row = mysql_fetch_assoc($qh)) {
+			while($row = mysqli_fetch_assoc($qh)) {
 				if($row['configid'] == $configid)
 					return $row['config'];
 				if($reccnt < 20) {
