@@ -73,15 +73,15 @@ function validateCASUser($type) {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function checkCASUserInDatabase($type, $userid) {
-	global $authMechs, $mysql_link_vcl;
+	global $authMechs, $mysqli_link_vcl;
 	$loweruserid = strtolower($userid);
-	$loweruserid = mysql_real_escape_string($loweruserid);
+	$loweruserid = vcl_mysql_escape_string($loweruserid);
 	$query = "SELECT id "
 	       . "FROM user "
 	       . "WHERE unityid = '$userid' AND "
 	       .       "affiliationid = {$authMechs[$type]['affiliationid']}";
 	$qh = doQuery($query, 101);
-	if($row = mysql_fetch_assoc($qh)) {
+	if($row = mysqli_fetch_assoc($qh)) {
 		return TRUE;
 	}
 	return FALSE;
@@ -100,14 +100,14 @@ function checkCASUserInDatabase($type, $userid) {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function addCASUser($userinfo) {
-	global $authMechs, $mysql_link_vcl;
+	global $authMechs, $mysqli_link_vcl;
 	$now = unixToDatetime(time());
 	if(array_key_exists('firstname', $userinfo))
-		$esc_firstname = mysql_real_escape_string($userinfo['firstname']);
+		$esc_firstname = vcl_mysql_escape_string($userinfo['firstname']);
 	if(array_key_exists('lastname', $userinfo))
-		$esc_lastname = mysql_real_escape_string($userinfo['lastname']);
+		$esc_lastname = vcl_mysql_escape_string($userinfo['lastname']);
 	if(array_key_exists('preferredname', $userinfo))
-		$esc_preferredname = mysql_real_escape_string($userinfo['preferredname']);
+		$esc_preferredname = vcl_mysql_escape_string($userinfo['preferredname']);
 	$query = "INSERT INTO user (unityid, affiliationid";
 	if(array_key_exists('firstname', $userinfo))
 		$query .= ", firstname";
@@ -129,9 +129,9 @@ function addCASUser($userinfo) {
 		$query .= ",'{$now}')";
 
 	doQuery($query, 101, 'vcl', 1);
-	if(mysql_affected_rows($mysql_link_vcl)) {
+	if(mysqli_affected_rows($mysqli_link_vcl)) {
 		$qh = doQuery("SELECT LAST_INSERT_ID() FROM user", 101);
-		if(! $row = mysql_fetch_row($qh)) {
+		if(! $row = mysqli_fetch_row($qh)) {
 			abort(101);
 		}
 
@@ -160,15 +160,15 @@ function addCASUser($userinfo) {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function updateCASUser($userinfo) {
-	global $mysql_link_vcl;
+	global $mysqli_link_vcl;
 	$now = unixToDatetime(time());
-	$esc_userid = mysql_real_escape_string($userinfo['unityid']);
+	$esc_userid = vcl_mysql_escape_string($userinfo['unityid']);
 	if(array_key_exists('firstname', $userinfo))
-		$esc_firstname = mysql_real_escape_string($userinfo['firstname']);
+		$esc_firstname = vcl_mysql_escape_string($userinfo['firstname']);
 	if(array_key_exists('lastname', $userinfo))
-		$esc_lastname = mysql_real_escape_string($userinfo['lastname']);
+		$esc_lastname = vcl_mysql_escape_string($userinfo['lastname']);
 	if(array_key_exists('preferredname', $userinfo))
-		$esc_preferredname = mysql_real_escape_string($userinfo['preferredname']);
+		$esc_preferredname = vcl_mysql_escape_string($userinfo['preferredname']);
 	$query = "UPDATE user SET unityid = '{$userinfo['unityid']}', lastupdated = '{$now}'";
 	if(array_key_exists('firstname', $userinfo))
 		$query .= ", firstname = '{$esc_firstname}' ";
@@ -180,8 +180,8 @@ function updateCASUser($userinfo) {
 		$query .= ", email = '{$userinfo['email']}' ";
 	$query .= "WHERE unityid = '{$esc_userid}' AND affiliationid = {$userinfo['affiliationid']}";
 	doQuery($query, 256, 'vcl', 1);
-	if(mysql_affected_rows($mysql_link_vcl) == -1) {
-		error_log(mysql_error($mysql_link_vcl));
+	if(mysqli_affected_rows($mysqli_link_vcl) == -1) {
+		error_log(mysqli_error($mysqli_link_vcl));
 		error_log($query);
 		return FALSE;
 	}
@@ -189,7 +189,7 @@ function updateCASUser($userinfo) {
 	// get id of current user
 	$query = "SELECT id FROM user WHERE unityid = '{$esc_userid}' AND affiliationid = {$userinfo['affiliationid']}";
 	$qh = doQuery($query, 255);
-	if($user = mysql_fetch_assoc($qh)) {
+	if($user = mysqli_fetch_assoc($qh)) {
 		// Add to default group
 		if($userinfo['defaultgroup'] != null) {
 			$usergroups = array();
