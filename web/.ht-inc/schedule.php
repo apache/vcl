@@ -188,7 +188,7 @@ class Schedule extends Resource {
 		       .       "deleted = 0";
 		$qh = doQuery($query);
 		$comps = array();
-		while($row = mysql_fetch_assoc($qh))
+		while($row = mysqli_fetch_assoc($qh))
 			$comps[] = $row['hostname'];
 		if(count($comps))
 			$msg = "This schedule cannot be deleted because the following <strong>computers</strong> have it selected as their schedule:<br><br>\n" . implode("<br>\n", $comps);
@@ -445,7 +445,7 @@ class Schedule extends Resource {
 		if(! empty($id))
 			$query .= " AND id != $id";
 		$qh = doQuery($query, 101);
-		if(mysql_num_rows($qh))
+		if(mysqli_num_rows($qh))
 			return 1;
 		return 0;
 	}

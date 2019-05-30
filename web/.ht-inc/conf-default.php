@@ -56,11 +56,18 @@ regarding specific terms and conditions, please contact
 
 
 #######################   end required modifications ###########################
+$host = $_SERVER['HTTP_HOST'];
+if (strpos($host, ':')) {
+	$host = substr($host, 0, strpos($host, ':'));
+}
 
+define("SSLOFFLOAD", 0); // set this to 1 to use external load balancer to manage SSL termination
+                         // set the BASEURL and HOMEURL paths to also be plain HTTP
+                         // The VCL application will not force HTTPS urls as HTTPS is enforced at the load balancer
 define("BASEURL", "https://{$_SERVER['HTTP_HOST']}/vcl");   // no trailing slash - all of the URL except /index.php
 define("SCRIPT", "/index.php");                 // this should only be "/index.php" unless you rename index.php to something else
 define("HOMEURL", "https://{$_SERVER['HTTP_HOST']}/vcl/"); // url to go to when someone clicks HOME or Logout
-define("COOKIEDOMAIN", "{$_SERVER['HTTP_HOST']}");       // domain in which cookies are set
+define("COOKIEDOMAIN", "$host");       // domain in which cookies are set
 
 define("DEFAULTGROUP", "adminUsers"); // if a user is in no groups, use reservation
 										  //   length attriubtes from this group
@@ -131,7 +138,7 @@ $authMechs = array(
 	                            "affiliationid" => 1,
 	                            "help" => "Only use Local Account if there are no other options"),
 	/*"Shibboleth (UNC Federation)" => array("type" => "redirect",
-	                     "URL" => "https://federation.northcarolina.edu/wayf/wayf_framed.php?fed=FED_SHIB_UNC_DEV&version=dropdown&entityID=https%3A%2F%2Fvcl.ncsu.edu%2Fsp%2Fshibboleth&return=http%3A%2F%2Fvcl.ncsu.edu%2FShibboleth.sso%2FDS%3FSAMLDS%3D1%26target%3Dhttp%3A%2F%2Fvcl.ncsu.edu%2Fscheduling%2Fshibauth%2F",
+	                     "URL" => "https://federation.northcarolina.edu/wayf/wayf_framed.php?fed=FED_SHIB_UNC_DEV&version=dropdown&entityID=https%3A%2F%2Fvcl.ncsu.edu%2Fsp%2Fshibboleth&return=http%3A%2F%2Fvcl.ncsu.edu%2FShibboleth.sso%2FDS%3FSAMLDS%3D1%26target%3Dhttp%3A%2F%2Fvcl.ncsu.edu%2Fscheduling%2F/",
 	                     "affiliationid" => 0, // this should always be 0 for Shibboleth authentication
 	                     "help" => "Use Shibboleth (UNC Federation) if you are from a University in the UNC system and do not see another method specifically for your university"),*/
 	/*"EXAMPLE1 LDAP" => array("type" => "ldap",

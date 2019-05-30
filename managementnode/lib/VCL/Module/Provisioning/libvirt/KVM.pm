@@ -621,7 +621,7 @@ sub copy_virtual_disk {
 	
 	my $start_time = time;
 	my ($exit_status, $output) = $self->vmhost_os->execute($command, 0, 7200);
-	if (defined($output && grep(/Unknown option.*compat/, @$output))) {
+	if (defined($output) && grep(/Unknown option.*compat/, @$output)) {
 		# Check for older versions which don't support '-o compat=':
 		#    Unknown option 'compat'
 		#    qemu-img: Invalid options for file format 'qcow2'.

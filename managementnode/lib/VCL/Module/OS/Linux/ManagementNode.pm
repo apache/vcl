@@ -509,6 +509,13 @@ sub run_stage_scripts_on_management_node {
 			next;
 		}
 		
+		# Ignore the .gitignore files
+		if ($script_file_path =~ /\.gitignore/i) {
+			my $matching_section = $1;
+			notify($ERRORS{'DEBUG'}, 0, "ignoring gitignore file on management node from script directory '$matching_section': $script_file_path");
+			next;
+		}
+		
 		my $command = "chmod +x $script_file_path && $script_file_path $mn_json_file_path";
 		my ($exit_status, $output) = $self->execute($command);
 		if (!defined($output)) {

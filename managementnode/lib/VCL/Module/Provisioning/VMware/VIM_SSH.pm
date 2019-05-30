@@ -1548,7 +1548,7 @@ sub vm_register {
 
 =head2 vm_unregister
 
- Parameters  : $vm_identifier 
+ Parameters  : $vm_identifier
  Returns     : boolean
  Description : Unregisters the VM indicated by the argument which may either be
                the .vmx file path or VM ID.
@@ -1586,9 +1586,9 @@ sub vm_unregister {
 			return 1;
 		}
 		
-		# Power of the VM if it is powered on or the unregister command will fail
+		# Power off the VM if it is powered on or the unregister command will fail
 		my $vm_power_state = $self->get_vm_power_state($vmx_file_path);
-		if ($vm_power_state && $vm_power_state =~ /on/i) {
+		if ($vm_power_state && $vm_power_state !~ /off/i) {
 			if (!$self->vm_power_off($vmx_file_path)) {
 				notify($ERRORS{'WARNING'}, 0, "failed to unregister VM because it could not be powered off: $vmx_file_path");
 				return;

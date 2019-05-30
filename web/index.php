@@ -20,14 +20,17 @@
 $VCLversion = '2.5';
 
 require_once(".ht-inc/conf.php");
-if(! isset($_SERVER['HTTPS']) || $_SERVER['HTTPS'] != "on") {
-	header("Location: " . BASEURL . "/");
-	exit;
+
+if (SSLOFFLOAD == 0) {
+    if(! isset($_SERVER['HTTPS']) || $_SERVER['HTTPS'] != "on") {
+        header("Location: " . BASEURL . "/");
+        exit;
+    }
 }
 
 $user = '';
-$mysql_link_vcl = '';
-$mysql_link_acct = '';
+$mysqli_link_vcl = '';
+$mysqli_link_acct = '';
 $mode = '';
 $oldmode = '';
 $submitErr = '';
