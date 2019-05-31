@@ -364,7 +364,7 @@ sub configure_cpan {
 		"term_ornaments" => "1",
 		"trust_test_report_history" => "1",
 		"unzip" => `echo -n \`which unzip\`` || "",
-		"urllist" => [q[http://cpan-rsync.perl.org/]],
+		"urllist" => [q[https://cpan.metacpan.org/], q[https://mirrors.namecheap.com/CPAN/], q[https://mirrors.syringanetworks.net/CPAN/], q[https://ftp.wayne.edu/CPAN/]],
 		"use_sqlite" => "0",
 		"wget" => `echo -n \`which wget\`` || "",
 		"yaml_load_code" => "0",
