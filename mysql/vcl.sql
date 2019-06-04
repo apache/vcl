@@ -53,9 +53,9 @@ CREATE TABLE IF NOT EXISTS `addomain` (
 CREATE TABLE IF NOT EXISTS `adminlevel` (
   `id` tinyint(3) unsigned NOT NULL auto_increment,
   `name` varchar(10) NOT NULL default '',
-  PRIMARY KEY  (`id`),
+  PRIMARY KEY (`id`),
   UNIQUE KEY `name` (`name`)
-) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
 
@@ -72,7 +72,7 @@ CREATE TABLE IF NOT EXISTS `affiliation` (
   `helpaddress` varchar(32) default NULL,
   `shibonly` tinyint(1) unsigned NOT NULL default '0',
   `theme` varchar(50) default NULL,
-  PRIMARY KEY  (`id`),
+  PRIMARY KEY (`id`),
   UNIQUE KEY `name` (`name`)
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
@@ -87,7 +87,7 @@ CREATE TABLE IF NOT EXISTS `blockComputers` (
   `computerid` smallint(5) unsigned NOT NULL default '0',
   `imageid` smallint(5) unsigned NOT NULL default '0',
   `reloadrequestid` mediumint(8) unsigned NOT NULL default '0',
-  PRIMARY KEY  (`blockTimeid`,`computerid`),
+  PRIMARY KEY (`blockTimeid`,`computerid`),
   KEY `computerid` (`computerid`),
   KEY `imageid` (`imageid`)
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1;
@@ -111,11 +111,11 @@ CREATE TABLE IF NOT EXISTS `blockRequest` (
   `processing` tinyint(1) unsigned NOT NULL,
   `status` enum('requested','accepted','completed','rejected','deleted') NOT NULL DEFAULT 'accepted',
   `comments` text,
-  PRIMARY KEY  (`id`),
+  PRIMARY KEY (`id`),
   KEY `imageid` (`imageid`),
   KEY `groupid` (`groupid`),
   KEY `ownerid` (`ownerid`)
-) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
 
@@ -130,11 +130,11 @@ CREATE TABLE IF NOT EXISTS `blockTimes` (
   `end` datetime NOT NULL,
   `processed` tinyint(1) unsigned NOT NULL default '0',
   `skip` tinyint(1) unsigned NOT NULL default '0',
-  PRIMARY KEY  (`id`),
+  PRIMARY KEY (`id`),
   KEY `start` (`start`),
   KEY `end` (`end`),
   KEY `blockRequestid` (`blockRequestid`)
-) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
 
@@ -178,7 +178,7 @@ CREATE TABLE IF NOT EXISTS `blockWebTime` (
 CREATE TABLE IF NOT EXISTS `changelog` (
   `id` int(10) unsigned NOT NULL auto_increment,
   `logid` int(10) unsigned NOT NULL default '0',
-  `userid` mediumint(8) unsigned DEFAULT NULL,
+  `userid` mediumint(8) unsigned default NULL,
   `reservationid` mediumint(8) unsigned default NULL,
   `start` datetime default NULL,
   `end` datetime default NULL,
@@ -187,13 +187,13 @@ CREATE TABLE IF NOT EXISTS `changelog` (
   `wasavailable` tinyint(1) unsigned default NULL,
   `timestamp` datetime NOT NULL default '0000-00-00 00:00:00',
   `other` varchar(255) default NULL,
-  PRIMARY KEY  (`id`),
+  PRIMARY KEY (`id`),
   KEY `logid` (`logid`),
   KEY `userid` (`userid`),
   KEY `reservationid` (`reservationid`),
   KEY `computerid` (`computerid`),
-  UNIQUE KEY reservation_user_remoteIP (userid,reservationid,remoteIP)
-) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
+  UNIQUE KEY `reservation_user_remoteIP` (`userid`,`reservationid`,`remoteIP`)
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
 
@@ -241,7 +241,7 @@ CREATE TABLE IF NOT EXISTS `computer` (
   `provisioningid` smallint(5) unsigned NOT NULL,
   `drivetype` varchar(4) NOT NULL default 'hda',
   `deleted` tinyint(1) unsigned NOT NULL default '0',
-  `datedeleted` DATETIME NOT NULL DEFAULT '0000-00-00 00:00:00',
+  `datedeleted` datetime NOT NULL default '0000-00-00 00:00:00',
   `notes` text,
   `lastcheck` datetime default NULL,
   `location` varchar(255) default NULL,
@@ -253,10 +253,10 @@ CREATE TABLE IF NOT EXISTS `computer` (
   `hostpub` mediumtext,
   `vmtypeid` tinyint(3) unsigned default NULL,
   `predictivemoduleid` smallint(5) unsigned NOT NULL default '9',
-  PRIMARY KEY  (`id`),
-  UNIQUE KEY `hostname` (`hostname`, `datedeleted`),
-  UNIQUE KEY `eth1macaddress` (`eth1macaddress`, `datedeleted`),
-  UNIQUE KEY `eth0macaddress` (`eth0macaddress`, `datedeleted`),
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `hostname` (`hostname`,`datedeleted`),
+  UNIQUE KEY `eth1macaddress` (`eth1macaddress`,`datedeleted`),
+  UNIQUE KEY `eth0macaddress` (`eth0macaddress`,`datedeleted`),
   KEY `ownerid` (`ownerid`),
   KEY `stateid` (`stateid`),
   KEY `platformid` (`platformid`),
@@ -270,7 +270,7 @@ CREATE TABLE IF NOT EXISTS `computer` (
   KEY `nextimageid` (`nextimageid`),
   KEY `provisioningid` (`provisioningid`),
   KEY `imagerevisionid` (`imagerevisionid`)
-) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
 
@@ -300,11 +300,11 @@ CREATE TABLE IF NOT EXISTS `computerloadlog` (
   `loadstateid` smallint(8) unsigned NOT NULL,
   `timestamp` datetime default NULL,
   `additionalinfo` text,
-  PRIMARY KEY  (`id`),
+  PRIMARY KEY (`id`),
   KEY `reservationid` (`reservationid`),
   KEY `loadstateid` (`loadstateid`),
   KEY `computerid` (`computerid`)
-) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
 
@@ -317,9 +317,9 @@ CREATE TABLE IF NOT EXISTS `computerloadstate` (
   `loadstatename` varchar(24) NOT NULL,
   `prettyname` varchar(50) default NULL,
   `est` tinyint(2) unsigned default NULL,
-  PRIMARY KEY  (`id`),
+  PRIMARY KEY (`id`),
   UNIQUE KEY `loadstatename` (`loadstatename`)
-) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
 
@@ -327,20 +327,20 @@ CREATE TABLE IF NOT EXISTS `computerloadstate` (
 -- Table structure for table 'connectlog'
 --
 
-CREATE TABLE IF NOT EXISTS connectlog (
-  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+CREATE TABLE IF NOT EXISTS `connectlog` (
+  `id` int(10) unsigned NOT NULL auto_increment,
   `logid` int(10) unsigned NOT NULL,
   `reservationid` mediumint(8) unsigned NOT NULL,
-  `userid` mediumint(8) unsigned DEFAULT NULL,
+  `userid` mediumint(8) unsigned default NULL,
   `remoteIP` varchar(39) NOT NULL,
   `verified` tinyint(1) NOT NULL,
-  `timestamp` datetime NOT NULL DEFAULT '0000-00-00 00:00:00',
-  PRIMARY KEY (id),
-  UNIQUE KEY reservationid_1 (reservationid,userid,remoteIP),
-  KEY reservationid (reservationid),
-  KEY userid (userid),
-  KEY logid (logid)
-) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
+  `timestamp` datetime NOT NULL default '0000-00-00 00:00:00',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `reservationid_1` (`reservationid`,`userid`,`remoteIP`),
+  KEY `reservationid` (`reservationid`),
+  KEY `userid` (`userid`),
+  KEY `logid` (`logid`)
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
 
@@ -354,10 +354,10 @@ CREATE TABLE IF NOT EXISTS `connectmethod` (
   `description` varchar(255) NOT NULL,
   `connecttext` text NOT NULL,
   `servicename` varchar(32) NOT NULL,
-  `startupscript` varchar(256) DEFAULT NULL,
+  `startupscript` varchar(256) default NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `name` (`name`,`description`)
-) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
 
@@ -389,10 +389,10 @@ CREATE TABLE IF NOT EXISTS `connectmethodport` (
   `connectmethodid` tinyint(3) unsigned NOT NULL,
   `port` mediumint(8) unsigned NOT NULL,
   `protocol` enum('TCP','UDP') NOT NULL default 'TCP',
-  PRIMARY KEY  (`id`),
+  PRIMARY KEY (`id`),
   UNIQUE KEY `connectmethodid_port_protocol` (`connectmethodid`,`port`,`protocol`),
   KEY `connectmethodid` (`connectmethodid`)
-) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
 
@@ -410,7 +410,7 @@ CREATE TABLE IF NOT EXISTS `continuations` (
   `multicall` tinyint(1) unsigned NOT NULL default '1',
   `parentid` varchar(255) default NULL,
   `deletefromid` varchar(255) NOT NULL default '',
-  PRIMARY KEY  (`id`),
+  PRIMARY KEY (`id`),
   KEY `parentid` (`parentid`),
   KEY `userid` (`userid`),
   KEY `expiretime` (`expiretime`),
@@ -424,9 +424,9 @@ CREATE TABLE IF NOT EXISTS `continuations` (
 -- 
 
 CREATE TABLE IF NOT EXISTS `cryptkey` (
-  `id` smallint(6) unsigned NOT NULL AUTO_INCREMENT,
+  `id` smallint(6) unsigned NOT NULL auto_increment,
   `hostid` smallint(6) unsigned NOT NULL,
-  `hosttype` enum('managementnode','web') NOT NULL DEFAULT 'managementnode',
+  `hosttype` enum('managementnode','web') NOT NULL default 'managementnode',
   `pubkey` varchar(1000) NOT NULL,
   `algorithm` varchar(80) NOT NULL,
   `algorithmoption` varchar(255) NOT NULL,
@@ -442,7 +442,7 @@ CREATE TABLE IF NOT EXISTS `cryptkey` (
 -- 
 
 CREATE TABLE IF NOT EXISTS `cryptsecret` (
-  `id` mediumint(8) unsigned NOT NULL AUTO_INCREMENT,
+  `id` mediumint(8) unsigned NOT NULL auto_increment,
   `cryptkeyid` smallint(5) unsigned NOT NULL,
   `secretid` smallint(5) unsigned NOT NULL,
   `cryptsecret` varchar(1000) NOT NULL,
@@ -499,7 +499,7 @@ CREATE TABLE IF NOT EXISTS `image` (
   `description` text,
   `usage` text,
   `basedoffrevisionid` mediumint(8) unsigned default NULL,
-  PRIMARY KEY  (`id`),
+  PRIMARY KEY (`id`),
   UNIQUE KEY `name` (`name`),
   UNIQUE KEY `prettyname` (`prettyname`),
   KEY `ownerid` (`ownerid`),
@@ -508,7 +508,7 @@ CREATE TABLE IF NOT EXISTS `image` (
   KEY `imagemetaid` (`imagemetaid`),
   KEY `imagetypeid` (`imagetypeid`),
   KEY `basedoffrevisionid` (`basedoffrevisionid`)
-) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
 
@@ -538,8 +538,8 @@ CREATE TABLE IF NOT EXISTS `imagemeta` (
   `architecture` varchar(10) default NULL,
   `rootaccess` tinyint(1) unsigned NOT NULL default '1',
   `sethostname` tinyint(1) unsigned default NULL,
-  PRIMARY KEY  (`id`)
-) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
 
@@ -558,12 +558,12 @@ CREATE TABLE IF NOT EXISTS `imagerevision` (
   `production` tinyint(1) unsigned NOT NULL,
   `comments` text,
   `imagename` varchar(75) NOT NULL,
-  `autocaptured` tinyint(1) unsigned NOT NULL DEFAULT '0',
-  PRIMARY KEY  (`id`),
+  `autocaptured` tinyint(1) unsigned NOT NULL default '0',
+  PRIMARY KEY (`id`),
   UNIQUE KEY `production` (`production`,`imagename`),
   UNIQUE KEY `imageid` (`imageid`,`revision`),
   KEY `userid` (`userid`)
-) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
 
@@ -573,7 +573,7 @@ CREATE TABLE IF NOT EXISTS `imagerevision` (
 
 CREATE TABLE IF NOT EXISTS `imagerevisioninfo` (
   `imagerevisionid` mediumint(8) unsigned NOT NULL,
-  `usernames` varchar(512) DEFAULT NULL,
+  `usernames` varchar(512) default NULL,
   `firewallenabled` varchar(20) NOT NULL,
   `timestamp` datetime NOT NULL,
   UNIQUE KEY `imagerevisionid` (`imagerevisionid`)
@@ -588,9 +588,9 @@ CREATE TABLE IF NOT EXISTS `imagerevisioninfo` (
 CREATE TABLE IF NOT EXISTS `imagetype` (
   `id` smallint(5) unsigned NOT NULL auto_increment,
   `name` varchar(16) NOT NULL,
-  PRIMARY KEY  (`id`),
+  PRIMARY KEY (`id`),
   UNIQUE KEY `name` (`name`)
-) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
 
@@ -601,9 +601,9 @@ CREATE TABLE IF NOT EXISTS `imagetype` (
 CREATE TABLE IF NOT EXISTS `IMtype` (
   `id` tinyint(3) unsigned NOT NULL auto_increment,
   `name` varchar(20) NOT NULL default '',
-  PRIMARY KEY  (`id`),
+  PRIMARY KEY (`id`),
   UNIQUE KEY `name` (`name`)
-) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
 
@@ -617,7 +617,7 @@ CREATE TABLE IF NOT EXISTS `localauth` (
   `salt` varchar(8) NOT NULL default '',
   `lastupdated` datetime NOT NULL default '0000-00-00 00:00:00',
   `lockedout` tinyint(1) unsigned NOT NULL default '0',
-  PRIMARY KEY  (`userid`)
+  PRIMARY KEY (`userid`)
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
@@ -641,14 +641,14 @@ CREATE TABLE IF NOT EXISTS `log` (
   `remoteIP` varchar(15) default NULL,
   `imageid` smallint(5) unsigned NOT NULL default '0',
   `size` smallint(5) unsigned NOT NULL default '1450',
-  PRIMARY KEY  (`id`),
+  PRIMARY KEY (`id`),
   KEY `userid` (`userid`),
   KEY `computerid` (`computerid`),
   KEY `imageid` (`imageid`),
   KEY `finalend` (`finalend`),
   KEY `start` (`start`),
   KEY `wasavailable` (`wasavailable`)
-) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
 
@@ -663,7 +663,7 @@ CREATE TABLE IF NOT EXISTS `loginlog` (
   `timestamp` timestamp NOT NULL default CURRENT_TIMESTAMP,
   `passfail` tinyint(1) unsigned NOT NULL default '0',
   `remoteIP` varchar(15) NOT NULL,
-  `code` enum('none','invalid credentials') NOT NULL DEFAULT 'none',
+  `code` enum('none','invalid credentials') NOT NULL default 'none',
   KEY `user` (`user`),
   KEY `affiliationid` (`affiliationid`),
   KEY `timestamp` (`timestamp`),
@@ -700,13 +700,13 @@ CREATE TABLE IF NOT EXISTS `managementnode` (
   `sharedMailBox` varchar(128) default NULL,
   `NOT_STANDALONE` varchar(128) default NULL,
   `availablenetworks` text NOT NULL,
-  PRIMARY KEY  (`id`),
+  PRIMARY KEY (`id`),
   UNIQUE KEY `hostname` (`hostname`),
   KEY `stateid` (`stateid`),
   KEY `ownerid` (`ownerid`),
   KEY `imagelibgroupid` (`imagelibgroupid`),
   KEY `IPaddress` (`IPaddress`)
-) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
 
@@ -718,7 +718,7 @@ CREATE TABLE IF NOT EXISTS `messagereset` (
   `name` varchar(128) NOT NULL,
   `value` longtext NOT NULL,
   PRIMARY KEY (`name`)
-) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
 
@@ -732,9 +732,9 @@ CREATE TABLE IF NOT EXISTS `module` (
   `prettyname` varchar(70) NOT NULL,
   `description` varchar(255) NOT NULL,
   `perlpackage` varchar(150) NOT NULL,
-  PRIMARY KEY  (`id`),
+  PRIMARY KEY (`id`),
   UNIQUE KEY `name` (`name`)
-) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
 
@@ -746,10 +746,10 @@ CREATE TABLE IF NOT EXISTS `nathost` (
   `id` smallint(5) unsigned NOT NULL auto_increment,
   `resourceid` mediumint(8) unsigned NOT NULL,
   `publicIPaddress` varchar(15) NOT NULL,
-  `internalIPaddress` varchar(15) DEFAULT NULL,
-  PRIMARY KEY  (`id`),
+  `internalIPaddress` varchar(15) default NULL,
+  PRIMARY KEY (`id`),
   UNIQUE KEY `resourceid` (`resourceid`)
-) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
 
@@ -762,9 +762,9 @@ CREATE TABLE IF NOT EXISTS `natlog` (
   `nathostresourceid` mediumint(8) unsigned NOT NULL,
   `publicIPaddress` varchar(15) NOT NULL,
   `publicport` smallint(5) unsigned NOT NULL,
-  `internalIPaddress` varchar(15) DEFAULT NULL,
+  `internalIPaddress` varchar(15) default NULL,
   `internalport` smallint(5) unsigned NOT NULL,
-  `protocol` enum('TCP','UDP') NOT NULL DEFAULT 'TCP',
+  `protocol` enum('TCP','UDP') NOT NULL default 'TCP',
   `timestamp` datetime NOT NULL,
   UNIQUE KEY `sublogid` (`sublogid`,`nathostresourceid`,`publicIPaddress`,`publicport`,`internalIPaddress`,`internalport`,`protocol`),
   KEY `logid` (`sublogid`),
@@ -809,13 +809,13 @@ CREATE TABLE IF NOT EXISTS `natport` (
 --
 
 CREATE TABLE IF NOT EXISTS `oneclick` (
-  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `id` int(10) unsigned NOT NULL auto_increment,
   `userid` mediumint(8) unsigned NOT NULL,
   `imageid` smallint(5) unsigned NOT NULL,
   `name` varchar(70) NOT NULL,
   `duration` int(11) NOT NULL,
-  `autologin` tinyint(1) NOT NULL DEFAULT '0',
-  `status` tinyint(4) NOT NULL DEFAULT '1',
+  `autologin` tinyint(1) NOT NULL default '0',
+  `status` tinyint(4) NOT NULL default '1',
   PRIMARY KEY (`id`),
   KEY `userid` (`userid`),
   KEY `imageid` (`imageid`)
@@ -829,7 +829,7 @@ CREATE TABLE IF NOT EXISTS `oneclick` (
 
 CREATE TABLE IF NOT EXISTS `openstackcomputermap` (
   `instanceid` varchar(50) NOT NULL,
-  `computerid` smallint(5) unsigned DEFAULT NULL,
+  `computerid` smallint(5) unsigned default NULL,
   PRIMARY KEY (`instanceid`),
   UNIQUE KEY `computerid` (`computerid`)
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1;
@@ -859,16 +859,16 @@ CREATE TABLE IF NOT EXISTS `OS` (
   `prettyname` varchar(64) NOT NULL default '',
   `type` varchar(30) NOT NULL,
   `installtype` varchar(30) NOT NULL default 'image',
-  `minram` mediumint(8) unsigned NOT NULL DEFAULT '512',
+  `minram` mediumint(8) unsigned NOT NULL default '512',
   `sourcepath` varchar(30) default NULL,
   `moduleid` smallint(5) unsigned default NULL,
-  PRIMARY KEY  (`id`),
+  PRIMARY KEY (`id`),
   UNIQUE KEY `name` (`name`),
   UNIQUE KEY `prettyname` (`prettyname`),
   KEY `type` (`type`),
   KEY `installtype` (`installtype`),
   KEY `moduleid` (`moduleid`)
-) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
 
@@ -879,9 +879,9 @@ CREATE TABLE IF NOT EXISTS `OS` (
 CREATE TABLE IF NOT EXISTS `OSinstalltype` (
   `id` tinyint(3) unsigned NOT NULL auto_increment,
   `name` varchar(30) NOT NULL,
-  PRIMARY KEY  (`id`),
+  PRIMARY KEY (`id`),
   UNIQUE KEY `name` (`name`)
-) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
 
@@ -892,9 +892,9 @@ CREATE TABLE IF NOT EXISTS `OSinstalltype` (
 CREATE TABLE IF NOT EXISTS `OStype` (
   `id` tinyint(3) unsigned NOT NULL auto_increment,
   `name` varchar(30) NOT NULL,
-  PRIMARY KEY  (`id`),
+  PRIMARY KEY (`id`),
   UNIQUE KEY `name` (`name`)
-) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
 
@@ -905,9 +905,9 @@ CREATE TABLE IF NOT EXISTS `OStype` (
 CREATE TABLE IF NOT EXISTS `platform` (
   `id` tinyint(3) unsigned NOT NULL auto_increment,
   `name` varchar(20) NOT NULL default '',
-  PRIMARY KEY  (`id`),
+  PRIMARY KEY (`id`),
   UNIQUE KEY `name` (`name`)
-) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
 
@@ -919,9 +919,9 @@ CREATE TABLE IF NOT EXISTS `privnode` (
   `id` mediumint(8) unsigned NOT NULL auto_increment,
   `parent` mediumint(8) unsigned NOT NULL default '0',
   `name` varchar(50) NOT NULL default '',
-  PRIMARY KEY  (`id`),
+  PRIMARY KEY (`id`),
   UNIQUE KEY `parent` (`parent`,`name`)
-) ENGINE=InnoDB  DEFAULT CHARSET=latin1 COMMENT='nodes for privilege tree';
+) ENGINE=InnoDB DEFAULT CHARSET=latin1 COMMENT='nodes for privilege tree';
 
 -- --------------------------------------------------------
 
@@ -934,10 +934,10 @@ CREATE TABLE IF NOT EXISTS `provisioning` (
   `name` varchar(30) NOT NULL,
   `prettyname` varchar(70) NOT NULL,
   `moduleid` smallint(5) unsigned NOT NULL,
-  PRIMARY KEY  (`id`),
+  PRIMARY KEY (`id`),
   KEY `moduleid` (`moduleid`),
   UNIQUE KEY `name` (`name`)
-) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
 
@@ -948,9 +948,9 @@ CREATE TABLE IF NOT EXISTS `provisioning` (
 CREATE TABLE IF NOT EXISTS `provisioningOSinstalltype` (
   `provisioningid` smallint(5) unsigned NOT NULL,
   `OSinstalltypeid` tinyint(3) unsigned NOT NULL,
-  PRIMARY KEY  (`provisioningid`,`OSinstalltypeid`),
+  PRIMARY KEY (`provisioningid`,`OSinstalltypeid`),
   KEY `OSinstalltypeid` (`OSinstalltypeid`)
-) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
 
@@ -986,14 +986,14 @@ CREATE TABLE IF NOT EXISTS `request` (
   `daterequested` datetime NOT NULL default '0000-00-00 00:00:00',
   `datemodified` datetime default NULL,
   `checkuser` tinyint(1) unsigned NOT NULL default '1',
-  PRIMARY KEY  (`id`),
+  PRIMARY KEY (`id`),
   KEY `userid` (`userid`),
   KEY `stateid` (`stateid`),
   KEY `laststateid` (`laststateid`),
   KEY `logid` (`logid`),
   KEY `start` (`start`),
   KEY `end` (`end`)
-) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
 
@@ -1013,13 +1013,13 @@ CREATE TABLE IF NOT EXISTS `reservation` (
   `pw` varchar(40) default NULL,
   `connectIP` varchar(15) default NULL,
   `connectport` smallint(5) unsigned default NULL,
-  PRIMARY KEY  (`id`),
+  PRIMARY KEY (`id`),
   KEY `managementnodeid` (`managementnodeid`),
   KEY `imageid` (`imageid`),
   KEY `requestid` (`requestid`),
   KEY `computerid` (`computerid`),
   KEY `imagerevisionid` (`imagerevisionid`)
-) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
 
@@ -1045,9 +1045,9 @@ CREATE TABLE IF NOT EXISTS `resource` (
   `id` mediumint(8) unsigned NOT NULL auto_increment,
   `resourcetypeid` tinyint(5) unsigned NOT NULL default '0',
   `subid` mediumint(8) unsigned NOT NULL default '0',
-  PRIMARY KEY  (`id`),
+  PRIMARY KEY (`id`),
   UNIQUE KEY `resourcetypeid` (`resourcetypeid`,`subid`)
-) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
 
@@ -1060,10 +1060,10 @@ CREATE TABLE IF NOT EXISTS `resourcegroup` (
   `name` varchar(50) NOT NULL default '',
   `ownerusergroupid` smallint(5) unsigned NOT NULL default '39',
   `resourcetypeid` tinyint(3) unsigned NOT NULL default '0',
-  PRIMARY KEY  (`id`),
+  PRIMARY KEY (`id`),
   UNIQUE KEY `resourcetypeid` (`resourcetypeid`,`name`),
   KEY `ownerusergroupid` (`ownerusergroupid`)
-) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
 
@@ -1074,7 +1074,7 @@ CREATE TABLE IF NOT EXISTS `resourcegroup` (
 CREATE TABLE IF NOT EXISTS `resourcegroupmembers` (
   `resourceid` mediumint(8) unsigned NOT NULL default '0',
   `resourcegroupid` smallint(5) unsigned NOT NULL default '0',
-  PRIMARY KEY  (`resourceid`,`resourcegroupid`),
+  PRIMARY KEY (`resourceid`,`resourcegroupid`),
   KEY `resourcegroupid` (`resourcegroupid`)
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
@@ -1089,7 +1089,7 @@ CREATE TABLE IF NOT EXISTS `resourcemap` (
   `resourcetypeid1` tinyint(3) unsigned NOT NULL default '13',
   `resourcegroupid2` smallint(5) unsigned NOT NULL default '0',
   `resourcetypeid2` tinyint(3) unsigned NOT NULL default '12',
-  PRIMARY KEY  (`resourcegroupid1`,`resourcegroupid2`),
+  PRIMARY KEY (`resourcegroupid1`,`resourcegroupid2`),
   KEY `resourcetypeid1` (`resourcetypeid1`),
   KEY `resourcetypeid2` (`resourcetypeid2`),
   KEY `resourcegroupid2` (`resourcegroupid2`)
@@ -1106,10 +1106,10 @@ CREATE TABLE IF NOT EXISTS `resourcepriv` (
   `resourcegroupid` smallint(5) unsigned NOT NULL default '0',
   `privnodeid` mediumint(8) unsigned NOT NULL default '0',
   `type` enum('block','cascade','available','administer','manageGroup','manageMapping') NOT NULL default 'block',
-  PRIMARY KEY  (`id`),
+  PRIMARY KEY (`id`),
   UNIQUE KEY `resourcegroupid` (`resourcegroupid`,`privnodeid`,`type`),
   KEY `privnodeid` (`privnodeid`)
-) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
 
@@ -1120,9 +1120,9 @@ CREATE TABLE IF NOT EXISTS `resourcepriv` (
 CREATE TABLE IF NOT EXISTS `resourcetype` (
   `id` tinyint(5) unsigned NOT NULL auto_increment,
   `name` varchar(50) NOT NULL default '',
-  PRIMARY KEY  (`id`),
+  PRIMARY KEY (`id`),
   UNIQUE KEY `name` (`name`)
-) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
 
@@ -1134,10 +1134,10 @@ CREATE TABLE IF NOT EXISTS `schedule` (
   `id` tinyint(3) unsigned NOT NULL auto_increment,
   `name` varchar(25) NOT NULL default '',
   `ownerid` mediumint(8) unsigned NOT NULL default '1',
-  PRIMARY KEY  (`id`),
+  PRIMARY KEY (`id`),
   UNIQUE KEY `name` (`name`),
   KEY `ownerid` (`ownerid`)
-) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
 
@@ -1163,7 +1163,7 @@ CREATE TABLE IF NOT EXISTS `semaphore` (
   `imageid` smallint(5) unsigned NOT NULL,
   `imagerevisionid` mediumint(8) unsigned NOT NULL,
   `managementnodeid` smallint(5) unsigned NOT NULL,
-  `expires` timestamp NOT NULL default CURRENT_TIMESTAMP on update CURRENT_TIMESTAMP,
+  `expires` timestamp NOT NULL default CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `procid` varchar(255) NOT NULL,
   KEY `computerid` (`computerid`),
   KEY `imageid` (`imageid`),
@@ -1191,13 +1191,13 @@ CREATE TABLE IF NOT EXISTS `serverprofile` (
   `admingroupid` smallint(5) unsigned default NULL,
   `logingroupid` smallint(5) unsigned default NULL,
   `monitored` tinyint(1) unsigned NOT NULL default '0',
-  PRIMARY KEY  (`id`),
+  PRIMARY KEY (`id`),
   KEY `ownerid` (`ownerid`),
   UNIQUE KEY `name` (`name`),
   KEY `admingroupid` (`admingroupid`),
   KEY `logingroupid` (`logingroupid`),
   KEY `imageid` (`imageid`)
-) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
 
@@ -1215,12 +1215,12 @@ CREATE TABLE IF NOT EXISTS `serverrequest` (
   `admingroupid` smallint(5) unsigned default NULL,
   `logingroupid` smallint(5) unsigned default NULL,
   `monitored` tinyint(1) unsigned NOT NULL default '0',
-  PRIMARY KEY  (`id`),
+  PRIMARY KEY (`id`),
   UNIQUE KEY `requestid` (`requestid`),
   KEY `admingroupid` (`admingroupid`),
   KEY `logingroupid` (`logingroupid`),
   KEY `serverprofileid` (`serverprofileid`)
-) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
 
@@ -1234,8 +1234,8 @@ CREATE TABLE IF NOT EXISTS `shibauth` (
   `ts` datetime NOT NULL,
   `sessid` varchar(80) NOT NULL,
   `data` text NOT NULL,
-  PRIMARY KEY  (`id`)
-) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
 
@@ -1253,11 +1253,11 @@ CREATE TABLE IF NOT EXISTS `sitemaintenance` (
   `usermessage` text NOT NULL,
   `informhoursahead` smallint(5) unsigned NOT NULL,
   `allowreservations` tinyint(1) unsigned NOT NULL,
-  PRIMARY KEY  (`id`),
+  PRIMARY KEY (`id`),
   KEY `start` (`start`),
   KEY `end` (`end`),
   KEY `ownerid` (`ownerid`)
-) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
 
@@ -1268,9 +1268,9 @@ CREATE TABLE IF NOT EXISTS `sitemaintenance` (
 CREATE TABLE IF NOT EXISTS `state` (
   `id` tinyint(3) unsigned NOT NULL auto_increment,
   `name` varchar(20) NOT NULL default '',
-  PRIMARY KEY  (`id`),
+  PRIMARY KEY (`id`),
   UNIQUE KEY `name` (`name`)
-) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
 
@@ -1310,7 +1310,7 @@ CREATE TABLE IF NOT EXISTS `subimages` (
 -- 
 
 CREATE TABLE IF NOT EXISTS `sublog` (
-  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `id` int(10) unsigned NOT NULL auto_increment,
   `logid` int(10) unsigned NOT NULL default '0',
   `imageid` smallint(5) unsigned NOT NULL default '0',
   `imagerevisionid` mediumint(8) unsigned NOT NULL,
@@ -1365,12 +1365,12 @@ CREATE TABLE IF NOT EXISTS `user` (
   `validated` tinyint(1) unsigned NOT NULL default '1',
   `usepublickeys` tinyint(1) unsigned NOT NULL default '0',
   `sshpublickeys` text,
-  PRIMARY KEY  (`id`),
+  PRIMARY KEY (`id`),
   UNIQUE KEY `unityid` (`unityid`,`affiliationid`),
   UNIQUE KEY `uid` (`uid`),
   KEY `IMtypeid` (`IMtypeid`),
   KEY `affiliationid` (`affiliationid`)
-) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
 
@@ -1390,12 +1390,12 @@ CREATE TABLE IF NOT EXISTS `usergroup` (
   `totalmaxtime` mediumint(8) unsigned NOT NULL default '360',
   `maxextendtime` mediumint(8) unsigned NOT NULL default '60',
   `overlapResCount` smallint(5) unsigned NOT NULL default '0',
-  PRIMARY KEY  (`id`),
+  PRIMARY KEY (`id`),
   UNIQUE KEY `name` (`name`,`affiliationid`),
   KEY `ownerid` (`ownerid`),
   KEY `editusergroupid` (`editusergroupid`),
   KEY `affiliationid` (`affiliationid`)
-) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
 
@@ -1406,7 +1406,7 @@ CREATE TABLE IF NOT EXISTS `usergroup` (
 CREATE TABLE IF NOT EXISTS `usergroupmembers` (
   `userid` mediumint(8) unsigned NOT NULL default '0',
   `usergroupid` smallint(5) unsigned NOT NULL default '0',
-  PRIMARY KEY  (`userid`,`usergroupid`),
+  PRIMARY KEY (`userid`,`usergroupid`),
   KEY `usergroupid` (`usergroupid`)
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
@@ -1448,12 +1448,12 @@ CREATE TABLE IF NOT EXISTS `userpriv` (
   `usergroupid` smallint(5) unsigned default NULL,
   `privnodeid` mediumint(8) unsigned NOT NULL default '0',
   `userprivtypeid` smallint(5) unsigned NOT NULL default '0',
-  PRIMARY KEY  (`id`,`privnodeid`,`userprivtypeid`),
+  PRIMARY KEY (`id`,`privnodeid`,`userprivtypeid`),
   UNIQUE KEY `userid` (`userid`,`privnodeid`,`userprivtypeid`),
   UNIQUE KEY `usergroupid` (`usergroupid`,`privnodeid`,`userprivtypeid`),
   KEY `privnodeid` (`privnodeid`),
   KEY `userprivtypeid` (`userprivtypeid`)
-) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
 
@@ -1464,9 +1464,9 @@ CREATE TABLE IF NOT EXISTS `userpriv` (
 CREATE TABLE IF NOT EXISTS `userprivtype` (
   `id` smallint(5) unsigned NOT NULL auto_increment,
   `name` varchar(50) NOT NULL default '',
-  PRIMARY KEY  (`id`),
+  PRIMARY KEY (`id`),
   UNIQUE KEY `name` (`name`)
-) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
 
@@ -1481,7 +1481,7 @@ CREATE TABLE IF NOT EXISTS `variable` (
   `value` longtext NOT NULL,
   `setby` varchar(128) default NULL,
   `timestamp` datetime NOT NULL,
-  PRIMARY KEY  (`id`),
+  PRIMARY KEY (`id`),
   UNIQUE KEY `name` (`name`)
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
@@ -1510,10 +1510,10 @@ CREATE TABLE IF NOT EXISTS `vmhost` (
   `id` smallint(5) unsigned NOT NULL auto_increment,
   `computerid` smallint(5) unsigned NOT NULL,
   `vmprofileid` smallint(5) unsigned NOT NULL,
-  PRIMARY KEY  (`id`),
+  PRIMARY KEY (`id`),
   UNIQUE KEY `computerid_vmprofileid` (`computerid`,`vmprofileid`),
   KEY `vmprofileid` (`vmprofileid`)
-) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
 
@@ -1545,13 +1545,13 @@ CREATE TABLE IF NOT EXISTS `vmprofile` (
   `rsapub` text NULL default NULL,
   `rsakey` varchar(256) NULL default NULL,
   `encryptedpasswd` text NULL default NULL,
-  PRIMARY KEY  (`id`),
+  PRIMARY KEY (`id`),
   UNIQUE KEY `profilename` (`profilename`),
   KEY `imageid` (`imageid`),
   KEY `repositoryimagetypeid` (`repositoryimagetypeid`),
   KEY `datastoreimagetypeid` (`datastoreimagetypeid`),
   KEY `secretid` (`secretid`)
-) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
 
@@ -1562,9 +1562,9 @@ CREATE TABLE IF NOT EXISTS `vmprofile` (
 CREATE TABLE IF NOT EXISTS `vmtype` (
   `id` tinyint(3) unsigned NOT NULL auto_increment,
   `name` varchar(30) NOT NULL,
-  PRIMARY KEY  (`id`),
+  PRIMARY KEY (`id`),
   UNIQUE KEY `name` (`name`)
-) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
 
