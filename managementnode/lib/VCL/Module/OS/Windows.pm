@@ -3938,10 +3938,13 @@ sub reboot {
 				return 0;
 			}
 			
-			# Set sshd service startup mode to auto
+			# Set sshd service startup mode to manual
 			if (!$self->set_service_startup_mode('sshd', 'manual')) {
 				notify($ERRORS{'WARNING'}, 0, "reboot not attempted, unable to set sshd service startup mode to manual");
 				return 0;
+			}
+			else {
+				notify($ERRORS{'DEBUG'}, 0, "sshd service set to manual start");
 			}
 			
 			# Make sure ping access is enabled from private IP addresses

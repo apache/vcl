@@ -1736,6 +1736,13 @@ sub generate_domain_xml {
 	
 	my $copy_on_write_file_path = $self->get_copy_on_write_file_path();
 	my $image_type = $self->data->get_vmhost_datastore_imagetype_name();
+	my $vmhost_vmpath = $self->data->get_vmhost_profile_vmpath();
+	my $add_disk_cache = 0;
+	if (! $self->os->nathost_os->is_file_on_local_disk($vmhost_vmpath)) {
+		# set disk cache to none if vmpath on NFS so live migration will work
+		$add_disk_cache = 1;
+	}
+
 	my $disk_driver_name = $self->driver->get_disk_driver_name();
 	my $disk_bus_type = $self->get_master_xml_disk_bus_type();
 	
@@ -1912,6 +1919,11 @@ EOF
 			}
 		]
 	};
+
+	if ($add_disk_cache) {
+		notify($ERRORS{'DEBUG'}, 0, "vmpath ($vmhost_vmpath) is on NFS; setting disk cache to none");
+		$xml_hashref->{'devices'}[0]{'disk'}[0]{'driver'}{'cache'} = 'none';
+	}
 	
 	notify($ERRORS{'DEBUG'}, 0, "generated domain XML:\n" . format_data($xml_hashref));
 	return hash_to_xml_string($xml_hashref, 'domain');
