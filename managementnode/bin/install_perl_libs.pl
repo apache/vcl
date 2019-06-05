@@ -75,6 +75,13 @@ my @LINUX_PACKAGES = (
 	'perl-XML-Simple',
 	'perl-YAML',
 	'xmlsec1-openssl',
+	'perl-Frontier-RPC',
+	'perl-Frontier-RPC-Client',
+	'perl-LWP-Protocol-https',
+	'perl-Mo',
+	'perl-Object-InsideOut',
+	'perl-Scalar-List-Utils',
+	'perl-Expect',
 );
 
 my @PERL_MODULES = (
@@ -179,7 +186,7 @@ sub install_epel {
 	my $epel_install_repo_contents = <<EOF;
 [epel-install]
 name=EPEL Repository
-mirrorlist=http://mirrors.fedoraproject.org/mirrorlist?repo=epel-\$releasever&arch=\$basearch
+mirrorlist=https://mirrors.fedoraproject.org/mirrorlist?repo=epel-\$releasever&arch=\$basearch
 failovermethod=priority
 enabled=1
 gpgcheck=0
