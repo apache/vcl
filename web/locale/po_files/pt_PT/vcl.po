@@ -2986,7 +2986,7 @@ msgstr ""
 
 #: siteconfig.php:1517
 #, php-format
-msgid "This section allows for configuration of messages that are sent to users and administrators about things such as reservations and image management. Every message has a default. Additionally, separate messages can be configured for each affiliation. Most of the messages will have parts that are in square brackets. These parts will have data substituted for them before the message is sent. A list of what can be used in squeare brackets can be found at the <a href=\"%s\">Apache VCL web site</a>. Some messages also have a short form that may be sent such as in the form of a popup within a reservation when the reservation is about to end."
+msgid "This section allows for configuration of messages that are sent to users and administrators about things such as reservations and image management. Every message has a default. Additionally, separate messages can be configured for each affiliation. Most of the messages will have parts that are in square brackets. These parts will have data substituted for them before the message is sent. A list of what can be used in square brackets can be found at the <a href=\"%s\">Apache VCL web site</a>. Some messages also have a short form that may be sent such as in the form of a popup within a reservation when the reservation is about to end."
 msgstr ""
 
 #: siteconfig.php:1582
