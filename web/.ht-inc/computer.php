@@ -1757,6 +1757,11 @@ class Computer extends Resource {
 		}
 		# add multiple
 		if($return['mode'] == 'add' && $addmode == 'multiple') {
+			# ensure % in hostname
+			if(! preg_match('/%/', $return['name'])) {
+				$return['error'] = 1;
+				$errormsg[] = "Name must contain % when adding multiple computers";
+			}
 			# startnum/endnum
 			if($return['startnum'] < 0 || $return['startnum'] > 255) {
 				$return['error'] = 1;
