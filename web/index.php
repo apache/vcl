@@ -16,8 +16,8 @@
   limitations under the License.
 */
 
-# ASF VCL v2.5
-$VCLversion = '2.5';
+# ASF VCL v2.5.1
+$VCLversion = '2.5.1';
 
 require_once(".ht-inc/conf.php");
 
