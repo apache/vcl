@@ -886,6 +886,7 @@ CREATE TABLE IF NOT EXISTS `addomain` (
 
 CALL DropExistingIndices('addomain', 'domainDNSName');
 CALL AddIndexIfNotExists('addomain', 'domainDNSName');
+CALL AddColumnIfNotExists('addomain', 'usedbhostnames', "tinyint(1) unsigned NOT NULL default '0'");
 
 ALTER TABLE `addomain` CHANGE `name` `name` varchar(512) NOT NULL default '';
 ALTER TABLE `addomain` CHANGE `username` `username` varchar(80) NOT NULL default '';

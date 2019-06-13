@@ -69,7 +69,7 @@ if [ $? -ne 0 ]; then help; fi
 eval set -- "$args"
 
 # ------------------------- variables -------------------------------
-VCL_VERSION=2.5
+VCL_VERSION=2.5.1
 DB_USERNAME=vcluser
 ADMIN_PASSWORD=
 
@@ -433,7 +433,7 @@ function set_localauth_password() {
 	
 	salt=$(random_string 8)
 	#echo "Password salt: $salt"
-	passhash=$(echo -n $password$salt | sha1sum | awk '{print $1}')
+	passhash=$(echo -n $password$salt | sha512sum | awk '{print $1}')
 	#echo "Password hash: $passhash"
 	mysql -e "UPDATE localauth SET passhash = '$passhash', salt = '$salt', lastupdated = NOW() WHERE localauth.userid = (SELECT id FROM user WHERE unityid = '$username');" vcl
 	if [ $? -ne 0 ]; then
@@ -450,12 +450,12 @@ function download_archive() {
 	if [ $? -ne 0 ]; then generic_error "failed to download $ARCHIVE from $ARCHIVEURLPATH"; exit 1; fi
 }
 
-function validate_archive_sha1() {
-	echo "Downloading sha1 file for $VCL_VERSION..."
-	/bin/rm -f $ARCHIVE.sha1
-	wget -q $SIGPATH$ARCHIVE.sha1
+function validate_archive_sha512() {
+	echo "Downloading sha512 file for $VCL_VERSION..."
+	/bin/rm -f $ARCHIVE.sha512
+	wget -q $SIGPATH$ARCHIVE.sha512
 	echo "validating $ARCHIVE"
-	sha1sum -c $ARCHIVE.sha1
+	sha512sum -c $ARCHIVE.sha512
 	return $?
 }
 
@@ -487,19 +487,19 @@ cd $WORKPATH
 if [[ ! -f $ARCHIVE ]]; then
 	echo "Downloading VCL $VCL_VERSION..."
 	download_archive
-	validate_archive_sha1
+	validate_archive_sha512
 	if [ $? -ne 0 ]; then generic_error "failed to validate $ARCHIVE"; exit 1; fi;
 	validate_archive_gpg
 	if [ $? -ne 0 ]; then generic_error "failed to validate $ARCHIVE"; exit 1; fi;
 else
 	dir=`pwd`
 	echo "archive for $VCL_VERSION found at $dir/$ARCHIVE"
-	validate_archive_sha1
+	validate_archive_sha512
 	if [ $? -ne 0 ]; then
 		echo "failed to validate $ARCHIVE; downloading again..."
 		/bin/mv -f $ARCHIVE $ARCHIVE.old
 		download_archive
-		validate_archive_sha1
+		validate_archive_sha512
 		if [ $? -ne 0 ]; then generic_error "failed to validate $ARCHIVE"; exit 1; fi;
 		validate_archive_gpg
 		if [ $? -ne 0 ]; then generic_error "failed to validate $ARCHIVE"; exit 1; fi;
