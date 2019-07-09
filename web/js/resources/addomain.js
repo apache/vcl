@@ -21,6 +21,16 @@ function ADdomain() {
 }
 ADdomain.prototype = new Resource();
 
+ADdomain.prototype.colformatter = function(value, rowIndex, obj) {
+	if(obj.field == 'usedbhostnames') {
+		if(value == "0")
+			return '<span class="rederrormsg">' + _('false') + '</span>';
+		if(value == "1")
+			return '<span class="ready">' + _('true') + '</span>';
+	}
+	return value;
+}
+
 var resource = new ADdomain();
 
 function addNewResource(title) {
@@ -44,9 +54,7 @@ function inlineEditResourceCB(data, ioArgs) {
 		dijit.byId('domaindnsname').set('value', data.items.data.domaindnsname);
 		dijit.byId('username').set('value', data.items.data.username);
 		dijit.byId('dnsservers').set('value', data.items.data.dnsservers);
-		if(data.items.data.usedbhostnames == 1) {
-			dijit.byId('usedbhostnames').set('checked', data.items.data.usedbhostnames)
-		}
+		dijit.byId('usedbhostnames').set('checked', parseInt(data.items.data.usedbhostnames))
 		dijit.byId('password').set('value', '********');
 		dijit.byId('password2').set('value', 'xxxxxxxx');
 
@@ -132,7 +140,7 @@ function saveResourceCB(data, ioArgs) {
 			resourcegrid.store.fetch({
 				query: {id: data.items.data.id},
 				onItem: function(item) {
-					var fields = ['name', 'owner', 'domaindnsname', 'username','dnsservers'];
+					var fields = ['name', 'owner', 'domaindnsname', 'username', 'usedbhostnames', 'dnsservers'];
 					for(var i = 0; i < fields.length; i++) {
 						dijit.byId(fields[i]).reset();
 						resourcegrid.store.setValue(item, fields[i], data.items.data[fields[i]]);
