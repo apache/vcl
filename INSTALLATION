@@ -1,10 +1,10 @@
-Installing VCL 2.5
+Installing VCL 2.5.1
 
-VCL 2.5 is the second release to include an installation script. All you need
-to install VCL is the script. It will download and validate the VCL software and
-then install it. The script can be used to install all three parts of VCL
-(database, web portal, and management node) on a single system or to install
-each part individually on separate systems.
+VCL 2.5.1 can be installed using an installation script. All you need to
+install VCL is the script. It will download and validate the VCL software
+and then install it. The script can be used to install all three parts of
+VCL (database, web portal, and management node) on a single system or to
+install each part individually on separate systems.
 
 Running the installation script with no arguments will step you through
 installing all three parts of VCL.
@@ -52,7 +52,7 @@ available:
 
 
 
-MINUAL INSTALLATION INSTRUCTIONS
+MANUAL INSTALLATION INSTRUCTIONS
 
 The recommended method of installing VCL is to use the installation script. See
 above for additional information. If manual installation is required,
@@ -145,7 +145,7 @@ instructions are listed below.
       Import the vcl.sql file into the database. The vcl.sql file is included in
       the mysql directory within the Apache VCL source code
 
-        mysql vcl < apache-VCL-2.5/mysql/vcl.sql
+        mysql vcl < apache-VCL-2.5.1/mysql/vcl.sql
 
 2. Install and Configure the Web Components
 
@@ -155,8 +155,8 @@ instructions are listed below.
 
    Web Server:
 
-    Apache HTTP Server v1.3 or v2.x with SSL enabled
-    PHP 5.0 or later
+    Apache HTTP Server v2.x with SSL enabled
+    PHP 5.x or 7.x
 
    Required Linux Packages:
 
@@ -167,12 +167,13 @@ instructions are listed below.
    Required PHP Modules:
 
     php
+    php-gettext
     php-json (required if your PHP version is 5.2 or later)
+    php-ldap (if you will be using LDAP authentication)
     php-mysql
     php-openssl
     php-xml
     php-xmlrpc
-    php-ldap (if you will be using LDAP authentication)
 
    A. Install the Required Linux Packages & PHP Modules
 
@@ -225,14 +226,14 @@ instructions are listed below.
       Copy the web directory to a location under the web root of your web
       server and navigate to the destination .ht-inc subdirectory:
 
-        cp -ar apache-VCL-2.5/web/ /var/www/html/vcl-2.5
-        ln -s /var/www/html/vcl-2.5 /var/www/html/vcl
+        cp -ar apache-VCL-2.5.1/web/ /var/www/html/vcl-2.5.1
+        ln -s /var/www/html/vcl-2.5.1 /var/www/html/vcl
         cd /var/www/html/vcl/.ht-inc
 
       If SELinux is enabled, run the following command to set the context of the
       web code to httpd_sys_content_t
 
-        chcon -R -t httpd_sys_content_t /var/www/html/vcl-2.5
+        chcon -R -t httpd_sys_content_t /var/www/html/vcl-2.5.1
 
       Copy secrets-default.php to secrets.php:
 
@@ -353,8 +354,8 @@ instructions are listed below.
    Prerequisites The following management node installation instructions assume
    the instructions in these previous sections have been completed:
 
-    VCL 2.5 Database Installation
-    VCL 2.5 Web Code Installation
+    VCL 2.5.1 Database Installation
+    VCL 2.5.1 Web Code Installation
 
    Supported Operating Systems:
 
@@ -392,11 +393,12 @@ instructions are listed below.
 
    The VCL management node daemon (vcld) is written in Perl and has been tested
    on Perl 5.10 and 5.16. The following Perl modules available from CPAN are
-   also required (see step 2 below for installation instructions):
+   also required (see step B below for installation instructions):
 
     Crypt::CBC - implementation of the cryptographic cipher block chaining mode
     Crypt::OpenSSL::RSA - RSA encoding and decoding, using the openSSL libraries
     Crypt::Rijndael - Crypt::CBC compliant Rijndael encryption module
+    DBD::MySQL - MySQL driver for the Perl5 Database Interface (DBI)
     DBI - Generic Database Interface
     Digest::SHA1 - NIST SHA message digest algorithm
     Exception::Class::Base - base class for exception objects
@@ -408,6 +410,7 @@ instructions are listed below.
     Mail::Mailer - Simple mail agent interface
     Net::Jabber - Jabber perl library
     Net::Netmask - parse, manipulate and lookup IP network blocks
+    Net::Ping::External - Cross-platform Perl interface to "ping" utilities
     Net::SSH::Expect - a wrapper to the ssh executable that is available in
                        system's PATH
     Object::InsideOut - Comprehensive inside-out object support
@@ -421,8 +424,8 @@ instructions are listed below.
       Copy the managementnode directory to the location where you want it to
       reside (typically /usr/local):
 
-        cp -ar apache-VCL-2.5/managementnode /usr/local/vcl-2.5
-        ln -s /usr/local/vcl-2.5 /usr/local/vcl
+        cp -ar apache-VCL-2.5.1/managementnode /usr/local/vcl-2.5.1
+        ln -s /usr/local/vcl-2.5.1 /usr/local/vcl
 
    B. Install the Required Linux Packages & Perl Modules
 
