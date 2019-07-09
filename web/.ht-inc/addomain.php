@@ -119,6 +119,8 @@ class ADdomain extends Resource {
 				return 'Domain DNS Name';
 			case 'dnsservers':
 				return 'DNS Server(s)';
+			case 'usedbhostnames':
+				return 'Use Database Hostnames';
 		}
 		return ucfirst($field);
 	}
