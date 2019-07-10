@@ -139,7 +139,10 @@ function initGlobals() {
 	                     's', 't', 'u', 'v', 'w', 'x', 'y', 'z', '1', '2', '3',
 	                     '4', '5', '6', '7', '8', '9', '0');
 
-	if(array_key_exists('VCLAUTH', $_COOKIE) || $mode == 'submitLogin') {
+	if(isset($_COOKIE['VCLAUTH']) ||
+	   $mode == 'submitLogin' ||
+	   $mode == 'selectauth' ||
+	   $mode == 'main') {
 		// open keys
 		$fp = fopen(".ht-inc/keys.pem", "r");
 		$key = fread($fp, 8192);
