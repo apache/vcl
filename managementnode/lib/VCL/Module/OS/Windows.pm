@@ -8353,6 +8353,7 @@ Windows Registry Editor Version 5.00
 
 [HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU]
 "NoAutoUpdate"=dword:00000001
+"AUOptions"=dword:00000001
 EOF
 
 	# Import the string into the registry
