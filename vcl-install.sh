@@ -433,7 +433,7 @@ function set_localauth_password() {
 	
 	salt=$(random_string 8)
 	#echo "Password salt: $salt"
-	passhash=$(echo -n $password$salt | sha512sum | awk '{print $1}')
+	passhash=$(echo -n $password$salt | sha1sum | awk '{print $1}')
 	#echo "Password hash: $passhash"
 	mysql -e "UPDATE localauth SET passhash = '$passhash', salt = '$salt', lastupdated = NOW() WHERE localauth.userid = (SELECT id FROM user WHERE unityid = '$username');" vcl
 	if [ $? -ne 0 ]; then
