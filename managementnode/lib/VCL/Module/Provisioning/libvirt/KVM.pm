@@ -599,6 +599,14 @@ sub copy_virtual_disk {
 		$source_file_paths_string = '"' . join('" "', @source_file_paths) . '"';
 	#}
 	
+	my $parent_file = $source_file_name;
+	$parent_file =~ s/-s[0-9]{3}//;
+	$parent_file = $parent_file . ".vmdk";
+	if ($self->vmhost_os->file_exists("$source_directory_path$parent_file")) {
+		$source_file_paths_string = "$source_directory_path$parent_file";
+		notify($ERRORS{'DEBUG'}, 0, "changing source_file_paths_string from multiple files to $source_directory_path$parent_file");
+	}
+	
 	my $options = '';
 	# VCL-911: If copying to the repository, save the image qcow2 version 0.10, the traditional image format that can be read by any QEMU since 0.10
 	my $repository_image_file_path = $self->get_repository_image_file_path();
@@ -621,7 +629,9 @@ sub copy_virtual_disk {
 	
 	my $start_time = time;
 	my ($exit_status, $output) = $self->vmhost_os->execute($command, 0, 7200);
-	if (defined($output) && grep(/Unknown option.*compat/, @$output)) {
+	if (defined($output) &&
+	   (grep(/Unknown option.*compat/, @$output) ||
+	   grep(/Invalid parameter.*compat/, @$output))) {
 		# Check for older versions which don't support '-o compat=':
 		#    Unknown option 'compat'
 		#    qemu-img: Invalid options for file format 'qcow2'.
