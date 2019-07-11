@@ -779,6 +779,44 @@ sub power_off {
 		notify($ERRORS{'DEBUG'}, 0, "'$domain_name' domain is not running on $node_name");
 		return 1;
 	}
+	elsif (grep(/SIGKILL: Device or resource busy/i, @$output)) {
+		notify($ERRORS{'DEBUG'}, 0, "Failed to stop '$domain_name' domain; \"SIGKILL: Device or resource busy\" encountered, waiting 30 seconds and trying again");
+		# libvirt could not kill VM, wait and try again
+		sleep 30;
+		my $command2 = "virsh -q list --all";
+		($exit_status, $output) = $self->vmhost_os->execute($command2);
+		my ($id, $name, $state);
+		for my $line (@$output) {
+			($id, $name, $state) = $line =~ /^\s*([\d\-]+)\s+(.+?)\s+(\w+|shut off|in shutdown)$/g;
+			next if (!defined($id));
+			last if ($name eq $domain_name);
+		}
+		if ($name ne $domain_name) {
+			notify($ERRORS{'WARNING'}, 0, "2nd try: $domain_name not found when running 'virsh list' on $node_name");
+			return;
+		}
+		if ($id eq '-') {
+			notify($ERRORS{'DEBUG'}, 0, "'$domain_name' domain now stopped");
+			return 1;
+		}
+		($exit_status, $output) = $self->vmhost_os->execute($command);
+		if (!defined($output)) {
+			notify($ERRORS{'WARNING'}, 0, "2nd try: failed to execute virsh command to destroy '$domain_name' domain on $node_name");
+			return;
+		}
+		elsif ($exit_status eq '0') {
+			notify($ERRORS{'OK'}, 0, "2nd try: destroyed '$domain_name' domain on $node_name");
+			return 1;
+		}
+		elsif (grep(/domain is not running/i, @$output)) {
+			notify($ERRORS{'DEBUG'}, 0, "2nd try: '$domain_name' domain is not running on $node_name");
+			return 1;
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "2nd try: failed to destroy '$domain_name' domain on $node_name\ncommand: $command\nexit status: $exit_status\noutput:\n" . join("\n", @$output));
+			return;
+		}
+	}
 	else {
 		notify($ERRORS{'WARNING'}, 0, "failed to destroy '$domain_name' domain on $node_name\ncommand: $command\nexit status: $exit_status\noutput:\n" . join("\n", @$output));
 		return;
