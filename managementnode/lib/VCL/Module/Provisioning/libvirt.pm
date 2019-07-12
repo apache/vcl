@@ -1776,7 +1776,7 @@ sub generate_domain_xml {
 	my $image_type = $self->data->get_vmhost_datastore_imagetype_name();
 	my $vmhost_vmpath = $self->data->get_vmhost_profile_vmpath();
 	my $add_disk_cache = 0;
-	if (! $self->os->nathost_os->is_file_on_local_disk($vmhost_vmpath)) {
+	if (! $self->vmhost_os->is_file_on_local_disk($vmhost_vmpath)) {
 		# set disk cache to none if vmpath on NFS so live migration will work
 		$add_disk_cache = 1;
 	}
