@@ -12653,7 +12653,7 @@ function validateEmailAddress($addr) {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function xmlrpccall() {
-	global $xmlrpc_handle, $HTTP_RAW_POST_DATA, $user;
+	global $xmlrpc_handle, $user;
 	# create xmlrpc handle
 	$xmlrpc_handle = xmlrpc_server_create();
 	# register functions available via rpc calls
@@ -12707,7 +12707,8 @@ function xmlrpccall() {
 	xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCfinishBaseImageCapture", "xmlRPChandler");
 	xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCcheckCryptSecrets", "xmlRPChandler");
 
-	print xmlrpc_server_call_method($xmlrpc_handle, $HTTP_RAW_POST_DATA, '');
+	$raw_post_data = file_get_contents("php://input");
+	print xmlrpc_server_call_method($xmlrpc_handle, $raw_post_data, '');
 	xmlrpc_server_destroy($xmlrpc_handle);
 	cleanSemaphore();
 	dbDisconnect();
@@ -12722,13 +12723,14 @@ function xmlrpccall() {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function xmlrpcgetaffiliations() {
-	global $xmlrpc_handle, $HTTP_RAW_POST_DATA;
+	global $xmlrpc_handle;
 	# create xmlrpc handle
 	$xmlrpc_handle = xmlrpc_server_create();
 	# register functions available via rpc calls
 	xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCaffiliations", "xmlRPChandler");
 
-	print xmlrpc_server_call_method($xmlrpc_handle, $HTTP_RAW_POST_DATA, '');
+	$raw_post_data = file_get_contents("php://input");
+	print xmlrpc_server_call_method($xmlrpc_handle, $raw_post_data, '');
 	xmlrpc_server_destroy($xmlrpc_handle);
 	dbDisconnect();
 	exit;
