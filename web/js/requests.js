@@ -435,8 +435,7 @@ function getDeployData(waitonly) {
 		else {
 			var tmp = dojo.byId('deploystartday').value;
 			tmp = new Date(tmp * 1000);
-			var offset = tmp.getTimezoneOffset() * 60000;
-			var date = new Date(tmp.getTime() + offset);
+			var date = new Date(tmp.getTime());
 			var hour = parseInt(dojo.byId('deployhour').value);
 			var m = dojo.byId('deploymeridian').value;
 			if(m == 'pm' && hour < 12)
@@ -876,7 +875,7 @@ function configureSystemCB(data, ioArgs) {
 	oldstore = dijit.byId('configvariables').store;
 	dijit.byId('configvariables').setStore(newstore2, '', {query: {id: ''}});
 	delete oldstore;
-	
+
 	// finishconfigs
 	/*if(data.items.configs.length == 0)
 		dijit.byId('newResDlgShowConfigBtn').set('disabled', true);
@@ -1389,7 +1388,7 @@ function endReservationCB(data, ioArgs) {
 		dijit.byId('serverdeletedlg').show();
 		return;
 	}
-	if(dijit.byId('serverdeletedlg') && 
+	if(dijit.byId('serverdeletedlg') &&
 	   dijit.byId('serverdeletedlg').open) {
 		dijit.byId('serverdeletedlg').hide();
 		dijit.byId('serverDeleteDlgBtn').set('disabled', false);
@@ -1553,7 +1552,7 @@ function submitEditReservation() {
 		data.day = dijit.byId('day').value;
 	if(dijit.byId('editstarttime')) {
 		var t = dijit.byId('editstarttime').value;
-		data.starttime = dojox.string.sprintf('%02d%02d', 
+		data.starttime = dojox.string.sprintf('%02d%02d',
 		                                      t.getHours(),
 		                                      t.getMinutes());
 		var tmp = dijit.byId('day').value.match(/([0-9]{4})([0-9]{2})([0-9]{2})/);
@@ -1584,7 +1583,7 @@ function submitEditReservation() {
 		data.endmode = 'length';
 	}
 	else if((dojo.byId('dateradio') && dojo.byId('dateradio').checked) ||
-	        (dijit.byId('openenddate') && ! dojo.byId('indefiniteradio')) || 
+	        (dijit.byId('openenddate') && ! dojo.byId('indefiniteradio')) ||
 	        (dijit.byId('openenddate') && dojo.byId('indefiniteradio') && ! dojo.byId('indefiniteradio').checked)) {
 		var d = dijit.byId('openenddate').value;
 		var t = dijit.byId('openendtime').value;

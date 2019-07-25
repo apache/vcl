@@ -1,3 +1,53 @@
+ASF VCL 2.5.1
+
+Dependency changes:
+
+VCL Management Node:
+* updated supported versions of CentOS and Red Hat
+
+Release Notes - VCL - Version 2.5.1
+            
+** Bug
+    * [VCL-1079] - Virtual Hosts page references Computer Utilities
+    * [VCL-1080] - Wrong port can be delivered in RDP file
+    * [VCL-1081] - UID conflict for admin user
+    * [VCL-1082] - monitor_vcld.pl throws incorrect lastcheckin time exception after Daylight Savings Time Roles Back
+    * [VCL-1083] - Data in shares mounted under Linux home directories may be deleted
+    * [VCL-1093] - vSphere_SDK.pm:vm_unregister - failed to unregister VM:
+    * [VCL-1100] - block allocation usage graph does not work correctly for allocations with a single time slot
+    * [VCL-1103] - change vcldsemaphore.pid from smallint to mediumint
+    * [VCL-1105] - Shibboleth authentication broken due to bug in getCryptKeyID
+    * [VCL-1111] - statgraphcache table not correctly being used
+    * [VCL-1113] - image capture for Windows system configured as domain controller fails
+    * [VCL-1116] - use database hostnames for ad joined computers
+    * [VCL-1117] - vcld fails to set fixed IP address for Linux server reservations if management node not set to static
+    * [VCL-1119] - wrong day submitted for future reservations made in the evening
+    * [VCL-1120] - image conversion from vmdk to qcow2 always done twice
+        
+** New Feature
+    * [VCL-1112] - SSL Offload
+        
+** Improvement
+    * [VCL-1041] - Customer facing email notifications are ugly
+    * [VCL-1084] - set cache mode for libvirt VMs
+    * [VCL-1085] - Configuring VCL Website to use custom port
+    * [VCL-1089] - Change ping module to use Net::Ping::External
+    * [VCL-1092] - Change installation script to install these RPM Perl Modules
+    * [VCL-1094] - add .\ to windows user login to prevent automatic use of Microsoft accounts
+    * [VCL-1095] - Move unjoining of Windows VMs from Active Directory to earlier in the deprovision process
+    * [VCL-1096] - Add ability to automatically mount NFS shares under Windows
+    * [VCL-1101] - Change chmod mode from string to octal number value
+    * [VCL-1104] - set cpu topology for libvirt VMs
+    * [VCL-1106] - make PHP code compatible with PHP 7
+    * [VCL-1109] - date duplicated on statistic graph labels for day after daylight saving time rolls back
+    * [VCL-1110] - expose maxinitial time for images in web UI
+    * [VCL-1114] - miscellaneous small web updates
+            
+** Task
+    * [VCL-1097] - add hidden files to empty directories to force them to be included in Git repo
+
+================================================================================
+
 ASF VCL 2.5
 
 Dependency changes:

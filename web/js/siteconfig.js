@@ -685,7 +685,22 @@ messages.prototype.setContents = function(clearmsg) {
 	}
 	dojo.byId('messagesaffil').innerHTML = affiltype;
 	dijit.byId('messagessubject').set('value', item['subject']);
-	dijit.byId('messagesbody').set('value', item['message']);
+	if(('DBmanagedHTML' in item) && item['DBmanagedHTML'] == 1) {
+		dijit.byId('messagesbody').set('value', 'This message body contains HTML that is set directly in the database');
+		dijit.byId('messagesbody').set('disabled', true);
+		dijit.byId('messagessubject').set('disabled', true);
+		dijit.byId('messagesshortmsg').set('disabled', true);
+		dijit.byId('messagessavebtn').set('disabled', true);
+		dijit.byId('messagesdelbtn').set('disabled', true);
+	}
+	else {
+		dijit.byId('messagesbody').set('value', item['message']);
+		dijit.byId('messagesbody').set('disabled', false);
+		dijit.byId('messagessubject').set('disabled', false);
+		dijit.byId('messagesshortmsg').set('disabled', false);
+		dijit.byId('messagessavebtn').set('disabled', false);
+		dijit.byId('messagesdelbtn').set('disabled', false);
+	}
 	if('short_message' in item)
 		dijit.byId('messagesshortmsg').set('value', item['short_message']);
 	else

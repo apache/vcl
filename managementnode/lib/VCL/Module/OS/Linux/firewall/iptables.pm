@@ -39,7 +39,7 @@ use lib "$FindBin::Bin/../../../../..";
 use base qw(VCL::Module::OS::Linux::firewall);
 
 # Specify the version of this module
-our $VERSION = '2.5';
+our $VERSION = '2.5.1';
 
 our @ISA;
 

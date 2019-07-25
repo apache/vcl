@@ -36,8 +36,11 @@ define("ADDUSERNOPRIVS", 1 << 1);
 ////////////////////////////////////////////////////////////////////////////////
 function viewNodes() {
 	global $user;
-	if(! empty($_COOKIE["VCLACTIVENODE"]) &&
-		nodeExists($_COOKIE['VCLACTIVENODE']))
+	if(isset($_COOKIE["VCLACTIVENODE"]) &&
+	   is_numeric($_COOKIE['VCLACTIVENODE']) &&
+	   $_COOKIE['VCLACTIVENODE'] > 0 &&
+	   $_COOKIE['VCLACTIVENODE'] < 16777216 &&
+	   nodeExists($_COOKIE['VCLACTIVENODE']))
 		$activeNode = $_COOKIE["VCLACTIVENODE"];
 	else {
 		$topNodes = getChildNodes();
@@ -256,7 +259,7 @@ function viewNodes() {
 		       . "ORDER BY name";
 		$qh = doQuery($query);
 		$orderedgroups = array();
-		while($row = mysql_fetch_assoc($qh))
+		while($row = mysqli_fetch_assoc($qh))
 			$orderedgroups[] = $row['id'];
 		foreach($orderedgroups as $id) {
 			printUserPrivRow($id, $i, $privs["usergroups"], $usertypes["users"],
@@ -965,7 +968,7 @@ function selectNode() {
 		       . "ORDER BY name";
 		$qh = doQuery($query);
 		$orderedgroups = array();
-		while($row = mysql_fetch_assoc($qh))
+		while($row = mysqli_fetch_assoc($qh))
 			$orderedgroups[] = $row['id'];
 		foreach($orderedgroups as $id) {
 			$tmpArr = getUserPrivRowHTML($id, $i, $privs["usergroups"],
@@ -1125,7 +1128,7 @@ function nodeDropData() {
 	$query = "SELECT id, parent FROM privnode WHERE id > " . DEFAULT_PRIVNODE;
 	$qh = doQuery($query);
 	$data = 'nodedropdata = {';
-	while($row = mysql_fetch_assoc($qh))
+	while($row = mysqli_fetch_assoc($qh))
 		if(checkUserHasPriv('nodeAdmin', $user['id'], $row['id']) &&
 		   ($row['parent'] == DEFAULT_PRIVNODE || checkUserHasPriv('nodeAdmin', $user['id'], $row['parent'])))
 			$data .= "{$row['id']}: '1',";
@@ -1183,7 +1186,7 @@ function AJsubmitAddChildNode() {
 	       . "WHERE name = '$newnode' AND "
 	       .       "parent = $parent";
 	$qh = doQuery($query, 335);
-	if(mysql_num_rows($qh)) {
+	if(mysqli_num_rows($qh)) {
 		$text = "A node of that name already exists "
 		      . "under " . $nodeInfo["name"];
 		print "dojo.byId('addChildNodeStatus').innerHTML = '$text';";
@@ -1198,7 +1201,7 @@ function AJsubmitAddChildNode() {
 	doQuery($query, 336);
 
 	$qh = doQuery("SELECT LAST_INSERT_ID() FROM privnode", 101);
-	if(! $row = mysql_fetch_row($qh))
+	if(! $row = mysqli_fetch_row($qh))
 		abort(101);
 	$nodeid = $row[0];
 
@@ -1228,7 +1231,7 @@ function AJsubmitAddChildNode() {
 function nodeExists($node) {
 	$query = "SELECT id FROM privnode WHERE id = $node";
 	$qh = doQuery($query, 101);
-	if(mysql_num_rows($qh))
+	if(mysqli_num_rows($qh))
 		return 1;
 	else
 		return 0;
@@ -1313,13 +1316,13 @@ function AJsubmitRenameNode() {
 		return;
 	}
 	# check if node matching new name already exists at parent
-	$_newname = mysql_real_escape_string($newname);
+	$_newname = vcl_mysql_escape_string($newname);
 	$query = "SELECT id "
 	       . "FROM privnode "
 	       . "WHERE parent = (SELECT parent FROM privnode WHERE id = $activeNode) AND "
 	       .       "name = '$_newname'";
 	$qh = doQuery($query, 101);
-	if(mysql_num_rows($qh)) {
+	if(mysqli_num_rows($qh)) {
 		$msg = i("A sibling node of that name currently exists");
 		$arr = array('error' => 2, 'message' => $msg);
 		sendJSON($arr);
@@ -1372,7 +1375,7 @@ function AJmoveNode() {
 	       .       "p2.parent = $newparentid AND "
 	       .       "p2.name = p1.name";
 	$qh = doQuery($query);
-	if($row = mysql_num_rows($qh)) {
+	if($row = mysqli_num_rows($qh)) {
 		$arr = array('status' => 'collision',
 		             'moveid' => $moveid,
 		             'oldparentid' => $oldparentid,
@@ -1494,7 +1497,7 @@ function userLookup() {
 	print "<INPUT type=hidden name=continuation value=\"$cont\">\n";
 	print "</FORM><br>\n";
 	if(! empty($userid)) {
-		$esc_userid = mysql_real_escape_string($userid);
+		$esc_userid = vcl_mysql_escape_string($userid);
 		if(preg_match('/,/', $userid)) {
 			$mode = 'name';
 			$force = 0;
@@ -1517,8 +1520,8 @@ function userLookup() {
 		}
 		else {
 			$tmp = explode(',', $userid);
-			$last = mysql_real_escape_string(trim($tmp[0]));
-			$first = mysql_real_escape_string(trim($tmp[1]));
+			$last = vcl_mysql_escape_string(trim($tmp[0]));
+			$first = vcl_mysql_escape_string(trim($tmp[1]));
 			$query = "SELECT CONCAT(u.unityid, '@', a.name) AS unityid "
 			       . "FROM user u, "
 			       .      "affiliation a "
@@ -1528,7 +1531,7 @@ function userLookup() {
 			       .       "a.id = $affilid";
 		}
 		$qh = doQuery($query, 101);
-		if(! mysql_num_rows($qh)) {
+		if(! mysqli_num_rows($qh)) {
 			if($mode == 'name') {
 				print "<font color=red>User not found</font><br>\n";
 				return;
@@ -1538,13 +1541,13 @@ function userLookup() {
 		}
 		elseif($force) {
 			$_SESSION['userresources'] = array();
-			$row = mysql_fetch_assoc($qh);
+			$row = mysqli_fetch_assoc($qh);
 			$newtime = unixToDatetime(time() - SECINDAY - 5);
 			$query = "UPDATE user SET lastupdated = '$newtime' WHERE id = {$row['id']}";
 			doQuery($query, 101);
 		}
 		elseif($mode == 'name') {
-			$row = mysql_fetch_assoc($qh);
+			$row = mysqli_fetch_assoc($qh);
 			$userid = $row['unityid'];
 			$esc_userid = $row['unityid'];
 		}
@@ -1629,6 +1632,12 @@ function userLookup() {
 		print "      Total: {$times['total']}<br>\n";
 		print "  </TR>\n";
 
+		$maxconcurrent = getMaxOverlap($userdata['id']);
+		print "  <TR>\n";
+		print "    <TH align=right>Max Overlapping Reservations:</TH>\n";
+		print "    <TD>$maxconcurrent</TD>\n";
+		print "  </TR>\n";
+
 		print "  <TR>\n";
 		print "    <TH align=right style=\"vertical-align: top\">Privileges (found somewhere in the tree):</TH>\n";
 		print "    <TD>\n";
@@ -1659,11 +1668,11 @@ function userLookup() {
 		       . "ORDER BY p.name, "
 		       .          "upt.name";
 		$qh = doQuery($query, 101);
-		if(mysql_num_rows($qh)) {
+		if(mysqli_num_rows($qh)) {
 			print "Nodes where user is granted privileges:<br>\n";
 			print "<TABLE>\n";
 			$privnodeid = 0;
-			while($row = mysql_fetch_assoc($qh)) {
+			while($row = mysqli_fetch_assoc($qh)) {
 				if($privnodeid != $row['privnodeid']) {
 					if($privnodeid) {
 						print "    </TD>\n";
@@ -1699,11 +1708,11 @@ function userLookup() {
 			       . "ORDER BY p.name, "
 			       .          "upt.name";
 			$qh = doQuery($query, 101);
-			if(mysql_num_rows($qh)) {
+			if(mysqli_num_rows($qh)) {
 				print "Nodes where user's groups are granted privileges:<br>\n";
 				print "<TABLE>\n";
 				$privnodeid = 0;
-				while($row = mysql_fetch_assoc($qh)) {
+				while($row = mysqli_fetch_assoc($qh)) {
 					if($privnodeid != $row['privnodeid']) {
 						if($privnodeid) {
 							print "    </TD>\n";
@@ -1723,6 +1732,30 @@ function userLookup() {
 			}
 		}
 		print "</div>\n";
+
+		# owned images
+		$ownedimages = array();
+		$query = "SELECT prettyname "
+		       . "FROM image "
+		       . "WHERE ownerid = {$userdata['id']} AND "
+		       .       "deleted = 0 "
+		       . "ORDER BY prettyname";
+		$qh = doQuery($query);
+		while($row = mysqli_fetch_row($qh))
+			$ownedimages[] = $row[0];
+		print "<table>\n";
+		print "  <tr>\n";
+		print "    <th style=\"vertical-align: top;\">Images Owned by User:<th>\n";
+		print "    <td>\n";
+		if(count($ownedimages)) {
+			foreach($ownedimages as $image)
+				print "      $image<br>\n";
+		}
+		else
+			print "      None\n";
+		print "    </td>\n";
+		print "  </tr>\n";
+		print "</table>\n";
 
 		# image access
 		print "<table>\n";
@@ -1749,7 +1782,7 @@ function userLookup() {
 		       . "LIMIT 8";
 		$logins = array();
 		$qh = doQuery($query);
-		while($row = mysql_fetch_assoc($qh))
+		while($row = mysqli_fetch_assoc($qh))
 			$logins[] = $row;
 		if(count($logins)) {
 			$logins = array_reverse($logins);
@@ -1814,7 +1847,7 @@ function userLookup() {
 		       . "ORDER BY l.start DESC "
 		       . "LIMIT 5";
 		$qh = doQuery($query, 290);
-		while($row = mysql_fetch_assoc($qh))
+		while($row = mysqli_fetch_assoc($qh))
 			array_push($requests, $row);
 		$requests = array_reverse($requests);
 		if(! empty($requests)) {
@@ -1924,7 +1957,7 @@ function userLookup() {
 		       . "GROUP BY rq.id "
 		       . "ORDER BY rq.start";
 		$qh = doQuery($query, 290);
-		while($row = mysql_fetch_assoc($qh))
+		while($row = mysqli_fetch_assoc($qh))
 			array_push($requests, $row);
 		$requests = array_reverse($requests);
 		if(! empty($requests)) {
@@ -2054,7 +2087,7 @@ function userLookup() {
 			       . "GROUP BY rq.id "
 			       . "ORDER BY rq.start";
 			$qh = doQuery($query, 290);
-			while($row = mysql_fetch_assoc($qh))
+			while($row = mysqli_fetch_assoc($qh))
 				array_push($requests, $row);
 			$requests = array_reverse($requests);
 			if(! empty($requests)) {
@@ -2156,7 +2189,7 @@ function userLookup() {
 function recurseGetChildren($node) {
 	$children = array();
 	$qh = doQuery("SELECT id FROM privnode WHERE parent = $node", 340);
-	while($row = mysql_fetch_row($qh)) {
+	while($row = mysqli_fetch_row($qh)) {
 		array_push($children, $row[0]);
 		$children = array_merge($children, recurseGetChildren($row[0]));
 	}
@@ -2444,7 +2477,7 @@ function jsonGetUserGroupMembers() {
 	       . "LEFT JOIN usergroup g2 ON (g.editusergroupid = g2.id) "
 	       . "WHERE g.id = $usergrpid";
 	$qh = doQuery($query, 101);
-	if(! ($grpdata = mysql_fetch_assoc($qh))) {
+	if(! ($grpdata = mysqli_fetch_assoc($qh))) {
 		# problem getting group members
 		$msg = 'failed to fetch group members';
 		$arr = array('members' => $msg, 'domid' => $domid);
@@ -2620,7 +2653,7 @@ function jsonGetResourceGroupMembers() {
 	       . "WHERE rg.id = $resgrpid AND "
 	       .       "rg.resourcetypeid = rt.id";
 	$qh = doQuery($query, 101);
-	if($row = mysql_fetch_assoc($qh)) {
+	if($row = mysqli_fetch_assoc($qh)) {
 		$type = $row['name'];
 		if($type == 'computer' || $type == 'managementnode')
 			$field = 'hostname';
@@ -2639,7 +2672,7 @@ function jsonGetResourceGroupMembers() {
 			$query .= " AND t.deleted = 0";
 		$qh = doQuery($query, 101);
 		$members = '';
-		while($row = mysql_fetch_assoc($qh))
+		while($row = mysqli_fetch_assoc($qh))
 			$members .= "{$row['item']}<br>";
 		if($members == '')
 			$members = '(empty group)';
@@ -2719,7 +2752,7 @@ function getNodePrivileges($node, $type="all", $privs=0) {
 		       .       "g.resourcetypeid = t.id "
 		       . "ORDER BY p.privnodeid";
 		$qh = doQuery($query, 350);
-		while($row = mysql_fetch_assoc($qh)) {
+		while($row = mysqli_fetch_assoc($qh)) {
 			$resourcedata[$row['privnodeid']][] = $row;
 		}
 	}
@@ -2746,7 +2779,7 @@ function getNodePrivileges($node, $type="all", $privs=0) {
 		       .       "u.affiliationid = a.id "
 		       . "ORDER BY u.unityid";
 		$qh = doQuery($query, 351);
-		while($row = mysql_fetch_assoc($qh))
+		while($row = mysqli_fetch_assoc($qh))
 			$privs['users'][$row['unityid']][$row['name']] = 1;
 	}
 	if($type == "usergroups" || $type == "all") {
@@ -2766,7 +2799,7 @@ function getNodePrivileges($node, $type="all", $privs=0) {
 		       .       "up.usergroupid IS NOT NULL "
 		       . "ORDER BY g.name";
 		$qh = doQuery($query, 352);
-		while($row = mysql_fetch_assoc($qh)) {
+		while($row = mysqli_fetch_assoc($qh)) {
 			if(isset($privs["usergroups"][$row["id"]]))
 				$privs["usergroups"][$row["id"]]['privs'][$row['priv']] = 1;
 			else
@@ -2849,7 +2882,7 @@ function getNodeCascadePrivileges($node, $type="all", $privs=0) {
 		       .       "g.resourcetypeid = t.id AND "
 		       .       "p.type = 'block'";
 		$qh = doQuery($query);
-		while($row = mysql_fetch_assoc($qh)) {
+		while($row = mysqli_fetch_assoc($qh)) {
 			if(! isset($allblockdata[$row['privnodeid']]))
 				$allblockdata[$row['privnodeid']] = array();
 			# TODO adding the id at the end will fix the bug where blocking cascaded resource
@@ -2888,7 +2921,7 @@ function getNodeCascadePrivileges($node, $type="all", $privs=0) {
 		       .       "p.privnodeid = p2.privnodeid AND "
 		       .       "p2.type = 'cascade'";
 		$qh = doQuery($query);
-		while($row = mysql_fetch_assoc($qh)) {
+		while($row = mysqli_fetch_assoc($qh)) {
 			if(! isset($allcascadedata[$row['privnodeid']]))
 				$allcascadedata[$row['privnodeid']] = array();
 			$allcascadedata[$row['privnodeid']][] =
@@ -2939,7 +2972,7 @@ function getNodeCascadePrivileges($node, $type="all", $privs=0) {
 			       .       "t.name = 'block' AND "
 			       .       "u.affiliationid = a.id";
 			$qh = doQuery($query, 355);
-			while($row = mysql_fetch_row($qh))
+			while($row = mysqli_fetch_row($qh))
 				$nodeuserblock[$row[0]][$row[1]] = 1;
 		}
 		static $nodeusercasade;
@@ -2967,7 +3000,7 @@ function getNodeCascadePrivileges($node, $type="all", $privs=0) {
 			       . 		"up.userid = Cup.userid "
 			       . "ORDER BY up.privnodeid, u.unityid, t.name";
 			$qh = doQuery($query, 356);
-			while($row = mysql_fetch_row($qh))
+			while($row = mysqli_fetch_row($qh))
 				$nodeusercascade[$row[0]][$row[1]][$row[2]] = 1;
 		}
 		$mynodelist = $nodelist;
@@ -3005,7 +3038,7 @@ function getNodeCascadePrivileges($node, $type="all", $privs=0) {
 			       .       "up.usergroupid IS NOT NULL AND "
 			       .       "t.name = 'block'";
 			$qh = doQuery($query, 357);
-			while($row = mysql_fetch_row($qh))
+			while($row = mysqli_fetch_row($qh))
 				$nodegroupblock[$row[0]][$row[1]] = 1;
 		}
 		static $nodegroupcascade;
@@ -3035,7 +3068,7 @@ function getNodeCascadePrivileges($node, $type="all", $privs=0) {
 			       . 		"up.usergroupid = Cup.usergroupid "
 			       . "ORDER BY up.privnodeid, g.id, t.name";
 			$qh = doQuery($query, 356);
-			while($row = mysql_fetch_row($qh)) {
+			while($row = mysqli_fetch_row($qh)) {
 				if(! isset($nodegroupcascade[$row[0]][$row[1]])) {
 					$nodegroupcascade[$row[0]][$row[1]] = array('id' => $row[1],
 						                                         'name' => $row[2],

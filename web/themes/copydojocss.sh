@@ -51,11 +51,18 @@ if ! cp -R $path/../dojo/dijit/themes/tundra $path/$skin/css/dojo; then
 fi
 
 cd $path/$skin/css/dojo
-mv tundra.css $skin.css
+if [[ -f tundra.css ]]; then
+	mv tundra.css $skin.css
+fi
+
 if [[ -r tundra.css.commented.css ]]; then
 	mv tundra.css.commented.css $skin.css.commented.css
 fi
-mv tundra_rtl.css ${skin}_rtl.css
+
+if [[ -f tundra_rtl.css ]]; then
+	mv tundra_rtl.css ${skin}_rtl.css
+fi
+
 if [[ -r tundra_rtl.css.commented.css ]]; then
 	mv tundra_rtl.css.commented.css ${skin}_rtl.css.commented.css
 fi

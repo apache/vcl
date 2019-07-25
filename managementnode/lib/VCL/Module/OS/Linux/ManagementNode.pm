@@ -44,7 +44,7 @@ use lib "$FindBin::Bin/../../../..";
 use base qw(VCL::Module::OS::Linux);
 
 # Specify the version of this module
-our $VERSION = '2.5';
+our $VERSION = '2.5.1';
 
 # Specify the version of Perl to use
 use 5.008000;
@@ -506,6 +506,13 @@ sub run_stage_scripts_on_management_node {
 		if ($script_file_path =~ /\/(\.svn|\.git)\//i) {
 			my $matching_section = $1;
 			notify($ERRORS{'DEBUG'}, 0, "ignoring file on management node because it resides under intermediate directory '$matching_section': $script_file_path");
+			next;
+		}
+		
+		# Ignore the .gitignore files
+		if ($script_file_path =~ /\.gitignore/i) {
+			my $matching_section = $1;
+			notify($ERRORS{'DEBUG'}, 0, "ignoring gitignore file on management node from script directory '$matching_section': $script_file_path");
 			next;
 		}
 		

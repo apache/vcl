@@ -47,7 +47,7 @@ function editVMInfo() {
 	print "</div>\n";
 
 	$newmsg = "To create a new Virtual Host, change the state of a computer to<br>\n"
-	        . "'vmhostinuse' under Manage Computers-&gt;Computer Utilities.<br><br>\n";
+	        . "'vmhostinuse' under Manage Computers-&gt;Edit Computer Profiles.<br><br>\n";
 	$vmhosts = getVMHostData();
 	$resources = getUserResources(array("computerAdmin"), array("administer"));
 	foreach($vmhosts as $key => $value) {
@@ -380,7 +380,7 @@ function vmhostdata() {
 	$currvms = array();
 	$noaccess = array();
 	$freevms = array();
-	while($row = mysql_fetch_assoc($qh)) {
+	while($row = mysqli_fetch_assoc($qh)) {
 		if($row['vmhostid'] == $vmhostid) {
 			$ids[$row['id']] = $row['hostname'];
 			if(array_key_exists($row['id'], $computers))
@@ -423,7 +423,7 @@ function vmhostdata() {
 		       .       "rq.laststateid = 18) AND "
 		       .       "rq.start > NOW()";
 		$qh = doQuery($query, 101);
-		while($row = mysql_fetch_assoc($qh)) {
+		while($row = mysqli_fetch_assoc($qh)) {
 			$movevms[] = array('id' => $row['id'],
 			                 'time' => strtolower($row['start']) . ' ' . date('T'),
 			                 'hostname' => $currvms[$row['computerid']]['name']);
@@ -437,9 +437,7 @@ function vmhostdata() {
 	$currvms = array_merge($currvms);
 	$noaccess = array_merge($noaccess);
 	$freevms = array_merge($freevms);
-	$cont = addContinuationsEntry('AJchangeVMprofile', array(), 3600, 1, 0);
 	$arr = array('profile' => $data[$vmhostid]['vmprofiledata'],
-	             'continuation' => $cont,
 	             'allvms' => $allvms,
 	             'currvms' => $currvms,
 	             'noaccess' => $noaccess,
@@ -480,7 +478,7 @@ function getVMHostData($id='') {
 		$query .= " AND vh.id = $id";
 	$qh = doQuery($query, 101);
 	$ret = array();
-	while($row = mysql_fetch_assoc($qh)) {
+	while($row = mysqli_fetch_assoc($qh)) {
 		$ret[$row['id']] = $row;
 		foreach($profiles[$row['vmprofileid']] AS $key => $value) {
 			if(is_null($value))
@@ -516,6 +514,10 @@ function AJvmToHost() {
 	$fails = array();
 
 	$vmlistids = processInputVar('listids', ARG_STRING);
+	if(! preg_match('/^(\d+)(,\d+)*$/', $vmlistids)) {
+		sendJSON(array('failed' => 'invaliddata'));
+		return;
+	}
 	$vmids = explode(',', $vmlistids);
 
 	# get data about submitted vms to add
@@ -524,7 +526,7 @@ function AJvmToHost() {
 	       . "WHERE id in ($vmlistids)";
 	$qh = doQuery($query, 101);
 	$vmdata = array();
-	while($row = mysql_fetch_assoc($qh)) {
+	while($row = mysqli_fetch_assoc($qh)) {
 		if(! array_key_exists($row['id'], $resources['computer'])) {
 			$fails[] = array('id' => $row['id'], 'name' => $row['hostname'], 'reason' => 'noaccess');
 			unset_by_val($row['id'], $vmids);
@@ -537,7 +539,7 @@ function AJvmToHost() {
 	$query = "SELECT id FROM vmhost";
 	$vmhosts = array();
 	$qh = doQuery($query, 101);
-	while($row = mysql_fetch_assoc($qh))
+	while($row = mysqli_fetch_assoc($qh))
 		$vmhosts[$row['id']] = 1;
 
 	# check to see if there any submitted vms have a hostid of an existing vm host
@@ -583,6 +585,10 @@ function AJvmFromHost() {
 
 	$fails = array();
 	$vmlistids = processInputVar('listids', ARG_STRING);
+	if(! preg_match('/^(\d+)(,\d+)*$/', $vmlistids)) {
+		sendJSON(array('failed' => 'invaliddata'));
+		return;
+	}
 	$vmids = explode(',', $vmlistids);
 	$rems = array();
 	$checks = array();
@@ -616,7 +622,7 @@ function AJvmFromHost() {
 		       . "ORDER BY end DESC "
 		       . "LIMIT 1";
 		$qh = doQuery($query, 101);
-		if($row = mysql_fetch_assoc($qh)) {
+		if($row = mysqli_fetch_assoc($qh)) {
 			$checks[] = array('id' => $compid,
 			                  'hostname' => $compdata[$compid]['hostname'],
 			                  'end' => strtolower($row['end']) . ' ' . date('T'),
@@ -718,6 +724,10 @@ function AJcancelVMmove() {
 
 	$fails = array();
 	$requestids = processInputVar('listids', ARG_STRING);
+	if(! preg_match('/^(\d+)(,\d+)*$/', $requestids)) {
+		sendJSON(array('failed' => 'invaliddata'));
+		return;
+	}
 	$now = time();
 	$msg = 'FAIL';
 	foreach(explode(',', $requestids) AS $reqid) {
@@ -840,11 +850,11 @@ function AJupdateVMprofileItem() {
 	else {
 		if(get_magic_quotes_gpc())
 			$newvalue = stripslashes($newvalue);
-		$newvalue2 = mysql_real_escape_string($newvalue);
+		$newvalue2 = vcl_mysql_escape_string($newvalue);
 		$newvalue2 = "'$newvalue2'";
 	}
 
-	$item = mysql_real_escape_string($item);
+	$item = vcl_mysql_escape_string($item);
 	$profile = getVMProfiles($profileid);
 	if($item == 'password') {
 		$pwdlen = strlen($newvalue);
@@ -878,7 +888,7 @@ function AJupdateVMprofileItem() {
 			       . "WHERE cryptkeyid = $cryptkeyid AND "
 			       .       "secretid = $secretid";
 			$qh = doQuery($query);
-			if(! ($row = mysql_fetch_assoc($qh))) {
+			if(! ($row = mysqli_fetch_assoc($qh))) {
 				# generate a new secret
 				$newsecretid = getSecretKeyID('vmprofile', 'secretid', 0);
 				$delids = array($secretid);
@@ -895,7 +905,7 @@ function AJupdateVMprofileItem() {
 				       . "WHERE cs.secretid = $secretid AND "
 				       .       "ck.hosttype = 'managementnode'";
 				$qh = doQuery($query);
-				while($row = mysql_fetch_assoc($qh))
+				while($row = mysqli_fetch_assoc($qh))
 					$secretidset[$row['mnid']][$newsecretid] = 1;
 				$values = getMNcryptkeyUpdates($secretidset, $cryptkeyid);
 				addCryptSecretKeyUpdates($values);
@@ -944,13 +954,12 @@ function AJupdateVMprofileItem() {
 ////////////////////////////////////////////////////////////////////////////////
 function AJnewProfile() {
 	$newprofile = processInputVar('newname', ARG_STRING);
-	if(get_magic_quotes_gpc()) {
+	if(get_magic_quotes_gpc())
 		$newprofile = stripslashes($newprofile);
-		$newprofile = mysql_real_escape_string($newprofile);
-	}
+	$newprofile = vcl_mysql_escape_string($newprofile);
 	$query = "SELECT id FROM vmprofile WHERE profilename = '$newprofile'";
 	$qh = doQuery($query, 101);
-	if($row = mysql_fetch_assoc($qh)) {
+	if($row = mysqli_fetch_assoc($qh)) {
 		sendJSON(array('failed' => 'exists'));
 		return;
 	}
@@ -994,7 +1003,7 @@ function AJdelProfile() {
 	       .       "s.name IN ('vmhostinuse', 'tovmhostinuse') AND " 
 	       .       "vh.vmprofileid = $profileid";
 	$qh = doQuery($query, 101);
-	if($row = mysql_fetch_assoc($qh)) {
+	if($row = mysqli_fetch_assoc($qh)) {
 		sendJSON(array('failed' => 'inuse'));
 		return;
 	}

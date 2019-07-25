@@ -110,7 +110,7 @@ function selectStatistics() {
 		       . "ORDER BY prettyname";
 		$qh = doQuery($query);
 		$provs = array();
-		while($row = mysql_fetch_assoc($qh))
+		while($row = mysqli_fetch_assoc($qh))
 			$provs[$row['id']] = $row['prettyname'];
 		$cdata = array('mode' => 'provisioning',
 		               'provs' => $provs);
@@ -213,7 +213,8 @@ function viewStatistics() {
 		       .        "l.wasavailable, "
 		       .        "l.ending, "
 		       .        "i.prettyname, "
-		       .        "o.prettyname AS OS "
+		       .        "o.prettyname AS OS, "
+		       .        "o.type AS OStype "
 		       . "FROM log l, "
 		       .      "image i, "
 		       .      "user u, "
@@ -234,7 +235,8 @@ function viewStatistics() {
 		       .        "l.wasavailable, "
 		       .        "l.ending, "
 		       .        "i.prettyname, "
-		       .        "o.prettyname AS OS "
+		       .        "o.prettyname AS OS, "
+		       .        "o.type AS OStype "
 		       . "FROM image i, "
 		       .      "user u, "
 		       .      "OS o, "
@@ -282,6 +284,7 @@ function viewStatistics() {
 	$imageload6to8 = array();
 	$imageload8more = array();
 	$imagefails = array();
+	$imageostype = array();
 	$lengths = array("30min" => 0,
 	                 "1hour" => 0,
 	                 "2hours" => 0,
@@ -292,7 +295,7 @@ function viewStatistics() {
 	                 "10hrsplus" => 0);
 	$totalhours = 0;
 	$osusers = array();
-	while($row = mysql_fetch_assoc($qh)) {
+	while($row = mysqli_fetch_assoc($qh)) {
 		if(! array_key_exists($row["prettyname"], $imageload2less))
 			$imageload2less[$row["prettyname"]] = 0;
 		if(! array_key_exists($row["prettyname"], $imageload2to6))
@@ -301,6 +304,8 @@ function viewStatistics() {
 			$imageload6to8[$row["prettyname"]] = 0;
 		if(! array_key_exists($row["prettyname"], $imageload8more))
 			$imageload8more[$row["prettyname"]] = 0;
+		if(! isset($imageostype[$row["prettyname"]]))
+			$imageostype[$row["prettyname"]] = ucfirst($row['OStype']);
 
 		# notavailable
 		if($row["wasavailable"] == 0) {
@@ -452,6 +457,7 @@ function viewStatistics() {
 	print "    <TH>" . i("6-8 min wait") . "</TH>\n";
 	print "    <TH>" . i("&gt;= 8 min wait") . "</TH>\n";
 	print "    <TH>" . i("Failures") . "</TH>\n";
+	print "    <TH>" . i("OS Type") . "</TH>\n";
 	print "  </TR>\n";
 	foreach($imagecount as $key => $value) {
 		print "  <TR>\n";
@@ -477,6 +483,7 @@ function viewStatistics() {
 		}
 		else
 			print "    <TD align=center>{$imagefails[$key]}</TD>\n";
+		print "    <TD align=center>{$imageostype[$key]}</TD>\n";
 		print "  </TR>\n";
 	}
 	print "</TABLE>\n";
@@ -665,6 +672,8 @@ function AJgetStatData() {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function getStatGraphDayData($start, $end, $affilid, $mode, $provid) {
+	$tz = date_default_timezone_get();
+	date_default_timezone_set('UTC');
 	$startunix = datetimeToUnix($start . " 00:00:00");
 	$endunix = datetimeToUnix($end . " 23:59:59");
 
@@ -676,6 +685,9 @@ function getStatGraphDayData($start, $end, $affilid, $mode, $provid) {
 	$addcache = array();
 	$reloadid = getUserlistID('vclreload@Local');
 	$cnt = 0;
+	$prov = "provisioningid = $provid";
+	if($provid == 0)
+		$prov = "(provisioningid IS NULL OR provisioningid = 0)";
 	$query = "SELECT statdate, "
 	       .        "value "
 	       . "FROM statgraphcache "
@@ -683,9 +695,9 @@ function getStatGraphDayData($start, $end, $affilid, $mode, $provid) {
 			 .       "affiliationid = $affilid AND "
 	       .       "statdate >= '$start' AND "
 	       .       "statdate <= '$end' AND "
-	       .       "provisioningid = $provid";
+	       .       "$prov";
 	$qh = doQuery($query, 101);
-	while($row = mysql_fetch_assoc($qh))
+	while($row = mysqli_fetch_assoc($qh))
 		$cachepts[$row['statdate']] = $row['value'];
 	for($i = $startunix; $i < $endunix; $i += SECINDAY) {
 		$cnt++;
@@ -735,7 +747,7 @@ function getStatGraphDayData($start, $end, $affilid, $mode, $provid) {
 				}
 			}
 			$qh = doQuery($query, 295);
-			if($row = mysql_fetch_row($qh))
+			if($row = mysqli_fetch_row($qh))
 				$value = $row[0];
 			else
 				$value = 0;
@@ -749,6 +761,7 @@ function getStatGraphDayData($start, $end, $affilid, $mode, $provid) {
 	}
 	if(count($addcache))
 		addToStatGraphCache('totalres', $addcache, $affilid, $provid);
+	date_default_timezone_set($tz);
 	return($data);
 }
 
@@ -843,7 +856,7 @@ function getStatGraphHourData($start, $end, $affilid, $mode, $provid) {
 		}
 	}
 	$qh = doQuery($query, 296);
-	while($row = mysql_fetch_assoc($qh)) {
+	while($row = mysqli_fetch_assoc($qh)) {
 		$startmin = ($row['shour'] * 60) + $row['smin'];
 		$endmin = ($row['ehour'] * 60) + $row['emin'];
 
@@ -920,6 +933,8 @@ function statHourFormatX($val) {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function getStatGraphDayConUsersData($start, $end, $affilid, $mode, $provid) {
+	$tz = date_default_timezone_get();
+	date_default_timezone_set('UTC');
 	$startdt = $start . " 00:00:00";
 	$enddt = $end . " 23:59:59";
 	$startunix = datetimeToUnix($startdt);
@@ -942,6 +957,9 @@ function getStatGraphDayConUsersData($start, $end, $affilid, $mode, $provid) {
 
 	$reloadid = getUserlistID('vclreload@Local');
 	$cnt = 0;
+	$prov = "provisioningid = $provid";
+	if($provid == 0)
+		$prov = "(provisioningid IS NULL OR provisioningid = 0)";
 	$query = "SELECT statdate, "
 	       .        "value "
 	       . "FROM statgraphcache "
@@ -949,12 +967,13 @@ function getStatGraphDayConUsersData($start, $end, $affilid, $mode, $provid) {
 			 .       "affiliationid = $affilid AND "
 	       .       "statdate >= '$start' AND "
 	       .       "statdate <= '$end' AND "
-	       .       "provisioningid = $provid";
+	       .       "$prov";
 	$qh = doQuery($query, 101);
-	while($row = mysql_fetch_assoc($qh))
+	while($row = mysqli_fetch_assoc($qh))
 		$cachepts[$row['statdate']] = $row['value'];
 	if((count($cachepts) + 31) < $daycnt) {
 		$data = array('nodata' => i('(too much computational time required to generate this graph)'));
+		date_default_timezone_set($tz);
 		return $data;
 	}
 	for($daystart = $startunix; $daystart < $endunix; $daystart += SECINDAY) {
@@ -1008,7 +1027,7 @@ function getStatGraphDayConUsersData($start, $end, $affilid, $mode, $provid) {
 				}
 			}
 			$qh = doQuery($query, 101);
-			while($row = mysql_fetch_assoc($qh)) {
+			while($row = mysqli_fetch_assoc($qh)) {
 				$unixstart = $row["start"];
 				$unixend = $row["end"];
 				for($binstart = $daystart, $binend = $daystart + 3600, $binindex = 0;
@@ -1038,6 +1057,7 @@ function getStatGraphDayConUsersData($start, $end, $affilid, $mode, $provid) {
 	}
 	if(count($addcache))
 		addToStatGraphCache('concurres', $addcache, $affilid, $provid);
+	date_default_timezone_set($tz);
 	return($data);
 }
 
@@ -1064,6 +1084,8 @@ function getStatGraphDayConUsersData($start, $end, $affilid, $mode, $provid) {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function getStatGraphConBladeUserData($start, $end, $affilid, $mode, $provid) {
+	$tz = date_default_timezone_get();
+	date_default_timezone_set('UTC');
 	$startdt = $start . " 00:00:00";
 	$enddt = $end . " 23:59:59";
 	$startunix = datetimeToUnix($startdt);
@@ -1086,6 +1108,9 @@ function getStatGraphConBladeUserData($start, $end, $affilid, $mode, $provid) {
 
 	$reloadid = getUserlistID('vclreload@Local');
 	$cnt = 0;
+	$prov = "provisioningid = $provid";
+	if($provid == 0)
+		$prov = "(provisioningid IS NULL OR provisioningid = 0)";
 	$query = "SELECT statdate, "
 	       .        "value "
 	       . "FROM statgraphcache "
@@ -1093,12 +1118,13 @@ function getStatGraphConBladeUserData($start, $end, $affilid, $mode, $provid) {
 			 .       "affiliationid = $affilid AND "
 	       .       "statdate >= '$start' AND "
 	       .       "statdate <= '$end' AND "
-	       .       "provisioningid = $provid";
+	       .       "$prov";
 	$qh = doQuery($query, 101);
-	while($row = mysql_fetch_assoc($qh))
+	while($row = mysqli_fetch_assoc($qh))
 		$cachepts[$row['statdate']] = $row['value'];
 	if((count($cachepts) + 31) < $daycnt) {
 		$data = array('nodata' => i('(too much computational time required to generate this graph)'));
+		date_default_timezone_set($tz);
 		return $data;
 	}
 	for($daystart = $startunix; $daystart < $endunix; $daystart += SECINDAY) {
@@ -1180,7 +1206,7 @@ function getStatGraphConBladeUserData($start, $end, $affilid, $mode, $provid) {
 			}
 			$qh = doQuery($query, 101);
 			$comps = array();
-			while($row = mysql_fetch_assoc($qh)) {
+			while($row = mysqli_fetch_assoc($qh)) {
 				$unixstart = datetimeToUnix($row["start"]);
 				$unixend = datetimeToUnix($row["end"]);
 				for($binstart = $daystart, $binend = $daystart + 3600, $binindex = 0;
@@ -1216,6 +1242,7 @@ function getStatGraphConBladeUserData($start, $end, $affilid, $mode, $provid) {
 	}
 	if(count($addcache))
 		addToStatGraphCache('concurblade', $addcache, $affilid, $provid);
+	date_default_timezone_set($tz);
 	return($data);
 }
 
@@ -1242,6 +1269,8 @@ function getStatGraphConBladeUserData($start, $end, $affilid, $mode, $provid) {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function getStatGraphConVMUserData($start, $end, $affilid, $mode, $provid) {
+	$tz = date_default_timezone_get();
+	date_default_timezone_set('UTC');
 	$startdt = $start . " 00:00:00";
 	$enddt = $end . " 23:59:59";
 	$startunix = datetimeToUnix($startdt);
@@ -1264,6 +1293,9 @@ function getStatGraphConVMUserData($start, $end, $affilid, $mode, $provid) {
 
 	$reloadid = getUserlistID('vclreload@Local');
 	$cnt = 0;
+	$prov = "provisioningid = $provid";
+	if($provid == 0)
+		$prov = "(provisioningid IS NULL OR provisioningid = 0)";
 	$query = "SELECT statdate, "
 	       .        "value "
 	       . "FROM statgraphcache "
@@ -1271,12 +1303,13 @@ function getStatGraphConVMUserData($start, $end, $affilid, $mode, $provid) {
 			 .       "affiliationid = $affilid AND "
 	       .       "statdate >= '$start' AND "
 	       .       "statdate <= '$end' AND "
-	       .       "provisioningid = $provid";
+	       .       "$prov";
 	$qh = doQuery($query, 101);
-	while($row = mysql_fetch_assoc($qh))
+	while($row = mysqli_fetch_assoc($qh))
 		$cachepts[$row['statdate']] = $row['value'];
 	if((count($cachepts) + 31) < $daycnt) {
 		$data = array('nodata' => i('(too much computational time required to generate this graph)'));
+		date_default_timezone_set($tz);
 		return $data;
 	}
 	for($daystart = $startunix; $daystart < $endunix; $daystart += SECINDAY) {
@@ -1348,7 +1381,7 @@ function getStatGraphConVMUserData($start, $end, $affilid, $mode, $provid) {
 				}
 			}
 			$qh = doQuery($query, 101);
-			while($row = mysql_fetch_assoc($qh)) {
+			while($row = mysqli_fetch_assoc($qh)) {
 				$unixstart = datetimeToUnix($row["start"]);
 				$unixend = datetimeToUnix($row["end"]);
 				for($binstart = $daystart, $binend = $daystart + 3600, $binindex = 0;
@@ -1378,6 +1411,7 @@ function getStatGraphConVMUserData($start, $end, $affilid, $mode, $provid) {
 	}
 	if(count($addcache))
 		addToStatGraphCache('concurvm', $addcache, $affilid, $provid);
+	date_default_timezone_set($tz);
 	return($data);
 }
 

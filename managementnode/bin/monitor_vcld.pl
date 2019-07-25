@@ -53,7 +53,7 @@ use FindBin;
 use lib "$FindBin::Bin/../lib";
 
 # Specify the version of this module
-our $VERSION = '2.5';
+our $VERSION = '2.5.1';
 
 use strict;
 use warnings;
@@ -170,27 +170,39 @@ if (!defined($lastcheckin_timestamp)) {
 }
 
 my $current_epoch_seconds = convert_to_epoch_seconds();
-my $lastcheckin_epoch_seconds = convert_to_epoch_seconds($lastcheckin_timestamp);
+my $current_timestamp = makedatestring();
+my $lastcheckin_epoch_seconds = $management_node_info->{lastcheckin_epoch};
 my $lastcheckin_seconds_ago = ($current_epoch_seconds - $lastcheckin_epoch_seconds);
 
+# This message displays the timestamp information from the management node and the database
+my $detailed_ts_message = <<"END_MESSAGE";
+	Current Time = $current_timestamp
+	Current epoch = $current_epoch_seconds
+	Last Checkin Time = $lastcheckin_timestamp
+	Last Checkin epoch = $lastcheckin_epoch_seconds
+END_MESSAGE
+
 if ($lastcheckin_seconds_ago < 0) {
-	print_warning("$management_node_name last checkin time is in the future: $lastcheckin_timestamp, exiting");
+	print_warning("$management_node_name last checkin time is in the future: $lastcheckin_timestamp($lastcheckin_epoch_seconds), exiting");
 }
 elsif ($lastcheckin_seconds_ago < $lastcheckin_warning_seconds) {
-	print_message("$management_node_name last checked in $lastcheckin_seconds_ago seconds ago at $lastcheckin_timestamp");
+	print_message("$management_node_name last checked in $lastcheckin_seconds_ago seconds ago at $lastcheckin_timestamp($lastcheckin_epoch_seconds)");
 }
 elsif ($lastcheckin_seconds_ago >= $lastcheckin_critical_seconds) {
-	my $critical_message = "critical threshold exceeded, $management_node_name last checked in $lastcheckin_seconds_ago seconds ago at $lastcheckin_timestamp";
+	my $critical_message = "critical threshold exceeded, $management_node_name last checked in $lastcheckin_seconds_ago seconds ago at $lastcheckin_timestamp($lastcheckin_epoch_seconds)";
 	# Attempt to restart the vcld service
 	if ($mn_os->restart_service($vcld_service_name)) {
 		print_critical("$critical_message, $vcld_service_name service restarted");
+		print_critical($detailed_ts_message);
 	}
 	else {
 		print_critical("$critical_message, failed to restart $vcld_service_name service");
+		print_critical($detailed_ts_message);
 	}
 }
 else {
-	print_critical("last checkin warning threshold exceeded, $management_node_name last checked in $lastcheckin_seconds_ago seconds ago at $lastcheckin_timestamp");
+	print_critical("last checkin warning threshold exceeded, $management_node_name last checked in $lastcheckin_seconds_ago seconds ago at $lastcheckin_timestamp($lastcheckin_epoch_seconds)");
+	print_critical($detailed_ts_message);
 }
 
 print_message('done');

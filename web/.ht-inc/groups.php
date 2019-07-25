@@ -1102,7 +1102,7 @@ function processGroupInput($checks=1) {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function checkForGroupName($name, $type, $id, $extraid) {
-	$name = mysql_real_escape_string($name);
+	$name = vcl_mysql_escape_string($name);
 	if($type == "user")
 		$query = "SELECT id FROM usergroup "
 		       . "WHERE name = '$name' AND "
@@ -1114,7 +1114,7 @@ function checkForGroupName($name, $type, $id, $extraid) {
 	if(! empty($id))
 		$query .= " AND id != $id";
 	$qh = doQuery($query, 101);
-	if(mysql_num_rows($qh))
+	if(mysqli_num_rows($qh))
 		return 1;
 	return 0;
 }
@@ -1162,7 +1162,7 @@ function updateGroup($data) {
 		       . "WHERE id = {$data['groupid']}";
 	}
 	doQuery($query, 300);
-	return mysql_affected_rows($GLOBALS['mysql_link_vcl']);
+	return mysqli_affected_rows($GLOBALS['mysqli_link_vcl']);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1221,7 +1221,7 @@ function addGroup($data) {
 	}
 	$qh = doQuery($query, 305);
 	clearPrivCache();
-	return mysql_affected_rows($GLOBALS['mysql_link_vcl']);
+	return mysqli_affected_rows($GLOBALS['mysqli_link_vcl']);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1254,7 +1254,7 @@ function checkForGroupUsage($groupid, $type, &$msg='') {
 		       .       "rg.resourcetypeid = rt.id";
 		$usedby = array();
 		$qh = doQuery($query, 310);
-		while($row = mysql_fetch_assoc($qh))
+		while($row = mysqli_fetch_assoc($qh))
 			$usedby[] = $row['name'];
 		if(count($usedby)) {
 			$msgs[] = "<h3>Owning User Group for Resource Groups</h3>\n"
@@ -1269,7 +1269,7 @@ function checkForGroupUsage($groupid, $type, &$msg='') {
 				 .       "ug.affiliationid = a.id";
 		$usedby = array();
 		$qh = doQuery($query, 313);
-		while($row = mysql_fetch_assoc($qh))
+		while($row = mysqli_fetch_assoc($qh))
 			$usedby[] = $row['name'];
 		if(count($usedby)) {
 			$msgs[] = "<h3>'Editable by' Group for User Groups</h3>\n"
@@ -1281,7 +1281,7 @@ function checkForGroupUsage($groupid, $type, &$msg='') {
 		       . "WHERE usergroupid = $groupid";
 		$qh = doQuery($query);
 		$usedby = array();
-		while($row = mysql_fetch_assoc($qh))
+		while($row = mysqli_fetch_assoc($qh))
 			$usedby[] = getNodePath($row['privnodeid']);
 		if(count($usedby)) {
 			$msgs[] = "<h3>Assigned at Privilege Nodes</h3>\n"
@@ -1294,7 +1294,7 @@ function checkForGroupUsage($groupid, $type, &$msg='') {
 		       .   "AND status IN ('requested', 'accepted')";
 		$qh = doQuery($query, 311);
 		$usedby = array();
-		while($row = mysql_fetch_assoc($qh))
+		while($row = mysqli_fetch_assoc($qh))
 			$usedby[] = $row['name'];
 		if(count($usedby)) {
 			$msgs[] = "<h3>Assigned for Block Allocations</h3>\n"
@@ -1304,7 +1304,7 @@ function checkForGroupUsage($groupid, $type, &$msg='') {
 		$query = "SELECT name FROM serverprofile WHERE admingroupid = $groupid";
 		$qh = doQuery($query);
 		$usedby = array();
-		while($row = mysql_fetch_assoc($qh))
+		while($row = mysqli_fetch_assoc($qh))
 			$usedby[] = $row['name'];
 		if(count($usedby)) {
 			$msgs[] = "<h3>Admin User Group for Server Profiles</h3>\n"
@@ -1314,7 +1314,7 @@ function checkForGroupUsage($groupid, $type, &$msg='') {
 		$query = "SELECT name FROM serverprofile WHERE logingroupid = $groupid";
 		$qh = doQuery($query);
 		$usedby = array();
-		while($row = mysql_fetch_assoc($qh))
+		while($row = mysqli_fetch_assoc($qh))
 			$usedby[] = $row['name'];
 		if(count($usedby)) {
 			$msgs[] = "<h3>Access User Group for Server Profiles</h3>\n"
@@ -1328,7 +1328,7 @@ function checkForGroupUsage($groupid, $type, &$msg='') {
 		       .       "s.requestid = rq.id";
 		$qh = doQuery($query);
 		$usedby = array();
-		while($row = mysql_fetch_assoc($qh))
+		while($row = mysqli_fetch_assoc($qh))
 			$usedby[] = $row['name'];
 		if(count($usedby)) {
 			$msgs[] = "<h3>Admin User Group for Server Requests</h3>\n"
@@ -1342,7 +1342,7 @@ function checkForGroupUsage($groupid, $type, &$msg='') {
 		       .       "s.requestid = rq.id";
 		$qh = doQuery($query);
 		$usedby = array();
-		while($row = mysql_fetch_assoc($qh))
+		while($row = mysqli_fetch_assoc($qh))
 			$usedby[] = $row['name'];
 		if(count($usedby)) {
 			$msgs[] = "<h3>Access User Group for Server Requests</h3>\n"
@@ -1366,7 +1366,7 @@ function checkForGroupUsage($groupid, $type, &$msg='') {
 	$query = "SELECT hostname FROM managementnode WHERE imagelibgroupid = $groupid";
 	$qh = doQuery($query);
 	$usedby = array();
-	while($row = mysql_fetch_assoc($qh))
+	while($row = mysqli_fetch_assoc($qh))
 		$usedby[] = $row['hostname'];
 	if(count($usedby)) {
 		$msgs[] = "<h3>Management Node Image Library Group</h3>\n"
@@ -1376,7 +1376,7 @@ function checkForGroupUsage($groupid, $type, &$msg='') {
 	$query = "SELECT DISTINCT privnodeid FROM resourcepriv WHERE resourcegroupid = $groupid";
 	$qh = doQuery($query);
 	$usedby = array();
-	while($row = mysql_fetch_assoc($qh))
+	while($row = mysqli_fetch_assoc($qh))
 		$usedby[] = getNodePath($row['privnodeid']);
 	if(count($usedby)) {
 		$msgs[] = "<h3>Assigned at Privilege Nodes</h3>\n"

@@ -523,10 +523,10 @@ function AJsaveServerProfile() {
 		sendJSON($data);
 		return;
 	}
-	$name = mysql_real_escape_string($data['name']);
-	$desc = mysql_real_escape_string($data['desc']);
-	$fixedIP = mysql_real_escape_string($data['fixedIP']);
-	$fixedMAC = mysql_real_escape_string($data['fixedMAC']);
+	$name = vcl_mysql_escape_string($data['name']);
+	$desc = vcl_mysql_escape_string($data['desc']);
+	$fixedIP = vcl_mysql_escape_string($data['fixedIP']);
+	$fixedMAC = vcl_mysql_escape_string($data['fixedMAC']);
 	$ret = array();
 	if($data['profileid'] == 70000) {
 		$query = "INSERT INTO serverprofile "
@@ -626,7 +626,7 @@ function AJdelServerProfile() {
 	}
 	$query = "DELETE FROM serverprofile WHERE id = $profileid";
 	doQuery($query, 101);
-	$rows = mysql_affected_rows();
+	$rows = mysqli_affected_rows();
 	if($rows == 0) {
 		$data = array('error' => 1,
 		              'msg' => 'Failed to delete selected server profile');
@@ -864,7 +864,7 @@ function getServerProfileGroups($userid, $type) {
 	}
 	$qh = doQuery($query, 101);
 	$groups = array();
-	while($row = mysql_fetch_assoc($qh))
+	while($row = mysqli_fetch_assoc($qh))
 		$groups[$row['id']] = $row['name'];
 	$_SESSION['usersessiondata'][$key] = $groups;
 	return $groups;
@@ -1136,45 +1136,6 @@ function AJremProfileFromGroup() {
 		}
 	}
 	sendJSON($arr);
-}
-
-////////////////////////////////////////////////////////////////////////////////
-///
-/// \fn AJfetchRouterDNS()
-///
-/// \brief get router and dns information for a given IP address
-///
-////////////////////////////////////////////////////////////////////////////////
-function AJfetchRouterDNS() {
-	$data = array('status' => 'none');
-	$page = processInputVar('page', ARG_STRING);
-	if($page != 'deploy' && $page != 'profile') {
-		sendJSON($data);
-		return;
-	}
-	$ipaddr = processInputVar('ipaddr', ARG_STRING);
-	# validate fixed IP address
-	if(! validateIPv4addr($ipaddr)) {
-		sendJSON($data);
-		return;
-	}
-	# validate netmask
-	$netmask = processInputVar('netmask', ARG_STRING);
-	$bnetmask = ip2long($netmask);
-	if(! preg_match('/^[1]+0[^1]+$/', sprintf('%032b', $bnetmask))) {
-		sendJSON($data);
-		return;
-	}
-	$network = ip2long($ipaddr) & $bnetmask;
-	$availnets = getVariable('fixedIPavailnetworks', array());
-	$key = long2ip($network) . "/$netmask";
-	if(array_key_exists($key, $availnets)) {
-		$data = array('status' => 'success',
-		              'page' => $page,
-		              'router' => $availnets[$key]['router'],
-		              'dns' => implode(',', $availnets[$key]['dns']));
-	}
-	sendJSON($data);
 }
 
 ?>

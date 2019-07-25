@@ -872,16 +872,24 @@ ALTER TABLE `computerloadlog` CHANGE `loadstateid` `loadstateid` SMALLINT( 8 ) U
 CREATE TABLE IF NOT EXISTS `addomain` (
   `id` tinyint(3) unsigned NOT NULL auto_increment,
   `ownerid` mediumint(8) unsigned NOT NULL,
-  `name` varchar(30) NOT NULL default '',
+  `name` varchar(512) NOT NULL default '',
   `domainDNSName` varchar(70) NOT NULL default '',
   `dnsServers` varchar(512) default NULL,
-  `username` varchar(64) NOT NULL default '',
+  `username` varchar(80) NOT NULL default '',
   `password` varchar(256) NOT NULL default '',
   `secretid` smallint(5) unsigned NOT NULL,
+  `usedbhostnames` tinyint(1) unsigned NOT NULL default '0',
   PRIMARY KEY (`id`),
-  UNIQUE KEY `domainDNSName` (`domainDNSName`),
+  KEY `domainDNSName` (`domainDNSName`),
   KEY `secretid` (`secretid`)
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+
+CALL DropExistingIndices('addomain', 'domainDNSName');
+CALL AddIndexIfNotExists('addomain', 'domainDNSName');
+CALL AddColumnIfNotExists('addomain', 'usedbhostnames', "tinyint(1) unsigned NOT NULL default '0'");
+
+ALTER TABLE `addomain` CHANGE `name` `name` varchar(512) NOT NULL default '';
+ALTER TABLE `addomain` CHANGE `username` `username` varchar(80) NOT NULL default '';
 
 -- --------------------------------------------------------
 
@@ -1020,6 +1028,7 @@ CALL AddIndexIfNotExists('image', 'imagetypeid');
 
 ALTER TABLE `image` CHANGE `basedoffrevisionid` `basedoffrevisionid` mediumint(8) unsigned default NULL;
 CALL AddIndexIfNotExists('image', 'basedoffrevisionid');
+ALTER TABLE `image` CHANGE `maxinitialtime` `maxinitialtime` mediumint(8) unsigned NOT NULL default '0';
 
 -- --------------------------------------------------------
 
@@ -1111,6 +1120,7 @@ CALL AddIndexIfNotExists('loginlog', 'code');
 -- Table structure change for table `managementnode`
 -- 
 
+ALTER TABLE `managementnode` CHANGE `lastcheckin` `lastcheckin` timestamp default 0;
 CALL AddColumnIfNotExists('managementnode', 'publicIPconfiguration', "enum('dynamicDHCP','manualDHCP','static') NOT NULL default 'dynamicDHCP'");
 CALL AddColumnIfNotExists('managementnode', 'publicSubnetMask', "varchar(56) default NULL");
 CALL AddColumnIfNotExists('managementnode', 'publicDefaultGateway', "varchar(56) default NULL");
@@ -1121,6 +1131,18 @@ CALL AddColumnIfNotExists('managementnode', 'NOT_STANDALONE', "varchar(128) defa
 CALL AddColumnIfNotExists('managementnode', 'availablenetworks', "text NOT NULL");
 CALL DropColumnIfExists('managementnode', 'predictivemoduleid');
 CALL AddUniqueIndex('managementnode', 'hostname');
+
+-- --------------------------------------------------------
+
+-- 
+-- Table structure for table `messagereset`
+-- 
+
+CREATE TABLE IF NOT EXISTS `messagereset` (
+  `name` varchar(128) NOT NULL,
+  `value` longtext NOT NULL,
+  PRIMARY KEY (`name`)
+) ENGINE=InnoDB  DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
 
@@ -1302,6 +1324,14 @@ CREATE TABLE IF NOT EXISTS `reservationaccounts` (
   UNIQUE KEY `reservationid` (`reservationid`,`userid`),
   KEY `userid` (`userid`)
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `resourcegroup`
+--
+
+ALTER TABLE `resourcegroup` CHANGE `name` `name` varchar(60) NOT NULL default '';
 
 -- --------------------------------------------------------
 
@@ -1544,11 +1574,13 @@ CREATE TABLE IF NOT EXISTS `variable` (
 CREATE TABLE IF NOT EXISTS `vcldsemaphore` (
   `identifier` varchar(256) NOT NULL,
   `reservationid` mediumint(9) unsigned NOT NULL,
-  `pid` smallint(5) unsigned NOT NULL,
+  `pid` mediumint(8) unsigned NOT NULL,
   `expires` datetime NOT NULL,
   PRIMARY KEY (`identifier`),
   KEY `reservationid` (`reservationid`)
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+
+ALTER TABLE `vcldsemaphore` CHANGE `pid` `pid` mediumint(8) unsigned NOT NULL;
 
 -- --------------------------------------------------------
 
@@ -1741,6 +1773,30 @@ UPDATE image, OS, module SET image.imagetypeid = (SELECT `id` FROM `imagetype` W
 UPDATE image SET image.imagetypeid = (SELECT `id` FROM `imagetype` WHERE `name` = 'none') WHERE image.imagetypeid = 0;
 
 UPDATE image SET imagemetaid = NULL WHERE NOT EXISTS (SELECT * FROM imagemeta WHERE image.imagemetaid = imagemeta.id);
+
+-- --------------------------------------------------------
+
+-- 
+-- Inserts for table `messagereset`
+-- 
+
+INSERT IGNORE INTO `messagereset` (`name`, `value`) VALUES ('adminmessage|image_creation_failed', '---\nmessage: |\n  VCL Image Creation Failed\n  \n  Management node: [management_node_short_name]\n  \n  Request ID: [request_id]\n  Reservation ID: [reservation_id]\n  PID: [process_pid]\n  \n  Image ID: [image_id]\n  Image revision ID: [imagerevision_id]\n  Image name: [image_name]\n  Image display name: [image_prettyname]\n  Image OS package: [image_os_module_perl_package]\n  \n  User ID: [user_id]\n  User login name: [user_login_id]\n  User name: [user_firstname] [user_lastname]\n  User affiliation: [user_affiliation_name]\n  \n  Provisioning module: [computer_provisioning_pretty_name] ([computer_provisioning_name])\n  Provisioning package: [computer_provisioning_module_perl_package]\n  \n  Computer ID: [computer_id]\n  Computer name: [computer_short_name]\n  \n  VM host ID: [vmhost_id]\n  VM host computer ID: [vmhost_computer_id]\n  VM host computer name: [vmhost_short_name]\n  \n  VM host profile ID: [vmhost_profile_id]\n  VM host profile name: [vmhost_profile_name]\nsubject: ''VCL -- NOTICE FAILED Image [image_capture_type] [image_prettyname]''\n');
+INSERT IGNORE INTO `messagereset` (`name`, `value`) VALUES ('adminmessage|image_creation_complete', '---\nmessage: |\n  VCL Image [image_capture_type] Completed\n  \n  Request ID: [request_id]\n  Reservation ID: [reservation_id]\n  PID: [process_pid]\n  \n  Image ID: [image_id]\n  Image name: [image_name]\n  Image size: [image_size]\n  \n  Revision ID: [imagerevision_id]\n  \n  Management node: [management_node_short_name]\n  \n  Username: [user_login_id]\n  User ID: [user_id]\n  \n  Computer ID: [computer_id]\n  Computer name: [computer_short_name]\n  \n  Use Sysprep: [imagemeta_sysprep]\nsubject: ''VCL IMAGE [image_capture_type] Completed: [image_name]''\n');
+INSERT IGNORE INTO `messagereset` (`name`, `value`) VALUES ('adminmessage|image_creation_started', '---\nmessage: |\n  VCL Image Creation Started\n  \n  Request ID: [request_id]\n  Reservation ID: [reservation_id]\n  PID: [process_pid]\n  \n  Image ID: [image_id]\n  Image name: [image_name]\n  Base image size: [image_size]\n  Base revision ID: [imagerevision_id]\n  \n  Management node: [management_node_short_name]\n  \n  Username: [user_login_id]\n  User ID: [user_id]\n  \n  Computer ID: [computer_id]\n  Computer name: [computer_short_name]\n  \n  Use Sysprep: [imagemeta_sysprep]\nsubject: ''VCL IMAGE Creation Started: [image_name]''\n');
+INSERT IGNORE INTO `messagereset` (`name`, `value`) VALUES ('usermessage|endtime_reached|Global', '---\nmessage: |\n  Your reservation of [image_prettyname] has ended. Thank you for using [user_affiliation_sitewwwaddress].\n  \n  Regards,\n  VCL Team\n  \n  \n  ******************************************************************\n  This is an automated notice. If you need assistance please respond \n  with detailed information on the issue and a help ticket will be \n  generated.\n  \n  To disable email notices\n  -Visit [user_affiliation_sitewwwaddress]\n  -Select User Preferences\n  -Select General Preferences\n  \n  ******************************************************************\nshort_message: ~\nsubject: ''VCL -- End of reservation''\n');
+INSERT IGNORE INTO `messagereset` (`name`, `value`) VALUES ('usermessage|reserved|Global', '---\nmessage: |\n  The resources for your VCL reservation have been successfully reserved.\n  Connection will not be allowed until you click the ''Connect'' button on the ''Current Reservations'' page.\n  You must acknowledge the reservation within the next 15 minutes or the resources will be reclaimed for other VCL users.\n  \n  -Visit [user_affiliation_sitewwwaddress]\n  -Select "Current Reservations"\n  -Click the "Connect" button\n  Upon acknowledgement, all of the remaining connection details will be displayed.\n  \n  Thank You,\n  VCL Team\n  \n  ******************************************************************\n  This is an automated notice. If you need assistance please respond \n  with detailed information on the issue and a help ticket will be \n  generated.\n  \n  To disable email notices\n  -Visit [user_affiliation_sitewwwaddress]\n  -Select User Preferences\n  -Select General Preferences\n  \n  ******************************************************************\nshort_message: ~\nsubject: ''VCL -- [image_prettyname] reservation''\n');
+INSERT IGNORE INTO `messagereset` (`name`, `value`) VALUES ('usermessage|timeout_no_initial_connection|Global', '---\nmessage: |\n  Your reservation has timed out for image [image_prettyname] because no initial connection was made.\n  \n  To make another reservation, please revisit [user_affiliation_sitewwwaddress].\n  \n  Thank You,\n  VCL Team\n  \n  \n  ******************************************************************\n  This is an automated notice. If you need assistance\n  please respond with detailed information on the issue\n  and a help ticket will be generated.\n  \n  To disable email notices\n  -Visit [user_affiliation_sitewwwaddress]\n  -Select User Preferences\n  -Select General Preferences\n  ******************************************************************\nshort_message: ~\nsubject: ''VCL -- Reservation Timeout''\n');
+INSERT IGNORE INTO `messagereset` (`name`, `value`) VALUES ('usermessage|endtime_imminent|Global', '---\nmessage: |\n  You have [notice_interval] until the end of your reservation for image [image_prettyname], please save all work and prepare to exit.\n  \n  Reservation extensions are available if the machine you are on does not have a reservation immediately following.\n  \n  Visit [user_affiliation_sitewwwaddress] and select Current Reservations to edit this reservation.\n  \n  Thank You,\n  VCL Team\n  \n  \n  ******************************************************************\n  This is an automated notice. If you need assistance please respond \n  with detailed information on the issue and a help ticket will be \n  generated.\n  \n  To disable email notices\n  -Visit [user_affiliation_sitewwwaddress]\n  -Select User Preferences\n  -Select General Preferences\n  \n  ******************************************************************\nshort_message: ''You have [notice_interval] until the end of your reservation. Please save all work and prepare to log off.''\nsubject: ''VCL -- [notice_interval] until end of reservation''\n');
+INSERT IGNORE INTO `messagereset` (`name`, `value`) VALUES ('usermessage|production_imagerevision|Global', '---\nmessage: |\n  Revision [imagerevision_revision] of your VCL ''[image_prettyname]'' image has been made production.  Any new reservations for the image will receive this revision by default.\n  \n  If you have any questions, please contact [user_affiliation_helpaddress].\n  \n  Thank You,\n  VCL Team\nshort_message: ~\nsubject: ''VCL -- Image [image_prettyname] made production''\n');
+INSERT IGNORE INTO `messagereset` (`name`, `value`) VALUES ('usermessage|timeout_inactivity|Global', '---\nmessage: |\n  Your reservation has timed out due to inactivity for image [image_prettyname].\n  \n  To make another reservation, please revisit:\n  [user_affiliation_sitewwwaddress]\n  \n  Thank You,\n  VCL Team\n  \n  \n  ******************************************************************\n  This is an automated notice. If you need assistance please respond \n  with detailed information on the issue and a help ticket will be \n  generated.\n  \n  To disable email notices\n  -Visit [user_affiliation_sitewwwaddress]\n  -Select User Preferences\n  -Select General Preferences\n  \n  ******************************************************************\nshort_message: ~\nsubject: ''VCL -- reservation timeout''\n');
+INSERT IGNORE INTO `messagereset` (`name`, `value`) VALUES ('usermessage|image_creation_delayed|Global', '---\nmessage: |\n  We apologize for the inconvenience.\n  Your image creation of [image_prettyname] has been delayed\n  due to a system issue that prevented the automatic completion.\n  \n  The image creation request and the computing resource have\n  been placed in a safe mode. The VCL system administrators\n  have been notified for manual intervention.\n  \n  Once the issues have been resolved, you will be notified\n  by the successful completion email or contacted directly\n  by the VCL system administrators.\n  \n  If you do not receive a response within one business day, please\n  reply to this email.\n  \n  Thank You,\n  VCL Team\nshort_message: ~\nsubject: ''VCL -- NOTICE DELAY Image Creation [image_prettyname]''\n');
+INSERT IGNORE INTO `messagereset` (`name`, `value`) VALUES ('usermessage|reinstalled|Global', '---\nmessage: |\n  Your reservation was successfully reinstalled and you can proceed to reconnect. \n  Please revisit the ''Current Reservations'' page for any additional information.\n  \n  Thank You,\n  VCL Team\n  \n  ******************************************************************\n  This is an automated notice. If you need assistance please respond \n  with detailed information on the issue and a help ticket will be \n  generated.\n  \n  To disable email notices\n  -Visit [user_affiliation_sitewwwaddress]\n  -Select User Preferences\n  -Select General Preferences\n  \n  ******************************************************************''\nshort_message: ~\nsubject: ''VCL -- [image_prettyname] reservation reinstalled''\n');
+INSERT IGNORE INTO `messagereset` (`name`, `value`) VALUES ('usermessage|endtime_reached_imaging|Global', '---\nmessage: |\n  Your imaging reservation of [image_prettyname] has reached it''s scheduled end time.\n  \n  To avoid losing your work we have started an automatic capture of this image. Upon completion of the \n  image capture. You will be notified about the completion of the image capture.\n  \n  Thank You,\n  VCL Team\n  \n  \n  ******************************************************************\n  This is an automated notice. If you need assistance please respond \n  with detailed information on the issue and a help ticket will be \n  generated.\n  \n  To disable email notices\n  -Visit [user_affiliation_sitewwwaddress]\n  -Select User Preferences\n  -Select General Preferences\n  \n  ******************************************************************\nshort_message: ~\nsubject: ''VCL Image Reservation - Auto capture started''\n');
+INSERT IGNORE INTO `messagereset` (`name`, `value`) VALUES ('usermessage|image_creation_success|Global', '---\nmessage: |\n  Your VCL image creation request for [image_prettyname] has succeeded.\n  \n  Please visit [user_affiliation_sitewwwaddress] and you should see an image called [image_prettyname].\n  \n  Please test this image to confirm it works correctly.\n  \n  Thank You,\n  VCL Team\nshort_message: ~\nsubject: ''VCL -- [image_prettyname] Image Creation Succeeded''\n');
+INSERT IGNORE INTO `messagereset` (`name`, `value`) VALUES ('usermessage|image_checkpoint_success|Global', '---\nmessage: |\n  Your VCL image checkpoint creation request for [image_prettyname] has succeeded.\n  \n  You will need to visit the "Current Reservations" page and click "Connect" in order to be able to reconnect to the computer.\n  \n  Thank You,\n  VCL Team\nshort_message: ~\nsubject: ''VCL -- [image_prettyname] Image Checkpoint Succeeded''\n');
+INSERT IGNORE INTO `messagereset` (`name`, `value`) VALUES ('usermessage|timeout_no_acknowledgement|Global', '---\nmessage: |\n  Your reservation has timed out for image [image_prettyname] because no initial connection was made.\n  \n  To make another reservation, please revisit [user_affiliation_sitewwwaddress].\n  \n  Thank You,\n  VCL Team\n  \n  \n  ******************************************************************\n  This is an automated notice. If you need assistance\n  please respond with detailed information on the issue\n  and a help ticket will be generated.\n  \n  To disable email notices\n  -Visit [user_affiliation_sitewwwaddress]\n  -Select User Preferences\n  -Select General Preferences\n  ******************************************************************\nshort_message: ~\nsubject: ''VCL -- Reservation Timeout''\n');
+INSERT IGNORE INTO `messagereset` (`name`, `value`) VALUES ('usermessage|future_endtime|Global', '---\nmessage: |\n  You have [notice_interval] until the scheduled end time of your reservation for image [image_prettyname].\n  \n  Reservation extensions are available if the machine you are on does not have a reservation immediately following.\n  \n  To edit this reservation:\n  -Visit [user_affiliation_sitewwwaddress]\n  -Select Current Reservations\n  \n  Thank You,\n  VCL Team\n  \n  \n  ******************************************************************\n  This is an automated notice. If you need assistance please respond \n  with detailed information on the issue and a help ticket will be \n  generated.\n  \n  To disable email notices\n  -Visit [user_affiliation_sitewwwaddress]\n  -Select User Preferences\n  -Select General Preferences\n  \n  ******************************************************************\nshort_message: "You have [notice_interval] until the scheduled end time of your reservation. VCL Team\\n"\nsubject: ''VCL -- [notice_interval] until end of reservation for [image_prettyname]''\n');
+INSERT IGNORE INTO `messagereset` (`name`, `value`) VALUES ('usermessage|endtime_imminent_imaging|Global', '---\nmessage: |\n  You have [notice_interval] until the end of your reservation for image [image_prettyname]. \n  \n  At the scheduled end time your imaging reservation will be automatically captured. \n  \n  To prevent this auto capture, visit the VCL site [user_affiliation_sitewwwaddress] manually start the image creation process.\n  \n  Please note this auto capture feature is intended to prevent destorying any work you have done to the image.\n  \n  Thank You,\n  VCL Team\n  \n  \n  ******************************************************************\n  This is an automated notice. If you need assistance please respond \n  with detailed information on the issue and a help ticket will be \n  generated.\n  \n  To disable email notices\n  -Visit [user_affiliation_sitewwwaddress]\n  -Select User Preferences\n  -Select General Preferences\n  \n  ******************************************************************\nshort_message: ''You have [notice_interval] until the auto capture process is started.''\nsubject: ''VCL Imaging Reservation -- [notice_interval] until starting auto capture''\n');
 
 -- --------------------------------------------------------
 

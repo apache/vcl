@@ -821,7 +821,7 @@ class Computer extends Resource {
 		       . "ORDER BY rq.start "
 		       . "LIMIT 1";
 		$qh = doQuery($query);
-		if($row = mysql_fetch_assoc($qh)) {
+		if($row = mysqli_fetch_assoc($qh)) {
 			$cdata = $this->basecdata;
 			$cdata['compid'] = $rscid;
 			$cont = addContinuationsEntry('AJcanceltovmhostinuse', $cdata, 300, 1, 0);
@@ -973,7 +973,7 @@ class Computer extends Resource {
 				       .       "vm.stateid = 10";
 				$qh = doQuery($query);
 				$vmids = array();
-				while($row = mysql_fetch_assoc($qh))
+				while($row = mysqli_fetch_assoc($qh))
 					$vmids[] = $row['id'];
 				$allids = implode(',', $vmids);
 				if($data['provisioning'] != 'none')  {
@@ -1235,7 +1235,7 @@ class Computer extends Resource {
 					       .       "vm.vmhostid = v.id";
 					$qh = doQuery($query);
 					$fail = 0;
-					while($row = mysql_fetch_assoc($qh)) {
+					while($row = mysqli_fetch_assoc($qh)) {
 						if(! simpleAddRequest($row['id'], $imageid, $revid, $startdt,
 						                      $enddt, 18, $vclreloadid)) {
 							$fail = 1;
@@ -1357,7 +1357,7 @@ class Computer extends Resource {
 					       .       "vm.vmhostid = v.id";
 					$qh = doQuery($query);
 					$fails = array();
-					while($row = mysql_fetch_assoc($qh)) {
+					while($row = mysqli_fetch_assoc($qh)) {
 						if(! simpleAddRequest($row['id'], $imageid, $revid, $startdt,
 						                      $enddt, 18, $vclreloadid)) {
 							$fails[] = $row['id'];
@@ -1451,7 +1451,7 @@ class Computer extends Resource {
 							$qh = doQuery($query);
 							$fails = array();
 							$cnt = 0;
-							while($row = mysql_fetch_assoc($qh)) {
+							while($row = mysqli_fetch_assoc($qh)) {
 								$cnt++;
 								if(! simpleAddRequest($row['id'], $imageid, $revid, $startdt,
 								                      $enddt, 18, $vclreloadid)) {
@@ -1757,6 +1757,11 @@ class Computer extends Resource {
 		}
 		# add multiple
 		if($return['mode'] == 'add' && $addmode == 'multiple') {
+			# ensure % in hostname
+			if(! preg_match('/%/', $return['name'])) {
+				$return['error'] = 1;
+				$errormsg[] = "Name must contain % when adding multiple computers";
+			}
 			# startnum/endnum
 			if($return['startnum'] < 0 || $return['startnum'] > 255) {
 				$return['error'] = 1;
@@ -1781,7 +1786,7 @@ class Computer extends Resource {
 			       .       "deleted = 0";
 			$qh = doQuery($query);
 			$exists = array();
-			while($row = mysql_fetch_assoc($qh))
+			while($row = mysqli_fetch_assoc($qh))
 				$exists[] = $row['hostname'];
 			if(count($exists)) {
 				$hosts = implode(', ', $exists);
@@ -2049,7 +2054,7 @@ class Computer extends Resource {
 				       .       "rq.laststateid NOT IN (1,5,11,12) AND "
 				       .       "rq.userid != $vclreloadid";
 				$qh = doQuery($query);
-				if(mysql_num_rows($qh)) {
+				if(mysqli_num_rows($qh)) {
 					$return['error'] = 1;
 					$errormsg[] = "This computer has an active reservation. NAT settings cannot be changed for computers having<br>active reservations.";
 				}
@@ -2099,7 +2104,7 @@ class Computer extends Resource {
 				       .       "rq.laststateid NOT IN (1,5,11,12) AND "
 				       .       "rq.userid != $vclreloadid";
 				$qh = doQuery($query);
-				if(mysql_num_rows($qh)) {
+				if(mysqli_num_rows($qh)) {
 					$return['error'] = 1;
 					$errormsg[] = "This computer is the NAT host for other computers that have active reservations. NAT host<br>settings cannot be changed while providing NAT for active reservations.";
 				}
@@ -2140,7 +2145,7 @@ class Computer extends Resource {
 		if(! empty($compid))
 			$query .= " AND id != $compid";
 		$qh = doQuery($query);
-		if(mysql_num_rows($qh))
+		if(mysqli_num_rows($qh))
 			return 1;
 		return 0;
 	}
@@ -2170,7 +2175,7 @@ class Computer extends Resource {
 		if(! empty($compid))
 			$query .= " AND id != $compid";
 		$qh = doQuery($query);
-		if(mysql_num_rows($qh))
+		if(mysqli_num_rows($qh))
 			return 1;
 		return 0;
 	}
@@ -2199,7 +2204,7 @@ class Computer extends Resource {
 		if(! empty($compid))
 			$query .= " AND id != $compid";
 		$qh = doQuery($query);
-		if(mysql_num_rows($qh))
+		if(mysqli_num_rows($qh))
 			return 1;
 		return 0;
 	}
@@ -2377,7 +2382,7 @@ class Computer extends Resource {
 	///
 	////////////////////////////////////////////////////////////////////////////////
 	function AJcanceltovmhostinuse() {
-		global $mysql_link_vcl;
+		global $mysqli_link_vcl;
 		$compid = getContinuationVar('compid');
 		$type = 'none';
 		$query = "DELETE FROM request "
@@ -2387,7 +2392,7 @@ class Computer extends Resource {
 		       .              "FROM reservation "
 		       .              "WHERE computerid = $compid)";
 		doQuery($query);
-		if(mysql_affected_rows($mysql_link_vcl))
+		if(mysqli_affected_rows($mysqli_link_vcl))
 			$type = 'future';
 		$query = "UPDATE request rq, "
 		       .         "reservation rs, "
@@ -2399,7 +2404,7 @@ class Computer extends Resource {
 		       .       "rq.laststateid = ls.id AND "
 		       .       "ls.name = 'tovmhostinuse'";
 		doQuery($query);
-		if(mysql_affected_rows($mysql_link_vcl))
+		if(mysqli_affected_rows($mysqli_link_vcl))
 			$type = 'current';
 		$query = "SELECT rq.start "
 		       . "FROM request rq, "
@@ -2415,7 +2420,7 @@ class Computer extends Resource {
 		       .       "rq.end > NOW() "
 		       . "ORDER BY rq.start";
 		$qh = doQuery($query);
-		if(mysql_num_rows($qh))
+		if(mysqli_num_rows($qh))
 			$arr = array('status' => 'failed');
 		else {
 			if($type == 'now')
@@ -2477,7 +2482,7 @@ class Computer extends Resource {
 		       . "ORDER BY rq.start "
 		       . "LIMIT 1";
 		$qh = doQuery($query);
-		if($row = mysql_fetch_assoc($qh)) {
+		if($row = mysqli_fetch_assoc($qh)) {
 			if(! retryGetSemaphore($imageid, $revid, $mnid, $compid, $startdt, $enddt, $row['id']))
 				return 0;
 			# update existing reservation
@@ -2720,7 +2725,7 @@ class Computer extends Resource {
 			       .       "vm.vmhostid = v.id";
 			$qh = doQuery($query);
 			$fail = 0;
-			while($row = mysql_fetch_assoc($qh)) {
+			while($row = mysqli_fetch_assoc($qh)) {
 				if(! simpleAddRequest($row['id'], $imageid, $revid, $startdt,
 				                      $enddt, 18, $vclreloadid)) {
 					$fail = 1;
@@ -2811,7 +2816,7 @@ class Computer extends Resource {
 			       . "WHERE v.computerid = $compid AND "
 			       .       "vm.vmhostid = v.id";
 			$qh = doQuery($query);
-			while($row = mysql_fetch_assoc($qh)) {
+			while($row = mysqli_fetch_assoc($qh)) {
 				$checkstart = getExistingChangeStateStartTime($row['id'], 18);
 				if($checkstart) {
 					if($checkstart > $start)
@@ -3069,7 +3074,7 @@ class Computer extends Resource {
 							 .       "rq.end > '$startstamp' AND "
 							 .       "s.name NOT IN ('complete', 'deleted', 'failed', 'timeout')";
 					$qh = doQuery($query);
-					if(! mysql_num_rows($qh))
+					if(! mysqli_num_rows($qh))
 						$reloadnow[] = $compid;
 					else
 						$reloadasap[] = $compid;
@@ -3160,7 +3165,7 @@ class Computer extends Resource {
 		       .       "s.name NOT IN ('deleted', 'failed', 'complete') AND "
 		       .       "rq.end > NOW()";
 		$qh = doQuery($query);
-		while($row = mysql_fetch_assoc($qh))
+		while($row = mysqli_fetch_assoc($qh))
 			$skipcompids[] = $row['computerid'];
 		$query = "SELECT DISTINCT bc.computerid "
 		       . "FROM blockTimes bt, "
@@ -3173,7 +3178,7 @@ class Computer extends Resource {
 		       .       "bt.skip = 0 AND "
 		       .       "br.status = 'accepted'";
 		$qh = doQuery($query);
-		while($row = mysql_fetch_assoc($qh))
+		while($row = mysqli_fetch_assoc($qh))
 			$skipcompids[] = $row['computerid'];
 		$delids = array_diff($compids, $skipcompids);
 		$msg = '';
@@ -3254,7 +3259,7 @@ class Computer extends Resource {
 		       .       "s.name NOT IN ('deleted', 'failed', 'complete') AND "
 		       .       "rq.end > NOW()";
 		$qh = doQuery($query);
-		while($row = mysql_fetch_assoc($qh))
+		while($row = mysqli_fetch_assoc($qh))
 			$fails[] = $row['computerid'];
 		$delids = array_diff($compids, $fails);
 
@@ -3429,7 +3434,7 @@ class Computer extends Resource {
 			       .       "rq.stateid NOT IN (1, 5, 11, 12) AND " # TODO might not want 11 (timeout)
 			       .       "rs.computerid IN ($allids)";
 			$qh = doQuery($query);
-			while($row = mysql_fetch_assoc($qh))
+			while($row = mysqli_fetch_assoc($qh))
 				$inusecompids[$row['computerid']] = 1;
 
 			# check initial conditions
@@ -3491,7 +3496,7 @@ class Computer extends Resource {
 				       . "WHERE h.id IN ($ids) "
 				       . "GROUP BY vh.computerid";
 				$qh = doQuery($query);
-				while($row = mysql_fetch_assoc($qh)) {
+				while($row = mysqli_fetch_assoc($qh)) {
 					if($row['count'])
 						$fails['hasvms'][] = $row['id'];
 					else
@@ -3507,7 +3512,7 @@ class Computer extends Resource {
 				       . "LEFT JOIN computer h ON (vh.computerid = h.id) "
 				       . "WHERE vm.id IN ($ids)";
 				$qh = doQuery($query);
-				while($row = mysql_fetch_assoc($qh)) {
+				while($row = mysqli_fetch_assoc($qh)) {
 					if($row['stateid'] != 20)
 						$fails['hostfail'][] = $row['id'];
 					else
@@ -3578,7 +3583,7 @@ class Computer extends Resource {
 				$notes = processInputVar('notes', ARG_STRING);
 				if(get_magic_quotes_gpc())
 					$notes = stripslashes($notes);
-				$notes = mysql_real_escape_string($notes);
+				$notes = vcl_mysql_escape_string($notes);
 				$notes = $user["unityid"] . " " . unixToDatetime(time()) . "@"
 				       . $notes;
 			}
@@ -3634,7 +3639,7 @@ class Computer extends Resource {
 						       .       "vm.vmhostid = v.id";
 						$qh = doQuery($query);
 						$setnoteids = array();
-						while($row = mysql_fetch_assoc($qh)) {
+						while($row = mysqli_fetch_assoc($qh)) {
 							$checkstart = getExistingChangeStateStartTime($row['id'], 18);
 							if($checkstart) {
 								if($checkstart > $reloadstart)
@@ -3865,7 +3870,7 @@ class Computer extends Resource {
 			       . "WHERE v.computerid IN ($allids) AND "
 			       .       "vm.vmhostid = v.id";
 			$qh = doQuery($query);
-			while($row = mysql_fetch_assoc($qh)) {
+			while($row = mysqli_fetch_assoc($qh)) {
 				if(! array_key_exists($row['compid'], $maintvmids))
 					$maintvmids[$row['compid']] = array();
 				if($row['vmstateid'] == 10 &&
@@ -4000,8 +4005,8 @@ class Computer extends Resource {
 								       . "GROUP BY rs.computerid "
 								       . "ORDER BY start";
 								$qh = doQuery($query);
-								if(mysql_num_rows($qh) == count($allvmids)) {
-									while($row = mysql_fetch_assoc($qh)) {
+								if(mysqli_num_rows($qh) == count($allvmids)) {
+									while($row = mysqli_fetch_assoc($qh)) {
 										$times[$row['start']] = 1;
 										$reqids[] = $row['id'];
 									}
@@ -4022,7 +4027,7 @@ class Computer extends Resource {
 										       .       "rs.imageid = '{$profiles[$profileid]['imageid']}' AND "
 										       .       "rq.stateid = 21";
 										$qh = doQuery($query);
-										if($row = mysql_fetch_assoc($qh)) {
+										if($row = mysqli_fetch_assoc($qh)) {
 											# node was previously scheduled to be reloaded for vmhostinuse
 											if($times[0] > $start) {
 												# update existing reservations
@@ -4280,27 +4285,33 @@ class Computer extends Resource {
 
 		$query = "SELECT rs.computerid "
 		       . "FROM request rq, "
-		       .      "reservation rs "
+		       .      "reservation rs, "
+		       .      "state s "
 		       . "WHERE rs.requestid = rq.id AND "
+		       .       "rq.stateid = s.id AND "
 		       .       "rs.computerid IN ($allids) AND "
 		       .       "rq.start <= '$startcheckdt' AND "
-		       .       "rq.end > NOW()";
+		       .       "rq.end > NOW() AND "
+		       .       "s.name != 'complete'";
 		$qh = doQuery($query);
-		while($row = mysql_fetch_assoc($qh))
+		while($row = mysqli_fetch_assoc($qh))
 			$fails[] = $row['computerid'];
 
 		$nowids = array_diff($compids, $fails);
-		$allids = implode(',', $nowids);
-		$query = "UPDATE computer "
-		       . "SET provisioningid = $provisioningid "
-		       . "WHERE id in ($allids)";
-		doQuery($query);
+		if(! empty($nowids)) {
+			$allids = implode(',', $nowids);
+			$query = "UPDATE computer "
+			       . "SET provisioningid = $provisioningid "
+			       . "WHERE id in ($allids)";
+			doQuery($query);
+		}
 
 		$resources = getUserResources(array($this->restype . "Admin"), array("administer"));
 		$compdata = $resources[$this->restype];
 
+		$msg = '';
 		if(count($nowids)) {
-			$msg  = "The following computers had their Provisioning Engine set to $provname:<br><br>\n";
+			$msg  .= "The following computers had their Provisioning Engine set to $provname:<br><br>\n";
 			foreach($nowids as $compid)
 				$msg .= "{$compdata[$compid]}<br>\n";
 			$msg .= "<br>";
@@ -4454,7 +4465,7 @@ class Computer extends Resource {
 		       .       "rq.laststateid NOT IN (1,5,11,12) AND "
 		       .       "rq.userid != $vclreloadid";
 		$qh = doQuery($query);
-		while($row = mysql_fetch_assoc($qh))
+		while($row = mysqli_fetch_assoc($qh))
 			$inusecompids[] = $row['computerid'];
 
 		$tmp = getUserResources(array($this->restype . "Admin"), array("administer"), 0, 1);
@@ -4799,7 +4810,7 @@ class Computer extends Resource {
 		       .       "s.name NOT IN ('timedout','deleted','complete')";
 		$qh = doQuery($query);
 		$data = array();
-		while($row = mysql_fetch_assoc($qh)) {
+		while($row = mysqli_fetch_assoc($qh)) {
 			$msg = "<strong>{$row['hostname']}</strong><br>";
 			if($row['start'] == '') {
 				$msg .= "(No reservations)<br><hr>";
@@ -4872,9 +4883,11 @@ class Computer extends Resource {
 		       .        "i.prettyname AS image, "
 		       .        "ir.revision, "
 		       .        "c.hostname AS hostname, "
+		       .        "s.IPaddress, "
 		       .        "mn.hostname AS managementnode, "
 		       .        "l.ending, "
-		       .        "CONCAT(u.unityid, '@', a.name) AS username "
+		       .        "CONCAT(u.unityid, '@', a.name) AS username, "
+		       .        "l.requestid "
 		       . "FROM computer c "
 		       . "LEFT JOIN sublog s ON (c.id = s.computerid) "
 		       . "LEFT JOIN image i ON (s.imageid = i.id) "
@@ -4888,7 +4901,7 @@ class Computer extends Resource {
 		       .          "l.start DESC";
 		$qh = doQuery($query);
 		$data = array();
-		while($row = mysql_fetch_assoc($qh)) {
+		while($row = mysqli_fetch_assoc($qh)) {
 			if(! is_numeric($row['end']))
 				continue;
 			$msg = "<strong>{$row['hostname']}</strong><br>";
@@ -4907,6 +4920,8 @@ class Computer extends Resource {
 				$msg .= "End: " . prettyDatetime($row['end'], 1) . "<br>";
 			$msg .= "Management Node: {$row['managementnode']}<br>";
 			$msg .= "Ending: {$row['ending']}<br>";
+			$msg .= "Request ID: {$row['requestid']}<br>";
+			$msg .= "IP Address: {$row['IPaddress']}<br>";
 			$msg .= "<hr>";
 			$data[] = array('name' => $row['hostname'], 'msg' => $msg);
 		}
@@ -5076,7 +5091,7 @@ class Computer extends Resource {
 		       .       "eth1macaddress IN ('$ineth1s')";
 		$qh = doQuery($query);
 		$errmsg = '';
-		if(mysql_num_rows($qh)) {
+		if(mysqli_num_rows($qh)) {
 			$errmsg .= "The specified starting MAC address combined with the number ";
 			$errmsg .= "of computers entered will result in a MAC address already ";
 			$errmsg .= "assigned to another computer.";

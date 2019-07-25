@@ -574,7 +574,7 @@ class Resource {
 			       . "FROM `{$this->restype}` "
 			       . "WHERE id = $rscid";
 			$qh = doQuery($query);
-			if($row = mysql_fetch_assoc($qh)) {
+			if($row = mysqli_fetch_assoc($qh)) {
 				$newval = (int)(! (int)$row['deleted']);
 				$query = "UPDATE {$this->restype} "
 				       . "SET deleted = $newval "
@@ -1628,7 +1628,7 @@ class Resource {
 		if($id)
 			$query .= " AND id != $id";
 		$qh = doQuery($query);
-		if(mysql_num_rows($qh))
+		if(mysqli_num_rows($qh))
 			return 1;
 		return 0;
 	}
@@ -1731,6 +1731,11 @@ function AJstartImage() {
 	               'baserevisionid' => $revid,
 	               'checkpoint' => $checkpoint,
 	               'add' => 1);
+	$cdata['addomainvals'] = array();
+	if(in_array("addomainAdmin", $user["privileges"])) {
+		$vals = getUserResources(array('addomainAdmin'), array("manageGroup"));
+		$cdata['addomainvals'] = $vals['addomain'];
+	}
 	$cont = addContinuationsEntry('AJsaveResource', $cdata, SECINDAY, 0);
 	$arr = array('newcont' => $cont,
 	             'enableupdate' => 0,

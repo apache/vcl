@@ -47,7 +47,7 @@ use lib "$FindBin::Bin/../../../..";
 use base qw(VCL::Module::Provisioning::VMware::VMware);
 
 # Specify the version of this module
-our $VERSION = '2.5';
+our $VERSION = '2.5.1';
 
 # Specify the version of Perl to use
 use 5.008000;
@@ -362,6 +362,14 @@ sub vm_unregister {
 	}
 	
 	my $vmx_path = $vm_view->{summary}{config}{vmPathName};
+	
+	my $vm_power_state = $self->get_vm_power_state($vmx_path);
+	if ($vm_power_state && $vm_power_state !~ /off/i) {
+		if (!$self->vm_power_off($vmx_path)) {
+			notify($ERRORS{'WARNING'}, 0, "failed to unregister VM because it could not be powered off: $vmx_path");
+			return;
+		}
+	}
 	
 	# Override the die handler
 	local $SIG{__DIE__} = sub{};

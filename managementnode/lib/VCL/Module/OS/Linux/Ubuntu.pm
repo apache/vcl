@@ -39,7 +39,7 @@ use lib "$FindBin::Bin/../../../..";
 use base qw(VCL::Module::OS::Linux);
 
 # Specify the version of this module
-our $VERSION = '2.5';
+our $VERSION = '2.5.1';
 
 # Specify the version of Perl to use
 use 5.008000;
@@ -154,6 +154,7 @@ sub set_password {
 
 =cut
 
+=head2 comment out this get_network_configuration to use version of function in Linux.pm
 sub get_network_configuration {
 	my $self = shift;
 	if (ref($self) !~ /VCL::Module/i) {
@@ -238,6 +239,7 @@ sub get_network_configuration {
 	return $self->{network_configuration};
 		
 }
+=cut
 
 #//////////////////////////////////////////////////////////////////////////////
 

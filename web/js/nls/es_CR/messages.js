@@ -146,5 +146,10 @@ nlsmessages = {
 'Invalid item submitted to save':'Elemento inválido para guardar',
 'Message successfully saved':'Mensaje guardado satisfactoriamente',
 'No changes to submitted message. Nothing saved.':'Sin cambios en el mensaje. Nada guardado.',
-'unset':'sin especificar'
+'unset':'sin especificar',
+'1 hour':'',
+'Default for User':'',
+'Invalid Max Reservation Duration selected':'',
+'minutes':'',
+'Passwords do not match':''
 }

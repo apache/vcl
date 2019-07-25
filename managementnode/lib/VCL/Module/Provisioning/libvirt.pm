@@ -46,7 +46,7 @@ use lib "$FindBin::Bin/../../..";
 use base qw(VCL::Module::Provisioning);
 
 # Specify the version of this module
-our $VERSION = '2.5';
+our $VERSION = '2.5.1';
 
 # Specify the version of Perl to use
 use 5.008000;
@@ -778,6 +778,44 @@ sub power_off {
 	elsif (grep(/domain is not running/i, @$output)) {
 		notify($ERRORS{'DEBUG'}, 0, "'$domain_name' domain is not running on $node_name");
 		return 1;
+	}
+	elsif (grep(/SIGKILL: Device or resource busy/i, @$output)) {
+		notify($ERRORS{'DEBUG'}, 0, "Failed to stop '$domain_name' domain; \"SIGKILL: Device or resource busy\" encountered, waiting 30 seconds and trying again");
+		# libvirt could not kill VM, wait and try again
+		sleep 30;
+		my $command2 = "virsh -q list --all";
+		($exit_status, $output) = $self->vmhost_os->execute($command2);
+		my ($id, $name, $state);
+		for my $line (@$output) {
+			($id, $name, $state) = $line =~ /^\s*([\d\-]+)\s+(.+?)\s+(\w+|shut off|in shutdown)$/g;
+			next if (!defined($id));
+			last if ($name eq $domain_name);
+		}
+		if ($name ne $domain_name) {
+			notify($ERRORS{'WARNING'}, 0, "2nd try: $domain_name not found when running 'virsh list' on $node_name");
+			return;
+		}
+		if ($id eq '-') {
+			notify($ERRORS{'DEBUG'}, 0, "'$domain_name' domain now stopped");
+			return 1;
+		}
+		($exit_status, $output) = $self->vmhost_os->execute($command);
+		if (!defined($output)) {
+			notify($ERRORS{'WARNING'}, 0, "2nd try: failed to execute virsh command to destroy '$domain_name' domain on $node_name");
+			return;
+		}
+		elsif ($exit_status eq '0') {
+			notify($ERRORS{'OK'}, 0, "2nd try: destroyed '$domain_name' domain on $node_name");
+			return 1;
+		}
+		elsif (grep(/domain is not running/i, @$output)) {
+			notify($ERRORS{'DEBUG'}, 0, "2nd try: '$domain_name' domain is not running on $node_name");
+			return 1;
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "2nd try: failed to destroy '$domain_name' domain on $node_name\ncommand: $command\nexit status: $exit_status\noutput:\n" . join("\n", @$output));
+			return;
+		}
 	}
 	else {
 		notify($ERRORS{'WARNING'}, 0, "failed to destroy '$domain_name' domain on $node_name\ncommand: $command\nexit status: $exit_status\noutput:\n" . join("\n", @$output));
@@ -1736,6 +1774,13 @@ sub generate_domain_xml {
 	
 	my $copy_on_write_file_path = $self->get_copy_on_write_file_path();
 	my $image_type = $self->data->get_vmhost_datastore_imagetype_name();
+	my $vmhost_vmpath = $self->data->get_vmhost_profile_vmpath();
+	my $add_disk_cache = 0;
+	if (! $self->vmhost_os->is_file_on_local_disk($vmhost_vmpath)) {
+		# set disk cache to none if vmpath on NFS so live migration will work
+		$add_disk_cache = 1;
+	}
+
 	my $disk_driver_name = $self->driver->get_disk_driver_name();
 	my $disk_bus_type = $self->get_master_xml_disk_bus_type();
 	
@@ -1799,6 +1844,13 @@ EOF
 	#    Windows, however, expects it to be in so called 'localtime'."
 	my $clock_offset = ($image_os_type =~ /windows/) ? 'localtime' : 'utc';
 	
+	my $cpusockets = $cpu_count;
+	my $cpucores = 1;
+	if($cpu_count > 2) {
+		$cpusockets = 2;
+		$cpucores = ($cpu_count - ($cpu_count % 2)) / 2;
+	}
+
 	my $xml_hashref = {
 		'type' => $domain_type,
 		'description' => [$description],
@@ -1828,14 +1880,11 @@ EOF
 				model => {
 					'fallback' => 'allow',
 				},
-				#'topology' => [
-				#	{
-				#		'sockets' => $cpu_count,
-				#		'cores' => '2',
-				#		'threads' => '2',
-				#	}
-				#],
-				
+				topology => {
+					'sockets' => $cpusockets,
+					'cores' => $cpucores,
+					'threads' => 1,
+				},
 			}
 		],
 		'clock' => [
@@ -1908,6 +1957,11 @@ EOF
 			}
 		]
 	};
+
+	if ($add_disk_cache) {
+		notify($ERRORS{'DEBUG'}, 0, "vmpath ($vmhost_vmpath) is on NFS; setting disk cache to none");
+		$xml_hashref->{'devices'}[0]{'disk'}[0]{'driver'}{'cache'} = 'none';
+	}
 	
 	notify($ERRORS{'DEBUG'}, 0, "generated domain XML:\n" . format_data($xml_hashref));
 	return hash_to_xml_string($xml_hashref, 'domain');

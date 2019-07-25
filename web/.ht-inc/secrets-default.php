@@ -21,7 +21,7 @@ $vcldb = 'vcl';         # name of mysql database
 $vclusername = 'vcluser';      # username to access database
 $vclpassword = '';      # password to access database
 
-$cryptkey  = ''; # generate with "openssl rand 32 | base64"
+$cryptkey = ''; # generate with "openssl rand 32 | base64"
 
 $pemkey = ''; # random passphrase - won't ever have to type it so make it long
 ?>

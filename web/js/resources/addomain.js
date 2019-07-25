@@ -21,6 +21,16 @@ function ADdomain() {
 }
 ADdomain.prototype = new Resource();
 
+ADdomain.prototype.colformatter = function(value, rowIndex, obj) {
+	if(obj.field == 'usedbhostnames') {
+		if(value == "0")
+			return '<span class="rederrormsg">' + _('false') + '</span>';
+		if(value == "1")
+			return '<span class="ready">' + _('true') + '</span>';
+	}
+	return value;
+}
+
 var resource = new ADdomain();
 
 function addNewResource(title) {
@@ -41,11 +51,10 @@ function inlineEditResourceCB(data, ioArgs) {
 		dojo.byId('editresid').value = data.items.rscid;
 		dijit.byId('name').set('value', data.items.data.name);
 		dijit.byId('owner').set('value', data.items.data.owner);
-
 		dijit.byId('domaindnsname').set('value', data.items.data.domaindnsname);
 		dijit.byId('username').set('value', data.items.data.username);
 		dijit.byId('dnsservers').set('value', data.items.data.dnsservers);
-
+		dijit.byId('usedbhostnames').set('checked', parseInt(data.items.data.usedbhostnames))
 		dijit.byId('password').set('value', '********');
 		dijit.byId('password2').set('value', 'xxxxxxxx');
 
@@ -58,7 +67,7 @@ function inlineEditResourceCB(data, ioArgs) {
 }
 
 function resetEditResource() {
-	var fields = ['name', 'owner', 'domaindnsname', 'username', 'password', 'password2', 'dnsservers'];
+	var fields = ['name', 'owner', 'domaindnsname', 'username', 'password', 'password2', 'usedbhostnames', 'dnsservers'];
 	for(var i = 0; i < fields.length; i++) {
 		dijit.byId(fields[i]).reset();
 	}
@@ -89,7 +98,13 @@ function saveResource() {
 		dojo.byId('addeditdlgerrmsg').innerHTML = _('Passwords do not match');
 		return;
 	}
-
+	// update usedbhostnames
+	if(dijit.byId('usedbhostnames').get('checked')) {
+		data['usedbhostnames'] = 1;
+	}
+	else {
+		data['usedbhostnames'] = 0;
+	}
 	dijit.byId('addeditbtn').set('disabled', true);
 	RPCwrapper(data, saveResourceCB, 1);
 }
@@ -125,7 +140,7 @@ function saveResourceCB(data, ioArgs) {
 			resourcegrid.store.fetch({
 				query: {id: data.items.data.id},
 				onItem: function(item) {
-					var fields = ['name', 'owner', 'domaindnsname', 'username','dnsservers'];
+					var fields = ['name', 'owner', 'domaindnsname', 'username', 'usedbhostnames', 'dnsservers'];
 					for(var i = 0; i < fields.length; i++) {
 						dijit.byId(fields[i]).reset();
 						resourcegrid.store.setValue(item, fields[i], data.items.data[fields[i]]);
