@@ -3097,9 +3097,11 @@ sub delete_user {
 	# Assemble the userdel command
 	my $userdel_command = "/usr/sbin/userdel";
 	
-	my $delete_home_directory = 1;
+	my $delete_home_directory = 0;
 	
 	if ($home_directory_on_local_disk) {
+		$delete_home_directory = 1;
+		
 		# Fetch exclude_list
 		my @exclude_list = $self->get_exclude_list();
 		if ((grep(/\/home\/$username/, @exclude_list))) {
