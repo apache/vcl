@@ -4870,6 +4870,7 @@ function isAvailable($images, $imageid, $imagerevisionid, $start, $end,
 
 		// if $ip specified, only look at computers under management nodes that can
 		#   handle that network
+		$ipmaplimited = 0;
 		if($ip != '') {
 			$mappedmns = getMnsFromImage($imageid);
 			$mnnets = checkAvailableNetworks($ip);
@@ -4886,6 +4887,24 @@ function isAvailable($images, $imageid, $imagerevisionid, $start, $end,
 				return debugIsAvailable(0, 18, $start, $end, $imagerevisionid);
 			}
 			$mappedcomputers = implode(',', $newcompids);
+			// if existing, available, and mapped computer already has requested IP
+			//address, limit $mappedcomputers to just that one
+			$query = "SELECT c.id "
+			       . "FROM computer c "
+			       . "JOIN state s ON (c.stateid = s.id) "
+			       . "WHERE c.IPaddress = '$ip' AND "
+			       .       "c.id in ($mappedcomputers) AND "
+			       .       "s.name != 'deleted' AND "
+			       .       "c.deleted = 0 AND "
+			       .       "(c.type != 'virtualmachine' OR c.vmhostid IS NOT NULL)";
+			$tmpmapped = array();
+			$qh = doQuery($query);
+			while($row = mysqli_fetch_assoc($qh))
+				$tmpmapped[] = $row['id'];
+			if(count($tmpmapped)) {
+				$ipmaplimited = 1;
+				$mappedcomputers = implode(',', $tmpmapped);
+			}
 		}
 
 		#get computers for available schedules and platforms
@@ -4999,8 +5018,11 @@ function isAvailable($images, $imageid, $imagerevisionid, $start, $end,
 		}
 
 		# return 0 if no computers available
-		if(empty($computerids) && empty($blockids))
+		if(empty($computerids) && empty($blockids)) {
+			if($ipmaplimited)
+				return debugIsAvailable(-4, 2, $start, $end, $imagerevisionid, $computerids, $currentids, $blockids, array(), $virtual);
 			return debugIsAvailable(0, 21, $start, $end, $imagerevisionid, $computerids, $currentids, $blockids, array(), $virtual);
+		}
 
 		#remove computers from list that are already scheduled
 		$usedComputerids = array();
@@ -5142,7 +5164,7 @@ function isAvailable($images, $imageid, $imagerevisionid, $start, $end,
 		#   undetected failure
 		$failedids = getPossibleRecentFailures($userid, $imageid);
 		$shortened = 0;
-		if(! empty($failedids)) {
+		if(! empty($failedids) && ! $ipmaplimited) {
 			$origcomputerids = $computerids;
 			$origcurrentids = $currentids;
 			$origblockids = $blockids;
@@ -5231,7 +5253,7 @@ function debugIsAvailable($rc, $loc, $start, $end, $imagerevisionid,
 			$msg = "invalid image id submitted - not found in images available to the user";
 			break;
 		case "2":
-			$msg = "an overlapping server reservation has the same fixed IP or MAC address";
+			$msg = "an unavailable computer has the requested fixed IP or MAC address";
 			break;
 		case "16":
 			$msg = "the requested fixed IP address is currently in use by a management node";

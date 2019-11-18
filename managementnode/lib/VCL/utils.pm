@@ -11905,20 +11905,25 @@ sub get_current_image_contents_no_data_structure {
 
 =head2 is_ip_assigned_query
 
-  Parameters  : IP address
+  Parameters  : IP address, Computer ID (optional)
   Returns     : boolean
-  Description : checks if IP address exists in db
+  Description : checks if IP address exists in db; ignores computer with
+                specified ID if supplied
 
 =cut
 
 sub is_ip_assigned_query {
 	
-	my ($ip_address) = @_;
+	my ($ip_address) = shift;
+	my ($computer_id) = shift;
 
    if (!defined($ip_address)) {
       notify($ERRORS{'WARNING'}, 0, "IPaddress  argument was not supplied");
       return;
-   }	
+   }
+	if (!defined($computer_id)) {
+		$computer_id = 0;
+	}
 
    my $select_statement = <<EOF;
 SELECT
@@ -11930,6 +11935,7 @@ FROM computer, state
 WHERE
 computer.IPaddress = '$ip_address' AND
 computer.stateid = state.id AND
+computer.id != $computer_id AND
 state.name != 'deleted' AND
 computer.vmhostid IS NOT NULL
 EOF
