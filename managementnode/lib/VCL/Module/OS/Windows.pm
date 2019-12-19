@@ -673,7 +673,7 @@ sub pre_capture {
 
 =cut
 
-	if (!$self->set_service_startup_mode('sshd', 'manual')) {
+	if (!$self->set_service_startup_mode('sshd', 'manual') && !$self->set_service_startup_mode('cygsshd', 'manual')) {
 		notify($ERRORS{'WARNING'}, 0, "unable to set sshd service startup mode to manual");
 		return 0;
 	}
@@ -786,7 +786,7 @@ sub post_load {
 
 =cut
 
-	if (!$self->set_service_startup_mode('sshd', 'auto')) {
+	if (!$self->set_service_startup_mode('sshd', 'auto') && !$self->set_service_startup_mode('cygsshd', 'auto')) {
 		notify($ERRORS{'WARNING'}, 0, "unable to set sshd service startup mode to auto");
 		return 0;
 	}
@@ -2349,14 +2349,20 @@ sub set_password {
 	# Get the list of services
 	my @services = $self->get_services_using_login_id($username);
 	if ($username eq 'root' && !@services) {
-		@services = ('sshd');
+		@services = ('sshd', 'cygsshd');
 	}
 	
+	my $success = 0;
 	for my $service (@services) {
 		notify($ERRORS{'DEBUG'}, 0, "$service service is configured to run as $username, updating service credentials");
-		if (!$self->set_service_credentials($service, $username, $password)) {
-			notify($ERRORS{'WARNING'}, 0, "failed to set $service service credentials to $username ($password)");
+		if ($self->set_service_credentials($service, $username, $password)) {
+			$success = 1;
+			last;
 		}
+	}
+	if(!$success) {
+		my $servicelist = join(', ', @services);
+		notify($ERRORS{'WARNING'}, 0, "failed to set credentials to $username ($password) for any of $servicelist");
 	}
 	
 	# Get the scheduled tasks - check if any are configured to run as the user
@@ -3939,7 +3945,7 @@ sub reboot {
 			}
 			
 			# Set sshd service startup mode to manual
-			if (!$self->set_service_startup_mode('sshd', 'manual')) {
+			if (!$self->set_service_startup_mode('sshd', 'manual') && !$self->set_service_startup_mode('cygsshd', 'manual')) {
 				notify($ERRORS{'WARNING'}, 0, "reboot not attempted, unable to set sshd service startup mode to manual");
 				return 0;
 			}

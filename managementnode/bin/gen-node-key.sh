@@ -151,6 +151,16 @@ case $OS in
       die "Unsupported OS found, OS call reported $OS";;
 esac
 
+# if OS is CYGWIN, try to determine sshd service name
+if [[ $OS =~ (CYGWIN) ]]; then
+	sshdservice=`ssh $SSH_OPTIONS -i $KEY_PATH root@$NODE "sc queryex type=service state=all | grep sshd | grep SERVICE_NAME | awk '{print \\$2}' | sed 's///g'"`
+	if [[ $sshdservice != "" && $sshdservice != "sshd" ]]; then
+		echo "Detected CYGWIN with alternate sshd service name: $sshdservice"
+		SSHSTOP="net stop $sshdservice"
+		SSHSTART="net start $sshdservice"
+	fi
+fi
+
 echo Setting PasswordAuthentication to no in sshd_config on $NODE
 ssh $SSH_OPTIONS -i $KEY_PATH root@$NODE 'sed -i -r -e "s/^[ #]*(PasswordAuthentication).*/\1 no/"' $SSHDCONFIG
 ssh $SSH_OPTIONS -i $KEY_PATH root@$NODE 'grep "^[ #]*PasswordAuthentication"' $SSHDCONFIG

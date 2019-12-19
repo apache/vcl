@@ -134,7 +134,7 @@ sub pre_capture {
 	}
 	
 	# Set the sshd service startup mode to disabled so that it does not start up until properly configured
-	if (!$self->set_service_startup_mode('sshd', 'disabled')) {
+	if (!$self->set_service_startup_mode('sshd', 'disabled') && !$self->set_service_startup_mode('cygsshd', 'disabled')) {
 		notify($ERRORS{'WARNING'}, 0, "sshd service could not be disabled before shutting down computer");
 		return;
 	}
