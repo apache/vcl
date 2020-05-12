@@ -131,7 +131,7 @@ if [ $? -ne 0 ]; then die "failed to configure / mount point"; fi;
 mount
 print_hr
 
-sshdservice=$(sc queryex type=service state=all | grep sshd | grep SERVICE_NAME | awk '{print $2}' | sed 's///g')
+sshdservice=$(sc queryex type= service state= all | grep sshd | grep SERVICE_NAME | awk '{print $2}' | sed 's///g')
 
 if [[ $sshdservice == "" ]]; then
 	sshdservice=sshd
