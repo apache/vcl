@@ -153,7 +153,7 @@ esac
 
 # if OS is CYGWIN, try to determine sshd service name
 if [[ $OS =~ (CYGWIN) ]]; then
-	sshdservice=`ssh $SSH_OPTIONS -i $KEY_PATH root@$NODE "sc queryex type=service state=all | grep sshd | grep SERVICE_NAME | awk '{print \\$2}' | sed 's///g'"`
+	sshdservice=`ssh $SSH_OPTIONS -i $KEY_PATH root@$NODE "sc queryex type= service state= all | grep sshd | grep SERVICE_NAME | awk '{print \\$2}' | sed 's///g'"`
 	if [[ $sshdservice != "" && $sshdservice != "sshd" ]]; then
 		echo "Detected CYGWIN with alternate sshd service name: $sshdservice"
 		SSHSTOP="net stop $sshdservice"
