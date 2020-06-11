@@ -172,7 +172,7 @@ echo.
 
 echo ----------------------------------------------------------------------
 
-sc queryex type=service state=all | findstr "cygsshd" > nul && SET sshdservice=cygsshd || SET sshdservice=sshd
+sc queryex type= service state= all | findstr "cygsshd" > nul && SET sshdservice=cygsshd || SET sshdservice=sshd
 
 echo %TIME%: Setting sshd service startup mode to auto...
 "%SystemRoot%\System32\sc.exe" config %sshdservice% start= auto 2>&1
