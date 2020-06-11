@@ -131,10 +131,10 @@ if [ $? -ne 0 ]; then die "failed to configure / mount point"; fi;
 mount
 print_hr
 
-sshdservice=$(sc queryex type=service state=all | grep sshd | grep SERVICE_NAME | awk '{print $2}' | sed 's///g')
+sshdservice=$(grep ^service_name /usr/bin/ssh-host-config | awk -F'=' '{print $2}')
 
 if [[ $sshdservice == "" ]]; then
-	sshdservice=sshd
+	sshdservice=cygsshd
 fi
 
 echo "sshd service name is $sshdservice"
