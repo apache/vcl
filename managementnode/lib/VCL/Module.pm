@@ -1006,15 +1006,17 @@ sub mn_os {
 	if (!defined($display_warning)) {
 		$display_warning = 1;
 	}
-	
-	if (!$ENV{mn_os}) {
+
+	my $session = get_session_data();
+
+	if (!$session->{mn_os}) {
 		if ($display_warning) {
-			notify($ERRORS{'WARNING'}, 0, "unable to return management node OS object, \$ENV{mn_os} is not set");
+			notify($ERRORS{'WARNING'}, 0, "unable to return management node OS object, \$session->{mn_os} is not set");
 		}
 		return;
 	}
 	else {
-		return $ENV{mn_os};
+		return $session->{mn_os};
 	}
 }
 
@@ -1175,7 +1177,9 @@ sub set_mn_os {
 	my $type = ref($self);
 	my $mn_os_address = sprintf('%x', $mn_os);
 	notify($ERRORS{'DEBUG'}, 0, "storing reference to managment node OS object (address: $mn_os_address) in this $type object (address: $address)");
-	$ENV{mn_os} = $mn_os;
+	my $session = get_session_data();
+	$session->{mn_os} = $mn_os;
+	tied(%$session)->save;
 	return 1;
 }
 
@@ -2274,27 +2278,28 @@ sub setup_test_rpc_xml {
 		return 1;
 	}
 	
-	
-	if (!$ENV{rpc_xml_error}) {
+	my $session = get_session_data();
+
+	if (!$session->{rpc_xml_error}) {
 		print "FAILURE: RPC-XML access is not configured correctly, view the log file for more information: $LOGFILE\n";
 		return 0;
 	}
 	
-	print "FAILURE: RPC-XML access is not configured correctly, error message:\n$ENV{rpc_xml_error}\n\n";
+	print "FAILURE: RPC-XML access is not configured correctly, error message:\n$session->{rpc_xml_error}\n\n";
 	
-	if ($ENV{rpc_xml_error} =~ /access denied/i) {
+	if ($session->{rpc_xml_error} =~ /access denied/i) {
 		# Affiliation not correct
 		# Affiliation not included, default affiliation isn't Local
 		# Incorrect password
 		print "SUGGESTION: make sure the xmlrpc_username and xmlrpc_pass values are correct in $CONF_FILE_PATH\n";
 	}
-	if ($ENV{rpc_xml_error} =~ /internal server error/i) {
+	if ($session->{rpc_xml_error} =~ /internal server error/i) {
 		# Affiliation not included in username
 		# User doesn't exist but affiliation does
 		# Affiliation does not exist
 		print "SUGGESTION:  make sure the xmlrpc_username is correct in $CONF_FILE_PATH, current value: '$XMLRPC_USER'\n";
 	}
-	if ($ENV{rpc_xml_error} =~ /internal error while processing/i) {
+	if ($session->{rpc_xml_error} =~ /internal error while processing/i) {
 		# Affiliation not included in username
 		# User doesn't exist but affiliation does
 		# Affiliation does not exist

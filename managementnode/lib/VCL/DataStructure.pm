@@ -483,38 +483,39 @@ $SUBROUTINE_MAPPINGS{user_imtype_name} = '$self->request_data->{user}{IMtype}{na
 $SUBROUTINE_MAPPINGS{user_use_public_keys} = '$self->request_data->{user}{usepublickeys}';
 $SUBROUTINE_MAPPINGS{user_ssh_public_keys} = '$self->request_data->{user}{sshpublickeys}';
 
-$SUBROUTINE_MAPPINGS{management_node_id} = '$ENV{management_node_info}{id}';
-$SUBROUTINE_MAPPINGS{management_node_ipaddress} = '$ENV{management_node_info}{IPaddress}';
-$SUBROUTINE_MAPPINGS{management_node_hostname} = '$ENV{management_node_info}{hostname}';
-$SUBROUTINE_MAPPINGS{management_node_ownerid} = '$ENV{management_node_info}{ownerid}';
-$SUBROUTINE_MAPPINGS{management_node_stateid} = '$ENV{management_node_info}{stateid}';
-$SUBROUTINE_MAPPINGS{management_node_lastcheckin} = '$ENV{management_node_info}{lastcheckin}';
-$SUBROUTINE_MAPPINGS{management_node_checkininterval} = '$ENV{management_node_info}{checkininterval}';
-$SUBROUTINE_MAPPINGS{management_node_install_path} = '$ENV{management_node_info}{installpath}';
-$SUBROUTINE_MAPPINGS{management_node_image_lib_enable} = '$ENV{management_node_info}{imagelibenable}';
-$SUBROUTINE_MAPPINGS{management_node_image_lib_group_id} = '$ENV{management_node_info}{imagelibgroupid}';
-$SUBROUTINE_MAPPINGS{management_node_image_lib_user} = '$ENV{management_node_info}{imagelibuser}';
-$SUBROUTINE_MAPPINGS{management_node_image_lib_key} = '$ENV{management_node_info}{imagelibkey}';
-$SUBROUTINE_MAPPINGS{management_node_keys} = '$ENV{management_node_info}{keys}';
-$SUBROUTINE_MAPPINGS{management_node_image_lib_partners} = '$ENV{management_node_info}{IMAGELIBPARTNERS}';
-$SUBROUTINE_MAPPINGS{management_node_short_name} = '$ENV{management_node_info}{SHORTNAME}';
-$SUBROUTINE_MAPPINGS{management_node_state_name} = '$ENV{management_node_info}{state}{name}';
-$SUBROUTINE_MAPPINGS{management_node_os_name} = '$ENV{management_node_info}{OSNAME}';
-$SUBROUTINE_MAPPINGS{management_node_predictive_module_id} = '$ENV{management_node_info}{predictivemoduleid}';
-$SUBROUTINE_MAPPINGS{management_node_ssh_port} = '$ENV{management_node_info}{sshport}';
+$SUBROUTINE_MAPPINGS{management_node_id} = '$self->ds_get_management_node_info()->{id}';
+$SUBROUTINE_MAPPINGS{management_node_ipaddress} = '$self->ds_get_management_node_info()->{IPaddress}';
+#$SUBROUTINE_MAPPINGS{management_node_hostname} = '$ENV{management_node_info}{hostname}';
+$SUBROUTINE_MAPPINGS{management_node_hostname} = '$self->ds_get_management_node_info()->{hostname}';
+$SUBROUTINE_MAPPINGS{management_node_ownerid} = '$self->ds_get_management_node_info()->{ownerid}';
+$SUBROUTINE_MAPPINGS{management_node_stateid} = '$self->ds_get_management_node_info()->{stateid}';
+$SUBROUTINE_MAPPINGS{management_node_lastcheckin} = '$self->ds_get_management_node_info()->{lastcheckin}';
+$SUBROUTINE_MAPPINGS{management_node_checkininterval} = '$self->ds_get_management_node_info()->{checkininterval}';
+$SUBROUTINE_MAPPINGS{management_node_install_path} = '$self->ds_get_management_node_info()->{installpath}';
+$SUBROUTINE_MAPPINGS{management_node_image_lib_enable} = '$self->ds_get_management_node_info()->{imagelibenable}';
+$SUBROUTINE_MAPPINGS{management_node_image_lib_group_id} = '$self->ds_get_management_node_info()->{imagelibgroupid}';
+$SUBROUTINE_MAPPINGS{management_node_image_lib_user} = '$self->ds_get_management_node_info()->{imagelibuser}';
+$SUBROUTINE_MAPPINGS{management_node_image_lib_key} = '$self->ds_get_management_node_info()->{imagelibkey}';
+$SUBROUTINE_MAPPINGS{management_node_keys} = '$self->ds_get_management_node_info()->{keys}';
+$SUBROUTINE_MAPPINGS{management_node_image_lib_partners} = '$self->ds_get_management_node_info()->{IMAGELIBPARTNERS}';
+$SUBROUTINE_MAPPINGS{management_node_short_name} = '$self->ds_get_management_node_info()->{SHORTNAME}';
+$SUBROUTINE_MAPPINGS{management_node_state_name} = '$self->ds_get_management_node_info()->{state}{name}';
+$SUBROUTINE_MAPPINGS{management_node_os_name} = '$self->ds_get_management_node_info()->{OSNAME}';
+$SUBROUTINE_MAPPINGS{management_node_predictive_module_id} = '$self->ds_get_management_node_info()->{predictivemoduleid}';
+$SUBROUTINE_MAPPINGS{management_node_ssh_port} = '$self->ds_get_management_node_info()->{sshport}';
 
-$SUBROUTINE_MAPPINGS{management_node_public_ip_configuration} = '$ENV{management_node_info}{PUBLIC_IP_CONFIGURATION}';
-$SUBROUTINE_MAPPINGS{management_node_public_subnet_mask} = '$ENV{management_node_info}{PUBLIC_SUBNET_MASK}';
+$SUBROUTINE_MAPPINGS{management_node_public_ip_configuration} = '$self->ds_get_management_node_info()->{PUBLIC_IP_CONFIGURATION}';
+$SUBROUTINE_MAPPINGS{management_node_public_subnet_mask} = '$self->ds_get_management_node_info()->{PUBLIC_SUBNET_MASK}';
 #$SUBROUTINE_MAPPINGS{management_node_public_default_gateway} = '$ENV{management_node_info}{PUBLIC_DEFAULT_GATEWAY}';
-$SUBROUTINE_MAPPINGS{management_node_public_dns_server} = '$ENV{management_node_info}{PUBLIC_DNS_SERVER}';
+$SUBROUTINE_MAPPINGS{management_node_public_dns_server} = '$self->ds_get_management_node_info()->{PUBLIC_DNS_SERVER}';
 
-$SUBROUTINE_MAPPINGS{management_node_sysadmin_email}	= '$ENV{management_node_info}{SYSADMIN_EMAIL}';
-$SUBROUTINE_MAPPINGS{management_node_shared_email_box} = '$ENV{management_node_info}{SHARED_EMAIL_BOX}';
+$SUBROUTINE_MAPPINGS{management_node_sysadmin_email}	= '$self->ds_get_management_node_info()->{SYSADMIN_EMAIL}';
+$SUBROUTINE_MAPPINGS{management_node_shared_email_box} = '$self->ds_get_management_node_info()->{SHARED_EMAIL_BOX}';
 
-$SUBROUTINE_MAPPINGS{management_node_predictive_module_name} = '$ENV{management_node_info}{predictive_name}';
-$SUBROUTINE_MAPPINGS{management_node_predictive_module_pretty_name} = '$ENV{management_node_info}{predictive_prettyname}';
-$SUBROUTINE_MAPPINGS{management_node_predictive_module_description} = '$ENV{management_node_info}{predictive_description}';
-$SUBROUTINE_MAPPINGS{management_node_predictive_module_perl_package} = '$ENV{management_node_info}{predictive_perlpackage}';
+$SUBROUTINE_MAPPINGS{management_node_predictive_module_name} = '$self->ds_get_management_node_info()->{predictive_name}';
+$SUBROUTINE_MAPPINGS{management_node_predictive_module_pretty_name} = '$self->ds_get_management_node_info()->{predictive_prettyname}';
+$SUBROUTINE_MAPPINGS{management_node_predictive_module_description} = '$self->ds_get_management_node_info()->{predictive_description}';
+$SUBROUTINE_MAPPINGS{management_node_predictive_module_perl_package} = '$self->ds_get_management_node_info()->{predictive_perlpackage}';
 
 $SUBROUTINE_MAPPINGS{subroutine_mappings} = '\%SUBROUTINE_MAPPINGS';
 
@@ -1456,11 +1457,13 @@ sub print_data {
 sub print_subroutines {
 	my $self = shift;
 
+	my $mnvar = $ENV{management_node_info};
+
 	my $output;
 	foreach my $mapping_key (sort keys %SUBROUTINE_MAPPINGS) {
 		my $mapping_value = $SUBROUTINE_MAPPINGS{$mapping_key};
 		$mapping_value =~ s/^\$self->request_data->/\%request/;
-		$mapping_value =~ s/^\$ENV{management_node_info}/\%management_node/;
+		$mapping_value =~ s/^\$mnvar/\%management_node/;
 		$output .= "get_$mapping_key() : $mapping_value\n";
 	}
 
@@ -2884,6 +2887,16 @@ sub get_vmhost_profile_password {
 	my $decrypted_password_hidden = '*' x $decrypted_password_length;
 	notify($ERRORS{'DEBUG'}, 0, "decrypted VM host profile password: '$decrypted_password_hidden' ($decrypted_password_length characters)");
 	return $decrypted_password;
+}
+
+sub ds_get_management_node_info {
+	my $self = shift;
+
+	my $man_node_info =  get_management_node_info();
+
+	#print "$man_node_info->{'hostname'}";
+
+	return $man_node_info;
 }
 
 #//////////////////////////////////////////////////////////////////////////////

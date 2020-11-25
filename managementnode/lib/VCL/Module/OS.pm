@@ -53,7 +53,8 @@ use warnings;
 use diagnostics;
 use English '-no_match_vars';
 use File::Temp qw(tempdir);
-use POSIX qw(tmpnam);
+#use POSIX qw(tmpnam);
+use File::Temp qw(tempfile);
 use Net::SSH::Expect;
 use List::Util qw(min max);
 
@@ -2948,7 +2949,8 @@ sub create_text_file {
 	
 	# File was not created using the quicker echo method
 	# Create a temporary file on the management node, copy it to the computer, then delete temporary file from management node
-	my $mn_temp_file_path = tmpnam();
+	#my $mn_temp_file_path = tmpnam();
+	my ($fh, $mn_temp_file_path) = tempfile();
 	if (!$self->mn_os->create_text_file($mn_temp_file_path, $file_contents_string, $append)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to create text file on $computer_node_name, temporary file could not be created on the management node");
 		return;
@@ -3243,7 +3245,8 @@ sub execute {
 	}
 	
 	# TESTING: use the new subroutine if $ENV{execute_new} is set and the command isn't one that's known to fail with the new subroutine
-	if ($ENV{execute_new} && !$no_persistent_connection) {
+	my $session = get_session_data();
+	if ($session->{execute_new} && !$no_persistent_connection) {
 		my @excluded_commands = $command =~ /(vmkfstools|qemu-img|Convert-VHD|scp|shutdown|reboot)/i;
 		if (@excluded_commands) {
 			notify($ERRORS{'DEBUG'}, 0, "not using execute_new, command: $command\nexcluded commands matched:\n" . join("\n", @excluded_commands));
@@ -3433,7 +3436,9 @@ sub execute_new {
 		if ($attempt > 0) {
 			$attempt_string = "attempt $attempt/$max_attempts: ";
 			$ssh->close() if $ssh;
-			delete $ENV{net_ssh_expect}{$remote_connection_target};
+			my $session = get_session_data();
+			delete $session->{net_ssh_expect}{$remote_connection_target};
+			tied(%$session)->save;
 			
 			notify($ERRORS{'DEBUG'}, 0, $attempt_string . "sleeping for $attempt_delay seconds before making next attempt");
 			sleep $attempt_delay;
@@ -3445,8 +3450,9 @@ sub execute_new {
 		# Calling 'return' in the EVAL block doesn't exit this subroutine
 		# Use a flag to determine if null should be returned without making another attempt
 		my $return_null;
-		
-		if (!$ENV{net_ssh_expect}{$remote_connection_target}) {
+
+		my $session = get_session_data();
+		if (!$session->{net_ssh_expect}{$remote_connection_target}) {
 			eval {
 				my $expect_options = {
 					host => $remote_connection_target,
@@ -3516,11 +3522,13 @@ sub execute_new {
 			}
 		}
 		else {
-			$ssh = $ENV{net_ssh_expect}{$remote_connection_target};
+			$session = get_session_data();
+			$ssh = $session->{net_ssh_expect}{$remote_connection_target};
 			
 			# Delete the stored SSH object to make sure it isn't saved if the command fails
 			# The SSH object will be added back to %ENV if the command completes successfully
-			delete $ENV{net_ssh_expect}{$remote_connection_target};
+			delete $session->{net_ssh_expect}{$remote_connection_target};
+			tied(%$session)->save;
 		}
 		
 		# Set the timeout
@@ -3576,7 +3584,9 @@ sub execute_new {
 		notify($ERRORS{'OK'}, 0, "executed command on $computer_string: '$command', exit status: $exit_status, output:\n$output") if ($display_output);
 		
 		# Save the SSH object for later use
-		$ENV{net_ssh_expect}{$remote_connection_target} = $ssh;
+		$session = get_session_data();
+		$session->{net_ssh_expect}{$remote_connection_target} = $ssh;
+		tied(%$session)->save;
 		
 		return ($exit_status, \@output_lines);
 	}

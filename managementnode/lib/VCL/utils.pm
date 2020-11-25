@@ -80,6 +80,7 @@ use Crypt::OpenSSL::RSA;
 use B qw(svref_2object);
 use Socket;
 use Net::Netmask;
+use Apache::Session::Flex;
 
 BEGIN {
 	$ENV{PERL_RL} = 'Perl';
@@ -303,6 +304,7 @@ our @EXPORT = qw(
 	xmlrpc_call
 	yaml_deserialize
 	yaml_serialize
+	get_session_data
 
 	$CONF_FILE_PATH
 	$DAEMON_MODE
@@ -375,6 +377,7 @@ our $DAEMON_MODE;
 our $SETUP_MODE;
 our $EXECUTE_NEW;
 
+our %SESSION = ();
 
 INIT {
 	# Parse config file and set globals
@@ -509,7 +512,9 @@ INIT {
 	elsif (!defined($EXECUTE_NEW)) {
 		$EXECUTE_NEW = 0;
 	}
-	$ENV{execute_new} = $EXECUTE_NEW if $EXECUTE_NEW;
+	my $session = get_session_data();
+	$session->{execute_new} = $EXECUTE_NEW if $EXECUTE_NEW;
+	tied(%$session)->save;
 	
 	# Set boolean variables to 0 or 1, they may be set to 'no' or 'yes' in the conf file
 	for ($MYSQL_SSL, $JABBER, $VERBOSE, $DAEMON_MODE, $SETUP_MODE) {
@@ -669,15 +674,17 @@ sub notify {
 	if ($string !~ /[\'\"]/gs && $string !~ /\s:\s/gs) {
 		$string =~ s/[ \t]+/ /gs;
 	}
-	
+
+	my $session = get_session_data();
+
 	# Assemble the process identifier string
 	my $process_identifier;
 	$process_identifier .= "|$PID|";
-	$process_identifier .= $ENV{request_id} if defined $ENV{request_id};
+	$process_identifier .= $session->{request_id} if defined $session->{request_id};
 	$process_identifier .= "|";
-	$process_identifier .= $ENV{reservation_id} if defined $ENV{reservation_id};
+	$process_identifier .= $session->{reservation_id} if defined $session->{reservation_id};
 	$process_identifier .= "|";
-	$process_identifier .= $ENV{state} || 'vcld';
+	$process_identifier .= $session->{state} || 'vcld';
 	$process_identifier .= "|$filename:$sub|$line";
 
 	# Assemble the log message
@@ -732,8 +739,9 @@ $body_separator
 END
 			
 			# Add the reservation info to the message if the DataStructure object is defined in %ENV
-			if ($ENV{data}) {
-				my $reservation_info_string = $ENV{data}->get_reservation_info_string();
+			my $session = get_session_data();
+			if ($session->{data}) {
+				my $reservation_info_string = $session->{data}->get_reservation_info_string();
 				if ($reservation_info_string) {
 					$reservation_info_string =~ s/\s+$//;
 					$body .= "$reservation_info_string\n";
@@ -755,27 +763,27 @@ END
 			my $subject = "PROBLEM -- $management_node_short_name|";
 			
 			# Assemble the process identifier string
-			if (defined $ENV{request_id} && defined $ENV{reservation_id} && defined $ENV{state}) {
-				$subject .= "$ENV{request_id}:$ENV{reservation_id}|$ENV{state}|$filename";
+			if (defined $session->{request_id} && defined $session->{reservation_id} && defined $session->{state}) {
+				$subject .= "$session->{request_id}:$session->{reservation_id}|$session->{state}|$filename";
 			}
 			else {
 				$subject .= "$caller_info";
 			}
 			
-			if (defined($ENV{data})) {
-				my $blockrequest_name = $ENV{data}->get_blockrequest_name(0);
+			if (defined($session->{data})) {
+				my $blockrequest_name = $session->{data}->get_blockrequest_name(0);
 				$subject .= "|$blockrequest_name" if (defined $blockrequest_name);
 				
-				my $computer_name = $ENV{data}->get_computer_short_name(0);
+				my $computer_name = $session->{data}->get_computer_short_name(0);
 				$subject .= "|$computer_name" if (defined $computer_name);
 				
-				my $vmhost_hostname = $ENV{data}->get_vmhost_short_name(0);
+				my $vmhost_hostname = $session->{data}->get_vmhost_short_name(0);
 				$subject .= ">$vmhost_hostname" if (defined $vmhost_hostname);
 				
-				my $image_name = $ENV{data}->get_image_name(0);
+				my $image_name = $session->{data}->get_image_name(0);
 				$subject .= "|$image_name" if (defined $image_name);
 				
-				my $user_name = $ENV{data}->get_user_login_id(0);
+				my $user_name = $session->{data}->get_user_login_id(0);
 				$subject .= "|$user_name" if (defined $user_name);
 			}
 			
@@ -1130,6 +1138,8 @@ sub check_time {
 	my $preload_window_minutes_prior_high = 35;
 	my $preload_window_minutes_prior_low = 25;
 
+	my $session = get_session_data();
+
 	# Print the time differences
 	#notify($ERRORS{'OK'}, 0, "reservation lastcheck difference: $lastcheck_diff_minutes minutes ($lastcheck_diff_seconds seconds)");
 	#notify($ERRORS{'OK'}, 0, "request start time difference:    $start_diff_minutes minutes");
@@ -1200,7 +1210,7 @@ sub check_time {
 		else {
 			# End time is more than 10 minutes in the future
 			if ($serverrequest) {	
-				my $server_inuse_check_time = ($ENV{management_node_info}->{SERVER_INUSE_CHECK} * -1);
+				my $server_inuse_check_time = ($session->{management_node_info}->{SERVER_INUSE_CHECK} * -1);
 				if ($lastcheck_diff_minutes <= $server_inuse_check_time) {
 					return "poll";
 				}
@@ -1209,7 +1219,7 @@ sub check_time {
 				}
 			}
 			elsif ($reservation_cnt > 1) {
-				my $cluster_inuse_check_time = ($ENV{management_node_info}->{CLUSTER_INUSE_CHECK} * -1);; 
+				my $cluster_inuse_check_time = ($session->{management_node_info}->{CLUSTER_INUSE_CHECK} * -1);;
 				if ($lastcheck_diff_minutes <= $cluster_inuse_check_time) {
 					return "poll";
 				}
@@ -1219,7 +1229,7 @@ sub check_time {
 			}
 			else {
 				#notify($ERRORS{'DEBUG'}, 0, "reservation will end in more than 10 minutes ($end_diff_minutes)");
-				my $general_inuse_check_time = ($ENV{management_node_info}->{GENERAL_INUSE_CHECK} * -1);
+				my $general_inuse_check_time = ($session->{management_node_info}->{GENERAL_INUSE_CHECK} * -1);
 				if ($lastcheck_diff_minutes <= $general_inuse_check_time) {
 					notify($ERRORS{'DEBUG'}, 0, "reservation was last checked more than $general_inuse_check_time minutes ago ($lastcheck_diff_minutes), returning 'poll'");
 					return "poll";
@@ -2181,20 +2191,22 @@ sub getnewdbh {
 
 	my $dbh;
 
+	my $session = get_session_data();
+
 	# Try to use the existing database handle
-	if ($ENV{dbh} && $ENV{dbh}->ping && $ENV{dbh}->{Name} =~ /^$database:/) {
-		#notify($ERRORS{'DEBUG'}, 0, "using database handle stored in \$ENV{dbh}");
-		return $ENV{dbh};
+	if ($session->{dbh} && $session->{dbh}->ping && $session->{dbh}->{Name} =~ /^$database:/) {
+		#notify($ERRORS{'DEBUG'}, 0, "using database handle stored in \$session->{dbh}");
+		return $session->{dbh};
 	}
-	elsif ($ENV{dbh} && $ENV{dbh}->ping) {
-		my ($stored_database_name) = $ENV{dbh}->{Name} =~ /^([^:]*)/;
-		notify($ERRORS{'DEBUG'}, 0, "database requested ($database) does not match handle stored in \$ENV{dbh} (" . $ENV{dbh}->{Name} . ")");
+	elsif ($session->{dbh} && $session->{dbh}->ping) {
+		my ($stored_database_name) = $session->{dbh}->{Name} =~ /^([^:]*)/;
+		notify($ERRORS{'DEBUG'}, 0, "database requested ($database) does not match handle stored in \$session->{dbh} (" . $session->{dbh}->{Name} . ")");
 	}
-	elsif (defined $ENV{dbh}) {
-		notify($ERRORS{'DEBUG'}, 0, "unable to use database handle stored in \$ENV{dbh}");
+	elsif (defined $session->{dbh}) {
+		notify($ERRORS{'DEBUG'}, 0, "unable to use database handle stored in \$session->{dbh}");
 	}
 	else {
-		#notify($ERRORS{'DEBUG'}, 0, "\$ENV{dbh} is not defined, creating new database handle");
+		#notify($ERRORS{'DEBUG'}, 0, "\$session->{dbh} is not defined, creating new database handle");
 	}
 
 	my $attempt      = 0;
@@ -2212,6 +2224,7 @@ sub getnewdbh {
 
 	# Attempt to connect to the data source and get a database handle object
 	my $dbi_result;
+	$session = get_session_data();
 	while (!$dbh && $attempt < $max_attempts) {
 		$attempt++;
 
@@ -2223,24 +2236,28 @@ sub getnewdbh {
 		if ($dbh && $dbh->ping) {
 			# Set InactiveDestroy = 1 for all dbh's belonging to child processes
 			# Set InactiveDestroy = 0 for all dbh's belonging to vcld
-			if (!defined $ENV{vcld} || !$ENV{vcld}) {
+			if (!defined $session->{vcld} || !$session->{vcld}) {
 				$dbh->{InactiveDestroy} = 1;
 			}
 			else {
 				$dbh->{InactiveDestroy} = 0;
 			}
 
+			$session = get_session_data();
+
 			# Increment the dbh count environment variable if it is defined
 			# This is only for development and testing to see how many handles a process creates
-			$ENV{dbh_count}++ if defined($ENV{dbh_count});
+			$session->{dbh_count}++ if defined($session->{dbh_count});
 
 			# Store the newly created database handle in an environment variable
 			# Only store it if $ENV{dbh} is already defined
 			# It's up to other modules to determine if $ENV{dbh} is defined, they must initialize it
-			if (defined $ENV{dbh}) {
-				$ENV{dbh} = $dbh;
-				notify($ERRORS{'DEBUG'}, 0, "database handle stored in \$ENV{dbh}");
+			if (defined $session->{dbh}) {
+				$session->{dbh} = $dbh;
+				notify($ERRORS{'DEBUG'}, 0, "database handle stored in \$session->{dbh}");
 			}
+
+			tied(%$session)->save;
 
 			return $dbh;
 		} ## end if ($dbh && $dbh->ping)
@@ -2304,7 +2321,9 @@ sub notify_via_oascript {
 
         my $command = "/var/root/VCL/oamessage \"$message\"";
 
-        if (run_ssh_command($node, $ENV{management_node_info}{keys}, $command)) {
+		my $session = get_session_data();
+
+        if (run_ssh_command($node, $session->{management_node_info}{keys}, $command)) {
                 notify($ERRORS{'OK'}, 0, "successfully sent message to OSX user $user on $node");
                 return 1;
         }
@@ -2327,12 +2346,14 @@ sub notify_via_oascript {
 
 sub getpw {
 	my ($password_length, $include_special_characters) = @_;
-	
+
+	my $session = get_session_data();
+
 	if (!$password_length) {
-		$password_length = $ENV{management_node_info}{USER_PASSWORD_LENGTH} || 8;
+		$password_length = $session->{management_node_info}{USER_PASSWORD_LENGTH} || 8;
 	}
 	if (!defined($include_special_characters)) {
-		$include_special_characters = $ENV{management_node_info}{INCLUDE_SPECIAL_CHARS};
+		$include_special_characters = $session->{management_node_info}{INCLUDE_SPECIAL_CHARS};
 	}
 	
 	#Skip certain confusing chars like: iI1lL,0Oo Zz2
@@ -2592,20 +2613,24 @@ sub database_select {
 	my ($select_statement, $database) = @_;
 	
 	my $calling_sub = (caller(1))[3] || 'undefined';
-	
+
+	my $session = get_session_data();
+
 	# Initialize the database_select_calls element if not already initialized
-	if (!ref($ENV{database_select_calls})) {
-		$ENV{database_select_calls} = {};
+	if (!ref($session->{database_select_calls})) {
+		$session->{database_select_calls} = {};
+		tied(%$session)->save;
 	}
 	
 	# For performance tuning - count the number of calls
-	$ENV{database_select_count}++;
-	if (!defined($ENV{database_select_calls}{$calling_sub})) {
-		$ENV{database_select_calls}{$calling_sub} = 1;
+	$session->{database_select_count}++;
+	if (!defined($session->{database_select_calls}{$calling_sub})) {
+		$session->{database_select_calls}{$calling_sub} = 1;
 	}
 	else {
-		$ENV{database_select_calls}{$calling_sub}++;
+		$session->{database_select_calls}{$calling_sub}++;
 	}
+	tied(%$session)->save;
 	
 	$database = $DATABASE unless $database;
 	
@@ -2625,7 +2650,7 @@ sub database_select {
 	# Check the select statement handle
 	if (!$select_handle) {
 		notify($ERRORS{'WARNING'}, 0, "could not prepare select statement, $select_statement, " . $dbh->errstr());
-		$dbh->disconnect if !defined $ENV{dbh};
+		$dbh->disconnect if !defined $session->{dbh};
 		return ();
 	}
 
@@ -2639,7 +2664,7 @@ sub database_select {
 			"error: " . $dbh->errstr()
 		);
 		$select_handle->finish;
-		$dbh->disconnect if !defined $ENV{dbh};
+		$dbh->disconnect if !defined $session->{dbh};
 		return ();
 	}
 
@@ -2647,7 +2672,7 @@ sub database_select {
 	# An array reference is created containing hash refs because {} is passed to fetchall_arrayref
 	my @return_rows = @{$select_handle->fetchall_arrayref({})};
 	$select_handle->finish;
-	$dbh->disconnect if !defined $ENV{dbh};
+	$dbh->disconnect if !defined $session->{dbh};
 	
 	return @return_rows;
 } ## end sub database_select
@@ -2665,8 +2690,12 @@ sub database_select {
 
 sub database_execute {
 	my ($sql_statement, $database) = @_;
-	
-	$ENV{database_execute_count}++;
+
+	my $session = get_session_data();
+
+	$session->{database_execute_count}++;
+
+	tied(%$session)->save;
 	
 	my $dbh;
 	if (!($dbh = getnewdbh($database))) {
@@ -2684,7 +2713,7 @@ sub database_execute {
 	if (!$statement_handle) {
 		my $error_string = $dbh->errstr() || '<unknown error>';
 		notify($ERRORS{'WARNING'}, 0, "could not prepare SQL statement, $sql_statement, $error_string");
-		$dbh->disconnect if !defined $ENV{dbh};
+		$dbh->disconnect if !defined $session->{dbh};
 		return;
 	}
 	
@@ -2693,7 +2722,7 @@ sub database_execute {
 	if (!defined($result)) {
 		my $error_string = $dbh->errstr() || '<unknown error>';
 		$statement_handle->finish;
-		$dbh->disconnect if !defined $ENV{dbh};
+		$dbh->disconnect if !defined $session->{dbh};
 		
 		if (wantarray) {
 			return (0, $error_string);
@@ -2715,7 +2744,7 @@ sub database_execute {
 		my $sql_insertid = $statement_handle->{'mysql_insertid'};
 		my $sql_warning_count = $statement_handle->{'mysql_warning_count'};
 		$statement_handle->finish;
-		$dbh->disconnect if !defined $ENV{dbh};
+		$dbh->disconnect if !defined $session->{dbh};
 		if ($sql_insertid) {
 			return $sql_insertid;
 		}
@@ -2725,7 +2754,7 @@ sub database_execute {
 	}
 	else {
 		$statement_handle->finish;
-		$dbh->disconnect if !defined $ENV{dbh};
+		$dbh->disconnect if !defined $session->{dbh};
 		return $result;
 	}
 
@@ -2754,9 +2783,10 @@ sub database_update {
 		notify($ERRORS{'WARNING'}, 0, "invalid SQL UPDATE statement argument, it does not begin with 'UPDATE':\n$update_statement");
 		return;
 	}
-	
+
 	
 	my $dbh = getnewdbh($database);
+	my $session = get_session_data();
 	if (!$dbh) {
 		sleep_uninterrupted(3);
 		$dbh = getnewdbh($database);
@@ -2773,7 +2803,7 @@ sub database_update {
 	if (!$statement_handle) {
 		my $error_string = $dbh->errstr() || '<unknown error>';
 		notify($ERRORS{'WARNING'}, 0, "failed to prepare SQL UPDATE statement, $update_statement, $error_string");
-		$dbh->disconnect if !defined $ENV{dbh};
+		$dbh->disconnect if !defined $session->{dbh};
 		return;
 	}
 	
@@ -2783,14 +2813,14 @@ sub database_update {
 	if (!defined($result)) {
 		my $error_string = $dbh->errstr() || '<unknown error>';
 		$statement_handle->finish;
-		$dbh->disconnect if !defined $ENV{dbh};
+		$dbh->disconnect if !defined $session->{dbh};
 		notify($ERRORS{'WARNING'}, 0, "failed to execute SQL UPDATE statement: $update_statement\nerror:\n$error_string");
 		return;
 	}
 	
 	my $updated_row_count = $statement_handle->rows;
 	$statement_handle->finish;
-	$dbh->disconnect if !defined $ENV{dbh};
+	$dbh->disconnect if !defined $session->{dbh};
 	
 	$update_statement =~ s/[\n\s]+/ /g;
 	notify($ERRORS{'DEBUG'}, 0, "returning number of rows affected by UPDATE statement: $updated_row_count\n$update_statement");
@@ -2879,7 +2909,8 @@ EOF
 	# Build the hash
 	my $request_info;
 	my $request_state_name;
-	
+	my $session = get_session_data();
+
 	for my $reservation_row (@selected_rows) {
 		my $reservation_id = $reservation_row->{'reservation-id'};
 		if (!$reservation_id) {
@@ -2933,7 +2964,7 @@ EOF
 		
 		# Populate natport table for reservation
 		# Make sure this wasn't called from populate_reservation_natport or else recursive loop will occur
-		if (defined $ENV{reservation_id} && $ENV{reservation_id} eq $reservation_id) {
+		if (defined $session->{reservation_id} && $session->{reservation_id} eq $reservation_id) {
 			my $caller_trace = get_caller_trace(5);
 			if ($caller_trace !~ /populate_reservation_natport/) {
 				if ($request_state_name =~ /(new|reserved|modified|test)/) {
@@ -3091,9 +3122,11 @@ sub get_request_log_info {
 		notify($ERRORS{'WARNING'}, 0, "request ID argument was not specified");
 		return;
 	}
-	
-	if (!$no_cache && defined($ENV{log_info}{$request_id})) {
-		return $ENV{log_info}{$request_id};
+
+	my $session = get_session_data();
+
+	if (!$no_cache && defined($session->{log_info}{$request_id})) {
+		return $session->{log_info}{$request_id};
 	}
 	
 	# Get a hash ref containing the database column names
@@ -3167,7 +3200,8 @@ EOF
 		}
 	}
 	
-	$ENV{log_info}{$request_id} = $log_info;
+	$session->{log_info}{$request_id} = $log_info;
+	tied(%$session)->save;
 	#notify($ERRORS{'DEBUG'}, 0, "retrieved log info for request $request_id:\n" . format_data($log_info));
 	return $log_info;
 }
@@ -3359,13 +3393,15 @@ sub get_image_info {
 		notify($ERRORS{'WARNING'}, 0, "image identifier argument was not specified");
 		return;
 	}
-	
+
+	my $session = get_session_data();
+
 	# Check if cached image info exists
-	if (!$no_cache && defined($ENV{image_info}{$image_identifier})) {
+	if (!$no_cache && defined($session->{image_info}{$image_identifier})) {
 		# Check the time the info was last retrieved
-		my $data_age_seconds = (time - $ENV{image_info}{$image_identifier}{RETRIEVAL_TIME});
+		my $data_age_seconds = (time - $session->{image_info}{$image_identifier}{RETRIEVAL_TIME});
 		if ($data_age_seconds < 600) {
-			return $ENV{image_info}{$image_identifier};
+			return $session->{image_info}{$image_identifier};
 		}
 		else {
 			notify($ERRORS{'DEBUG'}, 0, "retrieving current image info for '$image_identifier' from database, cached data is stale: $data_age_seconds seconds old");
@@ -3488,11 +3524,14 @@ EOF
 	my $image_id = $image_info->{id};
 	my $domain_info = get_image_active_directory_domain_info($image_id, $no_cache);
 	$image_info->{imagedomain} = $domain_info;
+
+	$session = get_session_data();
 	
 	#notify($ERRORS{'DEBUG'}, 0, "retrieved info for image '$image_identifier':\n" . format_data($image_info));
-	$ENV{image_info}{$image_identifier} = $image_info;
-	$ENV{image_info}{$image_identifier}{RETRIEVAL_TIME} = time;
-	return $ENV{image_info}{$image_identifier};
+	$session->{image_info}{$image_identifier} = $image_info;
+	$session->{image_info}{$image_identifier}{RETRIEVAL_TIME} = time;
+	tied(%$session)->save;
+	return $session->{image_info}{$image_identifier};
 }
 
 #//////////////////////////////////////////////////////////////////////////////
@@ -3511,13 +3550,15 @@ sub get_imagerevision_info {
 		notify($ERRORS{'WARNING'}, 0, "imagerevision identifier argument was not specified");
 		return;
 	}
-	
+
+	my $session = get_session_data();
+
 	# Check if cached imagerevision info exists
-	if (!$no_cache && defined($ENV{imagerevision_info}{$imagerevision_identifier})) {
+	if (!$no_cache && defined($session->{imagerevision_info}{$imagerevision_identifier})) {
 		# Check the time the info was last retrieved
-		my $data_age_seconds = (time - $ENV{imagerevision_info}{$imagerevision_identifier}{RETRIEVAL_TIME});
+		my $data_age_seconds = (time - $session->{imagerevision_info}{$imagerevision_identifier}{RETRIEVAL_TIME});
 		if ($data_age_seconds < 600) {
-			return $ENV{imagerevision_info}{$imagerevision_identifier};
+			return $session->{imagerevision_info}{$imagerevision_identifier};
 		}
 		else {
 			notify($ERRORS{'DEBUG'}, 0, "retrieving current imagerevision info for '$imagerevision_identifier' from database, cached data is stale: $data_age_seconds seconds old");
@@ -3567,12 +3608,15 @@ EOF
 	
 	# Retrieve the imagerevision user info
 	$imagerevision_info->{user} = get_user_info($imagerevision_info->{userid});
-	
+
+	$session = get_session_data();
+
 	# Add the info to %ENV so it doesn't need to be retrieved from the database again
-	$ENV{imagerevision_info}{$imagerevision_identifier} = $imagerevision_info;
-	$ENV{imagerevision_info}{$imagerevision_identifier}{RETRIEVAL_TIME} = time;
+	$session->{imagerevision_info}{$imagerevision_identifier} = $imagerevision_info;
+	$session->{imagerevision_info}{$imagerevision_identifier}{RETRIEVAL_TIME} = time;
 	#notify($ERRORS{'DEBUG'}, 0, "retrieved info from database for imagerevision '$imagerevision_identifier':\n" . format_data($ENV{imagerevision_info}{$imagerevision_identifier}));
-	return $ENV{imagerevision_info}{$imagerevision_identifier};
+	tied(%$session)->save;
+	return $session->{imagerevision_info}{$imagerevision_identifier};
 }
 
 #//////////////////////////////////////////////////////////////////////////////
@@ -3594,8 +3638,10 @@ sub get_production_imagerevision_info {
 		notify($ERRORS{'WARNING'}, 0, "imagerevision identifier argument was not specified");
 		return;
 	}
-	
-	return $ENV{production_imagerevision_info}{$image_identifier} if (!$no_cache && $ENV{production_imagerevision_info}{$image_identifier});
+
+	my $session = get_session_data();
+
+	return $session->{production_imagerevision_info}{$image_identifier} if (!$no_cache && $session->{production_imagerevision_info}{$image_identifier});
 	
 	my $select_statement = <<EOF;
 SELECT
@@ -3636,9 +3682,11 @@ EOF
 	my $imagerevision_info = get_imagerevision_info($imagerevision_id);
 	
 	my $image_name = $imagerevision_info->{imagename};
-	$ENV{production_imagerevision_info}{$image_identifier} = $imagerevision_info;
+	$session = get_session_data();
+	$session->{production_imagerevision_info}{$image_identifier} = $imagerevision_info;
+	tied(%$session)->save;
 	notify($ERRORS{'DEBUG'}, 0, "retrieved info from database for production revision for image identifier '$image_identifier', production image: '$image_name'");
-	return $ENV{production_imagerevision_info}{$image_identifier};
+	return $session->{production_imagerevision_info}{$image_identifier};
 	
 } ## end sub get_production_imagerevision_info
 
@@ -3661,9 +3709,13 @@ sub set_production_imagerevision {
 		notify($ERRORS{'WARNING'}, 0, "imagerevision ID argument was not supplied");
 		return;
 	}
-	
+
+	my $session = get_session_data();
+
 	# Delete cached data
-	delete $ENV{production_imagerevision_info};
+	delete($session->{production_imagerevision_info});
+
+	tied(%$session)->save;
 	
 	my $sql_statement = <<EOF;
 UPDATE
@@ -3714,9 +3766,11 @@ sub get_imagemeta_info {
 	if (!$imagemeta_id) {
 		return $default_imagemeta_info;
 	}
-	
-	if (!$no_cache && $ENV{imagemeta_info}{$imagemeta_id}) {
-		return $ENV{imagemeta_info}{$imagemeta_id};
+
+	my $session = get_session_data();
+
+	if (!$no_cache && $session->{imagemeta_info}{$imagemeta_id}) {
+		return $session->{imagemeta_info}{$imagemeta_id};
 	}
 	
 	# If imagemetaid isnt' NULL, perform another query to get the meta info
@@ -3731,13 +3785,16 @@ EOF
 
 	# Call the database select subroutine
 	my @selected_rows = database_select($select_statement);
-	
+
+	#TODO: Checkout the session value before and after the database select call to make sure the values
+	#      are reflected correctly
+
 	# Check to make sure 1 row was returned
 	if (!@selected_rows || scalar @selected_rows > 1) {
-		$ENV{imagemeta_info}{$imagemeta_id} = $default_imagemeta_info;
-		
+		$session->{imagemeta_info}{$imagemeta_id} = $default_imagemeta_info;
+		tied(%$session)->save;
 		notify($ERRORS{'WARNING'}, 0, "failed to retrieve imagemeta ID=$imagemeta_id, returning default imagemeta values");
-		return $ENV{imagemeta_info}{$imagemeta_id};
+		return $session->{imagemeta_info}{$imagemeta_id};
 	}
 
 	# Get the single row returned from the select statement
@@ -3750,8 +3807,9 @@ EOF
 	}
 	
 	notify($ERRORS{'DEBUG'}, 0, "retrieved imagemeta info:\n" . format_data($imagemeta_info));
-	$ENV{imagemeta_info}{$imagemeta_id} = $imagemeta_info;
-	return $ENV{imagemeta_info}{$imagemeta_id};
+	$session->{imagemeta_info}{$imagemeta_id} = $imagemeta_info;
+	tied(%$session)->save;
+	return $session->{imagemeta_info}{$imagemeta_id};
 }
 
 #//////////////////////////////////////////////////////////////////////////////
@@ -3766,11 +3824,12 @@ EOF
 
 
 sub get_default_imagemeta_info {
-	if ($ENV{imagemeta_info}{default}) {
+	my $session = get_session_data();
+	if ($session->{imagemeta_info}{default}) {
 		# Create a copy to ensure that the correct default data is returned
 		# Other processes may use the same cached copy
 		# If the same reference is returned for multiple processes, one process may alter the data
-		my %default_imagemeta_info = %{$ENV{imagemeta_info}{default}};
+		my %default_imagemeta_info = %{$session->{imagemeta_info}{default}};
 		return \%default_imagemeta_info;
 	}
 	
@@ -3794,9 +3853,10 @@ sub get_default_imagemeta_info {
 		}
 	}
 	
-	$ENV{imagemeta_info}{default} = $default_imagemeta_info;
+	$session->{imagemeta_info}{default} = $default_imagemeta_info;
+	tied(%$session)->save;
 	
-	my %default_imagemeta_info_copy = %{$ENV{imagemeta_info}{default}};
+	my %default_imagemeta_info_copy = %{$session->{imagemeta_info}{default}};
 	#notify($ERRORS{'DEBUG'}, 0, "retrieved default imagemeta info:\n" . format_data(\%default_imagemeta_info_copy));
 	return \%default_imagemeta_info_copy;
 }
@@ -3824,8 +3884,10 @@ sub get_vmhost_info {
 		notify($ERRORS{'WARNING'}, 0, "VM host identifier argument was not specified");
 		return;
 	}
-	
-	return $ENV{vmhost_info}{$vmhost_identifier} if (!$no_cache && $ENV{vmhost_info}{$vmhost_identifier});
+
+	my $session = get_session_data();
+
+	return $session->{vmhost_info}{$vmhost_identifier} if (!$no_cache && $session->{vmhost_info}{$vmhost_identifier});
 	
 	my $management_node_id = get_management_node_id();
 	
@@ -4003,14 +4065,17 @@ EOF
 	my $vmhost_id = $vmhost_info->{id};
 	
 	notify($ERRORS{'DEBUG'}, 0, "retrieved VM host $vmhost_identifier info, VM host ID: $vmhost_id, computer: $vmhost_info->{computer}{hostname}, computer ID: $vmhost_info->{computer}{id}");
-	$ENV{vmhost_info}{$vmhost_identifier} = $vmhost_info;
+	$session = get_session_data();
+	$session->{vmhost_info}{$vmhost_identifier} = $vmhost_info;
+	tied(%$session)->save;
 	
 	
 	if ($vmhost_identifier ne $vmhost_id) {
-		$ENV{vmhost_info}{$vmhost_id} = $vmhost_info;
+		$session->{vmhost_info}{$vmhost_id} = $vmhost_info;
+		tied(%$session)->save;
 	}
 	
-	return $ENV{vmhost_info}{$vmhost_identifier};
+	return $session->{vmhost_info}{$vmhost_identifier};
 }
 
 #//////////////////////////////////////////////////////////////////////////////
@@ -4088,11 +4153,13 @@ sub run_ssh_command {
 		my $management_node_info = get_management_node_info();
 		$identity_paths = $management_node_info->{keys}
 	}
-	
+
+	my $session = get_session_data();
+
 	# TESTING: use the new subroutine if $ENV{execute_new} is set and the command isn't one that's known to fail with the new subroutine
 	my $calling_subroutine = get_calling_subroutine();
 	if ($calling_subroutine && $calling_subroutine !~ /execute/) {
-		if ($ENV{execute_new} && $command !~ /(vmkfstools|qemu-img|Convert-VHD|scp|reboot|shutdown)/) {
+		if ($session->{execute_new} && $command !~ /(vmkfstools|qemu-img|Convert-VHD|scp|reboot|shutdown)/) {
 			return VCL::Module::OS::execute_new($node, $command, $output_level, $timeout_seconds, $max_attempts, $port, $user, '', $identity_paths);
 		}
 	}
@@ -4591,25 +4658,33 @@ sub get_management_node_info {
 			$management_node_identifier = (hostname())[0];
 		}
 	}
-	
-	if (!defined($ENV{management_node_info}) || !ref($ENV{management_node_info}) || ref($ENV{management_node_info}) ne 'HASH') {
+
+	#if (!defined($ENV{management_node_info}) || !ref($ENV{management_node_info}) || ref($ENV{management_node_info}) ne 'HASH') {
+	#	notify($ERRORS{'DEBUG'}, 0, "initializing management node info hash reference");
+	#	$ENV{management_node_info} = {};
+	#}
+
+	my $session = get_session_data();
+	if (!defined($session->{management_node_info}) || !ref($session->{management_node_info}) || ref($session->{management_node_info}) ne 'HASH') {
 		notify($ERRORS{'DEBUG'}, 0, "initializing management node info hash reference");
-		$ENV{management_node_info} = {};
+		$session->{management_node_info} = {};
+		tied(%$session)->save;
 	}
+
 	
-	if (defined($ENV{management_node_info}{$management_node_identifier})) {
-		my $data_age_seconds = (time - $ENV{management_node_info}{$management_node_identifier}{RETRIEVAL_TIME});
+	if (defined($session->{management_node_info}{$management_node_identifier})) {
+		my $data_age_seconds = (time - $session->{management_node_info}{$management_node_identifier}{RETRIEVAL_TIME});
 		
 		if ($data_age_seconds < 60) {
 			#notify($ERRORS{'DEBUG'}, 0, "returning previously retrieved management node info for '$management_node_identifier'");
-			return $ENV{management_node_info}{$management_node_identifier};
+			return $session->{management_node_info}{$management_node_identifier};
 		}
 		else {
 			#notify($ERRORS{'DEBUG'}, 0, "retrieving current management node info for '$management_node_identifier' from database, cached data is stale: $data_age_seconds seconds old");
 		}
 	}
 	else {
-		notify($ERRORS{'DEBUG'}, 0, "management node info for '$management_node_identifier' is not stored in \$ENV{management_node_info}");
+		notify($ERRORS{'DEBUG'}, 0, "management node info for '$management_node_identifier' is not stored in \$session->{management_node_info}");
 	}
 
 	my $select_statement = "
@@ -4722,23 +4797,23 @@ AND managementnode.id != $management_node_id
 	# Get the inuse timing checks for general and server based reservations
 	my $general_inuse_check = get_variable('general_inuse_check') || 300;
 	$management_node_info->{GENERAL_INUSE_CHECK} = round($general_inuse_check / 60);
-	$ENV{management_node_info}{GENERAL_INUSE_CHECK} = $management_node_info->{GENERAL_INUSE_CHECK};
+	$session->{management_node_info}{GENERAL_INUSE_CHECK} = $management_node_info->{GENERAL_INUSE_CHECK};
 
 	my $server_inuse_check = get_variable('server_inuse_check') || 300;
 	$management_node_info->{SERVER_INUSE_CHECK} = round($server_inuse_check / 60);
-	$ENV{management_node_info}{SERVER_INUSE_CHECK} = $management_node_info->{SERVER_INUSE_CHECK};
+	$session->{management_node_info}{SERVER_INUSE_CHECK} = $management_node_info->{SERVER_INUSE_CHECK};
 	
 	my $cluster_inuse_check = get_variable('cluster_inuse_check') || 300;
 	$management_node_info->{CLUSTER_INUSE_CHECK} = round($cluster_inuse_check / 60);
-	$ENV{management_node_info}{CLUSTER_INUSE_CHECK} = $management_node_info->{CLUSTER_INUSE_CHECK};
+	$session->{management_node_info}{CLUSTER_INUSE_CHECK} = $management_node_info->{CLUSTER_INUSE_CHECK};
 
 	my $user_password_length = get_variable('user_password_length') || 6;
 	$management_node_info->{USER_PASSWORD_LENGTH} = $user_password_length;
-	$ENV{management_node_info}{USER_PASSWORD_LENGTH} = $management_node_info->{USER_PASSWORD_LENGTH};
+	$session->{management_node_info}{USER_PASSWORD_LENGTH} = $management_node_info->{USER_PASSWORD_LENGTH};
 
 	my $user_password_include_spchar = get_variable('user_password_spchar') || 0;
 	$management_node_info->{INCLUDE_SPECIAL_CHARS} = $user_password_include_spchar;
-	$ENV{management_node_info}{INCLUDE_SPECIAL_CHARS} =  $management_node_info->{INCLUDE_SPECIAL_CHARS};
+	$session->{management_node_info}{INCLUDE_SPECIAL_CHARS} =  $management_node_info->{INCLUDE_SPECIAL_CHARS};
 
 	# Get the OS name
 	my $os_name = lc($^O);
@@ -4756,14 +4831,15 @@ AND managementnode.id != $management_node_id
 	
 	# Store the info in $ENV{management_node_info}
 	# Add keys for all of the unique identifiers that may be passed as an argument to this subroutine
-	$ENV{management_node_info}{$management_node_identifier} = $management_node_info;
-	$ENV{management_node_info}{$management_node_info->{hostname}} = $management_node_info;
-	$ENV{management_node_info}{$management_node_info->{SHORTNAME}} = $management_node_info;
-	$ENV{management_node_info}{$management_node_info->{id}} = $management_node_info;
-	$ENV{management_node_info}{$management_node_info->{IPaddress}} = $management_node_info;
+	$session->{management_node_info}{$management_node_identifier} = $management_node_info;
+	$session->{management_node_info}{$management_node_info->{hostname}} = $management_node_info;
+	$session->{management_node_info}{$management_node_info->{SHORTNAME}} = $management_node_info;
+	$session->{management_node_info}{$management_node_info->{id}} = $management_node_info;
+	$session->{management_node_info}{$management_node_info->{IPaddress}} = $management_node_info;
 	
 	# Save the time when the data was retrieved
-	$ENV{management_node_info}{$management_node_identifier}{RETRIEVAL_TIME} = time;
+	$session->{management_node_info}{$management_node_identifier}{RETRIEVAL_TIME} = time;
+	tied(%$session)->save;
 	
 	#notify($ERRORS{'DEBUG'}, 0, "retrieved management node info: '$management_node_identifier' ($management_node_info->{SHORTNAME})");
 	return $management_node_info;
@@ -5043,9 +5119,11 @@ sub update_computer_private_ip_address {
 	
 	my $computer_string = $computer_identifier;
 	$computer_string .= " ($computer_id)" if ($computer_identifier ne $computer_id);
-	
+
+	my $session = get_session_data();
 	# Delete cached data if previously set
-	delete $ENV{computer_private_ip_address}{$computer_id};
+	delete($session->{computer_private_ip_address}{$computer_id});
+	tied(%$session)->save;
 	
 	my $private_ip_address_text;
 	if ($private_ip_address =~ /null/i) {
@@ -5069,7 +5147,9 @@ EOF
 	# Call the database execute subroutine
 	if (database_execute($update_statement)) {
 		if ($private_ip_address !~ /null/i) {
-			$ENV{computer_private_ip_address}{$computer_id} = $private_ip_address;
+			$session = get_session_data();
+			$session->{computer_private_ip_address}{$computer_id} = $private_ip_address;
+			tied(%$session)->save;
 		}
 		notify($ERRORS{'OK'}, 0, "updated private IP address of computer $computer_string in database: $private_ip_address");
 		return 1;
@@ -6573,13 +6653,15 @@ sub get_user_info {
 		notify($ERRORS{'WARNING'}, 0, "user identifier argument was not specified");
 		return;
 	}
-	
+
+	my $session = get_session_data();
+
 	# Check if cached user info exists
-	if (!$no_cache && defined($ENV{user_info}{$user_identifier})) {
+	if (!$no_cache && defined($session->{user_info}{$user_identifier})) {
 		# Check the time the info was last retrieved
-		my $data_age_seconds = (time - $ENV{user_info}{$user_identifier}{RETRIEVAL_TIME});
+		my $data_age_seconds = (time - $session->{user_info}{$user_identifier}{RETRIEVAL_TIME});
 		if ($data_age_seconds < 600) {
-			return $ENV{user_info}{$user_identifier};
+			return $session->{user_info}{$user_identifier};
 		}
 		else {
 			notify($ERRORS{'DEBUG'}, 0, "retrieving current user info for '$user_identifier' from database, cached data is stale: $data_age_seconds seconds old");
@@ -6727,9 +6809,10 @@ EOF
 	}
 	
 	#notify($ERRORS{'DEBUG'}, 0, "retrieved info for user '$user_identifier', affiliation: '$affiliation_identifier':\n" . format_data($user_info));
-	$ENV{user_info}{$user_identifier} = $user_info;
-	$ENV{user_info}{$user_identifier}{RETRIEVAL_TIME} = time;
-	return $ENV{user_info}{$user_identifier};	
+	$session->{user_info}{$user_identifier} = $user_info;
+	$session->{user_info}{$user_identifier}{RETRIEVAL_TIME} = time;
+	tied(%$session)->save;
+	return $session->{user_info}{$user_identifier};
 }
 
 #//////////////////////////////////////////////////////////////////////////////
@@ -6846,9 +6929,11 @@ sub get_computer_info {
 		notify($ERRORS{'WARNING'}, 0, "computer identifier argument was not supplied");
 		return;
 	}
-	
-	if (!$no_cache && defined($ENV{computer_info}{$computer_identifier})) {
-		return $ENV{computer_info}{$computer_identifier};
+
+	my $session = get_session_data();
+
+	if (!$no_cache && defined($session->{computer_info}{$computer_identifier})) {
+		return $session->{computer_info}{$computer_identifier};
 	}
 	#notify($ERRORS{'DEBUG'}, 0, "retrieving info for computer $computer_identifier");
 	
@@ -7059,11 +7144,14 @@ EOF
 			notify($ERRORS{'DEBUG'}, 0, "skipping retrieval of NAT host $nathost_id info for $computer_hostname to avoid recursion");
 		}
 	}
-	
+
+	$session = get_session_data();
+
 	notify($ERRORS{'DEBUG'}, 0, "retrieved info for computer: $computer_hostname ($computer_id)");
-	$ENV{computer_info}{$computer_identifier} = $computer_info;
-	$ENV{computer_info}{$computer_identifier}{RETRIEVAL_TIME} = time;
-	return $ENV{computer_info}{$computer_identifier};
+	$session->{computer_info}{$computer_identifier} = $computer_info;
+	$session->{computer_info}{$computer_identifier}{RETRIEVAL_TIME} = time;
+	tied(%$session)->save;
+	return $session->{computer_info}{$computer_identifier};
 }
 
 #//////////////////////////////////////////////////////////////////////////////
@@ -7105,8 +7193,10 @@ sub get_computer_nathost_info {
 		notify($ERRORS{'WARNING'}, 0, "computer identifier argument was not supplied");
 		return;
 	}
-	
-	return $ENV{nathost_info}{$computer_identifier} if (!$no_cache && $ENV{nathost_info}{$computer_identifier});
+
+	my $session = get_session_data();
+
+	return $session->{nathost_info}{$computer_identifier} if (!$no_cache && $session->{nathost_info}{$computer_identifier});
 	
 	# Get a hash ref containing the database column names
 	my $database_table_columns = get_database_table_columns();
@@ -7223,8 +7313,10 @@ EOF
 	}
 	
 	#notify($ERRORS{'DEBUG'}, 0, "retrieved info for NAT host mapped to computer computer $computer_identifier:\n" . format_data($nathost_info));
-	$ENV{nathost_info}{$computer_identifier} = $nathost_info;
-	return $ENV{nathost_info}{$computer_identifier};
+	$session = get_session_data();
+	$session->{nathost_info}{$computer_identifier} = $nathost_info;
+	tied(%$session)->save;
+	return $session->{nathost_info}{$computer_identifier};
 }
 
 #//////////////////////////////////////////////////////////////////////////////
@@ -7274,7 +7366,8 @@ sub get_nathost_assigned_public_ports {
 =cut
 
 sub get_natport_ranges {
-	return @{$ENV{natport_ranges}} if defined($ENV{natport_ranges});
+	my $session = get_session_data();
+	return @{$session->{natport_ranges}} if defined($session->{natport_ranges});
 	
 	# Retrieve and parse the natport_ranges variable
 	my $natport_ranges_variable = get_variable('natport_ranges') || '49152-65535';
@@ -7298,7 +7391,10 @@ sub get_natport_ranges {
 	}
 	
 	notify($ERRORS{'DEBUG'}, 0, "parsed natport_ranges variable:\n" . format_data(@natport_ranges));
-	$ENV{natport_ranges} = \@natport_ranges;
+
+	$session = get_session_data();
+	$session->{natport_ranges} = \@natport_ranges;
+	tied(%$session)->save;
 	return @natport_ranges;
 }
 
@@ -7841,9 +7937,11 @@ sub get_reservation_management_node_hostname {
 		notify($ERRORS{'WARNING'}, 0, "reservation ID argument was not supplied");
 		return;
 	}
-	
-	if (!$no_cache && defined($ENV{reservation_management_node_hostname}{$reservation_id})) {
-		return $ENV{reservation_management_node_hostname}{$reservation_id};
+
+	my $session = get_session_data();
+
+	if (!$no_cache && defined($session->{reservation_management_node_hostname}{$reservation_id})) {
+		return $session->{reservation_management_node_hostname}{$reservation_id};
 	}
 	
 	my $select_statement = <<EOF;
@@ -7866,7 +7964,8 @@ EOF
 	my $row = $selected_rows[0];
 	my $hostname = $row->{hostname};
 	notify($ERRORS{'DEBUG'}, 0, "retrieved management node hostname for reservation $reservation_id: hostname");
-	$ENV{reservation_management_node_hostname}{$reservation_id} = $hostname;
+	$session->{reservation_management_node_hostname}{$reservation_id} = $hostname;
+	tied(%$session)->save;
 	return $hostname;
 }
 
@@ -7886,9 +7985,11 @@ sub get_reservation_request_id {
 		notify($ERRORS{'WARNING'}, 0, "reservation ID argument was not supplied");
 		return;
 	}
-	
-	if (!$no_cache && defined($ENV{reservation_request_id}{$reservation_id})) {
-		return $ENV{reservation_request_id}{$reservation_id};
+
+	my $session = get_session_data();
+
+	if (!$no_cache && defined($session->{reservation_request_id}{$reservation_id})) {
+		return $session->{reservation_request_id}{$reservation_id};
 	}
 	
 	my $select_statement = "SELECT requestid FROM reservation WHERE id = '$reservation_id'";
@@ -7901,7 +8002,8 @@ sub get_reservation_request_id {
 	my $row = $selected_rows[0];
 	my $request_id = $row->{requestid};
 	notify($ERRORS{'DEBUG'}, 0, "retrieved reservation $reservation_id request ID: $request_id");
-	$ENV{reservation_request_id}{$reservation_id} = $request_id;
+	$session->{reservation_request_id}{$reservation_id} = $request_id;
+	tied(%$session)->save;
 	return $request_id;
 }
 
@@ -8752,9 +8854,11 @@ sub get_calling_subroutine {
 sub get_management_node_id {
 	my $management_node_id;
 
+	my $session = get_session_data();
+
 	# Check the management_node_id environment variable
-	if ($ENV{management_node_id}) {
-		return $ENV{management_node_id};
+	if ($session->{management_node_id}) {
+		return $session->{management_node_id};
 	}
 	else {
 		notify($ERRORS{'DEBUG'}, 0, "management_node_id environment variable not set");
@@ -8764,7 +8868,8 @@ sub get_management_node_id {
 	my $management_node_info = get_management_node_info();
 	if ($management_node_info && ($management_node_id = $management_node_info->{id})) {
 		notify($ERRORS{'DEBUG'}, 0, "get_managementnode_info(): $management_node_id");
-		$ENV{management_node_id} = $management_node_id;
+		$session->{management_node_id} = $management_node_id;
+		tied(%$session)->save;
 		return $management_node_id;
 	}
 	else {
@@ -8788,7 +8893,8 @@ sub get_management_node_id {
 
 sub get_database_names {
 	my $no_cache = shift;
-	return @{$ENV{database_names}} if $ENV{database_names} && !$no_cache;
+	my $session = get_session_data();
+	return @{$session->{database_names}} if $session->{database_names} && !$no_cache;
 	
 	my $select_statement = "
 SELECT DISTINCT
@@ -8809,10 +8915,10 @@ SCHEMATA
 	
 	my @database_names;
 	map({push @database_names, $_->{SCHEMA_NAME}} @rows);
-	
-	$ENV{database_names} = \@database_names;
-	
-	return @{$ENV{database_names}};
+
+	$session->{database_names} = \@database_names;
+	tied(%$session)->save;
+	return @{$session->{database_names}};
 }
 
 #//////////////////////////////////////////////////////////////////////////////
@@ -8882,7 +8988,8 @@ EOF
 
 sub get_database_table_columns {
 	my $no_cache = shift;
-	return $ENV{database_table_columns} if $ENV{database_table_columns} && !$no_cache;
+	my $session = get_session_data();
+	return $session->{database_table_columns} if $session->{database_table_columns} && !$no_cache;
 	
 	my $database = 'information_schema';
 
@@ -8914,9 +9021,10 @@ TABLES.TABLE_NAME = COLUMNS.TABLE_NAME
 	my %database_table_columns;
 	map({push @{$database_table_columns{$_->{TABLE_NAME}}}, $_->{COLUMN_NAME}} @rows);
 	
-	$ENV{database_table_columns} = \%database_table_columns;
+	$session->{database_table_columns} = \%database_table_columns;
+	tied(%$session)->save;
 	
-	return $ENV{database_table_columns};
+	return $session->{database_table_columns};
 }
 
 #//////////////////////////////////////////////////////////////////////////////
@@ -9486,9 +9594,11 @@ sub character_to_ascii_value {
 	else {
 		$numeral_system = 'decimal';
 	}
-	
-	if (defined($ENV{ascii_value}{$character}{$numeral_system})) {
-		return $ENV{ascii_value}{$character}{$numeral_system};
+
+	my $session = get_session_data();
+
+	if (defined($session->{ascii_value}{$character}{$numeral_system})) {
+		return $session->{ascii_value}{$character}{$numeral_system};
 	}
 	
 	my $decimal_value = unpack("C*", $character);
@@ -9499,7 +9609,8 @@ sub character_to_ascii_value {
 	};
 	
 	# Store the results in %ENV to avoid repetitive messages in vcld.log
-	$ENV{ascii_value}{$character} = $values;
+	$session->{ascii_value}{$character} = $values;
+	tied(%$session)->save;
 	
 	my $string = "ASCII $numeral_system value of '$character': $values->{$numeral_system}";
 	if ($numeral_system ne 'decimal') {
@@ -9630,7 +9741,9 @@ sub xmlrpc_call {
 	
 	# Call send_request
 	my $response = $client->send_request(@arguments);
-	$ENV{rpc_xml_response} = $response;
+	my $session = get_session_data();
+	$session->{rpc_xml_response} = $response;
+	tied(%$session)->save;
 	
 	if (!ref($response)) {	
 		notify($ERRORS{'WARNING'}, 0, "RPC::XML::Client::send_request failed\n" .
@@ -9642,8 +9755,9 @@ sub xmlrpc_call {
 			#"client: '$client'\n" . format_data($client)
 		);
 		
-		$ENV{rpc_xml_error} = $response;
-		$ENV{rpc_xml_error} =~ s/^RPC::XML::Client::send_request:\s*//;
+		$session->{rpc_xml_error} = $response;
+		$session->{rpc_xml_error} =~ s/^RPC::XML::Client::send_request:\s*//;
+		tied(%$session)->save;
 		return;
 	}
 	
@@ -9657,7 +9771,8 @@ sub xmlrpc_call {
 			"fault code: " . $response->code . "\n" .
 			"fault string: " . $response->string
 		);
-		$ENV{rpc_xml_error} = $response->string;
+		$session->{rpc_xml_error} = $response->string;
+		tied(%$session)->save;
 		return;
 	}
 	
@@ -10987,8 +11102,10 @@ sub setup_get_array_choice {
 			print " " x $pad;
 			print "$choices[$i-1]\n";
 		}
-		
-		print "\n[" . join("/", @{$ENV{setup_path}}) . "]\n" if defined($ENV{setup_path});
+
+		my $session = get_session_data();
+
+		print "\n[" . join("/", @{$session->{setup_path}}) . "]\n" if defined($session->{setup_path});
 		print "Make a selection (1";
 		print "-$choice_count" if ($choice_count > 1);
 		print ", 'c' to cancel or when done): ";
@@ -11021,8 +11138,10 @@ sub setup_get_array_choice {
 
 sub setup_get_choice {
 	my ($choice_count) = @_;
-	
-	print "\n[" . join("/", @{$ENV{setup_path}}) . "]\n" if defined($ENV{setup_path});
+
+	my $session = get_session_data();
+
+	print "\n[" . join("/", @{$session->{setup_path}}) . "]\n" if defined($session->{setup_path});
 	while (1) {
 		print "Make a selection (1";
 		print "-$choice_count" if ($choice_count > 1);
@@ -11101,8 +11220,9 @@ sub setup_get_input_file_path {
 	
 	# Check if a Term::ReadLine object has already been created
 	my $term;
-	if (defined($ENV{term_readline})) {
-		$term = $ENV{term_readline};
+	my $session = get_session_data();
+	if (defined($session->{term_readline})) {
+		$term = $session->{term_readline};
 	}
 	else {
 		$term = Term::ReadLine->new('ReadLine');
@@ -11117,7 +11237,8 @@ sub setup_get_input_file_path {
 			$attribs->{completion_function} = \&_term_readline_complete_file_path;
 		}
 		
-		$ENV{term_readline} = $term;
+		$session->{term_readline} = $term;
+		tied(%$session)->save;
 	}
 	
 	$message = '' unless $message;
@@ -11437,7 +11558,8 @@ sub kill_child_processes {
 	
 	# Make sure the parent vcld daemon process didn't call this subroutine for safety
 	# Prevents all reservations being processed from being killed
-	if ($ENV{vcld}) {
+	my $session = get_session_data();
+	if ($session->{vcld}) {
 		notify($ERRORS{'CRITICAL'}, 0, "kill_child_processes subroutine called from the parent vcld process, not killing any processes for safety");
 		return;
 	}
@@ -11540,15 +11662,17 @@ sub get_reservation_connect_method_info {
 		notify($ERRORS{'WARNING'}, 0, "reservation ID argument was not supplied");
 		return;
 	}
-	
+
+	my $session = get_session_data();
+
 	# Check if cached info exists
-	if (!$no_cache && defined($ENV{connect_method_info}{$reservation_id})) {
-		my $connect_method_id = (keys(%{$ENV{connect_method_info}{$reservation_id}}))[0];
+	if (!$no_cache && defined($session->{connect_method_info}{$reservation_id})) {
+		my $connect_method_id = (keys(%{$session->{connect_method_info}{$reservation_id}}))[0];
 		if ($connect_method_id) {
 			# Check the time the info was last retrieved
-			my $data_age_seconds = (time - $ENV{connect_method_info}{$reservation_id}{$connect_method_id}{RETRIEVAL_TIME});
+			my $data_age_seconds = (time - $session->{connect_method_info}{$reservation_id}{$connect_method_id}{RETRIEVAL_TIME});
 			if ($data_age_seconds < 600) {
-				return $ENV{connect_method_info}{$reservation_id};
+				return $session->{connect_method_info}{$reservation_id};
 			}
 			else {
 				notify($ERRORS{'DEBUG'}, 0, "retrieving current connect method info for reservation $reservation_id from database, cached data is stale: $data_age_seconds seconds old");
@@ -11653,8 +11777,9 @@ EOF
 	}
 
 	notify($ERRORS{'DEBUG'}, 0, "retrieved connect method info for reservation $reservation_id:\n" . format_data($connect_method_info));
-	$ENV{connect_method_info}{$reservation_id} = $connect_method_info;
-	return $ENV{connect_method_info}{$reservation_id};
+	$session->{connect_method_info}{$reservation_id} = $connect_method_info;
+	tied(%$session)->save;
+	return $session->{connect_method_info}{$reservation_id};
 }
 
 #//////////////////////////////////////////////////////////////////////////////
@@ -11886,7 +12011,8 @@ sub get_current_image_contents_no_data_structure {
 
    # Attempt to retrieve the contents of currentimage.txt
    my $cat_command = "cat ~/currentimage.txt";
-   my ($cat_exit_status, $cat_output) = run_ssh_command($computer_node_name, $ENV{management_node_info}{keys}, $cat_command);
+   my $session = get_session_data();
+   my ($cat_exit_status, $cat_output) = run_ssh_command($computer_node_name, $session->{management_node_info}{keys}, $cat_command);
    if (!defined($cat_output)) {
       notify($ERRORS{'WARNING'}, 0, "failed to execute command to failed to retrieve currentimage.txt from $computer_node_name");
       return;
@@ -11973,28 +12099,34 @@ sub stopwatch {
 	my ($title) = @_;
 	
 	my ($seconds, $microseconds) = gettimeofday;
+
+	my $session = get_session_data();
 	
-	if (!$ENV{'start'}) {
-		$ENV{'start'} = [$seconds, $microseconds];
+	if (!$session->{'start'}) {
+		$session->{'start'} = [$seconds, $microseconds];
+		tied(%$session)->save;
 	}
 	
-	if (defined($ENV{'stopwatch_count'})) {
-		$ENV{'stopwatch_count'}++;
+	if (defined($session->{'stopwatch_count'})) {
+		$session->{'stopwatch_count'}++;
+		tied(%$session)->save;
 	}
 	else {
-		$ENV{'stopwatch_count'} = 'a';
+		$session->{'stopwatch_count'} = 'a';
+		tied(%$session)->save;
 	}
 	
-	$ENV{'previous'} = $ENV{'current'} || $ENV{'start'};
+	$session->{'previous'} = $session->{'current'} || $session->{'start'};
 	
-	$ENV{'current'} = [$seconds, $microseconds];
+	$session->{'current'} = [$seconds, $microseconds];
+	tied(%$session)->save;
 	
-	my $message = "[stopwatch] $ENV{'stopwatch_count'}: ";
+	my $message = "[stopwatch] $session->{'stopwatch_count'}: ";
 	$message .= "$title " if defined($title);
 	$title = '<none>' if !defined($title);
 	
-	my $previous_delta = sprintf("%.2f", tv_interval($ENV{'previous'}, $ENV{'current'}));
-	my $start_delta = sprintf("%.2f", tv_interval($ENV{'start'}, $ENV{'current'}));
+	my $previous_delta = sprintf("%.2f", tv_interval($session->{'previous'}, $session->{'current'}));
+	my $start_delta = sprintf("%.2f", tv_interval($session->{'start'}, $session->{'current'}));
 	
 	$start_delta = 0 if $start_delta =~ /e/;
 	$previous_delta = 0 if $previous_delta =~ /e/;
@@ -12004,19 +12136,20 @@ sub stopwatch {
 	print "\n$message\n\n";
 	
 	my $info = {
-		current => $ENV{'current'},
-		previous => $ENV{'previous'},
+		current => $session->{'current'},
+		previous => $session->{'previous'},
 		message => $message,
 		start_delta => $start_delta,
 		previous_delta => $previous_delta,
-		title => "$ENV{'stopwatch_count'}: $title",
+		title => "$session->{'stopwatch_count'}: $title",
 	};
 	
-	if (!$ENV{stopwatch}) {
-		$ENV{stopwatch} = [];
+	if (!$session->{stopwatch}) {
+		$session->{stopwatch} = [];
+		tied(%$session)->save;
 	}
 	
-	push @{$ENV{stopwatch}}, $info;
+	push @{$session->{stopwatch}}, $info;
 }
 
 #//////////////////////////////////////////////////////////////////////////////
@@ -12105,10 +12238,12 @@ EOF
 
 sub get_management_node_vmhost_ids {
 	my $management_node_identifier = shift || $FQDN;
-	
-	if ($ENV{management_node_vmhost_ids}{$management_node_identifier}) {
+
+	my $session = get_session_data();
+
+	if ($session->{management_node_vmhost_ids}{$management_node_identifier}) {
 		notify($ERRORS{'DEBUG'}, 0, "returning previously retrieved vmhost IDs assigned to management node: $management_node_identifier");
-		return @{$ENV{management_node_vmhost_ids}{$management_node_identifier}};
+		return @{$session->{management_node_vmhost_ids}{$management_node_identifier}};
 	}
 	notify($ERRORS{'DEBUG'}, 0, "retrieving vmhost IDs assigned to management node: $management_node_identifier");
 	
@@ -12173,8 +12308,9 @@ EOF
 	my @vmhost_ids = map { $_->{id} } @selected_rows;
 	
 	notify($ERRORS{'DEBUG'}, 0, "vmhost IDs assigned to $management_node_identifier (" . scalar(@vmhost_ids) . "): " . join(', ', @vmhost_ids));
-	$ENV{management_node_vmhost_ids}{$management_node_identifier} = \@vmhost_ids;
-	return @{$ENV{management_node_vmhost_ids}{$management_node_identifier}};
+	$session->{management_node_vmhost_ids}{$management_node_identifier} = \@vmhost_ids;
+	tied(%$session)->save;
+	return @{$session->{management_node_vmhost_ids}{$management_node_identifier}};
 }
 
 #//////////////////////////////////////////////////////////////////////////////
@@ -12190,7 +12326,8 @@ EOF
 
 sub get_management_node_vmhost_info {
 	my $management_node_identifier = shift || $FQDN;
-	return $ENV{management_node_vmhost_info}{$management_node_identifier} if $ENV{management_node_vmhost_info}{$management_node_identifier};
+	my $session = get_session_data();
+	return $session->{management_node_vmhost_info}{$management_node_identifier} if $session->{management_node_vmhost_info}{$management_node_identifier};
 	
 	my @management_node_vmhost_ids = get_management_node_vmhost_ids($management_node_identifier);
 	
@@ -12201,8 +12338,9 @@ sub get_management_node_vmhost_info {
 		$vmhost_info->{$vmhost_id}{vmprofile_profilename} = $vmhost_info->{$vmhost_id}{vmprofile}{profilename};
 	}
 	
-	$ENV{management_node_vmhost_info}{$management_node_identifier} = $vmhost_info;
-	return $ENV{management_node_vmhost_info}{$management_node_identifier};
+	$session->{management_node_vmhost_info}{$management_node_identifier} = $vmhost_info;
+	tied(%$session)->save;
+	return $session->{management_node_vmhost_info}{$management_node_identifier};
 }
 
 #//////////////////////////////////////////////////////////////////////////////
@@ -12222,9 +12360,11 @@ sub get_vmhost_assigned_vm_info {
 		notify($ERRORS{'WARNING'}, 0, "VM host ID argument was not supplied");
 		return;
 	}
-	
-	if (!$no_cache && defined($ENV{vmhost_assigned_vm_info}{$vmhost_id})) {
-		return $ENV{vmhost_assigned_vm_info}{$vmhost_id};
+
+	my $session = get_session_data();
+
+	if (!$no_cache && defined($session->{vmhost_assigned_vm_info}{$vmhost_id})) {
+		return $session->{vmhost_assigned_vm_info}{$vmhost_id};
 	}
 	
 	my $select_statement = <<EOF;
@@ -12245,7 +12385,8 @@ EOF
 		$assigned_computer_info->{$computer_id} = $computer_info if $computer_info;
 	}
 	
-	$ENV{vmhost_assigned_vm_info}{$vmhost_id} = $assigned_computer_info;
+	$session->{vmhost_assigned_vm_info}{$vmhost_id} = $assigned_computer_info;
+	tied(%$session)->save;
 	notify($ERRORS{'DEBUG'}, 0, "retrieved computer info for VMs assigned to VM host $vmhost_id: " . join(', ', sort keys %$assigned_computer_info));
 	return $assigned_computer_info;
 }
@@ -12321,9 +12462,11 @@ sub get_vmhost_assigned_vm_provisioning_info {
 		notify($ERRORS{'WARNING'}, 0, "VM host ID argument was not specified");
 		return;
 	}
-	
-	if (!$no_cache && defined($ENV{vmhost_assigned_vm_provisioning_info}{$vmhost_id})) {
-		return $ENV{vmhost_assigned_vm_provisioning_info}{$vmhost_id};
+
+	my $session = get_session_data();
+
+	if (!$no_cache && defined($session->{vmhost_assigned_vm_provisioning_info}{$vmhost_id})) {
+		return $session->{vmhost_assigned_vm_provisioning_info}{$vmhost_id};
 	}
 	
 	my $vmhost_assigned_vm_info = get_vmhost_assigned_vm_info($vmhost_id, $no_cache) || return;
@@ -12338,7 +12481,8 @@ sub get_vmhost_assigned_vm_provisioning_info {
 		$vmhost_assigned_vm_provisioning_info->{$provisioning_id}{ASSIGNED_VM_COUNT}++;
 	}
 	
-	$ENV{vmhost_assigned_vm_provisioning_info}{$vmhost_id} = $vmhost_assigned_vm_provisioning_info;
+	$session->{vmhost_assigned_vm_provisioning_info}{$vmhost_id} = $vmhost_assigned_vm_provisioning_info;
+	tied(%$session)->save;
 	notify($ERRORS{'DEBUG'}, 0, "retrieved provisioning info for VMs assigned to VM host $vmhost_id:\n" . format_data($vmhost_assigned_vm_provisioning_info));
 	return $vmhost_assigned_vm_provisioning_info;
 }
@@ -12406,7 +12550,8 @@ sub sleep_uninterrupted {
 =cut
 
 sub get_imagerevision_cleanup_info {
-	return $ENV{imagerevision_cleanup_info} if $ENV{imagerevision_cleanup_info};
+	my $session = get_session_data();
+	return $session->{imagerevision_cleanup_info} if $session->{imagerevision_cleanup_info};
 	
 	my $sql = <<EOF;	
 SELECT
@@ -12454,8 +12599,9 @@ EOF
 	}
 	
 	notify($ERRORS{'DEBUG'}, 0, "retrieved cleanup info for imagerevision entries in the database");
-	$ENV{imagerevision_cleanup_info} = $imagerevision_cleanup_info;
-	return $ENV{imagerevision_cleanup_info};
+	$session->{imagerevision_cleanup_info} = $imagerevision_cleanup_info;
+	tied(%$session)->save;
+	return $session->{imagerevision_cleanup_info};
 }
 
 #//////////////////////////////////////////////////////////////////////////////
@@ -12671,7 +12817,8 @@ EOF
 =cut
 
 sub get_imagerevision_names {
-	return @{$ENV{imagerevision_names}} if $ENV{imagerevision_names};
+	my $session = get_session_data();
+	return @{$session->{imagerevision_names}} if $session->{imagerevision_names};
 	
 	my $sql = "SELECT imagerevision.imagename FROM imagerevision WHERE 1";
 	my @rows = database_select($sql);
@@ -12679,8 +12826,9 @@ sub get_imagerevision_names {
 	my $imagerevision_count = scalar(@imagerevision_names);
 	notify($ERRORS{'DEBUG'}, 0, "retrieved $imagerevision_count imagerevision names from database");
 	
-	$ENV{imagerevision_names} = \@imagerevision_names;
-	return @{$ENV{imagerevision_names}};
+	$session->{imagerevision_names} = \@imagerevision_names;
+	tied(%$session)->save;
+	return @{$session->{imagerevision_names}};
 }
 
 #//////////////////////////////////////////////////////////////////////////////
@@ -13907,10 +14055,12 @@ sub get_computer_current_private_ip_address {
 	
 	my $computer_string = $computer_identifier;
 	$computer_string .= " ($computer_id)" if ($computer_identifier ne $computer_id);
-	
-	if (!$no_cache && defined($ENV{computer_private_ip_address}{$computer_id})) {
-		notify($ERRORS{'DEBUG'}, 0, "returning cached private IP address for computer $computer_string: $ENV{computer_private_ip_address}{$computer_id}");
-		return $ENV{computer_private_ip_address}{$computer_id};
+
+	my $session = get_session_data();
+
+	if (!$no_cache && defined($session->{computer_private_ip_address}{$computer_id})) {
+		notify($ERRORS{'DEBUG'}, 0, "returning cached private IP address for computer $computer_string: $session->{computer_private_ip_address}{$computer_id}");
+		return $session->{computer_private_ip_address}{$computer_id};
 	}
 	
 	my $select_statement = <<EOF;
@@ -13934,7 +14084,8 @@ EOF
 	my $private_ip_address = $row->{privateIPaddress};
 	my $hostname = $row->{hostname};
 	if ($private_ip_address) {
-		$ENV{computer_private_ip_address}{$computer_id} = $private_ip_address;
+		$session->{computer_private_ip_address}{$computer_id} = $private_ip_address;
+		tied(%$session)->save;
 		notify($ERRORS{'DEBUG'}, 0, "retrieved private IP address for computer $computer_string from database: $private_ip_address");
 		return $private_ip_address;
 	}
@@ -14193,7 +14344,8 @@ EOF
 =cut
 
 sub get_provisioning_table_info {
-	return $ENV{provisioning_table_info} if (defined($ENV{provisioning_table_info}));
+	my $session = get_session_data();
+	return $session->{provisioning_table_info} if (defined($session->{provisioning_table_info}));
 	
 	# Get a hash ref containing the database column names
 	my $database_table_columns = get_database_table_columns();
@@ -14251,7 +14403,8 @@ EOF
 		}
 	}
 	
-	$ENV{provisioning_table_info} = $provisioning_table_info;
+	$session->{provisioning_table_info} = $provisioning_table_info;
+	tied(%$session)->save;
 	notify($ERRORS{'DEBUG'}, 0, "retrieved provisioning info: " . format_data($provisioning_table_info));
 	return $provisioning_table_info;
 }
@@ -14320,33 +14473,38 @@ sub determine_remote_connection_target {
 	# Check if argument contains an '@' character: root@x.x.x.x
 	# Remove anything preceeding it
 	$argument =~ s/.*@([^@]+)$/$1/g;
-	
-	if (!$no_cache && defined($ENV{remote_connection_target}{$argument})) {
-		return $ENV{remote_connection_target}{$argument};
+
+	my $session = get_session_data();
+
+	if (!$no_cache && defined($session->{remote_connection_target}{$argument})) {
+		return $session->{remote_connection_target}{$argument};
 	}
 	
 	# If an IP address was passed, use it
 	if (is_valid_ip_address($argument, 0)) {
-		$ENV{remote_connection_target}{$argument} = $argument;
-		notify($ERRORS{'DEBUG'}, 0, "argument is a valid IP address, it will be used as the remote connection target: $ENV{remote_connection_target}{$argument}");
-		return $ENV{remote_connection_target}{$argument};
+		$session->{remote_connection_target}{$argument} = $argument;
+		tied(%$session)->save;
+		notify($ERRORS{'DEBUG'}, 0, "argument is a valid IP address, it will be used as the remote connection target: $session->{remote_connection_target}{$argument}");
+		return $session->{remote_connection_target}{$argument};
 	}
 	
 	# Attempt to retrieve the private IP address from the database
 	my $database_private_ip_address = get_computer_current_private_ip_address($argument);
 	if ($database_private_ip_address) {
-		$ENV{remote_connection_target}{$argument} = $database_private_ip_address;
-		notify($ERRORS{'DEBUG'}, 0, "private IP address is set in database for $argument, it will be used as the remote connection target: $ENV{remote_connection_target}{$argument}");
-		return $ENV{remote_connection_target}{$argument};
+		$session->{remote_connection_target}{$argument} = $database_private_ip_address;
+		tied(%$session)->save;
+		notify($ERRORS{'DEBUG'}, 0, "private IP address is set in database for $argument, it will be used as the remote connection target: $session->{remote_connection_target}{$argument}");
+		return $session->{remote_connection_target}{$argument};
 	}
 	
 	# Private IP address could not be retrieved from the database or is set to NULL
 	# Try to resolve the argument to an IP address
 	# First make sure it is a valid hostname
 	if (!is_valid_dns_host_name($argument)) {
-		$ENV{remote_connection_target}{$argument} = $argument;
+		$session->{remote_connection_target}{$argument} = $argument;
+		tied(%$session)->save;
 		notify($ERRORS{'WARNING'}, 0, "failed to reliably determine the remote connection target to use for '$argument', it is not a valid IP address or DNS hostname");
-		return $ENV{remote_connection_target}{$argument};
+		return $session->{remote_connection_target}{$argument};
 	}
 	
 	# Check if the hostname includes a DNS suffix
@@ -14368,14 +14526,16 @@ sub determine_remote_connection_target {
 			update_computer_private_ip_address($argument, $resolved_ip_address);
 		}
 		
-		$ENV{remote_connection_target}{$argument} = $resolved_ip_address;
+		$session->{remote_connection_target}{$argument} = $resolved_ip_address;
+		tied(%$session)->save;
 		notify($ERRORS{'DEBUG'}, 0, "$argument resolves to IP address $resolved_ip_address, it will be used as the remote connection target");
-		return $ENV{remote_connection_target}{$argument};
+		return $session->{remote_connection_target}{$argument};
 	}
 	else {
 		notify($ERRORS{'WARNING'}, 0, "failed to reliably determine the remote connection target to use for '$argument', it is not a valid IP address, a private IP address is not set in the database, and '$argument' does not resolve to an IP address on this management node");
-		$ENV{remote_connection_target}{$argument} = $argument;
-		return $ENV{remote_connection_target}{$argument};
+		$session->{remote_connection_target}{$argument} = $argument;
+		tied(%$session)->save;
+		return $session->{remote_connection_target}{$argument};
 	}
 }
 
@@ -15128,10 +15288,12 @@ sub get_management_node_ad_domain_credentials {
 		notify($ERRORS{'WARNING'}, 0, "domain identifier name argument was not specified");
 		return;
 	}
-	
-	if (!$no_cache && defined($ENV{management_node_ad_domain_credentials}{$domain_id})) {
+
+	my $session = get_session_data();
+
+	if (!$no_cache && defined($session->{management_node_ad_domain_credentials}{$domain_id})) {
 		notify($ERRORS{'DEBUG'}, 0, "returning cached Active Directory credentials for domain: $domain_id");
-		return @{$ENV{management_node_ad_domain_credentials}{$domain_id}};
+		return @{$session->{management_node_ad_domain_credentials}{$domain_id}};
 	}
 	
 	# Construct the select statement
@@ -15169,8 +15331,9 @@ EOF
 		"secret ID          : '$secret_id'\n" .
 		"encrypted password : '$encrypted_password'"
 	);
-	$ENV{management_node_ad_domain_credentials}{$domain_id} = [$domain_dns_name, $username, $secret_id, $encrypted_password];
-	return @{$ENV{management_node_ad_domain_credentials}{$domain_id}};
+	$session->{management_node_ad_domain_credentials}{$domain_id} = [$domain_dns_name, $username, $secret_id, $encrypted_password];
+	tied(%$session)->save;
+	return @{$session->{management_node_ad_domain_credentials}{$domain_id}};
 }
 
 #//////////////////////////////////////////////////////////////////////////////
@@ -15260,6 +15423,59 @@ sub call_check_crypt_secrets {
 	}
 	return 1;
 }
+
+sub get_session_data {
+
+	my $session_id = $ENV{'sessionid'};
+
+	my %session_data;
+
+	if (!defined($session_id)) {
+		print "Data session id not found\n";
+	} else {
+		#print "Session id = $session_id \n";
+	}
+
+	if (%SESSION) {
+		return \%SESSION;
+	}
+
+	# if sessionid is not set then generate a new session
+	if (!defined($session_id)) {
+		eval {
+			tie %SESSION, 'Apache::Session::Flex', undef, {
+				Store => 'File',
+				Lock => 'Semaphore',
+				Generate => 'MD5',
+				Serialize => 'Dumper',
+				Directory => '/tmp/apache_session'
+			};
+		};
+		if ($@) {
+			die "Session data not created";
+		} else {
+			print "$SESSION{_session_id} \n";
+			$ENV{'sessionid'} = $SESSION{_session_id};
+		}
+	} else {
+		eval {
+			tie %SESSION, 'Apache::Session::Flex', $session_id, {
+				Store => 'File',
+				Lock => 'Semaphore',
+				Generate => 'MD5',
+				Serialize => 'Dumper',
+				Directory => '/tmp/apache_session'
+			};
+		};
+		if ($@) {
+			die "Session data not created";
+		}
+	}
+
+	return \%SESSION;
+}
+
+
 
 #//////////////////////////////////////////////////////////////////////////////
 
