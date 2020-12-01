@@ -116,7 +116,9 @@ sub load {
 	# set the specific ssh port for vmhost in the variable table. e.g., 24
 	notify($ERRORS{'OK'}, 0, "remote_connection_target: $remote_connection_target");
 	my $target_ssh_port = get_variable("vmhost_ssh_port") || 22;
-	$ENV{ssh_port}{$remote_connection_target} = $target_ssh_port;
+	my $session = get_session_data();
+	$session->{ssh_port}{$remote_connection_target} = $target_ssh_port;
+	tied(%$session)->save;
 	notify($ERRORS{'OK'}, 0, "vmhost_ssh_port: $target_ssh_port");
 
 	# create a useragent
@@ -514,7 +516,9 @@ sub unload {
 	my $remote_connection_target = determine_remote_connection_target($vmhost_name);
 	# set the specific ssh port for vmhost in the variable table. e.g., 24
 	my $target_ssh_port = get_variable("vmhost_ssh_port") || 22;
-	$ENV{ssh_port}{$remote_connection_target} = $target_ssh_port;
+	my $session = get_session_data();
+	$session->{ssh_port}{$remote_connection_target} = $target_ssh_port;
+	tied(%$session)->save;
 
 	# create a useragent
 	my $ua = LWP::UserAgent->new();

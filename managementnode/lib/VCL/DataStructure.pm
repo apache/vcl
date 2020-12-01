@@ -1439,7 +1439,9 @@ sub print_data {
 	my $self = shift;
 
 	my $request_data         = format_data($self->request_data,        'request');
-	my $management_node_info = format_data($ENV{management_node_info}, 'management_node');
+	# gmj
+	#my $management_node_info = format_data($ENV{management_node_info}, 'management_node');
+	my $management_node_info = format_data($self->ds_get_management_node_info(), 'management_node');
 
 	notify($ERRORS{'OK'}, 0, "request data:\n$request_data\n\nmanagement node info:\n$management_node_info");
 }
@@ -1457,7 +1459,9 @@ sub print_data {
 sub print_subroutines {
 	my $self = shift;
 
-	my $mnvar = $ENV{management_node_info};
+	# gmj
+	#my $mnvar = $ENV{management_node_info};
+	my $mnvar = $self->ds_get_management_node_info();
 
 	my $output;
 	foreach my $mapping_key (sort keys %SUBROUTINE_MAPPINGS) {
@@ -1576,7 +1580,9 @@ sub get_computer_private_ip_address {
 	
 	# Check if the IP address is already stored
 	my $data_structure_private_ip_address = $self->request_data->{reservation}{$self->reservation_id}{computer}{privateIPaddress};
-	my $env_private_ip_address = $ENV{computer_private_ip_address}{$computer_id};
+	# gmj
+	# my $env_private_ip_address = $ENV{computer_private_ip_address}{$computer_id};
+	my $env_private_ip_address = $self->ds_get_management_node_info()->{computer_private_ip_address}{$computer_id};
 	
 	# Check if private IP adddress is stored in %ENV and differs from this object's data
 	if ($data_structure_private_ip_address) {
