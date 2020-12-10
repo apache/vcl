@@ -958,8 +958,10 @@ sub setup_management_node {
 		# Set the setup_path environment variable to anonymous array containing 'vcld'
 		# This is used to display the location in the menu hierarchy
 		# strings added/removed to the array cause the location to change
-		$ENV{setup_path} = ['vcld'];
-		
+		my $session = get_session_data();
+		$session->{setup_path} = ['vcld'];
+		tied(%$session)->save;
+
 		setup_print_break();
 		my $choice = setup_get_menu_choice(\%setup_menu);
 		## For testing
@@ -975,14 +977,15 @@ sub setup_management_node {
 		my $choice_sub_ref = $choice->{sub_ref};
 		my $choice_parent_menu_names = $choice->{parent_menu_names};
 		
-		push @{$ENV{setup_path}}, @$choice_parent_menu_names, $choice_name;
+		push @{$session->{setup_path}}, @$choice_parent_menu_names, $choice_name;
+		tied(%$session)->save;
 		
 		my $package_name = get_code_ref_package_name($choice_sub_ref);
 		my $subroutine_name = get_code_ref_subroutine_name($choice_sub_ref);
 		
 		my $module_object = $setup_module_objects{$package_name}{object};
 		&$choice_sub_ref($module_object);
-		pop @{$ENV{setup_path}};
+		pop @{$session->{setup_path}};
 	}
 	
 	setup_print_break('=');
