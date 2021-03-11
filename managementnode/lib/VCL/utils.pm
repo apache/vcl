@@ -2338,10 +2338,12 @@ sub getpw {
 	#Skip certain confusing chars like: iI1lL,0Oo Zz2
 	my @character_set = (
 		'A' .. 'H',
-		'J' .. 'N',
+		'J' .. 'K',
+ 		'M' .. 'N',
 		'P' .. 'Y',
 		'a' .. 'h',
-		'j' .. 'n',
+		'j' .. 'k',
+		'm' .. 'n',
 		'p' .. 'y',
 		'3' .. '9',
 	);
