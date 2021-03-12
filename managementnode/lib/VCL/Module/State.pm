@@ -95,13 +95,16 @@ sub initialize {
 	my $is_parent_reservation = $self->data->is_parent_reservation();
 	my $reservation_count = $self->data->get_reservation_count();
 	my $nathost_id = $self->data->get_nathost_id(0);
-	
+
+	my $session = get_session_data();
+
 	# Initialize the database handle count
-	$ENV{dbh_count} = 0;
-	
+	$session->{dbh_count} = 0;
+	tied(%$session)->save;
 	# Attempt to get a database handle
-	if ($ENV{dbh} = getnewdbh()) {
-		notify($ERRORS{'DEBUG'}, 0, "obtained a database handle for this state process, stored as \$ENV{dbh}");
+	if ($session->{dbh} = getnewdbh()) {
+		tied(%$session)->save;
+		notify($ERRORS{'DEBUG'}, 0, "obtained a database handle for this state process, stored as \$session->{dbh}");
 	}
 	else {
 		notify($ERRORS{'CRITICAL'}, 0, "unable to obtain a database handle for this state process");
@@ -874,9 +877,12 @@ sub state_exit {
 		notify($ERRORS{'CRITICAL'}, 0, "subroutine can only be called as a class method of a VCL object");
 		return;
 	}
-	
+
+	my $session = get_session_data();
+
 	# Set flag to avoid this subroutine from being called more than once
-	$ENV{state_exit} = 1;
+	$session->{state_exit} = 1;
+	tied(%$session)->save;
 	
 	my ($request_state_name_new, $computer_state_name_new, $request_log_ending) = @_;
 	notify($ERRORS{'DEBUG'}, 0, "beginning state module exit tasks, " .
@@ -1093,10 +1099,12 @@ sub DESTROY {
 	notify($ERRORS{'DEBUG'}, 0, ref($self) . " destructor called, address: $address");
 	
 	my $calling_sub = get_calling_subroutine();
-	
+
+	my $session = get_session_data();
+
 	# Check if normal module object data is available
 	if ($calling_sub && $self && $self->data(0) && !$self->data->is_blockrequest()) {
-		if (!$ENV{state_exit}) {
+		if (!$session->{state_exit}) {
 			my $request_id = $self->data->get_request_id();
 			my @reservation_ids = $self->data->get_reservation_ids();
 			if (@reservation_ids && $request_id) {
@@ -1131,9 +1139,9 @@ sub DESTROY {
 	#}
 
 	# Close the database handle
-	if (defined $ENV{dbh}) {
-		if (!$ENV{dbh}->disconnect) {
-			notify($ERRORS{'WARNING'}, 0, "\$ENV{dbh}: database disconnect failed, " . DBI::errstr());
+	if (defined $session->{dbh}) {
+		if (!$session->{dbh}->disconnect) {
+			notify($ERRORS{'WARNING'}, 0, "\$session->{dbh}: database disconnect failed, " . DBI::errstr());
 		}
 	}
 

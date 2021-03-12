@@ -78,10 +78,12 @@ sub initialize {
 	my $self = shift;
 	
 	# Initialize the database handle count
-	$ENV{dbh_count} = 0;
+	my $session = get_session_data();
+	$session->{dbh_count} = 0;
+	tied(%$session)->save;
 	
 	# Attempt to get a database handle
-	if ($ENV{dbh} = getnewdbh()) {
+	if ($session->{dbh} = getnewdbh()) {
 		notify($ERRORS{'OK'}, 0, "obtained a database handle for this state process, stored as \$ENV{dbh}");
 	}
 	else {
