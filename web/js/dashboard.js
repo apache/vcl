@@ -203,6 +203,7 @@ function updateNewReservations(data) {
 	    +  '<th>ReqID</th>'
 	    +  '<th>User</th>'
 	    +  '<th>Computer</th>'
+	    +  '<th>VM Host</th>'
 	    +  '<th>States</th>'
 	    +  '<th>Image</th>'
 	    +  '<th>Install Type</th>'
@@ -221,6 +222,8 @@ function updateNewReservations(data) {
 		    + data[i].user
 		    + '</td><td style=\"padding: 1px; border-right: 1px solid;\">'
 		    + data[i].computer
+		    + '</td><td style=\"padding: 1px; border-right: 1px solid;\">'
+		    + data[i].vmhost
 		    + '</td><td style=\"padding: 1px; border-right: 1px solid;\">'
 		    + data[i].state
 		    + '</td><td style=\"padding: 1px; border-right: 1px solid;\">'

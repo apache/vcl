@@ -16,21 +16,19 @@
   limitations under the License.
 */
 
-# ASF VCL v2.5
-$VCLversion = '2.5';
+# ASF VCL v2.5.1
+$VCLversion = '2.5.1';
 
 require_once(".ht-inc/conf.php");
 
-if (SSLOFFLOAD == 0) {
-    if(! isset($_SERVER['HTTPS']) || $_SERVER['HTTPS'] != "on") {
-        header("Location: " . BASEURL . "/");
-        exit;
-    }
+if(SSLOFFLOAD == 0) {
+	if(! isset($_SERVER['HTTPS']) || $_SERVER['HTTPS'] != "on") {
+		header("Location: " . BASEURL . "/");
+		exit;
+	}
 }
 
-$user = '';
-$mysqli_link_vcl = '';
-$mysqli_link_acct = '';
+$user = array();
 $mode = '';
 $oldmode = '';
 $submitErr = '';

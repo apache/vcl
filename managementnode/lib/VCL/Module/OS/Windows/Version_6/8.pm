@@ -39,7 +39,7 @@ use lib "$FindBin::Bin/../../../../..";
 use base qw(VCL::Module::OS::Windows::Version_6);
 
 # Specify the version of this module
-our $VERSION = '2.5';
+our $VERSION = '2.5.1';
 
 # Specify the version of Perl to use
 use 5.008000;
@@ -134,7 +134,7 @@ sub pre_capture {
 	}
 	
 	# Set the sshd service startup mode to disabled so that it does not start up until properly configured
-	if (!$self->set_service_startup_mode('sshd', 'disabled')) {
+	if (!$self->set_service_startup_mode('sshd', 'disabled') && !$self->set_service_startup_mode('cygsshd', 'disabled')) {
 		notify($ERRORS{'WARNING'}, 0, "sshd service could not be disabled before shutting down computer");
 		return;
 	}

@@ -1757,6 +1757,11 @@ class Computer extends Resource {
 		}
 		# add multiple
 		if($return['mode'] == 'add' && $addmode == 'multiple') {
+			# ensure % in hostname
+			if(! preg_match('/%/', $return['name'])) {
+				$return['error'] = 1;
+				$errormsg[] = "Name must contain % when adding multiple computers";
+			}
 			# startnum/endnum
 			if($return['startnum'] < 0 || $return['startnum'] > 255) {
 				$return['error'] = 1;
@@ -4280,27 +4285,33 @@ class Computer extends Resource {
 
 		$query = "SELECT rs.computerid "
 		       . "FROM request rq, "
-		       .      "reservation rs "
+		       .      "reservation rs, "
+		       .      "state s "
 		       . "WHERE rs.requestid = rq.id AND "
+		       .       "rq.stateid = s.id AND "
 		       .       "rs.computerid IN ($allids) AND "
 		       .       "rq.start <= '$startcheckdt' AND "
-		       .       "rq.end > NOW()";
+		       .       "rq.end > NOW() AND "
+		       .       "s.name != 'complete'";
 		$qh = doQuery($query);
 		while($row = mysqli_fetch_assoc($qh))
 			$fails[] = $row['computerid'];
 
 		$nowids = array_diff($compids, $fails);
-		$allids = implode(',', $nowids);
-		$query = "UPDATE computer "
-		       . "SET provisioningid = $provisioningid "
-		       . "WHERE id in ($allids)";
-		doQuery($query);
+		if(! empty($nowids)) {
+			$allids = implode(',', $nowids);
+			$query = "UPDATE computer "
+			       . "SET provisioningid = $provisioningid "
+			       . "WHERE id in ($allids)";
+			doQuery($query);
+		}
 
 		$resources = getUserResources(array($this->restype . "Admin"), array("administer"));
 		$compdata = $resources[$this->restype];
 
+		$msg = '';
 		if(count($nowids)) {
-			$msg  = "The following computers had their Provisioning Engine set to $provname:<br><br>\n";
+			$msg  .= "The following computers had their Provisioning Engine set to $provname:<br><br>\n";
 			foreach($nowids as $compid)
 				$msg .= "{$compdata[$compid]}<br>\n";
 			$msg .= "<br>";
@@ -4872,9 +4883,11 @@ class Computer extends Resource {
 		       .        "i.prettyname AS image, "
 		       .        "ir.revision, "
 		       .        "c.hostname AS hostname, "
+		       .        "s.IPaddress, "
 		       .        "mn.hostname AS managementnode, "
 		       .        "l.ending, "
-		       .        "CONCAT(u.unityid, '@', a.name) AS username "
+		       .        "CONCAT(u.unityid, '@', a.name) AS username, "
+		       .        "l.requestid "
 		       . "FROM computer c "
 		       . "LEFT JOIN sublog s ON (c.id = s.computerid) "
 		       . "LEFT JOIN image i ON (s.imageid = i.id) "
@@ -4907,6 +4920,8 @@ class Computer extends Resource {
 				$msg .= "End: " . prettyDatetime($row['end'], 1) . "<br>";
 			$msg .= "Management Node: {$row['managementnode']}<br>";
 			$msg .= "Ending: {$row['ending']}<br>";
+			$msg .= "Request ID: {$row['requestid']}<br>";
+			$msg .= "IP Address: {$row['IPaddress']}<br>";
 			$msg .= "<hr>";
 			$data[] = array('name' => $row['hostname'], 'msg' => $msg);
 		}

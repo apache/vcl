@@ -137,6 +137,12 @@ function inlineEditResourceCB(data, ioArgs) {
 	}
 }
 
+function initAddDialog() {
+	if(dijit.byId('addomainid').options.length == 0) {
+		dijit.byId('adauthenable').set('disabled', true);
+	}
+}
+
 function delayedEditResize() {
 	setTimeout(function() {resizeRecenterDijitDialog('addeditdlg');}, 300);
 }
@@ -781,6 +787,7 @@ function startImageCB(data, ioArgs) {
 function submitCreateUpdateImage() {
 	if(dojo.byId('newimage').checked) {
 		dijit.byId('addeditdlg').show();
+		initAddDialog();
 		dijit.byId('startimagedlg').hide();
 		return;
 	}

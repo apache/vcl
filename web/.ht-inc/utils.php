@@ -56,8 +56,8 @@ $printedHTMLheader = 0;
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function initGlobals() {
-	global $mode, $user, $remoteIP, $authed, $oldmode, $semid;
-	global $days, $phpVer, $keys, $pemkey, $AUTHERROR;
+	global $mode, $user, $remoteIP, $authed, $oldmode;
+	global $days, $phpVer, $keys, $pemkey, $submitErr, $submitErrMsg;
 	global $passwdArray, $skin, $contdata, $lastmode, $inContinuation;
 	global $ERRORS, $actions;
 	global $affilValFunc, $addUserFunc, $updateUserFunc, $addUserFuncArgs;
@@ -87,7 +87,7 @@ function initGlobals() {
 
 	if(function_exists('openssl_encrypt')) {
 		define('USE_PHPSECLIB', 0);
-		$crytpkey = base64_decode($cryptkey);
+		$cryptkey = base64_decode($cryptkey);
 	}
 	else {
 		define('USE_PHPSECLIB', 1);
@@ -139,7 +139,10 @@ function initGlobals() {
 	                     's', 't', 'u', 'v', 'w', 'x', 'y', 'z', '1', '2', '3',
 	                     '4', '5', '6', '7', '8', '9', '0');
 
-	if(array_key_exists('VCLAUTH', $_COOKIE) || $mode == 'submitLogin') {
+	if(isset($_COOKIE['VCLAUTH']) ||
+	   $mode == 'submitLogin' ||
+	   $mode == 'selectauth' ||
+	   $mode == 'main') {
 		// open keys
 		$fp = fopen(".ht-inc/keys.pem", "r");
 		$key = fread($fp, 8192);
@@ -279,9 +282,9 @@ function initGlobals() {
 		$id = $row['id'];
 		if(! array_key_exists($id, $affilValFunc)) {
 			if(ALLOWADDSHIBUSERS)
-				$affilValFunc[$id] = create_function('', 'return 1;');
+				$affilValFunc[$id] = function() {return 1;};
 			else
-				$affilValFunc[$id] = create_function('', 'return 0;');
+				$affilValFunc[$id] = function() {return 0;};
 		}
 		if(! array_key_exists($id, $addUserFunc)) {
 			if(ALLOWADDSHIBUSERS) {
@@ -289,10 +292,10 @@ function initGlobals() {
 				$addUserFuncArgs[$id] = $id;
 			}
 			else
-				$addUserFunc[$id] = create_function('', 'return 0;');
+				$addUserFunc[$id] = function() {return 0;};
 		}
 		if(! array_key_exists($id, $updateUserFunc))
-			$updateUserFunc[$id] = create_function('', 'return NULL;');
+			$updateUserFunc[$id] = function() {return NULL;};
 	}
 
 	# include appropriate files
@@ -382,12 +385,17 @@ function __autoload($class) {
 ////////////////////////////////////////////////////////////////////////////////
 function checkAccess() {
 	global $mode, $user, $actionFunction, $authMechs;
-	global $itecsauthkey, $ENABLE_ITECSAUTH, $actions, $noHTMLwrappers;
-	global $inContinuation, $docreaders, $apiValidateFunc;
+	global $itecsauthkey, $ENABLE_ITECSAUTH, $actions;
+	global $inContinuation, $apiValidateFunc;
 	if($mode == 'xmlrpccall') {
 		// double check for SSL
 		if(! isset($_SERVER['HTTPS']) || $_SERVER['HTTPS'] != "on") {
 			printXMLRPCerror(4);   # must have SSL enabled
+			dbDisconnect();
+			exit;
+		}
+		if(! isset($_SERVER['HTTP_X_USER'])) {
+			printXMLRPCerror(3);   # access denied
 			dbDisconnect();
 			exit;
 		}
@@ -769,7 +777,8 @@ function maintenanceCheck() {
 			# check to see if end time has been reached
 			$fh = fopen($file, 'r');
 			$msg = '';
-			while($line = fgetss($fh)) {
+			while($line = fgets($fh)) {
+			    $line = strip_tags($line);
 				if(preg_match("/^END=([0-9]{4})([0-9]{2})([0-9]{2})([0-9]{2})([0-9]{2})$/", $line, $matches)) {
 					$tmp = "{$matches[1]}-{$matches[2]}-{$matches[3]} {$matches[4]}:{$matches[5]}:00";
 					$end = datetimeToUnix($tmp);
@@ -969,7 +978,7 @@ function stopSession() {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function main() {
-	global $user, $authed, $mode;
+	global $user, $authed;
 	print "<H2>" . i("Welcome to the Virtual Computing Lab") . "</H2>\n";
 	if($authed) {
 		if(! empty($user['lastname']) && ! empty($user['preferredname']))
@@ -1023,10 +1032,10 @@ function abort($errcode, $query="") {
 		xmlRPCabort($errcode, $query);
 	if(ONLINEDEBUG && checkUserHasPerm('View Debug Information')) {
 		if($errcode >= 100 && $errcode < 400) {
-			print "<font color=red>" . mysqli_error($mysqli_link_vcl) . "</font><br>\n";
+			print "<span class=\"rederrormsg\">" . mysqli_error($mysqli_link_vcl) . "</span><br>\n";
 			error_log(mysqli_error($mysqli_link_vcl));
 			if($ENABLE_ITECSAUTH) {
-				print "<font color=red>" . mysqli_error($mysqli_link_acct) . "</font><br>\n";
+				print "<span class=\"rederrormsg\">" . mysqli_error($mysqli_link_acct) . "</span><br>\n";
 				error_log(mysqli_error($mysqli_link_acct));
 			}
 			print "$query<br>\n";
@@ -1453,7 +1462,8 @@ function getImages($includedeleted=0, $imageid=0) {
 	       . "WHERE i.userid = u.id AND ";
 	if(! $includedeleted)
 		$query .=   "i.deleted = 0 AND ";
-	$query .=      "u.affiliationid = a.id";
+	$query .=      "u.affiliationid = a.id "
+	       . "ORDER BY i.imageid, i.revision";
 	$qh = doQuery($query, 101);
 	while($row = mysqli_fetch_assoc($qh)) {
 		$id = $row['imageid'];
@@ -2099,7 +2109,6 @@ function getUserResources($userprivs, $resourceprivs=array("available"),
 		$bygroup = 1;
 	if(! $userid)
 		$userid = $user["id"];
-	$return = array();
 
 	$nodeprivs = array();
 	$startnodes = array();
@@ -2861,7 +2870,7 @@ function encryptSecretKey($secret, $cryptkey) {
 	}
 	else
 		$padding = constant('OPENSSL_PKCS1_OAEP_PADDING');
-	$savehdlr = set_error_handler(create_function('', ''));
+	$savehdlr = set_error_handler(function() {});
 	if(@openssl_public_encrypt($secret, $encdata, $cryptkey, $padding)) {
 		set_error_handler($savehdlr);
 		$b64data = base64_encode($encdata);
@@ -2891,7 +2900,7 @@ function decryptSecretKey($encsecret) {
 	$file .= "/.ht-inc/cryptkey/private.pem";
 	$prikey = openssl_pkey_get_private("file://$file", $pemkey);
 	# decrypt secret using private key
-	$savehdlr = set_error_handler(create_function('', ''));
+	$savehdlr = set_error_handler(function() {});
 	if(ASYMOPT == 'OAEP')
 		$padding = constant('OPENSSL_PKCS1_OAEP_PADDING');
 	# OAEP currently only supported padding option
@@ -4258,7 +4267,6 @@ function getUserInfo($id, $noupdate=0, $numeric=0) {
 			return NULL;
 	}
 
-	$user = array();
 	$query = "SELECT u.unityid AS unityid, "
 	       .        "u.affiliationid, "
 	       .        "af.name AS affiliation, "
@@ -4496,7 +4504,6 @@ function updateUserData($id, $type="loginid", $affilid=DEFAULT_AFFILID) {
 		$qh = doQuery($query, 101);
 		if($row = mysqli_fetch_assoc($qh)) {
 			$id = $row['unityid'];
-			$type = 'loginid';
 			$affilid = $row['affiliationid'];
 		}
 		else
@@ -4863,6 +4870,7 @@ function isAvailable($images, $imageid, $imagerevisionid, $start, $end,
 
 		// if $ip specified, only look at computers under management nodes that can
 		#   handle that network
+		$ipmaplimited = 0;
 		if($ip != '') {
 			$mappedmns = getMnsFromImage($imageid);
 			$mnnets = checkAvailableNetworks($ip);
@@ -4879,6 +4887,24 @@ function isAvailable($images, $imageid, $imagerevisionid, $start, $end,
 				return debugIsAvailable(0, 18, $start, $end, $imagerevisionid);
 			}
 			$mappedcomputers = implode(',', $newcompids);
+			// if existing, available, and mapped computer already has requested IP
+			//address, limit $mappedcomputers to just that one
+			$query = "SELECT c.id "
+			       . "FROM computer c "
+			       . "JOIN state s ON (c.stateid = s.id) "
+			       . "WHERE c.IPaddress = '$ip' AND "
+			       .       "c.id in ($mappedcomputers) AND "
+			       .       "s.name != 'deleted' AND "
+			       .       "c.deleted = 0 AND "
+			       .       "(c.type != 'virtualmachine' OR c.vmhostid IS NOT NULL)";
+			$tmpmapped = array();
+			$qh = doQuery($query);
+			while($row = mysqli_fetch_assoc($qh))
+				$tmpmapped[] = $row['id'];
+			if(count($tmpmapped)) {
+				$ipmaplimited = 1;
+				$mappedcomputers = implode(',', $tmpmapped);
+			}
 		}
 
 		#get computers for available schedules and platforms
@@ -4992,8 +5018,11 @@ function isAvailable($images, $imageid, $imagerevisionid, $start, $end,
 		}
 
 		# return 0 if no computers available
-		if(empty($computerids) && empty($blockids))
+		if(empty($computerids) && empty($blockids)) {
+			if($ipmaplimited)
+				return debugIsAvailable(-4, 2, $start, $end, $imagerevisionid, $computerids, $currentids, $blockids, array(), $virtual);
 			return debugIsAvailable(0, 21, $start, $end, $imagerevisionid, $computerids, $currentids, $blockids, array(), $virtual);
+		}
 
 		#remove computers from list that are already scheduled
 		$usedComputerids = array();
@@ -5085,6 +5114,8 @@ function isAvailable($images, $imageid, $imagerevisionid, $start, $end,
 			while($row = mysqli_fetch_assoc($qh))
 				$newcompids[] = $row['id'];
 			$computerids = $newcompids;
+			if(empty($computerids) && empty($blockids))
+				return debugIsAvailable(0, 23, $start, $end, $imagerevisionid, $computerids, $currentids, $blockids, array(), $virtual);
 		}
 
 		# check for use of specified IP address, have to wait until here
@@ -5106,7 +5137,7 @@ function isAvailable($images, $imageid, $imagerevisionid, $start, $end,
 			$qh = doQuery($query);
 			if(mysqli_num_rows($qh)) {
 				if($now)
-					return debugIsAvailable(-4, 18, $start, $end, $imagerevisionid, $computerids, $currentids, $blockids, array(), $virtual);
+					return debugIsAvailable(-4, 24, $start, $end, $imagerevisionid, $computerids, $currentids, $blockids, array(), $virtual);
 				$requestInfo['ipwarning'] = 1;
 			}
 			$query = "SELECT id "
@@ -5133,7 +5164,7 @@ function isAvailable($images, $imageid, $imagerevisionid, $start, $end,
 		#   undetected failure
 		$failedids = getPossibleRecentFailures($userid, $imageid);
 		$shortened = 0;
-		if(! empty($failedids)) {
+		if(! empty($failedids) && ! $ipmaplimited) {
 			$origcomputerids = $computerids;
 			$origcurrentids = $currentids;
 			$origblockids = $blockids;
@@ -5208,7 +5239,7 @@ function isAvailable($images, $imageid, $imagerevisionid, $start, $end,
 function debugIsAvailable($rc, $loc, $start, $end, $imagerevisionid,
 	                       $compids=array(), $currentids=array(),
 	                       $blockids=array(), $failedids=array(), $virtual='') {
-	global $user, $mode, $requestInfo;
+	global $mode, $requestInfo;
 	$debug = getContinuationVar('debug', 0);
 	if(! $debug ||
 	   $mode != 'AJupdateWaitTime' ||
@@ -5222,7 +5253,7 @@ function debugIsAvailable($rc, $loc, $start, $end, $imagerevisionid,
 			$msg = "invalid image id submitted - not found in images available to the user";
 			break;
 		case "2":
-			$msg = "an overlapping server reservation has the same fixed IP or MAC address";
+			$msg = "an unavailable computer has the requested fixed IP or MAC address";
 			break;
 		case "16":
 			$msg = "the requested fixed IP address is currently in use by a management node";
@@ -5266,9 +5297,6 @@ function debugIsAvailable($rc, $loc, $start, $end, $imagerevisionid,
 		case "13":
 			$msg = "no computers available (after virtual host resource checks/before performing overlapping IP address check)";
 			break;
-		case "18":
-			$msg = "requested IP address in use by another computer";
-			break;
 		case "22":
 			$msg = "at least 2 computers have the requested IP address assigned to them";
 			break;
@@ -5277,6 +5305,12 @@ function debugIsAvailable($rc, $loc, $start, $end, $imagerevisionid,
 			break;
 		case "12":
 			$msg = "successfully found a computer (id: {$requestInfo['computers'][0]})";
+			break;
+		case "23":
+			$msg = "no computers available after performing VM host check";
+			break;
+		case "24":
+			$msg = "requested IP address in use by another computer";
 			break;
 	}
 	print "console.log('$msg');";
@@ -5412,7 +5446,6 @@ function schCheckMaintenance($start, $end) {
 function allocComputer($blockids, $currentids, $computerids, $start, $end,
                        $nowfuture, $imageid, $imagerevisionid, $holdcomps,
                        $requestid) {
-	global $requestInfo;
 	$ret = array();
 	if(SCHEDULER_ALLOCATE_RANDOM_COMPUTER) {
 		shuffle($blockids);
@@ -5696,7 +5729,6 @@ function getMappedResources($resourcesubid, $resourcetype1, $resourcetype2) {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function checkOverlap($start, $end, $max, $requestid=0) {
-	global $user;
 	$requests = getUserRequests("all");
 	$count = 0;
 	if($max > 0)
@@ -5875,7 +5907,7 @@ function addRequest($forimaging=0, $revisionid=array(), $checkuser=1) {
 	       .       "'$endstamp', "
 	       .       "NOW(), "
 	       .       "$checkuser)";
-	$qh = doQuery($query, 136);
+	doQuery($query, 136);
 
 	$qh = doQuery("SELECT LAST_INSERT_ID() FROM request", 134);
 	if(! $row = mysqli_fetch_row($qh)) {
@@ -6037,7 +6069,6 @@ function simpleAddRequest($compid, $imageid, $revisionid, $start, $end,
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function findManagementNode($compid, $start, $nowfuture) {
-	global $HTMLheader;
 	$allmgmtnodes = array_keys(getManagementNodes($nowfuture));
 	$mapped = getMappedResources($compid, "computer", "managementnode");
 	$usablemgmtnodes = array_intersect($allmgmtnodes, $mapped);
@@ -6359,7 +6390,7 @@ function deleteRequest($request) {
 				       . "WHERE id = {$request['id']}";
 			}
 		}
-		$qh = doQuery($query, 150);
+		doQuery($query, 150);
 
 		addChangeLogEntry($request["logid"], NULL, unixToDatetime($now), NULL,
 		                  NULL, "released");
@@ -6402,7 +6433,7 @@ function deleteRequest($request) {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function moveReservationsOffComputer($compid=0, $count=0) {
-	global $requestInfo, $user;
+	global $requestInfo;
 	$resInfo = array();
 	$checkstart = unixToDatetime(time() + 180);
 	if($compid == 0) {
@@ -7183,29 +7214,6 @@ function hour24to12($hour) {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
-/// \fn getDepartmentName($id)
-///
-/// \param $id - id for a department in the department table
-///
-/// \return if found, department name; if not, 0
-///
-/// \brief looks up the name field corresponding to $id in the department table
-/// and returns it
-///
-////////////////////////////////////////////////////////////////////////////////
-function getDepartmentName($id) {
-	$query = "SELECT name FROM department WHERE id = '$id'";
-	$qh = doQuery($query, 101);
-	if($row = mysqli_fetch_row($qh)) {
-		return $row[0];
-	}
-	else {
-		return 0;
-	}
-}
-
-////////////////////////////////////////////////////////////////////////////////
-///
 /// \fn getImageId($image)
 ///
 /// \param $image - name of an image (must match name (not prettyname) in the
@@ -7580,11 +7588,9 @@ function getMnsFromImage($imageid) {
 	while($row = mysqli_fetch_assoc($qh))
 		$compgroups[] = $row['resourcegroupid'];
 	$mngrps = array();
-	foreach($compgroups as $grpid) {
-		$mngrpset = getResourceMapping('managementnode', 'computer', '', implode(',', $compgroups));
-		foreach($mngrpset as $mngrpid => $compgrpset)
-			$mngrps[$mngrpid] = 1;
-	}
+	$mngrpset = getResourceMapping('managementnode', 'computer', '', implode(',', $compgroups));
+	foreach($mngrpset as $mngrpid => $compgrpset)
+		$mngrps[$mngrpid] = 1;
 	$mngrpnames = array();
 	foreach(array_keys($mngrps) as $mnid) {
 		$mngrpnames[] = getResourceGroupName($mnid);
@@ -8562,6 +8568,7 @@ function findAvailableTimes($start, $end, $imageid, $userid, $usedaysahead,
 	       .      "reservation rs, "
 	       .      "image i, "
 	       .      "state s, "
+	       .      "state rqs, "
 	       .      "computer c, "
 	       .      "provisioningOSinstalltype poi, "
 	       .      "OSinstalltype oi, "
@@ -8569,6 +8576,8 @@ function findAvailableTimes($start, $end, $imageid, $userid, $usedaysahead,
 	       . "WHERE rs.requestid = rq.id AND "
 	       .       "(rq.start > '$startdt' OR "
 	       .        "(DATE_ADD(rq.end, INTERVAL 15 MINUTE) > '$startdt' AND rq.start <= '$startdt')) AND "
+	       .       "rq.stateid = rqs.id AND "
+	       .       "rqs.name NOT IN ('failed', 'complete', 'reload') AND "
 	       .       "rs.computerid IN ($incompids) AND "
 	       .       "i.id = $imageid AND "
 	       .       "c.id = rs.computerid AND "
@@ -9445,7 +9454,7 @@ function getNAThosts($id=0, $sort=0) {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
-/// \fn getReservationNATports($resid)
+/// \fn getNATports($resid)
 ///
 /// \param $resid - id of a reservation
 ///
@@ -12653,7 +12662,7 @@ function validateEmailAddress($addr) {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function xmlrpccall() {
-	global $xmlrpc_handle, $HTTP_RAW_POST_DATA, $user;
+	global $xmlrpc_handle, $user;
 	# create xmlrpc handle
 	$xmlrpc_handle = xmlrpc_server_create();
 	# register functions available via rpc calls
@@ -12707,7 +12716,8 @@ function xmlrpccall() {
 	xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCfinishBaseImageCapture", "xmlRPChandler");
 	xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCcheckCryptSecrets", "xmlRPChandler");
 
-	print xmlrpc_server_call_method($xmlrpc_handle, $HTTP_RAW_POST_DATA, '');
+	$raw_post_data = file_get_contents("php://input");
+	print xmlrpc_server_call_method($xmlrpc_handle, $raw_post_data, '');
 	xmlrpc_server_destroy($xmlrpc_handle);
 	cleanSemaphore();
 	dbDisconnect();
@@ -12722,13 +12732,14 @@ function xmlrpccall() {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function xmlrpcgetaffiliations() {
-	global $xmlrpc_handle, $HTTP_RAW_POST_DATA;
+	global $xmlrpc_handle;
 	# create xmlrpc handle
 	$xmlrpc_handle = xmlrpc_server_create();
 	# register functions available via rpc calls
 	xmlrpc_server_register_method($xmlrpc_handle, "XMLRPCaffiliations", "xmlRPChandler");
 
-	print xmlrpc_server_call_method($xmlrpc_handle, $HTTP_RAW_POST_DATA, '');
+	$raw_post_data = file_get_contents("php://input");
+	print xmlrpc_server_call_method($xmlrpc_handle, $raw_post_data, '');
 	xmlrpc_server_destroy($xmlrpc_handle);
 	dbDisconnect();
 	exit;
@@ -13113,7 +13124,7 @@ function sendJSON($arr, $identifier='', $REST=0) {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function sendHeaders() {
-	global $mode, $user, $authed, $oldmode, $actionFunction;
+	global $mode, $user, $authed, $actionFunction;
 	global $shibauthed, $authFuncs;
 	if(! $authed && $mode == "auth") {
 		header("Location: " . BASEURL . SCRIPT . "?mode=selectauth");
@@ -13208,8 +13219,8 @@ function sendHeaders() {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function printHTMLHeader() {
-	global $mode, $user, $authed, $oldmode, $HTMLheader, $contdata;
-	global $printedHTMLheader, $docreaders, $noHTMLwrappers, $actions;
+	global $mode, $user, $authed, $HTMLheader, $contdata;
+	global $printedHTMLheader, $noHTMLwrappers;
 	if($printedHTMLheader)
 		return;
 	$refresh = 0;
@@ -13785,23 +13796,6 @@ function getDojoHTML($refresh) {
 			                      'dijit.form.ValidationTextBox',
 			                      'dijit.layout.TabContainer');
 			break;
-		# TODO clean up
-		/*case 'serverProfiles':
-			$filename = 'vclServerProfiles.js';
-			$dojoRequires = array('dojo.parser',
-			                      'dijit.Dialog',
-			                      'dijit.form.Button',
-			                      'dijit.form.FilteringSelect',
-			                      'dijit.form.Select',
-			                      'dijit.form.TextBox',
-			                      'dijit.form.ValidationTextBox',
-			                      'dijit.form.CheckBox',
-			                      'dijit.form.Textarea',
-			                      'dijit.layout.ContentPane',
-			                      'dijit.layout.TabContainer',
-			                      'dojox.string.sprintf',
-			                      'dojo.data.ItemFileWriteStore');
-			break;*/
 		/*case 'testDojoREST':
 			$filename = '';
 			$dojoRequires = array('dojo.parser',
@@ -13853,8 +13847,6 @@ function getDojoHTML($refresh) {
 			$rt .= "      testJS();\n";
 			$rt .= "      document.onmousemove = updateMouseXY;\n";
 			$rt .= "      showScriptOnly();\n";
-			/*$cont = addContinuationsEntry('AJserverProfileStoreData', array(), 120, 1, 0);
-			$rt .= "   populateProfileStore('$cont');\n";*/
 			$rt .= "   });\n";
 			if($refresh)
 				$rt .= "   refresh_timer = setTimeout(resRefresh, 12000);\n";

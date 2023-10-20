@@ -19,9 +19,9 @@
 /**
  * \file
  * The functions listed here are for making VCL requests from other applications.
- * They are implemented according to the XML RPC spec defined at 
+ * They are implemented according to the XML RPC spec defined at
  * http://www.xmlrpc.com/ \n
- * There is one function called \b XMLRPCtest() that can be used during 
+ * There is one function called \b XMLRPCtest() that can be used during
  * initial development to get started without actually making a request.\n
  * \n
  * The URL you will use to submit RPC calls is the URL for your VCL site
@@ -171,7 +171,7 @@ function XMLRPCaddRequest($imageid, $start, $length, $foruser='',
 	$length = processInputData($length, ARG_NUMERIC);
 	#$foruser = processInputData($foruser, ARG_STRING, 1);
 
-	// make sure user didn't submit a request for an image he 
+	// make sure user didn't submit a request for an image he
 	// doesn't have access to
 	$resources = getUserResources(array("imageAdmin", "imageCheckOut"));
 	$validImageids = array_keys($resources['image']);
@@ -233,7 +233,7 @@ function XMLRPCaddRequest($imageid, $start, $length, $foruser='',
 	$revisionid = getProductionRevisionid($imageid);
 	$rc = isAvailable($images, $imageid, $revisionid, $start, $end, 1);
 	if($rc < 1) {
-		addLogEntry($nowfuture, unixToDatetime($start), 
+		addLogEntry($nowfuture, unixToDatetime($start),
 		            unixToDatetime($end), 0, $imageid);
 		return array('status' => 'notavailable');
 	}
@@ -354,7 +354,7 @@ function XMLRPCaddRequestWithEnding($imageid, $start, $end, $foruser='',
 	$revisionid = getProductionRevisionid($imageid);
 	$rc = isAvailable($images, $imageid, $revisionid, $start, $end, 1);
 	if($rc < 1) {
-		addLogEntry($nowfuture, unixToDatetime($start), 
+		addLogEntry($nowfuture, unixToDatetime($start),
 		            unixToDatetime($end), 0, $imageid);
 		return array('status' => 'notavailable');
 	}
@@ -387,7 +387,7 @@ function XMLRPCaddRequestWithEnding($imageid, $start, $end, $foruser='',
 /// \param $foruser - (optional) login to be used when setting up the account
 /// on the reserved machine - CURRENTLY, THIS IS UNSUPPORTED
 /// \param $name - (optional) name for reservation
-/// \param $userdata - (optional) text that will be placed in 
+/// \param $userdata - (optional) text that will be placed in
 /// /root/.vclcontrol/post_reserve_userdata on the reserved node
 ///
 /// \return an array with at least one index named '\b status' which will have
@@ -562,7 +562,7 @@ function XMLRPCdeployServer($imageid, $start, $end, $admingroup='',
 	$rc = isAvailable($images, $imageid, $revisionid, $start, $end,
 	                  1, 0, 0, 0, 0, $ipaddr, $macaddr);
 	if($rc < 1) {
-		addLogEntry($nowfuture, unixToDatetime($start), 
+		addLogEntry($nowfuture, unixToDatetime($start),
 		            unixToDatetime($end), 0, $imageid);
 		return array('status' => 'notavailable');
 	}
@@ -851,23 +851,23 @@ function XMLRPCgetRequestConnectData($requestid, $remoteIP) {
 		$portdata = array();
 		foreach($connectMethods as $key => $cm) {
 			$connecttext = $cm["connecttext"];
-			$connecttext = preg_replace("/#userid#/", $thisuser, $connecttext); 
-			$connecttext = preg_replace("/#password#/", $passwd, $connecttext); 
-			$connecttext = preg_replace("/#connectIP#/", $serverIP, $connecttext); 
+			$connecttext = preg_replace("/#userid#/", $thisuser, $connecttext);
+			$connecttext = preg_replace("/#password#/", $passwd, $connecttext);
+			$connecttext = preg_replace("/#connectIP#/", $serverIP, $connecttext);
 			foreach($cm['ports'] as $port) {
 				if(! empty($natports) && array_key_exists($port['key'], $natports[$key])) {
-					$connecttext = preg_replace("/{$port['key']}/", $natports[$key][$port['key']]['publicport'], $connecttext); 
+					$connecttext = preg_replace("/{$port['key']}/", $natports[$key][$port['key']]['publicport'], $connecttext);
 					$connectMethods[$key]['connectports'][] = "{$port['protocol']}:{$port['port']}:{$natports[$key][$port['key']]['publicport']}";
 				}
 				else {
 					if((preg_match('/remote desktop/i', $cm['description']) ||
-					   preg_match('/RDP/i', $cm['description'])) && 
+					   preg_match('/RDP/i', $cm['description'])) &&
 					   $port['key'] == '#Port-TCP-3389#') {
-						$connecttext = preg_replace("/{$port['key']}/", $user['rdpport'], $connecttext); 
+						$connecttext = preg_replace("/{$port['key']}/", $user['rdpport'], $connecttext);
 						$connectMethods[$key]['connectports'][] = "{$port['protocol']}:{$port['port']}:{$user['rdpport']}";
 					}
 					else {
-						$connecttext = preg_replace("/{$port['key']}/", $port['port'], $connecttext); 
+						$connecttext = preg_replace("/{$port['key']}/", $port['port'], $connecttext);
 						$connectMethods[$key]['connectports'][] = "{$port['protocol']}:{$port['port']}:{$port['port']}";
 					}
 				}
@@ -880,7 +880,7 @@ function XMLRPCgetRequestConnectData($requestid, $remoteIP) {
 		$cmid = $tmp[0];
 		if(empty($natports))
 			if((preg_match('/remote desktop/i', $connectMethods[$cmid]['description']) ||
-			   preg_match('/RDP/i', $connectMethods[$cmid]['description'])) && 
+			   preg_match('/RDP/i', $connectMethods[$cmid]['description'])) &&
 				$portdata[$cmid][0]['port'] == 3389)
 				$connectport = $user['rdpport'];
 			else
@@ -1005,7 +1005,7 @@ function XMLRPCextendRequest($requestid, $extendtime) {
 	if($timeToNext > -1) {
 		$lockedall = 1;
 		if(count($request['reservations']) > 1) {
-			# get semaphore on each existing node in cluster so that nothing 
+			# get semaphore on each existing node in cluster so that nothing
 			# can get moved to the nodes during this process
 			$checkend = unixToDatetime($endts + 900);
 			foreach($request["reservations"] as $res) {
@@ -1721,7 +1721,7 @@ function XMLRPCgetNodes($root=NULL) {
 			$node['id'] = $id;
 			array_push($nodes, $node);
 			array_push($stack, $node);
-		} 
+		}
 		while(count($stack)) {
 			$item = array_shift($stack);
 			$children = getChildNodes($item['id']);
@@ -1962,7 +1962,7 @@ function XMLRPCgetUserGroupPrivs($name, $affiliation, $nodeid) {
 
 	$privileges = array();
 	$nodePrivileges = getNodePrivileges($nodeid, 'usergroups');
-	$cascadedNodePrivileges = getNodeCascadePrivileges($nodeid, 'usergroups'); 
+	$cascadedNodePrivileges = getNodeCascadePrivileges($nodeid, 'usergroups');
 	$cngp = $cascadedNodePrivileges['usergroups'];
 	$ngp = $nodePrivileges['usergroups'];
 	if(array_key_exists($groupid, $cngp)) {
@@ -2180,7 +2180,7 @@ function XMLRPCgetResourceGroupPrivs($name, $type, $nodeid) {
 			             'errormsg' => 'resource group does not exist');
 		}
 		$np = getNodePrivileges($nodeid, 'resources');
-		$cnp = getNodeCascadePrivileges($nodeid, 'resources'); 
+		$cnp = getNodeCascadePrivileges($nodeid, 'resources');
 		$key = "$type/$name/$groupid";
 		if(isset($np['resources'][$key]['block']) || ! isset($cnp['resources'][$key]))
 			$privs = array_keys($np['resources'][$key]);
@@ -2399,9 +2399,9 @@ function XMLRPCgetUserGroups($groupType=0, $affiliationid=0) {
 	// Filter out any groups to which the user does not have access.
 	$usergroups = array();
 	foreach($groups as $id => $group) {
-		if($group['ownerid'] == $user['id'] || 
+		if($group['ownerid'] == $user['id'] ||
 		   (array_key_exists("editgroupid", $group) &&
-		   array_key_exists($group['editgroupid'], $user["groups"])) || 
+		   array_key_exists($group['editgroupid'], $user["groups"])) ||
 		   (array_key_exists($id, $user["groups"]))) {
 			array_push($usergroups, $group);
 		}
@@ -2476,7 +2476,7 @@ function XMLRPCgetUserGroupAttributes($name, $affiliation) {
 		             'errormsg' => 'user group with submitted name and affiliation does not exist');
 	}
 	// if not owner and not member of managing group, no access
-	if($user['id'] != $row['ownerid'] && 
+	if($user['id'] != $row['ownerid'] &&
 	   ! array_key_exists($row['editgroupid'], $user['groups'])) {
 		return array('status' => 'error',
 		             'errorcode' => 69,
@@ -2854,7 +2854,7 @@ function XMLRPCgetUserGroupMembers($name, $affiliation) {
 		             'errorcode' => 18,
 		             'errormsg' => 'user group with submitted name and affiliation does not exist');
 	}
-	// if custom and not owner and not member of managing group or 
+	// if custom and not owner and not member of managing group or
 	//    custom/courseroll and no federated user group access, no access to delete group
 	if(($row['custom'] == 1 && $user['id'] != $row['ownerid'] &&
 	   ! array_key_exists($row['editgroupid'], $user['groups'])) ||
@@ -2930,7 +2930,7 @@ function XMLRPCaddUsersToGroup($name, $affiliation, $users) {
 		             'errormsg' => 'user group with submitted name and affiliation does not exist');
 	}
 	// if not owner and not member of managing group, no access
-	if($user['id'] != $row['ownerid'] && 
+	if($user['id'] != $row['ownerid'] &&
 	   ! array_key_exists($row['editgroupid'], $user['groups'])) {
 		return array('status' => 'error',
 		             'errorcode' => 28,
@@ -3012,7 +3012,7 @@ function XMLRPCremoveUsersFromGroup($name, $affiliation, $users) {
 		             'errormsg' => 'user group with submitted name and affiliation does not exist');
 	}
 	// if not owner and not member of managing group, no access
-	if($user['id'] != $row['ownerid'] && 
+	if($user['id'] != $row['ownerid'] &&
 	   ! array_key_exists($row['editgroupid'], $user['groups'])) {
 		return array('status' => 'error',
 		             'errorcode' => 28,
@@ -3655,7 +3655,7 @@ function XMLRPCprocessBlockTime($blockTimesid, $ignoreprivileges=0) {
 	$stagCnt = 0;
 	$stagTime = 60;        # stagger reload reservations by 1 min
 	if($imgLoadTime > 840) // if estimated load time is > 14 min
-		$stagTime = 120;    #    stagger reload reservations by 2 min 
+		$stagTime = 120;    #    stagger reload reservations by 2 min
 	for($i = 0; $i < $reqToAlloc; $i++) {
 		$stagunixstart = $unixstart - $loadtime - ($stagCnt * $stagTime);
 		$stagstart = unixToDatetime($stagunixstart);
@@ -4003,8 +4003,8 @@ function XMLRPCgetOneClicks() {
 	        . "LEFT JOIN OS os ON (i.OSid = os.id) "
 	        . "LEFT JOIN ("
 	        .      "SELECT rs.imageid, "
-	        .             "MAX(rq.id) AS requestid, " 
-	        .             "COUNT(rq.id) AS reqcount " 
+	        .             "MAX(rq.id) AS requestid, "
+	        .             "COUNT(rq.id) AS reqcount "
 	        .      "FROM reservation rs, "
 	        .           "request rq "
 	        .      "WHERE rs.requestid = rq.id AND "
@@ -4200,7 +4200,7 @@ function XMLRPCeditOneClick($oneclickid, $name, $imageid, $duration, $autologin)
 		             'errormsg' => "Specified duration is too long",
 		             'maxduration' => $allowed);
 	}
-	
+
 	$query = "SELECT id "
 	       . "FROM oneclick "
 	       . "WHERE id = $oneclickid AND "
@@ -4218,7 +4218,7 @@ function XMLRPCeditOneClick($oneclickid, $name, $imageid, $duration, $autologin)
 		             'errorcode' => 90,
 		             'errormsg' => "The OneClick with ID $oneclickid does not belong to the user that requested it.");
 	}*/
-	
+
 	$query = "UPDATE oneclick "
 	       . "SET imageid = $imageid, "
 	       .     "name = '$name', "
@@ -4255,7 +4255,7 @@ function XMLRPCeditOneClick($oneclickid, $name, $imageid, $duration, $autologin)
 function XMLRPCdeleteOneClick($oneclickid) {
 	global $user;
 	$oneclickid = processInputData($oneclickid, ARG_NUMERIC);
-	
+
 	$query = "SELECT id "
 	       . "FROM oneclick "
 	       . "WHERE id = $oneclickid AND "

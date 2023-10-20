@@ -43,7 +43,7 @@ use lib "$FindBin::Bin/../..";
 use base qw(VCL::Module);
 
 # Specify the version of this module
-our $VERSION = '2.5';
+our $VERSION = '2.5.1';
 
 # Specify the version of Perl to use
 use 5.008000;
@@ -1424,10 +1424,17 @@ sub confirm_fixed_ip_is_available {
 	my $server_request_fixed_ip = $self->data->get_server_request_fixed_ip(); 
 	
 	#check VCL computer table
-	if (is_ip_assigned_query($server_request_fixed_ip)) {
+	if (is_ip_assigned_query($server_request_fixed_ip, $computer_id)) {
 		notify($ERRORS{'WARNING'}, 0, "$server_request_fixed_ip is already assigned");
 		insertloadlog($reservation_id, $computer_id, "failed","$server_request_fixed_ip is already assigned");
 		return 0;
+	}
+
+	#check if the assigned computer has the specified address
+	my $retrieved_public_ip_address = $self->get_public_ip_address();
+	if ($retrieved_public_ip_address eq $server_request_fixed_ip) {
+		notify($ERRORS{'DEBUG'}, 0, "$server_request_fixed_ip is assigned to reserved computer, skipping ping test");
+		return 1;
 	}
 
 	#Is IP pingable	

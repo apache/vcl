@@ -276,12 +276,14 @@ function viewRequests() {
 					$text .= getViewRequestHTMLitem('openmoreoptions');
 					$text .= getViewRequestHTMLitem('editoption', $editcont);
 					if(array_key_exists($imageid, $resources['image']) && ! $cluster &&            # imageAdmin access, not a cluster,
+					   $requests[$i]['OSinstalltype'] != 'none' &&
 					   ($requests[$i]['currstateid'] == 8 || $requests[$i]['laststateid'] == 8)) { # reservation has been in inuse state
 						$text .= getViewRequestHTMLitem('endcreateoption', $imgcont);
 					}
 					/*else
 						$text .= getViewRequestHTMLitem('endcreateoptiondisable');*/
 					if(array_key_exists($imageid, $resources['image']) && ! $cluster &&
+					   $requests[$i]['OSinstalltype'] != 'none' &&
 					   $requests[$i]['server'] && ($requests[$i]['currstateid'] == 8 ||
 						($requests[$i]['currstateid'] == 14 && $requests[$i]['laststateid'] == 8))) {
 						$chkcdata = $cdata;
@@ -291,7 +293,8 @@ function viewRequests() {
 					}
 					elseif($requests[$i]['server'] && $requests[$i]['currstateid'] == 24)
 						$text .= getViewRequestHTMLitem('checkpointoptiondisable');
-					if($requests[$i]['currstateid'] == 8 ||
+					if((! $cluster && $requests[$i]['OSinstalltype'] != 'none' &&
+					   $requests[$i]['currstateid'] == 8) ||
 					   (! $cluster &&
 					   $requests[$i]['OSinstalltype'] != 'none' &&
 					   $requests[$i]['currstateid'] != 3 &&
@@ -2093,6 +2096,45 @@ function printImageDescription($imageid) {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
+/// \fn AJfetchRouterDNS()
+///
+/// \brief get router and dns information for a given IP address
+///
+////////////////////////////////////////////////////////////////////////////////
+function AJfetchRouterDNS() {
+	$data = array('status' => 'none');
+	$page = processInputVar('page', ARG_STRING);
+	if($page != 'deploy') {
+		sendJSON($data);
+		return;
+	}
+	$ipaddr = processInputVar('ipaddr', ARG_STRING);
+	# validate fixed IP address
+	if(! validateIPv4addr($ipaddr)) {
+		sendJSON($data);
+		return;
+	}
+	# validate netmask
+	$netmask = processInputVar('netmask', ARG_STRING);
+	$bnetmask = ip2long($netmask);
+	if(! preg_match('/^[1]+0[^1]+$/', sprintf('%032b', $bnetmask))) {
+		sendJSON($data);
+		return;
+	}
+	$network = ip2long($ipaddr) & $bnetmask;
+	$availnets = getVariable('fixedIPavailnetworks', array());
+	$key = long2ip($network) . "/$netmask";
+	if(array_key_exists($key, $availnets)) {
+		$data = array('status' => 'success',
+		              'page' => $page,
+		              'router' => $availnets[$key]['router'],
+		              'dns' => implode(',', $availnets[$key]['dns']));
+	}
+	sendJSON($data);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
 /// \fn AJshowRequestSuggestedTimes()
 ///
 /// \brief builds html to display list of available times the selected image
@@ -2359,7 +2401,8 @@ function AJnewRequest() {
 		return;
 	}
 	elseif($availablerc == -3) {
-		$msg = i("The IP or MAC address you specified overlaps with another reservation using the same IP or MAC address you specified. Please use a different IP or MAC or select a different time to deploy the server.");
+		#$msg = i("The IP or MAC address you specified overlaps with another reservation using the same IP or MAC address you specified. Please use a different IP or MAC or select a different time to deploy the server.");
+		$msg = i("The IP address you specified overlaps with another reservation using the same IP address. Please use a different IP address or select a different time to deploy the server.");
 		$data = array('err' => 1,
 		              'errmsg' => $msg);
 		sendJSON($data);
@@ -3859,7 +3902,8 @@ function AJsubmitEditRequest() {
 			$msgip = " ($ip)";
 		if(! empty($mac))
 			$msgmac = " ($mac)";
-		$h .= sprintf(i("The reserved IP (%s) or MAC address (%s) conflicts with another reservation using the same IP or MAC address. Please select a different time to use the image."), $msgip, $msgmac);
+		#$h .= sprintf(i("The reserved IP (%s) or MAC address (%s) conflicts with another reservation using the same IP or MAC address. Please select a different time to use the image."), $msgip, $msgmac);
+		$h .= sprintf(i("The reserved IP address (%s) conflicts with another reservation using the same IP address. Please select a different time to use the image."), $msgip);
 		$h = preg_replace("/(.{1,60}([ \n]|$))/", '\1<br>', $h);
 		$cdata = getContinuationVar();
 		$cont = addContinuationsEntry('AJsubmitEditRequest', $cdata, SECINDAY, 1, 0);
@@ -5040,10 +5084,14 @@ function getReserveDayData() {
 function AJsetImageProduction() {
 	$requestid = getContinuationVar('requestid');
 	$data = getRequestInfo($requestid);
-	foreach($data["reservations"] as $res) {
-		if($res["forcheckout"]) {
-			$prettyimage = $res["prettyimage"];
-			break;
+	if($data['forimaging'])
+		$prettyimage = $data['reservations'][0]['prettyimage'];
+	else {
+		foreach($data["reservations"] as $res) {
+			if($res["forcheckout"]) {
+				$prettyimage = $res["prettyimage"];
+				break;
+			}
 		}
 	}
 	$title = "<big><strong>" . i("Change Test Image to Production") . "</strong></big><br><br>\n";
@@ -5068,10 +5116,14 @@ function AJsetImageProduction() {
 function AJsubmitSetImageProduction() {
 	$requestid = getContinuationVar('requestid');
 	$data = getRequestInfo($requestid);
-	foreach($data["reservations"] as $res) {
-		if($res["forcheckout"]) {
-			$prettyimage = $res["prettyimage"];
-			break;
+	if($data['forimaging'])
+		$prettyimage = $data['reservations'][0]['prettyimage'];
+	else {
+		foreach($data["reservations"] as $res) {
+			if($res["forcheckout"]) {
+				$prettyimage = $res["prettyimage"];
+				break;
+			}
 		}
 	}
 	$query = "UPDATE request SET stateid = 17 WHERE id = $requestid";

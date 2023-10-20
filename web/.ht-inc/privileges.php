@@ -36,8 +36,11 @@ define("ADDUSERNOPRIVS", 1 << 1);
 ////////////////////////////////////////////////////////////////////////////////
 function viewNodes() {
 	global $user;
-	if(! empty($_COOKIE["VCLACTIVENODE"]) &&
-		nodeExists($_COOKIE['VCLACTIVENODE']))
+	if(isset($_COOKIE["VCLACTIVENODE"]) &&
+	   is_numeric($_COOKIE['VCLACTIVENODE']) &&
+	   $_COOKIE['VCLACTIVENODE'] > 0 &&
+	   $_COOKIE['VCLACTIVENODE'] < 16777216 &&
+	   nodeExists($_COOKIE['VCLACTIVENODE']))
 		$activeNode = $_COOKIE["VCLACTIVENODE"];
 	else {
 		$topNodes = getChildNodes();
@@ -1629,6 +1632,12 @@ function userLookup() {
 		print "      Total: {$times['total']}<br>\n";
 		print "  </TR>\n";
 
+		$maxconcurrent = getMaxOverlap($userdata['id']);
+		print "  <TR>\n";
+		print "    <TH align=right>Max Overlapping Reservations:</TH>\n";
+		print "    <TD>$maxconcurrent</TD>\n";
+		print "  </TR>\n";
+
 		print "  <TR>\n";
 		print "    <TH align=right style=\"vertical-align: top\">Privileges (found somewhere in the tree):</TH>\n";
 		print "    <TD>\n";
@@ -1723,6 +1732,30 @@ function userLookup() {
 			}
 		}
 		print "</div>\n";
+
+		# owned images
+		$ownedimages = array();
+		$query = "SELECT prettyname "
+		       . "FROM image "
+		       . "WHERE ownerid = {$userdata['id']} AND "
+		       .       "deleted = 0 "
+		       . "ORDER BY prettyname";
+		$qh = doQuery($query);
+		while($row = mysqli_fetch_row($qh))
+			$ownedimages[] = $row[0];
+		print "<table>\n";
+		print "  <tr>\n";
+		print "    <th style=\"vertical-align: top;\">Images Owned by User:<th>\n";
+		print "    <td>\n";
+		if(count($ownedimages)) {
+			foreach($ownedimages as $image)
+				print "      $image<br>\n";
+		}
+		else
+			print "      None\n";
+		print "    </td>\n";
+		print "  </tr>\n";
+		print "</table>\n";
 
 		# image access
 		print "<table>\n";

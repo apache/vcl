@@ -872,10 +872,10 @@ ALTER TABLE `computerloadlog` CHANGE `loadstateid` `loadstateid` SMALLINT( 8 ) U
 CREATE TABLE IF NOT EXISTS `addomain` (
   `id` tinyint(3) unsigned NOT NULL auto_increment,
   `ownerid` mediumint(8) unsigned NOT NULL,
-  `name` varchar(30) NOT NULL default '',
+  `name` varchar(512) NOT NULL default '',
   `domainDNSName` varchar(70) NOT NULL default '',
   `dnsServers` varchar(512) default NULL,
-  `username` varchar(64) NOT NULL default '',
+  `username` varchar(80) NOT NULL default '',
   `password` varchar(256) NOT NULL default '',
   `secretid` smallint(5) unsigned NOT NULL,
   `usedbhostnames` tinyint(1) unsigned NOT NULL default '0',
@@ -886,6 +886,10 @@ CREATE TABLE IF NOT EXISTS `addomain` (
 
 CALL DropExistingIndices('addomain', 'domainDNSName');
 CALL AddIndexIfNotExists('addomain', 'domainDNSName');
+CALL AddColumnIfNotExists('addomain', 'usedbhostnames', "tinyint(1) unsigned NOT NULL default '0'");
+
+ALTER TABLE `addomain` CHANGE `name` `name` varchar(512) NOT NULL default '';
+ALTER TABLE `addomain` CHANGE `username` `username` varchar(80) NOT NULL default '';
 
 -- --------------------------------------------------------
 
@@ -1024,6 +1028,7 @@ CALL AddIndexIfNotExists('image', 'imagetypeid');
 
 ALTER TABLE `image` CHANGE `basedoffrevisionid` `basedoffrevisionid` mediumint(8) unsigned default NULL;
 CALL AddIndexIfNotExists('image', 'basedoffrevisionid');
+ALTER TABLE `image` CHANGE `maxinitialtime` `maxinitialtime` mediumint(8) unsigned NOT NULL default '0';
 
 -- --------------------------------------------------------
 
@@ -1319,6 +1324,14 @@ CREATE TABLE IF NOT EXISTS `reservationaccounts` (
   UNIQUE KEY `reservationid` (`reservationid`,`userid`),
   KEY `userid` (`userid`)
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `resourcegroup`
+--
+
+ALTER TABLE `resourcegroup` CHANGE `name` `name` varchar(60) NOT NULL default '';
 
 -- --------------------------------------------------------
 

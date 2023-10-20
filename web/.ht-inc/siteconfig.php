@@ -3115,7 +3115,7 @@ class Messages {
 	function __construct($globalopts) {
 		$this->basecdata['obj'] = $this;
 		$this->name = _('Messages');
-		$this->desc = sprintf(_("This section allows for configuration of messages that are sent to users and administrators about things such as reservations and image management. Every message has a default. Additionally, separate messages can be configured for each affiliation. Most of the messages will have parts that are in square brackets. These parts will have data substituted for them before the message is sent. A list of what can be used in squeare brackets can be found at the <a href=\"%s\">Apache VCL web site</a>. Some messages also have a short form that may be sent such as in the form of a popup within a reservation when the reservation is about to end."), "http://vcl.apache.org/docs/message_substitutions.html");
+		$this->desc = sprintf(_("This section allows for configuration of messages that are sent to users and administrators about things such as reservations and image management. Every message has a default. Additionally, separate messages can be configured for each affiliation. Most of the messages will have parts that are in square brackets. These parts will have data substituted for them before the message is sent. A list of what can be used in square brackets can be found at the <a href=\"%s\">Apache VCL web site</a>. Some messages also have a short form that may be sent such as in the form of a popup within a reservation when the reservation is about to end."), "http://vcl.apache.org/docs/message_substitutions.html");
 		$this->affils = getAffiliations();
 		$this->units = array();
 		$this->basekeys = array();

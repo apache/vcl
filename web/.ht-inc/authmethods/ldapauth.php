@@ -257,7 +257,7 @@ function addLDAPUser($authtype, $userid) {
 function validateLDAPUser($type, $loginid) {
 	global $authMechs;
 	$auth = $authMechs[$type];
-	$savehdlr = set_error_handler(create_function('', ''));
+	$savehdlr = set_error_handler(function() {});
 	if(! ($fh = fsockopen($auth['server'], 636, $errno, $errstr, 5)))
 		return -1;
 	set_error_handler($savehdlr);

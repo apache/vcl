@@ -1138,43 +1138,4 @@ function AJremProfileFromGroup() {
 	sendJSON($arr);
 }
 
-////////////////////////////////////////////////////////////////////////////////
-///
-/// \fn AJfetchRouterDNS()
-///
-/// \brief get router and dns information for a given IP address
-///
-////////////////////////////////////////////////////////////////////////////////
-function AJfetchRouterDNS() {
-	$data = array('status' => 'none');
-	$page = processInputVar('page', ARG_STRING);
-	if($page != 'deploy' && $page != 'profile') {
-		sendJSON($data);
-		return;
-	}
-	$ipaddr = processInputVar('ipaddr', ARG_STRING);
-	# validate fixed IP address
-	if(! validateIPv4addr($ipaddr)) {
-		sendJSON($data);
-		return;
-	}
-	# validate netmask
-	$netmask = processInputVar('netmask', ARG_STRING);
-	$bnetmask = ip2long($netmask);
-	if(! preg_match('/^[1]+0[^1]+$/', sprintf('%032b', $bnetmask))) {
-		sendJSON($data);
-		return;
-	}
-	$network = ip2long($ipaddr) & $bnetmask;
-	$availnets = getVariable('fixedIPavailnetworks', array());
-	$key = long2ip($network) . "/$netmask";
-	if(array_key_exists($key, $availnets)) {
-		$data = array('status' => 'success',
-		              'page' => $page,
-		              'router' => $availnets[$key]['router'],
-		              'dns' => implode(',', $availnets[$key]['dns']));
-	}
-	sendJSON($data);
-}
-
 ?>

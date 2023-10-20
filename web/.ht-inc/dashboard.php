@@ -42,7 +42,7 @@ function dashboard() {
 
 	# -------- left column ---------
 	print "<div id=\"dashleft\">\n";
-	print addWidget('status', 'Current Status');
+	print addWidget('status', 'Current Status', '(Hover for description)');
 	print addWidget('topimages', 'Top 5 Images in Use', '(Reservations &lt; 24 hours long)');
 	print addWidget('toplongimages', 'Top 5 Long Term Images in Use', '(Reservations &gt; 24 hours long)');
 	print addWidget('toppastimages', 'Top 5 Images From Past Day', '(Reservations with a start<br>time within past 24 hours)');
@@ -168,10 +168,11 @@ function addLineChart($id, $title) {
 function getStatusData() {
 	$affilid = getDashboardAffilID();
 	$data = array();
-	$data[] = array('key' => 'Active Reservations', 'val' => 0);
-	$data[] = array('key' => 'Online Computers', 'val' => 0, 'tooltip' => 'Computers in states available, reserved,<br>reloading, inuse, or timeout');
-	$data[] = array('key' => 'In Use Computers', 'val' => 0, 'tooltip' => 'Computers in inuse state');
-	$data[] = array('key' => 'Failed Computers', 'val' => 0);
+	$data[0] = array('key' => 'Active Reservations', 'val' => 0, 'tooltip' => 'Reservations currently running');
+	$data[1] = array('key' => 'Active Short Reservations', 'val' => 0, 'tooltip' => 'Reservations with a duration < 24 hours');
+	$data[2] = array('key' => 'Online Computers', 'val' => 0, 'tooltip' => 'Computers in states available, reserved,<br>reloading, inuse, or timeout');
+	$data[3] = array('key' => 'In Use Computers', 'val' => 0, 'tooltip' => 'Computers in inuse state');
+	$data[4] = array('key' => 'Failed Computers', 'val' => 0);
 	$reloadid = getUserlistID('vclreload@Local');
 	if($affilid == 0) {
 		$query = "SELECT COUNT(id) "
@@ -196,20 +197,45 @@ function getStatusData() {
 	if($row = mysqli_fetch_row($qh))
 		$data[0]['val'] = $row[0];
 
-	$query = "SELECT COUNT(id) FROM computer WHERE stateid IN (2, 3, 6, 8, 11)";
+	if($affilid == 0) {
+		$query = "SELECT COUNT(id) "
+		       . "FROM request "
+		       . "WHERE userid != $reloadid AND "
+		       .       "stateid NOT IN (1, 5, 10, 12) AND "
+		       .       "start < NOW() AND "
+				 .       "end > NOW() AND "
+		       .       "(UNIX_TIMESTAMP(end) - UNIX_TIMESTAMP(start)) < 86400";
+	}
+	else {
+		$query = "SELECT COUNT(rq.id) "
+		       . "FROM request rq, "
+		       .      "user u "
+		       . "WHERE rq.userid != $reloadid AND "
+		       .       "rq.userid = u.id AND "
+		       .       "u.affiliationid = $affilid AND "
+		       .       "rq.stateid NOT IN (1, 5, 10, 12) AND "
+		       .       "rq.start < NOW() AND "
+				 .       "rq.end > NOW() AND "
+		       .       "(UNIX_TIMESTAMP(end) - UNIX_TIMESTAMP(start)) < 86400";
+	}
 	$qh = doQuery($query, 101);
 	if($row = mysqli_fetch_row($qh))
 		$data[1]['val'] = $row[0];
 
-	$query = "SELECT COUNT(id) FROM computer WHERE stateid = 8";
+	$query = "SELECT COUNT(id) FROM computer WHERE stateid IN (2, 3, 6, 8, 11)";
 	$qh = doQuery($query, 101);
 	if($row = mysqli_fetch_row($qh))
 		$data[2]['val'] = $row[0];
 
-	$query = "SELECT COUNT(id) FROM computer WHERE stateid = 5";
+	$query = "SELECT COUNT(id) FROM computer WHERE stateid = 8";
 	$qh = doQuery($query, 101);
 	if($row = mysqli_fetch_row($qh))
 		$data[3]['val'] = $row[0];
+
+	$query = "SELECT COUNT(id) FROM computer WHERE stateid = 5";
+	$qh = doQuery($query, 101);
+	if($row = mysqli_fetch_row($qh))
+		$data[4]['val'] = $row[0];
 	return $data;
 }
 
@@ -674,6 +700,7 @@ function getBlockAllocationData() {
 function getNewReservationData() {
 	$affilid = getDashboardAffilID();
 	$query = "SELECT c.hostname AS computer, "
+	       .        "h.hostname AS vmhost, "
 	       .        "i.prettyname AS image, "
 	       .        "rq.id, "
 	       .        "UNIX_TIMESTAMP(rq.start) AS start, "
@@ -684,6 +711,8 @@ function getNewReservationData() {
 	       . "FROM request rq "
 	       . "LEFT JOIN reservation rs ON (rs.requestid = rq.id) "
 	       . "LEFT JOIN computer c ON (c.id = rs.computerid) "
+	       . "LEFT JOIN vmhost vh ON (c.vmhostid = vh.id) "
+	       . "LEFT JOIN computer h ON (h.id = vh.computerid) "
 	       . "LEFT JOIN image i ON (i.id = rs.imageid) "
 	       . "LEFT JOIN OS o ON (o.id = i.OSid) "
 	       . "LEFT JOIN state s1 ON (s1.id = rq.stateid) "
@@ -703,6 +732,8 @@ function getNewReservationData() {
 	while($row = mysqli_fetch_assoc($qh)) {
 		$tmp = explode('.', $row['computer']);
 		$row['computer'] = $tmp[0];
+		$tmp = explode('.', $row['vmhost']);
+		$row['vmhost'] = $tmp[0];
 		$row['start'] = date('D h:i', $row['start']);
 		$tmp = explode('.', $row['managementnode']);
 		$row['managementnode'] = $tmp[0];

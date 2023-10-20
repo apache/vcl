@@ -53,7 +53,7 @@ use FindBin;
 use lib "$FindBin::Bin/../lib";
 
 # Specify the version of this module
-our $VERSION = '2.5';
+our $VERSION = '2.5.1';
 
 use strict;
 use warnings;

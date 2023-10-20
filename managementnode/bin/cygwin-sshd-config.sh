@@ -131,9 +131,17 @@ if [ $? -ne 0 ]; then die "failed to configure / mount point"; fi;
 mount
 print_hr
 
+sshdservice=$(grep ^service_name /usr/bin/ssh-host-config | awk -F'=' '{print $2}')
+
+if [[ $sshdservice == "" ]]; then
+	sshdservice=cygsshd
+fi
+
+echo "sshd service name is $sshdservice"
+
 # Stop and kill all sshd processes
 echo Stopping sshd service if it is running
-net stop sshd 2>/dev/null
+net stop $sshdservice 2>/dev/null
 print_hr
 
 echo Killing any sshd.exe processes
@@ -146,7 +154,7 @@ print_hr
 
 # Delete the sshd service if it already exists
 echo Deleting sshd service if it already exists
-$SYSTEMROOT/system32/sc.exe delete sshd
+$SYSTEMROOT/system32/sc.exe delete $sshdservice
 print_hr
 
 # Make sure sshd service registry key is gone
@@ -154,6 +162,7 @@ print_hr
 # This prevents the service from being reinstalled
 echo Deleting sshd service registry key
 reg.exe DELETE 'HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\sshd' /f
+reg.exe DELETE "HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Services\\${sshdservice}" /f
 print_hr
 
 # Delete sshd user, a new account will be created
@@ -377,8 +386,8 @@ echo rebaseall exit status: %ERRORLEVEL%
 IF ERRORLEVEL 1 exit /b %ERRORLEVEL%
 echo.
 
-echo Starting Cygwin SSHD service
-net start sshd
+echo Starting Cygwin SSHD service (${sshdservice})
+net start ${sshdservice}
 IF ERRORLEVEL 1 exit /b %ERRORLEVEL%
 
 echo /var/log/sshd.log ending:
