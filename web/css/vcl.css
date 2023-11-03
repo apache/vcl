@@ -181,6 +181,10 @@ body {
 	width: 100px;
 }
 
+.newResRadio:disabled+label {
+	color: #aaa;
+}
+
 #resStatusText {
 	width: 100%;
 	height: 100%;

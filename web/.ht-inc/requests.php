@@ -1308,9 +1308,13 @@ function newReservationHTML() {
 			                     'checkout' => 1,
 			                     'maxinitialtime' => 0,
 			                     'revisions' => 0);
+			if(! isset($server['image'][$id]))
+				$images[$id]['server'] = 0;
 			if(array_key_exists($id, $imagedata) &&
-			   ! $imagedata[$id]["forcheckout"])
+			   ! $imagedata[$id]["forcheckout"]) {
 				$images[$id]['checkout'] = 0;
+				$images[$id]['server'] = 0;
+			}
 			if(array_key_exists($id, $imagedata) &&
 			   $imagingaccess && array_key_exists($id, $imaging['image'])) {
 			   if($imagedata[$id]['rootaccess'] == 1 || $imagedata[$id]['ownerid'] == $user['id'])
@@ -1339,6 +1343,9 @@ function newReservationHTML() {
 				checkUserHasPerm('View Debug Information')))) {
 				$images[$id]['revisions'] = 1;
 				$dorevisionscont = 1;
+			}
+			if($images[$id]['imaging'] == 0 && $images[$id]['checkout'] == 0) {
+				unset($images[$id]);
 			}
 		}
 	}
@@ -1385,7 +1392,7 @@ function newReservationHTML() {
 	}
 
 	$imageid = getUsersLastImage($user['id']);
-	if(is_null($imageid) && count($images)) {
+	if((is_null($imageid) || ! isset($images[$imageid])) && count($images)) {
 		$tmp = array_keys($images);
 		$imageid = $tmp[0];
 	}
@@ -1446,7 +1453,7 @@ function newReservationHTML() {
 		$h .= "<h2>" . i("New Reservation") . "</h2>\n";
 
 	if(! count($images)) {
-		$h .= i("You do not have access to any images.");
+		$h .= i("You do not have access to any environments.");
 		$h .= "<br><br>\n";
 		$h .= "   <div align=\"center\"><br>\n";
 		$h .= "   <button dojoType=\"dijit.form.Button\">\n";
@@ -1460,49 +1467,6 @@ function newReservationHTML() {
 		$h .= "</div>\n"; # newResDlg
 		return $h;
 	}
-
-	$chk = array('base' => '', 'imaging' => '', 'server' => '');
-	if(! $baseaccess && $serveraccess)
-		$chk['server'] = 'checked';
-	elseif($forimaging)
-		$chk['imaging'] = 'checked';
-	else
-		$chk['base'] = 'checked';
-
-	$showradios = 0;
-	if($baseaccess + $imagingaccess + $serveraccess > 1)
-		$showradios = 1;
-	if($showradios)
-		$h .= i("Reservation type:") . "<br>\n";
-	$h .= "<div";
-	if(! $baseaccess || $showradios == 0)
-		$h .= " style=\"display: none;\"";
-	else
-		$h .= " style=\"display: inline-block;\"";
-	$h .= "><input type=\"radio\" id=\"basicrdo\" name=\"restype\" ";
-	$h .= "onclick=\"selectResType();\" {$chk['base']}>\n";
-	$h .= "<label for=\"basicrdo\">" . i("Basic Reservation");
-	$h .= "</label></div>\n";
-	$h .= "<div";
-	if(! $imagingaccess || $showradios == 0)
-		$h .= " style=\"display: none;\"";
-	else
-		$h .= " style=\"display: inline-block;\"";
-	$h .= "><input type=\"radio\" id=\"imagingrdo\" name=\"restype\" ";
-	$h .= "onclick=\"selectResType();\" {$chk['imaging']}>\n";
-	$h .= "<label for=\"imagingrdo\">" . i("Imaging Reservation");
-	$h .= "</label></div>\n";
-	$h .= "<div";
-	if(! $serveraccess || $showradios == 0)
-		$h .= " style=\"display: none;\"";
-	else
-		$h .= " style=\"display: inline-block;\"";
-	$h .= "><input type=\"radio\" id=\"serverrdo\" name=\"restype\" ";
-	$h .= "onclick=\"selectResType();\" {$chk['server']}>\n";
-	$h .= "<label for=\"serverrdo\">" . i("Server Reservation");
-	$h .= "</label></div>\n";
-	if($showradios)
-		$h .= "<br><br>\n";
 
 	/*$h .= "<span id=\"deployprofileslist\" class=\"hidden\">\n";
 	$h .= "<div dojoType=\"dojo.data.ItemFileWriteStore\" jsId=\"profilesstore\" ";
@@ -1525,7 +1489,6 @@ function newReservationHTML() {
 	$h .= "<input type=\"hidden\" id=\"appliedprofileid\" value=\"0\">\n";
 	$h .= "</span>\n"; # deployprofileslist*/
 
-	$h .= "<div id=\"deployserverdiv\">\n";
 	# directions
 	$h .= "<span id=\"nrdirections\">";
 	$h .= i("Please select the environment you want to use from the list:");
@@ -1564,14 +1527,57 @@ function newReservationHTML() {
 	$h .= "<select dojoType=\"dijit.form.FilteringSelect\" id=\"deployimage\" ";
 	$h .= "style=\"width: 95%;\" required=\"true\" store=\"imagestore\" ";
 	$h .= "queryExpr=\"*\${0}*\" ";
-	if($forimaging)
-		$h .= "query=\"{imaging: 1}\" ";
-	else
-		$h .= "query=\"{basic: 1, checkout: 1}\" ";
 	$h .= "highlightMatch=\"all\" autoComplete=\"false\" ";
 	$h .= "invalidMessage=\"" . i("Please select a valid environment");
 	$h .= "\" onChange=\"selectEnvironment();\" tabIndex=1></select>\n";
 	$h .= "</span><br><br>\n";
+
+	$chk = array('base' => '', 'imaging' => '', 'server' => '');
+	if(! $baseaccess && $serveraccess)
+		$chk['server'] = 'checked';
+	elseif($forimaging)
+		$chk['imaging'] = 'checked';
+	else
+		$chk['base'] = 'checked';
+
+	$h .= "<span id=\"restyperadios\">\n";
+	$showradios = 0;
+	if($baseaccess + $imagingaccess + $serveraccess > 1)
+		$showradios = 1;
+	if($showradios)
+		$h .= i("Reservation type:") . "<br>\n";
+	$h .= "<div";
+	if(! $baseaccess || $showradios == 0)
+		$h .= " style=\"display: none;\"";
+	else
+		$h .= " style=\"display: inline-block;\"";
+	$h .= "><input type=\"radio\" id=\"basicrdo\" name=\"restype\" ";
+	$h .= "onclick=\"selectResType();\" {$chk['base']} class=\"newResRadio\">\n";
+	$h .= "<label for=\"basicrdo\">" . i("Basic Reservation");
+	$h .= "</label></div>\n";
+	$h .= "<div";
+	if(! $imagingaccess || $showradios == 0)
+		$h .= " style=\"display: none;\"";
+	else
+		$h .= " style=\"display: inline-block;\"";
+	$h .= "><input type=\"radio\" id=\"imagingrdo\" name=\"restype\" ";
+	$h .= "onclick=\"selectResType();\" {$chk['imaging']} class=\"newResRadio\">\n";
+	$h .= "<label for=\"imagingrdo\">" . i("Imaging Reservation");
+	$h .= "</label></div>\n";
+	$h .= "<div";
+	if(! $serveraccess || $showradios == 0)
+		$h .= " style=\"display: none;\"";
+	else
+		$h .= " style=\"display: inline-block;\"";
+	$h .= "><input type=\"radio\" id=\"serverrdo\" name=\"restype\" ";
+	$h .= "onclick=\"selectResType();\" {$chk['server']} class=\"newResRadio\">\n";
+	$h .= "<label for=\"serverrdo\">" . i("Server Reservation");
+	$h .= "</label></div>\n";
+	if($showradios)
+		$h .= "<br><br>\n";
+	$h .= "</span>\n"; # restyperadios
+
+	$h .= "<div id=\"deployserverdiv\">\n";
 	$imagenotes = getImageNotes($imageid);
 	$desc = '';
 	if(! preg_match('/^\s*$/', $imagenotes['description'])) {
@@ -1700,6 +1706,7 @@ function newReservationHTML() {
 		$h .= labeledFormItem('nousercheck', i('Disable timeout for disconnected users'), 'check', '', '', '1');
 	$h .= "<br></span>";
 
+	$h .= "<div id=\"whenstartblock\">\n";
 	$h .= "<span id=\"whentitlebasic\">";
 	$h .= i("When would you like to use the environment?");
 	$h .= "</span>\n";
@@ -1710,8 +1717,10 @@ function newReservationHTML() {
 	$h .= i("When would you like to deploy the server?");
 	$h .= "</span>";
 	$h .= "<br>\n";
+	$h .= "</div>\n"; # whenstartblock
 
 	# duration radios
+	$h .= "<span id=\"durationblock\">\n";
 	$h .= "&nbsp;&nbsp;&nbsp;";
 	$h .= "<input type=\"radio\" id=\"startnow\" name=\"deploystart\" ";
 	$h .= "onclick=\"setStartNow();\" checked>\n";
@@ -1740,6 +1749,7 @@ function newReservationHTML() {
 	$h .= selectInputHTML('meridian', array("am" => "a.m.", "pm" => "p.m."),
 	                      'deploymeridian', "onChange='setStartLater();'", $timeArr[2]);
 	$h .= "</span>\n";
+	$h .= "</span>\n"; # durationblock
 
 	# any start
 	$h .= "<span id=\"anystart\" class=\"hidden\">\n";
@@ -1873,6 +1883,9 @@ function AJupdateWaitTime() {
 	   ($type == 'imaging' && ! $imagingaccess) ||
 	   ($type == 'server' && ! $serveraccess))
 		return;
+
+		print "showHideTypeInputs();";
+
 	if($type == 'imaging')
 		$imaging = 1;
 
@@ -4683,6 +4696,12 @@ function processRequestInput() {
 	   array_key_exists($return['imageid'], $noimaging)))	{
 		$return['err'] = 1;
 		$return['errmsg'] = i('No access to submitted environment');
+		return $return;
+	}
+	$server = getUserResources(array("serverCheckOut"), array("available"));
+	if($return['type'] == 'server' && ! isset($server['image'][$return['imageid']])) {
+		$return['err'] = 1;
+		$return['errmsg'] = i('Server reservation not allowed for submitted environment');
 		return $return;
 	}
 

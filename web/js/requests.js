@@ -79,7 +79,7 @@ function initViewRequests(imaging) {
 function showNewResDlg() {
 	resetNewResDlg();
 	if(dojo.byId('basicrdo')) {
-		selectResType();
+		//selectResType();
 		selectEnvironment();
 	}
 	if(dijit.byId('newResDlgBtn'))
@@ -140,15 +140,102 @@ function resetNewResDlg() {
 function setLastImage() {
 	var sel = dijit.byId('deployimage');
 	sel.set('value', lastimageid);
-	checkSelectedInList();
+}
+
+function setResTypeButtons() {
+	var item = dijit.byId('deployimage').get('item');
+	var checkout = imagestore.getValue(item, 'checkout');
+	var imaging = imagestore.getValue(item, 'imaging');
+	var server = imagestore.getValue(item, 'server');
+	if(server) {
+		dojo.byId('serverrdo').disabled = false;
+	}
+	else {
+		if(dojo.byId('serverrdo').checked) {
+			if(checkout) {
+				dojo.byId('basicrdo').checked = true;
+			}
+			else if(imaging) {
+				dojo.byId('imagingrdo').checked = true;
+			}
+		}
+		dojo.byId('serverrdo').checked = false;
+		dojo.byId('serverrdo').disabled = true;
+	}
+	if(checkout) {
+		dojo.byId('basicrdo').disabled = false;
+	}
+	else {
+		if(dojo.byId('basicrdo').checked) {
+			if(imaging) {
+				dojo.byId('imagingrdo').checked = true;
+			}
+			else if(server) {
+				dojo.byId('serverrdo').checked = true;
+			}
+		}
+		dojo.byId('basicrdo').checked = false;
+		dojo.byId('basicrdo').disabled = true;
+	}
+	if(imaging) {
+		dojo.byId('imagingrdo').disabled = false;
+	}
+	else {
+		if(dojo.byId('imagingrdo').checked) {
+			if(checkout) {
+				dojo.byId('basicrdo').checked = true;
+			}
+			else if(server) {
+				dojo.byId('serverrdo').checked = true;
+			}
+		}
+		dojo.byId('imagingrdo').checked = false;
+		dojo.byId('imagingrdo').disabled = true;
+	}
+	selectResType();
 }
 
 function selectResType() {
+	showHideTypeInputs();
+	if(dojo.byId('basicrdo').checked) {
+		var imageid = getSelectValue('deployimage');
+		var item = dijit.byId('deployimage').get('item');
+		if(item) {
+			var max = imagestore.getValue(item, 'maxinitialtime');
+		}
+		if(max)
+			setMaxRequestLength(max);
+		else
+			setMaxRequestLength(defaultMaxTime);
+		if(! durationchanged)
+			dojo.byId('reqlength').value = 60;
+	}
+	if(dojo.byId('imagingrdo').checked) {
+		setMaxRequestLength(maximaging);
+		if(! durationchanged)
+			dojo.byId('reqlength').value = 480;
+	}
+	if(dojo.byId('serverrdo').checked) {
+		dijit.byId('deploystarttime').set('required', true);
+		dijit.byId('deploystartdate').set('required', true);
+		if(dojo.byId('endat') && ! dojo.byId('endat').checked) {
+			dojo.byId('endindef').checked = true;
+		}
+	}
+	delayedUpdateWaitTime(0, 50);
+	resetDeployBtnLabel();
+	resizeRecenterDijitDialog('newResDlg');
+}
+
+function showHideTypeInputs() {
+	dojo.removeClass('restyperadios', 'hidden');
+	dojo.removeClass('whenstartblock', 'hidden');
+	dojo.removeClass('durationblock', 'hidden');
+	dojo.removeClass('waittime', 'hidden');
 	if(dojo.byId('basicrdo').checked || dojo.byId('imagingrdo').checked) {
 		dojo.removeClass('limitstart', 'hidden');
 		dojo.removeClass('durationend', 'hidden');
 		dojo.addClass('whentitleserver', 'hidden');
-		//dojo.addClass('deployprofileslist', 'hidden');
 		dojo.addClass('nrnamespan', 'hidden');
 		dojo.addClass('nrservergroupspan', 'hidden');
 		//dojo.addClass('nrmacaddrspan', 'hidden');
@@ -165,54 +252,22 @@ function selectResType() {
 			dojo.addClass('endlbl', 'hidden');
 			dojo.addClass('specifyend', 'hidden');
 		}
-		if(dojo.byId('endat') && ! dojo.byId('endat').checked &&
-		   dojo.byId('endduration')) {
-			dojo.byId('endduration').checked = true;
-			delayedUpdateWaitTime(0, 50);
-		}
 	}
 	if(dojo.byId('basicrdo').checked) {
-		dijit.byId('deployimage').set('query', {basic: 1, checkout: 1});
-		checkSelectedInList();
 		if(dijit.byId('nousercheck'))
 			dojo.removeClass('nousercheckspan', 'hidden');
-		var imageid = getSelectValue('deployimage');
-		var item = dijit.byId('deployimage').get('item');
-		var max = imagestore.getValue(item, 'maxinitialtime');
-		if(max)
-			setMaxRequestLength(max);
-		else
-			setMaxRequestLength(defaultMaxTime);
 		dojo.removeClass('whentitlebasic', 'hidden');
 		dojo.addClass('whentitleimaging', 'hidden');
-		if(! durationchanged)
-			dojo.byId('reqlength').value = 60;
-	}
-	if(dojo.byId('imagingrdo').checked) {
-		dijit.byId('deployimage').set('query', {imaging: 1});
-		checkSelectedInList();
-		setMaxRequestLength(maximaging);
 		dojo.removeClass('whentitleimaging', 'hidden');
 		dojo.addClass('whentitlebasic', 'hidden');
 		if(dijit.byId('nousercheck'))
 			dojo.addClass('nousercheckspan', 'hidden');
-		if(! durationchanged)
-			dojo.byId('reqlength').value = 480;
 	}
 	if(dojo.byId('serverrdo').checked) {
-		dijit.byId('deployimage').set('query', {server: 1, checkout: 1});
-		checkSelectedInList();
 		if(dijit.byId('nousercheck'))
 			dojo.addClass('nousercheckspan', 'hidden');
-		dijit.byId('deploystarttime').set('required', true);
-		dijit.byId('deploystartdate').set('required', true);
 		dojo.addClass('waittime', 'hidden');
 		dojo.addClass('deployerr', 'hidden');
-		if(dojo.hasClass('anystart', 'hidden') &&
-		   dojo.byId('startlater') &&
-		   dojo.byId('startlater').checked) {
-			delayedUpdateWaitTime(0, 50);
-		}
 		dojo.addClass('whentitlebasic', 'hidden');
 		dojo.addClass('whentitleimaging', 'hidden');
 		dojo.addClass('limitstart', 'hidden');
@@ -232,28 +287,7 @@ function selectResType() {
 		dojo.removeClass('endlbl', 'hidden');
 		dojo.removeClass('specifyend', 'hidden');
 		//showDijitButton('newResDlgShowConfigBtn'); // finishconfigs
-		if(dojo.byId('endat') && ! dojo.byId('endat').checked) {
-			dojo.byId('endindef').checked = true;
-			delayedUpdateWaitTime(0, 50);
-		}
 	}
-	resetDeployBtnLabel();
-	resizeRecenterDijitDialog('newResDlg');
-}
-
-function checkSelectedInList() {
-	var sel = dijit.byId('deployimage');
-	var q = new Object();
-	for(v in sel.query)
-		q[v] = sel.query[v];
-	q.id = sel.get('value');
-	sel.store.fetch({
-		query: q,
-		onComplete: function(items, request) {
-			if(items.length == 0)
-				setFirstAvailableImage();
-		}
-	});
 }
 
 function setFirstAvailableImage() {
@@ -270,10 +304,11 @@ function setFirstAvailableImage() {
 function selectEnvironment() {
 	if(! initialimageset)
 		return;
+	setResTypeButtons();
 	var imageid = getSelectValue('deployimage');
 	var item = dijit.byId('deployimage').get('item');
 	var max = imagestore.getValue(item, 'maxinitialtime');
-	if(max)
+	if(max && max < defaultMaxTime)
 		setMaxRequestLength(max);
 	else
 		setMaxRequestLength(defaultMaxTime);
@@ -549,9 +584,17 @@ function getImageDescription() {
 	   ! checkValidatedObj('deployimage'))
 		return;
 	dojo.byId('imgdesc').innerHTML = '';
+	var type;
+	if(dojo.byId('basicrdo').checked)
+		type = 'basic';
+	else if(dojo.byId('imagingrdo').checked)
+		type = 'imaging';
+	else if(dojo.byId('serverrdo').checked)
+		type = 'server';
 	var data = {continuation: dojo.byId('waitcontinuation').value,
 	            desconly: 1,
-	            imageid: getSelectValue('deployimage')}
+	            type: type,
+	            imageid: getSelectValue('deployimage')};
 	RPCwrapper(data, generalReqCB, 0, 30000);
 }
 
