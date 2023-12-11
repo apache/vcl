@@ -495,7 +495,7 @@ sub post_load {
 	my $image_name            = $self->data->get_image_name();
 	my $computer_node_name    = $self->data->get_computer_node_name();
 	my $image_os_install_type = $self->data->get_image_os_install_type();
-	
+
 	notify($ERRORS{'OK'}, 0, "beginning Linux post_load tasks, image: $image_name, computer: $computer_node_name");
 
 	# Wait for computer to respond to SSH
@@ -578,7 +578,7 @@ sub post_load {
 			}
 		}
 	}
-	
+
 	return $self->SUPER::post_load();
 }
 
@@ -1286,11 +1286,11 @@ sub reserve {
 	# Add a local vcl user group if it doesn't already exist
 	# Do this before OS.pm::reserve calls add_user_accounts
 	$self->add_vcl_usergroup();
-	
+
 	# Configure sshd to only listen on the private interface and add ext_sshd service listening on the public interface
 	# This needs to be done after update_public_ip_address is called from OS.pm::reserve
 	$self->configure_ext_sshd() || return;
-	
+
 	# Call OS.pm's reserve subroutine
 	$self->SUPER::reserve() || return;
 	
@@ -3101,7 +3101,7 @@ sub delete_user {
 	
 	if ($home_directory_on_local_disk) {
 		$delete_home_directory = 1;
-		
+
 		# Fetch exclude_list
 		my @exclude_list = $self->get_exclude_list();
 		if ((grep(/\/home\/$username/, @exclude_list))) {
@@ -3151,7 +3151,7 @@ sub delete_user {
 			}
 		}
 	}
-	
+
 	if ($delete_home_directory) {
 		notify($ERRORS{'DEBUG'}, 0, "home directory will be deleted: $home_directory_path");
 		$userdel_command .= ' -r';
@@ -4188,6 +4188,59 @@ sub get_cpu_speed {
 
 #//////////////////////////////////////////////////////////////////////////////
 
+=head2 get_cpu_numa_data
+
+ Parameters  : none
+ Returns     : array
+ Description : Retrieves numa information of computer's CPUs
+
+=cut
+
+sub get_cpu_numa_data {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $computer_node_name = $self->data->get_computer_node_name();
+	
+	my $command = "lscpu";
+	my ($exit_status, $output) = $self->execute($command);
+	
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve CPU NUMA info from $computer_node_name");
+		return;
+	}
+	
+	my ($numacnt) = map {$_ =~ /NUMA node\(s\):\s*(\d+)/} @$output;
+	if ($numacnt) {
+		$numacnt = int($numacnt);
+		notify($ERRORS{'DEBUG'}, 0, "retrieved $computer_node_name CPU NUMA nodes: $numacnt");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to determine $computer_node_name CPU NUMA nodes, 'NUMA node(s):' line does not exist in the cpuinfo output:\n" . join("\n", @$output));
+		return ();
+	}
+
+	my @numanodes;
+
+	for (my $i = 0; $i < $numacnt; $i++) {
+		($numanodes[$i]) = map {$_ =~ /NUMA node$i CPU\(s\):\s*([-,0-9]+)/} @$output;
+		if ($numanodes[$i]) {
+			notify($ERRORS{'DEBUG'}, 0, "retrieved $computer_node_name NUMA node $i CPU(s): $numanodes[$i]");
+		}
+		else {
+			notify($ERRORS{'WARNING'}, 0, "failed to determine $computer_node_name NUMA node $i CPU(s), 'NUMA node$i CPU(s):' line does not exist in the cpuinfo output:\n" . join("\n", @$output));
+			return ();
+		}
+	}
+	notify($ERRORS{'DEBUG'}, 0, "NUMA CPU data for $computer_node_name:\n" . format_data(@numanodes));
+	return @numanodes;
+}
+
+#//////////////////////////////////////////////////////////////////////////////
+
 =head2 get_total_memory
 
  Parameters  : none
@@ -4225,6 +4278,88 @@ sub get_total_memory {
 		notify($ERRORS{'WARNING'}, 0, "failed to determine $computer_node_name total memory capacity from command: '$command', output:\n" . join("\n", @$output));
 		return;
 	}
+}
+
+#//////////////////////////////////////////////////////////////////////////////
+
+=head2 get_memory_huge_pages
+
+ Parameters  : none
+ Returns     : hash reference
+ Description : Retrieves information about the computer's huge pages
+
+=cut
+
+sub get_memory_huge_pages {
+	my $self = shift;
+	if (ref($self) !~ /VCL::Module/i) {
+		notify($ERRORS{'CRITICAL'}, 0, "subroutine was called as a function, it must be called as a class method");
+		return;
+	}
+	
+	my $computer_node_name = $self->data->get_computer_node_name();
+
+	my $command = "cat /proc/meminfo";
+	my ($exit_status, $output) = $self->execute($command);
+	
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve huge page size from $computer_node_name");
+		return;
+	}
+
+	my ($hugepagesize) = map {$_ =~ /Hugepagesize:\s*(\d+) kB/} @$output;
+	if ($hugepagesize) {
+		notify($ERRORS{'DEBUG'}, 0, "retrieved $computer_node_name huge page size: $hugepagesize kB");
+	}
+	else {
+		notify($ERRORS{'WARNING'}, 0, "failed to determine $computer_node_name huge page size from command: '$command', output:\n" . join("\n", @$output));
+		return;
+	}
+	my ($freemem) = map {$_ =~ /MemFree:\s*(\d+) kB/} @$output;
+	if ($freemem) {
+		notify($ERRORS{'DEBUG'}, 0, "retrieved $computer_node_name MemFree: $freemem kB");
+	}
+	my ($hugefree) = map {$_ =~ /HugePages_Free:\s*(\d+)/} @$output;
+	if ($hugefree) {
+		$hugefree = $hugefree * $hugepagesize;
+		notify($ERRORS{'DEBUG'}, 0, "retrieved $computer_node_name huge memory free $hugefree kB");
+	}
+	
+	$command = "numastat -m";
+	($exit_status, $output) = $self->execute($command);
+	
+	if (!defined($output)) {
+		notify($ERRORS{'WARNING'}, 0, "failed to retrieve NUMA memory info from $computer_node_name");
+		return;
+	}
+
+	my @nodes = ();
+	my $nodecnt = 0;
+
+	for my $line (@$output) {
+		if($line =~ /Node/) {
+			my @parts = split(' ', $line);
+			my $len = scalar(@parts);
+			$nodecnt = $parts[$len - 2] + 1;
+			notify($ERRORS{'DEBUG'}, 0, "NUMA node count on $computer_node_name: $nodecnt");
+			next;
+		}
+		if($line =~ /(MemFree|HugePages_Total|HugePages_Free)/) {
+			my @parts = split(' ', $line);
+			for(my $i = 0; $i < $nodecnt; $i++) {
+				$nodes[$i]{$parts[0]} = $parts[$i + 1] * 1024; # convert to kB
+			}
+		}
+	}
+	notify($ERRORS{'DEBUG'}, 0, "NUMA data for $computer_node_name\n" . format_data(@nodes));
+	if($nodecnt == 0 || scalar(@nodes) == 0) {
+		notify($ERRORS{'WARNING'}, 0, "failed to determine $computer_node_name NUMA memory data from command: '$command', output:\n" . join("\n", @$output));
+		return ();
+	}
+	return ( hugepagesize => $hugepagesize, # in kB
+	         numapagedata => \@nodes,
+	         totalfreemem => $freemem,
+	         totalfreehugemem => $hugefree );
 }
 
 #//////////////////////////////////////////////////////////////////////////////

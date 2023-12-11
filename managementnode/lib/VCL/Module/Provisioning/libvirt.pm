@@ -1844,11 +1844,83 @@ EOF
 	#    Windows, however, expects it to be in so called 'localtime'."
 	my $clock_offset = ($image_os_type =~ /windows/) ? 'localtime' : 'utc';
 	
-	my $cpusockets = $cpu_count;
-	my $cpucores = 1;
-	if($cpu_count > 2) {
-		$cpusockets = 2;
-		$cpucores = ($cpu_count - ($cpu_count % 2)) / 2;
+	my $cpusockets;
+	my $cpucores;
+	my $use_numa = 0;
+	my @numacpu;
+	my $optimize_memory = 0;
+	my $use_huge_pages = 0;
+	my $pernode_memory = 0;
+	my $cpuset = '';
+	my %numa_memory = $self->vmhost_os->get_memory_huge_pages();
+
+	if($cpu_count < 32) {
+		$cpusockets = $cpu_count;
+		$cpucores = 1;
+		if($cpu_count > 2) {
+			$cpusockets = 2;
+			$cpucores = ($cpu_count + ($cpu_count % 2)) / 2;
+		}
+		# use regular memory if available to leave huge pages for NUMA optomized VMs but
+		#   use huge pages if not enough regular memory free
+		if ($memory_kb > $numa_memory{totalfreemem} &&
+		    $memory_kb <= $numa_memory{totalfreehugemem}) {
+			$use_huge_pages = 1;
+			notify($ERRORS{'DEBUG'}, 0, "Using huge pages for memory backing");
+		}
+	}
+	else {
+		notify($ERRORS{'DEBUG'}, 0, "CPU count >= 32, using NUMA settings");
+		$use_numa = 1;
+		@numacpu = $self->vmhost_os->get_cpu_numa_data();
+		my $numacnt = scalar(@numacpu);
+		$cpusockets = $numacnt;
+		if($cpu_count % $numacnt != 0) {
+			# increase cpu_count to be evenly divisable by numa node count
+			$cpu_count = $cpu_count + ($numacnt - $cpu_count % $numacnt);
+			notify($ERRORS{'DEBUG'}, 0, "CPU count does not divide equally among NUMA nodes ($numacnt), increased CPU count to $cpu_count");
+		}
+		$cpucores = $cpu_count / $numacnt;
+
+		my $huge_memory_kb = $memory_kb;
+		if ($memory_kb % ($numa_memory{hugepagesize} * $numacnt)) {
+			# $memory_kb does not evenly divide into huge pages across all NUMA nodes, need to adjust $memory_kb
+			$huge_memory_kb = $memory_kb + ($numa_memory{hugepagesize} * $numacnt) - ($memory_kb % ($numa_memory{hugepagesize} * $numacnt));
+			notify($ERRORS{'DEBUG'}, 0, "required memory does not divide evenly among huge page size and NUMA nodes, increasing to $huge_memory_kb kB if huge pages are used");
+			notify($ERRORS{'DEBUG'}, 0, "----> huge page size: $numa_memory{hugepagesize}");
+			notify($ERRORS{'DEBUG'}, 0, "----> NUMA nodes: $numacnt");
+			notify($ERRORS{'DEBUG'}, 0, "----> memory per node: " . $huge_memory_kb / $numacnt);
+		}
+		$optimize_memory = 1;
+		$use_huge_pages = 1;
+		$pernode_memory = $memory_kb / $numacnt;
+		my $huge_pernode_memory = $huge_memory_kb / $numacnt;
+
+		# memory needed by VM: $memory_kb
+		# divide that by number of NUMA nodes: $numacnt
+		# check that each NUMA node has that much memory free
+		my @tmp_cpuset;
+		for (my $i = 0; $i < $numacnt; $i++) {
+			if($numa_memory{numapagedata}[$i]{MemFree} < $pernode_memory) {
+				notify($ERRORS{'DEBUG'}, 0, "not enough memory free to evenly split among NUMA nodes; memory will not be NUMA optimized") if ($optimize_memory);
+				$optimize_memory = 0;
+			}
+			if($numa_memory{numapagedata}[$i]{HugePages_Free} < $huge_pernode_memory) {
+				notify($ERRORS{'DEBUG'}, 0, "not enough huge pages free to evenly split among NUMA nodes; memory will not use huge pages") if ($use_huge_pages);
+				$use_huge_pages = 0;
+			}
+			push @tmp_cpuset, $numacpu[$i];
+			$cpuset = "$cpuset," . $numacpu[$i];
+		}
+		if ($use_huge_pages) {
+			$optimize_memory = 1;
+		}
+		$cpuset = join(",", @tmp_cpuset);
+		if ($use_huge_pages) {
+			notify($ERRORS{'DEBUG'}, 0, "Using huge pages for memory backing");
+			$memory_kb = $huge_memory_kb;
+			$pernode_memory = $huge_pernode_memory;
+		}
 	}
 
 	my $xml_hashref = {
@@ -1962,7 +2034,50 @@ EOF
 		notify($ERRORS{'DEBUG'}, 0, "vmpath ($vmhost_vmpath) is on NFS; setting disk cache to none");
 		$xml_hashref->{'devices'}[0]{'disk'}[0]{'driver'}{'cache'} = 'none';
 	}
-	
+
+	if ($use_numa) {
+		my $host_numacells = scalar(@numacpu);
+		# vcpu section
+		$xml_hashref->{'vcpu'} = [ {'placement' => 'static', 'cpuset' => $cpuset, 'content' => $cpu_count}];
+
+		# cputune section
+		my @pins = ();
+		for (my $i = 0, my $index, my $cpusetval; $i < $cpu_count; $i++) {
+			$index = int($i / $cpucores);
+			$cpusetval = $numacpu[$index];
+			$pins[$i] = {'vcpu' => $i, 'cpuset' => $cpusetval};
+		}
+		$xml_hashref->{'cputune'} = { 'vcpupin' => \@pins };
+
+		if ($optimize_memory) {
+			# numatune section
+			my @memnodes = ();
+			for (my $i = 0; $i < $host_numacells; $i++) {
+				$memnodes[$i] = { 'cellid' => $i, 'mode' => 'strict', 'nodeset' => $i };
+			}
+			my $nodeset = "0-" . ($host_numacells - 1);
+			$xml_hashref->{'numatune'} = { 'memory' => {'node' => 'strict', 'nodeset' => $nodeset}, 'memnode' => \@memnodes};
+
+			# cpu numa section
+			my @numacells = ();
+			for (my $i = 0,
+				  my $cores_per_cell = $cpu_count / $host_numacells,
+				  my $lower,
+				  my $upper;
+				  $i < $host_numacells;
+				  $i++) {
+				$lower = $i * $cores_per_cell;
+				$upper = $lower + $cores_per_cell - 1;
+				$numacells[$i] = { 'id' => $i, 'cpus' => "$lower-$upper", 'memory' => $pernode_memory, 'unit' => 'KiB' };
+			}
+			$xml_hashref->{'cpu'}[0]{'numa'} = {'cell' => \@numacells};
+		}
+	}
+
+	if ($use_huge_pages) {
+		$xml_hashref->{'memoryBacking'} = { 'hugepages' => {} };
+	}
+
 	notify($ERRORS{'DEBUG'}, 0, "generated domain XML:\n" . format_data($xml_hashref));
 	return hash_to_xml_string($xml_hashref, 'domain');
 }
