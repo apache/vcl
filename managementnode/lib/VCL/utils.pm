@@ -3686,14 +3686,76 @@ AND imagerevision_others.id != imagerevision_production.id
 EOF
 	
 	# Call the database execute subroutine
-	if (database_execute($sql_statement)) {
-		notify($ERRORS{'OK'}, 0, "imagerevision $imagerevision_id set to production");
-		return 1;
-	}
-	else {
+	if (!database_execute($sql_statement)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to set imagerevision $imagerevision_id to production");
 		return 0;
 	}
+	notify($ERRORS{'OK'}, 0, "imagerevision $imagerevision_id set to production");
+
+	# create reload reservations for any available computers loaded with different
+	#   revisions of the image
+	$sql_statement = "SELECT imageid FROM imagerevision WHERE id = $imagerevision_id";
+	my @rows = database_select($sql_statement);
+	my $row = $rows[0];
+	my $image_id = $row->{imageid};
+	if (!$image_id) {
+		notify($ERRORS{'DEBUG'}, 0, "failed to get image_id for $imagerevision_id");
+		return 1;
+	}
+
+	$sql_statement = <<EOF;
+SELECT
+id
+FROM
+computer
+WHERE
+currentimageid = $image_id
+AND imagerevisionid != $imagerevision_id
+AND deleted = 0
+AND stateid = (SELECT id FROM state WHERE name = 'available')
+AND RAM >= (SELECT minram FROM image WHERE id = $image_id)
+AND procnumber >= (SELECT minprocnumber FROM image WHERE id = $image_id)
+AND network >= (SELECT minnetwork FROM image WHERE id = $image_id)
+AND id NOT IN 
+   (
+	SELECT reservation.computerid
+	FROM reservation
+	JOIN request ON (reservation.requestid = request.id)
+	WHERE
+	request.start > DATE_SUB(NOW(), INTERVAL 5 MINUTE)
+	AND request.start < DATE_ADD(NOW(), INTERVAL 30 MINUTE)
+	AND request.stateid NOT IN (SELECT id FROM state WHERE name IN ('deleted', 'complete', 'timeout'))
+	)
+EOF
+	my @selected_rows = database_select($sql_statement);
+	if (scalar @selected_rows == 0) {
+		notify($ERRORS{'DEBUG'}, 0, "no computers found loaded with a different revision of $image_id than $imagerevision_id");
+		return 1;
+	}
+	my $sql_statement_template = <<EOF;
+SELECT
+mn.id
+FROM computer c
+JOIN resource rc ON (rc.resourcetypeid = 12 AND rc.subid = c.id)
+JOIN resourcegroupmembers rgm ON (rgm.resourceid = rc.id)
+JOIN resourcemap rm ON (rgm.resourcegroupid = rm.resourcegroupid2 AND rm.resourcetypeid2 = 12 AND rm.resourcetypeid1 = 16)
+JOIN resourcegroupmembers rgmmn ON (rgmmn.resourcegroupid = rm.resourcegroupid1)
+JOIN resource rmn ON (rgmmn.resourceid = rmn.id)
+JOIN managementnode mn ON (rmn.subid = mn.id AND rmn.resourcetypeid = 16 AND mn.stateid != 1)
+WHERE c.id = %d
+LIMIT 1
+EOF
+	my ($comp_id, $mn_id, @mn_selected_rows);
+	for my $selected_row (@selected_rows) {
+		$comp_id = $selected_row->{id};
+		$sql_statement = sprintf($sql_statement_template, $comp_id);
+		@mn_selected_rows = database_select($sql_statement);
+		next if (scalar @mn_selected_rows == 0);
+		$mn_id = $mn_selected_rows[0]{id};
+		notify($ERRORS{'DEBUG'}, 0, "creating reload reservation: compid: $comp_id, imageid: $image_id, revision: $imagerevision_id, mnid: $mn_id");
+		insert_request($mn_id, 'reload', 'reload', 'vclreload', $comp_id, $image_id, $imagerevision_id, 0, 15);
+	}
+	return 1;
 }
 
 #//////////////////////////////////////////////////////////////////////////////
