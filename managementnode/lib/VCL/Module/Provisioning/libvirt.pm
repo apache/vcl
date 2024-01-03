@@ -1764,6 +1764,7 @@ sub generate_domain_xml {
 	my $image_name = $self->data->get_image_name();
 	my $image_display_name = $self->data->get_image_prettyname();
 	my $image_os_type = $self->data->get_image_os_type();
+	my $image_project = $self->data->get_image_project();
 	my $computer_name = $self->data->get_computer_short_name();
 	my $management_node_name = $self->data->get_management_node_short_name();
 	
@@ -1928,21 +1929,21 @@ EOF
 							'type' => $interface_model_type,
 						},
 					},
-					{
-						'type' => $eth1_interface_type,	
-						'mac' => {
-							'address' => $eth1_mac_address,
-						},
-						'source' => {
-							$eth1_interface_type => $eth1_source_device,
-						},
-						#'target' => {
-						#	'dev' => 'vnet1',
-						#},
-						'model' => {
-							'type' => $interface_model_type,
-						},
-					}
+					#{
+					#	'type' => $eth1_interface_type,	
+					#	'mac' => {
+					#		'address' => $eth1_mac_address,
+					#	},
+					#	'source' => {
+					#		$eth1_interface_type => $eth1_source_device,
+					#	},
+					#	#'target' => {
+					#	#	'dev' => 'vnet1',
+					#	#},
+					#	'model' => {
+					#		'type' => $interface_model_type,
+					#	},
+					#}
 				],
 				'graphics' => [
 					{
@@ -1962,7 +1963,80 @@ EOF
 		notify($ERRORS{'DEBUG'}, 0, "vmpath ($vmhost_vmpath) is on NFS; setting disk cache to none");
 		$xml_hashref->{'devices'}[0]{'disk'}[0]{'driver'}{'cache'} = 'none';
 	}
-	
+
+	# add nic for public, first check for project not including 'vcl', skipping the public network assigned to the vmhost profile
+	my $skipadditionalnicnetwork = '';
+	if ($image_project !~ /vcl/i) {
+		foreach my $network_name (keys $network_info) {
+			next if ($network_name =~ /^$eth0_source_device$/i || $network_name =~ /^$eth1_source_device$/i);
+			if ($network_name =~ /$image_project/i || $image_project =~ /$network_name/i) {
+				$skipadditionalnicnetwork = $network_name;
+				notify($ERRORS{'DEBUG'}, 0, "network name ($network_name) and image project name ($image_project) intersect, setting public network interface for VM to network $network_name");
+				my %interface = (
+					'type' => 'network',
+					'mac' => {
+						'address' => $eth1_mac_address,
+					},
+					'source' => {
+						'network' => $network_name,
+					},
+					'model' => {
+						'type' => $interface_model_type,
+					}
+				);
+				push @{$xml_hashref->{'devices'}[0]{'interface'}}, \%interface;
+			}
+		}
+	}
+
+	my $nic_cnt = scalar @{$xml_hashref->{'devices'}[0]{interface}};
+
+	# if no public nic added above, add public nic on network assigned in the vmhost profile
+	if($nic_cnt == 1) {
+		notify($ERRORS{'DEBUG'}, 0, "image project is: $image_project, adding $eth1_source_device for public network");
+		my %interface = (
+			'type' => $eth1_interface_type,
+			'mac' => {
+				'address' => $eth1_mac_address,
+			},
+			'source' => {
+				$eth1_interface_type => $eth1_source_device,
+			},
+			'model' => {
+				'type' => $interface_model_type,
+			}
+		);
+		push @{$xml_hashref->{'devices'}[0]{'interface'}}, \%interface;
+	}
+
+	# add additional nics if project not strictly 'vcl'
+	if ($image_project !~ /^vcl$/i) {
+		notify($ERRORS{'DEBUG'}, 0, "image project is: $image_project, checking if additional network adapters should be configured");
+		foreach my $network_name (keys $network_info) {
+			next if ($network_name =~ /^$eth0_source_device$/i || $network_name =~ /^$eth1_source_device$/i);
+			next if ($network_name eq $skipadditionalnicnetwork);
+			if ($network_name =~ /$image_project/i || $image_project =~ /$network_name/i) {
+				notify($ERRORS{'DEBUG'}, 0, "network name ($network_name) and image project name ($image_project) intersect, adding network interface to VM for network $network_name");
+				my %interface = (
+					'type' => 'network',
+					'mac' => {
+						'address' => get_random_mac_address('00:0c:29:'),
+					},
+					'source' => {
+						'network' => $network_name,
+					},
+					'model' => {
+						'type' => $interface_model_type,
+					}
+				);
+				push @{$xml_hashref->{'devices'}[0]{'interface'}}, \%interface;
+			}
+			else {
+				notify($ERRORS{'DEBUG'}, 0, "network name ($network_name) and image project name ($image_project) do not intersect, network interface will not be added to VM for network $network_name");
+			}
+		}
+	}
+
 	notify($ERRORS{'DEBUG'}, 0, "generated domain XML:\n" . format_data($xml_hashref));
 	return hash_to_xml_string($xml_hashref, 'domain');
 }

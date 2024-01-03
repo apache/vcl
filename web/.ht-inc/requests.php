@@ -4025,9 +4025,12 @@ function AJconfirmDeleteRequest() {
 		sendJSON($data);
 		return;
 	}
+	$deletename = $reservation['prettyimage'];
+	if(isset($request['servername']) && $request['servername'] != '')
+		$deletename = $request['servername'];
 	if(datetimeToUnix($request["start"]) > time()) {
 		$text = sprintf(i("Delete reservation for %s starting %s?"),
-		                "<b>{$reservation["prettyimage"]}</b>",
+		                "<b>{$deletename}</b>",
 		                prettyDatetime($request["start"]));
 	}
 	else {
@@ -4048,13 +4051,13 @@ function AJconfirmDeleteRequest() {
 				$showstart = prettyDatetime($dtstart);
 			if($notbyowner == 0) {
 				$text = sprintf(i("Are you finished with your reservation for %s that started %s?"),
-				                "<b>{$reservation["prettyimage"]}</b>", $showstart);
+				                "<b>{$deletename}</b>", $showstart);
 			}
 			else {
 				$userinfo = getUserInfo($request["userid"], 1, 1);
 				$text = sprintf(i("Delete reservation by %s for %s that started %s?"),
 				                "{$userinfo['unityid']}@{$userinfo['affiliation']}",
-				                "<b>{$reservation["prettyimage"]}</b>",
+				                "<b>{$deletename}</b>",
 				                $showstart);
 			}
 		}
