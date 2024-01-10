@@ -53,7 +53,8 @@ use VCL::utils;
 use File::Basename;
 
 use IO::File;
-use POSIX qw(tmpnam);
+#use POSIX qw(tmpnam);
+use File::Temp qw/ :POSIX /;
 
 ###############################################################################
 
@@ -404,7 +405,7 @@ sub get_sysprep_inf_contents {
 	
 	# [Unattended] - Setup/Sysprep execution configuration
 	$sysprep_inf_hash{Unattended}{DriverSigningPolicy} = 'Ignore';         # Specifies how to process unsigned drivers during unattended Setup
-	$sysprep_inf_hash{Unattended}{ExtendOemPartition} = 'No';              # Specifies whether to extend the partition on which you install the Microsoft® Windows® operating system
+	$sysprep_inf_hash{Unattended}{ExtendOemPartition} = 'No';              # Specifies whether to extend the partition on which you install the Microsoftï¿½ Windowsï¿½ operating system
 	#$sysprep_inf_hash{Unattended}{Hibernation} = 'No';                    # Specifies whether to enable the hibernation option in the Power Options control panel
 	$sysprep_inf_hash{Unattended}{InstallFilesPath} = 'C:\Sysprep\i386';   # Specifies the location of files necessary for installation during Mini-Setup
 	#$sysprep_inf_hash{Unattended}{KeepPageFile} = '';                     # Specifies whether to regenerate the page file
@@ -484,8 +485,8 @@ sub get_sysprep_inf_contents {
 	
 	# [UserData] - user identification settings
 	$sysprep_inf_hash{UserData}{ComputerName} = '*';                       # Specifies the computer name
-	$sysprep_inf_hash{UserData}{FullName} = 'Virtual Computing Lab';       # Specifies the end user’s full name
-	$sysprep_inf_hash{UserData}{OrgName} = $image_affiliation_name;        # Specifies an organization’s name
+	$sysprep_inf_hash{UserData}{FullName} = 'Virtual Computing Lab';       # Specifies the end userï¿½s full name
+	$sysprep_inf_hash{UserData}{OrgName} = $image_affiliation_name;        # Specifies an organizationï¿½s name
 	$sysprep_inf_hash{UserData}{ProductKey} = $product_key;                # Specifies the Product Key for each unique installation of Windows
 	
 	# [Sysprep] section contains an entry for automatically generating the entries in the pre-existing [SysprepMassStorage] section and then installing those mass-storage controllers

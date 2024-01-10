@@ -3690,7 +3690,7 @@ sub get_firewall_ruleset_info {
 		return;
 	}
 	
-	return $ENV{firewall_ruleset_info} if defined($ENV{firewall_ruleset_info});
+	return $ENV->{firewall_ruleset_info} if defined($ENV->{firewall_ruleset_info});
 	
 	my $vmhost_computer_name = $self->data->get_vmhost_hostname();
 	
@@ -3801,7 +3801,7 @@ sub get_firewall_ruleset_info {
 	}
 	
 	notify($ERRORS{'OK'}, 0, "retrieved firewall ruleset info from VM host $vmhost_computer_name:\n" . format_data($ruleset_info));
-	$ENV{firewall_ruleset_info} = $ruleset_info;
+	$ENV->{firewall_ruleset_info} = $ruleset_info;
 	return $ruleset_info;
 }
 

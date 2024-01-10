@@ -296,7 +296,7 @@ sub does_image_exist {
 	my $imagerevision_id = $self->data->get_imagerevision_id() || return 0;
 	my $image_name = $self->data->get_image_name() || return 0;
 	my ($os_token, $os_compute_url) = $self->_get_os_token_compute_url();
-	my $os_project_id = $ENV{'OS_PROJECT_ID'};
+	my $os_project_id = $ENV->{'OS_PROJECT_ID'};
 	if (!defined($os_token) || !defined($os_compute_url) || !defined($os_project_id)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to get openstack auth info");
 		return 0;
@@ -360,7 +360,7 @@ sub get_image_size {
 	my $image_name = shift;
 	my $imagerevision_id = $self->data->get_imagerevision_id() || return;
 	my ($os_token, $os_compute_url) = $self->_get_os_token_compute_url();
-	my $os_project_id = $ENV{'OS_PROJECT_ID'};
+	my $os_project_id = $ENV->{'OS_PROJECT_ID'};
 	if (!defined($os_token) || !defined($os_compute_url) || !defined($os_project_id)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to get openstack auth info");
 		return;
@@ -788,11 +788,11 @@ EOF
 sub _get_os_token_compute_url {
 	my $self = shift;
 
-	my $os_auth_url = $ENV{'OS_AUTH_URL'};
-	my $os_tenant_name = $ENV{'OS_TENANT_NAME'};
-	my $os_user_name = $ENV{'OS_USERNAME'};
-	my $os_user_password = $ENV{'OS_PASSWORD'};
-	my $os_service_name = $ENV{'OS_SERVICE_NAME'};
+	my $os_auth_url = $ENV->{'OS_AUTH_URL'};
+	my $os_tenant_name = $ENV->{'OS_TENANT_NAME'};
+	my $os_user_name = $ENV->{'OS_USERNAME'};
+	my $os_user_password = $ENV->{'OS_PASSWORD'};
+	my $os_service_name = $ENV->{'OS_SERVICE_NAME'};
 	if (!defined($os_auth_url) || !defined($os_tenant_name) 
 		|| !defined($os_user_name) || !defined($os_user_password) || !defined($os_service_name)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to get openstack auth information from environment");
@@ -880,7 +880,7 @@ sub _insert_os_image_id {
 		return 0;
 	}
 	my ($os_token, $os_compute_url) = $self->_get_os_token_compute_url();
-	my $os_project_id = $ENV{'OS_PROJECT_ID'};
+	my $os_project_id = $ENV->{'OS_PROJECT_ID'};
 	if (!defined($os_token) || !defined($os_compute_url) || !defined($os_project_id)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to get the openstack auth info");
 		return 0;
@@ -1007,7 +1007,7 @@ sub _post_os_create_image{
 	}
 	notify($ERRORS{'DEBUG'}, 0, "os_image_name: $image_name in sub _post_os_create_image");
 	my ($os_token, $os_compute_url) = $self->_get_os_token_compute_url();
-	my $os_project_id = $ENV{'OS_PROJECT_ID'};
+	my $os_project_id = $ENV->{'OS_PROJECT_ID'};
 	if (!defined($os_token) || !defined($os_compute_url) || !defined($os_project_id)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to get openstack auth information from environment");
 		return;
@@ -1076,18 +1076,18 @@ sub _post_os_create_instance {
 	my $imagerevision_id = $self->data->get_imagerevision_id() || return;
 	my $computer_name  = $self->data->get_computer_short_name() || return;
 	my $image_os_type  = $self->data->get_image_os_type() || return;
-	my $os_project_id = $ENV{'OS_PROJECT_ID'};
-	my $os_key_name = $ENV{'VCL_LINUX_KEY'}; 	
+	my $os_project_id = $ENV->{'OS_PROJECT_ID'};
+	my $os_key_name = $ENV->{'VCL_LINUX_KEY'};
 	if (!defined($os_project_id) || !defined($os_key_name)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to get the openstack project id or key name");
 		return;
 	}
 	if ($image_os_type eq 'linux') {
-		$os_key_name =  $ENV{'VCL_LINUX_KEY'}; 	
+		$os_key_name =  $ENV->{'VCL_LINUX_KEY'};
 		notify($ERRORS{'OK'}, 0, "The $os_key_name is the key for Linux (default)");
 	} 
 	elsif ($image_os_type eq 'windows') {
-		$os_key_name =  $ENV{'VCL_WINDOWS_KEY'}; 	
+		$os_key_name =  $ENV->{'VCL_WINDOWS_KEY'};
 		notify($ERRORS{'OK'}, 0, "The $os_key_name is the key for Windows");
 	}
 
@@ -1230,14 +1230,14 @@ sub _set_os_auth_conf {
 	my $vcl_linux_key = $self->{config}->{vcl_linux_key};
 
 	# Set Environment File
-	$ENV{'OS_AUTH_URL'} = $os_auth_url;
-	$ENV{'OS_SERVICE_NAME'} = $os_service_name;
-	$ENV{'OS_PROJECT_ID'} = $os_project_id;
-	$ENV{'OS_TENANT_NAME'} = $os_tenant_name;
-	$ENV{'OS_USERNAME'} = $os_username;
-	$ENV{'OS_PASSWORD'} = $os_password;
-	$ENV{'VCL_WINDOWS_KEY'} = $vcl_windows_key;
-	$ENV{'VCL_LINUX_KEY'} = $vcl_linux_key;
+	$ENV->{'OS_AUTH_URL'} = $os_auth_url;
+	$ENV->{'OS_SERVICE_NAME'} = $os_service_name;
+	$ENV->{'OS_PROJECT_ID'} = $os_project_id;
+	$ENV->{'OS_TENANT_NAME'} = $os_tenant_name;
+	$ENV->{'OS_USERNAME'} = $os_username;
+	$ENV->{'OS_PASSWORD'} = $os_password;
+	$ENV->{'VCL_WINDOWS_KEY'} = $vcl_windows_key;
+	$ENV->{'VCL_LINUX_KEY'} = $vcl_linux_key;
 
 	return 1;
 }# end sub _set_os_auth_conf
@@ -1258,7 +1258,7 @@ sub _terminate_os_instance {
 	my $computer_name = $self->data->get_computer_short_name() || return 0;
 		
 	my ($os_token, $os_compute_url) = $self->_get_os_token_compute_url();
-	my $os_project_id = $ENV{'OS_PROJECT_ID'};
+	my $os_project_id = $ENV->{'OS_PROJECT_ID'};
 	my $os_instance_id = $self->_get_os_instance_id();
 	if (!defined($os_token) || !defined($os_compute_url) || !defined($os_project_id) || !defined($os_instance_id)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to get the openstack auth info");
@@ -1360,7 +1360,7 @@ sub _wait_for_copying_image {
 	
 	my $os_image_id = shift;
 	my ($os_token, $os_compute_url) = $self->_get_os_token_compute_url();
-	my $os_project_id = $ENV{'OS_PROJECT_ID'};
+	my $os_project_id = $ENV->{'OS_PROJECT_ID'};
 	if (!defined($os_image_id) || !defined($os_token) || !defined($os_compute_url) || !defined($os_project_id)) {
 		notify($ERRORS{'WARNING'}, 0, "failed to get openstack auth info or image id: $os_image_id");
 		return 0;

@@ -78,11 +78,11 @@ sub initialize {
 	my $self = shift;
 	
 	# Initialize the database handle count
-	$ENV{dbh_count} = 0;
+	$ENV->{dbh_count} = 0;
 	
 	# Attempt to get a database handle
-	if ($ENV{dbh} = getnewdbh()) {
-		notify($ERRORS{'OK'}, 0, "obtained a database handle for this state process, stored as \$ENV{dbh}");
+	if ($ENV->{dbh} = getnewdbh()) {
+		notify($ERRORS{'OK'}, 0, "obtained a database handle for this state process, stored as \$ENV->{dbh}");
 	}
 	else {
 		notify($ERRORS{'WARNING'}, 0, "unable to obtain a database handle for this state process");
