@@ -98,7 +98,7 @@ function XMLRPCaffiliations() {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function XMLRPCtest($string) {
-	$string = processInputData($string, ARG_STRING);
+	$string = processInputData($string, ARG_STRING, 0, '');
 	return array('status' => 'success',
 	             'message' => 'RPC call worked successfully',
 	             'string' => $string);
@@ -168,7 +168,7 @@ function XMLRPCaddRequest($imageid, $start, $length, $foruser='',
 	global $user;
 	$imageid = processInputData($imageid, ARG_NUMERIC);
 	$start = processInputData($start, ARG_STRING, 1);
-	$length = processInputData($length, ARG_NUMERIC);
+	$length = processInputData($length, ARG_NUMERIC, 0, 60);
 	#$foruser = processInputData($foruser, ARG_STRING, 1);
 
 	// make sure user didn't submit a request for an image he
@@ -425,9 +425,7 @@ function XMLRPCdeployServer($imageid, $start, $end, $admingroup='',
 		             'errormsg' => "access denied to $imageid");
 	}
 	if($admingroup != '') {
-		$admingroup = processInputData($admingroup, ARG_STRING);
-		if(get_magic_quotes_gpc())
-			$admingroup = stripslashes($admingroup);
+		$admingroup = processInputData($admingroup, ARG_STRING, 0, '');
 		if(preg_match('/@/', $admingroup)) {
 			$tmp = explode('@', $admingroup);
 			$escadmingroup = vcl_mysql_escape_string($tmp[0]);
@@ -452,9 +450,7 @@ function XMLRPCdeployServer($imageid, $start, $end, $admingroup='',
 	else
 		$admingroupid = '';
 	if($logingroup != '') {
-		$logingroup = processInputData($logingroup, ARG_STRING);
-		if(get_magic_quotes_gpc())
-			$logingroup = stripslashes($logingroup);
+		$logingroup = processInputData($logingroup, ARG_STRING, 0, '');
 		if(preg_match('/@/', $logingroup)) {
 			$tmp = explode('@', $logingroup);
 			$esclogingroup = vcl_mysql_escape_string($tmp[0]);
@@ -478,7 +474,7 @@ function XMLRPCdeployServer($imageid, $start, $end, $admingroup='',
 	}
 	else
 		$logingroupid = '';
-	$ipaddr = processInputData($ipaddr, ARG_STRING);
+	$ipaddr = processInputData($ipaddr, ARG_STRING, 0, '');
 	$ipaddrArr = explode('.', $ipaddr);
 	if($ipaddr != '' && (! preg_match('/^(([0-9]){1,3}\.){3}([0-9]){1,3}$/', $ipaddr) ||
 		$ipaddrArr[0] < 1 || $ipaddrArr[0] > 255 ||
@@ -490,7 +486,7 @@ function XMLRPCdeployServer($imageid, $start, $end, $admingroup='',
 		             'errormsg' => "Invalid IP address. Must be w.x.y.z with each of "
 		                         . "w, x, y, and z being between 1 and 255 (inclusive)");
 	}
-	$macaddr = processInputData($macaddr, ARG_STRING);
+	$macaddr = processInputData($macaddr, ARG_STRING, 0, '');
 	if($macaddr != '' && ! preg_match('/^(([A-Fa-f0-9]){2}:){5}([A-Fa-f0-9]){2}$/', $macaddr)) {
 		return array('status' => 'error',
 		             'errorcode' => 58,
@@ -504,9 +500,7 @@ function XMLRPCdeployServer($imageid, $start, $end, $admingroup='',
 	$end = processInputData($end, ARG_STRING, 1);
 	#$foruser = processInputData($foruser, ARG_STRING, 1);
 
-	$name = processInputData($name, ARG_STRING);
-	if(get_magic_quotes_gpc())
-		$name = stripslashes($name);
+	$name = processInputData($name, ARG_STRING, 0, '');
 	if(! preg_match('/^([-a-zA-Z0-9_\. ]){0,255}$/', $name)) {
 		return array('status' => 'error',
 		             'errorcode' => 58,
@@ -572,8 +566,6 @@ function XMLRPCdeployServer($imageid, $start, $end, $admingroup='',
 	       . "WHERE requestid = {$return['requestid']}";
 	doQuery($query);
 	if($userdata != '') {
-		if(get_magic_quotes_gpc())
-			$userdata = stripslashes($userdata);
 		$esc_userdata = vcl_mysql_escape_string($userdata);
 		$query = "INSERT INTO variable "
 		       .        "(name, "
@@ -806,7 +798,7 @@ function XMLRPCgetRequestStatus($requestid) {
 function XMLRPCgetRequestConnectData($requestid, $remoteIP) {
 	global $user;
 	$requestid = processInputData($requestid, ARG_NUMERIC);
-	$remoteIP = processInputData($remoteIP, ARG_STRING, 1);
+	$remoteIP = processInputData($remoteIP, ARG_STRING, 0, '');
 	if(! preg_match('/^([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})$/', $remoteIP, $matches) ||
 	   $matches[1] < 1 || $matches[1] > 223 ||
 	   $matches[2] > 255 ||
@@ -921,7 +913,7 @@ function XMLRPCgetRequestConnectData($requestid, $remoteIP) {
 function XMLRPCextendRequest($requestid, $extendtime) {
 	global $user;
 	$requestid = processInputData($requestid, ARG_NUMERIC);
-	$extendtime = processInputData($extendtime, ARG_NUMERIC);
+	$extendtime = processInputData($extendtime, ARG_NUMERIC, 0, 0);
 
 	$userRequests = getUserRequests('all', $user['id']);
 	$found = 0;
@@ -1130,7 +1122,7 @@ function XMLRPCsetRequestEnding($requestid, $end) {
 		             'errormsg' => "access denied to specify end time");
 	}
 
-	$end = processInputData($end, ARG_NUMERIC);
+	$end = processInputData($end, ARG_NUMERIC, 0, 0);
 
 	$maxend = datetimeToUnix("2038-01-01 00:00:00");
 	if($end < 0 || $end > $maxend) {
@@ -1185,7 +1177,7 @@ function XMLRPCsetRequestEnding($requestid, $end) {
 	if($timeToNext > -1) {
 		$lockedall = 1;
 		if(count($request['reservations']) > 1) {
-			# get semaphore on each existing node in cluster so that nothing 
+			# get semaphore on each existing node in cluster so that nothing
 			# can get moved to the nodes during this process
 			$unixend = datetimeToUnix($request['end']);
 			$checkend = unixToDatetime($unixend + 900);
@@ -1770,8 +1762,6 @@ function XMLRPCnodeExists($nodeName, $parentNode) {
 	if(in_array("userGrant", $user["privileges"]) ||
 		in_array("resourceGrant", $user["privileges"]) ||
 		in_array("nodeAdmin", $user["privileges"])) {
-		if(get_magic_quotes_gpc())
-			$nodeName = stripslashes($nodeName);
 		$nodeName = vcl_mysql_escape_string($nodeName);
 		// does a node with this name already exist?
 		$query = "SELECT id "
@@ -2620,8 +2610,6 @@ function XMLRPCeditUserGroup($name, $affiliation, $newName, $newAffiliation,
 	#   are valid
 	$validate = array('name' => $name,
 	                  'affiliation' => $affiliation);
-	if(get_magic_quotes_gpc())
-		$newOwner = stripslashes($newOwner);
 	if(! empty($newOwner))
 		$validate['owner'] = $newOwner;
 	if(! empty($newManagingGroup))
@@ -2672,8 +2660,6 @@ function XMLRPCeditUserGroup($name, $affiliation, $newName, $newAffiliation,
 		$validate = array('name' => $name,
 		                  'affiliation' => $affiliation);
 		if(! empty($newName)) {
-			if(get_magic_quotes_gpc())
-				$newName = stripslashes($newName);
 			$validate['name'] = $newName;
 			$tmp = vcl_mysql_escape_string($newName);
 			$updates[] = "name = '$tmp'";
@@ -2940,8 +2926,6 @@ function XMLRPCaddUsersToGroup($name, $affiliation, $users) {
 	foreach($users as $_user) {
 		if(empty($_user))
 			continue;
-		if(get_magic_quotes_gpc())
-			$_user = stripslashes($_user);
 		$esc_user = vcl_mysql_escape_string($_user);
 		if(validateUserid($_user) == 1)
 			addUserGroupMember($esc_user, $rc['id']);
@@ -3022,8 +3006,6 @@ function XMLRPCremoveUsersFromGroup($name, $affiliation, $users) {
 	foreach($users as $_user) {
 		if(empty($_user))
 			continue;
-		if(get_magic_quotes_gpc())
-			$_user = stripslashes($_user);
 		$esc_user = vcl_mysql_escape_string($_user);
 		# check that affiliation of user can be determined because getUserlistID
 		#   will abort if it cannot find it
@@ -3128,8 +3110,6 @@ function XMLRPCaddResourceGroup($name, $managingGroup, $type) {
 			             'errorcode' => 76,
 			             'errormsg' => 'resource group already exists');
 		}
-		if(get_magic_quotes_gpc())
-			$name = stripslashes($name);
 		if(! preg_match('/^[-a-zA-Z0-9_\. ]{3,30}$/', $name)) {
 			return array('status' => 'error',
 			             'errorcode' => 87,
@@ -3935,7 +3915,7 @@ function XMLRPCcheckCryptSecrets($reservationid) {
 ////////////////////////////////////////////////////////////////////////////////
 function XMLRPCgetOneClickParams($oneclickid) {
 	global $user;
-	$oneclickid = processInputData($oneclickid, ARG_NUMERIC);
+	$oneclickid = processInputData($oneclickid, ARG_NUMERIC, 0, 0);
 	$query = "SELECT o.id, "
 	       .        "o.userid, "
 	       .        "o.imageid, "
@@ -4073,8 +4053,8 @@ function XMLRPCaddOneClick($name, $imageid, $duration, $autologin) {
 	global $user;
 	$userid = $user['id'];
 	$imageid = processInputData($imageid, ARG_NUMERIC);
-	$name = processInputData($name, ARG_STRING);
-	$duration = processInputData($duration, ARG_NUMERIC);
+	$name = processInputData($name, ARG_STRING, 0, '');
+	$duration = processInputData($duration, ARG_NUMERIC, 0, 120);
 	$autologin = processInputData($autologin, ARG_NUMERIC) == 1 ? 1 : 0;
 
 	# validate $imageid
@@ -4163,10 +4143,10 @@ function XMLRPCaddOneClick($name, $imageid, $duration, $autologin) {
 ////////////////////////////////////////////////////////////////////////////////
 function XMLRPCeditOneClick($oneclickid, $name, $imageid, $duration, $autologin) {
 	global $user;
-	$oneclickid = processInputData($oneclickid, ARG_NUMERIC);
+	$oneclickid = processInputData($oneclickid, ARG_NUMERIC, 0, 0);
 	$imageid = processInputData($imageid, ARG_NUMERIC);
-	$name = processInputData($name, ARG_STRING);
-	$duration = processInputData($duration, ARG_NUMERIC);
+	$name = processInputData($name, ARG_STRING, 0, '');
+	$duration = processInputData($duration, ARG_NUMERIC, 0, 120);
 	$autologin = processInputData($autologin, ARG_NUMERIC) == 1 ? 1 : 0;
 
 	# validate $imageid
@@ -4254,7 +4234,7 @@ function XMLRPCeditOneClick($oneclickid, $name, $imageid, $duration, $autologin)
 ////////////////////////////////////////////////////////////////////////////////
 function XMLRPCdeleteOneClick($oneclickid) {
 	global $user;
-	$oneclickid = processInputData($oneclickid, ARG_NUMERIC);
+	$oneclickid = processInputData($oneclickid, ARG_NUMERIC, 0, 0);
 
 	$query = "SELECT id "
 	       . "FROM oneclick "

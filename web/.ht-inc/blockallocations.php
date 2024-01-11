@@ -2486,8 +2486,6 @@ function AJacceptBlockAllocationSubmit() {
 		$err = 1;
 	}
 	if($validemail) {
-		if(get_magic_quotes_gpc())
-			$emailtext = stripslashes($emailtext);
 		if(! $err && preg_match('/[<>|]/', $emailtext)) {
 			$errmsg = i("<>\'s and pipes (|) are not allowed in the email text.");
 			$err = 1;
@@ -2707,8 +2705,6 @@ function AJrejectBlockAllocationSubmit() {
 		$errmsg = i("Please include a reason for rejecting the block allocation in the email.");
 		$err = 1;
 	}
-	if(get_magic_quotes_gpc())
-		$emailtext = stripslashes($emailtext);
 	if(! $err && preg_match('/[<>|]/', $emailtext)) {
 		if($validemail)
 			$errmsg = i("<>\'s and pipes (|) are not allowed in the email text.");
@@ -2860,10 +2856,8 @@ function viewBlockStatus() {
 		print i("The selected Block Allocation no longer exists.");
 		return;
 	}
-	$startunix = datetimeToUnix($data['start']);
-	$endunix = datetimeToUnix($data['end']);
-	$start = strftime('%x %l:%M %P %Z', $startunix);
-	$end = strftime('%x %l:%M %P %Z', $endunix);
+	$start = prettyDatetime($data['start'], 1, 0, 0, 1);
+	$end = prettyDatetime($data['end'], 1, 0, 0, 1);
 	print "<div id=statusdiv>\n";
 	print "<table class=blockStatusData summary=\"lists attributes of block allocation\">\n";
 	print "  <tr>\n";
@@ -3267,8 +3261,6 @@ function processBlockAllocationInput() {
 	}
 	if($method == 'request') {
 		$return['comments'] = processInputVar('comments', ARG_STRING);
-		if(get_magic_quotes_gpc())
-			$return['comments'] = stripslashes($return['comments']);
 		if(! $err && preg_match('/[<>]/', $return['comments'])) {
 			$errmsg = i("<>\'s are not allowed in the comments.");
 			$err = 1;

@@ -331,9 +331,9 @@ class Schedule extends Resource {
 		$errormsg = array();
 
 		$return['rscid'] = getContinuationVar('rscid', 0);
-		$return["name"] = processInputVar("name", ARG_STRING);
+		$return["name"] = processInputVar("name", ARG_STRING, '');
 		$return["owner"] = processInputVar("owner", ARG_STRING, "{$user["unityid"]}@{$user['affiliation']}");
-		$times = processInputVar('times', ARG_STRING);
+		$times = processInputVar('times', ARG_STRING, '');
 
 		if(! preg_match("/^([A-Za-z0-9-!@#$%^&\*\(\)_=\+\[\]{}\\\|:;,\.\/\?~` ]){2,30}$/", $return['name'])) {
 			$return['error'] = 1;

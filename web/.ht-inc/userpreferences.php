@@ -562,8 +562,6 @@ function submitGeneralPreferences() {
 		$user['usepublickeys'] = $newval;
 	}
 	if($pubkeyauth == 2 && preg_match('|^[-a-zA-Z0-9\+/ @=\.\n\r]*$|', $pubkeys)) {
-		if(get_magic_quotes_gpc())
-			$pubkeys = stripslashes($pubkeys);
 		$_pubkeys = vcl_mysql_escape_string($pubkeys);
 		$query = "UPDATE user SET sshpublickeys = '$_pubkeys' WHERE id = {$user['id']}";
 		doQuery($query);
@@ -614,6 +612,7 @@ function processUserPrefsInput($checks=1) {
 	   $submitErrMsg[PREFNAMEERR] = i("Preferred name can only be up to 25 characters");
 	}
 	if(! preg_match('/^[a-zA-Z ]*$/', $return["preferredname"])) {
+		$_POST['preferredname'] = preg_replace('/[^a-zA-Z ]/', '', $return['preferredname']);
 	   $submitErr |= PREFNAMEERR;
 	   $submitErrMsg[PREFNAMEERR] = i("Preferred name can only contain letters and spaces");
 	}
@@ -621,11 +620,6 @@ function processUserPrefsInput($checks=1) {
 		$return['newpassword'] = $_POST['newpassword'];
 		$confirmpwd = $_POST['confirmpassword'];
 		$curr = $_POST['currentpassword'];
-		if(get_magic_quotes_gpc()) {
-			$return['newpassword'] = stripslashes($return['newpassword']);
-			$confirmpwd = stripslashes($confirmpwd);
-			$curr = stripslashes($curr);
-		}
 		if(! empty($return['newpassword']) && ! empty($confirmpwd) &&
 		   ! validateLocalAccount($user['unityid'], $curr)) {
 			$submitErr |= LOCALPASSWORDERR;

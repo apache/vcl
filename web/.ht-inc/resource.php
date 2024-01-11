@@ -894,7 +894,12 @@ class Resource {
 		}
 
 		$groups = getUserResources(array($this->restype . "Admin"), array("manageGroup"), 1);
-		$tmp = processInputVar('listids', ARG_STRING);
+		$tmp = processInputVar('listids', ARG_STRING, '');
+		if($tmp == '') {
+				$arr = array('status' => 'invalid');
+				sendJSON($arr);
+				return;
+		}
 		$tmp = explode(',', $tmp);
 		$groupids = array();
 		foreach($tmp as $id) {
@@ -1075,6 +1080,11 @@ class Resource {
 
 		$resources = getUserResources(array($this->restype . "Admin"), array("manageGroup"));
 		$tmp = processInputVar('listids', ARG_STRING);
+		if($tmp == '') {
+				$arr = array('status' => 'invalid');
+				sendJSON($arr);
+				return;
+		}
 		$tmp = explode(',', $tmp);
 		$rscids = array();
 		foreach($tmp as $id) {

@@ -2097,13 +2097,12 @@ function AJupdateWaitTime() {
 function printImageDescription($imageid) {
 	$imagenotes = getImageNotes($imageid);
 	if(! preg_match('/^\s*$/', $imagenotes['description'])) {
-		$desc = preg_replace("/\n/", '<br>', $imagenotes['description']);
-		$desc = preg_replace("/\r/", '', $desc);
+		$desc = preg_replace("/\r/", '', $imagenotes['description']);
 		$desc = preg_replace("/'/", '&#39;', $desc);
-		$desc = preg_replace("/(.{1,60}([ \n]|$))/", '\1<br>', $desc);
+		$desc = htmlwrap($desc, 80);
 		print "dojo.byId('imgdesc').innerHTML = '<b>";
 		print i("Image Description") . "</b>:<br>";
-		print "$desc<br>'; ";
+		print "$desc<br><br>'; ";
 	}
 }
 
@@ -2218,7 +2217,7 @@ function AJshowRequestSuggestedTimes() {
 		for($cnt = 0, $amount = 900, $e = datetimeToUnix($reqdata['end']) + 900;
 		    $cnt < 15 && $amount <= $maxextend && $amount < 7200;
 		    $cnt++, $amount += 900, $e += 900) {
-			$end = strftime('%x %l:%M %P', $e);
+			$end = prettyDatetime($e, 1, 0, 1, 1);
 			$extenstion = getReservationExtenstion($amount / 60);
 			if($cnt % 2)
 				$html .= "<tr class=\"tablerow0\">";
@@ -2234,7 +2233,7 @@ function AJshowRequestSuggestedTimes() {
 		}
 		for(; $cnt < 15 && $amount <= $maxextend;
 		    $cnt++, $amount += 3600, $e += 3600) {
-			$end = strftime('%x %l:%M %P', $e);
+			$end = prettyDatetime($e, 1, 0, 1, 1);
 			$extenstion = getReservationExtenstion($amount / 60);
 			if($cnt % 2)
 				$html .= "<tr class=\"tablerow0\">";
@@ -2262,7 +2261,7 @@ function AJshowRequestSuggestedTimes() {
 		foreach($slots as $key => $slot) {
 			$cnt++;
 			$slot['startts'] += $_SESSION['persistdata']['tzoffset'] * 60;
-			$start = strftime('%x %l:%M %P', $slot['startts']);
+			$start = prettyDatetime($slot['startts'], 1, 0, 1, 1);
 			if(($slot['startts'] - time()) + $slot['startts'] + $slot['duration'] >= 2114402400)
 				# end time >= 2037-01-01 00:00:00
 				$duration = 'indefinite';
@@ -3418,7 +3417,7 @@ function AJeditRequest() {
 	else
 		$maxcheck = $maxtimes['total'];
 	if(! $openend && ($reslen >= $maxcheck)) {
-		$h  = sprintf(i("You are only allowed to extend your reservation such that it has a total length of %s. "), minToHourMin($maxcheck));
+		$h  = sprintf(i("You are only allowed to extend your reservation such that it has a total length of %s. "), minToDaysHourMin($maxcheck));
 		$h .= i("This reservation already meets that length. Therefore, you are not allowed to extend your reservation any further.");
 		$h = preg_replace("/(.{1,60}([ \n]|$))/", '\1<br>', $h) . "<br>";
 		sendJSON(array('status' => 'nomodify', 'html' => $h));
@@ -3528,7 +3527,7 @@ function AJeditRequest() {
 			else
 				$maxcheck = $maxtimes['total'];
 			$m = sprintf(i("You can extend this reservation by up to %s but not exceeding %s for your total reservation time."),
-			             minToHourMin($maxtimes['extend']), minToHourMin($maxcheck));
+			             minToDaysHourMin($maxtimes['extend']), minToDaysHourMin($maxcheck));
 			$h .= preg_replace("/(.{1,60}([ \n]|$))/", '\1<br>', $m) . "<br>";
 		}
 	}
@@ -4402,7 +4401,7 @@ function AJconnectRequest() {
 		$h .= "</big></font><br><br>\n";
 	}
 	$imagenotes = getImageNotes($requestData['reservations'][0]['imageid']);
-	if(! preg_match('/^\s*$/', $imagenotes['usage'])) {
+	if(! is_null($imagenotes['usage']) && ! preg_match('/^\s*$/', $imagenotes['usage'])) {
 		$h .= "<h3>" . i("Notes on using this environment:") . "</h3>\n";
 		$h .= "{$imagenotes['usage']}<br><br><br>\n";
 	}
@@ -4531,6 +4530,11 @@ function AJconnectRequest() {
 function AJcheckConnectTimeout() {
 	$requestid = getContinuationVar('requestid');
 	$reqdata = getRequestInfo($requestid, 1);
+	if(is_null($reqdata)) {
+		$data['status'] = 'timeout';
+		sendJSON($data);
+		return;
+	}
 	$stateid = $reqdata['stateid'];
 	if($stateid == 14)
 		$stateid = $reqdata['laststateid'];
@@ -4714,7 +4718,7 @@ function processRequestInput() {
 		$return['nousercheck'] = 0;
 
 	# revisionid
-	$revids = processInputVar("revisionid", ARG_STRING);
+	$revids = processInputVar("revisionid", ARG_STRING, '');
 	$revids = explode(':', $revids);
 	$images = getImages(0, $return['imageid']);
 	$return['revisionids'] = array();
@@ -4777,7 +4781,7 @@ function processRequestInput() {
 	# server specific input
 	if($return['type'] == 'server') {
 		# name
-		$return['name'] = processInputVar('name', ARG_STRING);
+		$return['name'] = processInputVar('name', ARG_STRING, '');
 		if(! preg_match('/^([-a-zA-Z0-9_\. ]){0,255}$/', $return['name'])) {
 			$return['err'] = 1;
 			$return['errmsg'] = i('The reservation name can only contain letters, numbers, spaces, dashes(-), underscores(_), and periods(.) and can be up to 255 characters long');
@@ -4899,8 +4903,6 @@ function processRequestInput() {
 		$userconfigs = $tmp['config'];
 		$initconfigs = getMappedConfigs($return['imageid']);
 		if(array_key_exists('configdata', $_POST)) {
-			if(get_magic_quotes_gpc())
-				$_POST['configdata'] = stripslashes($_POST['configdata']);
 			$configdata = json_decode($_POST['configdata']);
 		}
 		if(array_key_exists('configdata', $_POST) &&

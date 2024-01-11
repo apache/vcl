@@ -1540,7 +1540,7 @@ class Computer extends Resource {
 			if($olddata['stateid'] == 10 && $data['stateid'] == 10) {
 				$testnotes = $olddata['notes'];
 				# check for notes being changed
-				if(strpos($testnotes, '@') === true) {
+				if(! is_null($testnotes) && strpos($testnotes, '@') === true) {
 					$tmp = explode('@', $olddata['notes']);
 					$testnotes = $tmp[1];
 				}
@@ -1695,23 +1695,23 @@ class Computer extends Resource {
 		$return = array('error' => 0);
 
 		$return['rscid'] = getContinuationVar('rscid', 0);
-		$return['name'] = processInputVar('name', ARG_STRING);
+		$return['name'] = processInputVar('name', ARG_STRING, '');
 		$return['startnum'] = processInputVar('startnum', ARG_NUMERIC);
 		$return['endnum'] = processInputVar('endnum', ARG_NUMERIC);
 		$return['owner'] = processInputVar('owner', ARG_STRING, "{$user['unityid']}@{$user['affiliation']}");
-		$return['type'] = processInputVar('type', ARG_STRING);
-		$return['IPaddress'] = processInputVar('ipaddress', ARG_STRING);
-		$return['privateIPaddress'] = processInputVar('privateipaddress', ARG_STRING);
-		$return['eth0macaddress'] = processInputVar('privatemac', ARG_STRING);
-		$return['eth1macaddress'] = processInputVar('publicmac', ARG_STRING);
-		$return['startpubipaddress'] = processInputVar('startpubipaddress', ARG_STRING);
-		$return['endpubipaddress'] = processInputVar('endpubipaddress', ARG_STRING);
-		$return['startprivipaddress'] = processInputVar('startprivipaddress', ARG_STRING);
-		$return['endprivipaddress'] = processInputVar('endprivipaddress', ARG_STRING);
-		$return['startmac'] = processInputVar('startmac', ARG_STRING);
+		$return['type'] = processInputVar('type', ARG_STRING, '');
+		$return['IPaddress'] = processInputVar('ipaddress', ARG_STRING, '');
+		$return['privateIPaddress'] = processInputVar('privateipaddress', ARG_STRING, '');
+		$return['eth0macaddress'] = processInputVar('privatemac', ARG_STRING, '');
+		$return['eth1macaddress'] = processInputVar('publicmac', ARG_STRING, '');
+		$return['startpubipaddress'] = processInputVar('startpubipaddress', ARG_STRING, '');
+		$return['endpubipaddress'] = processInputVar('endpubipaddress', ARG_STRING, '');
+		$return['startprivipaddress'] = processInputVar('startprivipaddress', ARG_STRING, '');
+		$return['endprivipaddress'] = processInputVar('endprivipaddress', ARG_STRING, '');
+		$return['startmac'] = processInputVar('startmac', ARG_STRING, '');
 		$return['provisioningid'] = processInputVar('provisioningid', ARG_NUMERIC);
 		$return['stateid'] = processInputVar('stateid', ARG_NUMERIC);
-		$return['notes'] = processInputVar('notes', ARG_STRING);
+		$return['notes'] = processInputVar('notes', ARG_STRING, '');
 		$return['vmprofileid'] = processInputVar('vmprofileid', ARG_NUMERIC);
 		$return['platformid'] = processInputVar('platformid', ARG_NUMERIC);
 		$return['scheduleid'] = processInputVar('scheduleid', ARG_NUMERIC);
@@ -1723,9 +1723,9 @@ class Computer extends Resource {
 		$return['natenabled'] = processInputVar('natenabled', ARG_NUMERIC);
 		$return['nathostid'] = processInputVar('nathostid', ARG_NUMERIC);
 		$return['nathostenabled'] = processInputVar('nathostenabled', ARG_NUMERIC);
-		$return['natpublicIPaddress'] = processInputVar('natpublicipaddress', ARG_STRING);
-		$return['natinternalIPaddress'] = processInputVar('natinternalipaddress', ARG_STRING);
-		$return['location'] = processInputVar('location', ARG_STRING);
+		$return['natpublicIPaddress'] = processInputVar('natpublicipaddress', ARG_STRING, '');
+		$return['natinternalIPaddress'] = processInputVar('natinternalipaddress', ARG_STRING, '');
+		$return['location'] = processInputVar('location', ARG_STRING, '');
 		$addmode = processInputVar('addmode', ARG_STRING);
 
 		if(! is_null($addmode) && $addmode != 'single' && $addmode != 'multiple') {
@@ -3581,8 +3581,6 @@ class Computer extends Resource {
 		elseif($newstateid == 10 || $newstateid == 23) {
 			if($newstateid == 10) {
 				$notes = processInputVar('notes', ARG_STRING);
-				if(get_magic_quotes_gpc())
-					$notes = stripslashes($notes);
 				$notes = vcl_mysql_escape_string($notes);
 				$notes = $user["unityid"] . " " . unixToDatetime(time()) . "@"
 				       . $notes;

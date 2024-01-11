@@ -179,7 +179,7 @@ function AJupdateTimeSource() {
 		return;
 	}
 	$origval = getContinuationVar('origval');
-	$val = processInputVar('timesource', ARG_STRING);
+	$val = processInputVar('timesource', ARG_STRING, '');
 	$val = preg_replace('/\s+/', '', $val);
 	if($origval != $val) {
 		$servers = explode(',', $val);
@@ -1075,7 +1075,7 @@ class AffilTextVariable {
 			return;
 		}
 		$value = processInputVar('value', ARG_STRING);
-		if(! $this->validateValue($value)) {
+		if(is_null($value) || ! $this->validateValue($value)) {
 			$arr = array('status' => 'failed',
 			             'msgid' => "{$this->domidbase}msg",
 			             'errmsg' => i('Invalid value submitted.'),
@@ -1147,9 +1147,9 @@ class AffilTextVariable {
 			$id = "{$this->domidbase}_$affilid";
 			$newval = processInputVar($id, ARG_STRING);
 			if($newval !== NULL ||
-			   ! $this->allowempty ||
-			   ($affilid == $this->globalid && ! $this->allowglobalempty)) {
-				if(! $this->validateValue($newval)) {
+			   ($newval === NULL && ! $this->allowempty) ||
+			   (($newval === NULL && $affilid == $this->globalid && ! $this->allowglobalempty))) {
+				if($newval === NULL || ! $this->validateValue($newval)) {
 					$affil = getAffiliationName($affilid);
 					$arr = array('status' => 'failed',
 					             'msgid' => "{$this->domidbase}msg",
@@ -2021,6 +2021,7 @@ class GlobalSingleVariable {
 	var $defaultval;
 	var $updatemsg;
 	var $type;
+	var $invalidvaluemsg;
 
 	/////////////////////////////////////////////////////////////////////////////
 	///
@@ -2127,7 +2128,7 @@ class GlobalSingleVariable {
 				sendJSON($arr);
 				return;
 			case 'textarea':
-				$newval = processInputVar('newval', ARG_STRING); 
+				$newval = processInputVar('newval', ARG_STRING, ''); 
 				if(! $this->validateValue($newval)) {
 					$arr = array('status' => 'failed',
 					             'msgid' => "{$this->domidbase}msg",
@@ -2176,6 +2177,8 @@ class GlobalSingleVariable {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 class userPasswordLength extends GlobalSingleVariable {
+	var $minval;
+	var $maxval;
 	/////////////////////////////////////////////////////////////////////////////
 	///
 	/// \fn __construct()
@@ -2300,6 +2303,13 @@ class GlobalMultiVariable {
 	var $deleteCBextra;
 	var $saveCBextra;
 	var $allowduplicates;
+	var $savekeys;
+	var $setkeys;
+	var $addmsg;
+	var $delmsg;
+	var $constraint;
+	var $invalidmsg;
+	var $invalidvaluemsg;
 
 	/////////////////////////////////////////////////////////////////////////////
 	///
@@ -2481,7 +2491,7 @@ class GlobalMultiVariable {
 			sendJSON($arr);
 			return;
 		}
-		if(! $this->validateValue($newval)) {
+		if(is_null($newval) || ! $this->validateValue($newval)) {
 			$arr = array('status' => 'failed',
 			             'msgid' => "{$this->domidbase}msg",
 			             'btn' => "{$this->domidbase}addbtn",
@@ -2617,7 +2627,7 @@ class GlobalMultiVariable {
 				case 'text':
 				case 'textarea':
 					$newval = processInputVar("{$this->domidbase}|$key", ARG_STRING); 
-					if(! $this->validateValue($newval, $key)) {
+					if(is_null($newval) || ! $this->validateValue($newval, $key)) {
 						$arr = array('status' => 'failed',
 						             'msgid' => "{$this->domidbase}msg",
 						             'btn' => "{$this->domidbase}btn",
@@ -2723,6 +2733,8 @@ class GlobalMultiVariable {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 class NFSmounts extends GlobalMultiVariable {
+	var $invalidmsg;
+	var $invalidvaluemsg;
 	/////////////////////////////////////////////////////////////////////////////
 	///
 	/// \fn __construct()
@@ -2737,13 +2749,14 @@ class NFSmounts extends GlobalMultiVariable {
 		foreach($this->units as $key => $val) {
 			$this->units[$key]['name'] = $val['hostname'];
 		}
-		$vals = getVariablesRegex('^nfsmount\\\|[0-9]+$');
+		$this->setValues();
+		/*$vals = getVariablesRegex('^nfsmount\\\|[0-9]+$');
 		$this->values = array();
 		foreach($vals as $key => $val) {
 			$tmp = explode('|', $key);
 			$id = $tmp[1];
 			$this->values[$id] = $val;
-		}
+		}*/
 		$formbase = ' &lt;hostname or IP&gt;:&lt;export path&gt;,&lt;mount path&gt;';
 		$this->desc = _("NFS Mounts are NFS exports that are to be mounted within each reservation deployed by a given management node.<br>Values must be like") . $formbase;
 		$this->domidbase = 'nfsmount';
@@ -2768,12 +2781,13 @@ class NFSmounts extends GlobalMultiVariable {
 	///
 	/////////////////////////////////////////////////////////////////////////////
 	function setValues() {
-		$vals = getVariablesRegex('^nfsmount\\\|[0-9]+$');
+		$vals = getVariablesRegex('^nfsmount\|[0-9]+$');
 		$this->values = array();
 		foreach($vals as $key => $val) {
 			$tmp = explode('|', $key);
 			$id = $tmp[1];
-			$this->values[$id] = $val;
+			if(isset($this->units[$id]))
+				$this->values[$id] = $val;
 		}
 	}
 
@@ -2963,7 +2977,7 @@ class Affiliations extends GlobalMultiVariable {
 			return;
 		}
 		$newval = processInputVar('multival', ARG_STRING);
-		if(! $this->validateValue($newval)) {
+		if(is_null($newval) || ! $this->validateValue($newval)) {
 			$arr = array('status' => 'failed',
 			             'msgid' => "{$this->domidbase}msg",
 			             'btn' => "{$this->domidbase}addbtn",
@@ -3122,9 +3136,9 @@ class Messages {
 		$this->globalopts = $globalopts;
 
 		if($this->globalopts)
-			$data = getVariablesRegex('^(usermessage\\\||adminmessage\\\|)');
+			$data = getVariablesRegex('^(usermessage\||adminmessage\|)');
 		else
-			$data = getVariablesRegex('^usermessage\\\|');
+			$data = getVariablesRegex('^usermessage\|');
 		foreach($data as $key => $item) {
 			# 0 - category, 1 - type, 2 - affil
 			$keyparts = explode('|', $key);
@@ -3278,7 +3292,7 @@ class Messages {
 	////////////////////////////////////////////////////////////////////////////////
 	function AJdeleteMessages() {
 		global $user;
-		$key = processInputVar('key', ARG_STRING);
+		$key = processInputVar('key', ARG_STRING, '');
 		$affilid = processInputVar('affilid', ARG_NUMERIC);
 		$keyparts = explode('|', $key);
 		if(! array_key_exists($key, $this->basekeys) ||
@@ -3315,7 +3329,7 @@ class Messages {
 	////////////////////////////////////////////////////////////////////////////////
 	function AJsaveMessages() {
 		global $user;
-		$key = processInputVar('key', ARG_STRING);
+		$key = processInputVar('key', ARG_STRING, '');
 		$affilid = processInputVar('affilid', ARG_NUMERIC);
 		$subject = processInputVar('subject', ARG_STRING);
 		$body = processInputVar('body', ARG_STRING);
@@ -3335,7 +3349,7 @@ class Messages {
 			sendJSON($arr);
 			return;
 		}
-		if(preg_match('/^\s*$/', $body)) {
+		if(is_null($body) || preg_match('/^\s*$/', $body)) {
 			$arr = array('status' => 'failed',
 			             'msgid' => "messagesmsg",
 			             'btn' => "messagessavebtn",
@@ -3367,7 +3381,7 @@ class Messages {
 		}
 		if($changed) {
 			if(preg_match('/\[.*\]/', $body) ||
-			   preg_match('/\[.*\]/', $shortmsg))
+			   (! is_null($shortmsg) && preg_match('/\[.*\]/', $shortmsg)))
 				setVariable('usermessage_needs_validating', 1, 'none');
 			unset($data['invalidfields']);
 			setVariable($savekey, $data, 'yaml');

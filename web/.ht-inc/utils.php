@@ -48,6 +48,8 @@ $HTMLheader = "";
 /// global variable to store if header has been printed
 $printedHTMLheader = 0;
 
+spl_autoload_register('vclAutoLoader');
+
 ////////////////////////////////////////////////////////////////////////////////
 ///
 /// \fn initGlobals()
@@ -142,6 +144,7 @@ function initGlobals() {
 	if(isset($_COOKIE['VCLAUTH']) ||
 	   $mode == 'submitLogin' ||
 	   $mode == 'selectauth' ||
+	   $mode == 'xmlrpccall' ||
 	   $mode == 'main') {
 		// open keys
 		$fp = fopen(".ht-inc/keys.pem", "r");
@@ -357,21 +360,21 @@ function initGlobals() {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
-/// \fn __autoload($class)
+/// \fn vclAutoLoader($class)
 ///
 /// \param $class - name of a class
 ///
 /// \brief handles loading class implementation file for a specified class
 ///
 ////////////////////////////////////////////////////////////////////////////////
-function __autoload($class) {
+function vclAutoLoader($class) {
 	global $actions;
 	$class = strtolower($class);
+	require_once(".ht-inc/resource.php");
 	if(array_key_exists($class, $actions['classmapping'])) {
 		require_once(".ht-inc/{$actions['classmapping'][$class]}.php");
 		return;
 	}
-	require_once(".ht-inc/resource.php");
 	require_once(".ht-inc/$class.php");
 }
 
@@ -419,8 +422,6 @@ function checkAccess() {
 			exit;
 		}
 		$xmlpass = $_SERVER['HTTP_X_PASS'];
-		if(get_magic_quotes_gpc())
-			$xmlpass = stripslashes($xmlpass);
 		$apiver = processInputData($_SERVER['HTTP_X_APIVERSION'], ARG_NUMERIC, 1);
 		if($apiver == 1) {
 			addLoginLog($xmluser, 'unknown', $user['affilid'], 0);
@@ -833,7 +834,7 @@ function maintenanceCheck() {
 		}
 		else
 			print i("This site is currently in maintenance.") . "<br>\n";
-		$niceend = strftime('%A, %x, %l:%M %P', $end);
+		$niceend = prettyDatetime($end, 1, 0, 1);
 		printf(i("The maintenance is scheduled to end <strong>%s</strong>.") . "<br><br><br>\n", $niceend);
 		printHTMLFooter();
 		exit;
@@ -863,8 +864,8 @@ function maintenanceNotice() {
 				$_SESSION['usersessiondata'] = array();
 				return;
 			}
-			$nicestart = strftime('%A, %x, %l:%M %P', $start);
-			$niceend = strftime('%A, %x, %l:%M %P', datetimeToUnix($item['end']));
+			$nicestart = prettyDatetime($start, 1, 0, 1);
+			$niceend = prettyDatetime($item['end'], 1, 0, 1);
 			print "<div id=\"maintenancenotice\">\n";
 			print "<strong>" . i("NOTICE:") . "</strong> ";
 			print i("This site will be down for maintenance during the following times:") . "<br><br>\n";
@@ -1290,8 +1291,6 @@ function doQuery($query, $errcode=101, $db="vcl", $nolog=0) {
 		if(QUERYLOGGING != 0 && (! $nolog) &&
 		   preg_match('/^(UPDATE|INSERT|DELETE)/', $query) &&
 		   strpos($query, 'UPDATE continuations SET expiretime = ') === FALSE) {
-			$logquery = str_replace("'", "\'", $query);
-			$logquery = str_replace('"', '\"', $logquery);
 			if(isset($user['id']))
 				$id = $user['id'];
 			else
@@ -1302,11 +1301,13 @@ function doQuery($query, $errcode=101, $db="vcl", $nolog=0) {
 			   .        "mode, "
 			   .        "query) "
 			   . "VALUES "
-			   .        "($id, "
+			   .        "(?, " # $id
 			   .        "NOW(), "
-			   .        "'$mode', "
-			   .        "'$logquery')";
-			mysqli_query($mysqli_link_vcl, $q);
+			   .        "?, " # $mode
+			   .        "?)"; # $logquery
+			$s = mysqli_prepare($mysqli_link_vcl, $q);
+			mysqli_stmt_bind_param($s, 'iss', $id, $mode, $query);
+			mysqli_stmt_execute($s);
 		}
 		for($i = 0; ! ($qh = mysqli_query($mysqli_link_vcl, $query)) && $i < 3; $i++) {
 			if(mysqli_errno($mysqli_link_vcl) == '1213') # DEADLOCK, sleep and retry
@@ -1318,6 +1319,76 @@ function doQuery($query, $errcode=101, $db="vcl", $nolog=0) {
 	elseif($db == "accounts") {
 		if($ENABLE_ITECSAUTH)
 			$qh = mysqli_query($mysqli_link_acct, $query) or abort($errcode, $query);
+		else
+			$qh = NULL;
+	}
+	return $qh;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn doPSQuery($query, $paramtypes, $params, $errcode, $db, $nolog)
+///
+/// \param $query - SQL statement
+/// \param $paramtypes - string containing the types of parameters to fill in
+/// for the ?s in the query, ex: 'ssi' for string string integer
+/// \param $params - array of parameters to fill in for the ?s in the query
+/// \param $errcode - error code
+/// \param $db - (optional, defaul=vcl), database to query against
+/// \param $nolog - (optional, defaul=0), don't log to queryLog table
+///
+/// \return $qh - query handle or NULL if problem encountered
+///
+/// \brief performs the query and returns $qh or aborts on error
+///
+////////////////////////////////////////////////////////////////////////////////
+function doPSQuery($query, $paramtypes, $params, $errcode=101, $db="vcl",
+                   $nolog=0) {
+	global $mysqli_link_vcl, $mysqli_link_acct, $user, $mode, $ENABLE_ITECSAUTH;
+	global $totalQueries, $queryTimes, $totalQueryTime;
+	$totalQueries++;
+	if(strlen($paramtypes) != count($params))
+		return NULL;
+	if($db == "vcl") {
+		if(QUERYLOGGING != 0 && (! $nolog) &&
+		   preg_match('/^(UPDATE|INSERT|DELETE)/', $query) &&
+		   strpos($query, 'UPDATE continuations SET expiretime = ') === FALSE) {
+			if(isset($user['id']))
+				$id = $user['id'];
+			else
+				$id = 0;
+			$q = "INSERT INTO querylog "
+			   .        "(userid, "
+			   .        "timestamp, "
+			   .        "mode, "
+			   .        "query) "
+			   . "VALUES "
+			   .        "(?, " # $id
+			   .        "NOW(), "
+			   .        "?, " # $mode
+			   .        "?)"; # $logquery
+			$s = mysqli_prepare($mysqli_link_vcl, $q);
+			mysqli_stmt_bind_param($s, 'iss', $id, $mode, $query);
+			mysqli_stmt_execute($s);
+		}
+		$stmt = mysqli_prepare($mysqli_link_vcl, $query);
+		if(strlen($paramtypes))
+			mysqli_stmt_bind_param($stmt, $paramtypes, ...$params);
+		for($i = 0; ! mysqli_stmt_execute($stmt) && $i < 3; $i++) {
+			if(mysqli_errno($mysqli_link_vcl) == '1213') # DEADLOCK, sleep and retry
+				usleep(50);
+			else
+				abort($errcode, $query);
+		}
+		$qh = mysqli_stmt_get_result($stmt);
+	}
+	elseif($db == "accounts") {
+		if($ENABLE_ITECSAUTH) {
+			$stmt = mysqli_prepare($mysqli_link_acct, $query);
+			mysqli_stmt_bind_param($stmt, $paramtypes, ...$params);
+			mysqli_stmt_execute($stmt);
+			$qh = mysqli_stmt_get_result($stmt) or abort($errcode, $query);
+		}
 		else
 			$qh = NULL;
 	}
@@ -1352,6 +1423,8 @@ function dbLastInsertID() {
 ////////////////////////////////////////////////////////////////////////////////
 function vcl_mysql_escape_string($string) {
 	global $mysqli_link_vcl;
+	if(is_null($string))
+		$string = '';
 	return mysqli_real_escape_string($mysqli_link_vcl, $string);
 }
 
@@ -1753,8 +1826,8 @@ function getImageRevisions($imageid, $incdeleted=0) {
 function getImageNotes($imageid) {
 	if(empty($imageid))
 		$imageid = 0;
-	$query = "SELECT description, "
-	       .        "`usage` "
+	$query = "SELECT COALESCE(description, '') as description, "
+	       .        "COALESCE(`usage`, '') as `usage` "
 	       . "FROM image "
 	       . "WHERE id = $imageid";
 	$qh = doQuery($query, 101);
@@ -4043,6 +4116,8 @@ function processInputVar($vartag, $type, $defaultvalue=NULL, $stripwhitespace=0)
 		}
 	}
 	else {
+		if(is_null($return))
+			$return = '';
 		$return = strip_tags($return);
 		if($stripwhitespace)
 			$return = trim($return);
@@ -4290,6 +4365,7 @@ function getUserInfo($id, $noupdate=0, $numeric=0) {
 	       .        "u.lastupdated AS lastupdated, "
 	       .        "u.usepublickeys, "
 	       .        "u.sshpublickeys, "
+	       .        "COALESCE(u.sshpublickeys, '') AS sshpublickeys, "
 	       .        "af.shibonly "
 	       . "FROM affiliation af, "
 	       .      "user u "
@@ -5529,7 +5605,7 @@ function getSemaphore($imageid, $imagerevisionid, $mgmtnodeid, $compid, $start,
 	$rc = mysqli_affected_rows($mysqli_link_vcl);
 
 	# check to see if another process allocated this one
-	if($rc) {
+	if($rc > 0) {
 		$query = "SELECT rq.id "
 		       . "FROM request rq, "
 		       .      "reservation rs "
@@ -10054,12 +10130,17 @@ function printArray($array) {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
-/// \fn prettyDatetime($stamp, $showyear=0, $notzoffset=0)
+/// \fn prettyDatetime($stamp, $showyear=0, $notzoffset=0, $numericdate=0
+///                    $nodayname=0)
 ///
 /// \param $stamp - a timestamp in unix or mysql datetime format
 /// \param $showyear (optional, default=0) - set to 1 to include year
 /// \param $notzoffset (optional, default=0) - set to 1 to prevent timezone
 /// conversion
+/// \param $numericdate (optional, default=0) - set to 1 to use a numeric date
+/// instead of a written out date
+/// \param $nodayname (optional, default=0) - set to 1 to leave off name of day
+/// of week
 ///
 /// \return date/time in html format of [Day of week], [month] [day of month],
 /// [HH:MM] [am/pm]
@@ -10067,17 +10148,28 @@ function printArray($array) {
 /// \brief reformats the datetime to look better
 ///
 ////////////////////////////////////////////////////////////////////////////////
-function prettyDatetime($stamp, $showyear=0, $notzoffset=0) {
+function prettyDatetime($stamp, $showyear=0, $notzoffset=0, $numericdate=0,
+                        $nodayname=0) {
 	global $locale;
 	if(! preg_match('/^[\d]+$/', $stamp))
 		$stamp = datetimeToUnix($stamp);
 	if(! $notzoffset && isset($_SESSION['persistdata']['tzoffset']))
 		$stamp += $_SESSION['persistdata']['tzoffset'] * 60;
+	$dateformatter = IntlDateFormatter::MEDIUM;
+	if($numericdate)
+		$dateformatter = IntlDateFormatter::SHORT;
+	$df = new IntlDateFormatter($locale, $dateformatter, IntlDateFormatter::SHORT);
+	$ptn = $df->getPattern();
+	$dayptn = 'EEEE, ';
+	if($nodayname)
+		$dayptn = '';
 	if($showyear)
-		$return = strftime('%A, %b&nbsp;%-d,&nbsp;%Y, %l:%M %P', $stamp);
-	else
-		$return = strftime('%A, %b&nbsp;%-d, %l:%M %P', $stamp);
-	return $return;
+		$df->setPattern("{$dayptn}$ptn z"); #Tuesday, May 2, 2023, 11:56 AM EDT
+	else {
+		$ptn = preg_replace('|[/ ]?y[,/]?|', '', $ptn);
+		$df->setPattern("{$dayptn}$ptn z"); #Tuesday, May 2, 11:56 AM EDT
+	}
+	return $df->format($stamp);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -10102,6 +10194,36 @@ function minToHourMin($min) {
 		return sprintf("%.1f " . i("hours"), $min / 60);
 	else
 		return sprintf("%.2f " . i("hours"), $min / 60);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn minToDaysHourMin($min)
+///
+/// \param $min - minutes
+///
+/// \return a string value
+///
+/// \brief um, I don't know how to describe this, just look at the code
+///
+////////////////////////////////////////////////////////////////////////////////
+function minToDaysHourMin($min) {
+	if($min < 60)
+		return $min . " " . i("minutes");
+	elseif($min < 2880) {
+		if($min == 60)
+			return i("1 hour");
+		elseif($min % 60 == 0)
+			return sprintf("%d " . i("hours"), $min / 60);
+		elseif($min % 30 == 0)
+			return sprintf("%.1f " . i("hours"), $min / 60);
+		else
+			return sprintf("%.2f " . i("hours"), $min / 60);
+	}
+	elseif($min < 64800)
+		return sprintf("%d " . i("days"), $min / 1440);
+	else
+		return sprintf("%d " . i("weeks"), $min / 10080);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -10153,6 +10275,74 @@ function prettyLength($minutes) {
 		else
 			return "$hours " . i("hours") . ", $min " . i("minutes");
 	}
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn htmlwrap($str, $linelen)
+///
+/// \param $str - string to be wrapped
+/// \param $linelen - max length of each line
+///
+/// \brief breaks $str up into multiple lines no longer than $linelen with each
+/// line ending with a break tag (<br/>)
+///
+////////////////////////////////////////////////////////////////////////////////
+function htmlwrap($str, $linelen) {
+	$str = str_replace('<br>', '<br/>', $str);
+	$str = str_replace('<br />', '<br/>', $str);
+	$word = '';
+	$nextstr = '';
+	$curlen = 0;
+	$strlen = strlen($str);
+	$wrapped = '';
+	$intag = 0;
+	for($i = 0; $i < $strlen; $i++) {
+		$nextstr .= $str[$i];
+		if($str[$i] == '<') {
+			$intag = 1;
+			continue;
+		}
+		elseif($str[$i] == '>') {
+			$intag = 0;
+			if($i > 4 && substr($nextstr, -5, 5) == '<br/>') {
+				if(strlen($nextstr)) {
+					if($curlen <= $linelen) {
+						$wrapped .= $nextstr;
+					}
+					else {
+						$wrapped .= "<br/>$nextstr";
+					}
+					$word = '';
+					$nextstr = '';
+				}
+				$curlen = 0;
+			}
+			continue;
+		}
+		if(! $intag) {
+			$curlen++;
+			$word .= $str[$i];
+			if($str[$i] == ' ') {
+				if($curlen <= $linelen) {
+					$wrapped .= $nextstr;
+				}
+				else {
+					$wrapped .= "<br/>$nextstr";
+					$curlen = strlen($word);
+				}
+				$word = '';
+				$nextstr = '';
+			}
+		}
+	}
+	if($curlen <= $linelen) {
+		$wrapped .= $nextstr;
+	}
+	else {
+		$wrapped .= "<br/>$nextstr";
+	}
+	return $wrapped;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -10348,6 +10538,8 @@ function getUserGroupID($name, $affilid=DEFAULT_AFFILID, $noadd=0) {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function getUserGroupName($id, $incAffil=0) {
+	if(! is_numeric($id))
+		return 0;
 	if($incAffil) {
 		$query = "SELECT CONCAT(u.name, '@', a.name) as name "
 		       . "FROM usergroup u, "
@@ -10603,7 +10795,7 @@ function sendRDPfile() {
 		$userid =  $matches[1];
 	else
 		$userid = $user["unityid"];
-	if($request['reservations'][0]['domainDNSName'] != '' && ! strlen($passwd))
+	if($request['reservations'][0]['domainDNSName'] != '' && (is_null($passwd) || ! strlen($passwd)) && $request['reservations'][0]['OStype'] == 'windows')
 		$userid .= "@" . $request['reservations'][0]['domainDNSName'];
 	elseif($request['reservations'][0]['OStype'] == 'windows')
 		$userid = ".\\$userid";
@@ -10958,6 +11150,8 @@ function getUserMaxTimes($uid=0) {
 
 	$allgroups = getUserGroups();
 	foreach($groupids as $id) {
+		if(! isset($allgroups[$id]))
+			continue;
 		if($return["initial"] < $allgroups[$id]["initialmaxtime"])
 			$return["initial"] = $allgroups[$id]["initialmaxtime"];
 		if($return["total"] < $allgroups[$id]["totalmaxtime"])
@@ -12015,7 +12209,7 @@ function weekOfYear($ts) {
 ////////////////////////////////////////////////////////////////////////////////
 function cleanSemaphore() {
 	global $mysqli_link_vcl, $uniqid;
-	if(! is_resource($mysqli_link_vcl) || ! get_resource_type($mysqli_link_vcl) == 'mysql link')
+	if(! is_object($mysqli_link_vcl) || get_class($mysqli_link_vcl) != 'mysqli')
 		return;
 	$query = "DELETE FROM semaphore "
 	       . "WHERE procid = '$uniqid'";
@@ -12450,8 +12644,8 @@ function getVariable($key, $default=NULL, $incparams=0) {
 	       .        "timestamp, ";
 	$query .=       "value ";
 	$query .= "FROM variable "
-	       .  "WHERE name = '$key'";
-	$qh = doQuery($query);
+	       .  "WHERE name = ?"; # $key
+	$qh = doPSQuery($query, 's', array($key));
 	if($row = mysqli_fetch_assoc($qh)) {
 		if($incparams) {
 			switch($row['serialization']) {
@@ -12500,8 +12694,8 @@ function getVariablesRegex($pattern) {
 	       .        "serialization, "
 	       .        "value "
 	       . "FROM variable "
-	       . "WHERE name REGEXP '$pattern'";
-	$qh = doQuery($query);
+	       . "WHERE name REGEXP ?"; # $pattern
+	$qh = doPSQuery($query, 's', array($pattern));
 	$ret = array();
 	while($row = mysqli_fetch_assoc($qh)) {
 		switch($row['serialization']) {
@@ -12537,8 +12731,8 @@ function getVariablesRegex($pattern) {
 ////////////////////////////////////////////////////////////////////////////////
 function setVariable($key, $data, $serialization='') {
 	$update = 0;
-	$query = "SELECT serialization FROM variable WHERE name = '$key'";
-	$qh = doQuery($query);
+	$query = "SELECT serialization FROM variable WHERE name = ?"; # $key
+	$qh = doPSQuery($query, 's', array($key));
 	if($row = mysqli_fetch_assoc($qh)) {
 		if($serialization == '')
 			$serialization = $row['serialization'];
@@ -12549,37 +12743,37 @@ function setVariable($key, $data, $serialization='') {
 	$_SESSION['variables'][$key] = $data;
 	switch($serialization) {
 		case 'none':
-			$qdata = vcl_mysql_escape_string($data);
+			$qdata = $data;
 			break;
 		case 'yaml':
-			$yaml = Spyc::YAMLDump($data);
-			$qdata = vcl_mysql_escape_string($yaml);
+			$qdata = Spyc::YAMLDump($data);
 			break;
 		case 'phpserialize':
-			$qdata = vcl_mysql_escape_string(serialize($data));
+			$qdata = serialize($data);
 			break;
 	}
 	if($update)
 		$query = "UPDATE variable "
-		       . "SET value = '$qdata', "
-		       .     "serialization = '$serialization', "
+		       . "SET serialization = ?, " # $serialization
+		       .     "value = ?, " # $qdata
 		       .     "setby = 'webcode', "
 		       .     "timestamp = NOW() "
-		       . "WHERE name = '$key'";
+		       . "WHERE name = ?"; # $key
 	else
 		$query = "INSERT INTO variable "
-		       .        "(name, "
-		       .        "serialization, "
+		       .        "(serialization, "
 		       .        "value, "
+		       .        "name, "
 		       .        "setby, "
 		       .        "timestamp) "
 		       . "VALUES "
-		       .        "('$key', "
-		       .        "'$serialization', "
-		       .        "'$qdata', "
+		       .        "(?, " # $serialization
+		       .        "?, " # $qdata
+		       .        "?, " # $key
 		       .        "'webcode', "
 		       .        "NOW())";
-	doQuery($query);
+	$params = array($serialization, $qdata, $key);
+	doPSQuery($query, 'sss', $params);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -14439,7 +14633,8 @@ function getFSlocales() {
 		if(! file_exists("{$dir}/language"))
 			continue;
 		$fh = fopen("{$dir}/language", 'r');
-		while($line = fgetss($fh)) {
+		while($line = fgets($fh)) {
+			$line = strip_tags($line);
 			if(preg_match('/(^#)|(^\s*$)/', $line)) {
 				continue;
 			}

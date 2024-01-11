@@ -993,7 +993,7 @@ function processGroupInput($checks=1) {
 	$return["type"] = getContinuationVar("type");
 	$return["custom"] = getContinuationVar("custom", 1);
 	$return["courseroll"] = getContinuationVar("courseroll", 0);
-	$return["name"] = getContinuationVar('name', processInputVar("name", ARG_STRING));
+	$return["name"] = getContinuationVar('name', processInputVar("name", ARG_STRING, ''));
 	$return["affiliationid"] = getContinuationVar('affiliationid', processInputVar("affiliationid", ARG_NUMERIC, $user['affiliationid']));
 	$return["resourcetypeid"] = getContinuationVar('resourcetypeid', processInputVar("resourcetypeid", ARG_NUMERIC));
 	$return["owner"] = getContinuationVar('owner', processInputVar("owner", ARG_STRING));
@@ -1004,10 +1004,12 @@ function processGroupInput($checks=1) {
 	$return["totalmax"] = getContinuationVar('totalmax', processInputVar("totalmax", ARG_NUMERIC));
 	$return["maxextend"] = getContinuationVar('maxextend', processInputVar("maxextend", ARG_NUMERIC));
 	$return["overlap"] = getContinuationVar('overlap', processInputVar("overlap", ARG_NUMERIC, 0));
-	$return['editgroupids'] = getContinuationVar('editgroupids');
+	$return['editgroupids'] = getContinuationVar('editgroupids', '');
 	$editgroupids = explode(',', $return['editgroupids']);
-	$return['ownergroupids'] = getContinuationVar('ownergroupids');
-	$ownergroupids = explode(',', $return['ownergroupids']);
+	if($return['type'] == 'resource') {
+		$return['ownergroupids'] = getContinuationVar('ownergroupids');
+		$ownergroupids = explode(',', $return['ownergroupids']);
+	}
 	$groupwasnone = getContinuationVar('groupwasnone');
 	$editname = getContinuationVar('editname', 1);
 

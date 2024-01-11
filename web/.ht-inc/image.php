@@ -25,6 +25,7 @@
 ///
 ////////////////////////////////////////////////////////////////////////////////
 class Image extends Resource {
+	var $imagerevisionid;
 	/////////////////////////////////////////////////////////////////////////////
 	///
 	/// \fn __construct()
@@ -1045,8 +1046,6 @@ class Image extends Resource {
 		elseif(! $autocaptured) {
 			$comments = processInputVar('comments', ARG_STRING, '');
 			$comments = htmlspecialchars($comments);
-			if(get_magic_quotes_gpc())
-				$comments = stripslashes($comments);
 		}
 
 		if(! $autocaptured)
@@ -1252,7 +1251,13 @@ class Image extends Resource {
 
 		# ad authentication
 		if($data['adauthenabled']) {
-			$esc_baseou = vcl_mysql_escape_string($data['baseou']);
+			if(is_null($data['baseou'])) {
+				$esc_baseou = 'NULL';
+			}
+			else {
+				$esc_baseou = vcl_mysql_escape_string($data['baseou']);
+				$esc_baseou = "'$esc_baseou'";
+			}
 			$query = "INSERT INTO imageaddomain "
 			       .        "(imageid, "
 			       .        "addomainid, "
@@ -1260,7 +1265,7 @@ class Image extends Resource {
 			       . "VALUES "
 			       .        "($imageid, "
 			       .        "{$data['addomainid']}, "
-			       .        "'$esc_baseou')";
+			       .        "$esc_baseou)";
 			doQuery($query);
 		}
 	
@@ -1534,7 +1539,7 @@ class Image extends Resource {
 			sendJSON($arr);
 			return;
 		}
-		$remids = processInputVar('imageids', ARG_STRING);
+		$remids = processInputVar('imageids', ARG_STRING, '');
 		$remids = explode(',', $remids);
 		foreach($remids as $id) {
 			if(! is_numeric($id)) {
@@ -1632,48 +1637,42 @@ class Image extends Resource {
 
 		$return = array('error' => 0);
 
-		$return["name"] = processInputVar("name", ARG_STRING);
+		$return["name"] = processInputVar("name", ARG_STRING, '');
 		$return["owner"] = processInputVar("owner", ARG_STRING, "{$user["unityid"]}@{$user['affiliation']}");
 		$return["ram"] = processInputVar("ram", ARG_NUMERIC, 512);
-		$return["cores"] = processInputVar("cores", ARG_NUMERIC);
-		$return["cpuspeed"] = processInputVar("cpuspeed", ARG_NUMERIC);
+		$return["cores"] = processInputVar("cores", ARG_NUMERIC, 4);
+		$return["cpuspeed"] = processInputVar("cpuspeed", ARG_NUMERIC, 2000);
 		$return["networkspeed"] = (int)processInputVar("networkspeed", ARG_NUMERIC);
 		$return["concurrent"] = processInputVar("concurrent", ARG_NUMERIC, 0);
-		$return["reload"] = processInputVar("reload", ARG_NUMERIC); # not in add
+		$return["reload"] = processInputVar("reload", ARG_NUMERIC, 0); # not in add
 		$return["checkout"] = processInputVar("checkout", ARG_NUMERIC);
 		$return["checkuser"] = processInputVar("checkuser", ARG_NUMERIC);
 		$return["rootaccess"] = processInputVar("rootaccess", ARG_NUMERIC);
 		$return["sethostname"] = processInputVar("sethostname", ARG_NUMERIC);
 		$return["maxinitialtime"] = processInputVar("maxinitialtime", ARG_NUMERIC, 0);
 		$return["sysprep"] = processInputVar("sysprep", ARG_NUMERIC); # only in add
-		$return["connectmethodids"] = processInputVar("connectmethodids", ARG_STRING); # only in add
-		$return["adauthenabled"] = processInputVar("adauthenabled", ARG_NUMERIC);
+		$return["connectmethodids"] = processInputVar("connectmethodids", ARG_STRING, ''); # only in add
+		$return["adauthenabled"] = processInputVar("adauthenabled", ARG_NUMERIC, 0);
 		$return["addomainid"] = processInputVar("addomainid", ARG_NUMERIC);
-		$return["baseou"] = processInputVar("baseou", ARG_STRING);
+		$return["baseou"] = processInputVar("baseou", ARG_STRING, '');
 
 		$return['requestid'] = getContinuationVar('requestid'); # only in add
 		$return["imageid"] = getContinuationVar('imageid');
 		$return['baserevisionid'] = getContinuationVar('baserevisionid');
 
-		$return["desc"] = processInputVar("desc", ARG_STRING);
-		if(get_magic_quotes_gpc())
-			$return["desc"] = stripslashes($return['desc']);
+		$return["desc"] = processInputVar("desc", ARG_STRING, '');
 		$return['desc'] = preg_replace("/[\n\s]*$/", '', $return['desc']);
 		$return['desc'] = preg_replace("/\r/", '', $return['desc']);
 		$return['desc'] = htmlspecialchars($return['desc']);
 		$return['desc'] = preg_replace("/\n/", '<br>', $return['desc']);
 
-		$return["usage"] = processInputVar("usage", ARG_STRING);
-		if(get_magic_quotes_gpc())
-			$return["usage"] = stripslashes($return['usage']);
+		$return["usage"] = processInputVar("usage", ARG_STRING, '');
 		$return['usage'] = preg_replace("/[\n\s]*$/", '', $return['usage']);
 		$return['usage'] = preg_replace("/\r/", '', $return['usage']);
 		$return['usage'] = htmlspecialchars($return['usage']);
 		$return['usage'] = preg_replace("/\n/", '<br>', $return['usage']);
 
-		$return["comments"] = processInputVar("imgcomments", ARG_STRING);
-		if(get_magic_quotes_gpc())
-			$return["comments"] = stripslashes($return['comments']);
+		$return["comments"] = processInputVar("imgcomments", ARG_STRING, '');
 		$return['comments'] = preg_replace("/[\n\s]*$/", '', $return['comments']);
 		$return['comments'] = preg_replace("/\r/", '', $return['comments']);
 		$return['comments'] = htmlspecialchars($return['comments']);
@@ -1735,19 +1734,23 @@ class Image extends Resource {
 			$return['error'] = 1;
 			$errormsg[] = i("Submitted ID is not valid");
 		}
-		if($return['checkout'] != 0 && $return['checkout'] != 1) {
+		if(is_null($return['checkout']) || 
+		   ($return['checkout'] != 0 && $return['checkout'] != 1)) {
 			$return['error'] = 1;
 			$errormsg[] = i("Available for Checkout must be Yes or No");
 		}
-		if($return['checkuser'] != 0 && $return['checkuser'] != 1) {
+		if(is_null($return['checkuser']) || 
+		   ($return['checkuser'] != 0 && $return['checkuser'] != 1)) {
 			$return['error'] = 1;
 			$errormsg[] = i("Check for Logged in User must be Yes or No");
 		}
-		if($return['rootaccess'] != 0 && $return['rootaccess'] != 1) {
+		if(is_null($return['rootaccess']) || 
+		   ($return['rootaccess'] != 0 && $return['rootaccess'] != 1)) {
 			$return['error'] = 1;
 			$errormsg[] = i("Users Have Administrative Access must be Yes or No");
 		}
-		if($return['sethostname'] != 0 && $return['sethostname'] != 1) {
+		if(is_null($return['sethostname']) || 
+		   ($return['sethostname'] != 0 && $return['sethostname'] != 1)) {
 			$return['error'] = 1;
 			$errormsg[] = i("Set Computer Hostname must be Yes or No");
 		}
@@ -2256,10 +2259,8 @@ class Image extends Resource {
 	function AJupdateRevisionComments() {
 		$imageid = getContinuationVar('imageid');
 		$revisionid = getContinuationVar('revisionid');
-		$comments = processInputVar('comments', ARG_STRING);
+		$comments = processInputVar('comments', ARG_STRING, '');
 		$comments = htmlspecialchars($comments);
-		if(get_magic_quotes_gpc())
-			$comments = stripslashes($comments);
 		$comments = vcl_mysql_escape_string($comments);
 		$query = "UPDATE imagerevision "
 		       . "SET comments = '$comments' "
@@ -2299,7 +2300,7 @@ class Image extends Resource {
 	function AJdeleteRevisions() {
 		$revids = getContinuationVar('revids');
 		$imageid = getContinuationVar('imageid');
-		$checkedids = processInputVar('checkedids', ARG_STRING);
+		$checkedids = processInputVar('checkedids', ARG_STRING, '');
 		$ids = explode(',', $checkedids);
 		if(empty($ids)) {
 			sendJSON(array());
