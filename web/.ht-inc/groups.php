@@ -311,7 +311,7 @@ function jsonUserGroupStore() {
 	elseif(checkUserHasPerm('Manage Federated User Groups (affiliation only)'))
 		$showfederatedaffil = 1;
 	$items = array();
-	$lengths = getReservationLengths(201600);
+	$lengths = getReservationLengths(302400);
 	foreach($affilusergroups as $id => $group) {
 		if($group['name'] == 'None' || preg_match('/^\s*None/', $group['name']))
 			continue;
@@ -784,7 +784,7 @@ function editOrAddGroup($state) {
 			print "  <TR>\n";
 			print "    <TH align=right>Initial Max Time:</TH>\n";
 			print "    <TD>";
-			$lengths = getReservationLengths(201600);
+			$lengths = getReservationLengths(302400);
 			if(! array_key_exists($data['initialmax'], $lengths))
 				$data['initialmax'] = getReservationLengthCeiling($data['initialmax']);
 			printSelectInput("initialmax", $lengths, $data['initialmax']);
@@ -1490,7 +1490,7 @@ function confirmEditOrAddGroup($state) {
 			print "    <TD>" . $usergroups[$data["editgroupid"]]["name"] . "</TD>\n";
 			print "  </TR>\n";
 		}
-		$lengths = getReservationLengths(201600);
+		$lengths = getReservationLengths(302400);
 		print "  <TR>\n";
 		print "    <TH align=right>Initial Max Time:</TH>\n";
 		print "    <TD>{$lengths[$data["initialmax"]]}</TD>\n";
