@@ -1976,6 +1976,24 @@ function userLookup() {
 			print "<table>\n";
 			$first = 1;
 			foreach($requests as $req) {
+				# get information about last time Connect button clicked
+				$query = "SELECT timestamp, "
+				       .        "query "
+				       . "FROM querylog "
+				       . "WHERE userid = {$userdata['id']} AND "
+				       .       "mode = 'AJconnectRequest' AND "
+				       .       "timestamp > DATE_SUB(NOW(), INTERVAL 1 WEEK) AND "
+				       .       "query LIKE 'UPDATE reservation SET remoteIP = % WHERE requestid = {$req['requestid']}' "
+				       . "ORDER BY timestamp DESC "
+				       . "LIMIT 5";
+				$qh = doQuery($query);
+				$connects = array();
+				while($row = mysqli_fetch_assoc($qh)) {
+					preg_match("/^UPDATE reservation SET remoteIP = '([0-9\.]+)' WHERE requestid = {$req['requestid']}$/", $row['query'], $matches);
+					if(isset($matches[1]))
+						$connects[] = "{$row['timestamp']} from {$matches[1]}";
+				}
+				$connectstr = implode('<br>', $connects);
 				if($first)
 					$first = 0;
 				else {
@@ -2053,6 +2071,12 @@ function userLookup() {
 				print "    <th align=right>Management Node:</th>\n";
 				print "    <td>{$req['managementnode']}</td>\n";
 				print "  </tr>\n";
+				if(count($connects)) {
+					print "  <tr>\n";
+					print "    <th align=right>Connect last clicked:</th>\n";
+					print "    <td>$connectstr</td>\n";
+					print "  </tr>\n";
+				}
 			}
 			print "</table>\n";
 		}
@@ -2106,6 +2130,26 @@ function userLookup() {
 				print "<table>\n";
 				$first = 1;
 				foreach($requests as $req) {
+					# get information about last time Connect button clicked
+					$connects = array();
+					if(count($requests) < 15) {
+						$query = "SELECT timestamp, "
+						       .        "query "
+						       . "FROM querylog "
+						       . "WHERE userid = {$userdata['id']} AND "
+						       .       "mode = 'AJconnectRequest' AND "
+						       .       "timestamp > DATE_SUB(NOW(), INTERVAL 1 WEEK) AND "
+						       .       "query LIKE 'UPDATE reservation SET remoteIP = % WHERE requestid = {$req['requestid']}' "
+						       . "ORDER BY timestamp DESC "
+						       . "LIMIT 5";
+						$qh = doQuery($query);
+						while($row = mysqli_fetch_assoc($qh)) {
+							preg_match("/^UPDATE reservation SET remoteIP = '([0-9\.]+)' WHERE requestid = {$req['requestid']}$/", $row['query'], $matches);
+							if(isset($matches[1]))
+								$connects[] = "{$row['timestamp']} from {$matches[1]}";
+						}
+						$connectstr = implode('<br>', $connects);
+					}
 					if($first)
 						$first = 0;
 					else {
@@ -2177,6 +2221,12 @@ function userLookup() {
 					print "    <th align=right>Management Node:</th>\n";
 					print "    <td>{$req['managementnode']}</td>\n";
 					print "  </tr>\n";
+					if(count($connects)) {
+						print "  <tr>\n";
+						print "    <th align=right>Connect last clicked:</th>\n";
+						print "    <td>$connectstr</td>\n";
+						print "  </tr>\n";
+					}
 				}
 				print "</table>\n";
 			}
