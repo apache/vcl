@@ -435,7 +435,7 @@ class Image extends Resource {
 		$h .= "</div>\n";
 		# Max reservation time
 		$tmp = array('0' => 'Default for User');
-		$lengths = $tmp + getReservationLengths(201600);
+		$lengths = $tmp + getReservationLengths(302400);
 		$h .= labeledFormItem('maxinitialtime', i('Max Reservation Duration'), 'select', $lengths);
 		# sysprep
 		if($add) {
@@ -1754,7 +1754,7 @@ class Image extends Resource {
 			$return['error'] = 1;
 			$errormsg[] = i("Set Computer Hostname must be Yes or No");
 		}
-		if($return['maxinitialtime'] < 0 || $return['maxinitialtime'] > 201600) {
+		if($return['maxinitialtime'] < 0 || $return['maxinitialtime'] > 302400) {
 			$return['error'] = 1;
 			$errormsg[] = i("Invalid Max Reservation Duration selected");
 		}
