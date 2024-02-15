@@ -4839,6 +4839,45 @@ class Computer extends Resource {
 			$msg .= "<hr>";
 			$data[] = array('name' => $row['hostname'], 'msg' => $msg);
 		}
+		$query = "SELECT UNIX_TIMESTAMP(bt.start) AS start, "
+		       .        "UNIX_TIMESTAMP(bt.end) AS end, "
+		       .        "i.prettyname AS image, "
+		       .        "ir.revision, "
+		       .        "c.hostname AS hostname, "
+		       .        "br.name AS blockname, "
+		       .        "ug.name AS usergroup, "
+		       .        "CONCAT(u.unityid, '@', a.name) AS owner, "
+		       .        "bc.reloadrequestid AS requestid, "
+		       .        "vh.hostname AS vmhost "
+		       . "FROM blockComputers bc "
+		       . "JOIN blockTimes bt ON (bc.blockTimeid = bt.id) "
+		       . "JOIN blockRequest br ON (bt.blockRequestid = br.id) "
+		       . "JOIN computer c ON (bc.computerid = c.id) "
+		       . "JOIN image i ON (br.imageid = i.id) "
+		       . "JOIN imagerevision ir ON (ir.imageid = br.imageid AND ir.production = 1) "
+		       . "JOIN usergroup ug ON (ug.id = br.groupid) "
+		       . "JOIN user u ON (br.ownerid = u.id) "
+		       . "JOIN affiliation a ON (u.affiliationid = a.id) "
+		       . "LEFT JOIN vmhost v ON (c.vmhostid = v.id) "
+		       . "LEFT JOIN computer vh ON (v.computerid = vh.id) "
+		       . "WHERE bc.computerid IN ($complist) AND "
+		       .       "br.status = 'accepted'";
+		$qh = doQuery($query);
+		while($row = mysqli_fetch_assoc($qh)) {
+			$msg = "<strong>{$row['hostname']} - Block Request</strong><br>";
+			$msg .= "Block Request: {$row['blockname']}<br>";
+			$msg .= "Image: {$row['image']}<br>";
+			$msg .= "Revision: {$row['revision']}<br>";
+			$msg .= "Start: " . prettyDatetime($row['start'], 1) . "<br>";
+			$msg .= "End: " . prettyDatetime($row['end'], 1) . "<br>";
+			$msg .= "User Group: {$row['usergroup']}<br>";
+			$msg .= "Owner: {$row['owner']}<br>";
+			if(! is_null($row['vmhost']))
+				$msg .= "VM Host: {$row['vmhost']}<br>";
+			$msg .= "Reload Request ID: {$row['requestid']}<br>";
+			$msg .= "<hr>";
+			$data[] = array('name' => $row['hostname'], 'msg' => $msg);
+		}
 		uasort($data, 'sortKeepIndex');
 		$msg = '';
 		if(count($data) != 0) {
