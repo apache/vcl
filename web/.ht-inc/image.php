@@ -1711,7 +1711,7 @@ class Image extends Resource {
 			$return['error'] = 1;
 			$errormsg[] = i("Cores must be between 0 and 255");
 		}
-		if($return["cpuspeed"] < 0 || $return["cpuspeed"] > 20000) {
+		if($return["cpuspeed"] < 1 || $return["cpuspeed"] > 20000) {
 			$return['error'] = 1;
 			$errormsg[] = i("Processor Speed must be between 0 and 20000");
 		}
@@ -1726,7 +1726,7 @@ class Image extends Resource {
 			$errormsg[] = i("Max concurrent usage must be between 0 and 255");
 		}
 		if($return['mode'] == 'edit' && 
-		   ($return["reload"] < 0 || $return["reload"] > 120)) {
+		   ($return["reload"] < 1 || $return["reload"] > 120)) {
 			$return['error'] = 1;
 			$errormsg[] = i("Estimated Reload Time must be between 0 and 120");
 		}
