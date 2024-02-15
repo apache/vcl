@@ -1824,6 +1824,7 @@ function getPendingBlockHTML($listonly=0) {
 	$d = '';
 	$groups = getUserGroups(0, $user['affiliationid']);
 	while($row = mysqli_fetch_assoc($qh)) {
+		unset($start);
 		if($row['repeating'] == 'weekly') {
 			$query2 = "SELECT DATE_FORMAT(start, '%m/%d/%y') AS swdate, "
 			        .        "DATE_FORMAT(end, '%m/%d/%y')AS ewdate, " 
@@ -1836,6 +1837,7 @@ function getPendingBlockHTML($listonly=0) {
 			if(! $row2 = mysqli_fetch_assoc($qh2))
 				abort(101);
 			$row = array_merge($row, $row2);
+			$start = $row['swdate'];
 			$wdays = array();
 			for($i = 0; $i < 7; $i++) {
 				if($row['days'] & (1 << $i))
@@ -1881,6 +1883,7 @@ function getPendingBlockHTML($listonly=0) {
 			if(! $row2 = mysqli_fetch_assoc($qh2))
 				abort(101);
 			$row = array_merge($row, $row2);
+			$start = $row['smdate'];
 			$query2 = "SELECT starthour, "
 			        .        "startminute, "
 			        .        "startmeridian, "
@@ -1917,6 +1920,8 @@ function getPendingBlockHTML($listonly=0) {
 			        . "ORDER BY start";
 			$qh2 = doQuery($query2, 101);
 			while($row2 = mysqli_fetch_assoc($qh2)) {
+				if(! isset($start))
+					$start = $row2['date'];
 				if($row2['date'] == '00/00/00')
 					$row['date'][$row2['order']] = '';
 				else
@@ -1975,7 +1980,7 @@ function getPendingBlockHTML($listonly=0) {
 			$d .= "<td>{$row['unityid']}</td>\n";
 		$d .= "<td>{$row['numMachines']}</td>\n";
 		$d .= "<td>" . i($row['repeating']) . "</td>\n";
-		$d .= "<td>{$row2['start']}</td>\n";
+		$d .= "<td>$start</td>\n";
 		$d .= "<td>{$row['lastdate']}</td>\n";
 		$d .= "  </tr>\n";
 	}
