@@ -395,11 +395,11 @@ class Image extends Resource {
 		# RAM
 		$extra = array('smallDelta' => 256, 'largeDelta' => 1024);
 		$h .= labeledFormItem('ram', i('Required RAM') . ' (MB)', 'spinner', '{min:512, max:8388607}',
-		                      1, 1024, '', '', $extra);
+		                      1, 4096, '', '', $extra);
 		# cores
 		$extra = array('smallDelta' => 1, 'largeDelta' => 2);
 		$h .= labeledFormItem('cores', i('Required Cores'), 'spinner', '{min:1, max:255}',
-		                      1, 1, '', '', $extra);
+		                      1, 2, '', '', $extra);
 		# proc speed
 		$extra = array('smallDelta' => 500, 'largeDelta' => 8000);
 		$h .= labeledFormItem('cpuspeed', i('Processor Speed'), 'spinner', '{min:500, max:8000}',
@@ -1639,8 +1639,8 @@ class Image extends Resource {
 
 		$return["name"] = processInputVar("name", ARG_STRING, '');
 		$return["owner"] = processInputVar("owner", ARG_STRING, "{$user["unityid"]}@{$user['affiliation']}");
-		$return["ram"] = processInputVar("ram", ARG_NUMERIC, 512);
-		$return["cores"] = processInputVar("cores", ARG_NUMERIC, 4);
+		$return["ram"] = processInputVar("ram", ARG_NUMERIC, 4096);
+		$return["cores"] = processInputVar("cores", ARG_NUMERIC, 2);
 		$return["cpuspeed"] = processInputVar("cpuspeed", ARG_NUMERIC, 2000);
 		$return["networkspeed"] = (int)processInputVar("networkspeed", ARG_NUMERIC);
 		$return["concurrent"] = processInputVar("concurrent", ARG_NUMERIC, 0);
