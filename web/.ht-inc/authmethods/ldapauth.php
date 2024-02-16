@@ -416,7 +416,8 @@ function updateLDAPUser($authtype, $userid) {
 		$qh = doQuery($query, 101);
 		if(! $user = mysqli_fetch_assoc($qh))
 			return NULL;
-		$user['sshpublickeys'] = htmlspecialchars($user['sshpublickeys']);
+		if(! empty($user['sshpublickeys']))
+			$user['sshpublickeys'] = htmlspecialchars($user['sshpublickeys']);
 	}
 
 	// TODO handle generic updating of groups

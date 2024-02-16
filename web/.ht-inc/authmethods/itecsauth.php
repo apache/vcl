@@ -345,6 +345,8 @@ function updateITECSUser($userid) {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function testITECSAffiliation(&$login, &$affilid) {
+	if(is_null($login))
+		return 0;
 	if(preg_match('/^([^@]*@[^@]*\.[^@]*)@ITECS$/', $login, $matches) ||
 	   preg_match('/^([^@]*@[^@]*\.[^@]*)$/', $login, $matches)) {
 		$login = $matches[1];

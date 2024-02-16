@@ -177,8 +177,9 @@ function processShibAuth() {
 							'SHIB_LOGOUTURL' => $logouturl,
 							'SHIB_EPPN' => $_SERVER['SHIB_EPPN'],
 							#'SHIB_UNAFFILIATION' => $_SERVER['SHIB_UNAFFILIATION'],
-							'SHIB_AFFILIATION' => $_SERVER['SHIB_AFFILIATION'],
 	);
+	if(isset($_SERVER['SHIB_AFFILIATION']))
+		$shibdata['SHIB_AFFILIATION'] = $_SERVER['SHIB_AFFILIATION'];
 	$serdata = vcl_mysql_escape_string(serialize($shibdata));
 	$query = "SELECT id "
 			 . "FROM shibauth "
@@ -249,7 +250,7 @@ function unauthShib($mode) {
 		print "</iframe>\n";
 	}
 	$shibdata = getShibauthDataByUser($user['id']);
-	if(array_key_exists('Shib-Identity-Provider', $shibdata) &&
+	if(isset($shibdata['Shib-Identity-Provider']) &&
 		! empty($shibdata['Shib-Identity-Provider'])) {
 		$tmp = explode('/', $shibdata['Shib-Identity-Provider']);
 		$idp = "{$tmp[0]}//{$tmp[2]}";
