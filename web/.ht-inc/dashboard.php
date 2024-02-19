@@ -28,6 +28,7 @@
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function dashboard() {
+	$affilid = getDashboardAffilID();
 	print "<h2>VCL Dashboard</h2>\n";
 	print "(Times and dates on this page are in " . date('T') . ")<br><br>\n";
 	if(checkUserHasPerm('View Dashboard (global)')) {
@@ -46,6 +47,7 @@ function dashboard() {
 	print addWidget('topimages', 'Top 5 Images in Use', '(Reservations &lt; 24 hours long)');
 	print addWidget('toplongimages', 'Top 5 Long Term Images in Use', '(Reservations &gt; 24 hours long)');
 	print addWidget('toppastimages', 'Top 5 Images From Past Day', '(Reservations with a start<br>time within past 24 hours)');
+	print addWidget('toppast6moimages', 'Top 5 Images From Past 6 Months', '(Reservations with a start<br>time within past 6 months)', 1);
 	print addWidget('topfailedcomputers', 'Top Recent Computer Failures', '(Failed in the last 5 days)');
 	print addWidget('blockallocation', 'Block Allocation Status');
 	print "</div>\n"; # dashleft
@@ -65,6 +67,24 @@ function dashboard() {
 		print addWidget('failedimaging', 'Failed Imaging Reservations', '(Imaging Reservations in the maintenance state)');
 	$cont = addContinuationsEntry('AJupdateDashboard', array('val' => 0), 90, 1, 0);
 	print "<input type=\"hidden\" id=\"updatecont\" value=\"$cont\">\n";
+	$cont = addContinuationsEntry('AJdashboardDetail', array('affilid' => $affilid));
+	print "<input type=\"hidden\" id=\"detailcont\" value=\"$cont\">\n";
+
+	# detail dialog
+	$h = '';
+	$h .= "<div dojoType=dijit.Dialog\n";
+	$h .= "      id=\"detaildialog\"\n";
+	$h .= "      duration=250\n";
+	$h .= "      autofocus=false\n";
+	$h .= "      draggable=true>\n";
+	$h .= "<h3><div id=\"detailtitle\"></div></h3>\n";
+	$h .= "<div id=\"detailcontent\"></div>\n";
+	$h .= "<input type=\"hidden\" id=\"submitcont\">\n";
+	$h .= "<div style=\"text-align: center;\"><br>\n";
+	$h .= dijitButton('canceldetailbtn', 'Close', 'cancelDetail();', 0);
+	$h .= "</div>\n"; # btn div
+	$h .= "</div>\n"; # detaildialog
+	print $h;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -80,7 +100,8 @@ function AJupdateDashboard() {
 	$data['status'] = getStatusData();
 	$data['topimages'] = getTopImageData();
 	$data['toplongimages'] = getTopLongImageData();
-	$data['toppastimages'] = getTopPastImageData();
+	$data['toppastimages'] = getTopPastImageData(5, 'DAY', 1);
+	$data['toppast6moimages'] = getTopPastImageData(5, 'MONTH', 6);
 	$data['topfailed'] = getTopFailedData();
 	$data['topfailedcomputers'] = getTopFailedComputersData();
 	$data['reschart'] = getActiveResChartData();
@@ -93,21 +114,48 @@ function AJupdateDashboard() {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
+/// \fn AJdashboardDetail()
+///
+/// \param id - id of widget type
+///
+/// \brief gets detailed information for specified type
+///
+////////////////////////////////////////////////////////////////////////////////
+function AJdashboardDetail() {
+	$id = processInputVar('id', ARG_STRING);
+	switch($id) {
+	case 'toppast6moimages':
+		$data = array('divid' => 'detailcontent');
+		$data['title'] = "Top Images From Past 6 Months";
+		$data['result'] = getTopPastImageData(30, 'MONTH', 6);
+		break;
+	default:
+	}
+	sendJSON($data);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
 /// \fn addWidget($id, $title, extra)
 ///
 /// \param $id - dom id for div
 /// \param $title - title to print at top of box
 /// \param $extra (optional, default='') - extra text to be placed below title,
 ///        but above data
+/// \param $clicktitle - (optional, default=0) boolean for title being clickable
+///        to display more details
 ///
 /// \return div element for a section of data
 ///
 /// \brief creates HTML for a box of data to be displayed
 ///
 ////////////////////////////////////////////////////////////////////////////////
-function addWidget($id, $title, $extra='') {
+function addWidget($id, $title, $extra='', $clicktitle=0) {
 	$txt  = "<div class=\"dashwidget\">\n";
-	$txt .= "<h3>$title</h3>\n";
+	if($clicktitle)
+		$txt .= "<h3><a onclick=\"showdetail('$id');\">$title</a></h3>\n";
+	else
+		$txt .= "<h3>$title</h3>\n";
 	if($extra != '')
 		$txt .= "<div class=\"extra\">$extra</div>\n";
 	$txt .= "<div id=\"$id\"></div>\n";
@@ -343,7 +391,11 @@ function getTopLongImageData() {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
-/// \fn getTopPastImageData()
+/// \fn getTopPastImageData($imagecnt, $intervalunit, $intervalnum)
+///
+/// \param $imagecnt - number of images to return
+/// \param $intervalunit - units of interval for DATE_SUB in query
+/// \param $intervalnum - how many interval units to use in query
 ///
 /// \return array of data with these keys:\n
 /// \b prettyname - name of image\n
@@ -352,7 +404,7 @@ function getTopLongImageData() {
 /// \brief gets data about top reserved images over past day
 ///
 ////////////////////////////////////////////////////////////////////////////////
-function getTopPastImageData() {
+function getTopPastImageData($imagecnt, $intervalunit, $intervalnum) {
 	$affilid = getDashboardAffilID();
 	$reloadid = getUserlistID('vclreload@Local');
 	if($affilid == 0) {
@@ -363,10 +415,10 @@ function getTopPastImageData() {
 		       . "WHERE l.imageid = i.id AND "
 		       .       "l.wasavailable = 1 AND "
 		       .       "l.userid != $reloadid AND "
-		       .       "l.start > DATE_SUB(NOW(), INTERVAL 1 DAY) "
+		       .       "l.start > DATE_SUB(NOW(), INTERVAL $intervalnum $intervalunit) "
 		       . "GROUP BY l.imageid "
 		       . "ORDER BY count DESC "
-		       . "LIMIT 5";
+		       . "LIMIT $imagecnt";
 	}
 	else {
 		$query = "SELECT COUNT(l.imageid) AS count, "
@@ -379,10 +431,10 @@ function getTopPastImageData() {
 		       .       "l.imageid = i.id AND "
 		       .       "l.wasavailable = 1 AND "
 		       .       "l.userid != $reloadid AND "
-		       .       "l.start > DATE_SUB(NOW(), INTERVAL 1 DAY) "
+		       .       "l.start > DATE_SUB(NOW(), INTERVAL $intervalnum $intervalunit) "
 		       . "GROUP BY l.imageid "
 		       . "ORDER BY count DESC "
-		       . "LIMIT 5";
+		       . "LIMIT $imagecnt";
 	}
 	$data = array();
 	$qh = doQuery($query, 101);
@@ -918,7 +970,7 @@ function getDashboardAffilID() {
 	global $user;
 	if(! checkUserHasPerm('View Dashboard (global)'))
 		return $user['affiliationid'];
-	$affilid = processInputVar('affilid', ARG_NUMERIC);
+	$affilid = getContinuationVar('affilid', processInputVar('affilid', ARG_NUMERIC, 0));
 	$affils = getAffiliations();
 	if($affilid != 0 && ! array_key_exists($affilid, $affils))
 		return 0;

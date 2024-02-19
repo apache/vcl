@@ -13957,6 +13957,7 @@ function getDojoHTML($refresh) {
 			$filename = 'vclDashboard.js';
 			$dojoRequires = array('dojo.parser',
 			                      'dijit.Tooltip',
+			                      'dijit.Dialog',
 			                      'dijit.form.Button',
 			                      'dojox.charting.widget.Chart2D',
 			                      'dojox.charting.action2d.Tooltip',

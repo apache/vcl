@@ -35,6 +35,7 @@ function updateDashboardCB(data, ioArgs) {
 	updateTopImages(data.items.topimages);
 	updateTopLongImages(data.items.toplongimages);
 	updateTopPastImages(data.items.toppastimages);
+	updateTopPast6MonthImages(data.items.toppast6moimages);
 	updateTopFailed(data.items.topfailed);
 	updateTopFailedComputers(data.items.topfailedcomputers);
 	updateResChart(data.items.reschart);
@@ -134,6 +135,31 @@ function updateTopPastImages(data) {
 	obj.innerHTML = txt;
 }
 
+function updateTopPast6MonthImages(data) {
+	if('items' in data && 'divid' in data.items) {
+	    var obj = dojo.byId(data.items.divid);
+	    dojo.byId('detailtitle').innerHTML = data.items.title;
+		data = data.items.result;
+	}
+	else {
+		var obj = dojo.byId('toppast6moimages');
+	}
+	console.log("data length: " + data.length);
+	if(data.length == 0) {
+		obj.innerHTML = 'No recent reservations';
+		return;
+	}
+	var txt = '<table>';
+	for(var i = 0; i < data.length; i++) {
+		txt += '<tr><th align="right">'
+			+ data[i].prettyname
+			+ '</th><td>'
+			+ data[i].count
+			+ '</td></tr>';
+	}
+	txt += '</table>';
+	obj.innerHTML = txt;
+}
 function updateTopFailed(data) {
 	var obj = dojo.byId('topfailed');
 	if(data.length == 0) {
@@ -371,4 +397,21 @@ function secToHour(time) {
 	var hour = parseInt(time / 3600);
 	var min = parseInt((time - (hour * 3600)) / 60);
 	return dojox.string.sprintf('%d:%02d hour(s)', hour, min);
+}
+
+function cancelDetail() {
+    dijit.byId('detaildialog').hide();
+}
+
+function showdetail(id) {
+	var data = {
+		id: id,
+		continuation: dojo.byId('detailcont').value
+	};
+	RPCwrapper(data, showDetailCB, 1);
+}
+
+function showDetailCB(data, ioArgs) {
+	updateTopPast6MonthImages(data);
+	dijit.byId('detaildialog').show();
 }
