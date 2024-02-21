@@ -152,6 +152,9 @@ function viewRequests() {
 					$cdata2['notbyowner'] = 0;
 					if($user['id'] != $requests[$i]['userid'])
 						$cdata2['notbyowner'] = 1;
+					$cdata2['imageadmin'] = 0;
+					if(array_key_exists($imageid, $resources['image']))
+						$cdata2['imageadmin'] = 1;
 					$cont = addContinuationsEntry('AJconfirmDeleteRequest', $cdata2, SECINDAY);
 					$text .= getViewRequestHTMLitem('deletebtn', $cont);
 				}
@@ -247,6 +250,9 @@ function viewRequests() {
 						$cdata2['notbyowner'] = 0;
 						if($user['id'] != $requests[$i]['userid'])
 							$cdata2['notbyowner'] = 1;
+						$cdata2['imageadmin'] = 0;
+						if(array_key_exists($imageid, $resources['image']))
+							$cdata2['imageadmin'] = 1;
 						$cont = addContinuationsEntry('AJconfirmDeleteRequest', $cdata2, SECINDAY);
 						$text .= getViewRequestHTMLitem('deletebtn', $cont);
 					}
@@ -262,6 +268,9 @@ function viewRequests() {
 					$cdata2['notbyowner'] = 0;
 					if($user['id'] != $requests[$i]['userid'])
 						$cdata2['notbyowner'] = 1;
+					$cdata2['imageadmin'] = 0;
+					if(array_key_exists($imageid, $resources['image']))
+						$cdata2['imageadmin'] = 1;
 					$cont = addContinuationsEntry('AJconfirmDeleteRequest', $cdata2, SECINDAY);
 					$text .= getViewRequestHTMLitem('deletebtn', $cont);
 				}
@@ -1433,24 +1442,7 @@ function newReservationHTML() {
 	$h .= "   <input type=\"hidden\" id=\"openend\" value=\"$openend\">\n";
 	$h .= "   <div id=\"newResDlgContent\">\n";
 
-	/*$cbtn  = "   <div align=\"center\"><br>\n";
-	$cbtn .= "   <button dojoType=\"dijit.form.Button\">\n";
-	$cbtn .= "     " . i("Close") . "\n";
-	$cbtn .= "     <script type=\"dojo/method\" event=\"onClick\">\n";
-	$cbtn .= "       dijit.byId('newResDlg').hide();\n";
-	$cbtn .= "     </script>\n";
-	$cbtn .= "   </button>\n";
-	$cbtn .= "   </div>\n"; # center
-
-	if($forimaging) {
-		$h .= "<h2>" . i("Create / Update an Image") . "</h2>\n";
-		if($imagingaccess == 0) {
-			$h .= i("You don't have access to any base images from which to create new images.") . "<br>\n";
-			return $h . $cbtn;
-		}
-	}
-	else*/
-		$h .= "<h2>" . i("New Reservation") . "</h2>\n";
+	$h .= "<h2>" . i("New Reservation") . "</h2>\n";
 
 	if(! count($images)) {
 		$h .= i("You do not have access to any environments.");
@@ -1467,28 +1459,6 @@ function newReservationHTML() {
 		$h .= "</div>\n"; # newResDlg
 		return $h;
 	}
-
-	/*$h .= "<span id=\"deployprofileslist\" class=\"hidden\">\n";
-	$h .= "<div dojoType=\"dojo.data.ItemFileWriteStore\" jsId=\"profilesstore\" ";
-	$h .= "data=\"profilesstoredata\"></div>\n";
-	$h .= i("Profile:") . " ";
-	$h .= "<select dojoType=\"dijit.form.Select\" id=\"deployprofileid\" ";
-	$h .= "onChange=\"deployProfileChanged();\" sortByLabel=\"true\"></select><br>\n";
-	$h .= "<fieldset>\n";
-	$h .= "<legend>" . i("Description:") . "</legend>\n";
-	$h .= "<div id=\"deploydesc\"></div>\n";
-	$h .= "</fieldset>\n";
-	$cont = addContinuationsEntry('AJserverProfileData', array('mode' => 'checkout'));
-	$h .= "<button dojoType=\"dijit.form.Button\" id=\"deployFetchProfilesBtn\">\n";
-	$h .= "	" . i("Apply Profile") . "\n";
-	$h .= "	<script type=\"dojo/method\" event=onClick>\n";
-	$h .= "		getServerProfileData('$cont', 'deployprofileid', getServerProfileDataDeployCB);\n";
-	$h .= "	</script>\n";
-	$h .= "</button>";
-	$h .= "<br><br>\n";
-	$h .= "<input type=\"hidden\" id=\"appliedprofileid\" value=\"0\">\n";
-	$h .= "</span>\n"; # deployprofileslist*/
-
 	# directions
 	$h .= "<span id=\"nrdirections\">";
 	$h .= i("Please select the environment you want to use from the list:");
@@ -3094,6 +3064,7 @@ function viewRequestInfo() {
 	print "    <TD>\n";
 	$cdata = array('requestid' => $requestid,
 	               'notbyowner' => 1,
+	               'imageadmin' => 0,
 	               'ttdata' => getContinuationVar('ttdata'),
 	               'fromtimetable' => 1);
 	$cont = addContinuationsEntry('AJconfirmDeleteRequest', $cdata, SECINDAY);
@@ -3988,6 +3959,7 @@ function AJconfirmDeleteRequest() {
 	global $user;
 	$requestid = getContinuationVar('requestid', 0);
 	$notbyowner = getContinuationVar('notbyowner', 0);
+	$imageadmin = getContinuationVar('imageadmin', 0);
 	$fromtimetable = getContinuationVar('fromtimetable', 0);
 	$skipconfirm = processInputVar('skipconfirm', ARG_NUMERIC, 0);
 	if($skipconfirm != 0 && $skipconfirm != 1)
@@ -4033,7 +4005,7 @@ function AJconfirmDeleteRequest() {
 		                prettyDatetime($request["start"]));
 	}
 	else {
-		if($notbyowner == 0 && ! $reservation["production"] && count($request['reservations']) == 1) {
+		if($imageadmin && $notbyowner == 0 && ! $reservation["production"] && count($request['reservations']) == 1) {
 			AJconfirmDeleteRequestProduction($request);
 			return;
 		}
