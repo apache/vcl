@@ -1854,7 +1854,7 @@ function AJupdateWaitTime() {
 	   ($type == 'server' && ! $serveraccess))
 		return;
 
-		print "showHideTypeInputs();";
+	print "showHideTypeInputs();";
 
 	if($type == 'imaging')
 		$imaging = 1;
@@ -4386,6 +4386,7 @@ function AJconnectRequest() {
 		$h .= i("This is a cluster reservation. Depending on the makeup of the cluster, you may need to use different methods to connect to the different environments in your cluster.");
 		$h .= "<br><br>\n";
 	}
+	$copybtnbase = "<a onclick=\"navigator.clipboard.writeText('%s');\"><img src=\"images/copy_icon.png\" style=\"height: 1.1em; width: 1em;\"></a>";
 	foreach($requestData["reservations"] as $key => $res) {
 		$osname = $res["OS"];
 		if(array_key_exists($user['id'], $requestData['passwds'][$res['reservationid']]))
@@ -4412,12 +4413,17 @@ function AJconnectRequest() {
 				$conuser = $matches[1];
 			else
 				$conuser = $user['unityid'];
-			if($requestData['reservations'][0]['domainDNSName'] != '' && ! strlen($passwd))
-				$conuser .= "@" . $requestData['reservations'][0]['domainDNSName'];
-			elseif($requestData['reservations'][0]['OStype'] == 'windows')
-				$conuser = ".\\$conuser";
-			if(! strlen($passwd))
-				$passwd = i('(use your campus password)');
+			if($requestData['reservations'][0]['OStype'] == 'windows') {
+				if($requestData['reservations'][0]['domainDNSName'] != '' && (is_null($passwd) || ! strlen($passwd)))
+					$conuser .= "@" . $requestData['reservations'][0]['domainDNSName'];
+				else
+					$conuser = ".\\$conuser";
+			}
+			$conuser = sprintf("$conuser&nbsp;$copybtnbase", preg_replace('/\\\/', '\\\\\\\\\\', $conuser));
+			if(is_null($passwd) || ! strlen($passwd))
+				$_passwd = i('(use your campus password)');
+			else
+				$_passwd = sprintf("$passwd&nbsp;$copybtnbase", $passwd);
 			if($cluster)
 				$h .= "<h4>" . i("Connect to reservation using") . " {$method['description']}</h4>\n";
 			else
@@ -4439,8 +4445,16 @@ function AJconnectRequest() {
 					$method['connecttext'] = preg_replace("/#connectIP#/", "#connectIP#:{$method['ports'][0]['key']}", $method['connecttext']);
 				}
 			}
+			if(preg_match('/(#connectIP#.#Port-(TCP|UDP)-[0-9]+#)/', $method['connecttext'], $matches)) {
+				$copyip = sprintf($copybtnbase, $matches[1]);
+				$method['connecttext'] = preg_replace("_((?<!/)#connectIP#.#Port-(TCP|UDP)-[0-9]+#)_", "\\1&nbsp;$copyip", $method['connecttext']);
+			}
+			else {
+				$copyip = sprintf($copybtnbase, $res['connectIP']);
+				$method['connecttext'] = preg_replace("|(?<!/)(#connectIP#)|", "\\1&nbsp;$copyip", $method['connecttext']);
+			}
 			$tos = array($conuser,
-			             $passwd,
+			             $_passwd,
 			             $res['connectIP']);
 			$msg = preg_replace($froms, $tos, $method['connecttext']);
 			foreach($method['ports'] as $port) {
