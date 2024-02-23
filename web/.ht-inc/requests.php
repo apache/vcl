@@ -3440,7 +3440,7 @@ function AJeditRequest() {
 	$lengths = array();
 	if($request['forimaging'] && $maxtimes['total'] < 720) # make sure at least 12 hours available for imaging reservations
 		$maxtimes['total'] = 720;
-	elseif(! $request['forimaging'] && $maximglen) {
+	elseif(! $request['forimaging'] && $maximglen && ($maximglen < $maxtimes['total'])) {
 		$maxtimes['total'] = $maximglen;
 		$currduration = (datetimeToUnix($request['end']) - datetimeToUnix($request['start'])) / 60;
 		$maxtimes['extend'] = $maximglen - $currduration;
