@@ -134,19 +134,6 @@ function processShibAuth() {
 	}
 	else {
 		$usernid = getUserlistID($userid, 1);
-		# NCSU specific
-		if(is_null($userid) && $affil == 'NCSU') {
-			$tmp = updateLDAPUser('NCSU LDAP', $username);
-			$usernid = $tmp['id'];
-		}
-		/*if($affil == 'NCSU') {
-			if(array_key_exists('SHIB_AFFILIATION', $_SERVER))
-				$groups = $_SERVER['SHIB_AFFILIATION'];
-			else
-				$groups = array('shibaffil' => $shibaffil);
-			updateShibGroups($usernid, $groups);
-		}*/
-		# end NCSU specific
 		if(is_null($usernid)) {
 			$tmp = updateShibUser($userid);
 			$usernid = $tmp['id'];
@@ -157,13 +144,13 @@ function processShibAuth() {
 
 	addLoginLog($userid, 'shibboleth', $affilid, 1);
 
-	if($affil == 'UNCG') {
-		$gid = getUserGroupID('All UNCG Users', $affilid);
+	/*if($affil == 'EXAMPLE1') {
+		$gid = getUserGroupID('All EXAMPLE1 Users', $affilid);
 		$query = "INSERT IGNORE INTO usergroupmembers "
 				 . "(userid, usergroupid) "
 				 . "VALUES ($usernid, $gid)";
-		doQuery($query, 307);
-	}
+		doQuery($query);
+	}*/
 
 	if(array_key_exists('SHIB_LOGOUTURL', $_SERVER))
 		$logouturl = $_SERVER['SHIB_LOGOUTURL'];
