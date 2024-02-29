@@ -423,7 +423,8 @@ class TimeVariable {
 		if(! array_key_exists($affilid, $affils)) {
 			$arr = array('status' => 'failed',
 			             'msgid' => "{$this->domidbase}msg",
-			             'errmsg' => i('Invalid affiliation submitted.'));
+			             'errmsg' => i('Invalid affiliation submitted.'),
+			             'btn' => "{$this->domidbase}addbtn");
 			sendJSON($arr);
 			return;
 		}
