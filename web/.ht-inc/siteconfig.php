@@ -209,6 +209,29 @@ function AJupdateTimeSource() {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
+/// \fn fixAffectedRowsRC(&$rc)
+///
+/// \param $rc (pass by reference) - return code to evaluate
+///
+/// \brief checks if $rc is -1, and if so check that a row was successfully
+/// updated and no errors were encountered and change $rc to 1 if that is the
+/// case
+///
+////////////////////////////////////////////////////////////////////////////////
+function fixAffectedRowsRC(&$rc) {
+	global $mysqli_link_vcl;
+	if($rc == -1) {
+		# weird condition where row gets successfully updated and there is no
+		# error, but -1 is returned
+		$errno = mysqli_errno($mysqli_link_vcl);
+		$qinfo = mysqli_info($mysqli_link_vcl);
+		if($errno == 0 && $qinfo == 'Rows matched: 1  Changed: 1  Warnings: 0')
+			$rc = 1;
+	}
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
 /// \class TimeVariable
 ///
 /// \brief base class for time related variables related to when vcld takes
@@ -1070,7 +1093,8 @@ class AffilTextVariable {
 		if(! array_key_exists($affilid, $affils)) {
 			$arr = array('status' => 'failed',
 			             'msgid' => "{$this->domidbase}msg",
-			             'errmsg' => i('Invalid affiliation submitted.'));
+			             'errmsg' => i('Invalid affiliation submitted.'),
+			             'btn' => "{$this->domidbase}addbtn");
 			sendJSON($arr);
 			return;
 		}
@@ -1216,7 +1240,7 @@ class AffilTextVariable {
 		if(! array_key_exists($affilid, $origvals)) {
 			$arr = array('status' => 'failed',
 			             'msgid' => "{$this->domidbase}msg",
-			             'msg' => i('Invalid data submitted.'));
+			             'errmsg' => i('Invalid data submitted.'));
 			sendJSON($arr);
 			return;
 		}
@@ -1322,6 +1346,7 @@ class AffilHelpAddress extends AffilTextVariable {
 		       . "WHERE id = $affilid";
 		doQuery($query);
 		$rc = mysqli_affected_rows($mysqli_link_vcl);
+		fixAffectedRowsRC($rc);
 		if($rc == 1)
 			return 1;
 		return 0;
@@ -1345,6 +1370,7 @@ class AffilHelpAddress extends AffilTextVariable {
 		       . "WHERE id = $affilid";
 		doQuery($query);
 		$rc = mysqli_affected_rows($mysqli_link_vcl);
+		fixAffectedRowsRC($rc);
 		if($rc == 1)
 			return 1;
 		return 0;
@@ -1370,7 +1396,7 @@ class AffilWebAddress extends AffilTextVariable {
 		parent::__construct();
 		$this->name = i("Site Web Address");
 		$this->desc = i("This is the web address in emails sent by the VCL system to users.");
-		$this->constraints = '^http(s)?://([-A-Za-z0-9]{1,63})(\.[A-Za-z0-9-_]+)*(\.?[A-Za-z0-9])(/[-a-zA-Z0-9\._~&\+,=:@]*)*$';
+		$this->constraints = '^http(s)?://([-A-Za-z0-9]{1,63})(\.[A-Za-z0-9-_]+)*(\.?[A-Za-z0-9])(/[-a-zA-Z0-9\._~&\+,=:@%\?]*)*$';
 		$this->errmsg = i("Invalid web address(es) specified");
 		$this->domidbase = "affilwebaddr";
 		$this->jsname = "affilwebaddr";
@@ -1421,6 +1447,7 @@ class AffilWebAddress extends AffilTextVariable {
 		       . "WHERE id = $affilid";
 		doQuery($query);
 		$rc = mysqli_affected_rows($mysqli_link_vcl);
+		fixAffectedRowsRC($rc);
 		if($rc == 1)
 			return 1;
 		return 0;
@@ -1444,6 +1471,7 @@ class AffilWebAddress extends AffilTextVariable {
 		       . "WHERE id = $affilid";
 		doQuery($query);
 		$rc = mysqli_affected_rows($mysqli_link_vcl);
+		fixAffectedRowsRC($rc);
 		if($rc == 1)
 			return 1;
 		return 0;
@@ -1609,6 +1637,7 @@ class AffilKMSserver extends AffilTextVariable {
 			       .       "affiliationid = $affilid";
 			doQuery($query);
 			$tmp = mysqli_affected_rows($mysqli_link_vcl);
+			fixAffectedRowsRC($tmp);
 			if($rc2)
 				$rc2 = $tmp;
 		}
@@ -1649,6 +1678,17 @@ class AffilKMSserver extends AffilTextVariable {
 		       . "WHERE affiliationid = $affilid";
 		doQuery($query);
 		$rc = mysqli_affected_rows($mysqli_link_vcl);
+		# code to handle mysqli_affected_rows incorrectly returning -1
+		$errno = mysqli_errno($mysqli_link_vcl);
+		if($rc == -1 && $errno == 0) {
+			$query = "SELECT affiliationid FROM winKMS WHERE affiliationid = $affilid";
+			$qh = doQuery($query);
+			if(mysqli_num_rows($qh))
+				return 0;
+			else
+				return 1;
+		}
+		# end -1 handling code
 		if($rc == 1)
 			return 1;
 		return 0;
@@ -1740,6 +1780,7 @@ class AffilTheme extends AffilTextVariable {
 		       . "WHERE id = $affilid";
 		doQuery($query);
 		$rc = mysqli_affected_rows($mysqli_link_vcl);
+		fixAffectedRowsRC($rc);
 		if($rc == 1)
 			return 1;
 		return 0;
@@ -1763,6 +1804,7 @@ class AffilTheme extends AffilTextVariable {
 		       . "WHERE id = $affilid";
 		doQuery($query);
 		$rc = mysqli_affected_rows($mysqli_link_vcl);
+		fixAffectedRowsRC($rc);
 		if($rc == 1)
 			return 1;
 		return 0;
@@ -1859,6 +1901,7 @@ class AffilShibOnly extends AffilTextVariable {
 		       . "WHERE id = $affilid";
 		doQuery($query);
 		$rc = mysqli_affected_rows($mysqli_link_vcl);
+		fixAffectedRowsRC($rc);
 		if($rc == 1)
 			return 1;
 		return 0;
@@ -1974,6 +2017,7 @@ class AffilShibName extends AffilTextVariable {
 		       . "WHERE id = $affilid";
 		doQuery($query);
 		$rc = mysqli_affected_rows($mysqli_link_vcl);
+		fixAffectedRowsRC($rc);
 		if($rc == 1)
 			return 1;
 		return 0;
@@ -1997,6 +2041,7 @@ class AffilShibName extends AffilTextVariable {
 		       . "WHERE id = $affilid";
 		doQuery($query);
 		$rc = mysqli_affected_rows($mysqli_link_vcl);
+		fixAffectedRowsRC($rc);
 		if($rc == 1)
 			return 1;
 		return 0;
@@ -2755,7 +2800,8 @@ class NFSmounts extends GlobalMultiVariable {
 		foreach($vals as $key => $val) {
 			$tmp = explode('|', $key);
 			$id = $tmp[1];
-			$this->values[$id] = $val;
+			if(isset($this->units[$id]))
+				$this->values[$id] = $val;
 		}*/
 		$formbase = ' &lt;hostname or IP&gt;:&lt;export path&gt;,&lt;mount path&gt;';
 		$this->desc = _("NFS Mounts are NFS exports that are to be mounted within each reservation deployed by a given management node.<br>Values must be like") . $formbase;
