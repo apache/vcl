@@ -97,11 +97,11 @@ sub initialize {
 	my $nathost_id = $self->data->get_nathost_id(0);
 	
 	# Initialize the database handle count
-	$ENV{dbh_count} = 0;
+	$ENV->{dbh_count} = 0;
 	
 	# Attempt to get a database handle
-	if ($ENV{dbh} = getnewdbh()) {
-		notify($ERRORS{'DEBUG'}, 0, "obtained a database handle for this state process, stored as \$ENV{dbh}");
+	if ($ENV->{dbh} = getnewdbh()) {
+		notify($ERRORS{'DEBUG'}, 0, "obtained a database handle for this state process, stored as \$ENV->{dbh}");
 	}
 	else {
 		notify($ERRORS{'CRITICAL'}, 0, "unable to obtain a database handle for this state process");
@@ -876,7 +876,7 @@ sub state_exit {
 	}
 	
 	# Set flag to avoid this subroutine from being called more than once
-	$ENV{state_exit} = 1;
+	$ENV->{state_exit} = 1;
 	
 	my ($request_state_name_new, $computer_state_name_new, $request_log_ending) = @_;
 	notify($ERRORS{'DEBUG'}, 0, "beginning state module exit tasks, " .
@@ -1096,7 +1096,7 @@ sub DESTROY {
 	
 	# Check if normal module object data is available
 	if ($calling_sub && $self && $self->data(0) && !$self->data->is_blockrequest()) {
-		if (!$ENV{state_exit}) {
+		if (!$ENV->{state_exit}) {
 			my $request_id = $self->data->get_request_id();
 			my @reservation_ids = $self->data->get_reservation_ids();
 			if (@reservation_ids && $request_id) {
@@ -1111,29 +1111,29 @@ sub DESTROY {
 	
 	# Uncomment to enable database metrics
 	# Print the number of database handles this process created for testing/development
-	#if (defined $ENV{dbh_count}) {
-	#	notify($ERRORS{'DEBUG'}, 0, "number of database handles state process created: $ENV{dbh_count}");
+	#if (defined $ENV->{dbh_count}) {
+	#	notify($ERRORS{'DEBUG'}, 0, "number of database handles state process created: $ENV->{dbh_count}");
 	#}
-	#if (defined $ENV{database_select_count}) {
-	#	notify($ERRORS{'DEBUG'}, 0, "database select queries: $ENV{database_select_count}");
+	#if (defined $ENV->{database_select_count}) {
+	#	notify($ERRORS{'DEBUG'}, 0, "database select queries: $ENV->{database_select_count}");
 	#}
-	#if (defined $ENV{database_select_calls}) {
+	#if (defined $ENV->{database_select_calls}) {
 	#	my $database_select_calls_string;
-	#	my %hash = %{$ENV{database_select_calls}};
+	#	my %hash = %{$ENV->{database_select_calls}};
 	#	my @sorted_keys = sort { $hash{$b} <=> $hash{$a} } keys(%hash);
 	#	for my $key (@sorted_keys) {
-	#		$database_select_calls_string .= "$ENV{database_select_calls}{$key}: $key\n";
+	#		$database_select_calls_string .= "$ENV->{database_select_calls}{$key}: $key\n";
 	#	}
 	#	notify($ERRORS{'DEBUG'}, 0, "database select called from:\n$database_select_calls_string");
 	#}
-	#if (defined $ENV{database_execute_count}) {
-	#	notify($ERRORS{'DEBUG'}, 0, "database execute queries: $ENV{database_execute_count}");
+	#if (defined $ENV->{database_execute_count}) {
+	#	notify($ERRORS{'DEBUG'}, 0, "database execute queries: $ENV->{database_execute_count}");
 	#}
 
 	# Close the database handle
-	if (defined $ENV{dbh}) {
-		if (!$ENV{dbh}->disconnect) {
-			notify($ERRORS{'WARNING'}, 0, "\$ENV{dbh}: database disconnect failed, " . DBI::errstr());
+	if (defined $ENV->{dbh}) {
+		if (!$ENV->{dbh}->disconnect) {
+			notify($ERRORS{'WARNING'}, 0, "\$ENV->{dbh}: database disconnect failed, " . DBI::errstr());
 		}
 	}
 

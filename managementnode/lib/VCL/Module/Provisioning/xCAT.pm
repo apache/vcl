@@ -106,10 +106,10 @@ sub initialize {
 	my $self = shift;
 
 	# Check the XCAT_ROOT environment variable, it should be defined
-	if (defined($ENV{XCATROOT}) && $ENV{XCATROOT}) {
-		$XCAT_ROOT = $ENV{XCATROOT};
+	if (defined($ENV->{XCATROOT}) && $ENV->{XCATROOT}) {
+		$XCAT_ROOT = $ENV->{XCATROOT};
 	}
-	elsif (defined($ENV{XCATROOT})) {
+	elsif (defined($ENV->{XCATROOT})) {
 		notify($ERRORS{'OK'}, 0, "XCATROOT environment variable is not defined, using /opt/xcat");
 		$XCAT_ROOT = '/opt/xcat';
 	}
