@@ -712,35 +712,30 @@ class ManagementNode extends Resource {
 		$return = array('error' => 0);
 
 		$return['rscid'] = getContinuationVar('rscid', 0);
-		$return['name'] = processInputVar('name', ARG_STRING);
+		$return['name'] = processInputVar('name', ARG_STRING, '');
 		$return['owner'] = processInputVar('owner', ARG_STRING, "{$user['unityid']}@{$user['affiliation']}");
-		$return['ipaddress'] = processInputVar('ipaddress', ARG_STRING);
-		$return['stateid'] = processInputVar('stateid', ARG_NUMERIC);
-		$return['sysadminemail'] = processInputVar('sysadminemail', ARG_STRING);
-		$return['sharedmailbox'] = processInputVar('sharedmailbox', ARG_STRING);
-		$return['installpath'] = processInputVar('installpath', ARG_STRING);
-		$return['timeservers'] = processInputVar('timeservers', ARG_STRING);
-		$return['keys'] = processInputVar('keys', ARG_STRING);
+		$return['ipaddress'] = processInputVar('ipaddress', ARG_STRING, '');
+		$return['stateid'] = processInputVar('stateid', ARG_NUMERIC, 0);
+		$return['sysadminemail'] = processInputVar('sysadminemail', ARG_STRING, '');
+		$return['sharedmailbox'] = processInputVar('sharedmailbox', ARG_STRING, '');
+		$return['installpath'] = processInputVar('installpath', ARG_STRING, '');
+		$return['timeservers'] = processInputVar('timeservers', ARG_STRING, '');
+		$return['keys'] = processInputVar('keys', ARG_STRING, '');
 		$return['sshport'] = processInputVar('sshport', ARG_NUMERIC);
 		$return['imagelibenable'] = processInputVar('imagelibenable', ARG_NUMERIC);
 		$return['imagelibgroupid'] = processInputVar('imagelibgroupid', ARG_NUMERIC);
-		$return['imagelibuser'] = processInputVar('imagelibuser', ARG_STRING);
-		$return['imagelibkey'] = processInputVar('imagelibkey', ARG_STRING);
-		$return['publicIPconfig'] = processInputVar('publicIPconfig', ARG_STRING);
-		$return['publicnetmask'] = processInputVar('publicnetmask', ARG_STRING);
-		$return['publicgateway'] = processInputVar('publicgateway', ARG_STRING);
-		$return['publicdnsserver'] = processInputVar('publicdnsserver', ARG_STRING);
+		$return['imagelibuser'] = processInputVar('imagelibuser', ARG_STRING, '');
+		$return['imagelibkey'] = processInputVar('imagelibkey', ARG_STRING, '');
+		$return['publicIPconfig'] = processInputVar('publicIPconfig', ARG_STRING, '');
+		$return['publicnetmask'] = processInputVar('publicnetmask', ARG_STRING, '');
+		$return['publicgateway'] = processInputVar('publicgateway', ARG_STRING, '');
+		$return['publicdnsserver'] = processInputVar('publicdnsserver', ARG_STRING, '');
 		$return['checkininterval'] = processInputVar('checkininterval', ARG_NUMERIC);
-		$return['availablenetworks'] = processInputVar('availablenetworks', ARG_STRING);
-		$return['federatedauth'] = processInputVar('federatedauth', ARG_STRING);
-		$return['nathostenabled'] = processInputVar('nathostenabled', ARG_NUMERIC);
-		$return['natpublicIPaddress'] = processInputVar('natpublicipaddress', ARG_STRING);
-		$return['natinternalIPaddress'] = processInputVar('natinternalipaddress', ARG_STRING);
-
-		if(get_magic_quotes_gpc()) {
-			$return['sysadminemail'] = stripslashes($return['sysadminemail']);
-			$return['sharedmailbox'] = stripslashes($return['sharedmailbox']);
-		}
+		$return['availablenetworks'] = processInputVar('availablenetworks', ARG_STRING, '');
+		$return['federatedauth'] = processInputVar('federatedauth', ARG_STRING, '');
+		$return['nathostenabled'] = processInputVar('nathostenabled', ARG_NUMERIC, 2);
+		$return['natpublicIPaddress'] = processInputVar('natpublicipaddress', ARG_STRING, '');
+		$return['natinternalIPaddress'] = processInputVar('natinternalipaddress', ARG_STRING, '');
 
 		$olddata = getContinuationVar('olddata');
 
@@ -889,8 +884,14 @@ class ManagementNode extends Resource {
 			}
 		}
 		else {
-			$return['publicnetmask'] = $olddata['publicnetmask'];
-			$return['publicgateway'] = $olddata['publicgateway'];
+			if($return['mode'] == 'edit') {
+				$return['publicnetmask'] = $olddata['publicnetmask'];
+				$return['publicgateway'] = $olddata['publicgateway'];
+			}
+			else {
+				$return['publicnetmask'] = '';
+				$return['publicgateway'] = '';
+			}
 		}
 		# stateid  2 - available, 5 - failed, 10 - maintenance
 		if(! preg_match('/^(2|5|10)$/', $return['stateid'])) {

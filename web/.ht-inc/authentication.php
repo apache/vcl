@@ -78,10 +78,7 @@ function getAuthCookieData($loginid, $authtype, $valid=600, $shibauthid=0) {
 ////////////////////////////////////////////////////////////////////////////////
 function readAuthCookie() {
 	global $keys, $AUTHERROR, $shibauthed;
-	if(get_magic_quotes_gpc())
-		$cookie = stripslashes($_COOKIE["VCLAUTH"]);
-	else
-		$cookie = $_COOKIE["VCLAUTH"];
+	$cookie = $_COOKIE["VCLAUTH"];
 	$cookie = base64_decode($cookie);
 	if(! openssl_public_decrypt($cookie, $tmp, $keys['public'])) {
 		# cookie is invalid; clear it and return NULL so will get redirected to log in again
@@ -157,10 +154,7 @@ function getAuthTypeFromAuthCookie() {
 	global $keys, $AUTHERROR;
 	if(! array_key_exists('VCLAUTH', $_COOKIE))
 		return NULL;
-	if(get_magic_quotes_gpc())
-		$cookie = stripslashes($_COOKIE["VCLAUTH"]);
-	else
-		$cookie = $_COOKIE["VCLAUTH"];
+	$cookie = $_COOKIE["VCLAUTH"];
 	$cookie = base64_decode($cookie);
 	if(! openssl_public_decrypt($cookie, $tmp, $keys['public'])) {
 		$AUTHERROR["code"] = 3;
@@ -192,7 +186,7 @@ function getAuthTypeFromAuthCookie() {
 ////////////////////////////////////////////////////////////////////////////////
 function selectAuth() {
 	global $HTMLheader, $printedHTMLheader, $authMechs, $skin;
-	$authtype = getContinuationVar('authtype', processInputVar("authtype", ARG_STRING));
+	$authtype = getContinuationVar('authtype', processInputVar("authtype", ARG_STRING, ''));
 	if($authtype == '' && array_key_exists('VCLAUTHSEL', $_COOKIE))
 		$authtype = $_COOKIE['VCLAUTHSEL'];
 	if(array_key_exists('clearselection', $_GET) && $_GET['clearselection'] == 1) {
@@ -285,7 +279,7 @@ function printLoginPageWithSkin($authtype, $servertimeout=0) {
 function printLoginPage($servertimeout=0) {
 	global $authMechs, $skin, $user;
 	$user['id'] = 0;
-	$authtype = getContinuationVar("authtype", processInputVar("authtype", ARG_STRING));
+	$authtype = getContinuationVar("authtype", processInputVar("authtype", ARG_STRING, ''));
 	if($authtype == '' && array_key_exists('VCLAUTHSEL', $_COOKIE))
 		$authtype = $_COOKIE['VCLAUTHSEL'];
 	if(isset($_GET['userid']))
@@ -298,8 +292,6 @@ function printLoginPage($servertimeout=0) {
 		dbDisconnect();
 		exit;
 	}
-	if(get_magic_quotes_gpc())
-		$userid = stripslashes($userid);
 	$userid = htmlspecialchars($userid);
 	$extrafailedmsg = '';
 	if($servertimeout)
@@ -386,7 +378,7 @@ function printLoginPage($servertimeout=0) {
 ////////////////////////////////////////////////////////////////////////////////
 function submitLogin() {
 	global $authMechs;
-	$authtype = getContinuationVar("authtype", processInputVar('authtype', ARG_STRING));
+	$authtype = getContinuationVar("authtype", processInputVar('authtype', ARG_STRING, ''));
 	if(! array_key_exists($authtype, $authMechs)) {
 		// FIXME - hackerish
 		dbDisconnect();
@@ -399,10 +391,6 @@ function submitLogin() {
 	if(empty($userid) || empty($passwd)) {
 		selectAuth();
 		return;
-	}
-	if(get_magic_quotes_gpc()) {
-		$userid = stripslashes($userid);
-		$passwd = stripslashes($passwd);
 	}
 	if($authMechs[$authtype]['type'] == 'ldap')
 		ldapLogin($authtype, $userid, $passwd);
@@ -631,6 +619,8 @@ function checkExpiredDemoUser($userid, $groups=0) {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function testGeneralAffiliation(&$login, &$affilid) {
+	if(is_null($login))
+		return 0;
 	if(preg_match('/^([^@]+)@([^@\.]*)$/', $login, $matches)) {
 		$login = $matches[1];
 		$affilid = getAffiliationID($matches[2]);

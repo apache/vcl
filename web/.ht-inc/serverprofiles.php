@@ -662,17 +662,17 @@ function processProfileInput() {
 	global $user;
 	$ret = array();
 	$ret['profileid'] = processInputVar('id', ARG_NUMERIC);
-	$ret['name'] = processInputVar('name', ARG_STRING);
-	$ret['desc'] = processInputVar('desc', ARG_STRING);
+	$ret['name'] = processInputVar('name', ARG_STRING, '');
+	$ret['desc'] = processInputVar('desc', ARG_STRING, '');
 	$ret['imageid'] = processInputVar('imageid', ARG_NUMERIC);
-	$ret['fixedMAC'] = processInputVar('fixedMAC', ARG_STRING);
-	$ret['admingroupid'] = processInputVar('admingroupid', ARG_NUMERIC);
-	$ret['logingroupid'] = processInputVar('logingroupid', ARG_NUMERIC);
-	$monitored = processInputVar('monitored', ARG_STRING);
-	$ret['fixedIP'] = processInputVar('fixedIP', ARG_STRING);
-	$ret['netmask'] = processInputVar('netmask', ARG_STRING);
-	$ret['router'] = processInputVar('router', ARG_STRING);
-	$ret['dns'] = processInputVar('dns', ARG_STRING);
+	$ret['fixedMAC'] = processInputVar('fixedMAC', ARG_STRING, '');
+	$ret['admingroupid'] = processInputVar('admingroupid', ARG_NUMERIC, 0);
+	$ret['logingroupid'] = processInputVar('logingroupid', ARG_NUMERIC, 0);
+	$monitored = processInputVar('monitored', ARG_STRING, '');
+	$ret['fixedIP'] = processInputVar('fixedIP', ARG_STRING, '');
+	$ret['netmask'] = processInputVar('netmask', ARG_STRING, '');
+	$ret['router'] = processInputVar('router', ARG_STRING, '');
+	$ret['dns'] = processInputVar('dns', ARG_STRING, '');
 	$ret['dnsArr'] = array();
 
 	$err = array();
@@ -950,7 +950,7 @@ function jsonProfileGroupingProfiles() {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function AJaddGroupToProfile() {
-	$profileid = processInputVar('id', ARG_NUMERIC);
+	$profileid = processInputVar('id', ARG_NUMERIC, 0);
 	$resources = getUserResources(array("serverProfileAdmin"), array("manageGroup"));
 	// check access to profile
 	if(! array_key_exists($profileid, $resources['serverprofile'])) {
@@ -961,7 +961,7 @@ function AJaddGroupToProfile() {
 
 	// check access to groups
 	$groups = getUserResources(array("serverProfileAdmin"), array("manageGroup"), 1);
-	$tmp = processInputVar('listids', ARG_STRING);
+	$tmp = processInputVar('listids', ARG_STRING, '');
 	$tmp = explode(',', $tmp);
 	$groupids = array();
 	foreach($tmp as $id) {
@@ -998,7 +998,7 @@ function AJaddGroupToProfile() {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function AJremGroupFromProfile() {
-	$profileid = processInputVar('id', ARG_NUMERIC);
+	$profileid = processInputVar('id', ARG_NUMERIC, 0);
 	$resources = getUserResources(array("serverProfileAdmin"), array("manageGroup"));
 	if(! array_key_exists($profileid, $resources['serverprofile'])) {
 		$arr = array('groups' => array(), 'addrem' => 0);
@@ -1007,7 +1007,7 @@ function AJremGroupFromProfile() {
 	}
 
 	$groups = getUserResources(array("serverProfileAdmin"), array("manageGroup"), 1);
-	$tmp = processInputVar('listids', ARG_STRING);
+	$tmp = processInputVar('listids', ARG_STRING, '');
 	$tmp = explode(',', $tmp);
 	$groupids = array();
 	foreach($tmp as $id) {
@@ -1056,7 +1056,7 @@ function AJaddProfileToGroup() {
 	}
 
 	$resources = getUserResources(array("serverProfileAdmin"), array("manageGroup"));
-	$tmp = processInputVar('listids', ARG_STRING);
+	$tmp = processInputVar('listids', ARG_STRING, '');
 	$tmp = explode(',', $tmp);
 	$profileids = array();
 	foreach($tmp as $id) {
@@ -1102,7 +1102,7 @@ function AJremProfileFromGroup() {
 	}
 
 	$resources = getUserResources(array("serverProfileAdmin"), array("manageGroup"));
-	$tmp = processInputVar('listids', ARG_STRING);
+	$tmp = processInputVar('listids', ARG_STRING, '');
 	$tmp = explode(',', $tmp);
 	$profileids = array();
 	foreach($tmp as $id) {

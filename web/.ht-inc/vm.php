@@ -354,7 +354,7 @@ function vmhostdata() {
 	$data = getVMHostData($vmhostid);
 
 	$resources = getUserResources(array("computerAdmin"), array("administer"));
-	if(! array_key_exists($data[$vmhostid]['computerid'], $resources['computer'])) {
+	if(is_null($vmhostid) || ! array_key_exists($data[$vmhostid]['computerid'], $resources['computer'])) {
 		sendJSON(array('failed' => 'noaccess'));
 		return;
 	}
@@ -505,7 +505,7 @@ function AJvmToHost() {
 	
 	$hostdata = getVMHostData($hostid);
 	$resources = getUserResources(array("computerAdmin"), array("administer"));
-	if(! array_key_exists($hostdata[$hostid]['computerid'], $resources['computer'])) {
+	if(is_null($hostid) || ! array_key_exists($hostdata[$hostid]['computerid'], $resources['computer'])) {
 		sendJSON(array('failed' => 'nohostaccess'));
 		return;
 	}
@@ -514,7 +514,7 @@ function AJvmToHost() {
 	$fails = array();
 
 	$vmlistids = processInputVar('listids', ARG_STRING);
-	if(! preg_match('/^(\d+)(,\d+)*$/', $vmlistids)) {
+	if(is_null($vmlistids) || ! preg_match('/^(\d+)(,\d+)*$/', $vmlistids)) {
 		sendJSON(array('failed' => 'invaliddata'));
 		return;
 	}
@@ -578,14 +578,14 @@ function AJvmFromHost() {
 	
 	$hostdata = getVMHostData($hostid);
 	$resources = getUserResources(array("computerAdmin"), array("administer"));
-	if(! array_key_exists($hostdata[$hostid]['computerid'], $resources['computer'])) {
+	if(is_null($hostid) || ! array_key_exists($hostdata[$hostid]['computerid'], $resources['computer'])) {
 		sendJSON(array('failed' => 'nohostaccess'));
 		return;
 	}
 
 	$fails = array();
 	$vmlistids = processInputVar('listids', ARG_STRING);
-	if(! preg_match('/^(\d+)(,\d+)*$/', $vmlistids)) {
+	if(is_null($vmlistids) || ! preg_match('/^(\d+)(,\d+)*$/', $vmlistids)) {
 		sendJSON(array('failed' => 'invaliddata'));
 		return;
 	}
@@ -717,14 +717,14 @@ function AJcancelVMmove() {
 	
 	$hostdata = getVMHostData($hostid);
 	$resources = getUserResources(array("computerAdmin"), array("administer"));
-	if(! array_key_exists($hostdata[$hostid]['computerid'], $resources['computer'])) {
+	if(is_null($hostid) || ! array_key_exists($hostdata[$hostid]['computerid'], $resources['computer'])) {
 		sendJSON(array('failed' => 'nohostaccess'));
 		return;
 	}
 
 	$fails = array();
 	$requestids = processInputVar('listids', ARG_STRING);
-	if(! preg_match('/^(\d+)(,\d+)*$/', $requestids)) {
+	if(is_null($requestids) || ! preg_match('/^(\d+)(,\d+)*$/', $requestids)) {
 		sendJSON(array('failed' => 'invaliddata'));
 		return;
 	}
@@ -774,11 +774,11 @@ function AJcancelVMmove() {
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function AJprofileData($profileid="") {
-	if(! checkUserHasPerm('Manage VM Profiles')) {
+	$profileid = processInputVar('profileid', ARG_NUMERIC, $profileid);
+	if(empty($profileid) || ! checkUserHasPerm('Manage VM Profiles')) {
 		sendJSON(array('failed' => 'noaccess'));
 		return;
 	}
-	$profileid = processInputVar('profileid', ARG_NUMERIC, $profileid);
 	$profiledata = getVMProfiles($profileid);
 	foreach($profiledata[$profileid] AS $key => $value) {
 		if(is_null($value))
@@ -819,7 +819,11 @@ function AJupdateVMprofileItem() {
 		return;
 	}
 	$profileid = processInputVar('profileid', ARG_NUMERIC);
-	$item = processInputVar('item', ARG_STRING);
+	if(empty($profileid) || ! checkUserHasPerm('Manage VM Profiles')) {
+		print "alert('Invalid data submitted.');";
+		return;
+	}
+	$item = processInputVar('item', ARG_STRING, '');
 	if(! preg_match('/^(profilename|imageid|resourcepath|folderpath|repositorypath|repositoryimagetypeid|datastorepath|datastoreimagetypeid|vmdisk|vmpath|virtualswitch[0-3]|username|password|eth0generated|eth1generated)$/', $item)) {
 		print "alert('Invalid data submitted.');";
 		return;
@@ -841,15 +845,26 @@ function AJupdateVMprofileItem() {
 		if(! in_array($newvalue, $vmdisks))
 			$newvalue = $vmdisks[0];
 	}
-	elseif($item == 'password')
-		$newvalue = $_POST['newvalue'];
+	elseif($item == 'password') {
+		if(isset($_POST['newvalue']))
+			$newvalue = $_POST['newvalue'];
+		else
+			$newvalue = '';
+	}
+	elseif($item == 'profilename') {
+		$newvalue = processInputVar('newvalue', ARG_STRING);
+		if(empty($newvalue) || ! preg_match('/^[-a-zA-Z0-9 \.\(\),@#_\+:;]$/', $newvalue)) {
+			$profile = getVMProfiles($profileid);
+			print "alert('Invalid value submitted for Name');";
+			print "dijit.byId('pname').set('value', '{$profile[$profileid]['name']}');";
+			return;
+		}
+	}
 	else
 		$newvalue = processInputVar('newvalue', ARG_STRING);
-	if($newvalue == '')
+	if(empty($newvalue))
 		$newvalue2 = 'NULL';
 	else {
-		if(get_magic_quotes_gpc())
-			$newvalue = stripslashes($newvalue);
 		$newvalue2 = vcl_mysql_escape_string($newvalue);
 		$newvalue2 = "'$newvalue2'";
 	}
@@ -940,7 +955,8 @@ function AJupdateVMprofileItem() {
 	       . "SET `$item` = $newvalue2 "
 	       . "WHERE id = $profileid";
 	doQuery($query, 101);
-	$newvalue = preg_replace("/'/", "\\'", $newvalue);
+	if(! is_null($newvalue))
+		$newvalue = preg_replace("/'/", "\\'", $newvalue);
 	print "curprofile.$item = '$newvalue';";
 }
 
@@ -954,13 +970,17 @@ function AJupdateVMprofileItem() {
 ////////////////////////////////////////////////////////////////////////////////
 function AJnewProfile() {
 	$newprofile = processInputVar('newname', ARG_STRING);
-	if(get_magic_quotes_gpc())
-		$newprofile = stripslashes($newprofile);
+	if(empty($newprofile) || ! preg_match('/^[-a-zA-Z0-9 \.\(\),@#_\+:;]$/', $newprofile)) {
+		sendJSON(array('failed' => 'invalid',
+		               'errmsg' => 'Invalid name submitted for new profile.'));
+		return;
+	}
 	$newprofile = vcl_mysql_escape_string($newprofile);
 	$query = "SELECT id FROM vmprofile WHERE profilename = '$newprofile'";
 	$qh = doQuery($query, 101);
 	if($row = mysqli_fetch_assoc($qh)) {
-		sendJSON(array('failed' => 'exists'));
+		sendJSON(array('failed' => 'exists',
+		               'errmsg' => 'A profile with this name already exists.'));
 		return;
 	}
 	$imageid = getImageId('noimage');
@@ -992,6 +1012,10 @@ function AJdelProfile() {
 		return;
 	}
 	$profileid = processInputVar('profileid', ARG_NUMERIC);
+	if(empty($profileid)) {
+		sendJSON(array('failed' => 'noaccess'));
+		return;
+	}
 	# check to see if profile is in use
 	$query = "SELECT vh.computerid, "
 	       .        "s.name "

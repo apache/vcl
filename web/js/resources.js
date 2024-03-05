@@ -116,6 +116,9 @@ Resource.prototype.addRemItemCB = function(data, ioArgs) {
 	else if(data.items.status == 'noaccess') {
 		alert(_('You do not have access to the submitted resource or group'));
 	}
+	else if(data.items.status == 'invalid') {
+		alert(_('Invalid value submitted'));
+	}
 	document.body.style.cursor = 'default';
 }
 

@@ -39,15 +39,10 @@ define("SUMMARYERR", 1 << 3);
 function printHelpForm() {
 	global $user, $submitErr, $noHTMLwrappers;
 	if($submitErr) {
-		$name = processInputVar("name", ARG_STRING);
-		$email = processInputVar("email", ARG_STRING);
+		$name = processInputVar("name", ARG_STRING, '');
+		$email = processInputVar("email", ARG_STRING, '');
 		$summary = processInputVar("summary", ARG_STRING);
 		$text = processInputVar("comments", ARG_STRING);
-		if(get_magic_quotes_gpc()) {
-			$name = stripslashes($name);
-			$summary = stripslashes($summary);
-			$text = stripslashes($text);
-		}
 		$name = preg_replace(array('/"/', '/>/'), array('&quot;', '&gt;'), $name);
 		$summary = preg_replace(array('/"/', '/>/'), array('&quot;', '&gt;'), $summary);
 	}
@@ -126,16 +121,14 @@ function submitHelpForm() {
 	$text = processInputVar("comments", ARG_STRING);
 
 	$testname = $name;
-	if(get_magic_quotes_gpc())
-		$testname = stripslashes($name);
-	if(! preg_match('/^([-A-Za-z \']{1,} [-A-Za-z \']{2,})*$/', $testname)) {
+	if(is_null($testname) || ! preg_match('/^([-A-Za-z \']{1,} [-A-Za-z \']{2,})*$/', $testname)) {
 		$submitErr |= NAMEERR;
 		$submitErrMsg[NAMEERR] = "Name can only contain letters, spaces, apostrophes ('), and dashes (-). Both first and last name must be specified.";
 	}
-	if(! preg_match('/^[_a-z0-9-]+(\.[_a-z0-9-]+)*@[a-z0-9-]+(\.[a-z0-9-]+)*(\.[a-z]{2,3})$/i',
-	   $email)) {
+	if(is_null($email) || ! filter_var($email, FILTER_VALIDATE_EMAIL)) {
 		$submitErr |= EMAILERR;
-		$submitErrMsg[EMAILERR] = "Invalid email address, please correct";
+		$submitErrMsg[EMAILERR] = "Invalid email address specified";
+		$_POST['email'] = $user['email'];
 	}
 	if(empty($summary)) {
 		$submitErr |= SUMMARYERR;
@@ -176,8 +169,6 @@ function submitHelpForm() {
 	}
 
 	$from = $user["email"];
-	if(get_magic_quotes_gpc())
-		$text = stripslashes($text);
 	$message = "Problem report submitted from VCL web form:\n\n"
 	         . "User: " . $user["unityid"] . "\n"
 	         . "Name: " . $testname . "\n"
@@ -225,7 +216,7 @@ function submitHelpForm() {
 		$resultlen = strlen(i('Fail'));
 	$qh = doQuery($query);
 	$logins = array();
-	while($row = mysql_fetch_assoc($qh)) {
+	while($row = mysqli_fetch_assoc($qh)) {
 		$tmp = prettyDatetime($row['timestamp'], 1, 1);
 		$row['timestamp'] = str_replace('&nbsp;', ' ', $tmp);
 		if($row['passfail'])
@@ -268,8 +259,6 @@ function submitHelpForm() {
 	if(! $indrupal)
 		print "<H2>VCL Help</H2>\n";
 	$mailParams = "-f" . ENVELOPESENDER;
-	if(get_magic_quotes_gpc())
-		$summary = stripslashes($summary);
 	$helpemail = getHelpEmail($user['affiliationid']);
 	if(! mail($helpemail, "$summary", $message,
 	   "From: $from\r\nReply-To: $email\r\n", $mailParams)){
@@ -302,7 +291,7 @@ function getHelpEmail($affil) {
 		$field = 'name';
 	$query = "SELECT helpaddress FROM affiliation WHERE $field = '$affil'";
 	$qh = doQuery($query);
-	if($row = mysql_fetch_assoc($qh))
+	if($row = mysqli_fetch_assoc($qh))
 		if($row['helpaddress'] != '')
 			return $row['helpaddress'];
 	return HELPEMAIL;

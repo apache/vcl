@@ -49,7 +49,7 @@ function blockAllocations() {
 		print "<h2>" . i("Manage Block Allocations") . "</h2>\n";
 		$cont = addContinuationsEntry('viewBlockAllocatedMachines');
 		print "<a href=\"" . BASEURL . SCRIPT . "?continuation=$cont\">";
-		print i("View Block Allocated Machines") . "</a>\n";
+		print i("View Block Allocated Machines") . "</a><br><br>\n";
 		print "<div id=\"blocklist\">\n";
 		print getCurrentBlockHTML();
 		print "</div>\n";
@@ -1180,6 +1180,7 @@ function getCurrentBlockHTML($listonly=0) {
 	$query .=      "b.status = 'accepted' "
 	       . "ORDER BY b.name";
 	$allblockids = array();
+	$blocks = array();
 	$qh = doQuery($query, 101);
 	while($row = mysqli_fetch_assoc($qh)) {
 		if($row['group'] == '') {
@@ -1217,9 +1218,6 @@ function getCurrentBlockHTML($listonly=0) {
 			$blocks[$row['id']]['nextstart'] = i("none found");
 			$blocks[$row['id']]['nextstartactive'] = 0;
 		}
-	}
-	if(empty($blocks)) {
-		return "There are currently no block allocations.<br>\n";
 	}
 	foreach($blocks as $id => $request) {
 		if($request['available'] == 'weekly') {
@@ -1325,60 +1323,64 @@ function getCurrentBlockHTML($listonly=0) {
 	}
 	$rt = '';
 	$rt .= "<input type=\"hidden\" id=\"timezone\" value=\"" . date('T') . "\">\n";
-	$rt .= "<table summary=\"lists current block allocations\">\n";
-	$rt .= "  <TR align=center>\n";
-	$rt .= "    <TD colspan=3></TD>\n";
-	$rt .= "    <TH>" . i("Name") . "</TH>\n";
-	$rt .= "    <TH>" . i("Environment") . "</TH>\n";
-	$rt .= "    <TH>" . i("Reserved<br>Machines") . "</TH>\n";
-	$rt .= "    <TH>" . i("Reserved<br>For") . "</TH>\n";
-	$rt .= "    <TH>" . i("Repeating") . "</TH>\n";
-	$rt .= "    <TH>" . i("Next Start Time") . "</TH>\n";
-	$rt .= "  </TR>\n";
-	foreach($blocks as $block) {
+	if(empty($blocks))
+		$rt .= "There are currently no block allocations.\n";
+	else {
+		$rt .= "<table summary=\"lists current block allocations\">\n";
 		$rt .= "  <TR align=center>\n";
-		$rt .= "    <TD>\n";
-		$rt .= "      <button dojoType=\"dijit.form.Button\" type=\"button\">\n";
-		$rt .= i(      "Edit") . "\n";
-		$rt .= "        <script type=\"dojo/method\" event=\"onClick\">\n";
-		$cont = addContinuationsEntry('editBlockAllocation', array('blockid' => $block['id']));
-		$rt .= "          location.href = '" . BASEURL . SCRIPT . "?continuation=$cont';\n";
-		$rt .= "        </script>\n";
-		$rt .= "      </button>\n";
-		$rt .= "    </TD>\n";
-		$rt .= "    <TD>\n";
-		$rt .= "      <button dojoType=\"dijit.form.Button\" type=\"button\">\n";
-		$rt .= i(      "Delete") . "\n";
-		$rt .= "        <script type=\"dojo/method\" event=\"onClick\">\n";
-		$cont = addContinuationsEntry('AJdeleteBlockAllocationConfirm', $block, SECINDAY);
-		$rt .= "          deleteBlockConfirm('$cont');\n";
-		$rt .= "        </script>\n";
-		$rt .= "      </button>\n";
-		$rt .= "    </TD>\n";
-		$rt .= "    <TD>\n";
-		$rt .= "      <button dojoType=\"dijit.form.Button\" type=\"button\">\n";
-		$rt .= i(      "View Times") . "\n";
-		$rt .= "        <script type=\"dojo/method\" event=\"onClick\">\n";
-		$cont = addContinuationsEntry('AJviewBlockAllocationTimes', array('blockid' => $block['id']), SECINDAY);
-		$rt .= "          viewBlockTimes('$cont');\n";
-		$rt .= "        </script>\n";
-		$rt .= "      </button>\n";
-		$rt .= "    </TD>\n";
-		$rt .= "    <TD>{$block['blockname']}</TD>\n";
-		$rt .= "    <TD>{$block['image']}</TD>\n";
-		$rt .= "    <TD><a href=\"javascript:void(0)\" onclick=\"viewBlockUsage({$block['id']});\">{$block['machinecnt']}</a></TD>\n";
-		$rt .= "    <TD>{$block['group']}</TD>\n";
-		$rt .= "    <TD>" . i($block['available']) . "</TD>\n";
-		if($block['nextstartactive']) {
-			$cont = addContinuationsEntry('viewBlockStatus', array('id' => $block['id']));
-			$rt .= "    <TD><a href=\"" . BASEURL . SCRIPT . "?continuation=$cont\">";
-			$rt .= "{$block['nextstart']}</a></TD>\n";
-		}
-		else
-			$rt .= "    <TD>{$block['nextstart']}</TD>\n";
+		$rt .= "    <TD colspan=3></TD>\n";
+		$rt .= "    <TH>" . i("Name") . "</TH>\n";
+		$rt .= "    <TH>" . i("Environment") . "</TH>\n";
+		$rt .= "    <TH>" . i("Reserved<br>Machines") . "</TH>\n";
+		$rt .= "    <TH>" . i("Reserved<br>For") . "</TH>\n";
+		$rt .= "    <TH>" . i("Repeating") . "</TH>\n";
+		$rt .= "    <TH>" . i("Next Start Time") . "</TH>\n";
 		$rt .= "  </TR>\n";
+		foreach($blocks as $block) {
+			$rt .= "  <TR align=center>\n";
+			$rt .= "    <TD>\n";
+			$rt .= "      <button dojoType=\"dijit.form.Button\" type=\"button\">\n";
+			$rt .= i(      "Edit") . "\n";
+			$rt .= "        <script type=\"dojo/method\" event=\"onClick\">\n";
+			$cont = addContinuationsEntry('editBlockAllocation', array('blockid' => $block['id']));
+			$rt .= "          location.href = '" . BASEURL . SCRIPT . "?continuation=$cont';\n";
+			$rt .= "        </script>\n";
+			$rt .= "      </button>\n";
+			$rt .= "    </TD>\n";
+			$rt .= "    <TD>\n";
+			$rt .= "      <button dojoType=\"dijit.form.Button\" type=\"button\">\n";
+			$rt .= i(      "Delete") . "\n";
+			$rt .= "        <script type=\"dojo/method\" event=\"onClick\">\n";
+			$cont = addContinuationsEntry('AJdeleteBlockAllocationConfirm', $block, SECINDAY);
+			$rt .= "          deleteBlockConfirm('$cont');\n";
+			$rt .= "        </script>\n";
+			$rt .= "      </button>\n";
+			$rt .= "    </TD>\n";
+			$rt .= "    <TD>\n";
+			$rt .= "      <button dojoType=\"dijit.form.Button\" type=\"button\">\n";
+			$rt .= i(      "View Times") . "\n";
+			$rt .= "        <script type=\"dojo/method\" event=\"onClick\">\n";
+			$cont = addContinuationsEntry('AJviewBlockAllocationTimes', array('blockid' => $block['id']), SECINDAY);
+			$rt .= "          viewBlockTimes('$cont');\n";
+			$rt .= "        </script>\n";
+			$rt .= "      </button>\n";
+			$rt .= "    </TD>\n";
+			$rt .= "    <TD>{$block['blockname']}</TD>\n";
+			$rt .= "    <TD>{$block['image']}</TD>\n";
+			$rt .= "    <TD><a href=\"javascript:void(0)\" onclick=\"viewBlockUsage({$block['id']});\">{$block['machinecnt']}</a></TD>\n";
+			$rt .= "    <TD>{$block['group']}</TD>\n";
+			$rt .= "    <TD>" . i($block['available']) . "</TD>\n";
+			if($block['nextstartactive']) {
+				$cont = addContinuationsEntry('viewBlockStatus', array('id' => $block['id']));
+				$rt .= "    <TD><a href=\"" . BASEURL . SCRIPT . "?continuation=$cont\">";
+				$rt .= "{$block['nextstart']}</a></TD>\n";
+			}
+			else
+				$rt .= "    <TD>{$block['nextstart']}</TD>\n";
+			$rt .= "  </TR>\n";
+		}
+		$rt .= "</table>\n";
 	}
-	$rt .= "</table>\n";
 	if($listonly)
 		return $rt;
 
@@ -1824,6 +1826,7 @@ function getPendingBlockHTML($listonly=0) {
 	$d = '';
 	$groups = getUserGroups(0, $user['affiliationid']);
 	while($row = mysqli_fetch_assoc($qh)) {
+		unset($start);
 		if($row['repeating'] == 'weekly') {
 			$query2 = "SELECT DATE_FORMAT(start, '%m/%d/%y') AS swdate, "
 			        .        "DATE_FORMAT(end, '%m/%d/%y')AS ewdate, " 
@@ -1836,6 +1839,7 @@ function getPendingBlockHTML($listonly=0) {
 			if(! $row2 = mysqli_fetch_assoc($qh2))
 				abort(101);
 			$row = array_merge($row, $row2);
+			$start = $row['swdate'];
 			$wdays = array();
 			for($i = 0; $i < 7; $i++) {
 				if($row['days'] & (1 << $i))
@@ -1881,6 +1885,7 @@ function getPendingBlockHTML($listonly=0) {
 			if(! $row2 = mysqli_fetch_assoc($qh2))
 				abort(101);
 			$row = array_merge($row, $row2);
+			$start = $row['smdate'];
 			$query2 = "SELECT starthour, "
 			        .        "startminute, "
 			        .        "startmeridian, "
@@ -1917,6 +1922,8 @@ function getPendingBlockHTML($listonly=0) {
 			        . "ORDER BY start";
 			$qh2 = doQuery($query2, 101);
 			while($row2 = mysqli_fetch_assoc($qh2)) {
+				if(! isset($start))
+					$start = $row2['date'];
 				if($row2['date'] == '00/00/00')
 					$row['date'][$row2['order']] = '';
 				else
@@ -1975,7 +1982,7 @@ function getPendingBlockHTML($listonly=0) {
 			$d .= "<td>{$row['unityid']}</td>\n";
 		$d .= "<td>{$row['numMachines']}</td>\n";
 		$d .= "<td>" . i($row['repeating']) . "</td>\n";
-		$d .= "<td>{$row2['start']}</td>\n";
+		$d .= "<td>$start</td>\n";
 		$d .= "<td>{$row['lastdate']}</td>\n";
 		$d .= "  </tr>\n";
 	}
@@ -2486,8 +2493,6 @@ function AJacceptBlockAllocationSubmit() {
 		$err = 1;
 	}
 	if($validemail) {
-		if(get_magic_quotes_gpc())
-			$emailtext = stripslashes($emailtext);
 		if(! $err && preg_match('/[<>|]/', $emailtext)) {
 			$errmsg = i("<>\'s and pipes (|) are not allowed in the email text.");
 			$err = 1;
@@ -2707,8 +2712,6 @@ function AJrejectBlockAllocationSubmit() {
 		$errmsg = i("Please include a reason for rejecting the block allocation in the email.");
 		$err = 1;
 	}
-	if(get_magic_quotes_gpc())
-		$emailtext = stripslashes($emailtext);
 	if(! $err && preg_match('/[<>|]/', $emailtext)) {
 		if($validemail)
 			$errmsg = i("<>\'s and pipes (|) are not allowed in the email text.");
@@ -2860,10 +2863,8 @@ function viewBlockStatus() {
 		print i("The selected Block Allocation no longer exists.");
 		return;
 	}
-	$startunix = datetimeToUnix($data['start']);
-	$endunix = datetimeToUnix($data['end']);
-	$start = strftime('%x %l:%M %P %Z', $startunix);
-	$end = strftime('%x %l:%M %P %Z', $endunix);
+	$start = prettyDatetime($data['start'], 1, 0, 0, 1);
+	$end = prettyDatetime($data['end'], 1, 0, 0, 1);
 	print "<div id=statusdiv>\n";
 	print "<table class=blockStatusData summary=\"lists attributes of block allocation\">\n";
 	print "  <tr>\n";
@@ -3267,8 +3268,6 @@ function processBlockAllocationInput() {
 	}
 	if($method == 'request') {
 		$return['comments'] = processInputVar('comments', ARG_STRING);
-		if(get_magic_quotes_gpc())
-			$return['comments'] = stripslashes($return['comments']);
 		if(! $err && preg_match('/[<>]/', $return['comments'])) {
 			$errmsg = i("<>\'s are not allowed in the comments.");
 			$err = 1;

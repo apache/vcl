@@ -801,7 +801,7 @@ class Resource {
 		$h .= "selectionMode=\"extended\">\n";
 		$h .= "<thead>\n";
 		$h .= "<tr>\n";
-		$h .= "<th field=\"name\" width=\"160px\"></th>\n";
+		$h .= "<th field=\"name\" width=\"220px\"></th>\n";
 		$h .= "</tr>\n";
 		$h .= "</thead>\n";
 		$h .= "</table>\n";
@@ -830,7 +830,7 @@ class Resource {
 		$h .= "selectionMode=\"extended\">\n";
 		$h .= "<thead>\n";
 		$h .= "<tr>\n";
-		$h .= "<th field=\"name\" width=\"160px\"></th>\n";
+		$h .= "<th field=\"name\" width=\"220px\"></th>\n";
 		$h .= "</tr>\n";
 		$h .= "</thead>\n";
 		$h .= "</table>\n";
@@ -894,7 +894,12 @@ class Resource {
 		}
 
 		$groups = getUserResources(array($this->restype . "Admin"), array("manageGroup"), 1);
-		$tmp = processInputVar('listids', ARG_STRING);
+		$tmp = processInputVar('listids', ARG_STRING, '');
+		if($tmp == '') {
+				$arr = array('status' => 'invalid');
+				sendJSON($arr);
+				return;
+		}
 		$tmp = explode(',', $tmp);
 		$groupids = array();
 		foreach($tmp as $id) {
@@ -979,7 +984,7 @@ class Resource {
 		$h .= "selectionMode=\"extended\" sortInfo=\"1\">\n";
 		$h .= "<thead>\n";
 		$h .= "<tr>\n";
-		$h .= "<th field=\"name\" width=\"160px\"></th>\n";
+		$h .= "<th field=\"name\" width=\"220px\"></th>\n";
 		$h .= "</tr>\n";
 		$h .= "</thead>\n";
 		$h .= "</table>\n";
@@ -1008,7 +1013,7 @@ class Resource {
 		$h .= "selectionMode=\"extended\" sortInfo=\"1\">\n";
 		$h .= "<thead>\n";
 		$h .= "<tr>\n";
-		$h .= "<th field=\"name\" width=\"160px\"></th>\n";
+		$h .= "<th field=\"name\" width=\"220px\"></th>\n";
 		$h .= "</tr>\n";
 		$h .= "</thead>\n";
 		$h .= "</table>\n";
@@ -1075,6 +1080,11 @@ class Resource {
 
 		$resources = getUserResources(array($this->restype . "Admin"), array("manageGroup"));
 		$tmp = processInputVar('listids', ARG_STRING);
+		if($tmp == '') {
+				$arr = array('status' => 'invalid');
+				sendJSON($arr);
+				return;
+		}
 		$tmp = explode(',', $tmp);
 		$rscids = array();
 		foreach($tmp as $id) {
@@ -1154,7 +1164,10 @@ class Resource {
 		$h = '';
 
 		if(! count($groups) || ! count($mapgroups)) {
+			$h .= "<div id=\"mapbyresgroupdiv\" dojoType=\"dijit.layout.ContentPane\" ";
+			$h .= "title=\"" . i("Map By {$this->restypename} Group") . "\">\n";
 			$h .= i("You don't have access to manage any mappings for this resource type.");
+			$h .= "</div>\n";
 			return $h;
 		}
 
@@ -1179,7 +1192,7 @@ class Resource {
 		$h .= "selectionMode=\"extended\">\n";
 		$h .= "<thead>\n";
 		$h .= "<tr>\n";
-		$h .= "<th field=\"name\" width=\"160px\"></th>\n";
+		$h .= "<th field=\"name\" width=\"220px\"></th>\n";
 		$h .= "</tr>\n";
 		$h .= "</thead>\n";
 		$h .= "</table>\n";
@@ -1210,7 +1223,7 @@ class Resource {
 		$h .= "selectionMode=\"extended\">\n";
 		$h .= "<thead>\n";
 		$h .= "<tr>\n";
-		$h .= "<th field=\"name\" width=\"160px\"></th>\n";
+		$h .= "<th field=\"name\" width=\"220px\"></th>\n";
 		$h .= "</tr>\n";
 		$h .= "</thead>\n";
 		$h .= "</table>\n";
@@ -1347,8 +1360,11 @@ class Resource {
 		$h = '';
 
 		if(! count($mapgroups) || ! count($groups)) {
+			$h .= "<div id=\"mapbymaptogroupdiv\" dojoType=\"dijit.layout.ContentPane\" ";
+			$h .= "title=\"" . i("Map By {$this->maptypename} Group") . "\">\n";
 			$h .= "You don't have access to manage any mappings for this resource ";
 			$h .= "type.<br>\n";
+			$h .= "</div>\n";
 			return $h;
 		}
 
@@ -1373,7 +1389,7 @@ class Resource {
 		$h .= "selectionMode=\"extended\">\n";
 		$h .= "<thead>\n";
 		$h .= "<tr>\n";
-		$h .= "<th field=\"name\" width=\"160px\"></th>\n";
+		$h .= "<th field=\"name\" width=\"220px\"></th>\n";
 		$h .= "</tr>\n";
 		$h .= "</thead>\n";
 		$h .= "</table>\n";
@@ -1402,7 +1418,7 @@ class Resource {
 		$h .= "selectionMode=\"extended\">\n";
 		$h .= "<thead>\n";
 		$h .= "<tr>\n";
-		$h .= "<th field=\"name\" width=\"160px\"></th>\n";
+		$h .= "<th field=\"name\" width=\"220px\"></th>\n";
 		$h .= "</tr>\n";
 		$h .= "</thead>\n";
 		$h .= "</table>\n";

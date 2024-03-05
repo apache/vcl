@@ -152,6 +152,9 @@ function viewRequests() {
 					$cdata2['notbyowner'] = 0;
 					if($user['id'] != $requests[$i]['userid'])
 						$cdata2['notbyowner'] = 1;
+					$cdata2['imageadmin'] = 0;
+					if(array_key_exists($imageid, $resources['image']))
+						$cdata2['imageadmin'] = 1;
 					$cont = addContinuationsEntry('AJconfirmDeleteRequest', $cdata2, SECINDAY);
 					$text .= getViewRequestHTMLitem('deletebtn', $cont);
 				}
@@ -247,6 +250,9 @@ function viewRequests() {
 						$cdata2['notbyowner'] = 0;
 						if($user['id'] != $requests[$i]['userid'])
 							$cdata2['notbyowner'] = 1;
+						$cdata2['imageadmin'] = 0;
+						if(array_key_exists($imageid, $resources['image']))
+							$cdata2['imageadmin'] = 1;
 						$cont = addContinuationsEntry('AJconfirmDeleteRequest', $cdata2, SECINDAY);
 						$text .= getViewRequestHTMLitem('deletebtn', $cont);
 					}
@@ -262,6 +268,9 @@ function viewRequests() {
 					$cdata2['notbyowner'] = 0;
 					if($user['id'] != $requests[$i]['userid'])
 						$cdata2['notbyowner'] = 1;
+					$cdata2['imageadmin'] = 0;
+					if(array_key_exists($imageid, $resources['image']))
+						$cdata2['imageadmin'] = 1;
 					$cont = addContinuationsEntry('AJconfirmDeleteRequest', $cdata2, SECINDAY);
 					$text .= getViewRequestHTMLitem('deletebtn', $cont);
 				}
@@ -1433,24 +1442,7 @@ function newReservationHTML() {
 	$h .= "   <input type=\"hidden\" id=\"openend\" value=\"$openend\">\n";
 	$h .= "   <div id=\"newResDlgContent\">\n";
 
-	/*$cbtn  = "   <div align=\"center\"><br>\n";
-	$cbtn .= "   <button dojoType=\"dijit.form.Button\">\n";
-	$cbtn .= "     " . i("Close") . "\n";
-	$cbtn .= "     <script type=\"dojo/method\" event=\"onClick\">\n";
-	$cbtn .= "       dijit.byId('newResDlg').hide();\n";
-	$cbtn .= "     </script>\n";
-	$cbtn .= "   </button>\n";
-	$cbtn .= "   </div>\n"; # center
-
-	if($forimaging) {
-		$h .= "<h2>" . i("Create / Update an Image") . "</h2>\n";
-		if($imagingaccess == 0) {
-			$h .= i("You don't have access to any base images from which to create new images.") . "<br>\n";
-			return $h . $cbtn;
-		}
-	}
-	else*/
-		$h .= "<h2>" . i("New Reservation") . "</h2>\n";
+	$h .= "<h2>" . i("New Reservation") . "</h2>\n";
 
 	if(! count($images)) {
 		$h .= i("You do not have access to any environments.");
@@ -1467,28 +1459,6 @@ function newReservationHTML() {
 		$h .= "</div>\n"; # newResDlg
 		return $h;
 	}
-
-	/*$h .= "<span id=\"deployprofileslist\" class=\"hidden\">\n";
-	$h .= "<div dojoType=\"dojo.data.ItemFileWriteStore\" jsId=\"profilesstore\" ";
-	$h .= "data=\"profilesstoredata\"></div>\n";
-	$h .= i("Profile:") . " ";
-	$h .= "<select dojoType=\"dijit.form.Select\" id=\"deployprofileid\" ";
-	$h .= "onChange=\"deployProfileChanged();\" sortByLabel=\"true\"></select><br>\n";
-	$h .= "<fieldset>\n";
-	$h .= "<legend>" . i("Description:") . "</legend>\n";
-	$h .= "<div id=\"deploydesc\"></div>\n";
-	$h .= "</fieldset>\n";
-	$cont = addContinuationsEntry('AJserverProfileData', array('mode' => 'checkout'));
-	$h .= "<button dojoType=\"dijit.form.Button\" id=\"deployFetchProfilesBtn\">\n";
-	$h .= "	" . i("Apply Profile") . "\n";
-	$h .= "	<script type=\"dojo/method\" event=onClick>\n";
-	$h .= "		getServerProfileData('$cont', 'deployprofileid', getServerProfileDataDeployCB);\n";
-	$h .= "	</script>\n";
-	$h .= "</button>";
-	$h .= "<br><br>\n";
-	$h .= "<input type=\"hidden\" id=\"appliedprofileid\" value=\"0\">\n";
-	$h .= "</span>\n"; # deployprofileslist*/
-
 	# directions
 	$h .= "<span id=\"nrdirections\">";
 	$h .= i("Please select the environment you want to use from the list:");
@@ -1884,7 +1854,7 @@ function AJupdateWaitTime() {
 	   ($type == 'server' && ! $serveraccess))
 		return;
 
-		print "showHideTypeInputs();";
+	print "showHideTypeInputs();";
 
 	if($type == 'imaging')
 		$imaging = 1;
@@ -2097,13 +2067,12 @@ function AJupdateWaitTime() {
 function printImageDescription($imageid) {
 	$imagenotes = getImageNotes($imageid);
 	if(! preg_match('/^\s*$/', $imagenotes['description'])) {
-		$desc = preg_replace("/\n/", '<br>', $imagenotes['description']);
-		$desc = preg_replace("/\r/", '', $desc);
+		$desc = preg_replace("/\r/", '', $imagenotes['description']);
 		$desc = preg_replace("/'/", '&#39;', $desc);
-		$desc = preg_replace("/(.{1,60}([ \n]|$))/", '\1<br>', $desc);
+		$desc = htmlwrap($desc, 80);
 		print "dojo.byId('imgdesc').innerHTML = '<b>";
 		print i("Image Description") . "</b>:<br>";
-		print "$desc<br>'; ";
+		print "$desc<br><br>'; ";
 	}
 }
 
@@ -2218,7 +2187,7 @@ function AJshowRequestSuggestedTimes() {
 		for($cnt = 0, $amount = 900, $e = datetimeToUnix($reqdata['end']) + 900;
 		    $cnt < 15 && $amount <= $maxextend && $amount < 7200;
 		    $cnt++, $amount += 900, $e += 900) {
-			$end = strftime('%x %l:%M %P', $e);
+			$end = prettyDatetime($e, 1, 0, 1, 1);
 			$extenstion = getReservationExtenstion($amount / 60);
 			if($cnt % 2)
 				$html .= "<tr class=\"tablerow0\">";
@@ -2234,7 +2203,7 @@ function AJshowRequestSuggestedTimes() {
 		}
 		for(; $cnt < 15 && $amount <= $maxextend;
 		    $cnt++, $amount += 3600, $e += 3600) {
-			$end = strftime('%x %l:%M %P', $e);
+			$end = prettyDatetime($e, 1, 0, 1, 1);
 			$extenstion = getReservationExtenstion($amount / 60);
 			if($cnt % 2)
 				$html .= "<tr class=\"tablerow0\">";
@@ -2262,7 +2231,7 @@ function AJshowRequestSuggestedTimes() {
 		foreach($slots as $key => $slot) {
 			$cnt++;
 			$slot['startts'] += $_SESSION['persistdata']['tzoffset'] * 60;
-			$start = strftime('%x %l:%M %P', $slot['startts']);
+			$start = prettyDatetime($slot['startts'], 1, 0, 1, 1);
 			if(($slot['startts'] - time()) + $slot['startts'] + $slot['duration'] >= 2114402400)
 				# end time >= 2037-01-01 00:00:00
 				$duration = 'indefinite';
@@ -3095,6 +3064,7 @@ function viewRequestInfo() {
 	print "    <TD>\n";
 	$cdata = array('requestid' => $requestid,
 	               'notbyowner' => 1,
+	               'imageadmin' => 0,
 	               'ttdata' => getContinuationVar('ttdata'),
 	               'fromtimetable' => 1);
 	$cont = addContinuationsEntry('AJconfirmDeleteRequest', $cdata, SECINDAY);
@@ -3418,7 +3388,7 @@ function AJeditRequest() {
 	else
 		$maxcheck = $maxtimes['total'];
 	if(! $openend && ($reslen >= $maxcheck)) {
-		$h  = sprintf(i("You are only allowed to extend your reservation such that it has a total length of %s. "), minToHourMin($maxcheck));
+		$h  = sprintf(i("You are only allowed to extend your reservation such that it has a total length of %s. "), minToDaysHourMin($maxcheck));
 		$h .= i("This reservation already meets that length. Therefore, you are not allowed to extend your reservation any further.");
 		$h = preg_replace("/(.{1,60}([ \n]|$))/", '\1<br>', $h) . "<br>";
 		sendJSON(array('status' => 'nomodify', 'html' => $h));
@@ -3470,7 +3440,7 @@ function AJeditRequest() {
 	$lengths = array();
 	if($request['forimaging'] && $maxtimes['total'] < 720) # make sure at least 12 hours available for imaging reservations
 		$maxtimes['total'] = 720;
-	elseif(! $request['forimaging'] && $maximglen) {
+	elseif(! $request['forimaging'] && $maximglen && ($maximglen < $maxtimes['total'])) {
 		$maxtimes['total'] = $maximglen;
 		$currduration = (datetimeToUnix($request['end']) - datetimeToUnix($request['start'])) / 60;
 		$maxtimes['extend'] = $maximglen - $currduration;
@@ -3528,7 +3498,7 @@ function AJeditRequest() {
 			else
 				$maxcheck = $maxtimes['total'];
 			$m = sprintf(i("You can extend this reservation by up to %s but not exceeding %s for your total reservation time."),
-			             minToHourMin($maxtimes['extend']), minToHourMin($maxcheck));
+			             minToDaysHourMin($maxtimes['extend']), minToDaysHourMin($maxcheck));
 			$h .= preg_replace("/(.{1,60}([ \n]|$))/", '\1<br>', $m) . "<br>";
 		}
 	}
@@ -3989,6 +3959,7 @@ function AJconfirmDeleteRequest() {
 	global $user;
 	$requestid = getContinuationVar('requestid', 0);
 	$notbyowner = getContinuationVar('notbyowner', 0);
+	$imageadmin = getContinuationVar('imageadmin', 0);
 	$fromtimetable = getContinuationVar('fromtimetable', 0);
 	$skipconfirm = processInputVar('skipconfirm', ARG_NUMERIC, 0);
 	if($skipconfirm != 0 && $skipconfirm != 1)
@@ -4034,7 +4005,7 @@ function AJconfirmDeleteRequest() {
 		                prettyDatetime($request["start"]));
 	}
 	else {
-		if($notbyowner == 0 && ! $reservation["production"] && count($request['reservations']) == 1) {
+		if($imageadmin && $notbyowner == 0 && ! $reservation["production"] && count($request['reservations']) == 1) {
 			AJconfirmDeleteRequestProduction($request);
 			return;
 		}
@@ -4402,7 +4373,7 @@ function AJconnectRequest() {
 		$h .= "</big></font><br><br>\n";
 	}
 	$imagenotes = getImageNotes($requestData['reservations'][0]['imageid']);
-	if(! preg_match('/^\s*$/', $imagenotes['usage'])) {
+	if(! is_null($imagenotes['usage']) && ! preg_match('/^\s*$/', $imagenotes['usage'])) {
 		$h .= "<h3>" . i("Notes on using this environment:") . "</h3>\n";
 		$h .= "{$imagenotes['usage']}<br><br><br>\n";
 	}
@@ -4415,6 +4386,7 @@ function AJconnectRequest() {
 		$h .= i("This is a cluster reservation. Depending on the makeup of the cluster, you may need to use different methods to connect to the different environments in your cluster.");
 		$h .= "<br><br>\n";
 	}
+	$copybtnbase = "<a onclick=\"navigator.clipboard.writeText('%s');\"><img src=\"images/copy_icon.png\" style=\"height: 1.1em; width: 1em;\"></a>";
 	foreach($requestData["reservations"] as $key => $res) {
 		$osname = $res["OS"];
 		if(array_key_exists($user['id'], $requestData['passwds'][$res['reservationid']]))
@@ -4441,12 +4413,17 @@ function AJconnectRequest() {
 				$conuser = $matches[1];
 			else
 				$conuser = $user['unityid'];
-			if($requestData['reservations'][0]['domainDNSName'] != '' && ! strlen($passwd))
-				$conuser .= "@" . $requestData['reservations'][0]['domainDNSName'];
-			elseif($requestData['reservations'][0]['OStype'] == 'windows')
-				$conuser = ".\\$conuser";
-			if(! strlen($passwd))
-				$passwd = i('(use your campus password)');
+			if($requestData['reservations'][0]['OStype'] == 'windows') {
+				if($requestData['reservations'][0]['domainDNSName'] != '' && (is_null($passwd) || ! strlen($passwd)))
+					$conuser .= "@" . $requestData['reservations'][0]['domainDNSName'];
+				else
+					$conuser = ".\\$conuser";
+			}
+			$conuser = sprintf("$conuser&nbsp;$copybtnbase", preg_replace('/\\\/', '\\\\\\\\\\', $conuser));
+			if(is_null($passwd) || ! strlen($passwd))
+				$_passwd = i('(use your campus password)');
+			else
+				$_passwd = sprintf("$passwd&nbsp;$copybtnbase", $passwd);
 			if($cluster)
 				$h .= "<h4>" . i("Connect to reservation using") . " {$method['description']}</h4>\n";
 			else
@@ -4468,8 +4445,16 @@ function AJconnectRequest() {
 					$method['connecttext'] = preg_replace("/#connectIP#/", "#connectIP#:{$method['ports'][0]['key']}", $method['connecttext']);
 				}
 			}
+			if(preg_match('/(#connectIP#.#Port-(TCP|UDP)-[0-9]+#)/', $method['connecttext'], $matches)) {
+				$copyip = sprintf($copybtnbase, $matches[1]);
+				$method['connecttext'] = preg_replace("_((?<!/)#connectIP#.#Port-(TCP|UDP)-[0-9]+#)_", "\\1&nbsp;$copyip", $method['connecttext']);
+			}
+			else {
+				$copyip = sprintf($copybtnbase, $res['connectIP']);
+				$method['connecttext'] = preg_replace("|(?<!/)(#connectIP#)|", "\\1&nbsp;$copyip", $method['connecttext']);
+			}
 			$tos = array($conuser,
-			             $passwd,
+			             $_passwd,
 			             $res['connectIP']);
 			$msg = preg_replace($froms, $tos, $method['connecttext']);
 			foreach($method['ports'] as $port) {
@@ -4531,6 +4516,11 @@ function AJconnectRequest() {
 function AJcheckConnectTimeout() {
 	$requestid = getContinuationVar('requestid');
 	$reqdata = getRequestInfo($requestid, 1);
+	if(is_null($reqdata)) {
+		$data['status'] = 'timeout';
+		sendJSON($data);
+		return;
+	}
 	$stateid = $reqdata['stateid'];
 	if($stateid == 14)
 		$stateid = $reqdata['laststateid'];
@@ -4714,7 +4704,7 @@ function processRequestInput() {
 		$return['nousercheck'] = 0;
 
 	# revisionid
-	$revids = processInputVar("revisionid", ARG_STRING);
+	$revids = processInputVar("revisionid", ARG_STRING, '');
 	$revids = explode(':', $revids);
 	$images = getImages(0, $return['imageid']);
 	$return['revisionids'] = array();
@@ -4777,7 +4767,7 @@ function processRequestInput() {
 	# server specific input
 	if($return['type'] == 'server') {
 		# name
-		$return['name'] = processInputVar('name', ARG_STRING);
+		$return['name'] = processInputVar('name', ARG_STRING, '');
 		if(! preg_match('/^([-a-zA-Z0-9_\. ]){0,255}$/', $return['name'])) {
 			$return['err'] = 1;
 			$return['errmsg'] = i('The reservation name can only contain letters, numbers, spaces, dashes(-), underscores(_), and periods(.) and can be up to 255 characters long');
@@ -4899,8 +4889,6 @@ function processRequestInput() {
 		$userconfigs = $tmp['config'];
 		$initconfigs = getMappedConfigs($return['imageid']);
 		if(array_key_exists('configdata', $_POST)) {
-			if(get_magic_quotes_gpc())
-				$_POST['configdata'] = stripslashes($_POST['configdata']);
 			$configdata = json_decode($_POST['configdata']);
 		}
 		if(array_key_exists('configdata', $_POST) &&

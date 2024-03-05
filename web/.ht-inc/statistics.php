@@ -37,7 +37,7 @@ define("ORDERERR", 1 << 2);
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function selectStatistics() {
-	global $submitErr, $user;
+	global $submitErr, $user, $locale;
 	list($month1, $day1, $year1) = explode(',', date('n,j,Y', time() - 
 	                                    (SECINDAY * 6)));
 	list($month2, $day2, $year2) = explode(',', date('n,j,Y', time()));
@@ -58,8 +58,10 @@ function selectStatistics() {
 		$affilid = $user['affiliationid'];
 	print i("Select a starting date:") . "<br>\n";
 	$months = array('');
+	$df = new IntlDateFormatter($locale, IntlDateFormatter::FULL, IntlDateFormatter::FULL);
+	$df->setPattern('MMMM');
 	for($i = 2 * SECINDAY, $cnt = 1; $cnt < 13; $i += SECINMONTH, $cnt++)
-		$months[$cnt] = strftime('%B', $i);
+		$months[$cnt] = $df->format($i);
 	unset($months[0]);
 	$days = array();
 	for($i = 0; $i < 32; $i++) {
@@ -140,12 +142,12 @@ function viewStatistics() {
 	define("1HOUR", 3600);
 	define("2HOURS", 7200);
 	define("4HOURS", 14400);
-	$month1 = processInputVar("month1", ARG_NUMERIC);
-	$day1 = processInputVar("day1", ARG_NUMERIC);
-	$year1 = processInputVar("year1", ARG_NUMERIC);
-	$month2 = processInputVar("month2", ARG_NUMERIC);
-	$day2 = processInputVar("day2", ARG_NUMERIC);
-	$year2 = processInputVar("year2", ARG_NUMERIC);
+	$month1 = (int)processInputVar("month1", ARG_NUMERIC);
+	$day1 = (int)processInputVar("day1", ARG_NUMERIC);
+	$year1 = (int)processInputVar("year1", ARG_NUMERIC);
+	$month2 = (int)processInputVar("month2", ARG_NUMERIC);
+	$day2 = (int)processInputVar("day2", ARG_NUMERIC);
+	$year2 = (int)processInputVar("year2", ARG_NUMERIC);
 	$affilid = processInputVar("affilid", ARG_NUMERIC, $user['affiliationid']);
 	$mode2 = getContinuationVar('mode', 'default');
 	$provid = processInputVar('provid', ARG_NUMERIC, 0);
@@ -197,9 +199,10 @@ function viewStatistics() {
 	print "(Times and dates on this page are in " . date('T') . ")<br>\n";
 	print "<H3>";
 	$tmp = mktime(0, 0, 0, $month1, $day1, $year1);
-	$starttime = strftime('%x', $tmp);
+	$df = new IntlDateFormatter($locale, IntlDateFormatter::SHORT, IntlDateFormatter::NONE);
+	$starttime = $df->format($tmp);
 	$tmp = mktime(0, 0, 0, $month2, $day2, $year2);
-	$endtime = strftime('%x', $tmp);
+	$endtime = $df->format($tmp);
 	printf(i("Reservation information between %s and %s:"), $starttime, $endtime);
 	print "</H3>\n";
 	$reloadid = getUserlistID('vclreload@Local');

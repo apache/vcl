@@ -380,8 +380,14 @@ div.dijitMenuPopup table tbody tr.dijitMenuItemFocused td {
 #addResourceGroupPane td.privCascade:hover {
 	background-color: #008000 !important;
 }
-#content div.dashwidget h3 {
+#content div.dashwidget h3,
+#content div.dashwidget h3 a {
 	background-color: #ed1c24;
+}
+#content div.dashwidget h3 a:hover {
+	background-color: black;
+	color: white;
+	cursor: pointer;
 }
 a:hover, a:active {
   text-decoration: underline;

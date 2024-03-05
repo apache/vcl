@@ -513,13 +513,13 @@ class ADdomain extends Resource {
 		$errormsg = array();
 
 		$return['rscid'] = getContinuationVar('rscid', 0);
-		$return["name"] = processInputVar("name", ARG_STRING);
+		$return["name"] = processInputVar("name", ARG_STRING, '');
 		$return["owner"] = processInputVar("owner", ARG_STRING, "{$user["unityid"]}@{$user['affiliation']}");
-		$return["domaindnsname"] = processInputVar("domaindnsname", ARG_STRING);
-		$return["username"] = processInputVar("username", ARG_STRING);
-		$return["password"] = $_POST['password'];
-		$return["password2"] = $_POST['password2'];
-		$return["dnsservers"] = processInputVar("dnsservers", ARG_STRING);
+		$return["domaindnsname"] = processInputVar("domaindnsname", ARG_STRING, '');
+		$return["username"] = processInputVar("username", ARG_STRING, '');
+		$return["password"] = $_POST['password'] ? $_POST['password'] : '';
+		$return["password2"] = $_POST['password2'] ? $_POST['password2'] : '';
+		$return["dnsservers"] = processInputVar("dnsservers", ARG_STRING, '');
 		$return["usedbhostnames"] = processInputVar('usedbhostnames', ARG_NUMERIC, 0);
 
 		if(! preg_match("/^([A-Za-z0-9-!@#$%^&\*\(\)_=\+\[\]{}\\\|:;,\.\/\?~` ]){2,30}$/", $return['name'])) {

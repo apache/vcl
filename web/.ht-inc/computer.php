@@ -1540,7 +1540,7 @@ class Computer extends Resource {
 			if($olddata['stateid'] == 10 && $data['stateid'] == 10) {
 				$testnotes = $olddata['notes'];
 				# check for notes being changed
-				if(strpos($testnotes, '@') === true) {
+				if(! is_null($testnotes) && strpos($testnotes, '@') === true) {
 					$tmp = explode('@', $olddata['notes']);
 					$testnotes = $tmp[1];
 				}
@@ -1695,23 +1695,23 @@ class Computer extends Resource {
 		$return = array('error' => 0);
 
 		$return['rscid'] = getContinuationVar('rscid', 0);
-		$return['name'] = processInputVar('name', ARG_STRING);
+		$return['name'] = processInputVar('name', ARG_STRING, '');
 		$return['startnum'] = processInputVar('startnum', ARG_NUMERIC);
 		$return['endnum'] = processInputVar('endnum', ARG_NUMERIC);
 		$return['owner'] = processInputVar('owner', ARG_STRING, "{$user['unityid']}@{$user['affiliation']}");
-		$return['type'] = processInputVar('type', ARG_STRING);
-		$return['IPaddress'] = processInputVar('ipaddress', ARG_STRING);
-		$return['privateIPaddress'] = processInputVar('privateipaddress', ARG_STRING);
-		$return['eth0macaddress'] = processInputVar('privatemac', ARG_STRING);
-		$return['eth1macaddress'] = processInputVar('publicmac', ARG_STRING);
-		$return['startpubipaddress'] = processInputVar('startpubipaddress', ARG_STRING);
-		$return['endpubipaddress'] = processInputVar('endpubipaddress', ARG_STRING);
-		$return['startprivipaddress'] = processInputVar('startprivipaddress', ARG_STRING);
-		$return['endprivipaddress'] = processInputVar('endprivipaddress', ARG_STRING);
-		$return['startmac'] = processInputVar('startmac', ARG_STRING);
+		$return['type'] = processInputVar('type', ARG_STRING, '');
+		$return['IPaddress'] = processInputVar('ipaddress', ARG_STRING, '');
+		$return['privateIPaddress'] = processInputVar('privateipaddress', ARG_STRING, '');
+		$return['eth0macaddress'] = processInputVar('privatemac', ARG_STRING, '');
+		$return['eth1macaddress'] = processInputVar('publicmac', ARG_STRING, '');
+		$return['startpubipaddress'] = processInputVar('startpubipaddress', ARG_STRING, '');
+		$return['endpubipaddress'] = processInputVar('endpubipaddress', ARG_STRING, '');
+		$return['startprivipaddress'] = processInputVar('startprivipaddress', ARG_STRING, '');
+		$return['endprivipaddress'] = processInputVar('endprivipaddress', ARG_STRING, '');
+		$return['startmac'] = processInputVar('startmac', ARG_STRING, '');
 		$return['provisioningid'] = processInputVar('provisioningid', ARG_NUMERIC);
 		$return['stateid'] = processInputVar('stateid', ARG_NUMERIC);
-		$return['notes'] = processInputVar('notes', ARG_STRING);
+		$return['notes'] = processInputVar('notes', ARG_STRING, '');
 		$return['vmprofileid'] = processInputVar('vmprofileid', ARG_NUMERIC);
 		$return['platformid'] = processInputVar('platformid', ARG_NUMERIC);
 		$return['scheduleid'] = processInputVar('scheduleid', ARG_NUMERIC);
@@ -1723,9 +1723,9 @@ class Computer extends Resource {
 		$return['natenabled'] = processInputVar('natenabled', ARG_NUMERIC);
 		$return['nathostid'] = processInputVar('nathostid', ARG_NUMERIC);
 		$return['nathostenabled'] = processInputVar('nathostenabled', ARG_NUMERIC);
-		$return['natpublicIPaddress'] = processInputVar('natpublicipaddress', ARG_STRING);
-		$return['natinternalIPaddress'] = processInputVar('natinternalipaddress', ARG_STRING);
-		$return['location'] = processInputVar('location', ARG_STRING);
+		$return['natpublicIPaddress'] = processInputVar('natpublicipaddress', ARG_STRING, '');
+		$return['natinternalIPaddress'] = processInputVar('natinternalipaddress', ARG_STRING, '');
+		$return['location'] = processInputVar('location', ARG_STRING, '');
 		$addmode = processInputVar('addmode', ARG_STRING);
 
 		if(! is_null($addmode) && $addmode != 'single' && $addmode != 'multiple') {
@@ -3581,8 +3581,6 @@ class Computer extends Resource {
 		elseif($newstateid == 10 || $newstateid == 23) {
 			if($newstateid == 10) {
 				$notes = processInputVar('notes', ARG_STRING);
-				if(get_magic_quotes_gpc())
-					$notes = stripslashes($notes);
 				$notes = vcl_mysql_escape_string($notes);
 				$notes = $user["unityid"] . " " . unixToDatetime(time()) . "@"
 				       . $notes;
@@ -4838,6 +4836,45 @@ class Computer extends Resource {
 			if($row['logingroup'] != '')
 				$msg .= "Access Group: {$row['logingroup']}<br>";
 			$msg .= "Request ID: {$row['requestid']}<br>";
+			$msg .= "<hr>";
+			$data[] = array('name' => $row['hostname'], 'msg' => $msg);
+		}
+		$query = "SELECT UNIX_TIMESTAMP(bt.start) AS start, "
+		       .        "UNIX_TIMESTAMP(bt.end) AS end, "
+		       .        "i.prettyname AS image, "
+		       .        "ir.revision, "
+		       .        "c.hostname AS hostname, "
+		       .        "br.name AS blockname, "
+		       .        "ug.name AS usergroup, "
+		       .        "CONCAT(u.unityid, '@', a.name) AS owner, "
+		       .        "bc.reloadrequestid AS requestid, "
+		       .        "vh.hostname AS vmhost "
+		       . "FROM blockComputers bc "
+		       . "JOIN blockTimes bt ON (bc.blockTimeid = bt.id) "
+		       . "JOIN blockRequest br ON (bt.blockRequestid = br.id) "
+		       . "JOIN computer c ON (bc.computerid = c.id) "
+		       . "JOIN image i ON (br.imageid = i.id) "
+		       . "JOIN imagerevision ir ON (ir.imageid = br.imageid AND ir.production = 1) "
+		       . "JOIN usergroup ug ON (ug.id = br.groupid) "
+		       . "JOIN user u ON (br.ownerid = u.id) "
+		       . "JOIN affiliation a ON (u.affiliationid = a.id) "
+		       . "LEFT JOIN vmhost v ON (c.vmhostid = v.id) "
+		       . "LEFT JOIN computer vh ON (v.computerid = vh.id) "
+		       . "WHERE bc.computerid IN ($complist) AND "
+		       .       "br.status = 'accepted'";
+		$qh = doQuery($query);
+		while($row = mysqli_fetch_assoc($qh)) {
+			$msg = "<strong>{$row['hostname']} - Block Request</strong><br>";
+			$msg .= "Block Request: {$row['blockname']}<br>";
+			$msg .= "Image: {$row['image']}<br>";
+			$msg .= "Revision: {$row['revision']}<br>";
+			$msg .= "Start: " . prettyDatetime($row['start'], 1) . "<br>";
+			$msg .= "End: " . prettyDatetime($row['end'], 1) . "<br>";
+			$msg .= "User Group: {$row['usergroup']}<br>";
+			$msg .= "Owner: {$row['owner']}<br>";
+			if(! is_null($row['vmhost']))
+				$msg .= "VM Host: {$row['vmhost']}<br>";
+			$msg .= "Reload Request ID: {$row['requestid']}<br>";
 			$msg .= "<hr>";
 			$data[] = array('name' => $row['hostname'], 'msg' => $msg);
 		}

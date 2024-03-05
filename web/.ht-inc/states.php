@@ -136,6 +136,7 @@ $noHTMLwrappers = array('sendRDPfile',
                         'AJdeleteSiteMaintenance',
                         'AJvalidateUserid',
                         'AJupdateDashboard',
+                        'AJdashboardDetail',
                         'AJgetStatData',
                         'AJgetBlockAllocatedMachineData',
                         'AJpermSelectUserGroup',
@@ -554,9 +555,11 @@ $actions['pages']['AJdeleteSiteMaintenance'] = "sitemaintenance";
 $actions['mode']['dashboard'] = "dashboard";
 $actions['mode']['AJupdateDashboard'] = "AJupdateDashboard";
 $actions['mode']['AJrestartImageCapture'] = "AJrestartImageCapture";
+$actions['mode']['AJdashboardDetail'] = "AJdashboardDetail";
 $actions['pages']['dashboard'] = "dashboard";
 $actions['pages']['AJupdateDashboard'] = "dashboard";
 $actions['pages']['AJrestartImageCapture'] = "dashboard";
+$actions['pages']['AJdashboardDetail'] = "dashboard";
 
 # site configuration
 $actions['mode']['siteconfig'] = "siteconfig";

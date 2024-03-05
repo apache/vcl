@@ -18,7 +18,8 @@
 	padding-right: 10px;
 }
 
-#dashboard table td {
+#dashboard table td,
+#detailcontent table td {
 	padding-left: 5px;
 }
 
@@ -45,3 +46,20 @@
 	margin-top: 0px;
 	margin-bottom: 2px;
 }
+
+.dashwidget h3 a {
+	background: #0053fb;
+	color: white;
+	margin-top: 0px;
+	margin-bottom: 2px;
+}
+
+.dashwidget h3 a:hover {
+	background: black;
+	color: white;
+	margin-top: 0px;
+	margin-bottom: 2px;
+	text-decoration: none;
+	cursor: pointer;
+}
+

@@ -232,8 +232,8 @@ function submitOneClick() {
 	global $user, $submitErr, $submitErrMsg;
 	$maxlength = getContinuationVar('maxlength');
 	$imageid = processInputVar("imageid", ARG_NUMERIC);
-	$name = processInputVar("newOneClickName", ARG_STRING);
-	$duration = processInputVar("length", ARG_NUMERIC);
+	$name = processInputVar("newOneClickName", ARG_STRING, '');
+	$duration = processInputVar("length", ARG_NUMERIC, 120);
 	$autologin = processInputVar("autologin", ARG_NUMERIC) == 1 ? 1 : 0;
 
 	# validate access to $imageid
@@ -410,8 +410,8 @@ function submitEditOneClick() {
 	global $submitErr, $submitErrMsg;
 	$oneclickid = getContinuationVar('oneclickid');
 	$maxlength = getContinuationVar('maxlength');
-	$name = processInputVar('name', ARG_STRING);
-	$duration = processInputVar("duration", ARG_NUMERIC);
+	$name = processInputVar('name', ARG_STRING, '');
+	$duration = processInputVar("duration", ARG_NUMERIC, 120);
 	$autologin = processInputVar("autologin", ARG_NUMERIC) == 1 ? 1 : 0;
 
 	# validate $name

@@ -1164,6 +1164,13 @@ function AJrefreshNodeDropData() {
 function AJsubmitAddChildNode() {
 	global $user;
 	$parent = processInputVar("activeNode", ARG_NUMERIC);
+	if(is_null($parent)) {
+		$text = "Invalid parent node submitted.";
+		print "dojo.byId('childNodeName').value = ''; ";
+		print "dijit.byId('addNodePane').hide(); ";
+		print "alert('$text');";
+		return;
+	}
 	if(! checkUserHasPriv("nodeAdmin", $user["id"], $parent)) {
 		$text = "You do not have rights to add children to this node.";
 		print "dojo.byId('childNodeName').value = ''; ";
@@ -1171,7 +1178,7 @@ function AJsubmitAddChildNode() {
 		print "alert('$text');";
 		return;
 	}
-	$newnode = processInputVar("newnode", ARG_STRING);
+	$newnode = processInputVar("newnode", ARG_STRING, '');
 	$errmsg = '';
 	if(! validateNodeName($newnode, $errmsg)) {
 		print "dojo.byId('addChildNodeStatus').innerHTML = '$errmsg';";
@@ -1308,7 +1315,7 @@ function AJsubmitRenameNode() {
 		sendJSON($arr);
 		return;
 	}
-	$newname = processInputVar('newname', ARG_STRING);
+	$newname = processInputVar('newname', ARG_STRING, '');
 	$errmsg = '';
 	if(! validateNodeName($newname, $errmsg)) {
 		$arr = array('error' => 2, 'message' => $errmsg);
@@ -1349,6 +1356,12 @@ function AJmoveNode() {
 	$moveid = processInputVar('moveid', ARG_NUMERIC);
 	$oldparentid = processInputVar('oldparentid', ARG_NUMERIC);
 	$newparentid = processInputVar('newparentid', ARG_NUMERIC);
+
+	if(is_null($moveid) || is_null($oldparentid) || is_null($newparentid)) {
+		$arr = array('status' => 'invalidreload');
+		sendJSON($arr);
+		return;
+	}
 
 	if(! checkUserHasPriv("nodeAdmin", $user["id"], $moveid) ||
 	   ! checkUserHasPriv("nodeAdmin", $user["id"], $newparentid) ||
@@ -1463,9 +1476,7 @@ function AJrevertMoveNode() {
 ////////////////////////////////////////////////////////////////////////////////
 function userLookup() {
 	global $user;
-	$userid = processInputVar("userid", ARG_STRING);
-	if(get_magic_quotes_gpc())
-		$userid = stripslashes($userid);
+	$userid = processInputVar("userid", ARG_STRING, '');
 	$affilid = processInputVar('affiliationid', ARG_NUMERIC, $user['affiliationid']);
 	$force = processInputVar('force', ARG_NUMERIC, 0);
 	print "<div align=center>\n";
@@ -1965,6 +1976,24 @@ function userLookup() {
 			print "<table>\n";
 			$first = 1;
 			foreach($requests as $req) {
+				# get information about last time Connect button clicked
+				$query = "SELECT timestamp, "
+				       .        "query "
+				       . "FROM querylog "
+				       . "WHERE userid = {$userdata['id']} AND "
+				       .       "mode = 'AJconnectRequest' AND "
+				       .       "timestamp > DATE_SUB(NOW(), INTERVAL 1 WEEK) AND "
+				       .       "query LIKE 'UPDATE reservation SET remoteIP = % WHERE requestid = {$req['requestid']}' "
+				       . "ORDER BY timestamp DESC "
+				       . "LIMIT 5";
+				$qh = doQuery($query);
+				$connects = array();
+				while($row = mysqli_fetch_assoc($qh)) {
+					preg_match("/^UPDATE reservation SET remoteIP = '([0-9\.]+)' WHERE requestid = {$req['requestid']}$/", $row['query'], $matches);
+					if(isset($matches[1]))
+						$connects[] = "{$row['timestamp']} from {$matches[1]}";
+				}
+				$connectstr = implode('<br>', $connects);
 				if($first)
 					$first = 0;
 				else {
@@ -2042,6 +2071,12 @@ function userLookup() {
 				print "    <th align=right>Management Node:</th>\n";
 				print "    <td>{$req['managementnode']}</td>\n";
 				print "  </tr>\n";
+				if(count($connects)) {
+					print "  <tr>\n";
+					print "    <th align=right>Connect last clicked:</th>\n";
+					print "    <td>$connectstr</td>\n";
+					print "  </tr>\n";
+				}
 			}
 			print "</table>\n";
 		}
@@ -2095,6 +2130,26 @@ function userLookup() {
 				print "<table>\n";
 				$first = 1;
 				foreach($requests as $req) {
+					# get information about last time Connect button clicked
+					$connects = array();
+					if(count($requests) < 15) {
+						$query = "SELECT timestamp, "
+						       .        "query "
+						       . "FROM querylog "
+						       . "WHERE userid = {$userdata['id']} AND "
+						       .       "mode = 'AJconnectRequest' AND "
+						       .       "timestamp > DATE_SUB(NOW(), INTERVAL 1 WEEK) AND "
+						       .       "query LIKE 'UPDATE reservation SET remoteIP = % WHERE requestid = {$req['requestid']}' "
+						       . "ORDER BY timestamp DESC "
+						       . "LIMIT 5";
+						$qh = doQuery($query);
+						while($row = mysqli_fetch_assoc($qh)) {
+							preg_match("/^UPDATE reservation SET remoteIP = '([0-9\.]+)' WHERE requestid = {$req['requestid']}$/", $row['query'], $matches);
+							if(isset($matches[1]))
+								$connects[] = "{$row['timestamp']} from {$matches[1]}";
+						}
+						$connectstr = implode('<br>', $connects);
+					}
 					if($first)
 						$first = 0;
 					else {
@@ -2166,6 +2221,12 @@ function userLookup() {
 					print "    <th align=right>Management Node:</th>\n";
 					print "    <td>{$req['managementnode']}</td>\n";
 					print "  </tr>\n";
+					if(count($connects)) {
+						print "  <tr>\n";
+						print "    <th align=right>Connect last clicked:</th>\n";
+						print "    <td>$connectstr</td>\n";
+						print "  </tr>\n";
+					}
 				}
 				print "</table>\n";
 			}
@@ -2465,8 +2526,8 @@ function getUserPrivRowHTML($privname, $rownum, $privs, $types,
 ////////////////////////////////////////////////////////////////////////////////
 function jsonGetUserGroupMembers() {
 	global $user;
-	$usergrpid = processInputVar('groupid', ARG_NUMERIC);
-	$domid = processInputVar('domid', ARG_STRING);
+	$usergrpid = processInputVar('groupid', ARG_NUMERIC, 0);
+	$domid = processInputVar('domid', ARG_STRING, '');
 	$query = "SELECT g.ownerid, "
 	       .        "g.affiliationid, "
 	       .        "g.custom, "
@@ -2645,8 +2706,8 @@ function getResourcePrivRowHTML($privname, $rownum, $privs, $types,
 ///
 ////////////////////////////////////////////////////////////////////////////////
 function jsonGetResourceGroupMembers() {
-	$resgrpid = processInputVar('groupid', ARG_NUMERIC);
-	$domid = processInputVar('domid', ARG_STRING);
+	$resgrpid = processInputVar('groupid', ARG_NUMERIC, 0);
+	$domid = processInputVar('domid', ARG_STRING, '');
 	$query = "SELECT rt.name "
 	       . "FROM resourcegroup rg, "
 	       .      "resourcetype rt "
@@ -3116,7 +3177,7 @@ function getNodeCascadePrivileges($node, $type="all", $privs=0) {
 function AJchangeUserPrivs() {
 	global $user;
 	$node = processInputVar("activeNode", ARG_NUMERIC);
-	if(! checkUserHasPriv("userGrant", $user["id"], $node)) {
+	if(is_null($node) || ! checkUserHasPriv("userGrant", $user["id"], $node)) {
 		$text = "You do not have rights to modify user privileges at this node.";
 		print "alert('$text');";
 		return;
@@ -3124,6 +3185,12 @@ function AJchangeUserPrivs() {
 	$newuser = processInputVar("item", ARG_STRING);
 	$newpriv = processInputVar('priv', ARG_STRING);
 	$newprivval = processInputVar('value', ARG_STRING);
+
+	if(is_null($newpriv) || ! preg_match('/^[- a-zA-Z0-9]+$/', $newpriv)) {
+		$text = "Invalid user privilege submitted.";
+		print "alert('$text');";
+		return;
+	}
 
 	if(! validateUserid($newuser)) {
 		$text = "Invalid user submitted.";
@@ -3172,7 +3239,7 @@ function AJchangeUserPrivs() {
 function AJchangeUserGroupPrivs() {
 	global $user;
 	$node = processInputVar("activeNode", ARG_NUMERIC);
-	if(! checkUserHasPriv("userGrant", $user["id"], $node)) {
+	if(is_null($node) || ! checkUserHasPriv("userGrant", $user["id"], $node)) {
 		$text = "You do not have rights to modify user privileges at this node.";
 		print "alert('$text');";
 		return;
@@ -3180,6 +3247,12 @@ function AJchangeUserGroupPrivs() {
 	$newusergrpid = processInputVar("item", ARG_NUMERIC);
 	$newpriv = processInputVar('priv', ARG_STRING);
 	$newprivval = processInputVar('value', ARG_STRING);
+
+	if(is_null($newpriv) || ! preg_match('/^[- a-zA-Z0-9]+$/', $newpriv)) {
+		$text = "Invalid user privilege submitted.";
+		print "alert('$text');";
+		return;
+	}
 
 	$newusergrp = getUserGroupName($newusergrpid);
 	if($newusergrp === 0) {
@@ -3229,12 +3302,12 @@ function AJchangeUserGroupPrivs() {
 function AJchangeResourcePrivs() {
 	global $user;
 	$node = processInputVar("activeNode", ARG_NUMERIC);
-	if(! checkUserHasPriv("resourceGrant", $user["id"], $node)) {
+	if(is_null($node) || ! checkUserHasPriv("resourceGrant", $user["id"], $node)) {
 		$text = "You do not have rights to modify resource privileges at this node.";
 		print "alert('$text');";
 		return;
 	}
-	$resourcegrp = processInputVar("item", ARG_STRING);
+	$resourcegrp = processInputVar("item", ARG_STRING, '');
 	$newpriv = processInputVar('priv', ARG_STRING);
 	$newprivval = processInputVar('value', ARG_STRING);
 
@@ -3307,7 +3380,7 @@ function AJchangeResourcePrivs() {
 function AJsubmitAddUserPriv() {
 	global $user;
 	$node = processInputVar("activeNode", ARG_NUMERIC);
-	if(! checkUserHasPriv("userGrant", $user["id"], $node)) {
+	if(is_null($node) || ! checkUserHasPriv("userGrant", $user["id"], $node)) {
 		$text = "You do not have rights to add new users at this node.";
 		print "addUserPaneHide(); ";
 		print "alert('$text');";
@@ -3320,7 +3393,7 @@ function AJsubmitAddUserPriv() {
 		return;
 	}
 
-	$perms = explode(':', processInputVar('perms', ARG_STRING));
+	$perms = explode(':', processInputVar('perms', ARG_STRING, ''));
 	$usertypes = getTypes("users");
 	array_push($usertypes["users"], "block");
 	array_push($usertypes["users"], "cascade");
@@ -3359,7 +3432,7 @@ function AJsubmitAddUserPriv() {
 function AJsubmitAddUserGroupPriv() {
 	global $user;
 	$node = processInputVar("activeNode", ARG_NUMERIC);
-	if(! checkUserHasPriv("userGrant", $user["id"], $node)) {
+	if(is_null($node) || ! checkUserHasPriv("userGrant", $user["id"], $node)) {
 		$text = "You do not have rights to add new user groups at this node.";
 		print "addUserGroupPaneHide(); ";
 		print "alert('$text');";
@@ -3374,7 +3447,7 @@ function AJsubmitAddUserGroupPriv() {
 		return;
 	}
 
-	$perms = explode(':', processInputVar('perms', ARG_STRING));
+	$perms = explode(':', processInputVar('perms', ARG_STRING, ''));
 
 	$usertypes = getTypes("users");
 	array_push($usertypes["users"], "block");
@@ -3413,13 +3486,13 @@ function AJsubmitAddUserGroupPriv() {
 function AJsubmitAddResourcePriv() {
 	global $user;
 	$node = processInputVar("activeNode", ARG_NUMERIC);
-	if(! checkUserHasPriv("resourceGrant", $user["id"], $node)) {
+	if(is_null($node) || ! checkUserHasPriv("resourceGrant", $user["id"], $node)) {
 		$text = "You do not have rights to add new resource groups at this node.";
 		print "addResourceGroupPaneHide(); ";
 		print "alert('$text');";
 		return;
 	}
-	$newgroupid = processInputVar("newgroupid", ARG_NUMERIC);
+	$newgroupid = processInputVar("newgroupid", ARG_NUMERIC, -1);
 	$privs = array("computerAdmin", "mgmtNodeAdmin", "imageAdmin",
 	               "scheduleAdmin", "serverProfileAdmin");
 	$resourcegroups = getUserResources($privs, array("manageGroup"), 1);
@@ -3441,7 +3514,7 @@ function AJsubmitAddResourcePriv() {
 		return;
 	}
 
-	$perms = explode(':', processInputVar('perms', ARG_STRING));
+	$perms = explode(':', processInputVar('perms', ARG_STRING, ''));
 	$privtypes = getResourcePrivs();
 	$newgroupprivs = array();
 	foreach($privtypes as $type) {
@@ -3564,7 +3637,7 @@ function AJsaveUserGroupPrivs() {
 		sendJSON(array('failed' => 'noaccess'));
 		return;
 	}
-	$permids = processInputVar('permids', ARG_STRING);
+	$permids = processInputVar('permids', ARG_STRING, '');
 	if(! preg_match('/^[0-9,]*$/', $permids)) {
 		sendJSON(array('failed' => 'invalid input'));
 		return;

@@ -453,25 +453,37 @@ function AJeditSiteMaintenance() {
 function processSiteMaintenanceInput() {
 	$start = processInputVar('start', ARG_NUMERIC);
 	$end = processInputVar('end', ARG_NUMERIC);
-	$data['hoursahead'] = processInputVar('hoursahead', ARG_NUMERIC);
-	$data['allowreservations'] = processInputVar('allowreservations', ARG_NUMERIC);
-	$data['reason'] = processInputVar('reason', ARG_STRING);
-	$data['usermessage'] = processInputVar('usermessage', ARG_STRING);
+	$data['hoursahead'] = processInputVar('hoursahead', ARG_NUMERIC, 168);
+	$data['allowreservations'] = processInputVar('allowreservations', ARG_NUMERIC, 1);
+	$data['reason'] = processInputVar('reason', ARG_STRING, '');
+	$data['usermessage'] = processInputVar('usermessage', ARG_STRING, '');
 
 	$err = 0;
 
 	$now = time();
-	$data['startdt'] = numdatetimeToDatetime($start . '00');
-	$data['startts'] = datetimeToUnix($data['startdt']);
-	$data['enddt'] = numdatetimeToDatetime($end . '00');
-	$data['endts'] = datetimeToUnix($data['enddt']);
+
+	if(is_null($start) || ! preg_match('/^[0-9]{12}$/', $start)) {
+		$errmsg = 'Invalid start time submitted.';
+		$err = 1;
+	}
+	if(! $err && (is_null($end) || ! preg_match('/^[0-9]{12}$/', $end))) {
+		$errmsg = 'Invalid end time submitted.';
+		$err = 1;
+	}
+
+	if(! $err) {
+		$data['startdt'] = numdatetimeToDatetime($start . '00');
+		$data['startts'] = datetimeToUnix($data['startdt']);
+		$data['enddt'] = numdatetimeToDatetime($end . '00');
+		$data['endts'] = datetimeToUnix($data['enddt']);
+	}
 
 	$reg = "/^[-0-9a-zA-Z\.,\?:;_@!#\(\)\n ]+$/";
-	if(! preg_match($reg, $data['reason'])) {
+	if(! $err && ! preg_match($reg, $data['reason'])) {
 		$errmsg = "Reason can only contain letters, numbers, spaces,\\nand these characters: . , ? : ; - _ @ ! # ( )";
 		$err = 1;
 	}
-	if(! preg_match($reg, $data['usermessage'])) {
+	if(! $err && ! preg_match($reg, $data['usermessage'])) {
 		$errmsg = "User Message can only contain letters, numbers, spaces,\\nand these characters: . , ? : ; - _ @ ! # ( )";
 		$err = 1;
 	}
