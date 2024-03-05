@@ -22,10 +22,10 @@
 
 /// signifies an error with submitted preferred name
 define("PREFNAMEERR", 1);
-/// signifies an error with submitted width
-define("WIDTHERR", 1 << 1);
-/// signifies an error with submitted height
-define("HEIGHTERR", 1 << 2);
+/// signifies an error with submitted resolution
+define("RESERR", 1 << 1);
+/// signifies an error with submitted audio mode
+define("AUDIOERR", 1 << 2);
 /// signifies an error with submitted new password
 define("LOCALPASSWORDERR", 1 << 3);
 /// signifies an error with submitted rdpport
@@ -185,6 +185,12 @@ function userpreferences() {
 	print "        <TR>\n";
 	print "          <TH align=right>" . i("Resolution:") . "</TH>\n";
 	$resolutionArray = array("Full Screen" => "Full Screen",
+	                         "3840x2160" => "3840x2160",
+	                         "3440x1440" => "3440x1440",
+	                         "2736x1824" => "2736x1824",
+	                         "2560x1440" => "2560x1440",
+	                         "2560x1080" => "2560x1080",
+	                         "2048x1152" => "2048x1152",
 	                         "1920x1440" => "1920x1440",
 	                         "1600x1200" => "1600x1200",
 	                         "1280x1024" => "1280x1024",
@@ -201,7 +207,9 @@ function userpreferences() {
 	print "          <TD>\n";
 	printSelectInput("resolution", $resolutionArray, $data["resolution"]);
 	print "          </TD>\n";
-	print "          <TD></TD>\n";
+	print "          <TD>\n";
+	printSubmitErr(RESERR);
+	print "          </TD>\n";
 	print "        </TR>\n";
 	print "        <TR>\n";
 	print "          <TH align=right>" . i("Color Depth:") . "</TH>\n";
@@ -217,7 +225,9 @@ function userpreferences() {
 	$audio = array("none" => i("None"), "local" => i("Use my speakers"));
 	printSelectInput("audiomode", $audio, $data["audiomode"]);
 	print "          </TD>\n";
-	print "          <TD></TD>\n";
+	print "          <TD>\n";
+	printSubmitErr(AUDIOERR);
+	print "          </TD>\n";
 	print "        </TR>\n";
 	print "        <TR>\n";
 	print "          <TH align=right>" . i("Map Local Drives:") . "</TH>\n";
@@ -635,7 +645,14 @@ function processUserPrefsInput($checks=1) {
 	if(array_key_exists('preferredname', $_POST) ||
 		array_key_exists('newpassword', $_POST))
 		$return['rdpport'] = $user['rdpport'];
-
+	if(! preg_match('/^[0-9]+x[0-9]+$/', $return['resolution']) && $return['resolution'] != 'Full Screen') {
+		$submitErr |= RESERR;
+		$submitErrMsg[RESERR] = i("Invalid data submitted");
+	}
+	if($return['audiomode'] != 'none' && $return['audiomode'] != 'local') {
+		$submitErr |= AUDIOERR;
+		$submitErrMsg[AUDIOERR] = i("Invalid data submitted");
+	}
 	if($return['rdpport'] != $user['rdpport']) {
 		$requests = getUserRequests('all');
 		$nochange = 0;
@@ -702,7 +719,9 @@ function togglePubKeys(mode) {
 HTMLdone;
 	if(! ($submitErr & PREFNAMEERR) && 
 		! ($submitErr & LOCALPASSWORDERR) &&
-	   ($submitErr & RDPPORTERR))
+		($submitErr & RDPPORTERR ||
+		 $submitErr & RESERR ||
+		 $submitErr & AUDIOERR))
 		print "show(\"rdpfile\");\n";
 	else
 		print "show(\"personal\");\n";
