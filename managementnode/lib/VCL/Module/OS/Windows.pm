@@ -10645,10 +10645,10 @@ sub setup_product_keys {
 		'Delete Product Key',
 	);
 	
-	my @setup_path = @{$ENV{setup_path}};
+	my @setup_path = @{$ENV->{setup_path}};
 	
 	OPERATION: while (1) {
-		@{$ENV{setup_path}} = @setup_path;
+		@{$ENV->{setup_path}} = @setup_path;
 		
 		print '-' x 76 . "\n";
 		
@@ -10658,7 +10658,7 @@ sub setup_product_keys {
 		my $operation_name = $operation_choices[$operation_choice_index];
 		print "\n";
 		
-		push @{$ENV{setup_path}}, $operation_name;
+		push @{$ENV->{setup_path}}, $operation_name;
 		
 		if ($operation_name =~ /list/i) {
 			$self->setup_display_product_key_info();
@@ -10858,10 +10858,10 @@ sub setup_kms_servers {
 	);
 	
 	
-	my @setup_path = @{$ENV{setup_path}};
+	my @setup_path = @{$ENV->{setup_path}};
 	
 	OPERATION: while (1) {
-		@{$ENV{setup_path}} = @setup_path;
+		@{$ENV->{setup_path}} = @setup_path;
 		print '-' x 76 . "\n";
 		
 		print "Choose an operation:\n";
@@ -10870,7 +10870,7 @@ sub setup_kms_servers {
 		my $operation_name = $operation_choices[$operation_choice_index];
 		print "\n";
 		
-		push @{$ENV{setup_path}}, $operation_name;
+		push @{$ENV->{setup_path}}, $operation_name;
 		
 		if ($operation_name =~ /list/i) {
 			$self->setup_display_kms_server_info();

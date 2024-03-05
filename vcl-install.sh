@@ -81,7 +81,7 @@ CRYPTKEY=`random_string 20`
 PEMKEY=`random_string 20`
 ARCHIVE=apache-VCL-$VCL_VERSION.tar.bz2
 ARCHIVEURLPATH="http://vcl.apache.org/downloads/download.cgi?action=download&filename=%2Fvcl%2F$VCL_VERSION%2F"
-SIGPATH="https://www.apache.org/dist/vcl/$VCL_VERSION/"
+SIGPATH="https://downloads.apache.org/vcl/$VCL_VERSION/"
 TZDEFAULT="America/New_York"
 
 DODB=0
@@ -414,10 +414,10 @@ fi
 print_break
 echo "Installing Linux packages..."
 if [[ $DOMN -eq 1 ]]; then
-	yum -q -y install openssh-clients wget perl
+	yum -q -y install openssh-clients wget perl bzip2
 	if [ $? -ne 0 ]; then "Error: Failed to install required linux packages (openssh-client, wget, and perl)"; exit 1; fi;
 else
-	yum -q -y install openssh-clients wget
+	yum -q -y install openssh-clients wget bzip2
 	if [ $? -ne 0 ]; then "Error: Failed to install required linux packages (openssh-client and wget)"; exit 1; fi;
 fi
 
@@ -433,7 +433,7 @@ function set_localauth_password() {
 	
 	salt=$(random_string 8)
 	#echo "Password salt: $salt"
-	passhash=$(echo -n $password$salt | sha1sum | awk '{print $1}')
+	passhash=$(echo -n $password$salt | sha512sum | awk '{print $1}')
 	#echo "Password hash: $passhash"
 	mysql -e "UPDATE localauth SET passhash = '$passhash', salt = '$salt', lastupdated = NOW() WHERE localauth.userid = (SELECT id FROM user WHERE unityid = '$username');" vcl
 	if [ $? -ne 0 ]; then
@@ -521,6 +521,8 @@ if [[ $DOMN -eq 1 ]]; then
 	sleep 1
 	yum -q -y install perl-CPAN
 	if [ $? -ne 0 ]; then echo "Error: Failed to install perl-CPAN"; exit 1; fi;
+	yum -q -y install perl-App-cpanminus
+	if [ $? -ne 0 ]; then echo "Error: Failed to install perl-App-cpanminus"; exit 1; fi;
 	perl apache-VCL-$VCL_VERSION/managementnode/bin/install_perl_libs.pl
 	rc=$?
 	if [ $rc -eq 2 ]; then

@@ -55,55 +55,43 @@ my @LINUX_PACKAGES = (
 	'make',
 	'nmap',
 	'openssl-devel',
-	'perl-Archive-Tar',
+	'bzip2',
 	'perl-CPAN',
-	'perl-Crypt-CBC',
-	'perl-Crypt-OpenSSL-RSA',
-	'perl-Crypt-Rijndael',
+	'perl-App-cpanminus',
 	'perl-DBD-MySQL',
-	'perl-DBI',
-	'perl-Digest-SHA1',
-	'perl-Expect',
-	'perl-Frontier-RPC',
-	'perl-Frontier-RPC-Client',
-	'perl-IO-String',
-	'perl-JSON',
-	'perl-LWP-Protocol-https',
-	'perl-MailTools',
-	'perl-Mo',
-	'perl-Net-Jabber',
-	'perl-Net-Netmask',
-	'perl-Net-SSH-Expect',
-	'perl-Object-InsideOut',
-	'perl-RPC-XML',
-	'perl-Scalar-List-Utils',
-	'perl-Text-CSV_XS',
-	'perl-Time-HiRes',
-	'perl-XML-Simple',
-	'perl-YAML',
 	'xmlsec1-openssl',
-	'perl-Frontier-RPC',
-	'perl-Frontier-RPC-Client',
-	'perl-LWP-Protocol-https',
-	'perl-Mo',
-	'perl-Object-InsideOut',
-	'perl-Scalar-List-Utils',
-	'perl-Expect',
 );
 
 my @PERL_MODULES = (
-	'CPAN',
-	'Crypt::CBC',
-	'Digest::SHA1',
+	'CPAN@2.36',
+	'Archive::Tar@3.02',
+	'Crypt::CBC@3.04',
+	'Crypt::OpenSSL::RSA@0.33',
+	'Crypt::Rijndael@1.16',
+	'DBI@1.643',
+	'Digest::SHA1@2.13',
+	'Expect@1.35',
+	'Frontier::RPC2',
 	'Frontier::Client',
-	'IO::String',
-	'LWP::Protocol::https',
-	'Mo::builder',
-	'Net::Ping::External',
-	'Net::SSH::Expect',
-	'Object::InsideOut',
-	'Scalar::Util',
-	'Text::CSV_XS',
+	'IO::String@1.08',
+	'JSON@4.10',
+	'Net::LDAP@0.68',
+	'LWP::Protocol::https@6.12',
+	'MailTools@2.21',
+	'Mo@0.40',
+	'Mo::builder@0.40',
+	'Net::Jabber@2.0',
+	'Net::Netmask@2.0002',
+	'Net::SSH::Expect@1.09',
+	'Net::Ping::External@0.15',
+	'Object::InsideOut@4.05',
+	'REST::Client@281',
+	'RPC::XML@1.61',
+	'Sub::Util@1.63',
+	'Text::CSV_XS@1.53',
+	'Time::HiRes@1.9764',
+	'XML::Simple@2.25',
+	'YAML@1.31'
 );
 	
 # Store the command line options in hash
@@ -418,35 +406,31 @@ sub install_perl_modules {
 	PERL_MODULE: for my $perl_module (@PERL_MODULES) {
 		print_break('*');
 		
-		my $cpan_version = get_perl_module_cpan_version($perl_module);
-		if (!$cpan_version) {
+		#my $cpan_version = get_perl_module_cpan_version($perl_module);
+		my ($pModule, $cpan_version ) = split(/@/, $perl_module);
+		if (!defined $cpan_version) {
+			$cpan_version = 'undef';
+		}
+		my $cpan_version_available = `cpanm --info -q $perl_module | grep -i failed | wc -l`;
+		#if (!$cpan_version) {
+		if ($cpan_version_available == 1) {
 			print "ERROR: unable to install $perl_module Perl module, information could not be obtained from CPAN\n";
 			$ERRORS->{'Perl module'}{$perl_module} = 1;
 			next PERL_MODULE;
 		}
 		
 		# Check if installed version matches what is available from CPAN
-		my $installed_version = get_perl_module_installed_version($perl_module);
+		my $installed_version = get_perl_module_installed_version($pModule);
 		if ($installed_version && $installed_version eq $cpan_version) {
 			print "$perl_module Perl module is up to date\n";
 		}
 		else {
-		
-			# Check if the CPAN module implements the "notest" method
-			# This is not available in older versions of CPAN.pm
-			if (CPAN::Shell->can('notest')) {
-				print "Attempting to install (notest, force) Perl module using CPAN: $perl_module\n";
-				eval { CPAN::Shell->rematein("notest", "force", "install", $perl_module) };
-				#eval { CPAN::Shell->notest("force install", $perl_module) };
-			}
-			else {
-				print "Attempting to install (force) Perl module using CPAN: $perl_module\n";
-				eval { CPAN::Shell->rematein("force", "install", $perl_module) };
-				#eval { CPAN::Shell->force("install", $perl_module) };
-			}
+
+			print "Attempting to install Perl module using CPANMinus:  $perl_module\n";
+			my $returnval = system("cpanm", "--notest", "--force", $perl_module);
 			
 			# Check if the module was successfully installed
-			$installed_version = get_perl_module_installed_version($perl_module);
+			$installed_version = get_perl_module_installed_version($pModule);
 			if (!$installed_version) {
 				print "ERROR: failed to install $perl_module Perl module\n";
 				$ERRORS->{'Perl module'}{$perl_module} = 1;
@@ -455,7 +439,7 @@ sub install_perl_modules {
 		}
 		
 		# Check if corresponding Linux package failed - remove from %ERRORS
-		my $linux_package_name = "perl-$perl_module";
+		my $linux_package_name = "perl-$pModule";
 		$linux_package_name =~ s/::/-/g;
 		if (defined $ERRORS->{'Linux package'}{$linux_package_name}) {
 			print "Removed $linux_package_name from list of failed Linux packages\n";

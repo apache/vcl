@@ -1546,7 +1546,7 @@ sub get_table_info {
 	my ($table_name) = @_;
 	$table_name = 'filter' unless $table_name;
 	
-	$ENV{iptables_get_table_info_count}{$table_name}++;
+	$ENV->{iptables_get_table_info_count}->{$table_name}++;
 	
 	my $computer_name = $self->data->get_computer_hostname();
 	
@@ -2675,9 +2675,9 @@ sub DESTROY {
 	
 	my $address = sprintf('%x', $self);
 	my $table_count_string;
-	if ($ENV{iptables_get_table_info_count}) {
-		for my $table_name (keys %{$ENV{iptables_get_table_info_count}}) {
-			my $table_count = $ENV{iptables_get_table_info_count}{$table_name};
+	if ($ENV->{iptables_get_table_info_count}) {
+		for my $table_name (keys %{$ENV->{iptables_get_table_info_count}}) {
+			my $table_count = $ENV->{iptables_get_table_info_count}->{$table_name};
 			$table_count_string .= "$table_name: $table_count\n";
 		}
 		notify($ERRORS{'DEBUG'}, 0, "get_table_info calls ($address):\n$table_count_string");

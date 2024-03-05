@@ -129,7 +129,7 @@ sub main () {
 	my $management_node_hostname = $info{managementnode}{hostname};
 
 	# Set environment variables for global management node information
-	$ENV{management_node_id} = $management_node_id;
+	$ENV->{management_node_id} = $management_node_id;
 	notify($ERRORS{'DEBUG'}, $LOGFILE, "management_node_id environment variable set: $management_node_id");
 	
 	# Get the management node checkin interval from the database if defined
@@ -143,23 +143,23 @@ sub main () {
 	
 	#===========================================================================
 	while (1) {
-		delete $ENV{request_id};
-		delete $ENV{reservation_id};
-		delete $ENV{state};
-		delete $ENV{data};
+		delete $ENV->{request_id};
+		delete $ENV->{reservation_id};
+		delete $ENV->{state};
+		delete $ENV->{data};
 		
 		# Web site inserts into variable table whenever an admin or user message is modified
 		# Check if the variable exists, if so, validate all of the messages
 		check_messages_need_validating();
 		
-		my $data_age_seconds = (time - $ENV{management_node_info}{$management_node_id}{RETRIEVAL_TIME});
+		my $data_age_seconds = (time - $ENV->{management_node_info}->{$management_node_id}->{RETRIEVAL_TIME});
 		if ($data_age_seconds > 120 ) {
 			notify($ERRORS{'DEBUG'}, $LOGFILE, "retrieving management node info for '$management_node_id', cached data is stale: $data_age_seconds seconds old");
 			$info{managementnode} = get_management_node_info();
 			if (defined $info{managementnode}{checkininterval}) {
 				$management_node_checkin_interval = $info{managementnode}{checkininterval};
 			}
-			#notify($ERRORS{'DEBUG'}, $LOGFILE, "dump: " . format_data($ENV{management_node_info}{$management_node_id}));
+			#notify($ERRORS{'DEBUG'}, $LOGFILE, "dump: " . format_data($ENV->{management_node_info}->{$management_node_id}));
 		}
 		
 		# Set the vcld environment variable to 0 so other subroutines know if this is the vcld or child process
@@ -215,9 +215,9 @@ sub main () {
 			my @reservation_ids = sort { $a <=> $b } keys %{$info{request}{$request_id}{reservation}};
 			my $reservation_count = @reservation_ids;
 			
-			$ENV{request_id} = $request_id;
-			$ENV{reservation_id} = 0;
-			$ENV{state} = $request_state_name;
+			$ENV->{request_id} = $request_id;
+			$ENV->{reservation_id} = 0;
+			$ENV->{state} = $request_state_name;
 			
 			# Make sure the request state is valid
 			if ($request_state_name !~ /inuse|reserved|deleted|timeout|reclaim|reload|new|tomaintenance|image|imageprep|makeproduction|imageinuse|complete|failed|pending|maintenance|tovmhostinuse|rebootsoft|reboothard|reinstall|servermodified|checkpoint|test/) {
@@ -235,10 +235,10 @@ sub main () {
 			#===========================================================================
 			# Loop through the reservations associated with this request
 			RESERVATION: foreach my $reservation_id (@reservation_ids) {
-				$ENV{reservation_id} = $reservation_id;
-				$ENV{database_select_count} = 0;
-				$ENV{database_execute_count} = 0;
-				$ENV{database_select_calls} = {};
+				$ENV->{reservation_id} = $reservation_id;
+				$ENV->{database_select_count} = 0;
+				$ENV->{database_execute_count} = 0;
+				$ENV->{database_select_calls} = {};
 				
 				my $reservation_info = $info{request}{$request_id}{reservation}{$reservation_id};
 				my $reservation_management_node_id = $reservation_info->{managementnodeid};
@@ -338,7 +338,7 @@ sub main () {
 				}
 				
 				# Add the DataStructure reference to %ENV so it can be accessed from non-object methods
-				$ENV{data} = $data_structure;
+				$ENV->{data} = $data_structure;
 				
 				# Remove any existing 'exited' computerloadlog entries
 				delete_computerloadlog_reservation($reservation_id, 'exited');
@@ -354,10 +354,10 @@ sub main () {
 			} ## end foreach my $reservation_id (keys %{$info{request...
 		} ## end foreach my $request_id (keys %{$info{request}})
 
-		delete $ENV{request_id};
-		delete $ENV{reservation_id};
-		delete $ENV{state};
-		delete $ENV{data};
+		delete $ENV->{request_id};
+		delete $ENV->{reservation_id};
+		delete $ENV->{state};
+		delete $ENV->{data};
 		
 		#===========================================================================
 		# Get all the block requests assigned to this management node
@@ -571,10 +571,10 @@ sub make_new_child {
 			notify($ERRORS{'DEBUG'}, $LOGFILE, "vcld environment variable set to $ENV{vcld} for this process");
 			
 			# Set the request_id and reservation_id environment variables
-			$ENV{request_id}     = $request_id;
-			$ENV{reservation_id} = $reservation_id if $reservation_id;
-			$ENV{state}          = $state;
-			$ENV{data}           = $data_structure;
+			$ENV->{request_id}     = $request_id;
+			$ENV->{reservation_id} = $reservation_id if $reservation_id;
+			$ENV->{state}          = $state;
+			$ENV->{data}           = $data_structure;
 			
 			# Rename this process to include some request info
 			rename_vcld_process($data_structure);
@@ -671,8 +671,8 @@ sub die_handler {
 	notify($ERRORS{'CRITICAL'}, $LOGFILE, "@_");
 	
 	# Prevent requests stuck in pending, try to set state back to original
-	if ($ENV{request_id} && $ENV{state}) {
-		update_request_state($ENV{request_id}, $ENV{state}, $ENV{state});
+	if ($ENV->{request_id} && $ENV->{state}) {
+		update_request_state($ENV->{request_id}, $ENV->{state}, $ENV->{state});
 	}
 	
 	# Reinstall the signal handler in case of unreliable signals
@@ -941,7 +941,7 @@ sub setup_management_node {
 		# Set the setup_path environment variable to anonymous array containing 'vcld'
 		# This is used to display the location in the menu hierarchy
 		# strings added/removed to the array cause the location to change
-		$ENV{setup_path} = ['vcld'];
+		$ENV->{setup_path} = ['vcld'];
 		
 		setup_print_break();
 		my $choice = setup_get_menu_choice(\%setup_menu);
@@ -958,14 +958,14 @@ sub setup_management_node {
 		my $choice_sub_ref = $choice->{sub_ref};
 		my $choice_parent_menu_names = $choice->{parent_menu_names};
 		
-		push @{$ENV{setup_path}}, @$choice_parent_menu_names, $choice_name;
+		push @{$ENV->{setup_path}}, @$choice_parent_menu_names, $choice_name;
 		
 		my $package_name = get_code_ref_package_name($choice_sub_ref);
 		my $subroutine_name = get_code_ref_subroutine_name($choice_sub_ref);
 		
 		my $module_object = $setup_module_objects{$package_name}{object};
 		&$choice_sub_ref($module_object);
-		pop @{$ENV{setup_path}};
+		pop @{$ENV->{setup_path}};
 	}
 	
 	setup_print_break('=');

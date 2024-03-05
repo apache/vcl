@@ -1967,7 +1967,7 @@ EOF
 	# add nic for public, first check for project not including 'vcl', skipping the public network assigned to the vmhost profile
 	my $skipadditionalnicnetwork = '';
 	if ($image_project !~ /vcl/i) {
-		foreach my $network_name (keys $network_info) {
+		foreach my $network_name (keys %{$network_info}) {
 			next if ($network_name =~ /^$eth0_source_device$/i || $network_name =~ /^$eth1_source_device$/i);
 			if ($network_name =~ /$image_project/i || $image_project =~ /$network_name/i) {
 				$skipadditionalnicnetwork = $network_name;
@@ -2012,7 +2012,7 @@ EOF
 	# add additional nics if project not strictly 'vcl'
 	if ($image_project !~ /^vcl$/i) {
 		notify($ERRORS{'DEBUG'}, 0, "image project is: $image_project, checking if additional network adapters should be configured");
-		foreach my $network_name (keys $network_info) {
+		foreach my $network_name (keys %{$network_info}) {
 			next if ($network_name =~ /^$eth0_source_device$/i || $network_name =~ /^$eth1_source_device$/i);
 			next if ($network_name eq $skipadditionalnicnetwork);
 			if ($network_name =~ /$image_project/i || $image_project =~ /$network_name/i) {

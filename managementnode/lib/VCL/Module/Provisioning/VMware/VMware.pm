@@ -8177,7 +8177,7 @@ sub configure_vmhost_dedicated_ssh_key {
 	}
 	
 	# Parse the file contents, add ' --- vcl.tgz' to the end of the 'modules=' line if it hasn't already been added
-	# modules=k.z — s.z — c.z — oem.tgz — license.tgz — m.z — state.tgz — vcl.tgz
+	# modules=k.z ï¿½ s.z ï¿½ c.z ï¿½ oem.tgz ï¿½ license.tgz ï¿½ m.z ï¿½ state.tgz ï¿½ vcl.tgz
 	my $updated_bootbank_cfg_contents;
 	my $bootbank_cfg_changed = 0;
 	for my $line (@bootbank_cfg_contents) {
@@ -8361,7 +8361,7 @@ sub setup_vm_host_operations {
 	#my $vmhost_id = 32;
 	
 	my $vmhost_computer_name = $management_node_vmhost_info->{$vmhost_id}{computer}{SHORTNAME};
-	push @{$ENV{setup_path}}, $vmhost_computer_name;
+	push @{$ENV->{setup_path}}, $vmhost_computer_name;
 	
 	
 	# Get a provisioning object to control the VM host
