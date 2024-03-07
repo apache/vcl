@@ -282,6 +282,9 @@ function buildUserFilterStores() {
 
 function setFiltersFromCookie() {
 	var tmp = dojo.cookie('GROUPFILTER');
+	if(typeof tmp == 'undefined') {
+		return;
+	}
 	var data = tmp.split('|');
 	dijit.byId('shownormal').set('value', 0);
 	dijit.byId('showfederated').set('value', 0);
