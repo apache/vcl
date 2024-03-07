@@ -11271,11 +11271,11 @@ function getReservationLengthCeiling($length) {
 		if($length < $i)
 			return $i;
 	}
-	for($i = 70560; $i <= 201600; $i += 10080) {
+	for($i = 70560; $i <= 302400; $i += 10080) {
 		if($length < $i)
 			return $i;
 	}
-	return 201600;
+	return 302400;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
