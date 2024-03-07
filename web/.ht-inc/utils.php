@@ -10810,6 +10810,7 @@ function sendRDPfile() {
 	print "disable themes:i:0\r\n";
 	print "disable cursor setting:i:0\r\n";
 	print "bitmapcachepersistenable:i:1\r\n";
+	print "dynamic resolution:i:1\r\n";
 	//print "connect to console:i:1\r\n";
 }
 
@@ -13151,10 +13152,10 @@ function validateAPIgroupInput($items, $exists) {
 	}
 	# name
 	if(array_key_exists('name', $items)) {
-		if(! preg_match('/^[-a-zA-Z0-9_\.: ]{3,30}$/', $items['name'])) {
+		if(! preg_match('/^[-a-zA-Z0-9_\.: ]{3,60}$/', $items['name'])) {
 			return array('status' => 'error',
 			             'errorcode' => 19,
-			             'errormsg' => 'Name must be between 3 and 30 characters '
+			             'errormsg' => 'Name must be between 3 and 60 characters '
 			                         . 'and can only contain letters, numbers, and '
 			                         . 'these characters: - _ . :');
 		}
