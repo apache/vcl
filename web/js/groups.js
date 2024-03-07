@@ -192,6 +192,7 @@ function usergroupGridFilter() {
 			query.push('courseroll');
 	}
 	var type = query.join('|');
+	var cookietype = query.join('_');
 	if(query.length == 0)
 		type = 'foo';
 
@@ -200,6 +201,9 @@ function usergroupGridFilter() {
 		editid = '*';
 	if(editid == -1)
 		editid = 'NULL';
+
+	var cookiedata = "type:" + cookietype + "|owner:" + owner + "|name:" + name + "|affilid:" + affilid + "|editgroupid:" + editid;
+	dojo.cookie('GROUPFILTER', cookiedata, {expires: 15, path: '/', domain: cookiedomain});
 
 	usergroupgrid.setQuery({type: new RegExp(type),
 	                        owner: owner,
@@ -270,8 +274,63 @@ function buildUserFilterStores() {
 			}
 			dijit.byId('editgroupfilter').setStore(editgroupstore, '', {query: {id: '*'}});
 			delete usergroupstore.editgroups;
+
+			setFiltersFromCookie();
 		}
 	});
+}
+
+function setFiltersFromCookie() {
+	var tmp = dojo.cookie('GROUPFILTER');
+	var data = tmp.split('|');
+	dijit.byId('shownormal').set('value', 0);
+	dijit.byId('showfederated').set('value', 0);
+	dijit.byId('showcourseroll').set('value', 0);
+	var regex = new RegExp('normal');
+	if(data[0].match(regex)) {
+		dijit.byId('shownormal').set('value', 1);
+	}
+	regex = new RegExp('federated');
+	if(data[0].match(regex)) {
+		dijit.byId('showfederated').set('value', 1);
+	}
+	regex = new RegExp('courseroll');
+	if(data[0].match(regex)) {
+		dijit.byId('showcourseroll').set('value', 1);
+	}
+	var owner = data[1].split(':');
+	regex = new RegExp('^[-A-Za-z0-9_@\.]*$');
+	if(owner[1] == '*') {
+		dijit.byId('ownerfilter').set('value', 'all');
+	}
+	else if(owner[1].match(regex)) {
+		dijit.byId('ownerfilter').set('value', owner[1]);
+	}
+	var name = data[2].split(':');
+	regex = new RegExp('^\.\*[-A-Za-z0-9_@\.]*\.\*$');
+	if(name[1].match(regex)) {
+		var name2 = name[1].slice(2, -2);
+		dijit.byId('namefilter').set('value', name2);
+	}
+	var affilid = data[3].split(':');
+	regex = new RegExp('^[0-9]*$');
+	if(affilid[1] == '*') {
+		dijit.byId('affiliationfilter').set('value', 0);
+	}
+	else if(affilid[1].match(regex)) {
+		dijit.byId('affiliationfilter').set('value', affilid[1]);
+	}
+	var editgroupid = data[4].split(':');
+	regex = new RegExp('^[0-9]*$');
+	if(editgroupid[1] == '*') {
+		dijit.byId('editgroupfilter').set('value', 0);
+	}
+	else if(editgroupid[1] == 'NULL') {
+		dijit.byId('editgroupfilter').set('value', -1);
+	}
+	else if(editgroupid[1].match(regex)) {
+		dijit.byId('editgroupfilter').set('value', editgroupid[1]);
+	}
 }
 
 function fmtResourceGroupDeleteBtn(groupid, rowIndex) {

@@ -13867,6 +13867,7 @@ function getDojoHTML($refresh) {
 			                      'dojox.grid.DataGrid',
 			                      'dijit.TitlePane',
 			                      'dijit.Dialog',
+			                      'dojo.cookie',
 			                      'dijit.Tooltip');
 			break;
 		case 'viewResources':
