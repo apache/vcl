@@ -62,7 +62,38 @@ Image.prototype.colformatter = function(value, rowIndex, obj) {
 	return value;
 }
 
+Image.prototype.numericsort = function(a, b) {
+	if(typeof a != 'string' && typeof b != 'string')
+		return 0;
+	if(typeof a != 'string')
+		return -1;
+	if(typeof b != 'string')
+		return 1;
+	var al = parseInt(a, 10);
+	var bl = parseInt(b, 10);
+	if(al < bl)
+		return -1;
+	if(bl < al)
+		return 1;
+	return 0;
+}
+
 var resource = new Image();
+
+function initPage() {
+	if(! ('resourcegrid' in window)) {
+		setTimeout(function() {
+			initPage();
+		}, 100);
+		return;
+	}
+	else {
+		if(! resourcestore.comparatorMap) {
+			resourcestore.comparatorMap = {};
+		}
+		resourcestore.comparatorMap['minram'] = resource.numericsort;
+	}
+}
 
 function inlineEditResourceCB(data, ioArgs) {
 	if(data.items.status == 'success') {

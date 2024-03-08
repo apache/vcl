@@ -14233,7 +14233,8 @@ function getDojoHTML($refresh) {
 			foreach($dojoRequires as $req)
 				$rt .= "   dojo.require(\"$req\");\n";
 			$rt .= "      setTimeout(initViewResources, 100);\n";
-			if($cdata['obj']->restype == 'computer')
+			if($cdata['obj']->restype == 'computer' ||
+			   $cdata['obj']->restype == 'image')
 				$rt .= "      initPage();\n";
 			$rt .= "   });\n";
 			$rt .= "</script>\n";
