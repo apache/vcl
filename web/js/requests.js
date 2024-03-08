@@ -197,6 +197,13 @@ function setResTypeButtons() {
 
 function selectResType() {
 	showHideTypeInputs();
+	if(dojo.byId('basicrdo').checked || dojo.byId('imagingrdo').checked) {
+		if(dojo.byId('endat') && ! dojo.byId('endat').checked &&
+		   dojo.byId('endduration')) {
+			dojo.byId('endduration').checked = true;
+			delayedUpdateWaitTime(0, 50);
+		}
+	}
 	if(dojo.byId('basicrdo').checked) {
 		var imageid = getSelectValue('deployimage');
 		var item = dijit.byId('deployimage').get('item');
@@ -218,11 +225,16 @@ function selectResType() {
 	if(dojo.byId('serverrdo').checked) {
 		dijit.byId('deploystarttime').set('required', true);
 		dijit.byId('deploystartdate').set('required', true);
+		if(dojo.hasClass('anystart', 'hidden') &&
+		   dojo.byId('startlater') &&
+		   dojo.byId('startlater').checked) {
+			delayedUpdateWaitTime(0, 50);
+		}
 		if(dojo.byId('endat') && ! dojo.byId('endat').checked) {
 			dojo.byId('endindef').checked = true;
+			delayedUpdateWaitTime(0, 50);
 		}
 	}
-	delayedUpdateWaitTime(0, 50);
 	resetDeployBtnLabel();
 	resizeRecenterDijitDialog('newResDlg');
 }
@@ -238,12 +250,9 @@ function showHideTypeInputs() {
 		dojo.addClass('whentitleserver', 'hidden');
 		dojo.addClass('nrnamespan', 'hidden');
 		dojo.addClass('nrservergroupspan', 'hidden');
-		//dojo.addClass('nrmacaddrspan', 'hidden');
-		//dojo.addClass('nrmonitoredspan', 'hidden');
 		dojo.addClass('nrfixedipdiv2', 'hidden');
 		dojo.addClass('anystart', 'hidden');
 		dojo.addClass('indefiniteend', 'hidden');
-		//hideDijitButton('newResDlgShowConfigBtn'); // finishconfigs
 		if(dojo.byId('openend').value == 1) {
 			dojo.removeClass('endlbl', 'hidden');
 			dojo.removeClass('specifyend', 'hidden');
@@ -273,10 +282,6 @@ function showHideTypeInputs() {
 		dojo.addClass('limitstart', 'hidden');
 		dojo.addClass('durationend', 'hidden');
 		dojo.removeClass('whentitleserver', 'hidden');
-		/*if(profilesstore._arrayOfAllItems.length != 0 &&
-		   (profilesstore._arrayOfAllItems.length != 1 ||
-		   profilesstore._arrayOfAllItems[0].name != _('(New Profile)')))
-			dojo.removeClass('deployprofileslist', 'hidden');*/
 		dojo.removeClass('nrnamespan', 'hidden');
 		dojo.removeClass('nrservergroupspan', 'hidden');
 		//dojo.removeClass('nrmacaddrspan', 'hidden');
