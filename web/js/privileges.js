@@ -712,7 +712,12 @@ function moveNodeCB(data, ioArgs) {
 	moveitem.moveid = data.items.moveid;
 	moveitem.oldparentid = data.items.oldparentid;
 	moveitem.newparentid = data.items.newparentid;
-	if(data.items.status == 'invaliddata') {
+	if(data.items.status == 'invalidreload') {
+		alert('Error: invalid data submitted');
+		window.location.reload();
+		return;
+	}
+	else if(data.items.status == 'invaliddata') {
 		alert('Error: invalid data submitted');
 		revertNodeMove();
 		return;
