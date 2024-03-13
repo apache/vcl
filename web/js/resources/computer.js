@@ -197,6 +197,12 @@ Computer.prototype.Selection = function() {
 }
 
 Computer.prototype.nocasesort = function(a, b) {
+	if(typeof a != 'string' && typeof b != 'string')
+		return 0;
+	if(typeof a != 'string')
+		return -1;
+	if(typeof b != 'string')
+		return 1;
 	var al = a.toLowerCase();
 	var bl = b.toLowerCase();
 	if(al.match(/[0-9]/) ||
@@ -319,6 +325,7 @@ function initPage() {
 		resourcestore.comparatorMap['network'] = resource.nocasesort;
 		resourcestore.comparatorMap['IPaddress'] = resource.ipsort;
 		resourcestore.comparatorMap['privateIPaddress'] = resource.ipsort;
+		resourcestore.comparatorMap['vmhost'] = resource.nocasesort;
 
 		dojo.connect(resourcegrid, '_onFetchComplete', function() {dojo.byId('computercount').innerHTML = 'Computers in table: ' + resourcegrid.rowCount;});
 	}
@@ -1245,6 +1252,7 @@ function refreshcompdata(refreshcount) {
 	                               procspeed: resource.nocasesort,
 	                               network: resource.nocasesort,
 	                               ram: resource.nocasesort,
+	                               vmhost: resource.nocasesort,
 	                               IPaddress: resource.ipsort,
 	                               privateIPaddress: resource.ipsort};
 	resourcestore.fetch();
