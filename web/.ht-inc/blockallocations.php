@@ -3086,12 +3086,18 @@ function processBlockAllocationInput() {
 		$errmsg = i("The submitted image is invalid.");
 		$err = 1;
 	}
-	if(! $err && $method != 'request' && ! validateUserid($return['owner'])) {
-		$errmsg = i("The submitted owner is invalid.");
-		$err = 1;
+	if(! $err) {
+		if($method == 'new' || $method == 'edit') {
+			if(! validateUserid($return['owner'])) {
+				$errmsg = i("The submitted owner is invalid.");
+				$err = 1;
+			}
+			else
+				$return['ownerid'] = getUserlistID($return['owner']);
+		}
+		else
+			$return['owner'] = '';
 	}
-	else
-		$return['ownerid'] = getUserlistID($return['owner']);
 	$groups = getUserGroups(0, $user['affiliationid']);
 	$extragroups = getContinuationVar('extragroups');
 	if(! $err && ! array_key_exists($return['groupid'], $groups) &&

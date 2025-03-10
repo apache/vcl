@@ -1464,6 +1464,11 @@ function AJrevertMoveNode() {
 function userLookup() {
 	global $user;
 	$userid = processInputVar("userid", ARG_STRING);
+	$showerror = 0;
+	if(! preg_match('/^[-a-zA-Z0-9@_ \'\+\.,]{0,100}$/', $userid)) {
+		$userid = '';
+		$showerror = 1;
+	}
 	if(get_magic_quotes_gpc())
 		$userid = stripslashes($userid);
 	$affilid = processInputVar('affiliationid', ARG_NUMERIC, $user['affiliationid']);
@@ -1496,6 +1501,10 @@ function userLookup() {
 	$cont = addContinuationsEntry('submitUserLookup');
 	print "<INPUT type=hidden name=continuation value=\"$cont\">\n";
 	print "</FORM><br>\n";
+	if($showerror) {
+		print "<font color=red>User not found</font><br>\n";
+		return;
+	}
 	if(! empty($userid)) {
 		$esc_userid = vcl_mysql_escape_string($userid);
 		if(preg_match('/,/', $userid)) {
