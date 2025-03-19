@@ -1,3 +1,22 @@
+ASF VCL 2.5.2
+
+Dependency changes:
+
+No dependency changes for any components in this release.
+
+VCL Management Node:
+
+Release Notes - VCL - Version 2.5.2
+
+** Improvement
+    * [VCL-1127] - Make changes to handle Cygwin's change of sshd service name to cygsshd
+
+** Bug
+	 * reworked flow of validation of owner when submitting a Block Allocation
+    * modified regular expression to validate submitted userid when looking up a user under User Lookup
+
+================================================================================
+
 ASF VCL 2.5.1
 
 Dependency changes:

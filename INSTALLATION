@@ -1,6 +1,6 @@
-Installing VCL 2.5.1
+Installing VCL 2.5.2
 
-VCL 2.5.1 can be installed using an installation script. All you need to
+VCL 2.5.2 can be installed using an installation script. All you need to
 install VCL is the script. It will download and validate the VCL software
 and then install it. The script can be used to install all three parts of
 VCL (database, web portal, and management node) on a single system or to
@@ -145,7 +145,7 @@ instructions are listed below.
       Import the vcl.sql file into the database. The vcl.sql file is included in
       the mysql directory within the Apache VCL source code
 
-        mysql vcl < apache-VCL-2.5.1/mysql/vcl.sql
+        mysql vcl < apache-VCL-2.5.2/mysql/vcl.sql
 
 2. Install and Configure the Web Components
 
@@ -226,14 +226,14 @@ instructions are listed below.
       Copy the web directory to a location under the web root of your web
       server and navigate to the destination .ht-inc subdirectory:
 
-        cp -ar apache-VCL-2.5.1/web/ /var/www/html/vcl-2.5.1
-        ln -s /var/www/html/vcl-2.5.1 /var/www/html/vcl
+        cp -ar apache-VCL-2.5.2/web/ /var/www/html/vcl-2.5.2
+        ln -s /var/www/html/vcl-2.5.2 /var/www/html/vcl
         cd /var/www/html/vcl/.ht-inc
 
       If SELinux is enabled, run the following command to set the context of the
       web code to httpd_sys_content_t
 
-        chcon -R -t httpd_sys_content_t /var/www/html/vcl-2.5.1
+        chcon -R -t httpd_sys_content_t /var/www/html/vcl-2.5.2
 
       Copy secrets-default.php to secrets.php:
 
@@ -305,7 +305,7 @@ instructions are listed below.
 
     D. Add a Management Node to the Database
 
-      Click the Management Nodes link
+      Click the Manage->Management Nodes link
 
          Select Edit Management Node Profiles
          Click Submit
@@ -354,8 +354,8 @@ instructions are listed below.
    Prerequisites The following management node installation instructions assume
    the instructions in these previous sections have been completed:
 
-    VCL 2.5.1 Database Installation
-    VCL 2.5.1 Web Code Installation
+    VCL 2.5.2 Database Installation
+    VCL 2.5.2 Web Code Installation
 
    Supported Operating Systems:
 
@@ -424,8 +424,8 @@ instructions are listed below.
       Copy the managementnode directory to the location where you want it to
       reside (typically /usr/local):
 
-        cp -ar apache-VCL-2.5.1/managementnode /usr/local/vcl-2.5.1
-        ln -s /usr/local/vcl-2.5.1 /usr/local/vcl
+        cp -ar apache-VCL-2.5.2/managementnode /usr/local/vcl-2.5.2
+        ln -s /usr/local/vcl-2.5.2 /usr/local/vcl
 
    B. Install the Required Linux Packages & Perl Modules
 

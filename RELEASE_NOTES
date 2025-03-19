@@ -1,4 +1,4 @@
-VCL 2.5.1
+VCL 2.5.2
 
 I. Intro and Description
 
@@ -21,12 +21,7 @@ servers in a server farm or HPC cluster.
 
 II. Notable Changes
 
-This is primarily a bug fix release. However, the following are some 
-changes worth highlighting.
-
-* PHP code updated to work with PHP 7.x.
-* Rudimentary NFS file share mounting extended to work with Windows
-* Added method for using HTML in user emails through external script
+This is only a bug fix release.
 
 =================================
 

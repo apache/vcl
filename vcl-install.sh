@@ -69,7 +69,7 @@ if [ $? -ne 0 ]; then help; fi
 eval set -- "$args"
 
 # ------------------------- variables -------------------------------
-VCL_VERSION=2.5.1
+VCL_VERSION=2.5.2
 DB_USERNAME=vcluser
 ADMIN_PASSWORD=
 

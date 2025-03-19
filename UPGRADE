@@ -1,6 +1,6 @@
-Upgrading to VCL 2.5.1
+Upgrading to VCL 2.5.2
 
-VCL 2.5.1 can be upgraded using an upgrade script. All you need to upgrade
+VCL 2.5.2 can be upgraded using an upgrade script. All you need to upgrade
 VCL is the script. It will download and validate the VCL software and then
 upgrade your system. The script can be used to upgrade all three parts of
 VCL (database, web portal, and management node) on a single system or to
@@ -57,41 +57,41 @@ are listed below.
  2. Create a backup of the VCL database. This will provide a restore point if
     necessary.
 
-    mysqldump vcl > ~/vcl-pre2.5.1-upgrade.sql
+    mysqldump vcl > ~/vcl-pre2.5.2-upgrade.sql
 
- 3. Updates the database schema.
+ 3. Update the database schema.
 
-    mysql vcl < /root/apache-VCL-2.5.1/mysql/update-vcl.sql
+    mysql vcl < /root/apache-VCL-2.5.2/mysql/update-vcl.sql
 
  4. Possibly move old web code. If /var/www/html/vcl is a directory, rename it
-    to /var/www/html/vcl-2.5. These instructions assume that you installed the
+    to /var/www/html/vcl-2.5.1. These instructions assume that you installed the
     VCL web code at /var/www/html/vcl. If you installed it elsewhere, replace
     /var/www/html/vcl with your vcl web root.
 
-    mv /var/www/html/vcl /var/www/html/vcl-2.5
+    mv /var/www/html/vcl /var/www/html/vcl-2.5.1
 
  5. Disable access to the old web code
 
-    echo "Require all denied" > /var/www/html/vcl-2.5/.htaccess
+    echo "Require all denied" > /var/www/html/vcl-2.5.1/.htaccess
 
  6. Copy the new code in place
 
-    cp -ar /root/apache-VCL-2.5.1/web /var/www/html/vcl-2.5.1
-    ln -sfn /var/www/html/vcl-2.5.1 /var/www/html/vcl
+    cp -ar /root/apache-VCL-2.5.2/web /var/www/html/vcl-2.5.2
+    ln -sfn /var/www/html/vcl-2.5.2 /var/www/html/vcl
 
- 7. Copy your 2.5 config files
+ 7. Copy your 2.5.1 config files
 
-    cd /var/www/html/vcl-2.5/.ht-inc
+    cd /var/www/html/vcl-2.5.1/.ht-inc
     cp conf.php secrets.php pubkey.pem keys.pem /var/www/html/vcl/.ht-inc
     cp cryptkey/cryptkeyid cryptkey/private.pem /var/www/html/vcl/.ht-inc/cryptkey/
 
  8. If you are using SELinux, set the correct context:
 
-    chcon -R -t httpd_sys_content_t /var/www/html/vcl-2.5.1
-    chcon -t httpd_sys_rw_content_t /var/www/html/vcl-2.5.1/.ht-inc/maintenance
-    chcon -t httpd_sys_rw_content_t /var/www/html/vcl-2.5.1/.ht-inc/cryptkey
+    chcon -R -t httpd_sys_content_t /var/www/html/vcl-2.5.2
+    chcon -t httpd_sys_rw_content_t /var/www/html/vcl-2.5.2/.ht-inc/maintenance
+    chcon -t httpd_sys_rw_content_t /var/www/html/vcl-2.5.2/.ht-inc/cryptkey
 
- 9. Update conf.php: the following item needs to be added to the conf.php
+ 9. Update conf.php: the following item may need to be added to the conf.php
     file:
 
     (don't forget to edit conf.php in the *new* location)
@@ -117,25 +117,26 @@ are listed below.
     https://your.site.url/vcl/testsetup.php
 
 13. Copy old management node code:
-    If /usr/local/vcl is a directory, copy it to /usr/local/vcl-2.5, rename
-    /usr/local/vcl to /usr/local/vcl-2.5.1, and create a symlink.
-    If /usr/local/vcl is a symlink to vcl-2.5, copy /usr/local/vcl-2.5 to
-    /usr/local/vcl-2.5.1 and update the symlink.
+    If /usr/local/vcl is a directory, copy it to /usr/local/vcl-2.5.1, rename
+    /usr/local/vcl to /usr/local/vcl-2.5.2, and create a symlink.
+    If /usr/local/vcl is a symlink to vcl-2.5.1, copy /usr/local/vcl-2.5.1 to
+    /usr/local/vcl-2.5.2 and update the symlink.
 
     (for directory)
-    cp -ar /usr/local/vcl /usr/local/vcl-2.5
-    mv /usr/local/vcl /usr/local/vcl-2.5.1
-    ln -s /usr/local/vcl-2.5.1 /usr/local/vcl
+    cp -ar /usr/local/vcl /usr/local/vcl-2.5.1
+    mv /usr/local/vcl /usr/local/vcl-2.5.2
+    ln -s /usr/local/vcl-2.5.2 /usr/local/vcl
 
     (for symlink)
-    cp -ar /usr/local/vcl-2.5 /usr/local/vcl-2.5.1
-    ln -sfn /usr/local/vcl-2.5.1 /usr/local/vcl
+    cp -ar /usr/local/vcl-2.5.1 /usr/local/vcl-2.5.2
+    ln -sfn /usr/local/vcl-2.5.2 /usr/local/vcl
 
 14. Copy the new management node code over the old code:
 
-    /bin/cp -ar /root/apache-VCL-2.5.1/managementnode/* /usr/local/vcl-2.5.1
+    /bin/cp -ar /root/apache-VCL-2.5.2/managementnode/* /usr/local/vcl-2.5.2
 
-15. Run install_perl_libs.pl to add any new perl library requirements:
+15. Run install_perl_libs.pl to add any new perl library requirements (this
+    step can be skipped if upgrading from 2.5.1):
 
     /usr/local/vcl/bin/install_perl_libs.pl
 
