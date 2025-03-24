@@ -62,7 +62,7 @@ function help() {
 	exit 2
 }
 
-args=$(getopt -q -o dwmht: -l database,web,managementnode,help,dbhost:,dbpass:,mnhost:,mnip:,webhost:,adminpass:,timezone:,rc: -n $0 -- "$@")
+args=$(getopt -q -o dwmht: -l database,web,managementnode,help,dbhost:,dbpass:,mnhost:,mnip:,webhost:,adminpass:,timezone: -n $0 -- "$@")
 
 if [ $? -ne 0 ]; then help; fi
 
@@ -80,7 +80,7 @@ WEB_HOST=localhost
 CRYPTKEY=`random_string 20`
 PEMKEY=`random_string 20`
 ARCHIVE=apache-VCL-$VCL_VERSION.tar.bz2
-ARCHIVEURLPATH="http://vcl.apache.org/downloads/download.cgi?action=download&filename=%2Fvcl%2F$VCL_VERSION%2F"
+DOWNLOADARCHIVEURL="http://www.apache.org/dyn/closer.lua/vcl/$VCL_VERSION/$ARCHIVE?action=download"
 SIGPATH="https://www.apache.org/dist/vcl/$VCL_VERSION/"
 TZDEFAULT="America/New_York"
 
@@ -95,7 +95,6 @@ mnipdefault=1
 adminpassdefault=1
 webhostdefault=1
 DODHCP=no
-dorc=0
 TIMEZONE=''
 
 while true; do
@@ -149,11 +148,6 @@ while true; do
 			TIMEZONE=$2
 			shift 2
 			;;
-		--rc)
-			RC=$2
-		   dorc=1
-			shift 2
-			;;
 		-h|--help)
 			help
 			exit 1
@@ -168,19 +162,6 @@ while true; do
 			;;
 	esac
 done
-
-if [[ $dorc -eq 1 ]]; then
-	if [[ ! $RC =~ ^[0-9]+$ ]]; then
-		echo ""
-		echo "Invalid value specified for --rc=, must be a number"
-		echo ""
-		exit 1
-	fi
-	VCL_VERSION=${VCL_VERSION}-RC$RC
-	ARCHIVE=apache-VCL-$VCL_VERSION.tar.bz2
-	ARCHIVEURLPATH="https://people.apache.org/~jfthomps/apache-VCL-${VCL_VERSION}/"
-	SIGPATH="https://people.apache.org/~jfthomps/apache-VCL-${VCL_VERSION}/"
-fi
 
 if [[ $DOALL -eq 1 ]]; then
 	DODB=1
@@ -446,8 +427,8 @@ function set_localauth_password() {
 }
 
 function download_archive() {
-	wget -q "${ARCHIVEURLPATH}${ARCHIVE}" -O $ARCHIVE
-	if [ $? -ne 0 ]; then generic_error "failed to download $ARCHIVE from $ARCHIVEURLPATH"; exit 1; fi
+	wget -q "${DOWNLOADARCHIVEURL}" -O $ARCHIVE
+	if [ $? -ne 0 ]; then generic_error "failed to download from $DOWNLOADARCHIVEURL"; exit 1; fi
 }
 
 function validate_archive_sha512() {
