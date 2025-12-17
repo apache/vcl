@@ -172,6 +172,37 @@ body {
 	font-size: 15px;
 }
 
+.tokenfieldsetbuffer {
+	padding: 6px 12px;
+}
+
+.tokenrow {
+	border: 1px solid black;
+	padding: 4px;
+	margin-top: -1px;
+	display: flex;
+	justify-content: space-between;
+}
+
+.tokenname {
+	font-weight: bold;
+}
+
+.tokenexp {
+	font-size: 0.8em;
+}
+
+.newtoken {
+	margin: 4px 0;
+}
+
+.newtokenbox {
+	padding: 6px;
+	margin: 2px 0;
+	border: 1px solid black;
+	background-color: #f2f2f2;
+}
+
 .whenusefieldset {
 	border-width: 0px;
 }

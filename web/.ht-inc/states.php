@@ -228,6 +228,9 @@ $noHTMLwrappers = array('sendRDPfile',
                         'AJsetTZoffset',
                         'AJconfirmDeleteGroup',
                         'AJsubmitDeleteGroup',
+                        'AJaddAccessToken',
+                        'AJdeleteAccessToken',
+                        'AJtokenList',
 );
 
 # main
@@ -337,11 +340,17 @@ $actions['mode']['confirmrdpprefs'] = "confirmUserPrefs";
 $actions['args']['confirmrdpprefs'] = 1;
 $actions['mode']['submituserprefs'] = "submitUserPrefs";
 $actions['mode']['submitgeneralprefs'] = "submitGeneralPreferences";
+$actions['mode']['AJaddAccessToken'] = "AJaddAccessToken";
+$actions['mode']['AJdeleteAccessToken'] = "AJdeleteAccessToken";
+$actions['mode']['AJtokenList'] = "AJtokenList";
 $actions['pages']['userpreferences'] = "userPreferences";
 $actions['pages']['confirmpersonalprefs'] = "userPreferences";
 $actions['pages']['confirmrdpprefs'] = "userPreferences";
 $actions['pages']['submituserprefs'] = "userPreferences";
 $actions['pages']['submitgeneralprefs'] = "userPreferences";
+$actions['pages']['AJaddAccessToken'] = "userPreferences";
+$actions['pages']['AJdeleteAccessToken'] = "userPreferences";
+$actions['pages']['AJtokenList'] = "userPreferences";
 
 # manage groups
 $actions['mode']['viewGroups'] = "viewGroups"; # entry

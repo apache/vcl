@@ -76,6 +76,8 @@ function userpreferences() {
 	print "</li>\n";
 	print "      <li><a href=#uiprefs onclick=\"javascript:show('uiprefs'); ";
 	print "return false\">" . i("General Preferences") . "</a></li>\n";
+	print "      <li><a href=#tokens onclick=\"javascript:show('tokens'); ";
+	print "return false\">" . i("Manage Tokens") . "</a></li>\n";
 	print "      </ul>\n";
 	print "      </div>\n";
 	print "    </TD>\n";
@@ -354,7 +356,42 @@ function userpreferences() {
 	print "      <INPUT type=submit value=\"" . i("Submit General Preferences") . "\">\n";
 	print "      </FORM>\n";
 	print "      </fieldset>\n";
+	print "      </div>\n"; # end uiprefs
+
+	# tokens
+	print "      <div id=tokens class=hidden>\n";
+	print "      <fieldset>\n";
+	print "      <legend>" . i("Manage Personal Access Tokens") . "</legend>\n";
+	print "      <div class=\"tokenfieldsetbuffer\">\n";
+	print i("Personal Access Tokens are used to access the VCL XMLRPC API.") . "<br><br>\n";
+	print "<div id=tokenlist class=hidden>Existing tokens:<br></div>\n";
+	$cont = addContinuationsEntry('AJtokenList');
+	print "<input type=hidden id=tokenlistcont value=\"$cont\">\n";
+	$cont = addContinuationsEntry('AJdeleteAccessToken');
+	print "<input type=hidden id=deletetokencont value=\"$cont\">\n";
+	print "<div id=notokens class=hidden>You don't have any existing tokens. Use the form below to create one.<br></div>\n";
+	print "<div id=createdtokendiv class=hidden>\n";
+	print "<br><strong>New Token</strong>\n";
+	print "<div class=\"newtokenbox\">\n";
+	print "<span id=\"newtoken\"></span>&nbsp;";
+	print "<a id=\"newtokena\">";
+	print "<img src=\"images/copy_icon.png\" style=\"height: 1.1em; width: 1em;\"></a><br>\n";
+	print "</div>\n";
+	print "<span class=\"newtokennote\"><strong>" . i('Note') . ":</strong> " . i('This is the only time the token value will be displayed. Copy it now.'). "</span>\n";
+	print "</div>\n";
+	print "<br>\n";
+	print "<strong>Create New Token</strong>:<br>\n";
+	print "<div class=\"newtoken\">\n";
+	$errmsg = i('Token name can be 2-60 characters and include A-Z, a-z, 0-9, spaces, and these characters - @ # ( ) _ :');
+	print labeledFormItem('tokenname', i('Token Name'), 'text', '^([-A-Za-z0-9@#\(\)_: ]){2,60}$', 1, '', $errmsg); 
+	print "</div>\n";
+	print "<div id=tokenerrmsg class=\"hidden msgboxerror\"></div>\n";
+	print dijitButton('addtokenbtn', i('Create Token'), 'createToken();');
 	print "      </div>\n";
+	print "      </fieldset>\n";
+	$cont = addContinuationsEntry('AJaddAccessToken', array(), 1800);
+	print "        <input type=hidden id=addtokencont value=\"$cont\">\n";
+	print "      </div>\n"; # end tokens
 	print "    </TD>\n";
 	print "  </TR>\n";
 	print "</table>\n";
@@ -679,6 +716,78 @@ function processUserPrefsInput($checks=1) {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
+/// \fn AJtokenList()
+///
+/// \brief sends a lit of logged in user's tokens
+///
+////////////////////////////////////////////////////////////////////////////////
+function AJtokenList() {
+	$tokens = getUserAccessTokens();
+	sendJSON(array('tokens' => $tokens));
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn AJaddAccessToken()
+///
+/// \brief adds a new token and sends info about it back to user
+///
+////////////////////////////////////////////////////////////////////////////////
+function AJaddAccessToken() {
+	$tokenname = processInputVar("name", ARG_STRING, '');
+	if(! preg_match('/^([-A-Za-z0-9@#\(\)_: ]){2,60}$/', $tokenname)) {
+		$arr = array('status' => 'invalidname',
+		             'msg' => i("Submitted name is invalid"));
+		sendJSON($arr);
+		return;
+	}
+	$tokens = getUserAccessTokens();
+	foreach($tokens as $token) {
+		if($tokenname == $token['name']) {
+			$arr = array('status' => 'duplicatename',
+			             'msg' => i("Token with this name already exists"));
+			sendJSON($arr);
+			return;
+		}
+	}
+	$data = createUserAccessToken($tokenname);
+	$value = $data['value'];
+	$arr = array('status' => 'success',
+	             'id' => $data['tokenid'],
+	             'expires' => $data['expires'],
+	             'name' => $tokenname,
+	             'value' => $value);
+	sendJSON($arr);
+	return;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn AJdeleteAccessToken()
+///
+/// \brief deletes a token
+///
+////////////////////////////////////////////////////////////////////////////////
+function AJdeleteAccessToken() {
+	global $user, $mysqli_link_vcl;
+	$tokenid = processInputVar("tokenid", ARG_NUMERIC);
+	$tokens = getUserAccessTokens();
+	if(! array_key_exists($tokenid, $tokens)) {
+		$arr = array('status' => 'invalidtokenid',
+		             'msg' => i("Submitted token is invalid"));
+		sendJSON($arr);
+		return;
+	}
+	$cnt = deleteUserAccessToken($tokenid);
+	if($cnt == 0)
+		$arr = array('status' => 'failed', 'msg' => i('Error deleting token'), 'id' => $tokenid);
+	else
+		$arr = array('status' => 'success', 'id' => $tokenid);
+	sendJSON($arr);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
 /// \fn printUserprefJavascript()
 ///
 /// \brief prints javascript used in user preferences page
@@ -694,6 +803,7 @@ function show(id) {
 		obj.className = "hidden";
 	document.getElementById("rdpfile").className = "hidden";
 	document.getElementById("uiprefs").className = "hidden";
+	document.getElementById("tokens").className = "hidden";
 	document.getElementById("status").className = "hidden";
 	if(id == 'personal' && ! obj)
 		id = 'rdpfile';
@@ -728,6 +838,7 @@ HTMLdone;
 	print <<<HTMLdone
 document.getElementById("preflinks").className = "shown";
 document.getElementById("status").className = "visible";
+initTokens();
 </script>
 
 HTMLdone;

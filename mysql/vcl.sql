@@ -898,6 +898,30 @@ CREATE TABLE IF NOT EXISTS `OStype` (
 
 -- --------------------------------------------------------
 
+--
+-- Table structure for table `personalaccesstoken`
+--
+
+CREATE TABLE IF NOT EXISTS `personalaccesstoken` (
+  `id` smallint(5) unsigned NOT NULL AUTO_INCREMENT,
+  `userid` mediumint(8) unsigned NOT NULL,
+  `name` varchar(60) NOT NULL,
+  `created` datetime NOT NULL DEFAULT current_timestamp(),
+  `expires` datetime NOT NULL DEFAULT current_timestamp(),
+  `tokenkey` varchar(8) NOT NULL,
+  `tokenhash` varchar(64) NOT NULL,
+  `salt` varchar(8) NOT NULL,
+  `deleted` tinyint(3) unsigned NOT NULL DEFAULT 0,
+  `datedeleted` datetime DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `userid` (`userid`),
+  KEY `tokenkey` (`tokenkey`),
+  KEY `expires` (`expires`),
+  KEY `deleted` (`deleted`)
+) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=latin1 COLLATE=latin1_swedish_ci
+
+-- --------------------------------------------------------
+
 -- 
 -- Table structure for table `platform`
 -- 

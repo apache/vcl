@@ -397,7 +397,26 @@ function checkAccess() {
 			dbDisconnect();
 			exit;
 		}
-		if(! isset($_SERVER['HTTP_X_USER'])) {
+		if(! isset($_SERVER['HTTP_X_USER']) && ! isset($_SERVER['HTTP_X_AUTHORIZATION'])) {
+			printXMLRPCerror(3);   # access denied
+			dbDisconnect();
+			exit;
+		}
+		if(isset($_SERVER['HTTP_X_AUTHORIZATION'])) {
+			$typetest = substr($_SERVER['HTTP_X_AUTHORIZATION'], 0, 7);
+			if($typetest != 'Bearer ') {
+				printXMLRPCerror(3);   # access denied
+				dbDisconnect();
+				exit;
+			}
+			$token = substr($_SERVER['HTTP_X_AUTHORIZATION'], 7, 88);
+			if(! $tokenownerid = validateUserAccessToken($token)) {
+				printXMLRPCerror(3);   # access denied
+				dbDisconnect();
+				exit;
+			}
+			if($user = getUserInfo($tokenownerid, 1, 1))
+				return;
 			printXMLRPCerror(3);   # access denied
 			dbDisconnect();
 			exit;
@@ -11934,6 +11953,136 @@ function getNodePath($nodeid) {
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
+/// \fn createUserAccessToken($name)
+///
+/// \param $name - name of token
+///
+/// \return array with keys tokenid, value, expires
+///
+/// \brief generates a new personal access token and adds it to the database
+///
+////////////////////////////////////////////////////////////////////////////////
+function createUserAccessToken($name) {
+	global $user;
+	do {
+		$token = base64_encode(openssl_random_pseudo_bytes(64));
+		$tokenkey = substr(sha1($token), 0, 8);
+		$query = "SELECT id FROM personalaccesstoken WHERE tokenkey = '$tokenkey'";
+		$qh = doQuery($query);
+	} while (mysqli_num_rows($qh));
+	$salt = generateString(8);
+	$tokenhash = hash('sha256', "$salt$token");
+	$query = "INSERT INTO personalaccesstoken "
+	       .        "(userid, "
+	       .        "name, "
+	       .        "created, "
+	       .        "expires, "
+	       .        "tokenkey, "
+	       .        "tokenhash, "
+	       .        "salt, "
+	       .        "deleted) "
+	       . "VALUES "
+	       .       "({$user['id']}, "
+	       .       "'$name', "
+	       .       "NOW(), "
+	       .       "DATE_ADD(NOW(), INTERVAL 1 YEAR), "
+	       .       "'$tokenkey', "
+	       .       "'$tokenhash', "
+	       .       "'$salt', "
+	       .       "0)";
+	$qh = doQuery($query);
+	$tokenid = dbLastInsertID();
+	$data = getUserAccessTokens($tokenid);
+	return array('tokenid' => $tokenid,
+	             'value' => $token,
+	             'expires' => $data[$tokenid]['expires']);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn deleteUserAccessToken($id)
+///
+/// \param $id - id of token from database
+///
+/// \return number of tokens affected
+///
+/// \brief set a token as deleted in the database
+///
+////////////////////////////////////////////////////////////////////////////////
+function deleteUserAccessToken($id) {
+	global $user, $mysqli_link_vcl;
+	$query = "UPDATE personalaccesstoken "
+	       . "SET deleted = 1, "
+	       .     "datedeleted = NOW() "
+	       . "WHERE id = $id AND "
+	       .       "userid = {$user['id']}";
+	doQuery($query);
+	$cnt = mysqli_affected_rows($mysqli_link_vcl);
+	return $cnt;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn getUserAccessTokens($id)
+///
+/// \param $id - (optional) id of token from database
+///
+/// \return array of tokens with these keys for each one: id, name, expires
+///
+/// \brief gets information about tokens for logged in user
+///
+////////////////////////////////////////////////////////////////////////////////
+function getUserAccessTokens($id=0) {
+	global $user;
+	$query = "SELECT id, "
+	       .        "name, "
+	       .        "expires "
+	       . "FROM personalaccesstoken "
+	       . "WHERE userid = '{$user['id']}' AND "
+	       .       "expires > NOW() AND "
+	       .       "deleted = 0";
+	if($id != 0)
+		$query .= " AND id = $id";
+	$tokens = array();
+	$qh = doQuery($query);
+	while($row = mysqli_fetch_assoc($qh)) {
+		$tokens[$row['id']] = $row;
+	}
+	return $tokens;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
+/// \fn validateUserAccessToken($token)
+///
+/// \param $token - token submitted by user
+///
+/// \return 0 if invalid, id of user token belongs to if valid
+///
+/// \brief checks if the token matches a token in the database, and if so,
+/// returns the id of the user it belongs to
+///
+////////////////////////////////////////////////////////////////////////////////
+function validateUserAccessToken($token) {
+	$tokenkey = substr(sha1($token), 0, 8);
+	$query = "SELECT userid, "
+	       .        "tokenhash, "
+	       .        "salt "
+	       . "FROM personalaccesstoken "
+	       . "WHERE tokenkey = '$tokenkey' AND "
+	       .       "expires > NOW() AND "
+	       .       "deleted = 0";
+	$qh = doQuery($query);
+	while($row = mysqli_fetch_assoc($qh)) {
+		$tokenhash = hash('sha256', "{$row['salt']}$token");
+		if($row['tokenhash'] === $tokenhash)
+			return $row['userid'];
+	}
+	return 0;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+///
 /// \fn sortKeepIndex($a, $b)
 ///
 /// \param $a - first item
@@ -13945,6 +14094,8 @@ function getDojoHTML($refresh) {
 		case 'submitgeneralprefs':
 			$filename = 'vclUserPreferences.js';
 			$dojoRequires = array('dojo.parser',
+			                      'dijit.form.ValidationTextBox',
+			                      'dijit.form.Button',
 			                      'dijit.form.Textarea');
 			break;
 		case 'viewstats':
@@ -14340,6 +14491,24 @@ function getDojoHTML($refresh) {
 			$rt .= "   @import \"themes/$skin/css/dojo/$skin.css\";\n";
 			$rt .= "</style>\n";
 			$rt .= "<script type=\"text/javascript\" src=\"js/sitemaintenance.js?v=$v\"></script>\n";
+			$rt .= "<script type=\"text/javascript\" src=\"dojo/dojo/dojo.js\"\n";
+			$rt .= "   djConfig=\"parseOnLoad: true, locale: '$jslocale'\">\n";
+			$rt .= "</script>\n";
+			$rt .= $customfile;
+			$rt .= "<script type=\"text/javascript\">\n";
+			$rt .= "   dojo.addOnLoad(function() {\n";
+			foreach($dojoRequires as $req)
+				$rt .= "   dojo.require(\"$req\");\n";
+			$rt .= "   });\n";
+			$rt .= "</script>\n";
+			return $rt;
+
+		case "userpreferences":
+		case 'submitgeneralprefs':
+			$rt .= "<style type=\"text/css\">\n";
+			$rt .= "   @import \"themes/$skin/css/dojo/$skin.css\";\n";
+			$rt .= "</style>\n";
+			$rt .= "<script type=\"text/javascript\" src=\"js/userpreferences.js?v=$v\"></script>\n";
 			$rt .= "<script type=\"text/javascript\" src=\"dojo/dojo/dojo.js\"\n";
 			$rt .= "   djConfig=\"parseOnLoad: true, locale: '$jslocale'\">\n";
 			$rt .= "</script>\n";
