@@ -907,7 +907,7 @@ Release Notes - VCL - Version 2.2.1
     * [VCL-312] - remove View Mode and any uses of user.adminlevelid
     * [VCL-373] - Enable Windows Server 2008 RDP audio - it's disabled by default
     * [VCL-394] - Backend VMware improvements for 2.2.1 release
-    * [VCL-414] - modify XMLRPCaddUserGroup to accept a paramter specifying value for custom field
+    * [VCL-414] - modify XMLRPCaddUserGroup to accept a parameter specifying value for custom field
     * [VCL-424] - Remove unused variables from subroutines in backend modules
     * [VCL-425] - modify scheduler to be aware of RAM allocated to VMs on each VM host
     * [VCL-426] - modify scheduler to not give user same computer if user had very recent, short reservation and other computers are available
